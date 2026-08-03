@@ -718,7 +718,9 @@
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
                   Runs one program in a temporary terminal over a session and disappears when the program exits, leaving the
                   session unchanged. Mostly driven from the control API to launch an interactive program (a diff viewer, a process
-                  monitor) — full-size, as a floating panel, or scoped to one split pane while the sibling pane stays live. See the
+                  monitor) — full-size, as a floating panel, or scoped to one split pane while the sibling pane stays live. The
+                  same slot also holds a HUD, a small passive panel carrying a message instead of a program, which leaves the
+                  session focused and typable underneath. See the
                   <a href="#agtermctl" style="color: #6d82f3">agtermctl reference</a>.
                 </p>
               </div>
@@ -1144,7 +1146,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 71 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 74 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1482,6 +1484,81 @@
               its ordinary meaning), and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports the
               covered panes as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">paneOverlays</span>.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Message panel (HUD)
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># post a message over a session; the session keeps focus and stays typable</span><br />agtermctl
+              session hud <span style="color: #f2b45c">"gathering options…"</span> --spinner --detail
+              <span style="color: #f2b45c">"scanning branches"</span> --target
+              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
+                ># repaint in place, no re-spawn and no blink</span
+              ><br />agtermctl session hud update <span style="color: #f2b45c">"ready"</span> --detail
+              <span style="color: #f2b45c">"pick a branch"</span> --target
+              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
+                ># place it and size it by hand instead of measuring the message</span
+              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top --size-percent
+              30<br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A HUD carries a message rather than a program, and it is passive: the session keeps first responder and stays
+              typable under the panel, the terminal behind it is neither dimmed nor click-blocked, and nothing waits for an
+              answer. It is for the seconds a script or an agent needs before it can show anything, so the session says what is
+              happening rather than sitting silent.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">open</span> is the default
+              subcommand, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud "…"</span>
+              posts one.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--position top|center|bottom</span>
+              places it vertically (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> hold a margin off the
+              pane edge on their own), and the size comes from the message unless
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides it.
+              An update replaces the whole message, so
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> have to be repeated
+              to survive it.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              It shares the overlay slot, so a second
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud</span> replaces the first,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay open</span> replaces a
+              HUD, and ⌘W or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay close</span> takes one
+              down; a HUD over a <em>running</em> program is refused instead, because a message is replaceable and a program is
+              not.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay result</span> over a
+              HUD errors, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> accepts a
+              percent but refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span>,
+              which would cover the session the message is about.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
+              the panel as the session node's
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud</span> object, with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay</span> reading false beside it;
+              there is no event, so a script that needs the state polls the tree.
             </p>
 
             <h3

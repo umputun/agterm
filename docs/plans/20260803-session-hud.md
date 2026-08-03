@@ -488,21 +488,32 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 **Files:**
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`, `examples.md`
-- Modify: `README.md`, `site/commands.html`, `site/docs.html`
+- Modify: `README.md`, `CONTRIBUTING.md` (added during Task 13: a second count mention), `site/commands.html`, `site/docs.html`
 - Modify: `.claude/rules/control-api.md`
 - Modify: `agtermCore/Tests/agtermCoreTests/SkillInstallTests.swift`
 
-- [ ] add the three commands to the skill's command summary, full reference, and one worked recipe (post a HUD, compute items, open the picker, close the HUD)
-- [ ] document the read-back contract everywhere: `hud` object present with the effective `position`, `overlay` false, `overlay.result` refuses, state is poll-only via `tree` with no event
-- [ ] document `--position top|center|bottom`, the `center` default, and that `top`/`bottom` hold a fixed edge margin automatically
-- [ ] update the count from 71 to 74 in: `SKILL.md:147`, `README.md:187`, `site/commands.html` (four mentions — lines 9, 21, 33, 239), `site/docs.html:1147`, `.claude/rules/control-api.md:86`, and `SkillInstallTests.swift:26`. Search the count pattern rather than assuming these are the only hits
-- [ ] add the HUD paragraphs to `control-api.md` under "Overlay, zoom, dashboard, and picker": the deck exemptions, the HUD-replaces/overlay-refuses rule, the zoom narrowing, and the explicit no-GUI-trigger exemption
-- [ ] add the three commands to the public catalog list in `control-api.md`
-- [ ] ➕ from Task 10: document the two `session.overlay.*` rejections a HUD adds — `overlay result` returns
+- [x] add the three commands to the skill's command summary, full reference, and one worked recipe (post a HUD, compute items, open the picker, close the HUD)
+- [x] document the read-back contract everywhere: `hud` object present with the effective `position`, `overlay` false, `overlay.result` refuses, state is poll-only via `tree` with no event
+- [x] document `--position top|center|bottom`, the `center` default, and that `top`/`bottom` hold a fixed edge margin automatically
+- [x] update the count from 71 to 74 in: `SKILL.md:147`, `README.md:187`, `site/commands.html` (four mentions — lines 9, 21, 33, 239), `site/docs.html:1147`, `.claude/rules/control-api.md:86`, and `SkillInstallTests.swift:26`. Search the count pattern rather than assuming these are the only hits
+- [x] add the HUD paragraphs to `control-api.md` under "Overlay, zoom, dashboard, and picker": the deck exemptions, the HUD-replaces/overlay-refuses rule, the zoom narrowing, and the explicit no-GUI-trigger exemption
+- [x] add the three commands to the public catalog list in `control-api.md`
+- [x] ➕ from Task 10: document the two `session.overlay.*` rejections a HUD adds — `overlay result` returns
       `no overlay result: the slot holds a hud`, and `overlay resize --full` is refused while a percent is
       allowed — plus `overlay close` closing a HUD as a courtesy
-- [ ] decide whether `site/index.html` needs the feature (CLAUDE.md lists it as reflecting major features) and either update it or state the exemption here
-- [ ] run `swift test --filter SkillInstallTests` — must pass before task 14
+- [x] decide whether `site/index.html` needs the feature (CLAUDE.md lists it as reflecting major features) and either update it or state the exemption here
+      — EXEMPT, not updated: `index.html` carries GUI-visible features that ship with a screenshot
+      (dashboard, overlays, splits, palettes). `pick` — also control-only, also a real on-screen panel —
+      has no card there, which is the precedent a control-only HUD with no menu, chord, or asset follows.
+      `softwareVersion` is a release-time field and was left alone
+- [x] ➕ two count mentions the plan's list did not name, both found by the pattern search and updated:
+      `CONTRIBUTING.md:7` ("agterm carries 71 control commands") and `control-api.md:102`, where
+      `debug.appearance` is described as the private 72nd `Command` case and is now the 75th
+- [x] ➕ documented beyond the checkboxes, since each is a contract a caller hits: `open` as the group's
+      default subcommand, `hud update` taking `--spinner`/`--size-percent` but never `--background-color`,
+      the 256-character cap and the control-character rejection including newline, `no hud` on a second
+      close, and `surface zoom` refusing the explicit overlay address while a HUD is up
+- [x] run `swift test --filter SkillInstallTests` — must pass before task 14
 
 ### Task 14: Verify acceptance criteria
 

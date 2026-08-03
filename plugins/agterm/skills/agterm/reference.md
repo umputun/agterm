@@ -120,6 +120,15 @@ to restore the exact size),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
+`hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
+when none is up. A `{message, detail?, spinner, backgroundColor?, sizePercent?, position}` object:
+`detail` and `backgroundColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE 1–100
+share of the pane the panel takes (the app's measurement of the message, or the caller's `--size-percent`
+override; omitted only after `session overlay resize --full` stripped it), and `position` and `spinner`
+always report the effective value, `center` and `false` included, so a caller who omitted them never has to
+know the defaults. `hud` and `overlay` are mutually exclusive — one slot — and a HUD reports `overlay`
+FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
+a message for one. No event announces a HUD; poll `tree` for it),
 `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
@@ -564,12 +573,49 @@ All twelve are read-only projections of GUI state.
   `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
   or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
   resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
-  session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors.
+  session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
+  HUD a percent is accepted (the panel re-flows and its `hud.sizePercent` reports the new value) but
+  `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size would
+  cover the session the message is about. The text stays centred on the box it was rendered with until the
+  next `session hud update`.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
-  `--pane` closes that split pane's overlay; omit it for the session-wide one.
+  `--pane` closes that split pane's overlay; omit it for the session-wide one. It also takes a HUD down,
+  as a courtesy — the slot is the same one.
 - `session overlay result [--pane left|right] [--target] [--window W]` — returns `result.exitCode` once
   the overlay has closed. Errors `overlay still running` while up, `no overlay result` if none ran.
-  `--pane` reads that pane's overlay; omit it for the session-wide one.
+  `--pane` reads that pane's overlay; omit it for the session-wide one. A HUD runs the app's own painter,
+  not a caller's program, so there is no status to report and the session-wide arm errors
+  `no overlay result: the slot holds a hud`; the `--pane` arm is unaffected, since a HUD only ever takes
+  the session-wide slot.
+- `session hud [open] <message> [--detail T] [--spinner] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N] [--target] [--window W]`
+  — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
+  as `session overlay open`, but carries a message rather than a program: it takes no input, the session
+  keeps first responder and stays typable, and the terminal behind it is neither dimmed nor click-blocked.
+  Meant for the seconds before an agent can show anything — computing the items for `pick`, waiting on a
+  slow command — so the user reads what is happening in the session he is about to be pulled into.
+  `open` is the group's default subcommand (`session hud "gathering options…"`); a message that is
+  literally `update` or `close` needs the explicit `hud open` verb. `--detail` adds a dim second line,
+  `--spinner` animates a glyph beside the message, and `--position` places the panel vertically (default
+  `center`; `top` and `bottom` hold a fixed margin off the pane edge, so a panel at the largest allowed
+  size never overhangs). Size is measured from the message against the session's terminal font unless
+  `--size-percent N` (1–100) sets it. `--background-color #rrggbb` gives the panel its own solid
+  background, read once when the panel is created. Message and detail are capped at 256 characters and
+  reject control characters — newline included, since the panel prints straight into a live terminal and
+  `--detail` is the second line on offer. Errors `session.hud.open requires a message` on a missing or
+  empty message, `hud text must not contain control characters`, `hud message too long (max 256
+  characters)` / `hud detail too long (max 256 characters)`, `invalid color: <value> (#rrggbb)`,
+  `invalid position: <value> (top|center|bottom)`, and `session.hud.open: --size-percent must be 1...100`.
+  A second `hud` replaces the first; a `session overlay open` replaces a HUD, while a HUD over a RUNNING
+  program is refused with `overlay already open` — a message is replaceable, a program is not.
+- `session hud update <message> [--detail T] [--spinner] [--position P] [--size-percent N] [--target] [--window W]`
+  — repaint the live panel in place: no re-spawn, no blink, the panel does not flicker. It REPLACES the
+  whole spec rather than patching it, so `--detail`, `--spinner`, and `--position` must be repeated to
+  survive and an omitted one drops. Same required message and same rejections as `open`. There is no
+  `--background-color`: the surface reads that once at creation, so only a fresh `session hud` can change
+  it. Errors `no hud` when none is up.
+- `session hud close [--target] [--window W]` — take the panel down and delete its message file. Errors
+  `no hud` when none is up, so it is not idempotent. A program overlay in the same slot is left alone;
+  `session overlay close`, ⌘W, and closing the session also tear a HUD down.
 
 **Displaying an image inline.** This skill bundles `scripts/show-image.sh`. It opens an overlay (a
 real terminal surface) and renders the image there via the kitty graphics protocol, which ghostty —
@@ -651,7 +697,9 @@ lights and an exit button remains). `SURFACE_ID` comes from
 `surface:<session-id>:right` for the split pane or `surface:<session-id>:overlay-right` for a pane
 overlay covering it. Omit `--target` (or pass `active`) to act on the active surface in the
 frontmost or `--window` window; `quick` addresses a quick-terminal zoom (the id the command itself
-returns when the quick terminal is the zoom target).
+returns when the quick terminal is the zoom target). A HUD is not a zoom target: while one is up the
+session lists no overlay surface and `surface:<session-id>:overlay` is refused with `surface not
+available`, the same answer an empty slot gives.
 
 `show` is idempotent; `hide` exits zoom and is idempotent too (when an explicit id is provided, it
 only clears that same zoom target, and succeeds as a no-op even if that surface has since vanished);
@@ -1012,7 +1060,15 @@ here is app-global and touches only the captured commands, not those overrides.
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
 `no overlay` / `overlay still running` / `no overlay result` / `pane overlay already open` /
-`pane not visible` (overlay), `invalid flag mode` (session flag),
+`pane not visible` (overlay),
+`no hud` (session hud update/close with none up) /
+`no overlay result: the slot holds a hud` (session overlay result over a HUD) /
+`a hud is always floating: pass --size-percent, not --full` (session overlay resize over a HUD) /
+`session.hud.open requires a message` / `hud text must not contain control characters` /
+`hud message too long (max 256 characters)` / `hud detail too long (max 256 characters)` /
+`invalid position: <value> (top|center|bottom)` (session hud over the raw socket; the `agtermctl` CLI
+rejects the same value locally with `position must be one of: top, center, bottom`),
+`invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar),

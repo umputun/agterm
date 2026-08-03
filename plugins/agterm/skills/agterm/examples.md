@@ -784,6 +784,42 @@ agtermctl pick cancel "$pick_id" --window "$AGTERM_WINDOW_ID"
 Add `--follow` to raise a background target window when the picker opens. Without it, the picker waits in
 that window without stealing focus.
 
+## Say what you are doing while the user waits
+
+`session hud` posts a passive panel over a session. The session keeps focus and stays typable under it, so
+it is safe to leave up while you compute something. Cover the gap before a picker, then take it down:
+
+```bash
+me="$AGTERM_SESSION_ID"
+
+agtermctl session hud "gathering options…" --spinner --detail "scanning branches" --target "$me"
+
+branches=$(git for-each-ref --format='%(refname:short)' refs/heads)
+
+agtermctl session hud update "ready" --detail "pick a branch" --target "$me"
+choice=$(printf '%s\n' "$branches" | agtermctl pick --prompt "Check out which branch?")
+
+agtermctl session hud close --target "$me"
+```
+
+`hud update` repaints in place, no re-spawn and no blink, and it replaces the whole spec: `--detail` and
+`--spinner` are dropped unless repeated. `--position top|center|bottom` moves the panel (default `center`;
+`top`/`bottom` keep a fixed margin off the pane edge on their own), and `--size-percent N` overrides the
+size measured from the message.
+
+Read it back from the session node, and note the panel does NOT set `overlay` — one slot, and whichever
+occupant holds it is the one that reports:
+
+```bash
+agtermctl tree --json | jq -r --arg s "$me" '
+  .result.tree.workspaces[].sessions[] | select(.id == $s) | .hud.message // "no hud"'
+```
+
+Nothing announces a HUD as an event, so poll `tree` when another process owns the lifecycle. The slot is
+shared with `session overlay open`, which means a second `hud` replaces the first, an `overlay open`
+replaces a HUD, and `overlay result` over one errors `no overlay result: the slot holds a hud`. A HUD over
+a RUNNING program is refused instead: a message is replaceable, a program is not.
+
 ## Navigate and manage windows
 
 ```bash
