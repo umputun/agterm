@@ -51,6 +51,7 @@ targets:
           - "Resources/ghostty"
           - "Resources/terminfo"
           - "Resources/agent-status"
+          - "Resources/hud"
           # committed SOURCE for agterm's own bundled theme(s); setup.sh stages it
           # into Resources/ghostty/themes (above), so the source dir itself must not
           # be pulled into the project tree or the app bundle.
@@ -78,6 +79,12 @@ targets:
       # Lands at Contents/Resources/agent-status — the installer copies it from
       # there to ~/.config/agterm/agent-status.
       - path: agterm/Resources/agent-status
+        type: folder
+        buildPhase: resources
+      # The session.hud panel painter. Folder reference (not the default "group") so the
+      # extensionless-by-convention .sh keeps its exec bit. Lands at Contents/Resources/hud —
+      # makeOverlaySurface resolves hud.sh from there and shell-escapes it into the overlay command.
+      - path: agterm/Resources/hud
         type: folder
         buildPhase: resources
       # Agent skill package (SKILL.md + reference.md + examples.md + troubleshooting.md + scripts).

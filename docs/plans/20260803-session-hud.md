@@ -346,11 +346,17 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `project.yml`
 - Create: `agtermCore/Tests/agtermCoreTests/HudHelperTests.swift`
 
-- [ ] write `hud.sh`: each tick read `AGTERM_HUD_FILE` plus `AGTERM_HUD_COLS`/`AGTERM_HUD_ROWS`, clear, print the message centered in that box with the detail line dimmed, sleep ~500ms (~100ms and advance the spinner frame when `AGTERM_HUD_SPINNER=1`), exit when the file disappears
-- [ ] keep it POSIX `sh` with nothing beyond `printf`/`sleep` — the box comes from the environment, so no `stty`, `tput`, `$COLUMNS`, or SIGWINCH trap
-- [ ] add `agterm/Resources/hud` to the `agterm` target's `sources.excludes` (`project.yml:53` pattern) **and** as a folder-reference resource entry (`:78-82` pattern), landing at `Contents/Resources/hud`
-- [ ] write tests that run the script against a temp file and assert it renders the message, picks up a rewritten file, honors the box, and exits when the file is removed
-- [ ] run the new tests and `xcodegen generate` — must pass before task 8
+- [x] write `hud.sh`: each tick read `AGTERM_HUD_FILE` plus `AGTERM_HUD_COLS`/`AGTERM_HUD_ROWS`, clear, print the message centered in that box with the detail line dimmed, sleep ~500ms (~100ms and advance the spinner frame when `AGTERM_HUD_SPINNER=1`), exit when the file disappears
+- [x] keep it POSIX `sh` with nothing beyond `printf`/`sleep` — the box comes from the environment, so no `stty`, `tput`, `$COLUMNS`, or SIGWINCH trap
+- [x] add `agterm/Resources/hud` to the `agterm` target's `sources.excludes` (`project.yml:53` pattern) **and** as a folder-reference resource entry (`:78-82` pattern), landing at `Contents/Resources/hud`
+- [x] write tests that run the script against a temp file and assert it renders the message, picks up a rewritten file, honors the box, and exits when the file is removed
+- [x] run the new tests and `xcodegen generate` — must pass before task 8
+- [x] ⚠️ the box is delivered by environment variables, which a running process cannot see change, so it is
+  read once at startup rather than each tick. Task 8 must therefore treat a box change as a respawn: when
+  `updateHud`'s recomputed box differs from the spawned one, re-open the slot (`openHud`) instead of only
+  rewriting the file, or the text stays centered in the old box
+- [x] ⚠️ the helper re-reads the body file on every tick with no locking, so Task 8 must write it atomically
+  (temp file plus rename) or a repaint can catch a half-written body
 
 ### Task 8: App wiring — font measurement, non-focusing surface, temp-file lifecycle
 
