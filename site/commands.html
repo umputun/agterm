@@ -443,7 +443,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
-                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, sizePercent?, position}</span>,
+                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, sizePercent?, heightPercent?, position}</span>, where
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> names the effective style or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> —
                 omitted when none is up; mutually exclusive with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>, which reads false beside it),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>,
@@ -1438,7 +1440,8 @@
                 full-pane, and passing one errors.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Against a <a href="#hud" style="color: #6d82f3">HUD</a> a percent is accepted and the panel re-flows, but
+                Against a <a href="#hud" style="color: #6d82f3">HUD</a> a percent is accepted and re-flows its WIDTH (the height
+                stays measured from the message, which a resize does not change), but
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span> errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a hud is always floating: pass --size-percent, not --full</span>
                 — full size would cover the session the message is about.
@@ -1504,7 +1507,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session hud [open] &lt;message&gt; [--detail T] [--spinner] [--position top|center|bottom]
+                agtermctl session hud [open] &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position top|center|bottom]
                 [--background-color #rrggbb] [--size-percent N] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.open</div>
@@ -1520,17 +1523,26 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--detail</span> adds a dim second line,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner</span> animates a glyph, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner</span> animates a glyph in the default
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bar</span> style while
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner-style bar|braille|circle|blocks|dot</span> picks another and turns
+                the spinner on by itself (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> is accepted too and leaves the panel static,
+                so the value a read-back reports round-trips) (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">dot</span> blinks rather than animating, for a panel
+                that sits up for minutes), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span> places the panel vertically
                 (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center</span>;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span> hold a fixed margin off the pane edge
-                on their own, so even the largest allowed panel stays inside the pane). The size is measured from the message
-                against the session's terminal font unless
+                on their own, so even the largest allowed panel stays inside the pane). The panel is measured from the message
+                against the session's terminal font on BOTH axes separately — width from the longest wrapped line, height from
+                the number of them — so a title and a subtitle give a wide, short panel rather than a square one.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100)
-                sets it — either way the effective share is bounded to 10–80% of the pane, so a message never covers the session
+                overrides the WIDTH only; the height always follows the message, since a caller-set height could only strand it
+                in an empty box. The effective width is bounded to 10–80% of the pane, so a message never covers the session
                 it is about and a requested 100 reads back as 80. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> gives the
-                panel its own solid background, read once when the panel is created.
+                panel its own solid background, read once when the panel is created. Both effective shares read back, as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sizePercent</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">heightPercent</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Message and detail cap at 256 characters and reject control characters, newline included — the panel prints
@@ -1549,7 +1561,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session hud update &lt;message&gt; [--detail T] [--spinner] [--position P] [--size-percent N]
+                agtermctl session hud update &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P] [--size-percent N]
                 [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.update</div>
@@ -2785,6 +2797,19 @@
                     white-space: nowrap;
                   "
                   >invalid position: &lt;value&gt;<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (hud)</span></span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >invalid spinner: &lt;value&gt;<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (hud)</span></span
                 >
                 <span
                   style="

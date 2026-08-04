@@ -144,6 +144,54 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func rejectsUnknownSpinnerStyleWithoutCallingHost() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen,
+            args: ControlArgs(message: "working", spinner: "swirl")
+        ))
+
+        // the message lists `none` too: it is accepted, so a rejection naming only the styles would name a
+        // narrower set than the dispatcher takes
+        #expect(response == ControlResponse(
+            ok: false, error: "invalid spinner: swirl (bar|braille|circle|blocks|dot|none)"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: HudSpinner.allCases) func acceptsEverySpinnerStyle(style: HudSpinner) async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen,
+                                                     args: ControlArgs(message: "working",
+                                                                       spinner: style.rawValue)))
+
+        guard case let .hudOpen(_, _, spec) = try #require(actions.calls.first) else {
+            Issue.record("expected session.hud.open host call")
+            return
+        }
+        #expect(spec.spinner == style)
+    }
+
+    // the read-back spells a static panel `none`, so a caller round-tripping what `tree` gave it must not be
+    // rejected for a style that does not exist
+    @Test func acceptsTheReadBacksNoneAsNoSpinner() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen,
+                                                     args: ControlArgs(message: "working",
+                                                                       spinner: HudSpinner.noneName)))
+
+        guard case let .hudOpen(_, _, spec) = try #require(actions.calls.first) else {
+            Issue.record("expected session.hud.open host call")
+            return
+        }
+        #expect(spec.spinner == nil)
+    }
+
     @Test func openRoutesParsedSpecAndReturnsHostResponse() async throws {
         let actions = MockControlActions()
         let expected = ControlResponse(ok: true, result: ControlResult(id: "session-id"))
@@ -154,13 +202,13 @@ struct ControlDispatcherHudTests {
             cmd: .sessionHudOpen,
             target: "session-id",
             args: ControlArgs(sizePercent: 40, message: "gathering options", detail: "scanning 400 files",
-                              spinner: true, window: "window-id", color: "#112233", position: "top")
+                              spinner: "bar", window: "window-id", color: "#112233", position: "top")
         ))
 
         #expect(response == expected)
         let call = try #require(actions.calls.first)
         #expect(call == .hudOpen(target: "session-id", window: "window-id",
-                                 HudSpec(message: "gathering options", detail: "scanning 400 files", spinner: true,
+                                 HudSpec(message: "gathering options", detail: "scanning 400 files", spinner: .bar,
                                          backgroundColor: "#112233", sizePercent: 40, position: .top)))
     }
 
@@ -194,7 +242,7 @@ struct ControlDispatcherHudTests {
             return
         }
         #expect(spec.position == .center)
-        #expect(!spec.spinner)
+        #expect(spec.spinner == nil)
         #expect(spec.detail == nil)
         #expect(spec.backgroundColor == nil)
         #expect(spec.sizePercent == nil)

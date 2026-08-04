@@ -257,16 +257,39 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `isAvailable`'s `.overlay` arm, `isVisible`, and `paneVisible`. Widen `uncovered` and narrow the `.overlay`
   arm together or no case is active and the documented-unreachable `?? .primary` fallback runs. The explicit
   `surface:<id>:overlay` address is REFUSED for a HUD, and no overlay surface node is listed beside it.
-- Every HUD size passes `HudLayout.clampSizePercent` (10...80), the caller's `--size-percent` included, so
-  `--full`'s refusal and the never-cover invariant cannot disagree; that bound is also what makes
-  `top`/`bottom` always fit their edge margin. `OverlayPanelStyle.verticalOffset`'s centering fallback is
-  defensive only.
-- Read back `ControlSessionNode.hud`, with `overlay` false and `overlaySizePercent` omitted beside it;
-  `position` and `spinner` always report the effective value, defaults included. HUD state is poll-only.
+- A HUD sizes each axis separately, through `HudLayout.panelSize` into one `HudPanelSize` that travels
+  store-to-deck: width from the box's columns, height from its rows. One percent across both made every
+  panel as tall as it was wide, which is a square box around two lines of text, so `OverlayPanelStyle`
+  carries `widthFraction`/`heightFraction` and only a PROGRAM overlay sets them equal.
+- `--size-percent` reaches the WIDTH alone, on open and on `overlay.resize` — the text wraps at
+  `HudLayout.maxColumns`, not at the panel, so a resize changes no rows — and the height takes no caller
+  override at all. Every HUD WIDTH passes `HudLayout.clampSizePercent` (10...80), the caller's included, so
+  `--full`'s refusal and the never-cover invariant cannot disagree. The height is capped at the same 80 but
+  takes NO minimum floor: the box already carries `verticalPadding`, and flooring it is the square again.
+  The 80 cap is also what makes `top`/`bottom` always fit their edge margin, the height being what decides
+  how far the panel travels; `OverlayPanelStyle.verticalOffset`'s centering fallback is defensive only.
+- An unmeasured pane splits the fallback: width takes `maxSizePercent` (nothing is known to fit), height
+  takes `minSizePercent` (80% of a pane is a cover, not a message). `OverlayPanelStyle` falls back the same
+  way for a HUD whose height has not been measured yet.
+- `HudSpinner` owns the spinner: one case per style, each carrying its own FRAMES and tick interval, and
+  both ride the body header so the helper holds no table and a case is one edit. Frames must be single
+  scalars that render one column and contain no space — the header is word-split, and `spinnerWidth`
+  reserves exactly two cells. `dot`'s blank frame is U+00A0, not a space, for that reason.
+  The CLI keeps `--spinner` as the on switch for `HudSpinner.defaultStyle` and adds `--spinner-style`,
+  which implies it; both resolve client-side, so `ControlArgs.spinner` always carries a style name or
+  nothing and the dispatcher validates one thing. `noneName` is ACCEPTED by both, not just the socket —
+  refusing it in the CLI would fail a value `tree` had just handed the caller — and beats a bare
+  `--spinner` beside it. Rejection messages list it through `acceptedNamesList`, never the styles alone.
+- Read back `ControlSessionNode.hud` with BOTH shares, `sizePercent` and `heightPercent`, `overlay` false
+  and `overlaySizePercent` omitted beside it;
+  `position` and `spinner` always report the effective value, defaults included — `spinner` names the STYLE
+  and spells a static panel `HudSpinner.noneName`, which the dispatcher accepts back as "no spinner" so a
+  caller can round-trip what `tree` gave it. HUD state is poll-only.
   `openOverlay`/`closeOverlay` emit no `scheduleTreeChanged()` and neither does a HUD, so document no event.
 - The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with
   `AGTERM_HUD_FILE` as its only HUD-SPECIFIC variable (the surface still inherits the session environment
-  and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner and the APP'S PID
+  and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner (flag, interval
+  and frames) and the APP'S PID
   ride the body file's HEADER line and are re-read every tick, so `hud.update` repaints in place with no
   respawn; write that file atomically. It is per SESSION, so an update rewrites the path the running helper
   already opened. `Session.discardHudBody` is the only deleter and every store teardown runs it — close,
@@ -275,9 +298,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   at creation, so `hud.backgroundColor` never names a color the panel will not paint.
 - The header's grid is `HudLayout.paintGrid` — the PANEL's own cells (`panelGrid`: the effective percent of
   the pane, less `window-padding-*`, over the measured cell), NOT `HudLayout.box`, which only decides the
-  size. One percent sizes both dimensions, so the panel exceeds the box in whichever one did not drive it
-  and centering on the box strands the message toward the top-left. `box` remains the fallback when nothing
-  is measured. Every path that changes the panel's size — open, update, `overlay.resize` — must rewrite the
+  size. Both now measure the same message, so the two usually agree, but the panel is whole CELLS of a
+  rounded percent and the box is not — centering on the box can still strand the message by a column or a
+  row, and a `--size-percent` width detaches them outright. `box` remains the fallback when nothing is
+  measured. Every path that changes the panel's size — open, update, `overlay.resize` — must rewrite the
   header through `ControlServer.writeHudBody`, which reads the size the STORE resolved; a window resize is
   the one skew left, until the next update.
 - The helper forces `LC_CTYPE=UTF-8` on itself: `${#line}` counts BYTES otherwise, and a Dock-launched app

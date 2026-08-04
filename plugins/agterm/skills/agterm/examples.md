@@ -803,9 +803,12 @@ agtermctl session hud close --target "$me"
 ```
 
 `hud update` repaints in place, no re-spawn and no blink, and it replaces the whole spec: `--detail` and
-`--spinner` are dropped unless repeated. `--position top|center|bottom` moves the panel (default `center`;
+the spinner are dropped unless repeated. `--spinner-style bar|braille|circle|blocks|dot` picks the look and
+turns the spinner on by itself (`dot` blinks instead of animating, for a panel up for minutes), and an
+update may switch style mid-flight; `--spinner-style none` stops it, which is also what a read-back's
+`none` echoes back to. `--position top|center|bottom` moves the panel (default `center`;
 `top`/`bottom` keep a fixed margin off the pane edge on their own), and `--size-percent N` overrides the
-size measured from the message.
+panel's WIDTH; its height always follows the message.
 
 Read it back from the session node, and note the panel does NOT set `overlay` — one slot, and whichever
 occupant holds it is the one that reports:

@@ -70,11 +70,13 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// A HUD resizes like any floating panel — one slot, one size field — but never to FULL, which would
-    /// make the message cover the session it is about. A resized HUD also gets its body rewritten: the
-    /// helper centers on the grid in that file's header, so a new panel with the old header would paint the
-    /// message off-center until the next `session.hud.update`. A refused rewrite puts the size back rather
-    /// than leave the two disagreeing.
+    /// A HUD resizes through the same slot and field as any floating panel, but never to FULL, which would
+    /// make the message cover the session it is about. The percent reaches its WIDTH only — its height stays
+    /// measured from the message, and the text wraps at `HudLayout.maxColumns` rather than at the panel, so
+    /// a resize cannot change how many rows it needs. A resized HUD also gets its body rewritten: the helper
+    /// centers on the grid in that file's header, so a new panel with the old header would paint the message
+    /// off-center until the next `session.hud.update`. A refused rewrite puts the size back rather than
+    /// leave the two disagreeing.
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             let session = store.session(withID: id)

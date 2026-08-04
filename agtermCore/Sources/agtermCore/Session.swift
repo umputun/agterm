@@ -240,12 +240,19 @@ public final class Session: Identifiable {
     /// `session.overlay.result`; in-memory only.
     @ObservationIgnored public var overlayExitCode: Int?
 
-    /// The percent of the pane (width and height) an opaque framed panel occupies with the session still
-    /// VISIBLE behind it; nil is the full-pane program overlay, which hides it and draws translucent.
-    /// 1...100 for a floating PROGRAM overlay, which is always centered; a HUD shares the field but is bounded
-    /// by `HudLayout.clampSizePercent` and placed by its own `HudSpec.position`. Cleared on close, never
-    /// persisted.
+    /// The percent of the pane an opaque framed panel occupies with the session still VISIBLE behind it; nil
+    /// is the full-pane program overlay, which hides it and draws translucent. 1...100 for a floating PROGRAM
+    /// overlay, which takes it on BOTH axes and is always centered; a HUD shares the field for its WIDTH
+    /// only, bounded by `HudLayout.clampSizePercent` and placed by its own `HudSpec.position`, and sizes its
+    /// height through `hudHeightPercent`. Cleared on close, never persisted.
     public var overlaySizePercent: Int?
+
+    /// The percent of the pane's HEIGHT a HUD panel occupies, measured from its message rather than set by
+    /// the caller (`HudLayout.heightPercent`); nil for an empty slot and for a program overlay, which takes
+    /// `overlaySizePercent` on both axes. A HUD is two or three lines of text, so sharing one percent across
+    /// both axes made every panel as tall as it was wide. Observed — the deck reads it to frame the panel.
+    /// Cleared with the rest of the HUD state, never persisted.
+    public var hudHeightPercent: Int?
 
     /// Bumped on every overlay-slot OPEN so the deck can key the panel's view identity on it. A HUD is
     /// REPLACED in place — `closeOverlay` then `openOverlay` inside one store call — so `overlayActive`
@@ -274,6 +281,7 @@ public final class Session: Identifiable {
         if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
         hudSpec = nil
         hudFile = nil
+        hudHeightPercent = nil
     }
 
     /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the

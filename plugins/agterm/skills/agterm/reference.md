@@ -121,13 +121,15 @@ to restore the exact size),
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
-when none is up. A `{message, detail?, spinner, backgroundColor?, sizePercent?, position}` object:
-`detail` and `backgroundColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE 10–80
-share of the pane the panel takes (the app's measurement of the message, or the caller's `--size-percent`
-override, either way bounded so a message never covers the session; always present for a live HUD), and
-`position` and `spinner`
-always report the effective value, `center` and `false` included, so a caller who omitted them never has to
-know the defaults. `hud` and `overlay` are mutually exclusive — one slot — and a HUD reports `overlay`
+when none is up. A `{message, detail?, spinner, backgroundColor?, sizePercent?, heightPercent?, position}`
+object: `detail` and `backgroundColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE
+10–80 share of the pane's WIDTH the panel takes (the app's measurement of the message, or the caller's
+`--size-percent` override, either way bounded so a message never covers the session; always present for a
+live HUD), `heightPercent` is the effective share of its HEIGHT, always measured from the message's rows
+and never set by a caller, and `position` and `spinner`
+always report the effective value, `center` and a static panel's `none` included, so a caller who omitted
+them never has to know the defaults. `spinner` names the STYLE, a string, so a static panel reads back as
+`"none"` rather than `false`. `hud` and `overlay` are mutually exclusive — one slot — and a HUD reports `overlay`
 FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
 a message for one. No event announces a HUD; poll `tree` for it),
 `scratch` (scratch shown), `flagged` (in the
@@ -575,10 +577,11 @@ All twelve are read-only projections of GUI state.
   or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
   resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
   session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
-  HUD a percent is accepted (the panel re-flows and its `hud.sizePercent` reports the new value) but
-  `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size would
-  cover the session the message is about. The text stays centred on the box it was rendered with until the
-  next `session hud update`.
+  HUD a percent is accepted and re-flows its WIDTH (the panel re-flows and its `hud.sizePercent` reports the
+  new value; `hud.heightPercent` does not move, the text wrapping at a fixed 60 columns rather than at the
+  panel) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
+  would cover the session the message is about. The resize rewrites the body header itself, so the panel
+  re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
   `--pane` closes that split pane's overlay; omit it for the session-wide one. It also takes a HUD down,
   as a courtesy — the slot is the same one.
@@ -588,7 +591,7 @@ All twelve are read-only projections of GUI state.
   not a caller's program, so there is no status to report and the session-wide arm errors
   `no overlay result: the slot holds a hud`; the `--pane` arm is unaffected, since a HUD only ever takes
   the session-wide slot.
-- `session hud [open] <message> [--detail T] [--spinner] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N] [--target] [--window W]`
+- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N] [--target] [--window W]`
   — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
   as `session overlay open`, but carries a message rather than a program: it takes no input, the session
   keeps first responder and stays typable, and the terminal behind it is neither dimmed nor click-blocked.
@@ -596,24 +599,33 @@ All twelve are read-only projections of GUI state.
   slow command — so the user reads what is happening in the session he is about to be pulled into.
   `open` is the group's default subcommand (`session hud "gathering options…"`); a message that is
   literally `update` or `close` needs the explicit `hud open` verb. `--detail` adds a dim second line,
-  `--spinner` animates a glyph beside the message, and `--position` places the panel vertically (default
+  `--spinner` animates a glyph beside the message in the default `bar` style, `--spinner-style` picks
+  another from `bar|braille|circle|blocks|dot` and turns the spinner on by itself — `dot` blinks rather than
+  animating, for a panel that sits up for minutes. `--spinner-style none` is accepted too and leaves the
+  panel static, so the `none` a read-back reports can be echoed straight back; an unknown name is refused
+  `invalid spinner: <value> (bar|braille|circle|blocks|dot|none)`. `--position` places the panel vertically (default
   `center`; `top` and `bottom` hold a fixed margin off the pane edge, so a panel at the largest allowed
-  size never overhangs). Size is measured from the message against the session's terminal font unless
-  `--size-percent N` (1–100) sets it; either way the effective share is bounded to 10–80% of the pane,
-  the same invariant that makes `session overlay resize --full` a refusal, so a requested 100 reads back
-  as 80. `--background-color #rrggbb` gives the panel its own solid
+  size never overhangs). The panel is measured from the message against the session's terminal font on BOTH
+  axes separately — width from the longest wrapped line, height from the number of them — so a title and a
+  subtitle give a wide, short panel rather than a square one. `--size-percent N` (1–100) overrides the WIDTH
+  only; the height always follows the message, since a caller-set height could only strand it in an empty
+  box. The effective width is bounded to 10–80% of the pane, the same invariant that makes
+  `session overlay resize --full` a refusal, so a requested 100 reads back as 80. Both effective shares read
+  back, as `hud.sizePercent` and `hud.heightPercent`. `--background-color #rrggbb` gives the panel its own solid
   background, read once when the panel is created. Message and detail are capped at 256 characters and
   reject control characters — newline included, since the panel prints straight into a live terminal and
   `--detail` is the second line on offer. Errors `session.hud.open requires a message` on a missing or
   empty message, `hud text must not contain control characters`, `hud message too long (max 256
   characters)` / `hud detail too long (max 256 characters)`, `invalid color: <value> (#rrggbb)`,
-  `invalid position: <value> (top|center|bottom)`, and `session.hud.open: --size-percent must be 1...100`.
+  `invalid position: <value> (top|center|bottom)`, `invalid spinner: <value> (bar|braille|circle|blocks|dot|none)`,
+  and `session.hud.open: --size-percent must be 1...100`.
   A second `hud` replaces the first; a `session overlay open` replaces a HUD, while a HUD over a RUNNING
   program is refused with `overlay already open` — a message is replaceable, a program is not.
-- `session hud update <message> [--detail T] [--spinner] [--position P] [--size-percent N] [--target] [--window W]`
+- `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--size-percent N] [--target] [--window W]`
   — repaint the live panel in place: no re-spawn, no blink, the panel does not flicker. It REPLACES the
-  whole spec rather than patching it, so `--detail`, `--spinner`, and `--position` must be repeated to
-  survive and an omitted one drops. Same required message and same rejections as `open`. There is no
+  whole spec rather than patching it, so `--detail`, the spinner, and `--position` must be repeated to
+  survive and an omitted one drops. `--spinner-style` may name a DIFFERENT style than the panel opened
+  with; the frames ride the message file, so the look changes on the next tick with no re-spawn. Same required message and same rejections as `open`. There is no
   `--background-color`: the surface reads that once at creation, so only a fresh `session hud` can change
   it, and `tree` keeps reporting the creation color across updates. Errors `no hud` when none is up.
 - `session hud close [--target] [--window W]` — take the panel down and delete its message file. Errors
@@ -1075,6 +1087,8 @@ here is app-global and touches only the captured commands, not those overrides.
 `hud helper is not bundled in this build` / `could not write the hud message` /
 `invalid position: <value> (top|center|bottom)` (session hud over the raw socket; the `agtermctl` CLI
 rejects the same value locally with `position must be one of: top, center, bottom`),
+`invalid spinner: <value> (bar|braille|circle|blocks|dot|none)` (same split: the CLI rejects it locally with
+`spinner style must be one of: bar, braille, circle, blocks, dot, none`),
 `invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),

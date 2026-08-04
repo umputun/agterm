@@ -213,8 +213,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel occupies in
     /// both dimensions; omitted gives the default full-pane overlay. Also the new size for
     /// `session.overlay.resize` (mutually exclusive with `full`), and the caller's OVERRIDE of the HUD panel's
-    /// app-measured size for `session.hud.open`/`.update` — a HUD is always floating, so omitting it sizes the
-    /// panel from the message rather than covering the pane.
+    /// app-measured WIDTH for `session.hud.open`/`.update` — a HUD is always floating, so omitting it sizes the
+    /// panel from the message rather than covering the pane, and its height is measured either way.
     public var sizePercent: Int?
     /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay — the way
     /// to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.
@@ -232,9 +232,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var message: String?
     /// The HUD panel's dim second line, wrapped below the message; nil/omitted leaves the panel one block.
     public var detail: String?
-    /// Whether the HUD panel animates a spinner glyph (and ticks faster to drive it); nil/omitted = static.
+    /// The HUD panel's spinner STYLE, a `HudSpinner` raw value; nil/omitted = static, no glyph. The CLI's
+    /// bare `--spinner` resolves to `HudSpinner.defaultStyle` before it gets here, so this always names a
+    /// style or nothing and the dispatcher has one thing to validate.
     /// The box reserves the glyph's cells either way, so toggling it cannot rewrap the message.
-    public var spinner: Bool?
+    public var spinner: String?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
@@ -290,7 +292,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
-                follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: Bool? = nil,
+                follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
@@ -418,28 +420,36 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     public let message: String
     /// The dim second line; nil/omitted when the caller set none.
     public let detail: String?
-    public let spinner: Bool
+    /// The EFFECTIVE spinner style, a `HudSpinner` raw value or `HudSpinner.noneName`. Always present, the
+    /// static case included, so a caller reads one field rather than inferring absence.
+    public let spinner: String
     /// The panel's own `#rrggbb` background; nil/omitted when it keeps the session's terminal background. The
     /// color the open set, which survives every `session.hud.update` — the surface reads it once at creation,
     /// so this always names what the panel paints.
     public let backgroundColor: String?
-    /// The EFFECTIVE share of the pane the panel occupies — the app's measurement, or the caller's
+    /// The EFFECTIVE share of the pane's WIDTH the panel occupies — the app's measurement, or the caller's
     /// `sizePercent` override, either way bounded by `HudLayout.clampSizePercent`, so a requested 100 reads
     /// back as the maximum a HUD may take. Reported here because the node's `overlaySizePercent` stays
     /// omitted for a HUD. Optional because it projects the slot's optional percent, but no supported path
     /// leaves a live HUD sizeless: `openHud` always sets one and `overlay.resize --full` is refused.
     public let sizePercent: Int?
+    /// The EFFECTIVE share of the pane's HEIGHT, always measured from the message (`HudLayout.heightPercent`)
+    /// because no command sets it. Reported beside `sizePercent` so a caller polling the panel's geometry
+    /// reads both axes rather than assuming one square.
+    public let heightPercent: Int?
     /// The EFFECTIVE vertical placement, a `HudPosition` raw value (`top`|`center`|`bottom`). Always present,
     /// including the `center` default, so a caller who omitted it never has to know what the default is.
     public let position: String
 
-    public init(message: String, detail: String? = nil, spinner: Bool = false, backgroundColor: String? = nil,
-                sizePercent: Int? = nil, position: String) {
+    public init(message: String, detail: String? = nil, spinner: String = HudSpinner.noneName,
+                backgroundColor: String? = nil,
+                sizePercent: Int? = nil, heightPercent: Int? = nil, position: String) {
         self.message = message
         self.detail = detail
         self.spinner = spinner
         self.backgroundColor = backgroundColor
         self.sizePercent = sizePercent
+        self.heightPercent = heightPercent
         self.position = position
     }
 }

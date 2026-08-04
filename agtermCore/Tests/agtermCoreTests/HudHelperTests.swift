@@ -32,7 +32,7 @@ struct HudHelperTests {
         private let outFile: URL
         private let proc = Process()
 
-        init(_ body: String, cols: Int, rows: Int, spinner: Bool = false,
+        init(_ body: String, cols: Int, rows: Int, spinner: HudSpinner? = nil,
              ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
             let fm = FileManager.default
             dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-hud-\(UUID().uuidString)")
@@ -53,8 +53,13 @@ struct HudHelperTests {
             try proc.run()
         }
 
-        private static func header(cols: Int, rows: Int, spinner: Bool, owner: Int32) -> String {
-            "\(cols) \(rows) \(spinner ? 1 : 0) \(owner)\n"
+        /// Builds the header by hand rather than through `HudLayout.renderedBody`, so a test can hand the
+        /// script a grid no message would produce; the FORMAT still has to match, which is the contract these
+        /// tests exist to pin.
+        private static func header(cols: Int, rows: Int, spinner: HudSpinner?, owner: Int32) -> String {
+            let interval = spinner?.interval ?? HudSpinner.staticInterval
+            let frames = (spinner?.frames ?? []).map { " " + $0 }.joined()
+            return "\(cols) \(rows) \(spinner != nil ? 1 : 0) \(owner) \(interval)\(frames)\n"
         }
 
         private static func write(_ body: String, header: String, to file: URL) throws {
@@ -64,7 +69,7 @@ struct HudHelperTests {
         var painted: String { (try? String(contentsOf: outFile, encoding: .utf8)) ?? "" }
         var running: Bool { proc.isRunning }
 
-        func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: Bool = false,
+        func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: HudSpinner? = nil,
                      ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
             try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner, owner: ownerPid),
                           to: bodyFile)
@@ -84,7 +89,9 @@ struct HudHelperTests {
 
         /// Whether every needle reaches the painted stream before the timeout — the whole assertion for most
         /// of these tests, since the helper writes frames and never rewrites history.
-        func paints(_ needles: String...) -> Bool {
+        func paints(_ needles: String...) -> Bool { paints(needles) }
+
+        func paints(_ needles: [String]) -> Bool {
             let text = wait { painted in needles.allSatisfy(painted.contains) }
             return needles.allSatisfy(text.contains)
         }
@@ -140,19 +147,19 @@ struct HudHelperTests {
     }
 
     @Test func picksUpARewrittenBodyWithoutRespawning() throws {
-        let run = try Run("first\n", cols: 40, rows: 7, spinner: true)
+        let run = try Run("first\n", cols: 40, rows: 7, spinner: .bar)
         defer { run.stop() }
         run.wait { $0.contains("first") }
-        try run.rewrite("second\n", spinner: true)
+        try run.rewrite("second\n", spinner: .bar)
         #expect(run.paints("second"))
         #expect(run.running)
     }
 
     @Test func rewritingResizesTheContentInsideTheSameBox() throws {
-        let run = try Run("abc\n", cols: 41, rows: 9, spinner: true)
+        let run = try Run("abc\n", cols: 41, rows: 9, spinner: .bar)
         defer { run.stop() }
         run.wait { $0.contains("abc") }
-        try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: true)
+        try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: .bar)
         // 41 - 7 content - 2 spinner leaves 16 to the left, versus 18 for the shorter message
         #expect(run.paints("\(Self.esc)[16C"))
     }
@@ -176,7 +183,7 @@ struct HudHelperTests {
         defer { run.stop() }
         run.wait { $0.contains("busy") }
         #expect(!run.painted.contains("| busy"))
-        try run.rewrite("busy\n", spinner: true)
+        try run.rewrite("busy\n", spinner: .bar)
         #expect(run.paints("| busy"))
         #expect(run.running)
     }
@@ -192,9 +199,36 @@ struct HudHelperTests {
     }
 
     @Test func spinnerPrefixesTheFirstLineAndAdvances() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, spinner: true)
+        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .bar)
         defer { run.stop() }
         #expect(run.paints("| busy", "/ busy", "- busy"))
+    }
+
+    // the frames live in the header, not the script, so a style the helper has never heard of animates
+    @Test(arguments: HudSpinner.allCases) func paintsWhicheverFramesTheHeaderCarries(style: HudSpinner) throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, spinner: style)
+        defer { run.stop() }
+        #expect(run.paints(style.frames.map { "\($0) busy" }))
+    }
+
+    @Test func switchingStyleRepaintsWithoutRespawning() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .bar)
+        defer { run.stop() }
+        run.wait { $0.contains("| busy") }
+        try run.rewrite("busy\n", spinner: .braille)
+        #expect(run.paints("⠋ busy"))
+        #expect(run.running)
+    }
+
+    // the blink's off frame is a NO-BREAK SPACE, which the header's word splitting keeps and which still
+    // occupies the glyph's column: a real space would be swallowed and the message would jump two columns
+    // left on every other frame.
+    @Test func theBlinkKeepsItsColumnOnTheOffFrame() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .dot)
+        defer { run.stop() }
+        // 40 columns less 4 for "busy" less 2 for the glyph leaves 17 on both frames
+        #expect(run.paints("\(Self.esc)[17C● busy"))
+        #expect(run.paints("\(Self.esc)[17C\u{00A0} busy"))
     }
 
     @Test func noSpinnerGlyphWithoutTheFlag() throws {
@@ -206,7 +240,7 @@ struct HudHelperTests {
     }
 
     @Test func exitsWhenTheBodyFileDisappears() throws {
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: true)
+        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar)
         defer { run.stop() }
         run.wait { $0.contains("bye") }
         try run.removeBody()
@@ -223,7 +257,7 @@ struct HudHelperTests {
         // `Run`'s initializer can throw, which would otherwise leave this sleeper behind for the whole run
         defer { if owner.isRunning { owner.terminate() } }
 
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: true, ownerPid: owner.processIdentifier)
+        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar, ownerPid: owner.processIdentifier)
         defer { run.stop() }
         run.wait { $0.contains("bye") }
         #expect(run.running)
@@ -295,7 +329,7 @@ struct HudHelperTests {
     }
 
     @Test func hidesTheCursorAndRestoresItOnExit() throws {
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: true)
+        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar)
         defer { run.stop() }
         run.wait { $0.contains("bye") }
         #expect(run.painted.hasPrefix("\(Self.esc)[?25l"))

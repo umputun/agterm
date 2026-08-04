@@ -762,6 +762,27 @@ struct Session: ParsableCommand {
             }
         }
 
+        /// Accepts `HudSpinner.noneName` beside the styles, exactly as the dispatcher does: `none` is what
+        /// the read-back reports for a static panel, and refusing it here would make a value `tree` just
+        /// handed the caller fail locally while the identical raw-socket request succeeds.
+        static func validateSpinnerStyle(_ style: String?) throws {
+            if let style, style != HudSpinner.noneName, HudSpinner(rawValue: style) == nil {
+                throw ValidationError("spinner style must be one of: \(HudSpinner.acceptedNamesPhrase)")
+            }
+        }
+
+        /// The one spinner value the socket carries, from the two ways to ask for one: `--spinner-style`
+        /// names it and turns it on by itself, so the bare `--spinner` flag is only needed for the default.
+        /// Nil when neither is given, which is the static panel.
+        ///
+        /// An explicit `--spinner-style none` also resolves to nil, and beats a bare `--spinner` beside it:
+        /// naming a value is the more specific instruction, which is the same rule that makes a named style
+        /// win over the flag's default.
+        static func spinnerValue(spinner: Bool, style: String?) -> String? {
+            if style == HudSpinner.noneName { return nil }
+            return style ?? (spinner ? HudSpinner.defaultStyle.rawValue : nil)
+        }
+
         static func validateSizePercent(_ sizePercent: Int?) throws {
             if let sizePercent, !(1...100).contains(sizePercent) {
                 throw ValidationError("--size-percent must be between 1 and 100")
@@ -773,7 +794,14 @@ struct Session: ParsableCommand {
                 abstract: "Post a message panel over the session; the session keeps focus and stays typable.")
             @Argument(help: "Message shown in the panel.") var message: String
             @Option(name: .long, help: "Dim second line under the message (e.g. what the caller is waiting on).") var detail: String?
-            @Flag(name: .long, help: "Animate a spinner glyph in the panel.") var spinner = false
+            @Flag(name: .long, help: "Animate a spinner glyph in the panel, in the default style.")
+            var spinner = false
+            @Option(name: .long, help: """
+                Spinner style: \(HudSpinner.acceptedNamesPhrase) \
+                (default: \(HudSpinner.defaultStyle.rawValue)). Implies --spinner; \
+                \(HudSpinner.noneName) leaves the panel static.
+                """)
+            var spinnerStyle: String?
             @Option(name: .long, help: """
                 Vertical placement: \(HudPosition.validNamesPhrase) (default: center). \
                 top and bottom hold a fixed margin at the pane's edge.
@@ -781,9 +809,9 @@ struct Session: ParsableCommand {
             var position: String?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the panel, independent of the session's own.") var backgroundColor: String?
             @Option(name: .long, help: """
-                Size the panel at PERCENT (1-100) of the pane instead of measuring the message; \
+                Set the panel's WIDTH to PERCENT (1-100) of the pane instead of measuring the message; \
                 bounded to \(HudLayout.minSizePercent)-\(HudLayout.maxSizePercent), so it stays readable \
-                and never covers the session.
+                and never covers the session. Height always follows the message.
                 """)
             var sizePercent: Int?
             @OptionGroup var target: TargetOptions
@@ -794,14 +822,16 @@ struct Session: ParsableCommand {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
                 try Hud.validatePosition(position)
+                try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateSizePercent(sizePercent)
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionHudOpen, target: target.target,
-                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, message: message,
-                                                                     detail: detail, spinner: spinner ? true : nil,
-                                                                     color: backgroundColor, position: position)))
+                               args: options.withWindow(ControlArgs(
+                                   sizePercent: sizePercent, message: message, detail: detail,
+                                   spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   color: backgroundColor, position: position)))
             }
         }
 
@@ -813,12 +843,18 @@ struct Session: ParsableCommand {
                 abstract: "Replace the panel's text in place (no re-spawn, no blink).")
             @Argument(help: "New message; it replaces the old one entirely.") var message: String
             @Option(name: .long, help: "Dim second line under the message; omit to drop the old one.") var detail: String?
-            @Flag(name: .long, help: "Keep (or start) the spinner glyph; omit to stop it.") var spinner = false
+            @Flag(name: .long, help: "Keep (or start) the spinner in the default style; omit to stop it.")
+            var spinner = false
+            @Option(name: .long, help: """
+                Switch the spinner to \(HudSpinner.acceptedNamesPhrase); implies --spinner, and repaints \
+                the live panel without a re-spawn. \(HudSpinner.noneName) stops it.
+                """)
+            var spinnerStyle: String?
             @Option(name: .long, help: "Move the panel to \(HudPosition.validNamesPhrase) (default: center).") var position: String?
             @Option(name: .long, help: """
-                Resize the panel to PERCENT (1-100) of the pane instead of measuring the message; \
+                Resize the panel's WIDTH to PERCENT (1-100) of the pane instead of measuring the message; \
                 bounded to \(HudLayout.minSizePercent)-\(HudLayout.maxSizePercent), so it stays readable \
-                and never covers the session.
+                and never covers the session. Height always follows the message.
                 """)
             var sizePercent: Int?
             @OptionGroup var target: TargetOptions
@@ -826,14 +862,16 @@ struct Session: ParsableCommand {
 
             func validate() throws {
                 try Hud.validatePosition(position)
+                try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateSizePercent(sizePercent)
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionHudUpdate, target: target.target,
-                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, message: message,
-                                                                     detail: detail, spinner: spinner ? true : nil,
-                                                                     position: position)))
+                               args: options.withWindow(ControlArgs(
+                                   sizePercent: sizePercent, message: message, detail: detail,
+                                   spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   position: position)))
             }
         }
 

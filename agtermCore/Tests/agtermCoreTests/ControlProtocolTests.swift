@@ -190,7 +190,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "gathering options")),
             ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
                            args: ControlArgs(sizePercent: 40, message: "gathering options",
-                                             detail: "scanning 400 files", spinner: true,
+                                             detail: "scanning 400 files", spinner: "braille",
                                              window: "win", color: "#2a1a3a", position: "top")),
             ControlRequest(cmd: .sessionHudUpdate, target: "9f3c",
                            args: ControlArgs(message: "almost there", detail: "12 left", position: "bottom")),
@@ -221,11 +221,15 @@ struct ControlProtocolTests {
         }
     }
 
-    @Test func sessionHudSpinnerRoundTripsBothWays() throws {
-        let on = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "x", spinner: true))
-        let off = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "x", spinner: false))
-        #expect(try roundTrip(on).args?.spinner == true)
-        #expect(try roundTrip(off).args?.spinner == false)
+    @Test(arguments: HudSpinner.allCases) func everySpinnerStyleRoundTrips(style: HudSpinner) throws {
+        let request = ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
+                                     args: ControlArgs(message: "x", spinner: style.rawValue))
+        #expect(try roundTrip(request).args?.spinner == style.rawValue)
+    }
+
+    @Test func sessionHudSpinnerCarriesNoneAsAnAbsentField() throws {
+        let off = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "x"))
+        #expect(try roundTrip(off).args?.spinner == nil)
     }
 
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
@@ -794,7 +798,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithHud() throws {
-        let hud = ControlHudNode(message: "gathering options", detail: "scanning 400 files", spinner: true,
+        let hud = ControlHudNode(message: "gathering options", detail: "scanning 400 files", spinner: "braille",
                                  backgroundColor: "#2a1a3a", sizePercent: 35, position: "top")
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, hud: hud)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -819,7 +823,7 @@ struct ControlProtocolTests {
         #expect(!json.contains("backgroundColor"), "a nil background must be omitted from the JSON; got \(json)")
         #expect(!json.contains("sizePercent"), "a nil size must be omitted from the JSON; got \(json)")
         #expect(json.contains("\"position\":\"center\""), "the effective position must always be emitted; got \(json)")
-        #expect(json.contains("\"spinner\":false"), "the effective spinner must always be emitted; got \(json)")
+        #expect(json.contains("\"spinner\":\"none\""), "the effective spinner must always be emitted; got \(json)")
         let decoded = try JSONDecoder().decode(ControlHudNode.self, from: Data(json.utf8))
         #expect(decoded == hud)
     }

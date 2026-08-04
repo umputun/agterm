@@ -196,7 +196,9 @@ extension AppStore {
     /// nil to the translucent full-pane overlay, as in `openOverlay`. The surface stays mounted (the detail
     /// pane hosts both variants), so only the layout re-flows and the program never re-spawns. False with no
     /// open overlay. A HUD in the slot takes the narrower `HudLayout.clampSizePercent` bound instead, so no
-    /// resize path can grow a message until it covers the session it is about.
+    /// resize path can grow a message until it covers the session it is about, and the percent reaches its
+    /// WIDTH alone: its height stays measured from the message, which a resize does not change (the text
+    /// wraps at `HudLayout.maxColumns`, not at the panel).
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
         let hud = session.hudActive
@@ -237,12 +239,14 @@ extension AppStore {
     /// A live HUD is REPLACED (torn down and re-opened, so the helper picks up the new file), a live
     /// PROGRAM overlay refuses. False for an unknown session or an occupied program slot. NOT persisted.
     @discardableResult public func openHud(_ sessionID: UUID, command: String, spec: HudSpec, file: String,
-                                           sizePercent: Int) -> Bool {
-        guard openOverlay(sessionID, command: command, sizePercent: HudLayout.clampSizePercent(sizePercent),
+                                           size: HudPanelSize) -> Bool {
+        guard openOverlay(sessionID, command: command,
+                          sizePercent: HudLayout.clampSizePercent(size.widthPercent),
                           backgroundColor: spec.backgroundColor),
               let session = session(withID: sessionID) else { return false }
         session.hudSpec = spec
         session.hudFile = file
+        session.hudHeightPercent = size.heightPercent
         return true
     }
 
@@ -254,11 +258,12 @@ extension AppStore {
     /// dropped. Only a replacing `openHud` changes the color, and the read-back keeps naming what the panel
     /// actually paints. False with no HUD up, which is the only failure: `resizeOverlay` refuses an empty
     /// slot alone, and a live HUD occupies one.
-    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, sizePercent: Int) -> Bool {
+    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, size: HudPanelSize) -> Bool {
         guard let session = session(withID: sessionID), let live = session.hudSpec,
               session.hudActive else { return false }
         session.hudSpec = spec.withBackgroundColor(live.backgroundColor)
-        resizeOverlay(sessionID, sizePercent: sizePercent)
+        session.hudHeightPercent = size.heightPercent
+        resizeOverlay(sessionID, sizePercent: size.widthPercent)
         return true
     }
 

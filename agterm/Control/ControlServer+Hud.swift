@@ -24,7 +24,7 @@ extension ControlServer {
             // deletes the body file at this same per-session path — writing first would lose it. The
             // header's grid also comes from the size the store RESOLVED, which only exists after this call.
             guard store.openHud(id, command: command, spec: spec, file: file,
-                                sizePercent: Self.sizePercent(for: spec, pane: metrics)) else {
+                                size: HudLayout.panelSize(for: spec, pane: metrics)) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
             // the rolled-back HUD never realized a surface, and a replaced predecessor's file sits at this
@@ -45,13 +45,15 @@ extension ControlServer {
             // `hudActive` is the occupancy question, asked once and separately from the mutation below, so
             // a store that refused for another reason cannot come back as `noHud`.
             guard let session = store.session(withID: id), session.hudActive,
-                  let previous = session.hudSpec, let previousSize = session.overlaySizePercent else {
+                  let previous = session.hudSpec, let previousSize = session.overlaySizePercent,
+                  let previousHeight = session.hudHeightPercent else {
                 return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
             let metrics = self.paneMetrics(for: session)
-            store.updateHud(id, spec: spec, sizePercent: Self.sizePercent(for: spec, pane: metrics))
+            store.updateHud(id, spec: spec, size: HudLayout.panelSize(for: spec, pane: metrics))
             guard self.writeHudBody(session, pane: metrics) else {
-                store.updateHud(id, spec: previous, sizePercent: previousSize)
+                store.updateHud(id, spec: previous,
+                                size: HudPanelSize(widthPercent: previousSize, heightPercent: previousHeight))
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -68,13 +70,6 @@ extension ControlServer {
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
-    }
-
-    /// The share of the pane the panel takes: the caller's `--size-percent` when set, else the message's
-    /// own cell box measured against `pane`.
-    private static func sizePercent(for spec: HudSpec, pane: PaneMetrics) -> Int {
-        if let requested = spec.sizePercent { return requested }
-        return HudLayout.sizePercent(box: HudLayout.box(for: spec), pane: pane)
     }
 
     /// The terminal's padding inside the panel, per side, from `Resources/ghostty-defaults.conf`
@@ -149,8 +144,9 @@ extension ControlServer {
     /// painting whatever it last read, which is why every caller rolls its store change back.
     func writeHudBody(_ session: Session, pane: PaneMetrics) -> Bool {
         guard let path = session.hudFile, let spec = session.hudSpec,
-              let size = session.overlaySizePercent else { return false }
-        let grid = HudLayout.paintGrid(for: spec, sizePercent: size, pane: pane)
+              let size = session.overlaySizePercent, let height = session.hudHeightPercent else { return false }
+        let grid = HudLayout.paintGrid(for: spec, size: HudPanelSize(widthPercent: size, heightPercent: height),
+                                       pane: pane)
         let rendered = HudLayout.renderedBody(for: spec, grid: grid,
                                               ownerPid: ProcessInfo.processInfo.processIdentifier)
         return (try? Data(rendered.utf8).write(to: URL(fileURLWithPath: path), options: .atomic)) != nil

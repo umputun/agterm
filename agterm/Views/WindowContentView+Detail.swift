@@ -207,8 +207,8 @@ extension WindowContentView {
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: { makeOverlaySurface($0, nil) },
                                  isActive: live, deckVisible: live, viewOnly: !style.interactive)
-                        .frame(width: geo.size.width * style.fraction,
-                               height: geo.size.height * style.fraction)
+                        .frame(width: geo.size.width * style.widthFraction,
+                               height: geo.size.height * style.heightFraction)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
                         // still-visible session; full = translucent and chromeless (libghostty draws only the
                         // terminal, so the window backing shows through); a HUD keeps the backing but drops
@@ -318,8 +318,12 @@ struct DeckPaneGates {
 /// a full one. A value type so the deck flips PARAMETERS only and the modifier chain stays constant, per the
 /// rule `sessionDetail` states.
 struct OverlayPanelStyle: Equatable {
-    /// pane fraction the panel occupies in both dimensions; 1 for a full overlay.
-    let fraction: CGFloat
+    /// pane fraction the panel occupies horizontally; 1 for a full overlay.
+    let widthFraction: CGFloat
+    /// pane fraction the panel occupies vertically. A program overlay takes the same value on both axes —
+    /// it is a terminal, and a square-ish region is what it wants — while a HUD measures this one from its
+    /// message alone, so a two-line panel is two lines tall however wide it had to be.
+    let heightFraction: CGFloat
     /// opaque backing: both framed variants, never the chromeless full overlay.
     let framed: Bool
     let cornerRadius: CGFloat
@@ -349,24 +353,31 @@ struct OverlayPanelStyle: Equatable {
         guard session.hudActive else {
             // the full overlay is chromeless: no radius, no border, no shadow.
             let floating = session.overlaySizePercent != nil
-            return OverlayPanelStyle(fraction: fraction, framed: floating,
+            return OverlayPanelStyle(widthFraction: fraction, heightFraction: fraction, framed: floating,
                                      cornerRadius: floating ? floatingCornerRadius : 0,
                                      borderOpacity: floating ? floatingBorderOpacity : 0,
                                      shadowRadius: floating ? floatingShadowRadius : 0,
                                      backdrop: floating, interactive: true, position: .center)
         }
-        return OverlayPanelStyle(fraction: fraction, framed: true, cornerRadius: hudCornerRadius,
-                                 borderOpacity: hudBorderOpacity, shadowRadius: 0, backdrop: false,
-                                 interactive: false, position: session.hudSpec?.position ?? .center)
+        // a HUD with no measured height has not been through `openHud` yet; falling back to the width would
+        // put the square back for exactly the frame that would be seen first.
+        let height = session.hudHeightPercent.map { CGFloat($0) / 100 }
+            ?? CGFloat(HudLayout.minSizePercent) / 100
+        return OverlayPanelStyle(widthFraction: fraction, heightFraction: height, framed: true,
+                                 cornerRadius: hudCornerRadius, borderOpacity: hudBorderOpacity,
+                                 shadowRadius: 0, backdrop: false, interactive: false,
+                                 position: session.hudSpec?.position ?? .center)
     }
 
     /// The panel's offset from the pane's center, positive downward. `top`/`bottom` hold
-    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge. Every size a HUD can reach fits that
-    /// margin — `HudLayout.clampSizePercent` caps it where two margins exactly fill the rest — so the
-    /// centering fallback below is defensive only, for a panel no supported path can produce.
+    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge. It is the HEIGHT that decides how far
+    /// the panel can travel, and every height a HUD can reach fits that margin — `HudLayout.heightPercent`
+    /// caps it at `maxSizePercent`, where two margins exactly fill the rest — so `max(0,` is defensive only,
+    /// for a panel no supported path can produce. A message-sized panel now leaves most of the pane free,
+    /// so `top` and `bottom` reach the edge instead of barely clearing center.
     func verticalOffset(paneHeight: CGFloat) -> CGFloat {
         let margin = CGFloat(HudPosition.edgeMarginPercent) / 100
-        let free = max(0, paneHeight * ((1 - fraction) / 2 - margin))
+        let free = max(0, paneHeight * ((1 - heightFraction) / 2 - margin))
         switch position {
         case .center: return 0
         case .top: return -free

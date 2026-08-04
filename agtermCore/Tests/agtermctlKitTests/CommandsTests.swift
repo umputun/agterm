@@ -907,11 +907,59 @@ struct CommandsTests {
         // --background-color maps to ControlArgs.color, as the overlay group does.
         let expected = ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
                                       args: ControlArgs(sizePercent: 40, message: "building index",
-                                                        detail: "3 of 12 repos", spinner: true, window: "w1",
+                                                        detail: "3 of 12 repos", spinner: "bar", window: "w1",
                                                         color: "#2a1a3a", position: "top"))
         #expect(try request(["session", "hud", "building index", "--detail", "3 of 12 repos", "--spinner",
                              "--position", "top", "--background-color", "#2a1a3a", "--size-percent", "40",
                              "--target", "9f3c", "--window", "w1"]) == expected)
+    }
+
+    // the bare flag resolves to the default style client-side, so the socket only ever carries a name
+    @Test func sessionHudBareSpinnerFlagSendsTheDefaultStyle() throws {
+        let sent = try request(["session", "hud", "working", "--spinner"]).args?.spinner
+        #expect(sent == HudSpinner.defaultStyle.rawValue)
+    }
+
+    @Test(arguments: HudSpinner.allCases) func sessionHudSpinnerStyleImpliesTheSpinner(style: HudSpinner) throws {
+        let sent = try request(["session", "hud", "working", "--spinner-style", style.rawValue]).args?.spinner
+        #expect(sent == style.rawValue, "--spinner-style must turn the spinner on without --spinner")
+    }
+
+    @Test func sessionHudSpinnerStyleWinsOverTheBareFlag() throws {
+        let sent = try request(["session", "hud", "working", "--spinner",
+                                "--spinner-style", "braille"]).args?.spinner
+        #expect(sent == "braille")
+    }
+
+    @Test func sessionHudWithoutASpinnerSendsNone() throws {
+        #expect(try request(["session", "hud", "working"]).args?.spinner == nil)
+    }
+
+    // `none` is what the read-back reports for a static panel, so the CLI must accept the value `tree` just
+    // handed the caller rather than failing locally on a request the raw socket takes
+    @Test func sessionHudAcceptsTheReadBacksNoneAsNoSpinner() throws {
+        #expect(try request(["session", "hud", "working", "--spinner-style", "none"]).args?.spinner == nil)
+    }
+
+    @Test func sessionHudNoneBeatsABareSpinnerFlag() throws {
+        let sent = try request(["session", "hud", "working", "--spinner", "--spinner-style", "none"]).args?.spinner
+        #expect(sent == nil, "naming a value is the more specific instruction, as a named style is")
+    }
+
+    @Test func sessionHudUpdateStopsTheSpinnerWithNone() throws {
+        #expect(try request(["session", "hud", "update", "done", "--spinner-style", "none"]).args?.spinner == nil)
+    }
+
+    @Test func sessionHudRejectsAnUnknownSpinnerStyleBeforeTheSocket() {
+        #expect(throws: (any Error).self) {
+            try request(["session", "hud", "working", "--spinner-style", "swirl"])
+        }
+    }
+
+    @Test func sessionHudUpdateSwitchesStyleInPlace() throws {
+        let sent = try request(["session", "hud", "update", "still working",
+                                "--spinner-style", "dot"]).args?.spinner
+        #expect(sent == "dot")
     }
 
     @Test func sessionHudOpenVerbPostsAMessageNamedLikeASubcommand() throws {
@@ -969,7 +1017,7 @@ struct CommandsTests {
 
     @Test func sessionHudUpdateWithSpinnerAndSizePercent() throws {
         let expected = ControlRequest(cmd: .sessionHudUpdate, target: "active",
-                                      args: ControlArgs(sizePercent: 25, message: "still working", spinner: true))
+                                      args: ControlArgs(sizePercent: 25, message: "still working", spinner: "bar"))
         #expect(try request(["session", "hud", "update", "still working", "--spinner",
                              "--size-percent", "25"]) == expected)
     }

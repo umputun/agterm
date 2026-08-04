@@ -16,12 +16,15 @@ final class ControlHudUITests: ControlAPITestCase {
 
     func testHudOpenReportsItsMessageAndNeverAProgramOverlay() throws {
         let session = try activeSessionID()
-        try assertOK(openHud(message: "gathering options…", detail: "scanning the repository", spinner: true))
+        try assertOK(openHud(message: "gathering options…", detail: "scanning the repository", spinner: "braille"))
 
         let hud = try XCTUnwrap(pollHud(session, message: "gathering options…"), "tree should expose the hud")
         XCTAssertEqual(hud["detail"] as? String, "scanning the repository")
-        XCTAssertEqual(hud["spinner"] as? Bool, true)
+        XCTAssertEqual(hud["spinner"] as? String, "braille")
         XCTAssertNotNil(hud["sizePercent"] as? Int, "the panel's measured share of the pane should be reported")
+        let height = try XCTUnwrap(hud["heightPercent"] as? Int, "both axes should be reported")
+        let width = try XCTUnwrap(hud["sizePercent"] as? Int)
+        XCTAssertLessThan(height, width, "two lines of text must not produce a panel as tall as it is wide")
 
         let node = try sessionNode(id: session)
         XCTAssertEqual(node["overlay"] as? Bool, false, "a hud must never read back as a program overlay")
@@ -47,11 +50,11 @@ final class ControlHudUITests: ControlAPITestCase {
         XCTAssertNotNil(pollHud(session, message: "computing"), "the hud should open before the update")
 
         try assertOK(sendCommand(request(command: "session.hud.update", target: session,
-                                         args: ["message": "almost done", "spinner": true])))
+                                         args: ["message": "almost done", "spinner": "dot"])))
 
         let updated = try XCTUnwrap(pollHud(session, message: "almost done"), "the update should change the message")
         XCTAssertNil(updated["detail"], "an update replaces the whole spec, so an omitted detail is dropped")
-        XCTAssertEqual(updated["spinner"] as? Bool, true)
+        XCTAssertEqual(updated["spinner"] as? String, "dot", "an update may switch style in place")
         XCTAssertEqual(updated["position"] as? String, "center",
                        "an update without a position falls back to the default, it does not carry the old one")
         XCTAssertEqual(try sessionNode(id: session)["overlay"] as? Bool, false,
@@ -90,9 +93,12 @@ final class ControlHudUITests: ControlAPITestCase {
         try assertOK(sendCommand(typeRequest(text: "tty > '\(sessionTTY.path)'\n", target: session, select: false)))
         let expected = try XCTUnwrap(pollMarker(sessionTTY, timeout: 12), "the session should report its tty")
 
-        // the largest panel a hud may take, so the click below cannot miss it
-        try assertOK(openHud(message: "gathering options…", spinner: true, sizePercent: 80))
-        XCTAssertNotNil(pollHud(session, message: "gathering options…"), "the hud should be up before typing")
+        // the click below aims at the window's centre, so the panel has to be tall enough to cover it: the
+        // width takes the maximum and the HEIGHT only follows the message, so the message supplies the rows.
+        let tall = Array(repeating: "gathering", count: 24).joined(separator: " ")
+        try assertOK(openHud(message: tall, detail: Array(repeating: "scanning", count: 24).joined(separator: " "),
+                             spinner: "bar", sizePercent: 80))
+        XCTAssertNotNil(pollHud(session, message: tall), "the hud should be up before typing")
 
         let whileUp = markerDir.appendingPathComponent("hud-focus-while-up")
         XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(whileUp.path)'", file: whileUp), expected,
@@ -119,11 +125,11 @@ final class ControlHudUITests: ControlAPITestCase {
 
     // MARK: - Helpers
 
-    private func openHud(message: String, detail: String? = nil, spinner: Bool = false,
+    private func openHud(message: String, detail: String? = nil, spinner: String? = nil,
                          position: String? = nil, sizePercent: Int? = nil) throws -> [String: Any] {
         var args: [String: Any] = ["message": message]
         if let detail { args["detail"] = detail }
-        if spinner { args["spinner"] = true }
+        if let spinner { args["spinner"] = spinner }
         if let position { args["position"] = position }
         if let sizePercent { args["sizePercent"] = sizePercent }
         return try sendCommand(request(command: "session.hud.open", args: args))

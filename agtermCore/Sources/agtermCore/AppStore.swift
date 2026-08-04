@@ -309,13 +309,14 @@ public final class AppStore {
         return panes.isEmpty ? nil : panes
     }
 
-    /// The tree's `hud`: the live panel's spec carrying the slot's EFFECTIVE size and the effective position,
-    /// omitted when no HUD occupies the slot.
+    /// The tree's `hud`: the live panel's spec carrying the slot's EFFECTIVE size on BOTH axes and the
+    /// effective position, omitted when no HUD occupies the slot.
     private func hudNode(_ session: Session) -> ControlHudNode? {
         guard session.hudActive, let spec = session.hudSpec else { return nil }
-        return ControlHudNode(message: spec.message, detail: spec.detail, spinner: spec.spinner,
+        return ControlHudNode(message: spec.message, detail: spec.detail,
+                              spinner: spec.spinner?.rawValue ?? HudSpinner.noneName,
                               backgroundColor: spec.backgroundColor, sizePercent: session.overlaySizePercent,
-                              position: spec.position.rawValue)
+                              heightPercent: session.hudHeightPercent, position: spec.position.rawValue)
     }
 
     /// Creates a workspace and appends it. With `revealNewWorkspace` (the default) and the filter ON, the new

@@ -202,7 +202,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
     func testHudOpenPointsTheSlotAtTheBundledHelperAndWritesTheBody() throws {
         let (_, session) = try makeHudSession()
-        let spec = HudSpec(message: "gathering options", detail: "scanning 4 repositories", spinner: true)
+        let spec = HudSpec(message: "gathering options", detail: "scanning 4 repositories", spinner: .braille)
 
         let response = server.openHud(session.id.uuidString, window: nil, spec: spec)
 
@@ -318,7 +318,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(session.overlaySizePercent, 40)
         // the grid rides in the body's header line, which is what lets a running helper re-centre
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init),
-                       "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 \(Self.ownerPid)")
+                       "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 "
+                           + "\(Self.ownerPid) \(HudSpinner.staticInterval)")
     }
 
     func testHudCloseClearsTheSlotAndRemovesTheBodyFile() throws {

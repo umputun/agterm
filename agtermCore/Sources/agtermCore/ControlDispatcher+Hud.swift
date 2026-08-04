@@ -63,7 +63,17 @@ extension ControlDispatcher {
             }
             position = parsed
         }
-        return .spec(HudSpec(message: message, detail: args?.detail, spinner: args?.spinner == true,
+        // `none` is the read-back's spelling for a static panel, so a caller echoing one back means "no
+        // spinner" rather than a style this rejects.
+        var spinner: HudSpinner?
+        if let raw = args?.spinner, raw != HudSpinner.noneName {
+            guard let parsed = HudSpinner(rawValue: raw) else {
+                return .rejected(ControlResponse(
+                    ok: false, error: "invalid spinner: \(raw) (\(HudSpinner.acceptedNamesList))"))
+            }
+            spinner = parsed
+        }
+        return .spec(HudSpec(message: message, detail: args?.detail, spinner: spinner,
                              backgroundColor: args?.color, sizePercent: args?.sizePercent, position: position))
     }
 }

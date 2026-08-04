@@ -297,7 +297,7 @@ struct SnapshotRoundTripTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         session.overlayActive = true
         session.overlaySizePercent = 30
-        session.hudSpec = HudSpec(message: "gathering options", detail: "scanning /a", spinner: true)
+        session.hudSpec = HudSpec(message: "gathering options", detail: "scanning /a", spinner: .bar)
         session.hudFile = "/tmp/agterm-hud-test.txt"
 
         let snap = store.snapshot()

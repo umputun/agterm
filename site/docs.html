@@ -1518,7 +1518,7 @@
               ><br />agtermctl session hud update <span style="color: #f2b45c">"ready"</span> --detail
               <span style="color: #f2b45c">"pick a branch"</span> --target
               <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
-                ># place it and size it by hand instead of measuring the message</span
+                ># place it and set its width by hand instead of measuring the message</span
               ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top --size-percent
               30<br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
             </div>
@@ -1534,13 +1534,18 @@
               places it vertically (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> hold a margin off the
-              pane edge on their own), and the size comes from the message unless
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides it —
-              bounded either way to at most 80% of the pane, so a message never covers the session it is about.
+              pane edge on their own), and the panel comes from the message on both axes — width from the longest line, height
+              from the number of them, so a title and a subtitle give a wide, short panel rather than a square one.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides the
+              width only, bounded to at most 80% of the pane, so a message never covers the session it is about.
               An update replaces the whole message, so
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> have to be repeated
-              to survive it;
+              to survive it. The spinner takes a style —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner-style bar|braille|circle|blocks|dot|none</span>,
+              which turns it on by itself, with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">dot</span> blinking rather than
+              animating — and an update may switch style in place;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> is the
               exception, read once when the panel is created and kept — in the panel and in the read-back — across every
               update.
