@@ -55,10 +55,12 @@ public struct Snapshot: Codable, Equatable, Sendable {
         case focusedWorkspaceID
     }
 
-    /// Custom decode so `sessionRecency` is LOSSY: a present-but-invalid list (a malformed UUID, a wrong
-    /// JSON type after a hand edit) drops to nil. `Optional` alone tolerates only a MISSING key, so one bad
-    /// MRU entry would fail the whole `Snapshot` and `PersistenceStore.load` would start fresh, wiping every
-    /// workspace and session over a non-essential field. Mirrors `backgroundWatermark` below; others strict.
+    /// Custom decode so `sessionRecency` and `sidebarMode` are LOSSY: a present-but-invalid value (a
+    /// malformed UUID, an unknown enum raw value from a newer build or a hand edit) drops to nil.
+    /// `Optional` alone tolerates only a MISSING key, so one bad value would fail the whole `Snapshot` and
+    /// `PersistenceStore.load` would start fresh, wiping every workspace and session over a non-essential
+    /// field. Mirrors `backgroundWatermark` below; the remaining optionals stay strict — primitives and
+    /// UUIDs can't gain a value a newer build writes.
     ///
     /// Also migrates the legacy `focusedWorkspaceID`: its presence implied the filter was on, so it becomes
     /// a one-member ENABLED set. Neither key present decodes to nil/nil — an empty, disabled filter.
@@ -69,7 +71,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         workspaces = try c.decode([WorkspaceSnapshot].self, forKey: .workspaces)
         sidebarWidth = try c.decodeIfPresent(Double.self, forKey: .sidebarWidth)
         sidebarVisible = try c.decodeIfPresent(Bool.self, forKey: .sidebarVisible)
-        sidebarMode = try c.decodeIfPresent(SidebarMode.self, forKey: .sidebarMode)
+        sidebarMode = (try? c.decodeIfPresent(SidebarMode.self, forKey: .sidebarMode)) ?? nil
         let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
         let legacyFocus = try legacyContainer.decodeIfPresent(UUID.self, forKey: .focusedWorkspaceID)
         let ids = try c.decodeIfPresent([UUID].self, forKey: .focusedWorkspaceIDs)
