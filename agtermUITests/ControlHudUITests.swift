@@ -75,6 +75,37 @@ final class ControlHudUITests: ControlAPITestCase {
         XCTAssertEqual(second["error"] as? String, "no hud")
     }
 
+    /// THE defining property, and the only place it can be observed: with a HUD up — and after a click on
+    /// the panel — the real keyboard must still reach the session's own shell. Nothing below can see this;
+    /// the deck predicates are pure functions with no view of first responder, so all of `HudDeckGatesTests`
+    /// stays green while the painter holds the keyboard.
+    ///
+    /// `tty` is the oracle rather than an echoed marker: it names WHICH pty read the line, so a steal
+    /// cannot pass by the session happening to echo something.
+    func testTheSessionKeepsKeyboardFocusWhileAHudIsUpAndWhenTheHudIsClicked() throws {
+        let session = try activeSessionID()
+
+        // injected into the surface, so this capture is independent of focus and gives the expected answer
+        let sessionTTY = markerDir.appendingPathComponent("hud-session-tty")
+        try assertOK(sendCommand(typeRequest(text: "tty > '\(sessionTTY.path)'\n", target: session, select: false)))
+        let expected = try XCTUnwrap(pollMarker(sessionTTY, timeout: 12), "the session should report its tty")
+
+        // the largest panel a hud may take, so the click below cannot miss it
+        try assertOK(openHud(message: "gathering options…", spinner: true, sizePercent: 80))
+        XCTAssertNotNil(pollHud(session, message: "gathering options…"), "the hud should be up before typing")
+
+        let whileUp = markerDir.appendingPathComponent("hud-focus-while-up")
+        XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(whileUp.path)'", file: whileUp), expected,
+                       "an open hud must not take first responder from the session")
+
+        clickPanelCentre()
+
+        let afterClick = markerDir.appendingPathComponent("hud-focus-after-click")
+        XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(afterClick.path)'", file: afterClick), expected,
+                       "a click on the panel must reach the session, never make the painter first responder")
+        XCTAssertNotNil(hudNode(session), "and the hud must still be up throughout")
+    }
+
     func testOverlayResultRefusesAHudByName() throws {
         let session = try activeSessionID()
         try assertOK(openHud(message: "no program here"))
@@ -89,12 +120,23 @@ final class ControlHudUITests: ControlAPITestCase {
     // MARK: - Helpers
 
     private func openHud(message: String, detail: String? = nil, spinner: Bool = false,
-                         position: String? = nil) throws -> [String: Any] {
+                         position: String? = nil, sizePercent: Int? = nil) throws -> [String: Any] {
         var args: [String: Any] = ["message": message]
         if let detail { args["detail"] = detail }
         if spinner { args["spinner"] = true }
         if let position { args["position"] = position }
+        if let sizePercent { args["sizePercent"] = sizePercent }
         return try sendCommand(request(command: "session.hud.open", args: args))
+    }
+
+    /// The middle of the DETAIL area, where a centred panel sits — not the middle of the window, which the
+    /// sidebar pushes left of it. The sidebar's own row gives its right edge without hardcoding a width.
+    private func clickPanelCentre() {
+        let window = app.windows.firstMatch
+        let frame = window.frame
+        let sidebarRight = app.staticTexts["session-row"].firstMatch.frame.maxX
+        let offset = CGVector(dx: (sidebarRight + frame.maxX) / 2 - frame.minX, dy: frame.height / 2)
+        window.coordinate(withNormalizedOffset: .zero).withOffset(offset).click()
     }
 
     private func assertOK(_ response: @autoclosure () throws -> [String: Any]) throws {

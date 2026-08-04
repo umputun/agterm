@@ -780,7 +780,7 @@ struct Session: ParsableCommand {
                 """)
             var position: String?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the panel, independent of the session's own.") var backgroundColor: String?
-            @Option(name: .long, help: "Size the panel at PERCENT (1-100) of the pane instead of measuring the message.") var sizePercent: Int?
+            @Option(name: .long, help: "Size the panel at PERCENT (1-100) of the pane instead of measuring the message; bounded to 80 so it never covers the session.") var sizePercent: Int?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -810,7 +810,7 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Dim second line under the message; omit to drop the old one.") var detail: String?
             @Flag(name: .long, help: "Keep (or start) the spinner glyph; omit to stop it.") var spinner = false
             @Option(name: .long, help: "Move the panel to \(HudPosition.validNamesPhrase) (default: center).") var position: String?
-            @Option(name: .long, help: "Resize the panel to PERCENT (1-100) of the pane instead of measuring the message.") var sizePercent: Int?
+            @Option(name: .long, help: "Resize the panel to PERCENT (1-100) of the pane instead of measuring the message; bounded to 80 so it never covers the session.") var sizePercent: Int?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 

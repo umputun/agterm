@@ -16,7 +16,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public static let maxTextLength = 256
 
     public init(message: String, detail: String? = nil, spinner: Bool = false, backgroundColor: String? = nil,
-                sizePercent: Int? = nil, position: HudPosition = .center) {
+                sizePercent: Int? = nil, position: HudPosition = .defaultPosition) {
         self.message = message
         self.detail = detail
         self.spinner = spinner
@@ -36,7 +36,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
         spinner = try c.decodeIfPresent(Bool.self, forKey: .spinner) ?? false
         backgroundColor = try c.decodeIfPresent(String.self, forKey: .backgroundColor)
         sizePercent = try c.decodeIfPresent(Int.self, forKey: .sizePercent)
-        position = try c.decodeIfPresent(HudPosition.self, forKey: .position) ?? .center
+        position = try c.decodeIfPresent(HudPosition.self, forKey: .position) ?? .defaultPosition
     }
 }
 
@@ -45,7 +45,14 @@ public struct HudSpec: Codable, Equatable, Sendable {
 public enum HudPosition: String, Codable, CaseIterable, Sendable {
     case top, center, bottom
 
-    /// Percent of the pane height held clear at the edge for `.top`/`.bottom`; `.center` ignores it.
+    /// The placement a caller who omits `--position` gets. The ONE spelling of that default: the memberwise
+    /// initializer, the lenient decoder, and the dispatcher all read it, so changing it is one edit.
+    public static let defaultPosition = HudPosition.center
+
+    /// Percent of the pane height held clear at the edge for `.top`/`.bottom`; `.center` ignores it. The
+    /// margin is held only while the panel is small enough to leave room — `OverlayPanelStyle.verticalOffset`
+    /// centers instead of overhanging the pane, so a panel at or above `HudLayout.maxSizePercent` ignores
+    /// `.top`/`.bottom` entirely.
     public static let edgeMarginPercent = 10
 
     /// The accepted names pipe-joined — the control server's rejection message, as `StatusShape` does.
@@ -82,10 +89,10 @@ public enum HudLayout {
     public static let maxSizePercent = 80
     public static let minSizePercent = 10
 
-    /// The ONLY variable the app puts in the helper's environment: the path to the body file. Everything
-    /// that an update may change — the box, the spinner, the owning pid — rides in that file's header line
-    /// instead, since a running process cannot see its environment change and re-spawning would blink the
-    /// panel.
+    /// The only HUD-SPECIFIC variable the app puts in the helper's environment (it also inherits the session
+    /// environment and the overlay wrapper's own two): the path to the body file. Everything that an update
+    /// may change — the box, the spinner, the owning pid — rides in that file's header line instead, since a
+    /// running process cannot see its environment change and re-spawning would blink the panel.
     public static let fileEnvKey = "AGTERM_HUD_FILE"
 
     /// Frame padding in cells, applied on both sides of the content.
@@ -94,7 +101,20 @@ public enum HudLayout {
     /// Cells the spinner glyph and its trailing space claim, so turning the spinner on cannot rewrap text.
     static let spinnerWidth = 2
 
+    /// clampSizePercent bounds a CALLER'S `--size-percent` into the same range the measured path produces.
+    /// The maximum is the invariant `OverlayHudError.fullResize` states for `--full`, one layer down: a HUD
+    /// is a message ABOUT a session and must never cover it, and 100 would do exactly that. The read-back
+    /// reports the clamped value, so a caller sees what the panel actually took.
+    public static func clampSizePercent(_ requested: Int) -> Int {
+        min(max(requested, minSizePercent), maxSizePercent)
+    }
+
     /// box returns the cell box the panel needs for `spec`: the wrapped content plus the frame padding.
+    ///
+    /// Width is COUNTED IN CHARACTERS, not display columns, which the helper's own `${#line}` matches under
+    /// the UTF-8 locale it forces. A double-width glyph (CJK, most emoji) therefore advances two columns
+    /// against a box sized for one and overflows the frame — an accepted limitation, since correcting it
+    /// needs an East-Asian-width table on both sides of the file.
     public static func box(for spec: HudSpec) -> (columns: Int, rows: Int) {
         let lines = bodyLines(for: spec)
         let widest = lines.map(\.count).max() ?? 0

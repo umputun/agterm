@@ -122,9 +122,10 @@ to restore the exact size),
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A `{message, detail?, spinner, backgroundColor?, sizePercent?, position}` object:
-`detail` and `backgroundColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE 1–100
+`detail` and `backgroundColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE 10–80
 share of the pane the panel takes (the app's measurement of the message, or the caller's `--size-percent`
-override; omitted only after `session overlay resize --full` stripped it), and `position` and `spinner`
+override, either way bounded so a message never covers the session; always present for a live HUD), and
+`position` and `spinner`
 always report the effective value, `center` and `false` included, so a caller who omitted them never has to
 know the defaults. `hud` and `overlay` are mutually exclusive — one slot — and a HUD reports `overlay`
 FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
@@ -598,7 +599,9 @@ All twelve are read-only projections of GUI state.
   `--spinner` animates a glyph beside the message, and `--position` places the panel vertically (default
   `center`; `top` and `bottom` hold a fixed margin off the pane edge, so a panel at the largest allowed
   size never overhangs). Size is measured from the message against the session's terminal font unless
-  `--size-percent N` (1–100) sets it. `--background-color #rrggbb` gives the panel its own solid
+  `--size-percent N` (1–100) sets it; either way the effective share is bounded to 10–80% of the pane,
+  the same invariant that makes `session overlay resize --full` a refusal, so a requested 100 reads back
+  as 80. `--background-color #rrggbb` gives the panel its own solid
   background, read once when the panel is created. Message and detail are capped at 256 characters and
   reject control characters — newline included, since the panel prints straight into a live terminal and
   `--detail` is the second line on offer. Errors `session.hud.open requires a message` on a missing or
@@ -1064,8 +1067,11 @@ here is app-global and touches only the captured commands, not those overrides.
 `no hud` (session hud update/close with none up) /
 `no overlay result: the slot holds a hud` (session overlay result over a HUD) /
 `a hud is always floating: pass --size-percent, not --full` (session overlay resize over a HUD) /
-`session.hud.open requires a message` / `hud text must not contain control characters` /
+`session.hud.open requires a message` (also for a blank one) / `session.hud.update requires a message` /
+`hud text must not contain control characters` /
 `hud message too long (max 256 characters)` / `hud detail too long (max 256 characters)` /
+`session.hud.open: --size-percent must be 1...100` /
+`hud helper is not bundled in this build` / `could not write the hud message` /
 `invalid position: <value> (top|center|bottom)` (session hud over the raw socket; the `agtermctl` CLI
 rejects the same value locally with `position must be one of: top, center, bottom`),
 `invalid flag mode` (session flag),

@@ -235,9 +235,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from
   [[menu-actions]]'s shared-action-seam rule because there is nothing here for a human to invoke by hand.
-- Passivity is four deck exemptions, all reading ONE predicate, `Session.programOverlayActive`
-  (`overlayActive && !hudActive`): `gates.overlaid`, the floating click catcher, `backdropWashActive`, and
-  the scratch's focus gate. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
+- Passivity is four deck exemptions plus two NSView-level gates, all reading ONE predicate,
+  `Session.programOverlayActive` (`overlayActive && !hudActive`): `gates.overlaid`, the floating click
+  catcher, `backdropWashActive`, the scratch's focus gate, `TerminalView.viewOnly` on the panel, and the
+  program-only key for the overlay-close refocus. `viewOnly` owns the NSView layer, where `mouseDown` makes
+  a surface first responder; the panel's ancestor `.allowsHitTesting(false)` currently blocks the click
+  before that, so the two are belt and braces and neither is the place to economise.
+  Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
   `.id` carries `Session.overlaySlotGeneration`, or a replacement keeping `overlayActive` true never re-runs
   `makeNSView` and `updateNSView` hits a torn-down view.
@@ -253,13 +257,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `isAvailable`'s `.overlay` arm, `isVisible`, and `paneVisible`. Widen `uncovered` and narrow the `.overlay`
   arm together or no case is active and the documented-unreachable `?? .primary` fallback runs. The explicit
   `surface:<id>:overlay` address is REFUSED for a HUD, and no overlay surface node is listed beside it.
+- Every HUD size passes `HudLayout.clampSizePercent` (10...80), the caller's `--size-percent` included, so
+  `--full`'s refusal and the never-cover invariant cannot disagree; that bound is also what makes
+  `top`/`bottom` always fit their edge margin. `OverlayPanelStyle.verticalOffset`'s centering fallback is
+  defensive only.
 - Read back `ControlSessionNode.hud`, with `overlay` false and `overlaySizePercent` omitted beside it;
   `position` and `spinner` always report the effective value, defaults included. HUD state is poll-only.
   `openOverlay`/`closeOverlay` emit no `scheduleTreeChanged()` and neither does a HUD, so document no event.
-- The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with only
-  `AGTERM_HUD_FILE` and capturing no exit code. Box, spinner and the APP'S PID ride the body file's HEADER
-  line and are re-read every tick, so `hud.update` repaints in place with no respawn; write that file
-  atomically. It is per SESSION, so an update rewrites the path the running helper already opened.
+- The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with
+  `AGTERM_HUD_FILE` as its only HUD-SPECIFIC variable (the surface still inherits the session environment
+  and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Box, spinner and the APP'S PID
+  ride the body file's HEADER line and are re-read every tick, so `hud.update` repaints in place with no
+  respawn; write that file atomically. It is per SESSION, so an update rewrites the path the running helper
+  already opened.
+- The helper forces `LC_CTYPE=UTF-8` on itself: `${#line}` counts BYTES otherwise, while the box was sized
+  in characters, and a Dock-launched app inherits launchd's locale-less environment. Both sides count
+  characters, not display columns, so a double-width glyph overflows the frame — accepted, not fixed.
+- It skips a repaint whose frame is byte-identical to the last, so a spinner-less panel writes once and
+  stops waking the renderer, and traps WINCH to invalidate that cache. This is a cache, not a measurement:
+  the box still comes only from the body file.
 - The helper stops on either the file disappearing or a builtin `kill -0` on that pid failing. The pid is
   the only stop a HARD-killed app has: `destroySurface` never runs, so the body file survives, and no SIGHUP
   arrives because the pty's session leader is the surviving `login`. Without it every crash, `kill -9` and

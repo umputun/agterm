@@ -396,23 +396,24 @@ struct SessionTests {
         let session = Session(initialCwd: "/repo")
         #expect(session.hudActive == false)
         #expect(session.fullOverlayActive == false)
-        #expect(session.floatingOverlayActive == false)
+        #expect(session.programOverlayActive == false)
 
         session.overlayActive = true
         session.overlaySizePercent = 40
         #expect(session.hudActive == false)
-        #expect(session.floatingOverlayActive == true)
+        #expect(session.fullOverlayActive == false)
+        #expect(session.programOverlayActive == true)
 
         session.hudSpec = HudSpec(message: "gathering options")
         #expect(session.hudActive == true)
         #expect(session.fullOverlayActive == false)
-        #expect(session.floatingOverlayActive == false)
+        #expect(session.programOverlayActive == false)
 
         session.hudSpec = nil
         session.overlaySizePercent = nil
         #expect(session.hudActive == false)
         #expect(session.fullOverlayActive == true)
-        #expect(session.floatingOverlayActive == false)
+        #expect(session.programOverlayActive == true)
     }
 
     @Test func hudFlagsNeedTheSlotOccupied() {
@@ -430,7 +431,7 @@ struct SessionTests {
         session.hudSpec = HudSpec(message: "working")
         #expect(session.hudActive == true)
         #expect(session.fullOverlayActive == false)
-        #expect(session.floatingOverlayActive == false)
+        #expect(session.programOverlayActive == false)
     }
 
     @Test func programOverlayActiveSpansBothCoverageVariantsButNeverAHud() {

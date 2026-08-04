@@ -18,6 +18,19 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
+    // `HudLayout.wrap` drops whitespace-only text, so a blank message would paint an empty frame while
+    // `tree` reported a live HUD.
+    @Test func openRejectsAWhitespaceOnlyMessage() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let blank = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen,
+                                                             args: ControlArgs(message: "   ")))
+
+        #expect(blank == ControlResponse(ok: false, error: "session.hud.open requires a message"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func updateRejectsMissingAndEmptyMessageWithoutCallingHost() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

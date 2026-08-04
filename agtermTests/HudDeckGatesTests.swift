@@ -133,6 +133,8 @@ final class HudDeckGatesTests: XCTestCase {
         }
     }
 
+    // defensive: `HudLayout.clampSizePercent` keeps a live HUD at or under the size where both margins
+    // still fit, so no supported path reaches this branch
     func testAPanelTooLargeForTheMarginStaysCentered() {
         let style = OverlayPanelStyle.resolve(hudSession(position: .top, sizePercent: 95))
         XCTAssertEqual(style.verticalOffset(paneHeight: 1000), 0)

@@ -415,9 +415,11 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     public let spinner: Bool
     /// The panel's own `#rrggbb` background; nil/omitted when it keeps the session's terminal background.
     public let backgroundColor: String?
-    /// The EFFECTIVE share of the pane (1...100) the panel occupies — the app's measurement, or the caller's
-    /// `sizePercent` override. Reported here because the node's `overlaySizePercent` stays omitted for a HUD;
-    /// nil/omitted only when `session.overlay.resize --full` stripped the slot's percent.
+    /// The EFFECTIVE share of the pane the panel occupies — the app's measurement, or the caller's
+    /// `sizePercent` override, either way bounded by `HudLayout.clampSizePercent`, so a requested 100 reads
+    /// back as the maximum a HUD may take. Reported here because the node's `overlaySizePercent` stays
+    /// omitted for a HUD. Optional because it projects the slot's optional percent, but no supported path
+    /// leaves a live HUD sizeless: `openHud` always sets one and `overlay.resize --full` is refused.
     public let sizePercent: Int?
     /// The EFFECTIVE vertical placement, a `HudPosition` raw value (`top`|`center`|`bottom`). Always present,
     /// including the `center` default, so a caller who omitted it never has to know what the default is.
@@ -828,7 +830,12 @@ public enum OverlayHudError {
     /// `overlayActive` alone would otherwise answer the misleading "overlay still running".
     public static let noResult = "no overlay result: the slot holds a hud"
     /// A HUD is always floating (`AppStore.openHud`): it must never cover the session it is a message about.
+    /// A percent is accepted but bounded by `HudLayout.clampSizePercent`, which states the same invariant.
     public static let fullResize = "a hud is always floating: pass --size-percent, not --full"
+    /// `session.hud.update`/`.close` against a slot that holds no HUD — empty, or running a caller's program.
+    public static let noHud = "no hud"
+    /// The body file the helper reads could not be written, so the panel would paint nothing or stale text.
+    public static let writeFailed = "could not write the hud message"
 }
 
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections

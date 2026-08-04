@@ -1,7 +1,8 @@
 #!/bin/sh
 # hud.sh — the panel painter agterm runs in a session's overlay slot for `session.hud.*`.
 #
-# One environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes:
+# One HUD-SPECIFIC environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes (the
+# surface also inherits the session environment and the overlay wrapper's own AGTERM_OVL_* pair):
 #
 #   <columns> <rows> <spinner> <pid>   the box the app sized the slot to; spinner 1 shows the glyph and
 #                                      ticks faster; pid is the app process that owns this panel
@@ -19,6 +20,13 @@
 # session leader is the surviving `login`, not the app. Without it the loop repaints forever.
 set -uf
 
+# ${#line} counts CHARACTERS only under a UTF-8 locale and BYTES otherwise, while the app sized the box in
+# characters — so without this every non-ASCII message centers wrong. A Dock-launched app inherits launchd's
+# environment, which sets no LANG or LC_*, and an inherited LC_ALL would override LC_CTYPE.
+unset LC_ALL
+LC_CTYPE=UTF-8
+export LC_CTYPE
+
 file=${AGTERM_HUD_FILE:-}
 [ -n "$file" ] || exit 0
 
@@ -30,9 +38,13 @@ csi="$esc["
 down="${csi}E"
 
 trap 'printf "%s?25h%s0m" "$csi" "$csi"; exit 0' EXIT INT TERM HUP
+# a resize reflows what is already on screen, so drop the cached frame and repaint once. This measures
+# nothing — the box still comes from the body file — it only tells the tick below that the screen moved.
+trap 'painted=' WINCH
 printf '%s?25l' "$csi"
 
 frame=0
+painted=''
 while [ -f "$file" ]; do
     case $frame in
         0) glyph='|' ;;
@@ -98,7 +110,14 @@ while [ -f "$file" ]; do
         top=$(( top - 1 ))
     done
 
-    # one write per tick: reset, home, erase down, then the whole frame, so a repaint cannot flicker
-    printf '%s' "${csi}0m${csi}H${csi}J$pad$block${csi}0m"
+    # one write per tick: reset, home, erase down, then the whole frame, so a repaint cannot flicker. An
+    # UNCHANGED frame is not written at all: every write wakes the app's renderer, and a spinner-less panel
+    # is finished after its first paint — repainting it twice a second would be the continuous poll the
+    # rendering rule forbids.
+    out="${csi}0m${csi}H${csi}J$pad$block${csi}0m"
+    if [ "$out" != "$painted" ]; then
+        printf '%s' "$out"
+        painted=$out
+    fi
     sleep "$interval"
 done

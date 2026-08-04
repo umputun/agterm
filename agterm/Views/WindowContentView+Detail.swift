@@ -110,11 +110,15 @@ extension WindowContentView {
             overlayPanel(session: session, isActive: focusable)
                 .zIndex(3)
         }
-        // on overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane hidden
-        // under the scratch. One makeFirstResponder loses the race with the overlay's teardown/re-host, so
-        // drive the bounded retry the split-collapse survivor uses. Only the visible session reclaims focus:
+        // on PROGRAM overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane
+        // hidden under the scratch. One makeFirstResponder loses the race with the overlay's teardown/re-host,
+        // so drive the bounded retry the split-collapse survivor uses. Only the visible session reclaims focus:
         // the quick terminal owns it while it covers the window, and its own hide re-grabs the cover.
-        .onChange(of: session.overlayActive) { _, isOpen in
+        //
+        // Keyed on `programOverlayActive`, not the raw slot: a HUD never took first responder, so reclaiming
+        // it on the HUD's close would instead YANK focus out of whatever holds it — an open ⌘F search field,
+        // an in-progress sidebar rename — and `retryReparentFocus` re-grabs for ~0.36s.
+        .onChange(of: session.programOverlayActive) { _, isOpen in
             if !isOpen, deckInteractive, isActive, !quickTerminal.isVisible {
                 (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
             }
@@ -194,9 +198,15 @@ extension WindowContentView {
                     // clear — its panes are already hidden, and a wash would tint the window backing.
                     (style.backdrop ? washColor(for: session).opacity(muteWashOpacity) : Color.clear)
                         .contentShape(Rectangle())
+                    // `viewOnly` is the NSView-level half of the same passivity, and the layer that OWNS it:
+                    // `mouseDown` makes the surface first responder, which would swallow every keystroke the
+                    // user meant for the session, and the dashboard learned that `.allowsHitTesting(false)`
+                    // alone is not what stops AppKit routing a click there. `deckVisible: live` is deliberate
+                    // too — a passive panel registers no drag types and writes no mouse cursor, so a file drop
+                    // keeps reaching the pane behind it.
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: { makeOverlaySurface($0, nil) },
-                                 isActive: live, deckVisible: live)
+                                 isActive: live, deckVisible: live, viewOnly: !style.interactive)
                         .frame(width: geo.size.width * style.fraction,
                                height: geo.size.height * style.fraction)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
@@ -339,8 +349,9 @@ struct OverlayPanelStyle: Equatable {
     }
 
     /// The panel's offset from the pane's center, positive downward. `top`/`bottom` hold
-    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge; a panel too large for the margin to
-    /// fit stays centered rather than overhanging the pane.
+    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge. Every size a HUD can reach fits that
+    /// margin — `HudLayout.clampSizePercent` caps it where two margins exactly fill the rest — so the
+    /// centering fallback below is defensive only, for a panel no supported path can produce.
     func verticalOffset(paneHeight: CGFloat) -> CGFloat {
         let margin = CGFloat(HudPosition.edgeMarginPercent) / 100
         let free = max(0, paneHeight * ((1 - fraction) / 2 - margin))

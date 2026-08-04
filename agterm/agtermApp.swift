@@ -433,7 +433,9 @@ struct agtermApp: App {
                                            env: [String: String]) -> GhosttySurfaceView {
         let sessionID = session.id
         let spec = Self.overlaySpec(for: session, pane: pane)
-        let hudFile = pane == nil && session.hudActive ? session.hudFile : nil
+        // the session-wide slot's occupant decides passivity; the body file is what that occupant needs
+        let isHud = pane == nil && session.hudActive
+        let hudFile = isHud ? session.hudFile : nil
         let codeFile = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-ovl-\(UUID().uuidString).code")
         var overlayEnv = env
         overlayEnv[OverlayCapture.cmdEnvKey] = spec.command
@@ -441,7 +443,7 @@ struct agtermApp: App {
         if let hudFile { overlayEnv[HudLayout.fileEnvKey] = hudFile }
         let view = GhosttySurfaceView(workingDirectory: spec.cwd ?? session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
-                                      waitAfterCommand: spec.wait, autoFocus: hudFile == nil, env: overlayEnv)
+                                      waitAfterCommand: spec.wait, autoFocus: !isHud, env: overlayEnv)
         view.overlayCodeFile = codeFile
         view.hudBodyFile = hudFile
         // the overlay's own background color (`session.overlay.open --background-color`), applied in

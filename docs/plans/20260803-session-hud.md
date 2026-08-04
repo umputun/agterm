@@ -14,8 +14,9 @@ opens next, or dismissed by the user with Command-W.
 
 The HUD occupies the **session overlay slot** rather than introducing a new cover, so it inherits the
 Command-W dismissal ladder, `coverHidesActiveSession`, `searchTarget` gating, and session-close teardown
-without a new rung in any of them. The price of that reuse is three deliberate exemptions in the deck, since
-the deck currently treats an occupied overlay slot as proof that the session must not be focusable (Task 4).
+without a new rung in any of them. The price of that reuse is four deliberate deck exemptions plus two
+NSView-level gates, since the deck currently treats an occupied overlay slot as proof that the session must
+not be focusable (Task 4).
 
 ## Context (from discovery)
 
@@ -132,8 +133,9 @@ Flow:
 Key design decisions:
 
 - **Overlay slot, not a new cover.** One cover concept keeps the Command-W ladder, `coverHidesActiveSession`,
-  `searchTarget`, and teardown unchanged. Cost: three deck exemptions (Task 4), a session cannot show a HUD and
-  a program overlay at once, and `overlay.result` must refuse a HUD.
+  `searchTarget`, and teardown unchanged. Cost: four deck exemptions plus the panel's `viewOnly` and the
+  program-only refocus (Task 4), a session cannot show a HUD and a program overlay at once, and
+  `overlay.result` must refuse a HUD.
 - **Non-focusing, and it looks it.** The defining property lives in the deck gates as much as in the surface
   factory, and the chrome follows: framed and opaque, but no drop shadow and no backdrop wash, so the panel
   reads as part of the terminal rather than a window floating above a dimmed session.
@@ -185,7 +187,8 @@ public enum HudLayout {
     public static let minSizePercent = 10
     public static func box(for spec: HudSpec) -> (columns: Int, rows: Int)
     public static func sizePercent(box: (columns: Int, rows: Int), pane: PaneMetrics) -> Int
-    public static func renderedBody(for spec: HudSpec) -> String
+    public static func renderedBody(for spec: HudSpec, ownerPid: Int32) -> String
+    public static func clampSizePercent(_ requested: Int) -> Int
 }
 ```
 

@@ -195,10 +195,12 @@ extension AppStore {
     /// Resizes an already-open overlay in place: `sizePercent` (clamped to 1...100) switches it to floating,
     /// nil to the translucent full-pane overlay, as in `openOverlay`. The surface stays mounted (the detail
     /// pane hosts both variants), so only the layout re-flows and the program never re-spawns. False with no
-    /// open overlay.
+    /// open overlay. A HUD in the slot takes the narrower `HudLayout.clampSizePercent` bound instead, so no
+    /// resize path can grow a message until it covers the session it is about.
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
-        session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        let hud = session.hudActive
+        session.overlaySizePercent = sizePercent.map { hud ? HudLayout.clampSizePercent($0) : min(100, max(1, $0)) }
         return true
     }
 
@@ -228,15 +230,15 @@ extension AppStore {
     }
 
     /// Opens a HUD in the session's overlay slot: a passive message panel rendered by the app's bundled
-    /// helper, which `command` runs and which re-reads `file` every tick. Always FLOATING — `sizePercent`
-    /// (clamped to 1...100) is the effective share the app computed, honoring `spec.sizePercent` when the
-    /// caller set one — because a HUD must never cover the session it is a message about.
+    /// helper, which `command` runs and which re-reads `file` every tick. Always FLOATING and always within
+    /// `HudLayout.clampSizePercent` — the app's measurement or the caller's `spec.sizePercent`, whichever
+    /// applies, bounded — because a HUD must never cover the session it is a message about.
     ///
     /// A live HUD is REPLACED (torn down and re-opened, so the helper picks up the new file), a live
     /// PROGRAM overlay refuses. False for an unknown session or an occupied program slot. NOT persisted.
     @discardableResult public func openHud(_ sessionID: UUID, command: String, spec: HudSpec, file: String,
                                            sizePercent: Int) -> Bool {
-        guard openOverlay(sessionID, command: command, sizePercent: sizePercent,
+        guard openOverlay(sessionID, command: command, sizePercent: HudLayout.clampSizePercent(sizePercent),
                           backgroundColor: spec.backgroundColor),
               let session = session(withID: sessionID) else { return false }
         session.hudSpec = spec
@@ -245,14 +247,13 @@ extension AppStore {
     }
 
     /// Rewrites a live HUD's message and size in place: the surface stays mounted and the helper re-reads
-    /// the file on its next tick, so the panel changes with no re-spawn and no blink. `spec.backgroundColor`
-    /// is NOT re-applied — the factory reads it at creation, so only a replacing `openHud` can change it.
-    /// False with no HUD up; a caller's program overlay is never a HUD's to rewrite.
-    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, file: String,
-                                             sizePercent: Int) -> Bool {
+    /// its body file on the next tick, so the panel changes with no re-spawn and no blink. The file path is
+    /// not an argument — an update rewrites the path `openHud` already gave the running helper, which its
+    /// environment cannot be told to change. `spec.backgroundColor` is NOT re-applied either; the factory
+    /// reads it at creation, so only a replacing `openHud` can change it. False with no HUD up.
+    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, sizePercent: Int) -> Bool {
         guard let session = session(withID: sessionID), session.hudActive else { return false }
         session.hudSpec = spec
-        session.hudFile = file
         return resizeOverlay(sessionID, sizePercent: sizePercent)
     }
 

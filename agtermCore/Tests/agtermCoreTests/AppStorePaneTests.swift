@@ -494,7 +494,7 @@ struct AppStorePaneTests {
         #expect(session.overlaySizePercent == nil)
         #expect(store.resizeOverlay(session.id, sizePercent: 60) == true)
         #expect(session.overlaySizePercent == 60)
-        #expect(session.floatingOverlayActive)
+        #expect(session.programOverlayActive)
         // resize back to full (nil).
         #expect(store.resizeOverlay(session.id, sizePercent: nil) == true)
         #expect(session.overlaySizePercent == nil)
@@ -738,11 +738,18 @@ struct AppStorePaneTests {
         // the spec's color reaches the slot the factory reads, and a HUD is never a PROGRAM overlay.
         #expect(session.overlayBackgroundColor == "#101820")
         #expect(session.fullOverlayActive == false)
-        #expect(session.floatingOverlayActive == false)
-        // out-of-range percents clamp like any overlay's, so a HUD can never be sizeless (full-coverage).
+        #expect(session.programOverlayActive == false)
+        // a HUD's own clamp, not the overlay's 1...100: 100 would cover the session the message is about,
+        // which is the invariant `overlay.resize --full` is refused for.
         store.closeHud(session.id)
         store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/h", sizePercent: 400)
-        #expect(session.overlaySizePercent == 100)
+        #expect(session.overlaySizePercent == HudLayout.maxSizePercent)
+        store.closeHud(session.id)
+        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/h", sizePercent: 100)
+        #expect(session.overlaySizePercent == HudLayout.maxSizePercent)
+        store.closeHud(session.id)
+        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/h", sizePercent: 1)
+        #expect(session.overlaySizePercent == HudLayout.minSizePercent)
     }
 
     @Test func updateHudRewritesInPlaceWithoutRespawning() {
@@ -754,17 +761,20 @@ struct AppStorePaneTests {
         session.overlaySurface = surface
         let generation = session.overlaySlotGeneration
         let next = HudSpec(message: "two", detail: "still working", spinner: true, position: .top)
-        #expect(store.updateHud(session.id, spec: next, file: "/tmp/b", sizePercent: 44) == true)
+        #expect(store.updateHud(session.id, spec: next, sizePercent: 44) == true)
         #expect(session.hudSpec == next)
-        #expect(session.hudFile == "/tmp/b")
+        // an update cannot move the file: the running helper opened the path `openHud` gave it.
+        #expect(session.hudFile == "/tmp/a")
         #expect(session.overlaySizePercent == 44)
         // the helper re-reads the file, so nothing re-spawns: same surface, same view identity.
         #expect(surface.teardownCount == 0)
         #expect(session.overlaySurface === surface)
         #expect(session.overlaySlotGeneration == generation)
-        // the size clamp is the overlay's own.
-        #expect(store.updateHud(session.id, spec: next, file: "/tmp/b", sizePercent: 0) == true)
-        #expect(session.overlaySizePercent == 1)
+        // an update takes the HUD's clamp too, at both ends, so no resize path can grow it into a cover.
+        #expect(store.updateHud(session.id, spec: next, sizePercent: 0) == true)
+        #expect(session.overlaySizePercent == HudLayout.minSizePercent)
+        #expect(store.updateHud(session.id, spec: next, sizePercent: 100) == true)
+        #expect(session.overlaySizePercent == HudLayout.maxSizePercent)
     }
 
     @Test func updateHudRefusesWithoutAHud() {
@@ -772,10 +782,10 @@ struct AppStorePaneTests {
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         let spec = HudSpec(message: "hello")
-        #expect(store.updateHud(session.id, spec: spec, file: "/tmp/a", sizePercent: 20) == false)
+        #expect(store.updateHud(session.id, spec: spec, sizePercent: 20) == false)
         // a caller's program in the slot is not a HUD's to rewrite.
         store.openOverlay(session.id, command: "htop", sizePercent: 60)
-        #expect(store.updateHud(session.id, spec: spec, file: "/tmp/a", sizePercent: 20) == false)
+        #expect(store.updateHud(session.id, spec: spec, sizePercent: 20) == false)
         #expect(session.hudSpec == nil)
         #expect(session.overlaySizePercent == 60)
     }
@@ -887,7 +897,7 @@ struct AppStorePaneTests {
         let store = makeStore()
         #expect(store.openHud(UUID(), command: "hud.sh", spec: HudSpec(message: "x"), file: "/tmp/a",
                               sizePercent: 20) == false)
-        #expect(store.updateHud(UUID(), spec: HudSpec(message: "x"), file: "/tmp/a", sizePercent: 20) == false)
+        #expect(store.updateHud(UUID(), spec: HudSpec(message: "x"), sizePercent: 20) == false)
         #expect(store.closeHud(UUID()) == false)
     }
 

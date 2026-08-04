@@ -41,6 +41,8 @@ struct HudHelperTests {
 
             proc.executableURL = URL(fileURLWithPath: "/bin/sh")
             proc.arguments = [HudHelperTests.helper]
+            // no LANG/LC_*, which is what a Dock-launched app inherits from launchd: the script's own
+            // LC_CTYPE is the only thing making `${#line}` count characters.
             proc.environment = [HudLayout.fileEnvKey: bodyFile.path]
             proc.standardOutput = try FileHandle(forWritingTo: outFile)
             proc.standardError = FileHandle.nullDevice
@@ -87,6 +89,12 @@ struct HudHelperTests {
             proc.waitUntilExit()
             try? FileManager.default.removeItem(at: dir)
         }
+    }
+
+    // the script is reached through the repository layout, not a bundle, so a move breaks it at run time
+    @Test func theShippedHelperIsWhereTheseTestsLookForIt() throws {
+        #expect(FileManager.default.isReadableFile(atPath: Self.helper),
+                "no helper at \(Self.helper): agterm/Resources/hud/hud.sh moved, or this file did")
     }
 
     @Test func paintsTheMessage() throws {
@@ -204,6 +212,8 @@ struct HudHelperTests {
         owner.executableURL = URL(fileURLWithPath: "/bin/sh")
         owner.arguments = ["-c", "while :; do sleep 0.2; done"]
         try owner.run()
+        // `Run`'s initializer can throw, which would otherwise leave this sleeper behind for the whole run
+        defer { if owner.isRunning { owner.terminate() } }
 
         let run = try Run("bye\n", cols: 40, rows: 7, spinner: true, ownerPid: owner.processIdentifier)
         defer { run.stop() }
@@ -225,6 +235,42 @@ struct HudHelperTests {
         #expect(run.running)
     }
 
+    // the fourth field has three treat-as-absent spellings; a non-numeric one reaching `kill -0` would fail
+    // and take a live panel down on the next tick.
+    @Test(arguments: ["", "0", "notapid"]) func keepsPaintingWhenTheOwnerFieldIsNotAPid(owner: String) throws {
+        let run = try Run("", cols: 21, rows: 5)
+        defer { run.stop() }
+        try "40 7 0 \(owner)\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+
+        #expect(run.wait { $0.contains("still here") }.contains("still here"))
+        #expect(run.running)
+    }
+
+    // `${#line}` counts BYTES outside a UTF-8 locale, and the app sized the box in characters: under the
+    // locale-less environment a Dock-launched app inherits, an unfixed script centers "…" three columns off.
+    @Test func centersANonAsciiMessageByCharactersNotBytes() throws {
+        let run = try Run("a message …\n", cols: 41, rows: 5)
+        defer { run.stop() }
+        // 41 columns less 11 characters leaves 15 to the left; counting the 13 bytes would leave 14
+        let frame = "\(Self.esc)[15Ca message …"
+        #expect(run.wait { $0.contains(frame) }.contains(frame))
+    }
+
+    // every write wakes the app's renderer, so a settled panel must go quiet rather than repaint at 2 Hz
+    @Test func stopsWritingOnceASpinnerlessFrameIsSettled() throws {
+        let run = try Run("settled\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("settled") }
+
+        let after = run.painted
+        Thread.sleep(forTimeInterval: 1.5)   // three ticks at the spinner-less interval
+        #expect(run.painted == after)
+        #expect(run.running)
+
+        try run.rewrite("moved on\n", cols: 40, rows: 7)
+        #expect(run.wait { $0.contains("moved on") }.contains("moved on"))
+    }
+
     @Test func hidesTheCursorAndRestoresItOnExit() throws {
         let run = try Run("bye\n", cols: 40, rows: 7, spinner: true)
         defer { run.stop() }
@@ -244,7 +290,11 @@ struct HudHelperTests {
         proc.standardOutput = out
         proc.standardError = FileHandle.nullDevice
         try proc.run()
-        proc.waitUntilExit()
+        // bounded: a regression that made this path loop would otherwise hang the suite instead of failing
+        let deadline = Date().addingTimeInterval(5)
+        while proc.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        defer { if proc.isRunning { proc.terminate() } }
+        #expect(!proc.isRunning, "no body path must exit at once, not loop")
         #expect(proc.terminationStatus == 0)
         #expect(out.fileHandleForReading.readDataToEndOfFile().isEmpty)
     }

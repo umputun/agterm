@@ -207,8 +207,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
         // the command is eval'd by the overlay wrapper, so the bundled path must arrive shell-escaped
         let command = try XCTUnwrap(session.overlayCommand)
         XCTAssertEqual(command, ControlServer.helperCommand())
-        XCTAssertTrue(command.hasPrefix("/bin/sh "), command)
-        XCTAssertFalse(command.dropFirst("/bin/sh ".count).contains(" "), "an unescaped space would split the argv")
+        let helper = try XCTUnwrap(Bundle.main.resourceURL?.appendingPathComponent("hud/hud.sh").path)
+        XCTAssertEqual(command, "/bin/sh " + ShellEscape.path(helper), "the eval'd path must arrive escaped")
         XCTAssertTrue(session.hudActive)
         XCTAssertFalse(session.programOverlayActive, "a HUD must never read back as a caller's program")
     }
@@ -224,6 +224,63 @@ final class ControlServerSessionActionsTests: XCTestCase {
         let sized = HudSpec(message: "working", sizePercent: 25)
         XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: sized).ok)
         XCTAssertEqual(session.overlaySizePercent, 25)
+    }
+
+    // a hud must never cover the session it is about, which is why `overlay resize --full` is refused; a
+    // caller's 100 is the same state by another door, so it takes the same bound.
+    func testAnOversizedCallerRequestIsBoundedRatherThanCoveringThePane() throws {
+        let (store, session) = try makeHudSession()
+
+        let full = HudSpec(message: "working", sizePercent: 100)
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: full).ok)
+        XCTAssertEqual(session.overlaySizePercent, HudLayout.maxSizePercent)
+
+        XCTAssertTrue(server.updateHud(session.id.uuidString, window: nil, spec: full).ok)
+        XCTAssertEqual(session.overlaySizePercent, HudLayout.maxSizePercent)
+
+        XCTAssertTrue(store.resizeOverlay(session.id, sizePercent: 100))
+        XCTAssertEqual(session.overlaySizePercent, HudLayout.maxSizePercent,
+                       "session.overlay.resize must not grow a hud into a cover either")
+    }
+
+    // the cell the panel is sized from: a real monospaced face measures a plausible advance, and an
+    // unresolvable family falls back to the system face rather than to the 1-point floor.
+    func testCellSizeMeasuresTheConfiguredFontAndFallsBackWhenItCannot() {
+        let menlo = ControlServer.cellSize(family: "Menlo", size: 13)
+        XCTAssertGreaterThan(menlo.width, 1, "a real face must measure wider than the floor")
+        XCTAssertLessThan(menlo.width, 13, "a monospaced advance is narrower than the point size")
+        XCTAssertGreaterThan(menlo.height, menlo.width, "the line box is taller than one cell is wide")
+
+        let missing = ControlServer.cellSize(family: "no such face at all", size: 13)
+        XCTAssertEqual(missing.width, ControlServer.cellSize(family: nil, size: 13).width, accuracy: 0.001)
+        XCTAssertGreaterThan(missing.width, 1)
+
+        // the advance scales with the point size, so a wrong unit would show up here
+        XCTAssertEqual(ControlServer.cellSize(family: "Menlo", size: 26).width, menlo.width * 2, accuracy: 0.01)
+    }
+
+    // an unwritable body means the panel would paint nothing or stale text, so neither open nor update may
+    // leave the store claiming a message the helper cannot read.
+    func testAFailedBodyWriteRollsTheStoreBack() throws {
+        let (_, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "first")).ok)
+        let live = try XCTUnwrap(session.hudSpec)
+
+        // a directory at the body path is a write the app cannot complete
+        try FileManager.default.removeItem(atPath: ControlServer.bodyFile(for: session.id))
+        try FileManager.default.createDirectory(atPath: ControlServer.bodyFile(for: session.id),
+                                                withIntermediateDirectories: false)
+
+        let update = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "unwritable"))
+        XCTAssertFalse(update.ok)
+        XCTAssertEqual(update.error, OverlayHudError.writeFailed)
+        XCTAssertEqual(session.hudSpec, live, "a failed update must leave the live message in the tree")
+
+        let open = server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "also unwritable"))
+        XCTAssertFalse(open.ok)
+        XCTAssertEqual(open.error, OverlayHudError.writeFailed)
+        XCTAssertFalse(session.hudActive, "a failed open must roll the slot back rather than leave it empty")
+        XCTAssertFalse(session.overlayActive)
     }
 
     // the no-blink contract: an update rewrites the same file and resizes the same surface, so the slot

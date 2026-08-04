@@ -5,23 +5,19 @@ extension ControlDispatcher {
     /// message file, and takes the session's overlay slot. Only text, color, percent, and position are
     /// checked here; slot occupancy and sizing need the store and stay app-side.
     func dispatchHudCommand(_ request: ControlRequest) -> ControlResponse {
-        switch request.cmd {
-        case .sessionHudOpen:
-            switch parseHudSpec(request) {
-            case .rejected(let response): return response
-            case .spec(let spec):
-                return actions.openHud(request.target, window: request.args?.window, spec: spec)
-            }
-        case .sessionHudUpdate:
-            switch parseHudSpec(request) {
-            case .rejected(let response): return response
-            case .spec(let spec):
-                return actions.updateHud(request.target, window: request.args?.window, spec: spec)
-            }
-        case .sessionHudClose:
+        if request.cmd == .sessionHudClose {
             return actions.closeHud(request.target, window: request.args?.window)
-        default:
-            preconditionFailure("dispatchHudCommand called for \(request.cmd.rawValue)")
+        }
+        // open and update validate identically — an update replaces the whole spec — so only the effect differs
+        let post: (String?, String?, HudSpec) -> ControlResponse
+        switch request.cmd {
+        case .sessionHudOpen: post = actions.openHud
+        case .sessionHudUpdate: post = actions.updateHud
+        default: preconditionFailure("dispatchHudCommand called for \(request.cmd.rawValue)")
+        }
+        switch parseHudSpec(request) {
+        case .rejected(let response): return response
+        case .spec(let spec): return post(request.target, request.args?.window, spec)
         }
     }
 
@@ -34,7 +30,9 @@ extension ControlDispatcher {
     /// text rather than patching it, so an update with no message is a close the caller must ask for.
     private func parseHudSpec(_ request: ControlRequest) -> HudSpecParse {
         let args = request.args
-        guard let message = args?.message, !message.isEmpty else {
+        // blank joins absent: `HudLayout.wrap` drops whitespace-only text, so the panel would paint an empty
+        // frame while `tree` reported a live HUD. `session.background text` refuses the same input.
+        guard let message = args?.message, !message.trimmingCharacters(in: .whitespaces).isEmpty else {
             return .rejected(ControlResponse(ok: false, error: "\(request.cmd.rawValue) requires a message"))
         }
         // the helper prints these bytes straight into a live terminal, so an escape sequence would paint
@@ -57,7 +55,7 @@ extension ControlDispatcher {
             return .rejected(ControlResponse(ok: false,
                                              error: "\(request.cmd.rawValue): --size-percent must be 1...100"))
         }
-        var position = HudPosition.center
+        var position = HudPosition.defaultPosition
         if let raw = args?.position {
             guard let parsed = HudPosition(rawValue: raw) else {
                 return .rejected(ControlResponse(

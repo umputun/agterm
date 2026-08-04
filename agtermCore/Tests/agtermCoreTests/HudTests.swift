@@ -89,7 +89,17 @@ struct HudTests {
     @Test func sizePercentTakesTheLargerOfWidthAndHeightNeed() {
         let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1200, paneHeight: 800)
 
+        // width-dominant: 22 cells = 176pt of 1200 = 15%, against 3 rows = 54pt of 800 = 7%
         #expect(HudLayout.sizePercent(box: (columns: 22, rows: 3), pane: pane) == 15)
+        // height-dominant in a wide, short pane: 20 rows = 360pt of 800 = 45%, against 22 cells = 15%
+        #expect(HudLayout.sizePercent(box: (columns: 22, rows: 20), pane: pane) == 45)
+    }
+
+    @Test func aCallerOverrideIsBoundedByTheSameClampTheMeasurementTakes() {
+        #expect(HudLayout.clampSizePercent(100) == HudLayout.maxSizePercent)
+        #expect(HudLayout.clampSizePercent(1) == HudLayout.minSizePercent)
+        #expect(HudLayout.clampSizePercent(40) == 40)
+        #expect(HudLayout.clampSizePercent(HudLayout.maxSizePercent) == HudLayout.maxSizePercent)
     }
 
     @Test func sizePercentClampsASmallBoxToTheMinimum() {

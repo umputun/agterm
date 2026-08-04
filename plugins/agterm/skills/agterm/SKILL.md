@@ -339,7 +339,8 @@ omitted when expanded).
   literally `update` or `close` needs the explicit `hud open` verb. `--detail` adds a dim second line,
   `--spinner` animates a glyph, `--position` places it vertically (default `center`; `top` and `bottom`
   hold a fixed margin off the pane edge automatically). The panel is sized from the message unless
-  `--size-percent N` (1-100) overrides it. `hud update` repaints in place with no re-spawn and no blink,
+  `--size-percent N` (1-100) overrides it; either way it is bounded to 10-80% of the pane, since a message
+  must never cover the session it is about, so a requested 100 reads back as 80. `hud update` repaints in place with no re-spawn and no blink,
   and REPLACES the whole spec — repeat `--detail`/`--spinner` to keep them, since an omitted one drops.
   It takes no `--background-color`: the surface reads that once at creation, so only a fresh `hud` changes
   it. Message and detail are capped at 256 characters and reject control characters, newline included.

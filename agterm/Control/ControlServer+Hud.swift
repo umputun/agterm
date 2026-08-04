@@ -25,7 +25,7 @@ extension ControlServer {
             }
             guard Self.writeBody(spec, to: file) else {
                 store.closeHud(id)
-                return ControlResponse(ok: false, error: "could not write the hud message")
+                return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -33,18 +33,19 @@ extension ControlServer {
 
     /// Rewrites the live HUD's body and re-sizes the panel in place. The helper re-reads the file every
     /// tick — box and spinner included, they ride in its header line — so nothing re-spawns and the panel
-    /// does not blink.
+    /// does not blink. A failed write rolls the store back, as `openHud` does with `closeHud`: the panel
+    /// still paints the old message, and `tree` must not claim the new one.
     func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id), let file = session.hudFile else {
-                return ControlResponse(ok: false, error: "no hud")
-            }
-            guard store.updateHud(id, spec: spec, file: file,
-                                  sizePercent: self.sizePercent(for: spec, session: session)) else {
-                return ControlResponse(ok: false, error: "no hud")
+            guard let session = store.session(withID: id), let file = session.hudFile,
+                  let previous = session.hudSpec, let previousSize = session.overlaySizePercent,
+                  store.updateHud(id, spec: spec, sizePercent: self.sizePercent(for: spec, session: session))
+            else {
+                return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
             guard Self.writeBody(spec, to: file) else {
-                return ControlResponse(ok: false, error: "could not write the hud message")
+                store.updateHud(id, spec: previous, sizePercent: previousSize)
+                return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -54,7 +55,7 @@ extension ControlServer {
         resolver.resolveSession(target, window: window) { store, id in
             let file = store.session(withID: id)?.hudFile
             guard store.closeHud(id) else {
-                return ControlResponse(ok: false, error: "no hud")
+                return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
             // the surface's own teardown removes this, but a HUD whose surface never realized has none.
             if let file { try? FileManager.default.removeItem(atPath: file) }
@@ -71,9 +72,10 @@ extension ControlServer {
 
     /// Cell size from the CONFIGURED terminal font (the session's own size override, else the Settings
     /// base) and pane size from the surfaces currently laid out. libghostty reports no cell metrics —
-    /// `GHOSTTY_ACTION_CELL_SIZE` discards its payload — and its own cell width may round differently, which
-    /// `HudLayout`'s min/max clamp absorbs. A session with nothing on screen measures zero and takes the
-    /// clamp's maximum.
+    /// `GHOSTTY_ACTION_CELL_SIZE` discards its payload — so this measurement may round differently from the
+    /// cell it actually renders. That divergence is ACCEPTED, not corrected: the min/max clamp only bounds
+    /// the percentage, so a wider real cell overruns the helper's centering by a column or two. A session
+    /// with nothing on screen measures zero and takes the clamp's maximum.
     private func paneMetrics(for session: Session) -> PaneMetrics {
         let cell = Self.cellSize(family: settingsModel.settings.fontFamily,
                                  size: session.fontSize ?? GhosttyApp.shared.baseFontSize)
@@ -91,7 +93,7 @@ extension ControlServer {
     /// One cell of `family` at `size`: the horizontal advance of a digit (every glyph advances the same in
     /// a monospaced face) and ascent + descent + leading for the line box. An unresolvable family falls
     /// back to the system monospaced face rather than to a guessed ratio.
-    private static func cellSize(family: String?, size: Double) -> (width: Double, height: Double) {
+    static func cellSize(family: String?, size: Double) -> (width: Double, height: Double) {
         let font = family.flatMap { NSFont(name: $0, size: size) }
             ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         var characters: [UniChar] = Array("0".utf16)
@@ -99,6 +101,10 @@ extension ControlServer {
         var advance = CGSize.zero
         if CTFontGetGlyphsForCharacters(font, &characters, &glyph, 1) {
             CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
+        } else {
+            // a face with no glyph for "0" would otherwise leave the advance at zero and drive every panel to
+            // the clamp's floor with nothing to explain it
+            NSLog("hud: no digit glyph in %@, falling back to a one-point cell", font.fontName)
         }
         let height = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
         return (width: max(advance.width, 1), height: max(height, 1))

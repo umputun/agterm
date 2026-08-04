@@ -209,8 +209,11 @@ public final class Session: Identifiable {
     /// fire on a later manual ⌘D.
     @ObservationIgnored public var pendingSplitRestoreCommand: String?
 
-    /// Whether an ephemeral overlay terminal covers this session (full single-pane size); the detail pane
-    /// shows/hides it. Control-channel only and ephemeral — it runs one program and vanishes.
+    /// Whether the session-wide overlay slot is OCCUPIED, by either of its two occupants: a caller's PROGRAM
+    /// (`session.overlay.open`, which covers the session and owns first responder) or a passive HUD message
+    /// (`session.hud.open`, which covers nothing). Raw, so it answers only "occupied" — ask
+    /// `programOverlayActive` or `hudActive` for which, and never this, wherever the answer decides focus,
+    /// coverage, or input. Control-channel only and ephemeral; the detail pane shows and hides it.
     public var overlayActive: Bool = false
 
     /// The overlay's surface, created on open and torn down when its `overlayCommand` exits or the control
@@ -237,9 +240,11 @@ public final class Session: Identifiable {
     /// `session.overlay.result`; in-memory only.
     @ObservationIgnored public var overlayExitCode: Int?
 
-    /// For a *floating* overlay, the percent of the pane (width and height) the panel occupies, 1...100; nil
-    /// for the default full-pane overlay. Floating = an opaque framed panel centered in the pane, session
-    /// still VISIBLE behind it (full instead hides it and draws translucent). Cleared on close, never persisted.
+    /// The percent of the pane (width and height) an opaque framed panel occupies with the session still
+    /// VISIBLE behind it; nil is the full-pane program overlay, which hides it and draws translucent.
+    /// 1...100 for a floating PROGRAM overlay, which is always centered; a HUD shares the field but is bounded
+    /// by `HudLayout.clampSizePercent` and placed by its own `HudSpec.position`. Cleared on close, never
+    /// persisted.
     public var overlaySizePercent: Int?
 
     /// Bumped on every overlay-slot OPEN so the deck can key the panel's view identity on it. A HUD is
@@ -255,7 +260,9 @@ public final class Session: Identifiable {
     public var hudSpec: HudSpec?
 
     /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); the app owns
-    /// the file and deletes it on teardown. `@ObservationIgnored`: only the surface factory reads it.
+    /// the file and deletes it on teardown. Per SESSION, so an update rewrites the path the running helper
+    /// already opened. `@ObservationIgnored`: the surface factory, the HUD commands and `overlay close` read
+    /// it, and none of them is a view that must re-render when it changes.
     @ObservationIgnored public var hudFile: String?
 
     /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
@@ -275,11 +282,6 @@ public final class Session: Identifiable {
     /// cover. `!hudActive` keeps it a question about a running program even if a HUD ever reaches the slot
     /// without a size percent; a HUD covers nothing and must never hide the session behind it.
     public var fullOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent == nil }
-
-    /// Whether a FLOATING PROGRAM overlay is up: `overlayActive` WITH a size percent, the complement of
-    /// `fullOverlayActive` over the same program-only domain. The deck gates the floating panel on the raw
-    /// slot state instead, since a HUD renders through the same panel.
-    public var floatingOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent != nil }
 
     /// The left pane's overlay, covering that pane only and leaving the sibling live; nil means none is up,
     /// so the slot itself IS the "active" signal. Observed, ephemeral, control-channel only.
