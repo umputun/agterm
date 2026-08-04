@@ -8,6 +8,11 @@
 # so restoring the terminal resumes that tab's own conversation instead of starting fresh.
 # Requires: agterm (exports AGTERM_SESSION_ID, restores running commands) + fish.
 function claude --description 'Per-agterm-tab Claude Code session resume'
+    if not status is-interactive
+        command claude $argv                                    # non-interactive (script/subshell) -> passthrough
+        return
+    end
+
     set -l sid (string lower -- "$AGTERM_SESSION_ID")
     if test -z "$sid"
         command claude $argv                                    # not in an agterm tab -> passthrough

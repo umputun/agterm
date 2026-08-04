@@ -56,7 +56,7 @@ mkdir -p ~/.config/fish/functions
 cp claude-resume.fish ~/.config/fish/functions/claude.fish
 ```
 
-Fish autoloads a function from that directory by filename on first call, in any shell, interactive or not, so there is no config file to source and no restart to arrange. This file too is sourced by fish's autoloader, never run, so it does not need the executable bit and is committed without one.
+Fish autoloads a function from that directory by filename on first call, in any shell, interactive or not, so there is no config file to source and no restart to arrange. This file too is sourced by fish's autoloader, never run, so it does not need the executable bit and is committed without one. Unlike the zsh version — which a non-interactive shell never sources at all — the function checks `status is-interactive` itself and passes non-interactive calls straight through, so a script invoking `claude` from inside a tab isn't intercepted.
 
 Turn on **Restore running commands on restart** in Settings ▸ General, under Sessions. Without it agterm brings a tab back as a plain shell and there is nothing for the function to intercept.
 
