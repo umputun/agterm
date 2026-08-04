@@ -476,7 +476,7 @@ struct agtermApp: App {
         } else {
             // a HUD records nothing: its "program" is the app's own painter, so an exit status would put a
             // number `session.overlay.result` could report for a message nobody ran.
-            if hudFile == nil {
+            if !isHud {
                 view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
             }
             view.onExit = { store.closeOverlay(sessionID) }

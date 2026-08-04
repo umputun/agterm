@@ -89,7 +89,7 @@ extension ControlServer: ControlActions {
             guard store.resizeOverlay(id, sizePercent: sizePercent) else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
-            if hud, let session, !self.writeHudBody(session) {
+            if hud, let session, !self.writeHudBody(session, pane: self.paneMetrics(for: session)) {
                 store.resizeOverlay(id, sizePercent: previousSize)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }

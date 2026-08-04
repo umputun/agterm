@@ -294,6 +294,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(open.error, OverlayHudError.writeFailed)
         XCTAssertFalse(session.hudActive, "a failed open must roll the slot back rather than leave it empty")
         XCTAssertFalse(session.overlayActive)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ControlServer.bodyFile(for: session.id)),
+                       "a rolled-back open leaves the never-realized state closeHud's own removal exists for")
     }
 
     // the no-blink contract: an update rewrites the same file and resizes the same surface, so the slot

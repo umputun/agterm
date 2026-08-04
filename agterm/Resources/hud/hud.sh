@@ -12,14 +12,13 @@
 #   detail lines                 rendered dimmed
 #
 # Everything an update may change lives in that file, re-read every tick, so `session.hud.update` repaints
-# in place: a process cannot see its own environment change, and a re-spawn would blink the panel. The grid
-# is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app derives it from the
-# terminal font and the size it gave the panel; measuring would race that resize and disagree. Every app-side
-# path that changes the panel's size rewrites the header, or this centers on a frame that is gone.
+# in place; HudLayout.renderedBody owns why it rides there rather than in the environment. The grid is never
+# measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app derives it from the terminal font
+# and the size it gave the panel; measuring would race that resize and disagree. Every app-side path that
+# changes the panel's size rewrites the header, or this centers on a frame that is gone.
 #
-# Removing the file is how every teardown path stops the loop. The pid is the second stop, and the only one
-# a HARD-killed app has: no teardown deletes the file, and no SIGHUP arrives either, because the pty's
-# session leader is the surviving `login`, not the app. Without it the loop repaints forever.
+# Removing the file is how every teardown path stops the loop; the header's pid is the second stop, checked
+# below.
 set -uf
 
 # ${#line} counts CODE POINTS only under a UTF-8 locale and BYTES otherwise, and code points is what the app
@@ -99,8 +98,9 @@ while [ -f "$file" ]; do
         block="$block$attr$pre$line"
     done 2>/dev/null < "$file"
 
-    # kill is a shell builtin, so the liveness check costs no fork and does not slow the tick. A header
-    # naming no owner keeps painting, which is what leaves the file the only stop.
+    # kill is a shell builtin, so the liveness check costs no fork and does not slow the tick. It is the
+    # only stop a HARD-killed app leaves (HudLayout.renderedBody states why). A header naming no owner keeps
+    # painting, which is what leaves the file the only stop.
     if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
         exit 0
     fi

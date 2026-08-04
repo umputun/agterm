@@ -20,6 +20,10 @@ struct HudHelperTests {
 
     private static let esc = "\u{1b}"
 
+    /// The helper's own `interval` without a spinner, which is what a "did it stay quiet" assertion has to
+    /// outlast; a repaint loop would write within one of these.
+    private static let spinnerlessTick: TimeInterval = 0.5
+
     // a helper process painting into a temp file, so the frames can be read at any point without racing
     // a pipe's EOF.
     private final class Run {
@@ -78,6 +82,13 @@ struct HudHelperTests {
             return text
         }
 
+        /// Whether every needle reaches the painted stream before the timeout — the whole assertion for most
+        /// of these tests, since the helper writes frames and never rewrites history.
+        func paints(_ needles: String...) -> Bool {
+            let text = wait { painted in needles.allSatisfy(painted.contains) }
+            return needles.allSatisfy(text.contains)
+        }
+
         func waitForExit(_ timeout: TimeInterval = 5) -> Bool {
             let deadline = Date().addingTimeInterval(timeout)
             while proc.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
@@ -100,7 +111,7 @@ struct HudHelperTests {
     @Test func paintsTheMessage() throws {
         let run = try Run("gathering options\n", cols: 40, rows: 7)
         defer { run.stop() }
-        #expect(run.wait { $0.contains("gathering options") }.contains("gathering options"))
+        #expect(run.paints("gathering options"))
     }
 
     @Test func placesTheMessageInTheBoxTheHeaderGave() throws {
@@ -109,7 +120,7 @@ struct HudHelperTests {
         defer { run.stop() }
         let e = Self.esc
         let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[E\(e)[E\(e)[19Cabc"
-        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.paints(frame))
     }
 
     @Test func keepsAnOversizedLineAtTheLeftEdgeRatherThanOffScreen() throws {
@@ -117,7 +128,7 @@ struct HudHelperTests {
         defer { run.stop() }
         let e = Self.esc
         let frame = "\(e)[H\(e)[J\(e)[Ea message wider than its box"
-        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.paints(frame))
     }
 
     @Test func dimsEverythingAfterTheBodysEmptyLine() throws {
@@ -133,7 +144,7 @@ struct HudHelperTests {
         defer { run.stop() }
         run.wait { $0.contains("first") }
         try run.rewrite("second\n", spinner: true)
-        #expect(run.wait { $0.contains("second") }.contains("second"))
+        #expect(run.paints("second"))
         #expect(run.running)
     }
 
@@ -143,7 +154,7 @@ struct HudHelperTests {
         run.wait { $0.contains("abc") }
         try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: true)
         // 41 - 7 content - 2 spinner leaves 16 to the left, versus 18 for the shorter message
-        #expect(run.wait { $0.contains("\(Self.esc)[16C") }.contains("\(Self.esc)[16C"))
+        #expect(run.paints("\(Self.esc)[16C"))
     }
 
     // the header is what makes `session.hud.update` able to grow the panel: a running helper cannot see its
@@ -156,7 +167,7 @@ struct HudHelperTests {
         try run.rewrite("abc\n", cols: 21, rows: 5)
         // 21 - 3 leaves 9 to the left, and 5 rows - 1 line leaves 2 rows above
         let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[9Cabc"
-        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.paints(frame))
         #expect(run.running)
     }
 
@@ -166,7 +177,7 @@ struct HudHelperTests {
         run.wait { $0.contains("busy") }
         #expect(!run.painted.contains("| busy"))
         try run.rewrite("busy\n", spinner: true)
-        #expect(run.wait { $0.contains("| busy") }.contains("| busy"))
+        #expect(run.paints("| busy"))
         #expect(run.running)
     }
 
@@ -177,16 +188,13 @@ struct HudHelperTests {
         defer { run.stop() }
         try "not a header\nvisible\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
         // the default 40-column box leaves 16 to the left of a 7-character line, where 21 would leave 7
-        #expect(run.wait { $0.contains("\(Self.esc)[16Cvisible") }.contains("\(Self.esc)[16Cvisible"))
+        #expect(run.paints("\(Self.esc)[16Cvisible"))
     }
 
     @Test func spinnerPrefixesTheFirstLineAndAdvances() throws {
         let run = try Run("busy\n", cols: 40, rows: 7, spinner: true)
         defer { run.stop() }
-        let painted = run.wait { $0.contains("| busy") && $0.contains("/ busy") && $0.contains("- busy") }
-        #expect(painted.contains("| busy"))
-        #expect(painted.contains("/ busy"))
-        #expect(painted.contains("- busy"))
+        #expect(run.paints("| busy", "/ busy", "- busy"))
     }
 
     @Test func noSpinnerGlyphWithoutTheFlag() throws {
@@ -231,7 +239,7 @@ struct HudHelperTests {
         defer { run.stop() }
         try "40 7 0\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
 
-        #expect(run.wait { $0.contains("still here") }.contains("still here"))
+        #expect(run.paints("still here"))
         #expect(run.running)
     }
 
@@ -242,7 +250,7 @@ struct HudHelperTests {
         defer { run.stop() }
         try "40 7 0 \(owner)\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
 
-        #expect(run.wait { $0.contains("still here") }.contains("still here"))
+        #expect(run.paints("still here"))
         #expect(run.running)
     }
 
@@ -253,7 +261,7 @@ struct HudHelperTests {
         defer { run.stop() }
         // 41 columns less 11 characters leaves 15 to the left; counting the 13 bytes would leave 14
         let frame = "\(Self.esc)[15Ca message …"
-        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.paints(frame))
     }
 
     // the two halves must count the same unit: `${#line}` counts CODE POINTS, `String.count` counts grapheme
@@ -268,7 +276,7 @@ struct HudHelperTests {
         let left = (40 - HudLayout.cellCount(lines[0])) / 2
         #expect(left == 14)
         let frame = "\(Self.esc)[\(left)C\(lines[0])"
-        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.paints(frame))
     }
 
     // every write wakes the app's renderer, so a settled panel must go quiet rather than repaint at 2 Hz
@@ -278,12 +286,12 @@ struct HudHelperTests {
         run.wait { $0.contains("settled") }
 
         let after = run.painted
-        Thread.sleep(forTimeInterval: 1.5)   // three ticks at the spinner-less interval
+        Thread.sleep(forTimeInterval: Self.spinnerlessTick * 2)
         #expect(run.painted == after)
         #expect(run.running)
 
         try run.rewrite("moved on\n", cols: 40, rows: 7)
-        #expect(run.wait { $0.contains("moved on") }.contains("moved on"))
+        #expect(run.paints("moved on"))
     }
 
     @Test func hidesTheCursorAndRestoresItOnExit() throws {

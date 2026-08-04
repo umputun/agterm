@@ -332,20 +332,32 @@ struct OverlayPanelStyle: Equatable {
     /// where the panel sits vertically in the pane; program overlays are always centered.
     let position: HudPosition
 
+    /// The floating program overlay's chrome: a window hovering over the session, so a wide radius and a
+    /// shadow carry the separation and the border only edges it.
+    private static let floatingCornerRadius: CGFloat = 12
+    private static let floatingBorderOpacity = 0.18
+    private static let floatingShadowRadius: CGFloat = 24
+
     /// A HUD keeps the opaque backing but drops the shadow for a stronger border and a tighter radius:
     /// neither a shadow nor a backdrop wash separates it from the text behind, so the border does that work
     /// alone and the panel reads as part of the terminal rather than a window hovering over it.
+    private static let hudCornerRadius: CGFloat = 8
+    private static let hudBorderOpacity = 0.30
+
     @MainActor static func resolve(_ session: Session) -> OverlayPanelStyle {
         let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
         guard session.hudActive else {
+            // the full overlay is chromeless: no radius, no border, no shadow.
             let floating = session.overlaySizePercent != nil
-            return OverlayPanelStyle(fraction: fraction, framed: floating, cornerRadius: floating ? 12 : 0,
-                                     borderOpacity: floating ? 0.18 : 0, shadowRadius: floating ? 24 : 0,
+            return OverlayPanelStyle(fraction: fraction, framed: floating,
+                                     cornerRadius: floating ? floatingCornerRadius : 0,
+                                     borderOpacity: floating ? floatingBorderOpacity : 0,
+                                     shadowRadius: floating ? floatingShadowRadius : 0,
                                      backdrop: floating, interactive: true, position: .center)
         }
-        return OverlayPanelStyle(fraction: fraction, framed: true, cornerRadius: 8, borderOpacity: 0.30,
-                                 shadowRadius: 0, backdrop: false, interactive: false,
-                                 position: session.hudSpec?.position ?? .center)
+        return OverlayPanelStyle(fraction: fraction, framed: true, cornerRadius: hudCornerRadius,
+                                 borderOpacity: hudBorderOpacity, shadowRadius: 0, backdrop: false,
+                                 interactive: false, position: session.hudSpec?.position ?? .center)
     }
 
     /// The panel's offset from the pane's center, positive downward. `top`/`bottom` hold

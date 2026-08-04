@@ -248,13 +248,15 @@ extension AppStore {
 
     /// Rewrites a live HUD's message and size in place: the surface stays mounted and the helper re-reads
     /// its body file on the next tick, so the panel changes with no re-spawn and no blink. The file path is
-    /// not an argument — an update rewrites the path `openHud` already gave the running helper, which its
-    /// environment cannot be told to change. `spec.backgroundColor` is NOT re-applied either; the factory
-    /// reads it at creation, so only a replacing `openHud` can change it. False with no HUD up.
+    /// not an argument — an update rewrites the path `openHud` already gave the running helper, per
+    /// `HudLayout.renderedBody`. `spec.backgroundColor` is NOT re-applied either; the factory reads it at
+    /// creation, so only a replacing `openHud` can change it. False with no HUD up, which is the only
+    /// failure: `resizeOverlay` refuses an empty slot alone, and a live HUD occupies one.
     @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, sizePercent: Int) -> Bool {
         guard let session = session(withID: sessionID), session.hudActive else { return false }
         session.hudSpec = spec
-        return resizeOverlay(sessionID, sizePercent: sizePercent)
+        resizeOverlay(sessionID, sizePercent: sizePercent)
+        return true
     }
 
     /// Closes a HUD through the ordinary overlay teardown. Refused when the slot holds a caller's PROGRAM,

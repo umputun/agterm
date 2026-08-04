@@ -40,11 +40,11 @@ extension ControlDispatcher {
         guard !containsControlCharacters(message), !containsControlCharacters(args?.detail ?? "") else {
             return .rejected(ControlResponse(ok: false, error: "hud text must not contain control characters"))
         }
-        guard message.count <= HudSpec.maxTextLength else {
+        guard HudLayout.textLength(message) <= HudSpec.maxTextLength else {
             return .rejected(ControlResponse(
                 ok: false, error: "hud message too long (max \(HudSpec.maxTextLength) characters)"))
         }
-        guard (args?.detail?.count ?? 0) <= HudSpec.maxTextLength else {
+        guard HudLayout.textLength(args?.detail ?? "") <= HudSpec.maxTextLength else {
             return .rejected(ControlResponse(
                 ok: false, error: "hud detail too long (max \(HudSpec.maxTextLength) characters)"))
         }

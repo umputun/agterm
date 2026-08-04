@@ -81,9 +81,9 @@ targets:
       - path: agterm/Resources/agent-status
         type: folder
         buildPhase: resources
-      # The session.hud panel painter. Folder reference (not the default "group") so the
-      # extensionless-by-convention .sh keeps its exec bit. Lands at Contents/Resources/hud —
-      # makeOverlaySurface resolves hud.sh from there and shell-escapes it into the overlay command.
+      # The session.hud panel painter. Folder reference (not the default "group") so hud.sh keeps its
+      # exec bit. Lands at Contents/Resources/hud — ControlServer.helperCommand() resolves it there and
+      # shell-escapes it into the overlay command.
       - path: agterm/Resources/hud
         type: folder
         buildPhase: resources

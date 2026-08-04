@@ -223,6 +223,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var follow: Bool?
     /// The HUD panel's headline for `session.hud.open`/`.update` — required and non-empty on both, since an
     /// update with nothing to say is a close. Wrapped app-side; control characters are rejected.
+    ///
+    /// Separate from `title`/`body`, which `notify` owns: those two are a desktop notification's fields,
+    /// where the title is OPTIONAL and defaults to the session name and the body is the required one.
+    /// A HUD inverts that, so sharing them would make each field's contract read "required here, optional
+    /// there" — unlike `color`, `position` and `sizePercent`, whose contracts a HUD takes unchanged.
     public var message: String?
     /// The HUD panel's dim second line, wrapped below the message; nil/omitted leaves the panel one block.
     public var detail: String?

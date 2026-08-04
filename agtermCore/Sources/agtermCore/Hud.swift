@@ -13,8 +13,9 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public let sizePercent: Int?
     public let position: HudPosition
 
-    /// Cap on `message` and `detail` each, enforced by the dispatcher. The panel wraps at
-    /// `HudLayout.maxColumns` and is clamped to `HudLayout.maxSizePercent`, so longer text cannot be shown.
+    /// Cap on `message` and `detail` each, enforced by the dispatcher in `HudLayout.textLength`'s unit. The
+    /// panel wraps at `HudLayout.maxColumns` and is clamped to `HudLayout.maxSizePercent`, so longer text
+    /// cannot be shown.
     public static let maxTextLength = 256
 
     public init(message: String, detail: String? = nil, spinner: Bool = false, backgroundColor: String? = nil,
@@ -99,9 +100,8 @@ public enum HudLayout {
     public static let minSizePercent = 10
 
     /// The only HUD-SPECIFIC variable the app puts in the helper's environment (it also inherits the session
-    /// environment and the overlay wrapper's own two): the path to the body file. Everything that an update
-    /// may change — the grid, the spinner, the owning pid — rides in that file's header line instead, since a
-    /// running process cannot see its environment change and re-spawning would blink the panel.
+    /// environment and the overlay wrapper's own two): the path to the body file. Everything an update may
+    /// change rides in that file's header line instead, for the reason `renderedBody` states.
     public static let fileEnvKey = "AGTERM_HUD_FILE"
 
     /// Frame padding in cells, applied on both sides of the content.
@@ -227,6 +227,12 @@ public enum HudLayout {
     /// a cell counted as one and overflows the frame — accepted, since correcting it needs an
     /// East-Asian-width table on both sides of the file.
     static func cellCount(_ text: String) -> Int { text.unicodeScalars.count }
+
+    /// textLength measures `HudSpec.maxTextLength`'s cap in the SAME unit and on the same precomposed form
+    /// `wrap` lays the text out in, so the cap bounds what the panel actually has to fit.
+    static func textLength(_ text: String) -> Int {
+        cellCount(text.precomposedStringWithCanonicalMapping)
+    }
 
     private static func percent(_ size: Double, of available: Double) -> Int {
         guard available > 0 else { return maxSizePercent }

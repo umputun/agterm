@@ -83,6 +83,26 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.count == 1)
     }
 
+    // the cap must bound what the LAYOUT measures: `HudLayout.textLength` counts precomposed scalars, so a
+    // ZWJ emoji costs five against a grapheme count's one, and a decomposed accent costs one against two.
+    @Test func capsTextInTheUnitTheLayoutMeasures() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let emoji = String(repeating: "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", count: 100)
+        let decomposed = String(repeating: "e\u{0301}", count: HudSpec.maxTextLength)
+
+        #expect(emoji.count <= HudSpec.maxTextLength, "a grapheme count would let this through")
+        let rejected = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen,
+                                                                args: ControlArgs(message: emoji)))
+        let accepted = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen,
+                                                                args: ControlArgs(message: decomposed)))
+
+        #expect(rejected == ControlResponse(ok: false,
+                                            error: "hud message too long (max \(HudSpec.maxTextLength) characters)"))
+        #expect(accepted == ControlResponse(ok: true))
+        #expect(actions.calls.count == 1)
+    }
+
     @Test func rejectsInvalidColorWithoutCallingHost() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
