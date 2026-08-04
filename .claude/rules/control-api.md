@@ -241,7 +241,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   program-only key for the overlay-close refocus. `viewOnly` owns the NSView layer, where `mouseDown` makes
   a surface first responder; the panel's ancestor `.allowsHitTesting(false)` currently blocks the click
   before that, so the two are belt and braces and neither is the place to economise.
-  Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
+  Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
+  close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
   `.id` carries `Session.overlaySlotGeneration`, or a replacement keeping `overlayActive` true never re-runs
   `makeNSView` and `updateNSView` hits a torn-down view.
