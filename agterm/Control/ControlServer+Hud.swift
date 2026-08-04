@@ -18,12 +18,13 @@ extension ControlServer {
             }
             let file = Self.bodyFile(for: id)
             // open FIRST, write second: replacing a live HUD tears its surface down, and that teardown
-            // deletes the body file at this same per-session path — writing first would lose it.
+            // deletes the body file at this same per-session path — writing first would lose it. The
+            // header's grid also comes from the size the store RESOLVED, which only exists after this call.
             guard store.openHud(id, command: command, spec: spec, file: file,
                                 sizePercent: self.sizePercent(for: spec, session: session)) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
-            guard Self.writeBody(spec, to: file) else {
+            guard self.writeHudBody(session) else {
                 store.closeHud(id)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
@@ -37,13 +38,13 @@ extension ControlServer {
     /// still paints the old message, and `tree` must not claim the new one.
     func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id), let file = session.hudFile,
+            guard let session = store.session(withID: id), session.hudFile != nil,
                   let previous = session.hudSpec, let previousSize = session.overlaySizePercent,
                   store.updateHud(id, spec: spec, sizePercent: self.sizePercent(for: spec, session: session))
             else {
                 return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
-            guard Self.writeBody(spec, to: file) else {
+            guard self.writeHudBody(session) else {
                 store.updateHud(id, spec: previous, sizePercent: previousSize)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
@@ -70,6 +71,12 @@ extension ControlServer {
         return HudLayout.sizePercent(box: HudLayout.box(for: spec), pane: paneMetrics(for: session))
     }
 
+    /// The terminal's padding inside the panel, per side, from `Resources/ghostty-defaults.conf`
+    /// (`window-padding-x = 8`, `window-padding-y = 6`). It holds no cells, so the grid the helper centers
+    /// in owes it two columns and two rows. A user `ghostty.conf` overriding either is not tracked and
+    /// shifts the centering by about a column, as the estimated cell already can.
+    private static let windowPadding = (horizontal: 8.0, vertical: 6.0)
+
     /// Cell size from the CONFIGURED terminal font (the session's own size override, else the Settings
     /// base) and pane size from the surfaces currently laid out. libghostty reports no cell metrics —
     /// `GHOSTTY_ACTION_CELL_SIZE` discards its payload — so this measurement may round differently from the
@@ -87,7 +94,9 @@ extension ControlServer {
             .map { $0.convert($0.bounds, to: nil) }
         let area = frames.dropFirst().reduce(frames.first ?? .zero) { $0.union($1) }
         return PaneMetrics(cellWidth: cell.width, cellHeight: cell.height,
-                           paneWidth: area.width, paneHeight: area.height)
+                           paneWidth: area.width, paneHeight: area.height,
+                           paddingWidth: Self.windowPadding.horizontal,
+                           paddingHeight: Self.windowPadding.vertical)
     }
 
     /// One cell of `family` at `size`: the horizontal advance of a digit (every glyph advances the same in
@@ -125,11 +134,20 @@ extension ControlServer {
         (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-hud-\(sessionID.uuidString).txt")
     }
 
-    /// Writes the rendered body ATOMICALLY (temp file plus rename): the helper re-reads it every tick with
-    /// no locking, so a partial write would paint half a message. The header carries THIS process's pid,
-    /// which is the only stop a painter has when the app is hard-killed and runs no teardown.
-    private static func writeBody(_ spec: HudSpec, to path: String) -> Bool {
-        let body = Data(HudLayout.renderedBody(for: spec, ownerPid: ProcessInfo.processInfo.processIdentifier).utf8)
-        return (try? body.write(to: URL(fileURLWithPath: path), options: .atomic)) != nil
+    /// Writes the live HUD's body ATOMICALLY (temp file plus rename): the helper re-reads it every tick with
+    /// no locking, so a partial write would paint half a message. Every state the header carries is read off
+    /// the session, so the grid is the one the panel ACTUALLY took and open, update and resize cannot write
+    /// three different answers. The pid is THIS process's, the only stop a painter has when the app is
+    /// hard-killed and runs no teardown.
+    ///
+    /// False for a session with no HUD up, and for a write the file system refused — both leave the panel
+    /// painting whatever it last read, which is why every caller rolls its store change back.
+    func writeHudBody(_ session: Session) -> Bool {
+        guard let path = session.hudFile, let spec = session.hudSpec,
+              let size = session.overlaySizePercent else { return false }
+        let grid = HudLayout.paintGrid(for: spec, sizePercent: size, pane: paneMetrics(for: session))
+        let rendered = HudLayout.renderedBody(for: spec, grid: grid,
+                                              ownerPid: ProcessInfo.processInfo.processIdentifier)
+        return (try? Data(rendered.utf8).write(to: URL(fileURLWithPath: path), options: .atomic)) != nil
     }
 }

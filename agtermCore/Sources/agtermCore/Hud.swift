@@ -1,3 +1,5 @@
+import Foundation
+
 /// The message a control client posts over a session while it prepares something. `position` and `spinner`
 /// take their defaults when the caller omits them, so a decoded spec always carries an effective value the
 /// read-back can report.
@@ -71,12 +73,19 @@ public struct PaneMetrics: Equatable, Sendable {
     public let cellHeight: Double
     public let paneWidth: Double
     public let paneHeight: Double
+    /// The terminal's own padding INSIDE the panel, per side: it holds no cells, so `panelGrid` owes it to
+    /// the grid math. Zero is the honest default for a caller that does not know the configured padding.
+    public let paddingWidth: Double
+    public let paddingHeight: Double
 
-    public init(cellWidth: Double, cellHeight: Double, paneWidth: Double, paneHeight: Double) {
+    public init(cellWidth: Double, cellHeight: Double, paneWidth: Double, paneHeight: Double,
+                paddingWidth: Double = 0, paddingHeight: Double = 0) {
         self.cellWidth = cellWidth
         self.cellHeight = cellHeight
         self.paneWidth = paneWidth
         self.paneHeight = paneHeight
+        self.paddingWidth = paddingWidth
+        self.paddingHeight = paddingHeight
     }
 }
 
@@ -91,7 +100,7 @@ public enum HudLayout {
 
     /// The only HUD-SPECIFIC variable the app puts in the helper's environment (it also inherits the session
     /// environment and the overlay wrapper's own two): the path to the body file. Everything that an update
-    /// may change — the box, the spinner, the owning pid — rides in that file's header line instead, since a
+    /// may change — the grid, the spinner, the owning pid — rides in that file's header line instead, since a
     /// running process cannot see its environment change and re-spawning would blink the panel.
     public static let fileEnvKey = "AGTERM_HUD_FILE"
 
@@ -109,15 +118,12 @@ public enum HudLayout {
         min(max(requested, minSizePercent), maxSizePercent)
     }
 
-    /// box returns the cell box the panel needs for `spec`: the wrapped content plus the frame padding.
-    ///
-    /// Width is COUNTED IN CHARACTERS, not display columns, which the helper's own `${#line}` matches under
-    /// the UTF-8 locale it forces. A double-width glyph (CJK, most emoji) therefore advances two columns
-    /// against a box sized for one and overflows the frame — an accepted limitation, since correcting it
-    /// needs an East-Asian-width table on both sides of the file.
+    /// box returns the cell box the panel needs for `spec`: the wrapped content plus the frame padding. It
+    /// decides how BIG the panel is (through `sizePercent`); `panelGrid` decides where the text sits inside
+    /// the panel that decision produced. Measured in `cellCount`'s unit.
     public static func box(for spec: HudSpec) -> (columns: Int, rows: Int) {
         let lines = bodyLines(for: spec)
-        let widest = lines.map(\.count).max() ?? 0
+        let widest = lines.map(cellCount).max() ?? 0
         let content = max(widest + (spec.spinner ? spinnerWidth : 0), 1)
         return (columns: content + horizontalPadding * 2, rows: max(lines.count, 1) + verticalPadding * 2)
     }
@@ -131,18 +137,46 @@ public enum HudLayout {
         return min(max(max(width, height), minSizePercent), maxSizePercent)
     }
 
+    /// panelGrid returns the cell grid the PANEL ITSELF gets at `sizePercent` of `pane`: that share of each
+    /// pane dimension, less the terminal's padding, over one cell. One percentage sizes both dimensions, so
+    /// the panel matches `box` only in whichever dimension drove it and is larger in the other — which is
+    /// why the helper must center on THIS grid and not on the box.
+    ///
+    /// Nil when the pane is not measured (an unrealized session, a zero cell): there is no panel grid to
+    /// compute, and `paintGrid` falls back to the box. The result is an ESTIMATE — libghostty reports no
+    /// cell metrics, and a user `window-padding-*` override is not tracked — so it can miss by a column.
+    public static func panelGrid(sizePercent: Int, pane: PaneMetrics) -> (columns: Int, rows: Int)? {
+        guard pane.cellWidth > 0, pane.cellHeight > 0, pane.paneWidth > 0, pane.paneHeight > 0 else { return nil }
+        let fraction = Double(sizePercent) / 100
+        let columns = Int((pane.paneWidth * fraction - pane.paddingWidth * 2) / pane.cellWidth)
+        let rows = Int((pane.paneHeight * fraction - pane.paddingHeight * 2) / pane.cellHeight)
+        guard columns > 0, rows > 0 else { return nil }
+        return (columns: columns, rows: rows)
+    }
+
+    /// paintGrid is the grid the body's header carries: the panel's own, or the content box when nothing
+    /// was measured. `sizePercent` must be the EFFECTIVE percent the panel took (post-`clampSizePercent`),
+    /// or the header describes a frame the panel does not have.
+    public static func paintGrid(for spec: HudSpec, sizePercent: Int,
+                                 pane: PaneMetrics) -> (columns: Int, rows: Int) {
+        panelGrid(sizePercent: sizePercent, pane: pane) ?? box(for: spec)
+    }
+
     /// renderedBody returns the bytes written to `fileEnvKey`'s file: a `<columns> <rows> <spinner> <pid>`
     /// header line, then the wrapped message block, a single empty line, and the wrapped detail block.
     /// Content lines are never empty, so that one empty line is what tells the helper where the dimmed
-    /// detail starts. The header is what lets an update change the box or the spinner without a re-spawn —
+    /// detail starts. The header is what lets an update change the grid or the spinner without a re-spawn —
     /// the helper re-reads this file every tick and never consults its own environment for either.
+    ///
+    /// `grid` is the panel's own cell grid from `paintGrid`, which is what the helper centers in; every
+    /// path that RESIZES the panel owes it a rewritten header for the same reason an update does.
     ///
     /// `ownerPid` is the pid of the process WRITING the file, and it is how a hard-killed app (crash,
     /// `kill -9`) stops its painter: that path runs no surface teardown, so the file survives and no SIGHUP
     /// reaches the helper, whose pty session leader is `login` rather than the app.
-    public static func renderedBody(for spec: HudSpec, ownerPid: Int32) -> String {
-        let box = box(for: spec)
-        let header = "\(box.columns) \(box.rows) \(spec.spinner ? 1 : 0) \(ownerPid)\n"
+    public static func renderedBody(for spec: HudSpec, grid: (columns: Int, rows: Int),
+                                    ownerPid: Int32) -> String {
+        let header = "\(grid.columns) \(grid.rows) \(spec.spinner ? 1 : 0) \(ownerPid)\n"
         return header + bodyLines(for: spec).map { $0 + "\n" }.joined()
     }
 
@@ -155,25 +189,26 @@ public enum HudLayout {
         return lines
     }
 
-    /// wrap breaks `text` into lines of at most `columns` characters, treating a newline as a hard break and
+    /// wrap breaks `text` into lines of at most `columns` cells, treating a newline as a hard break and
     /// splitting a word longer than the line. Blank lines are dropped, which is what keeps the single empty
-    /// line in `renderedBody` unambiguous as the message/detail separator.
+    /// line in `renderedBody` unambiguous as the message/detail separator. The text is PRECOMPOSED first:
+    /// macOS hands back decomposed (NFD) strings, and a combining accent counts as its own cell otherwise.
     static func wrap(_ text: String, columns: Int) -> [String] {
         let width = max(columns, 1)
         var lines: [String] = []
-        for paragraph in text.split(separator: "\n") {
+        for paragraph in text.precomposedStringWithCanonicalMapping.split(separator: "\n") {
             var current = ""
             for chunk in paragraph.split(separator: " ") {
                 var word = String(chunk)
-                while word.count > width {
+                while cellCount(word) > width {
                     if !current.isEmpty { lines.append(current); current = "" }
-                    lines.append(String(word.prefix(width)))
-                    word = String(word.dropFirst(width))
+                    lines.append(String(String.UnicodeScalarView(word.unicodeScalars.prefix(width))))
+                    word = String(String.UnicodeScalarView(word.unicodeScalars.dropFirst(width)))
                 }
                 if word.isEmpty { continue }
                 if current.isEmpty {
                     current = word
-                } else if current.count + 1 + word.count <= width {
+                } else if cellCount(current) + 1 + cellCount(word) <= width {
                     current += " " + word
                 } else {
                     lines.append(current)
@@ -184,6 +219,14 @@ public enum HudLayout {
         }
         return lines
     }
+
+    /// The unit BOTH halves count in: Unicode scalars. The helper's `${#line}` counts code points under the
+    /// UTF-8 locale it forces, which `String.count` does not match — it counts grapheme clusters, so one
+    /// accented cluster is one Character but two scalars, and a ZWJ emoji is one against five. Neither side
+    /// counts DISPLAY columns, so a double-width glyph (CJK, most emoji) still advances two columns against
+    /// a cell counted as one and overflows the frame — accepted, since correcting it needs an
+    /// East-Asian-width table on both sides of the file.
+    static func cellCount(_ text: String) -> Int { text.unicodeScalars.count }
 
     private static func percent(_ size: Double, of available: Double) -> Int {
         guard available > 0 else { return maxSizePercent }

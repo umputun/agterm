@@ -74,15 +74,24 @@ extension ControlServer: ControlActions {
     }
 
     /// A HUD resizes like any floating panel — one slot, one size field — but never to FULL, which would
-    /// make the message cover the session it is about. The helper keeps centering on the box in its body
-    /// file, so the text re-centers on the next `session.hud.update` rather than on the resize.
+    /// make the message cover the session it is about. A resized HUD also gets its body rewritten: the
+    /// helper centers on the grid in that file's header, so a new panel with the old header would paint the
+    /// message off-center until the next `session.hud.update`. A refused rewrite puts the size back rather
+    /// than leave the two disagreeing.
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            if sizePercent == nil, store.session(withID: id)?.hudActive == true {
+            let session = store.session(withID: id)
+            let hud = session?.hudActive == true
+            if sizePercent == nil, hud {
                 return ControlResponse(ok: false, error: OverlayHudError.fullResize)
             }
+            let previousSize = session?.overlaySizePercent
             guard store.resizeOverlay(id, sizePercent: sizePercent) else {
                 return ControlResponse(ok: false, error: "no overlay")
+            }
+            if hud, let session, !self.writeHudBody(session) {
+                store.resizeOverlay(id, sizePercent: previousSize)
+                return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

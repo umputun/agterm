@@ -256,6 +256,21 @@ struct HudHelperTests {
         #expect(run.wait { $0.contains(frame) }.contains(frame))
     }
 
+    // the two halves must count the same unit: `${#line}` counts CODE POINTS, `String.count` counts grapheme
+    // clusters, and an accented word is where they part. macOS hands paths back decomposed, so `HudLayout`
+    // precomposes and measures in `cellCount`; centering the bytes it actually wrote is what proves both.
+    @Test func centersAnAccentedMessageOnTheCountTheAppMeasured() throws {
+        let lines = HudLayout.bodyLines(for: HudSpec(message: "cafe\u{0301} au lait"))
+        let run = try Run(lines.map { $0 + "\n" }.joined(), cols: 40, rows: 5)
+        defer { run.stop() }
+
+        // 40 columns less the 12 the app counted leaves 14 to the left; a decomposed 13 would leave 13
+        let left = (40 - HudLayout.cellCount(lines[0])) / 2
+        #expect(left == 14)
+        let frame = "\(Self.esc)[\(left)C\(lines[0])"
+        #expect(run.wait { $0.contains(frame) }.contains(frame))
+    }
+
     // every write wakes the app's renderer, so a settled panel must go quiet rather than repaint at 2 Hz
     @Test func stopsWritingOnceASpinnerlessFrameIsSettled() throws {
         let run = try Run("settled\n", cols: 40, rows: 7)

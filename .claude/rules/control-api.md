@@ -266,13 +266,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openOverlay`/`closeOverlay` emit no `scheduleTreeChanged()` and neither does a HUD, so document no event.
 - The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with
   `AGTERM_HUD_FILE` as its only HUD-SPECIFIC variable (the surface still inherits the session environment
-  and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Box, spinner and the APP'S PID
+  and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner and the APP'S PID
   ride the body file's HEADER line and are re-read every tick, so `hud.update` repaints in place with no
   respawn; write that file atomically. It is per SESSION, so an update rewrites the path the running helper
   already opened.
-- The helper forces `LC_CTYPE=UTF-8` on itself: `${#line}` counts BYTES otherwise, while the box was sized
-  in characters, and a Dock-launched app inherits launchd's locale-less environment. Both sides count
-  characters, not display columns, so a double-width glyph overflows the frame — accepted, not fixed.
+- The header's grid is `HudLayout.paintGrid` — the PANEL's own cells (`panelGrid`: the effective percent of
+  the pane, less `window-padding-*`, over the measured cell), NOT `HudLayout.box`, which only decides the
+  size. One percent sizes both dimensions, so the panel exceeds the box in whichever one did not drive it
+  and centering on the box strands the message toward the top-left. `box` remains the fallback when nothing
+  is measured. Every path that changes the panel's size — open, update, `overlay.resize` — must rewrite the
+  header through `ControlServer.writeHudBody`, which reads the size the STORE resolved; a window resize is
+  the one skew left, until the next update.
+- The helper forces `LC_CTYPE=UTF-8` on itself: `${#line}` counts BYTES otherwise, and a Dock-launched app
+  inherits launchd's locale-less environment. Under it `${#line}` counts CODE POINTS, so the app measures in
+  `HudLayout.cellCount` (Unicode scalars, precomposed first) rather than `String.count`, whose grapheme
+  clusters disagree on every combining mark and ZWJ emoji. Neither side counts display columns, so a
+  double-width glyph overflows the frame — accepted, not fixed.
 - It skips a repaint whose frame is byte-identical to the last, so a spinner-less panel writes once and
   stops waking the renderer, and traps WINCH to invalidate that cache. This is a cache, not a measurement:
   the box still comes only from the body file.

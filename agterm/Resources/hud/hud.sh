@@ -4,25 +4,27 @@
 # One HUD-SPECIFIC environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes (the
 # surface also inherits the session environment and the overlay wrapper's own AGTERM_OVL_* pair):
 #
-#   <columns> <rows> <spinner> <pid>   the box the app sized the slot to; spinner 1 shows the glyph and
-#                                      ticks faster; pid is the app process that owns this panel
+#   <columns> <rows> <spinner> <pid>   the PANEL's own cell grid, which the text is centered in; spinner 1
+#                                      shows the glyph and ticks faster; pid is the app process that owns
+#                                      this panel
 #   message lines                wrapped by HudLayout
 #   (one empty line)             the separator HudLayout guarantees, when a detail follows
 #   detail lines                 rendered dimmed
 #
 # Everything an update may change lives in that file, re-read every tick, so `session.hud.update` repaints
-# in place: a process cannot see its own environment change, and a re-spawn would blink the panel. The box
-# is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app computed it from the
-# terminal font and sized the slot to match; measuring would race that resize and disagree.
+# in place: a process cannot see its own environment change, and a re-spawn would blink the panel. The grid
+# is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app derives it from the
+# terminal font and the size it gave the panel; measuring would race that resize and disagree. Every app-side
+# path that changes the panel's size rewrites the header, or this centers on a frame that is gone.
 #
 # Removing the file is how every teardown path stops the loop. The pid is the second stop, and the only one
 # a HARD-killed app has: no teardown deletes the file, and no SIGHUP arrives either, because the pty's
 # session leader is the surviving `login`, not the app. Without it the loop repaints forever.
 set -uf
 
-# ${#line} counts CHARACTERS only under a UTF-8 locale and BYTES otherwise, while the app sized the box in
-# characters — so without this every non-ASCII message centers wrong. A Dock-launched app inherits launchd's
-# environment, which sets no LANG or LC_*, and an inherited LC_ALL would override LC_CTYPE.
+# ${#line} counts CODE POINTS only under a UTF-8 locale and BYTES otherwise, and code points is what the app
+# counted (HudLayout.cellCount) — so without this every non-ASCII message centers wrong. A Dock-launched app
+# inherits launchd's environment, which sets no LANG or LC_*, and an inherited LC_ALL would override LC_CTYPE.
 unset LC_ALL
 LC_CTYPE=UTF-8
 export LC_CTYPE
