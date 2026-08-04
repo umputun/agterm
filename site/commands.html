@@ -1565,7 +1565,9 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span>: the surface
                 reads that once at creation, so only a fresh
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session hud</span> can change it.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session hud</span> can change it. A
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">color</span> sent on an update over the raw protocol
+                is ignored for the same reason, and the read-back keeps naming the color the panel actually paints.
               </p>
             </div>
 

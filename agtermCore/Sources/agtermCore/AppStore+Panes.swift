@@ -223,9 +223,9 @@ extension AppStore {
         session.overlaySizePercent = nil
         session.overlayBackgroundColor = nil
         // every teardown routes through here — explicit close, ⌘W, the program's own exit, a replacement —
-        // so clearing the HUD here is what keeps `hudActive` from outliving the slot it describes.
-        session.hudSpec = nil
-        session.hudFile = nil
+        // so discarding the HUD here is what keeps `hudActive` and its body file from outliving the slot they
+        // describe, including for a HUD whose surface never realized and so never tore itself down.
+        session.discardHudBody()
         return true
     }
 
@@ -249,12 +249,15 @@ extension AppStore {
     /// Rewrites a live HUD's message and size in place: the surface stays mounted and the helper re-reads
     /// its body file on the next tick, so the panel changes with no re-spawn and no blink. The file path is
     /// not an argument — an update rewrites the path `openHud` already gave the running helper, per
-    /// `HudLayout.renderedBody`. `spec.backgroundColor` is NOT re-applied either; the factory reads it at
-    /// creation, so only a replacing `openHud` can change it. False with no HUD up, which is the only
-    /// failure: `resizeOverlay` refuses an empty slot alone, and a live HUD occupies one.
+    /// `HudLayout.renderedBody`. The background color is not an argument either in practice: the factory
+    /// reads it at creation, so the LIVE panel's color is carried into the stored spec and `spec`'s own is
+    /// dropped. Only a replacing `openHud` changes the color, and the read-back keeps naming what the panel
+    /// actually paints. False with no HUD up, which is the only failure: `resizeOverlay` refuses an empty
+    /// slot alone, and a live HUD occupies one.
     @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, sizePercent: Int) -> Bool {
-        guard let session = session(withID: sessionID), session.hudActive else { return false }
-        session.hudSpec = spec
+        guard let session = session(withID: sessionID), let live = session.hudSpec,
+              session.hudActive else { return false }
+        session.hudSpec = spec.withBackgroundColor(live.backgroundColor)
         resizeOverlay(sessionID, sizePercent: sizePercent)
         return true
     }

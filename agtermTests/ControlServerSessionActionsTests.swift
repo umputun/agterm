@@ -271,11 +271,13 @@ final class ControlServerSessionActionsTests: XCTestCase {
         let (_, session) = try makeHudSession()
         XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "first")).ok)
         let live = try XCTUnwrap(session.hudSpec)
+        let painted = bodyText(session)
 
-        // a directory at the body path is a write the app cannot complete
-        try FileManager.default.removeItem(atPath: ControlServer.bodyFile(for: session.id))
-        try FileManager.default.createDirectory(atPath: ControlServer.bodyFile(for: session.id),
-                                                withIntermediateDirectories: false)
+        // an immutable body file is a write the app cannot complete: the atomic rename onto it fails, and it
+        // outlives the removal a replacing open runs, which is what keeps the open arm below reachable
+        let path = ControlServer.bodyFile(for: session.id)
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: path) }
 
         let update = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "unwritable"))
         XCTAssertFalse(update.ok)
@@ -294,8 +296,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(open.error, OverlayHudError.writeFailed)
         XCTAssertFalse(session.hudActive, "a failed open must roll the slot back rather than leave it empty")
         XCTAssertFalse(session.overlayActive)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: ControlServer.bodyFile(for: session.id)),
-                       "a rolled-back open leaves the never-realized state closeHud's own removal exists for")
+        XCTAssertEqual(bodyText(session), painted,
+                       "the panel keeps painting the message it last read, so nothing may claim another one")
     }
 
     // the no-blink contract: an update rewrites the same file and resizes the same surface, so the slot

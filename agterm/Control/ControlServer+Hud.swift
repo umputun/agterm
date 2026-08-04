@@ -27,11 +27,10 @@ extension ControlServer {
                                 sizePercent: Self.sizePercent(for: spec, pane: metrics)) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
+            // the rolled-back HUD never realized a surface, and a replaced predecessor's file sits at this
+            // same path: `Session.discardHudBody`, which `closeHud` routes through, deletes both.
             guard self.writeHudBody(session, pane: metrics) else {
                 store.closeHud(id)
-                // this rollback IS the never-realized case `closeHud`'s own removal exists for, and a
-                // replaced predecessor's file sits at this same path.
-                try? FileManager.default.removeItem(atPath: file)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -59,14 +58,14 @@ extension ControlServer {
         }
     }
 
+    /// The body file goes with the state: `Session.discardHudBody` deletes it inside the store, so every
+    /// close — this one, `overlay close`, ⌘W, session and window teardown — removes it whether or not the
+    /// panel's surface ever realized.
     func closeHud(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            let file = store.session(withID: id)?.hudFile
             guard store.closeHud(id) else {
                 return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
-            // the surface's own teardown removes this, but a HUD whose surface never realized has none.
-            if let file { try? FileManager.default.removeItem(atPath: file) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

@@ -36,6 +36,23 @@ struct AppStoreHudTests {
         #expect(node.hud?.backgroundColor == nil)
     }
 
+    @Test func controlTreeKeepsTheHudColorAcrossAnUpdate() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one", backgroundColor: "#2a1a3a"),
+                      file: "/tmp/hud", sizePercent: 30)
+
+        store.updateHud(session.id, spec: HudSpec(message: "two"), sizePercent: 30)
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.hud?.backgroundColor == "#2a1a3a", "the color the panel still paints must survive")
+
+        store.updateHud(session.id, spec: HudSpec(message: "three", backgroundColor: "#ff0000"), sizePercent: 30)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.hud?.backgroundColor == "#2a1a3a", "a color the surface will never read must not be reported")
+        #expect(node.hud?.message == "three")
+    }
+
     @Test func controlTreeOmitsHudWithoutOne() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -132,7 +132,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// mode-`color` solid background (required, no opacity — it honors the Settings window translucency).
     /// Also `session.overlay.open`'s own background, independent of the session's (nil = the default theme
     /// background, same translucency), `session.hud.open`'s panel background (same rules; `session.hud.update`
-    /// cannot change it, the surface reading it once at creation), and `session.status`'s per-call glyph tint,
+    /// cannot change it — the surface reads it once at creation, so an update IGNORES this field and the live
+    /// panel's color survives into the read-back), and `session.status`'s per-call glyph tint,
     /// riding the ephemeral indicator so it lasts only to the next `session.status` without a color
     /// (nil = the Settings color).
     public var color: String?
@@ -418,7 +419,9 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     /// The dim second line; nil/omitted when the caller set none.
     public let detail: String?
     public let spinner: Bool
-    /// The panel's own `#rrggbb` background; nil/omitted when it keeps the session's terminal background.
+    /// The panel's own `#rrggbb` background; nil/omitted when it keeps the session's terminal background. The
+    /// color the open set, which survives every `session.hud.update` — the surface reads it once at creation,
+    /// so this always names what the panel paints.
     public let backgroundColor: String?
     /// The EFFECTIVE share of the pane the panel occupies — the app's measurement, or the caller's
     /// `sizePercent` override, either way bounded by `HudLayout.clampSizePercent`, so a requested 100 reads

@@ -343,7 +343,7 @@ omitted when expanded).
   must never cover the session it is about, so a requested 100 reads back as 80. `hud update` repaints in place with no re-spawn and no blink,
   and REPLACES the whole spec — repeat `--detail`/`--spinner` to keep them, since an omitted one drops.
   It takes no `--background-color`: the surface reads that once at creation, so only a fresh `hud` changes
-  it. Message and detail are capped at 256 characters and reject control characters, newline included.
+  it and `tree` keeps reporting the creation color across updates. Message and detail are capped at 256 characters and reject control characters, newline included.
   It occupies the SAME slot as `overlay open`, so: a second `hud` replaces the first, `overlay open`
   replaces a HUD (a running program is never replaced), `overlay close` and ⌘W take a HUD down,
   `overlay result` refuses with `no overlay result: the slot holds a hud`, `overlay resize --size-percent`

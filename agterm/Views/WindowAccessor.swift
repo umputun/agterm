@@ -151,6 +151,7 @@ struct WindowAccessor: NSViewRepresentable {
                         session.overlaySurface?.teardown()
                         session.teardownPaneOverlays()
                         session.scratchSurface?.teardown()
+                        session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
                     }
                     library.closeWindow(windowID)
                     // closing a window drops its (unobserved) store, so the Dock badge's observation won't

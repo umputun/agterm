@@ -32,6 +32,14 @@ public struct HudSpec: Codable, Equatable, Sendable {
         case message, detail, spinner, backgroundColor, sizePercent, position
     }
 
+    /// A copy carrying `color` in place of this spec's own background. `AppStore.updateHud` holds the LIVE
+    /// panel's color across an update with it: the surface reads that color once at creation, so a stored
+    /// spec carrying any other value would report a color the panel will never paint.
+    func withBackgroundColor(_ color: String?) -> HudSpec {
+        HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: color,
+                sizePercent: sizePercent, position: position)
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         message = try c.decode(String.self, forKey: .message)

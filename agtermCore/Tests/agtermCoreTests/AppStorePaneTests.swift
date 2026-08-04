@@ -790,6 +790,62 @@ struct AppStorePaneTests {
         #expect(session.overlaySizePercent == 60)
     }
 
+    @Test func updateHudKeepsTheColorTheSurfaceWasCreatedWith() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one", backgroundColor: "#101820"),
+                      file: "/tmp/a", sizePercent: 20)
+        // the CLI's update carries no color, and the panel still paints the one it was created with
+        #expect(store.updateHud(session.id, spec: HudSpec(message: "two"), sizePercent: 30) == true)
+        #expect(session.hudSpec?.backgroundColor == "#101820")
+        #expect(session.overlayBackgroundColor == "#101820")
+        // nor may a color the factory will never read reach the stored spec
+        let recolor = HudSpec(message: "three", backgroundColor: "#ff0000")
+        #expect(store.updateHud(session.id, spec: recolor, sizePercent: 30) == true)
+        #expect(session.hudSpec?.backgroundColor == "#101820")
+        #expect(session.overlayBackgroundColor == "#101820")
+        #expect(session.hudSpec?.message == "three")
+    }
+
+    /// Every store-only HUD teardown, none of which runs a surface teardown: a HUD closed before its panel
+    /// realized would otherwise leave its message text in `/tmp` forever.
+    @Test(arguments: HudTeardownPath.allCases)
+    func storeTeardownRemovesAnUnrealizedHudBodyFile(_ path: HudTeardownPath) throws {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "keep") // removeWorkspace keeps the last workspace
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let file = try Self.makeBodyFile()
+        defer { try? FileManager.default.removeItem(atPath: file) }
+        #expect(store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "gathering options"),
+                              file: file, sizePercent: 20) == true)
+        #expect(session.overlaySurface == nil)
+
+        switch path {
+        case .overlayClose: #expect(store.closeOverlay(session.id) == true)
+        case .hudClose: #expect(store.closeHud(session.id) == true)
+        case .sessionClose: store.closeSession(session.id)
+        case .workspaceRemove: store.removeWorkspace(ws.id)
+        case .pendingFinalize:
+            #expect(store.softCloseSession(session.id) == true)
+            store.finalizeAllPendingCloses()
+        }
+
+        #expect(!FileManager.default.fileExists(atPath: file))
+    }
+
+    enum HudTeardownPath: CaseIterable, Sendable {
+        case overlayClose, hudClose, sessionClose, workspaceRemove, pendingFinalize
+    }
+
+    private static func makeBodyFile() throws -> String {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-hud-test-\(UUID().uuidString).txt")
+        try Data("20 4 0 1\ngathering options".utf8).write(to: url)
+        return url.path
+    }
+
     @Test func closeHudTearsDownAndClearsTheSlot() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

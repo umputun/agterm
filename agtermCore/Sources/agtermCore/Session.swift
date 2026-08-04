@@ -259,11 +259,22 @@ public final class Session: Identifiable {
     /// a HUD is a message about work in flight and means nothing after a relaunch.
     public var hudSpec: HudSpec?
 
-    /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); the app owns
-    /// the file and deletes it on teardown. Per SESSION, so an update rewrites the path the running helper
-    /// already opened. `@ObservationIgnored`: the surface factory, the HUD commands and `overlay close` read
-    /// it, and none of them is a view that must re-render when it changes.
+    /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); `discardHudBody`
+    /// deletes it. Per SESSION, so an update rewrites the path the running helper already opened.
+    /// `@ObservationIgnored`: the surface factory, the HUD commands and `overlay close` read it, and none of
+    /// them is a view that must re-render when it changes.
     @ObservationIgnored public var hudFile: String?
+
+    /// Drops the HUD: deletes the body file and clears the state describing it. The single owner of that
+    /// deletion, so it happens wherever a HUD is discarded — `closeOverlay` and every teardown that discards
+    /// the whole session — and not only where a realized surface tears itself down. The file carries the
+    /// panel's TEXT under a world-readable `/tmp` path, so a HUD closed before its surface existed must not
+    /// leave it there. Deleting it also stops a helper still running against it.
+    public func discardHudBody() {
+        if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
+        hudSpec = nil
+        hudFile = nil
+    }
 
     /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
     /// two occupants, so the deck's passivity exemptions and the program-overlay questions below cannot

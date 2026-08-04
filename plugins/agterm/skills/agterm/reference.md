@@ -615,10 +615,11 @@ All twelve are read-only projections of GUI state.
   whole spec rather than patching it, so `--detail`, `--spinner`, and `--position` must be repeated to
   survive and an omitted one drops. Same required message and same rejections as `open`. There is no
   `--background-color`: the surface reads that once at creation, so only a fresh `session hud` can change
-  it. Errors `no hud` when none is up.
+  it, and `tree` keeps reporting the creation color across updates. Errors `no hud` when none is up.
 - `session hud close [--target] [--window W]` — take the panel down and delete its message file. Errors
   `no hud` when none is up, so it is not idempotent. A program overlay in the same slot is left alone;
-  `session overlay close`, ⌘W, and closing the session also tear a HUD down.
+  `session overlay close`, ⌘W, and closing the session or its window also tear a HUD down and delete that
+  file.
 
 **Displaying an image inline.** This skill bundles `scripts/show-image.sh`. It opens an overlay (a
 real terminal surface) and renders the image there via the kitty graphics protocol, which ghostty —

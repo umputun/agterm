@@ -59,16 +59,13 @@ extension ControlServer: ControlActions {
     }
 
     /// Closes a HUD too, as a courtesy: the slot is shared, so `closeOverlay` tears either occupant down and
-    /// clears the HUD state with it. Its body file is removed here for the same reason `closeHud` does it —
-    /// a HUD whose surface never realized has no teardown to run.
+    /// discards the HUD state and its body file with it.
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            let hudFile = pane == nil ? store.session(withID: id)?.hudFile : nil
             let closed = pane.map { store.closePaneOverlay(id, pane: $0) } ?? store.closeOverlay(id)
             guard closed else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
-            if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

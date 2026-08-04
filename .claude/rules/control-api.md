@@ -269,7 +269,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner and the APP'S PID
   ride the body file's HEADER line and are re-read every tick, so `hud.update` repaints in place with no
   respawn; write that file atomically. It is per SESSION, so an update rewrites the path the running helper
-  already opened.
+  already opened. `Session.discardHudBody` is the only deleter and every store teardown runs it — close,
+  ⌘W, session/workspace/window teardown — so a HUD closed before its surface realized cannot strand the
+  message text in `/tmp`. An update carries the OPEN's background color forward, the factory reading it once
+  at creation, so `hud.backgroundColor` never names a color the panel will not paint.
 - The header's grid is `HudLayout.paintGrid` — the PANEL's own cells (`panelGrid`: the effective percent of
   the pane, less `window-padding-*`, over the measured cell), NOT `HudLayout.box`, which only decides the
   size. One percent sizes both dimensions, so the panel exceeds the box in whichever one did not drive it

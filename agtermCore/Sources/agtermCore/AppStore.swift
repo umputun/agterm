@@ -450,6 +450,7 @@ public final class AppStore {
         removed.overlaySurface?.teardown()
         removed.teardownPaneOverlays()
         removed.scratchSurface?.teardown()
+        removed.discardHudBody() // a HUD whose surface never realized has no teardown to delete its body file
         WatermarkStorage.removeRenderedText(sessionID: sessionID) // drop any rendered .text PNG; the session is gone
         sessionRecency.remove(sessionID)
         if wasActive {
@@ -485,6 +486,7 @@ public final class AppStore {
             session.overlaySurface?.teardown()
             session.teardownPaneOverlays()
             session.scratchSurface?.teardown()
+            session.discardHudBody() // a HUD whose surface never realized has no teardown to delete its body file
             WatermarkStorage.removeRenderedText(sessionID: session.id) // drop any rendered .text PNG; the session is gone
             sessionRecency.remove(session.id)
         }
