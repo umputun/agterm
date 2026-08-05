@@ -143,6 +143,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// visually balanced against the text at either end.
     public static let sidebarFontSizeRange: ClosedRange<Double> = 9 ... 20
 
+    /// The palette/switcher text point size used when `interfaceFontSize` is nil; matches macOS `.body`
+    /// (13pt), the size those surfaces rendered at before the setting existed.
+    public static let defaultInterfaceFontSize: Double = 13
+
+    /// The Settings stepper bounds for the palette/switcher size. Same span as the sidebar's, for the
+    /// same reason: their fixed-size status glyphs stay balanced against the text at either end.
+    public static let interfaceFontSizeRange: ClosedRange<Double> = 9 ... 20
+
     /// Terminal font family name (e.g. `SF Mono`), or nil for the ghostty default.
     public var fontFamily: String?
     /// Default terminal font size in points, or nil for the ghostty default.
@@ -244,8 +252,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// nil/false = off. Only meaningful when `autoFollowAttention` is set.
     public var autoFollowStayOnActive: Bool?
     /// The sidebar row-text point size, nil for `defaultSidebarFontSize`; the row height scales with it
-    /// (`sidebarRowHeight(fontSize:)`).
+    /// (`sidebarRowHeight(fontSize:)`). Independent of `interfaceFontSize`.
     public var sidebarFontSize: Double?
+    /// The palette, picker and session-switcher text point size, nil for `defaultInterfaceFontSize`.
+    /// Panel widths scale with it (`InterfaceMetrics`). Independent of `sidebarFontSize`.
+    public var interfaceFontSize: Double?
     /// Raw names of the chrome elements the user has HIDDEN (see `InterfaceElement`); nil/empty shows
     /// everything. Unknown names are dropped by `resolvedHiddenInterfaceElements`.
     public var hiddenInterfaceElements: [String]?
@@ -275,6 +286,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
+                interfaceFontSize: Double? = nil,
                 hiddenInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
@@ -313,6 +325,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.sidebarFontSize = sidebarFontSize
+        self.interfaceFontSize = interfaceFontSize
         self.hiddenInterfaceElements = hiddenInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.welcomeShown = welcomeShown
@@ -389,6 +402,21 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// out-of-range value can't produce a degenerate row.
     public static func clampSidebarFontSize(_ size: Double) -> Double {
         min(sidebarFontSizeRange.upperBound, max(sidebarFontSizeRange.lowerBound, size))
+    }
+
+    /// Bounds a raw palette/switcher point size to `interfaceFontSizeRange`.
+    public static func clampInterfaceFontSize(_ size: Double) -> Double {
+        min(interfaceFontSizeRange.upperBound, max(interfaceFontSizeRange.lowerBound, size))
+    }
+
+    /// The resolved sidebar row-text size, clamped. The single read point.
+    public var effectiveSidebarFontSize: Double {
+        Self.clampSidebarFontSize(sidebarFontSize ?? Self.defaultSidebarFontSize)
+    }
+
+    /// The resolved palette/switcher text size, clamped. The single read point.
+    public var effectiveInterfaceFontSize: Double {
+        Self.clampInterfaceFontSize(interfaceFontSize ?? Self.defaultInterfaceFontSize)
     }
 
     /// The outline row height: the clamped point size plus a fixed 15pt of vertical padding, so the

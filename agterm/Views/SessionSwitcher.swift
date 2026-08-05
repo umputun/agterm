@@ -119,15 +119,30 @@ final class SessionSwitcher {
 struct SessionSwitcherOverlay: View {
     let switcher: SessionSwitcher
     let store: AppStore
+    /// Where the terminal area starts inside the window (sidebar plus divider, 0 when hidden). The panel
+    /// shifts by half of it so it centers over the terminal rather than the whole window.
+    let terminalAreaInset: Double
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    /// The chrome text sizes, read from the non-observable `GhosttyApp` — the overlay mounts fresh on each
+    /// Ctrl-Tab, so it never renders a stale size.
+    private let metrics = SessionSwitcherOverlay.resolvedMetrics()
+
+    /// The panel width at the 13pt default, scaled by `metrics`.
+    private static let panelWidthAtDefaultFontSize: Double = 460
+
+    private static func resolvedMetrics() -> InterfaceMetrics {
+        GhosttyApp.shared.interfaceMetrics
+    }
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
                 panel
-                    .frame(width: 460)
+                    .frame(width: metrics.scaled(Self.panelWidthAtDefaultFontSize))
                     .padding(.top, geo.size.height * 0.12)
+                    .offset(x: terminalAreaInset / 2)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -179,20 +194,30 @@ struct SessionSwitcherRow: View {
     var statusColorHex: String?
     var statusShape: StatusShape?
 
+    /// Read from the non-observable `GhosttyApp` — both the Ctrl-Tab overlay and the popovers mount fresh
+    /// on every open, so neither renders a stale size.
+    private let metrics = SessionSwitcherRow.resolvedMetrics()
+
+    private static func resolvedMetrics() -> InterfaceMetrics {
+        GhosttyApp.shared.interfaceMetrics
+    }
+
     var body: some View {
         HStack {
             if let status { StatusGlyph(status: status, colorHex: statusColorHex, shape: statusShape) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).foregroundStyle(foreground ?? Color.primary)
+                Text(title)
+                    .font(.system(size: metrics.base))
+                    .foregroundStyle(foreground ?? Color.primary)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.system(size: metrics.secondary))
                     .foregroundStyle(foreground.map { $0.opacity(0.6) } ?? Color.secondary)
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, metrics.scaled(12))
+        .padding(.vertical, metrics.scaled(6))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

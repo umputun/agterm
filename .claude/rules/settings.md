@@ -25,8 +25,16 @@ paths:
   `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
   Default-off nil fields include attention button, Dock bounce, restore commands, global config
   inheritance, close confirmation, auto-follow, hidden inactive sidebars, and interface hiding.
-- `sidebarFontSize` is 9...20, default 13; row height is clamped size + 15, so 13 gives 28. Icons/status
-  glyphs stay fixed. Unfocused-terminal mute and sidebar tint are 0...10 with neutral/default 5.
+- `sidebarFontSize` and `interfaceFontSize` are separate settings, both 9...20 default 13, read through
+  `effectiveSidebarFontSize`/`effectiveInterfaceFontSize`. Neither falls back to the other: the sidebar
+  is a density knob, the palette a readability one.
+  `sidebarFontSize` drives sidebar rows and their height (clamped size + 15, so 13 gives 28).
+  `interfaceFontSize` drives the palette/picker, the session switcher, and the title-bar popover rows
+  that share `SessionSwitcherRow`; `InterfaceMetrics` derives the secondary (subtitle/badge) and
+  shortcut sizes plus the panel scale from it, anchored so 13 reproduces the previously hardcoded
+  `.caption`/`.callout` and the 520x320 palette, with derived text floored at 8pt.
+  Icons/status glyphs stay fixed for both.
+  Unfocused-terminal mute and sidebar tint are 0...10 with neutral/default 5.
   `muteOpacity` maps 0/5/10 to 0/0.4/0.8. `sidebarShiftAmount` maps the endpoints to signed +/-0.30;
   below 5 uses white, above 5 black, behind the transparent sidebar only, never the title strip/text.
 - `ghosttyConfigLines()` emits raw `key = value` with no quoting, including spaced names such as
@@ -59,7 +67,7 @@ paths:
   contract, so freeing it risks a crash and the rare leak is accepted.
 - `.agtermAppearanceChanged` is required because terminal color is not observable; it updates
   `terminalColor`, quick-terminal backing, title/window appearance, and non-observable chrome mirrors.
-- Settings is a 540x590 six-tab SwiftUI scene with explicit selection defaulting General, preventing
+- Settings is a 540x640 six-tab SwiftUI scene with explicit selection defaulting General, preventing
   `com_apple_SwiftUI_Settings_selectedTabIndex` persistence. General holds Mouse, Sessions, and Ghostty
   Config. Appearance holds Terminal and Window. Interface groups `InterfaceElement`s two per row plus
   Multiple Windows. Notifications holds banner/badge/attention/bounce/sound. Agent Status holds

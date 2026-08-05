@@ -367,25 +367,47 @@ struct AppSettingsTests {
         #expect(AppSettings.defaultSidebarBackgroundShift == 5)
     }
 
-    @Test func sidebarFontSizeRoundTripsAndIsNotAConfigLine() throws {
-        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarFontSize: 16)))
+    @Test func fontSizesRoundTripAndAreNotConfigLines() throws {
+        let original = AppSettings(sidebarFontSize: 16, interfaceFontSize: 18)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded.sidebarFontSize == 16)
-        #expect(AppSettings(sidebarFontSize: 16).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+        #expect(decoded.interfaceFontSize == 18)
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
-    @Test func sidebarFontSizeDefaultsNilAndOmitsFromJSON() throws {
+    @Test func fontSizesDefaultNilAndOmitFromJSON() throws {
         #expect(AppSettings().sidebarFontSize == nil)
+        #expect(AppSettings().interfaceFontSize == nil)
+        #expect(AppSettings().effectiveSidebarFontSize == AppSettings.defaultSidebarFontSize)
+        #expect(AppSettings().effectiveInterfaceFontSize == AppSettings.defaultInterfaceFontSize)
         let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
         #expect(!json.contains("sidebarFontSize"))
-        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
-        #expect(decoded.sidebarFontSize == nil)
+        #expect(!json.contains("interfaceFontSize"))
     }
 
-    @Test func sidebarFontSizeClampsToRange() {
+    @Test func sidebarAndInterfaceFontSizesAreIndependent() throws {
+        let sidebarOnly = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "sidebarFontSize": 17 }"#.utf8))
+        #expect(sidebarOnly.effectiveSidebarFontSize == 17)
+        #expect(sidebarOnly.effectiveInterfaceFontSize == AppSettings.defaultInterfaceFontSize)
+        let interfaceOnly = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "interfaceFontSize": 17 }"#.utf8))
+        #expect(interfaceOnly.effectiveInterfaceFontSize == 17)
+        #expect(interfaceOnly.effectiveSidebarFontSize == AppSettings.defaultSidebarFontSize)
+    }
+
+    @Test func fontSizesClampToTheirRanges() {
         #expect(AppSettings.defaultSidebarFontSize == 13)
+        #expect(AppSettings.defaultInterfaceFontSize == 13)
         #expect(AppSettings.clampSidebarFontSize(13) == 13)
         #expect(AppSettings.clampSidebarFontSize(2) == AppSettings.sidebarFontSizeRange.lowerBound)
         #expect(AppSettings.clampSidebarFontSize(99) == AppSettings.sidebarFontSizeRange.upperBound)
+        #expect(AppSettings.clampInterfaceFontSize(13) == 13)
+        #expect(AppSettings.clampInterfaceFontSize(2) == AppSettings.interfaceFontSizeRange.lowerBound)
+        #expect(AppSettings.clampInterfaceFontSize(99) == AppSettings.interfaceFontSizeRange.upperBound)
+        var outOfRange = AppSettings()
+        outOfRange.sidebarFontSize = 99
+        outOfRange.interfaceFontSize = 2
+        #expect(outOfRange.effectiveSidebarFontSize == AppSettings.sidebarFontSizeRange.upperBound)
+        #expect(outOfRange.effectiveInterfaceFontSize == AppSettings.interfaceFontSizeRange.lowerBound)
     }
 
     @Test func sidebarRowHeightScalesWithFontSize() {

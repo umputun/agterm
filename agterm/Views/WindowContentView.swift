@@ -577,11 +577,19 @@ struct WindowContentView: View {
     /// `frontmostWindowID`, and is observed, so this reacts.
     private var isFrontmost: Bool { library.activeWindowID == windowID }
 
+    /// Where the terminal area starts inside the window: the sidebar column plus its 1pt divider, or 0 with
+    /// the sidebar hidden. The palette and switcher center their panel over THAT area rather than the whole
+    /// window, which otherwise reads as off-center whenever the sidebar is up. Their scrims stay full width,
+    /// so a click on the sidebar still dismisses.
+    private var terminalAreaInset: Double {
+        store.sidebarVisible ? store.sidebarWidth + 1 : 0
+    }
+
     /// Mounted only while a palette is open in the frontmost window; its content (search field + result
     /// list) is rebuilt from `palette.mode`.
     @ViewBuilder private var commandPaletteOverlay: some View {
         if isFrontmost, pick.pending == nil, palette.mode != nil {
-            CommandPalette(controller: palette, actions: actions)
+            CommandPalette(controller: palette, actions: actions, terminalAreaInset: terminalAreaInset)
         }
     }
 
@@ -594,6 +602,7 @@ struct WindowContentView: View {
             CommandPalette(
                 controller: palette,
                 actions: actions,
+                terminalAreaInset: terminalAreaInset,
                 items: pending.items.enumerated().map { index, item in
                     PaletteItem(id: item.id, title: item.label, subtitle: item.subtitle) {
                         pick.resolve(ControlPickResult(
@@ -619,7 +628,7 @@ struct WindowContentView: View {
     /// The Ctrl-Tab session switcher overlay, mounted only while cycling in the frontmost window.
     @ViewBuilder private var sessionSwitcherOverlay: some View {
         if isFrontmost, sessionSwitcher.isActive {
-            SessionSwitcherOverlay(switcher: sessionSwitcher, store: store)
+            SessionSwitcherOverlay(switcher: sessionSwitcher, store: store, terminalAreaInset: terminalAreaInset)
         }
     }
 
