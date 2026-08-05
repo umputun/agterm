@@ -83,8 +83,12 @@ agterm's bundled ghostty defaults are the **fallback**, binding all three to the
 (`super+key_c`/`super+key_v`/`super+key_a`), matched by keycode regardless of the character the layout
 prints. They fire whenever the menu equivalent does not: on a Russian/Greek/etc. layout the physical C key
 yields `с`, so the menu's ⌘C never matches and the keycode bind runs instead; likewise a ⌘C with no
-selection leaves the menu item disabled, so the key falls through (and ghostty's `performable:` prefix makes
-it a no-op). This is why copy, paste, and select-all all keep working on a non-Latin layout. (ghostty's own
+selection, or a ⌘V with nothing pasteable, leaves the menu item disabled and reaches the bind on ANY
+layout. The three binds deliberately omit ghostty's `performable:` prefix so they always consume the key,
+and one that cannot act simply does nothing. With that prefix the unperformed press fell through to key
+encoding — invisible under legacy encoding, which drops ⌘ chords on macOS, but the kitty keyboard protocol
+reports them and the program renders a stray `^[[…u` as text. This is why copy, paste, and select-all all
+keep working on a non-Latin layout. (ghostty's own
 `super+c`/`super+v`/`super+a` match the produced CHARACTER, so alone they would miss there — `super+key_a`
 in particular exists because without it ⌘A would silently do nothing on a Cyrillic layout.)
 
