@@ -114,6 +114,11 @@ paths:
   `session(from:launchRestore:)` copies `foregroundCommand`/`splitForegroundCommand` (like the pending
   override) only under `launchRestore`, so a mid-run window reopen or Reopen Closed Item comes back a
   plain shell.
+  A mid-run reopen also REWRITES the window snapshot when it carried captures
+  (`WindowLibrary.loadStore`), so the stale argv cannot survive a force-quit into the next launch;
+  and `recoverOrphanedWindows` drops captures from every recovered window (a surviving file for a
+  deliberately-closed window is indistinguishable from an open one, and a corrupt index must not
+  re-execute a closed window's last command) while the sticky override still arms.
 - Restore only when the toggle is on and basename is absent from user
   `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. Feed captured argv once through
   shell-quoted `config.initial_input` so exit returns to the shell, then nil it. Only one foreground

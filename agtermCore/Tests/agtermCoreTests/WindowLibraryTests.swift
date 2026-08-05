@@ -624,6 +624,57 @@ final class WindowLibraryTests {
         #expect(reloaded.restoreCommand == "claude --resume abc")
     }
 
+    @Test func midProcessReloadScrubsCapturedCommandsFromDisk() throws {
+        // the launch-only gate drops a captured foreground command from the LIVE sessions, but the
+        // snapshot on disk still carries it — without a write-back, a force-quit after the reopen
+        // replays the stale command on the next launch, after the user last saw a plain shell.
+        let anchor = UUID()
+        let id = UUID()
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
+                                      foregroundCommand: ["tee", "/tmp/m"],
+                                      splitForegroundCommand: ["tail", "-f", "/var/log/x"])
+        try writeWindowFile(anchor, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "open", sessions: [])]))
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        // the anchor stays open so the bootstrap fallback doesn't open the target window itself —
+        // loading the target below is then a genuine mid-run reopen, not a launch restore.
+        try writeIndex(WindowsIndex(frontmost: anchor, windows: [
+            WindowEntry(id: anchor, name: "open", isOpen: true),
+            WindowEntry(id: id, name: "work", isOpen: false),
+        ]))
+
+        let library = WindowLibrary(directory: directory)
+        let reloaded = try #require(library.loadStore(for: id)?.session(withID: sessionID))
+        #expect(reloaded.foregroundCommand == nil)
+
+        let persisted = PersistenceStore(directory: directory.appendingPathComponent("windows"),
+                                         fileName: "\(id.uuidString).json").load()
+        #expect(persisted.workspaces[0].sessions[0].foregroundCommand == nil)
+        #expect(persisted.workspaces[0].sessions[0].splitForegroundCommand == nil)
+    }
+
+    @Test func orphanRecoveryDropsCapturedCommandsButArmsTheStickyOverride() throws {
+        // recovery cannot tell a deliberately-closed window's surviving file from one open at the index
+        // loss, so the one-shot capture must not replay there — while the sticky `session.restore`
+        // override (pinned to fire every restart) still arms.
+        let id = UUID()
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
+                                      foregroundCommand: ["ssh", "prod"],
+                                      restoreCommand: "claude --resume abc")
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        // no index at all -> bootstrap falls through to recoverOrphanedWindows
+
+        let library = WindowLibrary(directory: directory)
+        let recovered = try #require(library.store(for: id)?.session(withID: sessionID))
+        #expect(recovered.foregroundCommand == nil)
+        #expect(recovered.pendingRestoreCommand == "claude --resume abc")
+
+        let persisted = PersistenceStore(directory: directory.appendingPathComponent("windows"),
+                                         fileName: "\(id.uuidString).json").load()
+        #expect(persisted.workspaces[0].sessions[0].foregroundCommand == nil)
+    }
+
     @Test func loadStoreUnknownIdReturnsNil() {
         let library = WindowLibrary(directory: directory)
         #expect(library.loadStore(for: UUID()) == nil)

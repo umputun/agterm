@@ -335,7 +335,8 @@ public final class WindowLibrary {
     /// persists. Nil for an id with no index entry.
     ///
     /// `launchRestore` marks an APP-BOOTSTRAP load — passed only by `reopen`/`recoverOrphanedWindows`, and
-    /// the only thing that arms a session's persisted `session.restore` override. False by default because
+    /// the only thing that arms anything executable: a session's persisted `session.restore` override and
+    /// the captured `foregroundCommand`/`splitForegroundCommand`. False by default because
     /// `ContentView.resolveStore()` calls this at RUNTIME for a mid-process reopen, which must not execute.
     @discardableResult
     public func loadStore(for id: UUID, launchRestore: Bool = false) -> AppStore? {
@@ -343,9 +344,19 @@ public final class WindowLibrary {
         if let existing = stores[id] { return existing }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
-        store.restore(from: persistence.load(), launchRestore: launchRestore)
+        let snapshot = persistence.load()
+        store.restore(from: snapshot, launchRestore: launchRestore)
         stores[id] = store
         if !launchRestore {
+            // the launch-only gate just dropped any captured foreground command from the live sessions;
+            // rewrite the snapshot too, or the stale argv survives on disk and a force-quit before the
+            // next save replays it on the following launch — after the user last saw this window as a
+            // plain shell.
+            if snapshot.workspaces.contains(where: { workspace in
+                workspace.sessions.contains { $0.foregroundCommand != nil || $0.splitForegroundCommand != nil }
+            }) {
+                store.save()
+            }
             for workspace in store.workspaces {
                 for session in workspace.sessions { store.emitSessionCreated(session, workspace: workspace.id) }
             }
@@ -555,7 +566,22 @@ public final class WindowLibrary {
         let infos = ids.enumerated().map { WindowInfo(id: $0.element, name: "window \($0.offset + 1)") }
         // append ALL infos FIRST — `loadStore` guards on `windows.contains(id)` and would silently no-op.
         windows.append(contentsOf: infos)
-        for info in infos { loadStore(for: info.id, launchRestore: true) }
+        for info in infos {
+            guard let store = loadStore(for: info.id, launchRestore: true) else { continue }
+            // recovery cannot tell a deliberately-closed window's surviving file from one open at the
+            // loss (per-window snapshots carry no open marker), and the window-close capture persists a
+            // live command for ANY close — so replaying here could re-execute a command the user last
+            // saw closed. Drop the one-shot captures and persist; the sticky `session.restore` override
+            // stays armed (the user pinned it to fire on every restart).
+            var stripped = false
+            for session in store.workspaces.flatMap(\.sessions)
+            where session.foregroundCommand != nil || session.splitForegroundCommand != nil {
+                session.foregroundCommand = nil
+                session.splitForegroundCommand = nil
+                stripped = true
+            }
+            if stripped { store.save() }
+        }
         frontmostWindowID = infos.first?.id
         saveIndex()
         return true

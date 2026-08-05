@@ -815,9 +815,10 @@ public final class AppStore {
     /// current state wholesale. A persisted selection pointing at a session that no longer exists is cleared.
     /// Deliberately does NOT call `save()` — it loads what was just read from disk; the closing
     /// `reselectIfSelectionHidden` is the exception, since repairing a stranded selection is worth writing.
-    /// `launchRestore` marks an APP-BOOTSTRAP restore, the only thing that arms a persisted `session.restore`
-    /// override for this launch. It defaults to false because reopening a closed window mid-process reloads
-    /// its store through here, and that RUNTIME caller must not execute anything.
+    /// `launchRestore` marks an APP-BOOTSTRAP restore, the only thing that arms anything executable — a
+    /// persisted `session.restore` override and the captured `foregroundCommand`/`splitForegroundCommand`.
+    /// It defaults to false because reopening a closed window mid-process reloads its store through here,
+    /// and that RUNTIME caller must not execute anything.
     public func restore(from snapshot: Snapshot, launchRestore: Bool = false) {
         freshWorkspaceID = nil // live create-time state, never restored from disk
         // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
@@ -958,10 +959,10 @@ public final class AppStore {
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
     /// allowed to arm anything executable: the captured `foregroundCommand`/`splitForegroundCommand` (the
-    /// window-close capture persists them for a close-the-last-window exit, so a mid-run reopen would
-    /// otherwise replay a live command without any quit) and the persisted `restoreCommand`, copied into the
-    /// transient `pendingRestoreCommand` the surface factory consumes. It defaults to false so any other
-    /// rebuild (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
+    /// window-close capture persists them on ANY window close, so a mid-run reopen would otherwise replay a
+    /// live command without any quit) and the persisted `restoreCommand`, copied into the transient
+    /// `pendingRestoreCommand` the surface factory consumes. It defaults to false so any other rebuild
+    /// (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
     ///
     /// A split hidden at the last quit is NOT rebuilt (`hasSplit` follows `isSplit`), so its pinned override
     /// describes a pane that no longer exists and is DROPPED here, the rule `closeSplit` applies when a pane
