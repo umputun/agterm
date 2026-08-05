@@ -403,7 +403,17 @@ public final class WindowLibrary {
         }
         store.scheduleTreeChanged()
         stores[id] = nil
-        if frontmostWindowID == id { frontmostWindowID = activeWindowID }
+        if openIDs().isEmpty {
+            // this close empties the open set — the app-exit close. Pin the frontmost to the closing
+            // window (even if a stale frontmost pointed elsewhere): the index persists with no open
+            // entries, so the next launch reaches reopen's never-windowless fallback, and the pin makes
+            // it target THIS window — whose exit capture was just persisted — instead of windows.first,
+            // which silently loses the close-the-last-window restore for any library whose oldest window
+            // isn't the one the user was working in.
+            frontmostWindowID = id
+        } else if frontmostWindowID == id {
+            frontmostWindowID = activeWindowID
+        }
         saveIndex()
     }
 

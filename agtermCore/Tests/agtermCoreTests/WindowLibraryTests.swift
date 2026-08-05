@@ -624,6 +624,33 @@ final class WindowLibraryTests {
         #expect(reloaded.restoreCommand == "claude --resume abc")
     }
 
+    @Test func allClosedExitPinsFrontmostSoRelaunchReopensTheExitWindow() throws {
+        // closing the LAST open window persists an index with no open entries, so the next launch takes
+        // reopen's never-windowless fallback — without the pin it opens windows.first (the OLDEST library
+        // entry), silently dropping the exit window's captured-command replay whenever the two differ.
+        let oldest = UUID(uuidString: "0A11AAAA-0000-0000-0000-000000000011")!
+        let exitWindow = UUID(uuidString: "7B33CCCC-0000-0000-0000-000000000013")!
+        let sessionID = UUID()
+        try writeWindowFile(oldest, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "old", sessions: [])]))
+        try writeWindowFile(exitWindow, Snapshot(workspaces: [WorkspaceSnapshot(
+            id: UUID(), name: "work",
+            sessions: [SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
+                                       foregroundCommand: ["tee", "/tmp/m"])])]))
+        try writeIndex(WindowsIndex(frontmost: exitWindow, windows: [
+            WindowEntry(id: oldest, name: "old", isOpen: false),
+            WindowEntry(id: exitWindow, name: "work", isOpen: true),
+        ]))
+
+        let library = WindowLibrary(directory: directory)
+        library.closeWindow(exitWindow)
+        #expect(library.frontmostWindowID == exitWindow)
+
+        let relaunched = WindowLibrary(directory: directory)
+        #expect(relaunched.openIDs() == [exitWindow])
+        let session = relaunched.store(for: exitWindow)?.session(withID: sessionID)
+        #expect(session?.foregroundCommand == ["tee", "/tmp/m"])
+    }
+
     @Test func midProcessReloadScrubsCapturedCommandsFromDisk() throws {
         // the launch-only gate drops a captured foreground command from the LIVE sessions, but the
         // snapshot on disk still carries it — without a write-back, a force-quit after the reopen

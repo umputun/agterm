@@ -35,6 +35,10 @@ session drag are out of scope.
 - A window is open when its store is loaded. `loadStore` lazily caches `windows/<id>.json`; `newWindow`
   seeds workspace 1 and a `$HOME` session. Keep at least one library entry. `openIDs` drives relaunch.
   `applyInactiveWindowSidebarHiding` shows the active sidebar and hides other windows' sidebars.
+- `closeWindow` that empties the open set pins `frontmostWindowID` to the closing window.
+  The persisted index then has no open entries, so the next launch takes reopen's never-windowless
+  fallback — the pin makes it reopen the exit window (whose captured commands were just persisted),
+  not `windows.first`.
 - State lives under `AGTERM_STATE_DIR` or Application Support: `windows.json` plus
   `windows/<uuid>.json`. Legacy `workspaces.json` remains dormant after migration. `PersistenceStore.fileName`
   defaults to `workspaces.json`; index and window mutations save only their own files.

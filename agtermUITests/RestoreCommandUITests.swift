@@ -356,6 +356,41 @@ final class RestoreCommandUITests: XCTestCase {
                        "a mid-run window reopen must come back a plain shell — the captured `tee` must not re-run")
     }
 
+    // the all-closed exit: window 1's command is running when the window is closed mid-session (no
+    // capture — not the exit), the exit is closing window 2 (captured), and the relaunch must replay
+    // ONLY window 2's command. Guards two failure modes at once: window 1's stale state replaying, and
+    // the reopen fallback opening windows.first (the oldest entry) instead of the pinned exit window,
+    // which would silently drop window 2's replay.
+    func testAllClosedExitReplaysOnlyTheExitWindowsCapture() throws {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        runTeeMarker()
+        let window1 = try firstWindowID()
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true, "second window opens")
+        XCTAssertTrue(poll { self.app.staticTexts.matching(identifier: "session-row").count >= 2 },
+                      "window 2's seeded session row appears")
+        XCTAssertTrue(try typeIntoPane("tee \(splitMarker.path)\n", pane: "left", file: splitMarker),
+                      "window 2's `tee` should create its marker (active session is window 2's)")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(window1)"}"#)["ok"] as? Bool, true,
+                       "closing window 1 mid-session is not the exit")
+        try FileManager.default.removeItem(at: marker)
+        try FileManager.default.removeItem(at: splitMarker)
+
+        let window2 = try onlyOpenWindowID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(window2)"}"#)["ok"] as? Bool, true,
+                       "closing window 2 is the app exit")
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15), "the app auto-quits after its last window closes")
+        app.launchForUITest()
+
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.splitMarker.path) },
+                      "the exit window's captured command must replay on relaunch")
+        RunLoop.current.run(until: Date().addingTimeInterval(2)) // give any (incorrect) replay a chance
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                       "the mid-session-closed window's command must not replay")
+    }
+
     // a window reopen reloads its store through the same `restore(from:)` the bootstrap uses, but must NOT
     // arm: that would execute every sticky override the moment a user closes and reopens a window.
     func testWindowReopenDoesNotArmTheOverride() throws {
@@ -438,6 +473,17 @@ final class RestoreCommandUITests: XCTestCase {
             if poll({ FileManager.default.fileExists(atPath: file.path) }, timeout: 4) { return true }
         }
         return false
+    }
+
+    /// The id of the single window `window.list` reports OPEN — after other windows were closed,
+    /// `firstWindowID` would return the closed first entry instead.
+    private func onlyOpenWindowID() throws -> String {
+        let response = try sendCommand(#"{"cmd":"window.list"}"#)
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "window.list should carry a result")
+        let windows = try XCTUnwrap(result["windows"] as? [[String: Any]], "result should list windows")
+        let open = windows.filter { $0["open"] as? Bool == true }
+        XCTAssertEqual(open.count, 1, "exactly one open window expected: \(windows)")
+        return try XCTUnwrap(open.first?["id"] as? String)
     }
 
     /// The id of the only open window, for the close/reopen round trip.
