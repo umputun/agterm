@@ -327,6 +327,29 @@ final class RestoreCommandUITests: XCTestCase {
                       "a close-the-window exit must capture the running `tee` and re-run it on relaunch")
     }
 
+    // the willClose capture persists a live foreground command on ANY window close, not just the
+    // last-window exit — so a mid-process reopen must not replay it (replay is clean-quit → next-launch
+    // only). The override variant below can't catch this: it pins an idle pane, so nothing is captured.
+    func testWindowCloseCapturedCommandDoesNotReplayOnMidRunReopen() throws {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        runTeeMarker()
+        let windowID = try firstWindowID()
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true,
+                       "a second window keeps the app alive while the first is closed")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(windowID)"}"#)["ok"] as? Bool, true,
+                       "closing the tee-running window fires the willClose capture")
+        try FileManager.default.removeItem(at: marker)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(windowID)"}"#)["ok"] as? Bool, true,
+                       "selecting the closed window reopens it in the same run")
+
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "window reopened")
+        RunLoop.current.run(until: Date().addingTimeInterval(3)) // give any (incorrect) replay a chance to fire
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                       "a mid-run window reopen must come back a plain shell — the captured `tee` must not re-run")
+    }
+
     // a window reopen reloads its store through the same `restore(from:)` the bootstrap uses, but must NOT
     // arm: that would execute every sticky override the moment a user closes and reopens a window.
     func testWindowReopenDoesNotArmTheOverride() throws {

@@ -957,9 +957,11 @@ public final class AppStore {
     }
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
-    /// allowed to arm a persisted `restoreCommand` by copying it into the transient `pendingRestoreCommand`
-    /// the surface factory consumes; it defaults to false so any other rebuild (a mid-process window reload,
-    /// Reopen Closed Item) comes back with nothing armed.
+    /// allowed to arm anything executable: the captured `foregroundCommand`/`splitForegroundCommand` (the
+    /// window-close capture persists them for a close-the-last-window exit, so a mid-run reopen would
+    /// otherwise replay a live command without any quit) and the persisted `restoreCommand`, copied into the
+    /// transient `pendingRestoreCommand` the surface factory consumes. It defaults to false so any other
+    /// rebuild (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
     ///
     /// A split hidden at the last quit is NOT rebuilt (`hasSplit` follows `isSplit`), so its pinned override
     /// describes a pane that no longer exists and is DROPPED here, the rule `closeSplit` applies when a pane
@@ -973,8 +975,6 @@ public final class AppStore {
         session.initialSplitCwd = snapshot.splitCwd
         session.splitRatio = snapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
         session.flagged = snapshot.flagged ?? false
-        session.foregroundCommand = snapshot.foregroundCommand
-        session.splitForegroundCommand = snapshot.splitForegroundCommand
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
         session.wasRestored = true
@@ -982,6 +982,8 @@ public final class AppStore {
         session.restoreCommand = snapshot.restoreCommand
         session.splitRestoreCommand = session.isSplit ? snapshot.splitRestoreCommand : nil
         if launchRestore {
+            session.foregroundCommand = snapshot.foregroundCommand
+            session.splitForegroundCommand = snapshot.splitForegroundCommand
             session.pendingRestoreCommand = snapshot.restoreCommand
             if session.isSplit { session.pendingSplitRestoreCommand = session.splitRestoreCommand }
         }

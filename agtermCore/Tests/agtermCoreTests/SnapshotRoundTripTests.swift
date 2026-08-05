@@ -35,8 +35,10 @@ struct SnapshotRoundTripTests {
         let snapped = snap.workspaces[0].sessions[0]
         #expect(snapped.foregroundCommand == ["ssh", "gate", "-p", "22"])
         #expect(snapped.splitForegroundCommand == ["tail", "-f", "/var/log/x"])
+        // the executable half of the round trip is quit → next-launch bootstrap; a non-launch rebuild
+        // deliberately drops the captured commands (see AppStoreRestoreSeedTests).
         let restored = makeStore()
-        restored.restore(from: snap)
+        restored.restore(from: snap, launchRestore: true)
         let r = restored.workspaces[0].sessions[0]
         #expect(r.foregroundCommand == ["ssh", "gate", "-p", "22"])
         #expect(r.splitForegroundCommand == ["tail", "-f", "/var/log/x"])

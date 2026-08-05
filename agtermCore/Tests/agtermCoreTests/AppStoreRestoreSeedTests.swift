@@ -2,9 +2,10 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-// The `launchRestore` seeding gate: which rebuild paths arm a persisted `session.restore` override for
-// this launch by copying it into the transient pending slots the surface factories consume. Only an
-// app-bootstrap restore may; everything else defaults to arming nothing.
+// The `launchRestore` seeding gate: which rebuild paths arm anything executable — a persisted
+// `session.restore` override (copied into the transient pending slots the surface factories consume)
+// or a captured `foregroundCommand`. Only an app-bootstrap restore may; everything else defaults to
+// arming nothing.
 @MainActor
 struct AppStoreRestoreSeedTests {
     private func snapshot(restore: String?, splitRestore: String?, isSplit: Bool) -> Snapshot {
@@ -89,6 +90,28 @@ struct AppStoreRestoreSeedTests {
         #expect(session.pendingRestoreCommand == nil)
         #expect(session.pendingSplitRestoreCommand == nil)
         #expect(session.restoreCommand == nil)
+    }
+
+    @Test func bootstrapRestoreCopiesCapturedForegroundCommands() {
+        let store = makeStore()
+        let snap = SessionSnapshot(id: UUID(), customName: nil, cwd: "/a", isSplit: true,
+                                   foregroundCommand: ["tee", "/tmp/m"], splitForegroundCommand: ["tail", "-f"])
+        let session = store.session(from: snap, launchRestore: true)
+        #expect(session.foregroundCommand == ["tee", "/tmp/m"])
+        #expect(session.splitForegroundCommand == ["tail", "-f"])
+    }
+
+    @Test func nonBootstrapRebuildDropsCapturedForegroundCommands() {
+        // the window-close capture persists a live foreground argv; a mid-process reopen (window.select /
+        // Open Window) or Reopen Closed Item rebuilds through here and must NOT carry it into the surface
+        // factory — that would re-execute the command with no quit/relaunch, against the documented
+        // clean-quit-only replay.
+        let store = makeStore()
+        let snap = SessionSnapshot(id: UUID(), customName: nil, cwd: "/a", isSplit: true,
+                                   foregroundCommand: ["tee", "/tmp/m"], splitForegroundCommand: ["tail", "-f"])
+        let session = store.session(from: snap)
+        #expect(session.foregroundCommand == nil)
+        #expect(session.splitForegroundCommand == nil)
     }
 
     @Test func freshSessionHasNoOverrideState() {
