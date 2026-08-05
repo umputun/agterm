@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 74 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 75 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 74 agtermctl control commands with arguments, return values, and errors."
+      content="All 75 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 74 agtermctl control commands with arguments, return values, and errors."
+      content="All 75 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -237,7 +237,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 74 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 75 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -1293,6 +1293,30 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session theme &lt;NAME&gt; [--light NAME] [--dark NAME] [--pane left|right|scratch] [--target T] [--window W]<br />
+                agtermctl session theme --clear [--pane left|right|scratch] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.theme</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Pin one pane to its own terminal theme, overriding the app-wide one, or clear the override. With
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--dark</span> the pane tracks the macOS Light/Dark appearance per side; without it the pane stays
+                on <span style="font-family: &quot;JetBrains Mono&quot;, monospace">NAME</span> whatever the system does. Names come from
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl theme list</span>; an unknown one errors.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> defaults to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (the main pane), so theming a whole
+                split takes two calls. Every set is wholesale — restate both sides to change one, which is why there is no
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--dark none</span> here, unlike the app-wide
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">theme set</span>. The override belongs to the pane <strong style="color: #bfbab0">slot</strong>
+                and is persisted: a scratch keeps its theme across its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">exit</span> and respawn, and a pane can
+                be themed before it exists. Window chrome keeps the app-wide theme. Read back as the node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">theme</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitTheme</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratchTheme</span> object.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session restore (&lt;command&gt; | --none | --clear) [--pane left|right] [--pane-id TOKEN] [--target T]
                 [--window W]
               </div>
@@ -1363,7 +1387,8 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session overlay open &lt;command&gt; [--cwd DIR] [--wait] [--block] [--size-percent N]
-                [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+                [--background-color #rrggbb] [--theme NAME] [--theme-dark NAME] [--follow] [--pane left|right]
+                [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1374,6 +1399,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> gives the overlay pane its
                 own solid color, independent of the session's.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--theme</span> gives it its own theme the same way — with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--theme-dark</span> it tracks the macOS appearance per side, and a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> still wins over the theme's background.
+                Both are ephemeral with the overlay: nothing persists them and neither reads back on the tree.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">It does not switch the active session by default</strong> — both variants open on

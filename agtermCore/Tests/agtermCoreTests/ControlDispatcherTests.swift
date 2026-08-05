@@ -1300,6 +1300,57 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionThemeRoutesSetPairAndClearPerPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionThemeResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let single = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, target: "session",
+            args: ControlArgs(mode: "set", window: "win", light: "Dracula")))
+        let pair = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, target: "session",
+            args: ControlArgs(mode: "set", pane: "scratch", light: "Builtin Light", dark: "Dracula")))
+        let cleared = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, target: "session", args: ControlArgs(mode: "clear", pane: "right")))
+
+        #expect(single == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(pair == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(cleared == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .sessionTheme(target: "session", window: "win",
+                          ControlSessionThemeOptions(pane: .left, theme: ThemeOverride(light: "Dracula"))),
+            .sessionTheme(target: "session", window: nil,
+                          ControlSessionThemeOptions(pane: .scratch,
+                                                     theme: ThemeOverride(light: "Builtin Light", dark: "Dracula"))),
+            .sessionTheme(target: "session", window: nil,
+                          ControlSessionThemeOptions(pane: .right, theme: nil))
+        ])
+    }
+
+    @Test func sessionThemeRejectsInvalidInputsBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missingName = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, args: ControlArgs(mode: "set")))
+        let conditionalName = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, args: ControlArgs(mode: "set", light: "light:A,dark:B")))
+        let injectedDark = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, args: ControlArgs(mode: "set", light: "Dracula", dark: "A\nclipboard-read = allow")))
+        let badPane = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, args: ControlArgs(mode: "set", pane: "middle", light: "Dracula")))
+        let badMode = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTheme, args: ControlArgs(mode: "reset", light: "Dracula")))
+
+        #expect(missingName == ControlResponse(ok: false, error: "session.theme requires a theme name"))
+        #expect(conditionalName == ControlResponse(ok: false, error: "invalid theme name: light:A,dark:B"))
+        #expect(injectedDark?.ok == false)
+        #expect(badPane == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
+        #expect(badMode == ControlResponse(ok: false, error: "invalid theme mode: reset (set|clear)"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionBackgroundRejectsInvalidInputsBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

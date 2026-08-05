@@ -1,3 +1,5 @@
+import agtermCore
+
 extension GhosttySurfaceView {
     // MARK: - Pane role
 
@@ -6,6 +8,22 @@ extension GhosttySurfaceView {
     /// `applyPwd`/`applyTitle` reports to the main `session.currentCwd`/`oscTitle`, not `splitCwd`/`splitTitle`.
     func promoteToPrimaryPane() {
         isSplitPane = false
+    }
+
+    /// Which of the owner's pane slots this surface fills, for the per-pane visual config. A scratch has no
+    /// `session` (only `watermarkSession`), and the live `isSplitPane` — not the surface's identity — decides
+    /// left vs right, so a promoted split reads the main pane's slot. Nil for a sessionless overlay / quick
+    /// terminal, which carry neither link.
+    var paneSlot: StatusPane? {
+        if session == nil { return watermarkSession != nil ? .scratch : nil }
+        return isSplitPane ? .right : .left
+    }
+
+    /// This surface's theme override, nil when it follows the app-wide theme: a pane's from the owning
+    /// session's slot, a sessionless overlay's from its own `--theme`.
+    var paneThemeOverride: ThemeOverride? {
+        guard let pane = paneSlot else { return overlayTheme }
+        return (session ?? watermarkSession)?.themeOverride(for: pane)
     }
 
     /// `TerminalSurface.paneToken`: this surface's stable spawn identity, read straight back from the baked

@@ -76,6 +76,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// because the overlay is sessionless.
     var overlayBackgroundColorHex: String?
 
+    /// For an OVERLAY surface: its own theme (`session.overlay.open --theme`), nil for the app-wide one.
+    /// The sessionless twin of a pane's `Session.themeOverride(for:)`; `paneThemeOverride` reads both.
+    var overlayTheme: ThemeOverride?
+
     /// The dynamic background color a program set on THIS surface via OSC 11 (`#rrggbb`), or nil for none.
     /// Rendered per-pane by `applyOSCBackground` (which carries the detail).
     var oscBackgroundColorHex: String?
@@ -522,12 +526,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // `watermarkSession`, sessionless overlay/quick skip it. ALSO re-applies a standalone
         // `dashboardFontOverride` for a member realizing AFTER the dashboard set the transient font, since
         // `applyWatermarkFromSession` honors `dashboardFontOverride ?? session.fontSize`.
-        if (session ?? watermarkSession)?.backgroundWatermark != nil || dashboardFontOverride != nil {
+        if (session ?? watermarkSession)?.backgroundWatermark != nil || dashboardFontOverride != nil
+            || paneThemeOverride != nil {
             applyWatermarkFromSession()
         }
         // an overlay surface with its own background color applies it here too — the overlay is sessionless,
         // so the watermark path above skips it.
-        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor() }
+        if overlayBackgroundColorHex != nil || overlayTheme != nil { applyOverlaySurfaceConfig() }
 
         // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the deferred
         // overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.

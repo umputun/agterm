@@ -622,6 +622,58 @@ struct CommandsTests {
         #expect(try request(["session", "restore", "claude --resume abc", "--target", "s1"]) == expected)
     }
 
+    @Test func sessionThemeSetsSingleAndPairPerPane() throws {
+        #expect(try request(["session", "theme", "Dracula"])
+            == ControlRequest(cmd: .sessionTheme, target: "active",
+                              args: ControlArgs(mode: "set", light: "Dracula")))
+        #expect(try request(["session", "theme", "Builtin Light", "--dark", "Dracula",
+                             "--pane", "scratch", "--target", "s1"])
+            == ControlRequest(cmd: .sessionTheme, target: "s1",
+                              args: ControlArgs(mode: "set", pane: "scratch",
+                                                light: "Builtin Light", dark: "Dracula")))
+        #expect(try request(["session", "theme", "--light", "Dracula"]).args?.light == "Dracula")
+    }
+
+    @Test func sessionOverlayOpenCarriesItsOwnTheme() throws {
+        let req = try request(["session", "overlay", "open", "revdiff", "--theme", "Dracula"])
+        #expect(req.args?.light == "Dracula")
+        #expect(req.args?.dark == nil)
+        let pair = try request(["session", "overlay", "open", "revdiff",
+                                "--theme", "Builtin Light", "--theme-dark", "Dracula"])
+        #expect(pair.args?.light == "Builtin Light")
+        #expect(pair.args?.dark == "Dracula")
+        #expect(try request(["session", "overlay", "open", "revdiff"]).args?.light == nil)
+    }
+
+    @Test func sessionOverlayOpenRejectsADarkThemeWithoutALightOne() throws {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "revdiff", "--theme-dark", "Dracula"])
+        }
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "revdiff", "--theme", "light:A,dark:B"])
+        }
+    }
+
+    @Test func sessionThemeClear() throws {
+        let req = try request(["session", "theme", "--clear", "--pane", "right"])
+        #expect(req == ControlRequest(cmd: .sessionTheme, target: "active",
+                                      args: ControlArgs(mode: "clear", pane: "right")))
+        #expect(req.args?.light == nil)
+    }
+
+    @Test func sessionThemeRejectsAmbiguousOrMalformedForms() throws {
+        // NAME with --clear, neither, --dark alongside --clear, NAME + --light, a conditional-looking name,
+        // and a bad pane are all usage errors before any socket round-trip.
+        for argv in [["session", "theme", "Dracula", "--clear"],
+                     ["session", "theme"],
+                     ["session", "theme", "--clear", "--dark", "Dracula"],
+                     ["session", "theme", "Dracula", "--light", "Dracula"],
+                     ["session", "theme", "light:A,dark:B"],
+                     ["session", "theme", "Dracula", "--pane", "middle"]] {
+            #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(argv) }
+        }
+    }
+
     @Test func sessionRestoreCarriesShellLineVerbatim() throws {
         let line = "cd /tmp && claude --resume abc | tee out"
         let req = try request(["session", "restore", line])

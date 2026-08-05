@@ -83,14 +83,14 @@ paths:
 
 ## Public catalog
 
-There are 74 public commands:
+There are 75 public commands:
 
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
-  `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
-  `.overlay.result`, `.hud.open`, `.hud.update`, `.hud.close`
+  `.flag`, `.seen`, `.restore`, `.background`, `.theme`, `.overlay.open`, `.overlay.close`,
+  `.overlay.resize`, `.overlay.result`, `.hud.open`, `.hud.update`, `.hud.close`
 - `surface.zoom`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `notify`
@@ -99,7 +99,7 @@ There are 74 public commands:
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
 
-`debug.appearance` is a private 75th `Command` case used only by `AppearanceFlipUITests`.
+`debug.appearance` is a private 76th `Command` case used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
 
@@ -488,6 +488,29 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   must reapply color after `windowOpacity` updates, including within-range drags that do not reload.
 - `Fit`/`Position` are CaseIterable typed enums. Revalidate free-text path/color during emission.
   Tree reads the stored background specification. See [[libghostty]] for live OSC 11 precedence.
+
+## Per-pane themes
+
+- `session.theme set|clear` persists a host-free `ThemeOverride` (`light` plus optional `dark`) on ONE
+  pane SLOT — `--pane left|right|scratch`, defaulting to left like status/restore/font. Every set is
+  wholesale, so there is no app-wide `--dark none`; `dark` absent pins the pane to `light`.
+- The dispatcher validates shape, pane, and name grammar (no comma/colon/control characters, which would
+  forge the `light:…,dark:…` conditional or inject a second config key). Only the app action can see the
+  bundled catalog, so it owns `unknown theme:` exactly as `theme.set` does.
+- Emission rides the same per-surface overlay as the watermark: a leading `theme` line in
+  `WatermarkConfig.overlayText` AND `oscBackgroundOverlayText`, which the OSC-11 path would otherwise drop.
+  Re-validate names on emit — a persisted override reaches restore raw.
+- Overrides ride the slot, not the surface: kept on restore even for a pane that does not exist (unlike
+  `splitRestoreCommand`), so a scratch keeps its theme across exit/respawn and nothing becomes unclearable.
+- A themed pane changes what an OSC 111 reset means: `baselineBackgroundHex` resolves the baseline from THAT
+  theme's `background` (`GhosttyApp.themeBackgroundHex`, cached), not the app theme's. See [[libghostty]].
+- Window chrome stays on the app-wide theme; per-pane overrides never feed `resolveSelectionColors`.
+  Tree reads `theme`/`splitTheme`/`scratchTheme`.
+- `session.overlay.open --theme/--theme-dark` themes the overlay surface itself, session-wide or per pane.
+  It rides `PaneOverlay.theme`/`Session.overlayTheme` beside `backgroundColor`, is validated by the shared
+  `unknownThemeName`, and is EPHEMERAL: cleared on close, never persisted, no read-back — so it needs no
+  tree field. `--theme-dark` without `--theme` is a usage error; a color still wins over the theme's
+  background, both coming from one `overlayText` call in `applyOverlaySurfaceConfig`.
 
 ## Documentation mirrors
 

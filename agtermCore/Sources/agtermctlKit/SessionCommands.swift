@@ -20,7 +20,7 @@ struct Session: ParsableCommand {
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
                       Text.self, Status.self, Restore.self, FlagCommand.self,
-                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self]
+                      Seen.self, Search.self, Background.self, ThemeCommand.self, Overlay.self, Hud.self]
     )
 
     struct New: RequestCommand {
@@ -497,6 +497,52 @@ struct Session: ParsableCommand {
         }
     }
 
+    // named `ThemeCommand` (not `Theme`) so it doesn't shadow the top-level app-wide `theme` command within
+    // the `Session` namespace; `commandName` keeps the user-facing verb `theme`.
+    struct ThemeCommand: RequestCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "theme",
+            abstract: "Pin one pane to its own theme, overriding the app-wide one.",
+            discussion: """
+            session theme NAME                 pin the pane to NAME whatever the system appearance
+            session theme NAME --dark NAME     track the macOS Light/Dark appearance, per side
+            session theme --clear              drop the override; the pane follows the app theme again
+
+            Every set is wholesale, so re-state both sides to change one; there is no `--dark none`. The \
+            override belongs to the pane SLOT and is persisted, so a scratch keeps its theme across its own \
+            exit and respawn, and a pane may be themed before it exists. Reads back on `tree` as theme \
+            (main), splitTheme, or scratchTheme. The app-wide theme is `agtermctl theme set`.
+            """)
+        @Argument(help: "Light/single theme name (a bundled theme, as listed by `agtermctl theme list`).")
+        var name: String?
+        @Option(help: "Light-appearance theme (same slot as NAME).") var light: String?
+        @Option(help: "Dark-appearance theme; the pane then tracks the macOS appearance.") var dark: String?
+        @Flag(name: .long, help: "Drop the override so the pane follows the app-wide theme.") var clear = false
+        @Option(name: .long, help: "Which pane to theme: left (main), right (split), or scratch. Defaults to the left pane.")
+        var pane: String?
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if name != nil, light != nil { throw ValidationError("provide either NAME or --light, not both") }
+            let named = name ?? light
+            guard (named != nil) != clear else {
+                throw ValidationError("provide exactly one of a theme NAME or --clear")
+            }
+            if clear, dark != nil { throw ValidationError("--dark cannot be combined with --clear") }
+            for value in [named, dark].compactMap({ $0 }) where !ThemeOverride.isValidName(value) {
+                throw ValidationError("theme name must not be empty or contain ',' or ':'")
+            }
+            try validatePaneArgument(pane)
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionTheme, target: target.target,
+                           args: options.withWindow(ControlArgs(mode: clear ? "clear" : "set", pane: pane,
+                                                                 light: name ?? light, dark: dark)))
+        }
+    }
+
     struct Background: ParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "background",
@@ -621,6 +667,10 @@ struct Session: ParsableCommand {
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
+            @Option(name: .long, help: "Theme for the overlay pane, overriding the app-wide one (a bundled theme name).")
+            var theme: String?
+            @Option(name: .long, help: "Dark-appearance theme for the overlay pane; needs --theme, and makes it track the macOS appearance.")
+            var themeDark: String?
             @Option(name: .long, help: """
                 Scope the overlay to ONE split pane (left or right), leaving the sibling pane live and \
                 visible; omit for the session-wide overlay. A pane overlay is always full-pane, so this \
@@ -641,13 +691,18 @@ struct Session: ParsableCommand {
                 if pane != nil, sizePercent != nil {
                     throw ValidationError("--pane cannot be combined with --size-percent (pane overlays are always full)")
                 }
+                if theme == nil, themeDark != nil { throw ValidationError("--theme-dark needs --theme") }
+                for value in [theme, themeDark].compactMap({ $0 }) where !ThemeOverride.isValidName(value) {
+                    throw ValidationError("theme name must not be empty or contain ',' or ':'")
+                }
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
-                                                                     pane: pane, color: backgroundColor)))
+                                                                     pane: pane, color: backgroundColor,
+                                                                     light: theme, dark: themeDark)))
             }
 
             /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable

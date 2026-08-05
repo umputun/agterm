@@ -1569,4 +1569,49 @@ struct AppStorePaneTests {
         #expect(store.closeScratch(session.id) == true)
         #expect(session.agentIndicator.status == .blocked)
     }
+
+    @Test func themeOverridesPersistPerPaneAcrossARestore() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/repo"))
+        #expect(store.setThemeOverride(ThemeOverride(light: "Dracula"), pane: .left, forSession: session.id))
+        #expect(store.setThemeOverride(ThemeOverride(light: "Nord", dark: "Dracula"), pane: .scratch,
+                                       forSession: session.id))
+
+        let restored = makeStore()
+        restored.restore(from: store.snapshot())
+        let reloaded = try #require(restored.session(withID: session.id))
+
+        #expect(reloaded.theme == ThemeOverride(light: "Dracula"))
+        #expect(reloaded.scratchTheme == ThemeOverride(light: "Nord", dark: "Dracula"))
+        #expect(reloaded.splitTheme == nil)
+    }
+
+    @Test func settingAnUnchangedThemeOverrideIsANoOp() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/repo"))
+        let theme = ThemeOverride(light: "Dracula")
+
+        #expect(store.setThemeOverride(theme, pane: .right, forSession: session.id))
+        #expect(!store.setThemeOverride(theme, pane: .right, forSession: session.id))
+        #expect(store.setThemeOverride(nil, pane: .right, forSession: session.id))
+        #expect(!store.setThemeOverride(nil, pane: .right, forSession: session.id))
+        #expect(!store.setThemeOverride(theme, pane: .left, forSession: UUID()))
+    }
+
+    @Test func controlTreeReportsEachPanesThemeOverride() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/repo"))
+        store.setThemeOverride(ThemeOverride(light: "Builtin Light", dark: "Dracula"), pane: .left,
+                               forSession: session.id)
+        store.setThemeOverride(ThemeOverride(light: "Nord"), pane: .scratch, forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces.first?.sessions.first)
+
+        #expect(node.theme == ThemeOverride(light: "Builtin Light", dark: "Dracula"))
+        #expect(node.scratchTheme == ThemeOverride(light: "Nord"))
+        #expect(node.splitTheme == nil)
+    }
 }

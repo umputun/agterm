@@ -177,7 +177,8 @@ extension AppStore {
     ///   session's; nil leaves the default theme background. Read by the overlay factory at creation.
     @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
                                                wait: Bool = false, sizePercent: Int? = nil,
-                                               backgroundColor: String? = nil) -> Bool {
+                                               backgroundColor: String? = nil,
+                                               theme: ThemeOverride? = nil) -> Bool {
         guard let session = session(withID: sessionID) else { return false }
         if session.hudActive { closeOverlay(sessionID) }
         guard !session.overlayActive else { return false }
@@ -188,6 +189,7 @@ extension AppStore {
         session.overlayExitCode = nil
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
         session.overlayBackgroundColor = backgroundColor
+        session.overlayTheme = theme
         session.overlayActive = true
         return true
     }
@@ -224,6 +226,7 @@ extension AppStore {
         session.overlayWait = false
         session.overlaySizePercent = nil
         session.overlayBackgroundColor = nil
+        session.overlayTheme = nil
         // every teardown routes through here — explicit close, ⌘W, the program's own exit, a replacement —
         // so discarding the HUD here is what keeps `hudActive` and its body file from outliving the slot they
         // describe, including for a HUD whose surface never realized and so never tore itself down.
@@ -280,8 +283,8 @@ extension AppStore {
     /// two open at once carry their own. Always full-pane — no size percent. Returns nil on success, else
     /// the reason, so the control arm can pick its error string. NOT persisted.
     public func openPaneOverlay(_ sessionID: UUID, pane: OverlayPane, command: String, cwd: String? = nil,
-                                wait: Bool = false,
-                                backgroundColor: String? = nil) -> PaneOverlayOpenFailure? {
+                                wait: Bool = false, backgroundColor: String? = nil,
+                                theme: ThemeOverride? = nil) -> PaneOverlayOpenFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
         guard session.paneOverlay(pane) == nil else { return .alreadyOpen }
         // an unrendered pane never gets a nonzero backing size, so its surface would never be created and
@@ -289,7 +292,7 @@ extension AppStore {
         guard session.rendersPane(pane) else { return .paneNotVisible }
         session.setPaneOverlayExitCode(nil, pane: pane)
         session.setPaneOverlay(PaneOverlay(command: command, cwd: cwd, backgroundColor: backgroundColor,
-                                           wait: wait), pane: pane)
+                                           theme: theme, wait: wait), pane: pane)
         return nil
     }
 
@@ -332,5 +335,23 @@ extension AppStore {
         scratch.teardown()
         session.scratchSurface = nil
         return true
+    }
+
+    /// Sets (or clears) one pane's theme override and persists it. Like `setBackgroundWatermark`, returns
+    /// whether the value CHANGED so the app target only re-applies the per-surface config on a real change.
+    @discardableResult
+    public func setThemeOverride(_ override: ThemeOverride?, pane: StatusPane, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), session.setThemeOverride(override, for: pane) else { return false }
+        save()
+        return true
+    }
+
+    /// Restores all three persisted theme slots. Unlike `splitRestoreCommand`, an override for an ABSENT pane
+    /// is kept: `setThemeOverride` takes any pane whether or not it exists, so dropping it here would make a
+    /// hidden pane's theme unclearable, and keeping it lets the pane pick the theme up when it is created.
+    func restoreThemeOverrides(from snapshot: SessionSnapshot, into session: Session) {
+        session.theme = snapshot.theme
+        session.splitTheme = snapshot.splitTheme
+        session.scratchTheme = snapshot.scratchTheme
     }
 }

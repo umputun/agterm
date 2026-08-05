@@ -456,9 +456,24 @@ struct WindowContentView: View {
     /// and a live OSC 11 color lives on the surface view. Every path that PUTS a wash on screen re-reads it
     /// (overlay, quick-terminal and split-focus state are all observed), so only a background set while a
     /// wash is already painted holds the old color, until the next observed change.
-    func washColor(for session: Session) -> Color {
-        guard let watermark = session.backgroundWatermark, watermark.kind == .color,
-              let nsColor = NSColor(agtermHex: watermark.colorHex) else { return terminalColor }
+    /// `pane` narrows the theme fallback to that pane's own override; omit it for a session-wide wash, which
+    /// can cover two differently themed panes and has no single right answer.
+    func washColor(for session: Session, pane: StatusPane? = nil) -> Color {
+        if let watermark = session.backgroundWatermark, watermark.kind == .color,
+           let nsColor = NSColor(agtermHex: watermark.colorHex) {
+            return Color(nsColor: nsColor)
+        }
+        return themeWashColor(pane.flatMap { session.themeOverride(for: $0) })
+    }
+
+    /// The background a pinned `theme` paints, for a wash that must blend against it rather than the
+    /// app-wide color. Falls back to `terminalColor` with no override or an unresolvable name — the theme
+    /// files are read (and cached) by name, so a name libghostty accepted may still not parse here.
+    /// Precedence matches the emitted config: `WatermarkConfig` writes the theme line FIRST, so a `.color`
+    /// watermark's explicit `background` wins over it and is checked first above.
+    func themeWashColor(_ theme: ThemeOverride?) -> Color {
+        guard let theme, let hex = GhosttyApp.themeBackgroundHex(theme, isDark: GhosttyApp.currentIsDark()),
+              let nsColor = NSColor(agtermHex: hex) else { return terminalColor }
         return Color(nsColor: nsColor)
     }
 

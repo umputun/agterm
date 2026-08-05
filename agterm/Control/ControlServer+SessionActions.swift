@@ -27,17 +27,20 @@ extension ControlServer: ControlActions {
     /// they sit here rather than in the dispatcher.
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
+        if let unknown = unknownThemeName(options.theme) { return unknown }
+        return resolver.resolveSession(target, window: window) { store, id in
             if let pane = options.pane {
                 if let failure = store.openPaneOverlay(id, pane: pane, command: options.command,
                                                        cwd: options.cwd, wait: options.wait,
-                                                       backgroundColor: options.backgroundColor) {
+                                                       backgroundColor: options.backgroundColor,
+                                                       theme: options.theme) {
                     return paneOverlayFailure(failure, target: target)
                 }
             } else {
                 guard store.openOverlay(id, command: options.command, cwd: options.cwd,
                                         wait: options.wait, sizePercent: options.sizePercent,
-                                        backgroundColor: options.backgroundColor) else {
+                                        backgroundColor: options.backgroundColor,
+                                        theme: options.theme) else {
                     return ControlResponse(ok: false, error: "overlay already open")
                 }
             }
@@ -48,6 +51,17 @@ extension ControlServer: ControlActions {
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+    }
+
+    /// The `unknown theme: <name>` rejection for a theme carried by another command, against the same
+    /// bundled catalog `theme.set` and `session.theme` use; nil when both sides name bundled themes.
+    func unknownThemeName(_ theme: ThemeOverride?) -> ControlResponse? {
+        guard let theme else { return nil }
+        let catalog = ThemeCatalog(names: actions.availableThemes())
+        for name in [theme.light, theme.dark].compactMap({ $0 }) where !catalog.contains(name: name) {
+            return ControlResponse(ok: false, error: "unknown theme: \(name)")
+        }
+        return nil
     }
 
     private func paneOverlayFailure(_ failure: PaneOverlayOpenFailure, target: String?) -> ControlResponse {

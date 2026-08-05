@@ -30,7 +30,8 @@ extension GhosttySurfaceView {
         let resolvedImagePath = WatermarkRenderer.materialize(session.backgroundWatermark, sessionID: session.id)
         let overlay = WatermarkConfig.overlayText(watermark: session.backgroundWatermark,
                                                   resolvedImagePath: resolvedImagePath, fontSize: currentEffectiveFontSize(),
-                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
+                                                  windowOpacity: GhosttyApp.shared.windowOpacity,
+                                                  theme: paneThemeOverride)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("watermark: per-surface config build failed for session %@", session.id.uuidString)
             return
@@ -53,7 +54,8 @@ extension GhosttySurfaceView {
         // broadcast that wiped it.
         if let hex = oscBackgroundColorHex { applyOSCBackground(hex); return }
         let configSession = session ?? watermarkSession
-        guard configSession?.backgroundWatermark != nil || configSession?.fontSize != nil || dashboardFontOverride != nil else {
+        guard configSession?.backgroundWatermark != nil || configSession?.fontSize != nil
+                || dashboardFontOverride != nil || paneThemeOverride != nil else {
             return
         }
         applyWatermarkFromSession()
@@ -70,18 +72,20 @@ extension GhosttySurfaceView {
         applyWatermarkFromSession()
     }
 
-    /// Applies a solid background color to a sessionless OVERLAY surface (`session.overlay.open
-    /// --background-color`), reading the overlay's own `overlayBackgroundColorHex` since it carries no
-    /// `session`. Bakes the window translucency into `background-opacity` at open time — the ephemeral
-    /// overlay gets no live updates, so unlike a session `.color` it does not re-track a later opacity
-    /// change. A rejected (malformed) hex leaves the plain base config.
-    func applyOverlayBackgroundColor() {
-        guard let surface, let hex = overlayBackgroundColorHex, WatermarkConfig.isValidColorHex(hex) else { return }
-        let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
+    /// Applies a sessionless OVERLAY surface's own visual config — its `--background-color`, its `--theme`,
+    /// or both — reading them off the view since it carries no `session`. Bakes the window translucency into
+    /// `background-opacity` at open time: the ephemeral overlay gets no live updates, so unlike a session
+    /// `.color` it does not re-track a later opacity change. A rejected (malformed) hex leaves the color out
+    /// while a valid theme still applies.
+    func applyOverlaySurfaceConfig() {
+        guard let surface else { return }
+        let color = overlayBackgroundColorHex.flatMap { WatermarkConfig.isValidColorHex($0) ? $0 : nil }
+        let overlay = WatermarkConfig.overlayText(watermark: color.map { BackgroundWatermark(kind: .color, colorHex: $0) },
                                                   resolvedImagePath: nil, fontSize: currentEffectiveFontSize(),
-                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
+                                                  windowOpacity: GhosttyApp.shared.windowOpacity,
+                                                  theme: paneThemeOverride)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
-            NSLog("overlay background: per-surface config build failed")
+            NSLog("overlay surface config: per-surface config build failed")
             return
         }
         ghostty_surface_update_config(surface, config)
@@ -107,9 +111,13 @@ extension GhosttySurfaceView {
     /// owns the rule, including why an installed OSC overlay makes it the theme rather than this surface's
     /// own color; here we only gather its two inputs.
     private func baselineBackgroundHex() -> String? {
-        OSCBackgroundPolicy.baseline(oscOverlayActive: oscBackgroundColorHex != nil,
-                                     surfaceBackground: surfaceOwnBackgroundHex(),
-                                     themeBackground: GhosttyApp.shared.terminalBackgroundColor?.agtermHexString)
+        // a pane pinned to its own theme resolves "the theme background" from THAT theme, not the app's.
+        let themeBackground = paneThemeOverride
+            .flatMap { GhosttyApp.themeBackgroundHex($0, isDark: GhosttyApp.currentIsDark()) }
+            ?? GhosttyApp.shared.terminalBackgroundColor?.agtermHexString
+        return OSCBackgroundPolicy.baseline(oscOverlayActive: oscBackgroundColorHex != nil,
+                                            surfaceBackground: surfaceOwnBackgroundHex(),
+                                            themeBackground: themeBackground)
     }
 
     /// The background color this surface's OWN config carries: a `.color` session watermark, else a
@@ -136,7 +144,8 @@ extension GhosttySurfaceView {
         guard let surface, WatermarkConfig.isValidColorHex(hex) else { return }
         oscBackgroundColorHex = hex
         let overlay = WatermarkConfig.oscBackgroundOverlayText(fontSize: currentEffectiveFontSize(),
-                                                               windowOpacity: GhosttyApp.shared.windowOpacity)
+                                                               windowOpacity: GhosttyApp.shared.windowOpacity,
+                                                               theme: paneThemeOverride)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config build failed")
             return
@@ -153,10 +162,11 @@ extension GhosttySurfaceView {
     func releaseOSCBackground() {
         oscBackgroundColorHex = nil
         if session != nil || watermarkSession != nil { applyWatermarkFromSession(); return }
-        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor(); return }
+        if overlayBackgroundColorHex != nil || overlayTheme != nil { applyOverlaySurfaceConfig(); return }
         guard let surface else { return }
         let overlay = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil,
-                                                  fontSize: currentEffectiveFontSize())
+                                                  fontSize: currentEffectiveFontSize(),
+                                                  theme: paneThemeOverride)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config rebuild failed on reset")
             return

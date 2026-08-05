@@ -66,6 +66,7 @@ final class MockControlActions: ControlActions {
         case hudUpdate(target: String?, window: String?, HudSpec)
         case hudClose(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
+        case sessionTheme(target: String?, window: String?, ControlSessionThemeOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
         case windowNew(String?, minimized: Bool)
         case windowList
@@ -127,6 +128,7 @@ final class MockControlActions: ControlActions {
     var nextHudUpdateResponse = ControlResponse(ok: true)
     var nextHudCloseResponse = ControlResponse(ok: true)
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
+    var nextSessionThemeResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
     var nextSurfaceZoomResponse = ControlResponse(ok: true)
     var nextDashboardResponse = ControlResponse(ok: true)
@@ -448,6 +450,12 @@ final class MockControlActions: ControlActions {
                               options: ControlSessionBackgroundOptions) -> ControlResponse {
         calls.append(.sessionBackground(target: target, window: window, options))
         return nextSessionBackgroundResponse
+    }
+
+    func setSessionTheme(_ target: String?, window: String?,
+                         options: ControlSessionThemeOptions) -> ControlResponse {
+        calls.append(.sessionTheme(target: target, window: window, options))
+        return nextSessionThemeResponse
     }
 
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse {

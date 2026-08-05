@@ -423,6 +423,24 @@ final class GhosttyApp {
         return (selBg, selFg)
     }
 
+    /// The `background` declared by a pane's own theme (`session.theme`) — the color libghostty seeds that
+    /// surface's `default` layer from, and so the baseline an OSC 111 reset must match (`OSCBackgroundPolicy`).
+    /// Without this a themed pane would compare against the APP theme's background and read every reset as a
+    /// fresh set, stranding the pane recolored (#309). Cached: COLOR_CHANGE arrives per prompt redraw, and
+    /// the miss is memoized too, so a theme that declares none doesn't re-read the file every time.
+    static func themeBackgroundHex(_ theme: ThemeOverride, isDark: Bool) -> String? {
+        let name = isDark ? (theme.dark ?? theme.light) : theme.light
+        if let cached = themeBackgroundCache[name] { return cached }
+        let hex = Bundle.main.url(forResource: "ghostty", withExtension: nil)
+            .map { $0.appendingPathComponent("themes", isDirectory: true).appendingPathComponent(name).path }
+            .flatMap { path in keyValues(ofFileAt: path).last { $0.0 == "background" }?.1 }
+            .flatMap { parseHexColor($0)?.agtermHexString }
+        themeBackgroundCache[name] = hex
+        return hex
+    }
+
+    private static var themeBackgroundCache: [String: String?] = [:]
+
     /// Parse a ghostty-style config file into its `key = value` pairs in file order, skipping blank and `#`
     /// comment lines. Missing/unreadable files yield no pairs.
     private static func keyValues(ofFileAt path: String) -> [(String, String)] {

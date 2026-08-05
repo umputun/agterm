@@ -284,6 +284,7 @@ public final class AppStore {
                                           fontSize: fontSize(session),
                                           splitFontSize: splitFontSize(session),
                                           scratchFontSize: scratchFontSize(session),
+                                          theme: session.theme, splitTheme: session.splitTheme, scratchTheme: session.scratchTheme,
                                           surfaces: surfaces)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
@@ -948,7 +949,8 @@ public final class AppStore {
                         initialCommand: session.initialCommand, commandWait: session.commandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark,
                         restoreCommand: session.restoreCommand,
-                        splitRestoreCommand: session.splitRestoreCommand)
+                        splitRestoreCommand: session.splitRestoreCommand,
+                        theme: session.theme, splitTheme: session.splitTheme, scratchTheme: session.scratchTheme)
     }
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
@@ -981,6 +983,7 @@ public final class AppStore {
         session.backgroundWatermark = snapshot.backgroundWatermark
         session.restoreCommand = snapshot.restoreCommand
         session.splitRestoreCommand = session.isSplit ? snapshot.splitRestoreCommand : nil
+        restoreThemeOverrides(from: snapshot, into: session)
         if launchRestore {
             session.pendingRestoreCommand = snapshot.restoreCommand
             if session.isSplit { session.pendingSplitRestoreCommand = session.splitRestoreCommand }

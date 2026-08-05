@@ -18,7 +18,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
-  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
+  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.theme, session.overlay,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -148,7 +148,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (74 commands)
+## Command summary (75 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -165,6 +165,9 @@ unset or idle), `statusBlink`/`statusColor`/`statusShape` (the status glyph's `-
 `#rrggbb` tint and its `--shape` silhouette from `session status`, omitted when idle / not blinking / using
 the configured color or shape — the tint and the silhouette report the per-call override only), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
+`theme`/`splitTheme`/`scratchTheme` (each pane's theme override from `session theme` as `{light, dark?}`,
+omitted when that pane follows the app-wide theme; `dark` omitted for a pane pinned to one theme —
+PERSISTED per slot, so it reads back before the pane exists, unlike the live-only `fontSize`),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen` — omitted when zero), `commandWait` (whether a `--command` session was created with `--wait` to
 hold open after the command exits — the read side of `session new --wait`, omitted for a plain or
@@ -307,7 +310,15 @@ omitted when expanded).
   terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `theme <NAME> [--light NAME] [--dark NAME] [--pane left|right|scratch]` · `theme --clear [--pane ...]` —
+  pin ONE pane to its own terminal theme, overriding the app-wide one; `--clear` drops the override. With
+  `--dark` the pane tracks the macOS Light/Dark appearance per side, else it stays on NAME. `--pane`
+  defaults to `left` (main), so theming a whole split takes two calls. Every set is WHOLESALE — restate
+  both sides to change one; there is no `--dark none` (unlike the app-wide `theme set`). An unknown name
+  errors. The override belongs to the pane SLOT and persists: a scratch keeps its theme across its own
+  `exit`/respawn, and a pane can be themed before it exists (a split not yet opened picks it up on ⌘D).
+  Reads back on `tree` as `theme`/`splitTheme`/`scratchTheme`. Window chrome keeps the app-wide theme.
+- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--theme NAME] [--theme-dark NAME] [--follow] [--pane left|right]` ·
   `overlay resize (--size-percent N | --full)` ·
   `overlay close [--pane left|right]` ·
   `overlay result [--pane left|right]` — run a program on top of a session; `--block` waits and exits
@@ -328,7 +339,9 @@ omitted when expanded).
   session. **Pass `--follow` to select the target after opening** (a no-op if it is already active): use
   `--follow` when you want the user pulled to the overlay, omit it to open quietly on your own or another
   session.
-  `--background-color` gives the overlay pane its own solid color, independent of the session's. An
+  `--background-color` gives the overlay pane its own solid color and `--theme` its own theme (with
+  `--theme-dark`, tracking the macOS appearance), both independent of the session's and ephemeral — an
+  overlay is never restored, so neither persists and neither reads back on `tree`. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
 - `hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N]` ·

@@ -449,6 +449,7 @@ struct agtermApp: App {
         // the overlay's own background color (`session.overlay.open --background-color`), applied in
         // createSurface — the overlay is sessionless, so it can't read it off the session there.
         view.overlayBackgroundColorHex = spec.backgroundColor
+        view.overlayTheme = spec.theme
         // record the exit status on teardown (always via destroySurface), so it survives a `session.overlay.close`
         // that bypasses onExit; a force-close removes the session first and no-ops here, where it is unqueryable.
         //
@@ -495,7 +496,8 @@ struct agtermApp: App {
     private static func overlaySpec(for session: Session, pane: OverlayPane?) -> PaneOverlay {
         guard let pane else {
             return PaneOverlay(command: session.overlayCommand ?? "", cwd: session.overlayCwd,
-                               backgroundColor: session.overlayBackgroundColor, wait: session.overlayWait)
+                               backgroundColor: session.overlayBackgroundColor, theme: session.overlayTheme,
+                               wait: session.overlayWait)
         }
         return session.paneOverlay(pane) ?? PaneOverlay(command: "")
     }

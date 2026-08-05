@@ -26,6 +26,7 @@ public enum Command: String, Codable, Sendable {
     case sessionSeen = "session.seen"
     case sessionRestore = "session.restore"
     case sessionBackground = "session.background"
+    case sessionTheme = "session.theme"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
@@ -539,6 +540,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The scratch terminal's live font size in points, or nil when no scratch surface is realized (omitted).
     /// The read side of `font --pane scratch` (also live-only).
     public let scratchFontSize: Double?
+    /// The main pane's theme override, the read side of `session.theme`; nil/omitted when the pane follows
+    /// the app-wide theme. `dark` is omitted for a pane pinned to one theme whatever the system appearance.
+    /// PERSISTED per pane slot, so it reads back before the pane exists (a split not yet opened, a scratch
+    /// between exits) — unlike `fontSize`, which is live-only.
+    public let theme: ThemeOverride?
+    /// The split (right) pane's theme override, the split analogue of `theme`.
+    public let splitTheme: ThemeOverride?
+    /// The scratch terminal's theme override, the scratch analogue of `theme`.
+    public let scratchTheme: ThemeOverride?
     /// Addressable terminal surfaces owned by this session; nil/omitted against a server predating
     /// `surface.zoom`. Hidden-but-alive surfaces are included, so a client can zoom them without unhiding.
     public let surfaces: [ControlSurfaceNode]?
@@ -554,6 +564,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 statusShape: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
+                theme: ThemeOverride? = nil, splitTheme: ThemeOverride? = nil,
+                scratchTheme: ThemeOverride? = nil,
                 surfaces: [ControlSurfaceNode]? = nil) {
         self.id = id
         self.name = name
@@ -584,6 +596,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.fontSize = fontSize
         self.splitFontSize = splitFontSize
         self.scratchFontSize = scratchFontSize
+        self.theme = theme
+        self.splitTheme = splitTheme
+        self.scratchTheme = scratchTheme
         self.surfaces = surfaces
     }
 }

@@ -536,7 +536,23 @@ All twelve are read-only projections of GUI state.
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session theme <NAME> [--light NAME] [--dark NAME] [--pane left|right|scratch] [--target] [--window W]` ·
+  `session theme --clear [--pane ...] [--target] [--window W]` — pin ONE pane to its own terminal theme,
+  overriding the app-wide one, or drop the override. `NAME` (alias `--light`; both is a usage error) is the
+  light/single side; with `--dark` the pane tracks the macOS Light/Dark appearance per side, stored as
+  ghostty's `theme = light:…,dark:…` conditional and resolved by libghostty from the surface's own color
+  scheme. Every set is WHOLESALE — restate both sides to change one — so there is no `--dark none` here,
+  unlike the app-global `theme set`. `--pane` defaults to `left` (main); `right` is the split, `scratch`
+  the scratch terminal. Names come from `theme list`; an unknown one errors `unknown theme: <name>`, and a
+  name containing `,`/`:`/a control character is rejected (it would forge the conditional form or inject a
+  second config key into the per-surface overlay). Applied as a per-surface ghostty config overlay, the
+  same channel as `session background`, so the two compose — a background color still wins over the
+  theme's. PERSISTED per pane SLOT, not per surface: a scratch keeps its theme across its own `exit` and
+  respawn, and a pane may be themed before it exists (an unopened split picks it up on creation). Window
+  chrome — the sidebar, the title bar, the selection colors — stays on the app-wide theme. Read back from
+  a session's `theme` / `splitTheme` / `scratchTheme` fields in `tree --json` (each `{light, dark?}`,
+  omitted when that pane follows the app theme).
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--theme NAME] [--theme-dark NAME] [--follow] [--pane left|right] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
@@ -548,7 +564,11 @@ All twelve are read-only projections of GUI state.
   visits that session. **Pass `--follow` to select the target after opening** (a no-op if it is already
   active); use it when you want the user pulled to the overlay, omit it to open quietly. `--background-color #rrggbb` gives the overlay pane its own solid
   background color, independent of the session's own `session background color` (nil = the default theme
-  background); it honors the Settings window translucency, captured when the overlay opens. `--wait` keeps the overlay open after the command exits (press a key
+  background); it honors the Settings window translucency, captured when the overlay opens. `--theme NAME`
+  gives it its own theme the same way — the overlay half of `session theme`, validated against the same
+  catalog (`unknown theme: <name>`) — and `--theme-dark NAME` (which requires `--theme`) makes the overlay
+  track the macOS appearance per side. A `--background-color` still wins over the theme's background. Both
+  are ephemeral with the overlay: nothing persists them and neither reads back on `tree`. `--wait` keeps the overlay open after the command exits (press a key
   to close). `--block` waits for the command to exit and makes agtermctl exit with the command's status
   (cannot combine with `--wait`); the program renders normally — capture its OUTPUT via the program's
   own output file, not the control channel. Returns the overlay's session id. `--target` defaults to

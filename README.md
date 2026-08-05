@@ -178,13 +178,15 @@ Settings (Cmd+,) has six tabs. **General** covers mouse scroll speed and right-c
 
 The theme picker (View ▸ Select Theme…, or the action palette) previews each bundled theme on the open terminals as you move through the list, so you see it before committing. Enter commits and syncs it to Settings; Esc reverts to the one you started on. While following the system appearance, the picker edits the theme for the appearance you are in; the control channel drives both slots with `agtermctl theme set --light NAME --dark NAME` (or either flag alone).
 
+A single pane can also be pinned to its own theme with `agtermctl session theme NAME [--pane left|right|scratch]`, overriding the app-wide one — so a production shell, an agent's split, or the scratch terminal can read as visibly different at a glance. Add `--dark NAME` and that pane tracks the macOS appearance per side, like the global theme does; `--clear` drops the override. The override belongs to the pane slot and is persisted, so a scratch keeps its theme across its own `exit`. Window chrome stays on the app-wide theme.
+
 ## Scripting agterm
 
 `agterm` can be driven from a script over a local unix-domain socket through a companion CLI, `agtermctl`. This is for personal scripting: commands manage workspaces and sessions, inject text, invoke control actions, and subscribe to control events. Terminal output is not streamed; use `session text` when a script needs to read a terminal buffer.
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 74 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 75 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -302,6 +304,8 @@ agtermctl dashboard --mru --auto-size            # ...or fill it from the window
 agtermctl font inc                               # increase the session's (main pane's) font size
 agtermctl font dec --pane right                   # shrink just the split pane's font (--pane left|right|scratch)
 agtermctl theme set --light "Builtin Light" --dark Dracula  # set the light/dark theme slots (--dark none turns following off)
+agtermctl session theme Dracula --pane scratch                 # pin ONE pane to its own theme (--clear drops it)
+agtermctl session overlay open lazygit --theme Dracula          # the overlay pane gets its own theme too
 ```
 
 `session type` types the text as real keystrokes, and every newline is a real Return press — so a trailing newline submits the command, and a multi-line payload runs line by line (a multi-line shell construct like a `for` loop is entered across the shell's continuation prompts and runs as one command). Note the `$'…\n'` quoting: a literal `\n` inside plain single quotes reaches the CLI as two characters, not a newline; use `$'…\n'` or pipe a real newline via `--stdin`. Typing goes to the session's left (main) pane by default; `--pane right` types into the split pane instead (an error when the session has no split), and `--pane scratch` reaches the session's scratch terminal even while it is hidden. `session text` takes the same `--pane`, so an agent can read a hidden scratch's output (e.g. a deploy you ran there) without leaving it open. `font inc|dec|reset` also takes `--pane left|right|scratch`, so you can resize just the split pane's font (an error when there is no split); only the main pane's size is remembered across a restart.

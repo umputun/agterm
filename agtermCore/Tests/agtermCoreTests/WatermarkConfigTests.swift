@@ -230,4 +230,37 @@ struct WatermarkConfigTests {
         let text = WatermarkConfig.oscBackgroundOverlayText(fontSize: nil, windowOpacity: opacity)
         #expect(text == "background-opacity = \(expected)\n")
     }
+
+    @Test func paneThemeEmitsSingleNameOrConditionalPair() {
+        let single = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil, fontSize: nil,
+                                                 theme: ThemeOverride(light: "Dracula"))
+        let pair = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil, fontSize: 14,
+                                               theme: ThemeOverride(light: "Builtin Light", dark: "Dracula"))
+        #expect(single == "theme = Dracula\n")
+        #expect(pair.contains("theme = light:Builtin Light,dark:Dracula\n"))
+        #expect(pair.contains("font-size = 14\n"))
+    }
+
+    @Test func paneThemeRidesTheOSCBackgroundOverlayToo() {
+        // the OSC-11 overlay REPLACES the watermark one, so a themed pane must keep its theme through it.
+        let text = WatermarkConfig.oscBackgroundOverlayText(fontSize: nil, windowOpacity: 0.9,
+                                                            theme: ThemeOverride(light: "Dracula"))
+        #expect(text.contains("theme = Dracula\n"))
+        #expect(text.contains("background-opacity = 0.9\n"))
+    }
+
+    @Test func overlayDropsAThemeNameThatCouldInjectAnotherKey() {
+        // a hand-edited state file reaches emit raw, so the name is re-validated here.
+        let injected = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil, fontSize: nil,
+                                                   theme: ThemeOverride(light: "Dracula\nclipboard-read = allow"))
+        let conditional = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil, fontSize: nil,
+                                                      theme: ThemeOverride(light: "A", dark: "B,c:d"))
+        #expect(injected.isEmpty)
+        #expect(conditional.isEmpty)
+    }
+
+    @Test func noThemeLeavesThePaneOnTheAppTheme() {
+        #expect(!WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil, fontSize: 12)
+            .contains("theme"))
+    }
 }

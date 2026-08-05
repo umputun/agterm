@@ -723,6 +723,32 @@ struct ControlProtocolTests {
         #expect(decoded.background == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsPerPaneThemes() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         theme: ThemeOverride(light: "Dracula"),
+                                         splitTheme: ThemeOverride(light: "Builtin Light", dark: "Dracula"),
+                                         scratchTheme: ThemeOverride(light: "Nord"))
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.theme == ThemeOverride(light: "Dracula"))
+        #expect(node?.theme?.dark == nil)
+        #expect(node?.splitTheme?.dark == "Dracula")
+        #expect(node?.scratchTheme?.light == "Nord")
+    }
+
+    @Test func treeSessionNodeOmitsThemesWhenUnset() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("theme"), "unset pane themes must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.theme == nil)
+        #expect(decoded.splitTheme == nil)
+        #expect(decoded.scratchTheme == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithUnseen() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: false, split: false, unseen: 3)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

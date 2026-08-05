@@ -78,6 +78,8 @@ public protocol ControlActions {
     func closeHud(_ target: String?, window: String?) -> ControlResponse
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
+    func setSessionTheme(_ target: String?, window: String?,
+                         options: ControlSessionThemeOptions) -> ControlResponse
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
     func windowNew(name: String?, minimized: Bool) async -> ControlResponse
     func windowList() -> ControlResponse
@@ -117,18 +119,22 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let wait: Bool
     public let sizePercent: Int?
     public let backgroundColor: String?
+    /// The overlay's own theme (`--theme`, plus `--theme-dark`), nil for the app-wide one. Names are checked
+    /// app-side against the bundled catalog, like `session.theme`.
+    public let theme: ThemeOverride?
     public let follow: Bool
     /// The pane to cover, nil for the session-wide overlay. A pane overlay is always full, so this and
     /// `sizePercent` are mutually exclusive (rejected in the dispatcher).
     public let pane: OverlayPane?
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
-                follow: Bool = false, pane: OverlayPane? = nil) {
+                theme: ThemeOverride? = nil, follow: Bool = false, pane: OverlayPane? = nil) {
         self.command = command
         self.cwd = cwd
         self.wait = wait
         self.sizePercent = sizePercent
         self.backgroundColor = backgroundColor
+        self.theme = theme
         self.follow = follow
         self.pane = pane
     }
@@ -139,6 +145,18 @@ public struct ControlSessionBackgroundOptions: Equatable, Sendable {
 
     public init(watermark: BackgroundWatermark?) {
         self.watermark = watermark
+    }
+}
+
+/// One resolved `session.theme` write: which pane slot, and the override to store (nil = clear). The theme
+/// NAMES are not checked here — only the app target can see the bundled catalog, so it owns that rejection.
+public struct ControlSessionThemeOptions: Equatable, Sendable {
+    public let pane: StatusPane
+    public let theme: ThemeOverride?
+
+    public init(pane: StatusPane, theme: ThemeOverride?) {
+        self.pane = pane
+        self.theme = theme
     }
 }
 
@@ -176,7 +194,7 @@ public struct ControlDispatcher {
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionBackground,
-                .sessionText:
+                .sessionTheme, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
@@ -561,6 +579,13 @@ public struct ControlDispatcher {
             if pane != nil, request.args?.sizePercent != nil {
                 return ControlResponse(ok: false, error: PaneOverlayError.sizePercentConflict)
             }
+            for name in [request.args?.light, request.args?.dark].compactMap({ $0 })
+            where !ThemeOverride.isValidName(name) {
+                return ControlResponse(ok: false, error: "invalid theme name: \(name)")
+            }
+            if request.args?.light == nil, request.args?.dark != nil {
+                return ControlResponse(ok: false, error: "--theme-dark needs --theme")
+            }
             return actions.openSessionOverlay(request.target, window: request.args?.window,
                                               options: ControlSessionOverlayOpenOptions(
                                                 command: command,
@@ -568,6 +593,9 @@ public struct ControlDispatcher {
                                                 wait: request.args?.wait ?? false,
                                                 sizePercent: request.args?.sizePercent,
                                                 backgroundColor: request.args?.color,
+                                                theme: request.args?.light.map {
+                                                    ThemeOverride(light: $0, dark: request.args?.dark)
+                                                },
                                                 follow: request.args?.follow ?? false,
                                                 pane: pane
                                               ))
@@ -603,6 +631,8 @@ public struct ControlDispatcher {
             }
         case .sessionBackground:
             return dispatchSessionBackground(request)
+        case .sessionTheme:
+            return dispatchSessionTheme(request)
         case .sessionText:
             return dispatchSessionText(request)
         default:
@@ -743,6 +773,35 @@ public struct ControlDispatcher {
         }
         return actions.setSessionBackground(request.target, window: request.args?.window,
                                             options: ControlSessionBackgroundOptions(watermark: watermark))
+    }
+
+    /// `session.theme`: `mode` is `set` (a `light` name, optionally with `dark`) or `clear`. Every set is
+    /// WHOLESALE — a set without `dark` pins the pane to one theme — so there is no `--dark none` to clear
+    /// one side of a pair, unlike the app-wide `theme.set`.
+    private func dispatchSessionTheme(_ request: ControlRequest) -> ControlResponse {
+        let pane: StatusPane?
+        switch parsePane(request.args?.pane) {
+        case .pane(let parsed): pane = parsed
+        case .rejected(let rejection): return rejection
+        }
+        let theme: ThemeOverride?
+        switch request.args?.mode {
+        case "set", .none:
+            guard let light = request.args?.light, !light.isEmpty else {
+                return ControlResponse(ok: false, error: "session.theme requires a theme name")
+            }
+            for name in [light, request.args?.dark].compactMap({ $0 })
+            where !ThemeOverride.isValidName(name) {
+                return ControlResponse(ok: false, error: "invalid theme name: \(name)")
+            }
+            theme = ThemeOverride(light: light, dark: request.args?.dark)
+        case "clear":
+            theme = nil
+        default:
+            return ControlResponse(ok: false, error: "invalid theme mode: \(request.args?.mode ?? "") (set|clear)")
+        }
+        return actions.setSessionTheme(request.target, window: request.args?.window,
+                                       options: ControlSessionThemeOptions(pane: pane ?? .left, theme: theme))
     }
 
     private func dispatchSessionText(_ request: ControlRequest) -> ControlResponse {

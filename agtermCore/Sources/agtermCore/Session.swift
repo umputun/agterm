@@ -45,6 +45,12 @@ public enum OverlayPane: String, CaseIterable, Codable, Sendable {
     public var paneZoomSurface: TerminalZoomSurface {
         self == .left ? .primary : .split
     }
+
+    /// The covered pane in the wider `StatusPane` vocabulary, which adds `scratch`. Bridges to the
+    /// per-pane theme/status accessors, which are keyed by that type.
+    public var statusPane: StatusPane {
+        self == .left ? .left : .right
+    }
 }
 
 /// One pane's ephemeral overlay — the session-scoped overlay's fields minus the size percent, which a
@@ -59,14 +65,19 @@ public struct PaneOverlay: Equatable, Sendable {
     /// The overlay's own solid background as `#rrggbb`, nil for the theme default. Per-surface, so two
     /// pane overlays open at once may carry different colors.
     public var backgroundColor: String?
+    /// The overlay's own theme (`--theme`), nil for the app-wide one. Per-surface like `backgroundColor`
+    /// and ephemeral with it — an overlay is never restored, so nothing persists this.
+    public var theme: ThemeOverride?
     /// Whether the overlay holds its surface after the command exits (libghostty's "press any key to
     /// close"), instead of closing.
     public var wait: Bool
 
-    public init(command: String, cwd: String? = nil, backgroundColor: String? = nil, wait: Bool = false) {
+    public init(command: String, cwd: String? = nil, backgroundColor: String? = nil,
+                theme: ThemeOverride? = nil, wait: Bool = false) {
         self.command = command
         self.cwd = cwd
         self.backgroundColor = backgroundColor
+        self.theme = theme
         self.wait = wait
     }
 }
@@ -165,6 +176,47 @@ public final class Session: Identifiable {
     /// after a global config reload. Persisted, so it survives a relaunch (`.text` re-renders its PNG).
     @ObservationIgnored public var backgroundWatermark: BackgroundWatermark?
 
+    /// Per-pane terminal theme overrides — main, split, and scratch — nil for the app-wide theme. Applied
+    /// app-side through the same per-surface config overlay as `backgroundWatermark`, and persisted, so a
+    /// pane keeps its theme across a relaunch and across the scratch's own exit/respawn. Keyed by slot
+    /// rather than by surface for exactly that reason. Read with `themeOverride(for:)`.
+    @ObservationIgnored public var theme: ThemeOverride?
+    @ObservationIgnored public var splitTheme: ThemeOverride?
+    @ObservationIgnored public var scratchTheme: ThemeOverride?
+
+    /// One pane slot's surface, nil when that pane is unrealized (no split, no scratch, or not yet mounted).
+    /// The `StatusPane` counterpart to `OverlayPane`'s slot key paths; callers that must REFUSE an absent
+    /// pane (`session.type`, `.text`) keep their own per-command error text.
+    public func surface(for pane: StatusPane) -> (any TerminalSurface)? {
+        switch pane {
+        case .left: return surface
+        case .right: return splitSurface
+        case .scratch: return scratchSurface
+        }
+    }
+
+    /// The theme override owned by one pane slot; nil when that pane follows the app theme.
+    public func themeOverride(for pane: StatusPane) -> ThemeOverride? {
+        switch pane {
+        case .left: return theme
+        case .right: return splitTheme
+        case .scratch: return scratchTheme
+        }
+    }
+
+    /// Writes one pane slot's theme override. Returns false when the value is unchanged, so the caller can
+    /// skip the persist + surface re-apply.
+    @discardableResult
+    public func setThemeOverride(_ override: ThemeOverride?, for pane: StatusPane) -> Bool {
+        guard themeOverride(for: pane) != override else { return false }
+        switch pane {
+        case .left: theme = override
+        case .right: splitTheme = override
+        case .scratch: scratchTheme = override
+        }
+        return true
+    }
+
     /// A command to run as the session's process instead of the login shell (kitty's `launch <cmd>`, ghostty's
     /// `command`), set via `session.new --command`. The surface factory reads it once; the session closes when
     /// the command exits. Persisted, so a command session — e.g. an `ssh …` shortcut, which escapes the
@@ -230,6 +282,10 @@ public final class Session: Identifiable {
     /// `session.overlay.open --background-color`, read by the factory at creation, cleared on close, never
     /// persisted. Independent of `backgroundWatermark`: the overlay surface is not wired to the session.
     @ObservationIgnored public var overlayBackgroundColor: String?
+
+    /// The session-wide overlay's own theme (`session.overlay.open --theme`), nil for the app-wide one —
+    /// the loose-field twin of `PaneOverlay.theme`, ephemeral exactly like `overlayBackgroundColor`.
+    @ObservationIgnored public var overlayTheme: ThemeOverride?
 
     /// Whether the overlay keeps its surface after the command exits, showing libghostty's "press any key to
     /// close" prompt with the final output, instead of closing. Read by the factory at creation.

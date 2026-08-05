@@ -165,7 +165,8 @@ extension WindowContentView {
                              makeSurface: pane == .left ? makeSurface : makeSplitSurface,
                              isActive: gates.focusable && focused && !gates.overlaid && !covered,
                              deckVisible: gates.visible && !covered)
-                    .overlay { paneDim(!focused, session: session) }
+                    .overlay { paneDim(!focused, session: session,
+                                       color: washColor(for: session, pane: pane.statusPane)) }
                     .modifier(PaneOverlayCover(covered: covered))
                     .id(pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split")
             } else {
@@ -214,7 +215,10 @@ extension WindowContentView {
                         // terminal, so the window backing shows through); a HUD keeps the backing but drops
                         // the shadow for a stronger border, so it reads as part of the terminal. The CHAIN is
                         // constant across all three, only the parameters change.
-                        .background(style.framed ? terminalColor : Color.clear)
+                        .background(style.framed
+                            ? overlaySurfaceColor(backgroundColor: session.overlayBackgroundColor,
+                                                  theme: session.overlayTheme)
+                            : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius))
                         .overlay(
                             RoundedRectangle(cornerRadius: style.cornerRadius)
@@ -256,7 +260,11 @@ extension WindowContentView {
                     TerminalView(session: session, surfaceKeyPath: pane.surfaceSlot,
                                  makeSurface: { makeOverlaySurface($0, pane) },
                                  isActive: isActive, deckVisible: deckVisible)
-                        .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
+                        .overlay {
+                            paneDim(!focused, session: session,
+                                    color: overlaySurfaceColor(backgroundColor: session.paneOverlay(pane)?.backgroundColor,
+                                                               theme: session.paneOverlay(pane)?.theme))
+                        }
                         .id("\(session.id.uuidString)-overlay-\(pane.rawValue)")
                 }
             }
@@ -270,22 +278,26 @@ extension WindowContentView {
     /// background: a translucent wash of the terminal background, so background pixels blend bg→bg and text
     /// pixels text→bg. Strength 0 renders nothing; clicks pass through, so it stays focusable. Suppressed
     /// while a floating panel washes the whole backdrop, which already covers this pane — the two would
-    /// stack to a stronger mute here than on the pane beside it. `color` overrides the blend target for a
-    /// surface that does not render the session's background; the pane itself takes the default.
-    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session, color: Color? = nil) -> some View {
+    /// stack to a stronger mute here than on the pane beside it. `color` is the blend target — what the
+    /// covered surface actually renders, which each caller resolves for its own surface kind.
+    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session, color: Color) -> some View {
         if dimmed, muteWashOpacity > 0, !backdropWashActive(session: session) {
-            (color ?? washColor(for: session)).opacity(muteWashOpacity).allowsHitTesting(false)
+            color.opacity(muteWashOpacity).allowsHitTesting(false)
         }
     }
 
-    /// The blend target for a PANE OVERLAY's wash: its own `--background-color` when it set one, else the
-    /// theme. An overlay surface is sessionless and never inherits the session's background — only the
-    /// scratch does, through `watermarkSession` — so `washColor(for:)` would blend bg→OTHER-bg and shift
-    /// the background instead of fading the text. Gated on the renderer's own hex predicate, so the wash
-    /// tracks exactly what `applyOverlayBackgroundColor` painted rather than a value it rejected.
-    private func overlayWashColor(_ session: Session, pane: OverlayPane) -> Color {
-        guard let hex = session.paneOverlay(pane)?.backgroundColor, WatermarkConfig.isValidColorHex(hex),
-              let nsColor = NSColor(agtermHex: hex) else { return terminalColor }
+    /// The background an OVERLAY surface renders: its own `--background-color` when it set one, else its
+    /// own `--theme`, else the app theme — the precedence `applyOverlaySurfaceConfig` emits. Gated on the
+    /// renderer's own hex predicate, so a rejected color falls through to the theme here too.
+    ///
+    /// Both readers need it because an overlay surface is sessionless and never inherits the session's
+    /// background — only the scratch does, through `watermarkSession`. Its wash would otherwise blend
+    /// bg→OTHER-bg and shift the background instead of fading the text, and a theme-only floating panel
+    /// under translucency shows this SwiftUI backing directly: with no `--background-color` the overlay
+    /// config carries no `background-opacity` line, so the surface stays at the base config's zero.
+    private func overlaySurfaceColor(backgroundColor: String?, theme: ThemeOverride?) -> Color {
+        guard let hex = backgroundColor, WatermarkConfig.isValidColorHex(hex),
+              let nsColor = NSColor(agtermHex: hex) else { return themeWashColor(theme) }
         return Color(nsColor: nsColor)
     }
 

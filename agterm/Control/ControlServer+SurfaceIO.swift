@@ -123,6 +123,27 @@ extension ControlServer {
         }
     }
 
+    /// Pins one pane to its own theme, or clears the override (`mode set|clear`): reject an unknown name
+    /// against the same bundled catalog `theme.set` uses, persist the override on the session so it rides
+    /// `SessionSnapshot`, then re-apply that pane's per-surface config. An unrealized pane — a split not yet
+    /// opened, a scratch between exits — keeps the override and picks it up on creation. Returns the session id.
+    func setSessionTheme(_ target: String?, window: String?,
+                         options: ControlSessionThemeOptions) -> ControlResponse {
+        if let unknown = unknownThemeName(options.theme) { return unknown }
+        return resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            // gate on a real change for the same reason `setSessionBackground` does: each apply retains a
+            // per-surface config freed only on teardown, so a scripted set-loop would leak owned configs.
+            guard store.setThemeOverride(options.theme, pane: options.pane, forSession: id) else {
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
+            (session.surface(for: options.pane) as? GhosttySurfaceView)?.applyWatermarkFromSession()
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Apply a session's watermark spec to its realized main + split + scratch surfaces. A never-realized one
     /// (nil) is skipped — it applies the spec itself on creation (`GhosttySurfaceView.createSurface`).
     private func applyWatermark(to session: Session) {

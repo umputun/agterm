@@ -1,6 +1,9 @@
-/// Host-free: formats a `BackgroundWatermark` into one surface's ghostty config-overlay text, plus the
-/// `fit`/`position` validation the CLI and control server share. No AppKit — `.text` rasterization lives in
-/// the app target, so this only emits the `background-image*` lines once a PNG path is known.
+/// Host-free: builds one surface's ghostty config-overlay text — its `BackgroundWatermark`, its
+/// `ThemeOverride`, and the font-size line that keeps a pane's zoom across a re-apply — plus the
+/// `fit`/`position` validation the CLI and control server share. Every per-surface config in the app target
+/// goes through here, so a new pane-scoped key belongs in these builders rather than a parallel one. No
+/// AppKit — `.text` rasterization lives in the app target, so this only emits the `background-image*` lines
+/// once a PNG path is known.
 public enum WatermarkConfig {
     /// The libghostty `background-image-fit` values, from `BackgroundWatermark.Fit`, for error messages.
     public static var validFits: [String] { BackgroundWatermark.Fit.allCases.map(\.rawValue) }
@@ -60,7 +63,8 @@ public enum WatermarkConfig {
     /// Values are emitted RAW: ghostty takes the whole line remainder as the value, so a path with spaces
     /// works unquoted, matching `AppSettings.ghosttyConfigLines()`.
     public static func overlayText(watermark: BackgroundWatermark?, resolvedImagePath: String?,
-                                   fontSize: Double?, windowOpacity: Double = 1) -> String {
+                                   fontSize: Double?, windowOpacity: Double = 1,
+                                   theme: ThemeOverride? = nil) -> String {
         var lines: [String] = []
         // re-validate free text on EMIT: `AppStore.restore` assigns a persisted spec raw, so a hand-edited
         // `workspaces.json` could carry a control-char path or a malformed color. a poisoned value drops the
@@ -78,7 +82,8 @@ public enum WatermarkConfig {
             lines.append("background-image-repeat = \(watermark.repeats == true)")
         }
         if let fontSize { lines.append("font-size = \(formatted(fontSize))") }
-        return lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
+        let body = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
+        return themeLine(theme) + body
     }
 
     /// The per-surface overlay that makes a program's LIVE OSC 11 background visible: a
@@ -90,11 +95,22 @@ public enum WatermarkConfig {
     /// `background` would reach `Termio.changeConfig`, which reseeds the `default` layer from the config on
     /// every surface update; OSC 111 resets the override TO that default, so the reset would no-op and
     /// strand the pane on the program's color after it exits.
-    public static func oscBackgroundOverlayText(fontSize: Double?, windowOpacity: Double) -> String {
+    public static func oscBackgroundOverlayText(fontSize: Double?, windowOpacity: Double,
+                                                theme: ThemeOverride? = nil) -> String {
         let opacity = windowOpacity.isFinite ? min(max(windowOpacity, 0), 1) : 1
         var lines = ["background-opacity = \(formatted(opacity))"]
         if let fontSize { lines.append("font-size = \(formatted(fontSize))") }
-        return lines.joined(separator: "\n") + "\n"
+        return themeLine(theme) + lines.joined(separator: "\n") + "\n"
+    }
+
+    /// The pane's `theme` line, first so the color keys an overlay states itself still win over it. Empty
+    /// without an override, leaving the pane on the app-wide theme from the Settings config layer. Names are
+    /// re-validated on EMIT like the watermark's free text: a persisted override reaches `AppStore.restore`
+    /// raw, so a hand-edited state file could otherwise inject a second key through the config line.
+    private static func themeLine(_ theme: ThemeOverride?) -> String {
+        let valid = ThemeOverride.isValidName
+        guard let theme, valid(theme.light), theme.dark.map(valid) ?? true else { return "" }
+        return "theme = \(theme.configValue)\n"
     }
 
     /// Format a `Double` for a ghostty config value: integral without a trailing `.0` (`14.0` → `14`), else

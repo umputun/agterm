@@ -267,4 +267,28 @@ struct ControlDispatcherOverlayTests {
             .overlayResize(target: "session", window: nil, sizePercent: 60)
         ])
     }
+
+    @Test func overlayOpenCarriesAndValidatesItsOwnTheme() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let opened = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "s1",
+            args: ControlArgs(command: "revdiff", light: "Builtin Light", dark: "Dracula")))
+        let darkAlone = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "s1", args: ControlArgs(command: "revdiff", dark: "Dracula")))
+        let malformed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "s1",
+            args: ControlArgs(command: "revdiff", light: "light:A,dark:B")))
+
+        #expect(opened?.ok == true)
+        #expect(darkAlone == ControlResponse(ok: false, error: "--theme-dark needs --theme"))
+        #expect(malformed == ControlResponse(ok: false, error: "invalid theme name: light:A,dark:B"))
+        let sent = actions.calls.compactMap { call -> ControlSessionOverlayOpenOptions? in
+            if case .overlayOpen(_, _, let options) = call { return options }
+            return nil
+        }
+        #expect(sent.count == 1)
+        #expect(sent.first?.theme == ThemeOverride(light: "Builtin Light", dark: "Dracula"))
+    }
 }
