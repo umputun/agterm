@@ -72,7 +72,10 @@ public final class WindowLibrary {
     /// independent of window reopen semantics.
     public private(set) var recentClosedItems: [RecentClosedItem]
 
-    /// The id of the frontmost on-screen window, mirrored into the index on change.
+    /// The id of the frontmost on-screen window, mirrored into the index on change. Outlives the window
+    /// only when it was the last one closed, so the index records which window the user exited from.
+    /// Resolving it to a live window guards on the store being loaded, so that survivor still reads as
+    /// "none open"; sites that only compare or reassign the raw id are unaffected either way.
     public var frontmostWindowID: UUID?
 
     /// Live per-window stores. `@ObservationIgnored`: read imperatively (scene/control), never by a view.
@@ -392,7 +395,11 @@ public final class WindowLibrary {
         }
         store.scheduleTreeChanged()
         stores[id] = nil
-        if frontmostWindowID == id { frontmostWindowID = activeWindowID }
+        // hand frontmost to another OPEN window, but keep pointing at this one when it was the last:
+        // the persisted `frontmost` is what the next launch's `reopen` fallback picks, and nil there
+        // sends it to `windows.first`. Resolving it to a live window guards on the store being loaded,
+        // so a frontmost id whose window is closed resolves as "none open" exactly as nil did.
+        if frontmostWindowID == id, let next = activeWindowID { frontmostWindowID = next }
         saveIndex()
     }
 
