@@ -680,6 +680,30 @@ final class WindowLibraryTests {
         #expect(persisted.workspaces[0].sessions[0].splitForegroundCommand == nil)
     }
 
+    @Test func midProcessReloadScrubsASplitOnlyCaptureFromDisk() throws {
+        // the write-back gate is an OR over both fields; a snapshot whose only capture is the split pane
+        // must still trigger the rewrite, or a "simplified" gate checking just foregroundCommand would
+        // leave the split's stale argv on disk.
+        let anchor = UUID()
+        let id = UUID()
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a", isSplit: true,
+                                      splitForegroundCommand: ["tail", "-f", "/var/log/x"])
+        try writeWindowFile(anchor, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "open", sessions: [])]))
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        try writeIndex(WindowsIndex(frontmost: anchor, windows: [
+            WindowEntry(id: anchor, name: "open", isOpen: true),
+            WindowEntry(id: id, name: "work", isOpen: false),
+        ]))
+
+        let library = WindowLibrary(directory: directory)
+        _ = try #require(library.loadStore(for: id))
+
+        let persisted = PersistenceStore(directory: directory.appendingPathComponent("windows"),
+                                         fileName: "\(id.uuidString).json").load()
+        #expect(persisted.workspaces[0].sessions[0].splitForegroundCommand == nil)
+    }
+
     @Test func orphanRecoveryDropsCapturedCommandsButArmsTheStickyOverride() throws {
         // recovery cannot tell a deliberately-closed window's surviving file from one open at the index
         // loss, so the one-shot capture must not replay there — while the sticky `session.restore`
