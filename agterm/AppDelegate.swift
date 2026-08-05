@@ -317,7 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // restore-running-command: capture each pane's live foreground command BEFORE the snapshot save so a
         // restored pane can re-run it. A force-quit/crash skips it (sessions + cwd still restore).
         if settingsModel?.settings.restoreRunningCommand == true, let library {
-            captureForegroundCommands(library: library)
+            Self.captureForegroundCommands(sessions: library.allOpenSessions())
         }
         library?.finalizeAllPendingCloses()
         // flush the stores + index: cwd changes since the last structural mutation aren't auto-persisted.
@@ -330,10 +330,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Capture every open pane's foreground command (main + split) into its `Session` fields for the snapshot
     /// save. `ForegroundProcess` returns nil for a pane at its shell prompt, so plain shells stay plain.
+    /// Session-list capture, shared with the window-close path: `WindowAccessor`'s `willClose` captures a
+    /// closing window's sessions BEFORE it tears their surfaces down — the quit-time capture (which calls
+    /// this with every open session) runs too late for a close-the-last-window exit (teardown precedes
+    /// `applicationWillTerminate`), which silently dropped every running command.
     @MainActor
-    private func captureForegroundCommands(library: WindowLibrary) {
+    static func captureForegroundCommands(sessions: [Session]) {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
-        for session in library.allOpenSessions() {
+        for session in sessions {
             if let view = session.surface as? GhosttySurfaceView {
                 session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
             }

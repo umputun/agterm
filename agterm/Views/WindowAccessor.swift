@@ -144,7 +144,19 @@ struct WindowAccessor: NSViewRepresentable {
                     // flush cwd drift before dropping the store — AppStore doesn't save on a live `cd`, so a
                     // reopened window would load a stale snapshot. skipped once the window is no longer open:
                     // a delete already dropped the store and removed the per-window file, so this resurrects it.
-                    if library.isOpen(windowID) { store.save() }
+                    if library.isOpen(windowID) {
+                        // restore-running-command: capture the panes' live foreground commands NOW, while the
+                        // surfaces below are still alive — a close-the-last-window exit reaches
+                        // `applicationWillTerminate`'s capture only AFTER this teardown, which silently
+                        // dropped every running command from the saved state. Skipped during app termination:
+                        // `applicationWillTerminate` has ALREADY captured, and a re-read here could overwrite
+                        // a good value with nil for a foreground that exited in the meantime (the capture
+                        // assigns unconditionally, and a dead pid reads as nil).
+                        if !library.isTerminating, GhosttyApp.shared.restoreRunningCommand {
+                            AppDelegate.captureForegroundCommands(sessions: store.workspaces.flatMap(\.sessions))
+                        }
+                        store.save()
+                    }
                     for session in store.workspaces.flatMap(\.sessions) {
                         session.surface?.teardown()
                         session.splitSurface?.teardown()

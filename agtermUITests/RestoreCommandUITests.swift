@@ -306,6 +306,27 @@ final class RestoreCommandUITests: XCTestCase {
                       "with no override pinned, the split pane re-runs its captured foreground command")
     }
 
+    // Exiting by closing the LAST window must capture the running command like ⌘Q: the close path tears
+    // surfaces down in `willClose` BEFORE the auto-quit reaches `applicationWillTerminate`, so the
+    // quit-time capture alone finds no surfaces and silently dropped every running command — the
+    // `willClose` capture (skipped only under `isTerminating`) is what re-runs `tee` here.
+    func testWindowCloseExitCapturesRunningCommand() throws {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        runTeeMarker()
+
+        try FileManager.default.removeItem(at: marker)
+        let windowID = try firstWindowID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(windowID)"}"#)["ok"] as? Bool,
+                       true, "closing the last window begins the auto-quit exit")
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15),
+                      "the app must auto-quit after its last window closes — relaunching over a hung exit would fake the capture")
+        app.launchForUITest()
+
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "a close-the-window exit must capture the running `tee` and re-run it on relaunch")
+    }
+
     // a window reopen reloads its store through the same `restore(from:)` the bootstrap uses, but must NOT
     // arm: that would execute every sticky override the moment a user closes and reopens a window.
     func testWindowReopenDoesNotArmTheOverride() throws {
