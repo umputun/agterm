@@ -22,6 +22,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code |
 | [claude-recap](claude-recap/) | one key lists what the Claude Code run in a session was working on | 0.10.0, zsh, jq, Claude Code |
 | [new-session-in-workspace](new-session-in-workspace/) | pick a workspace with fzf and start a session in it | 0.8.0, jq, fzf |
+| [annotate-claude-replies](annotate-claude-replies/) | mark up Claude's answers in revdiff and send the notes back | 0.13.0, revdiff, python3, Claude Code |
 | [project-launcher](project-launcher/) | pick a project anywhere — or type "project + prompt" — and get a session in its workspace | 0.19.0, jq |
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 
