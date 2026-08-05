@@ -40,7 +40,8 @@ public struct InterfaceMetrics: Equatable, Sendable {
 
     /// Clearance kept between a panel edge and the window edge.
     public static let panelMargin: Double = 16
-    /// The width below which a panel stops shrinking, whatever the window leaves.
+    /// The width a panel prefers not to shrink below when the sidebar crowds it. The window itself still
+    /// wins: a window narrower than this plus both margins yields less, since overflowing is worse.
     public static let minimumPanelWidth: Double = 280
 
     /// The panel width that actually fits: the scaled ideal, shrunk to what the terminal area leaves once

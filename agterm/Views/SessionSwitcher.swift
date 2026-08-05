@@ -188,7 +188,7 @@ struct SessionSwitcherOverlay: View {
                                                        maxRowsHeight: maxRowsHeight).map { CGFloat($0) })
             .scrollBounceBehavior(.basedOnSize)
             .onPreferenceChange(RowsHeightKey.self) { height in
-                MainActor.assumeIsolated { rowsHeight = height }
+                rowsHeight = height
             }
             .onChange(of: switcher.index) { _, index in proxy.scrollTo(index) }
         }
