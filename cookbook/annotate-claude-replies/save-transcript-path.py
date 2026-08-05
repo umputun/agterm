@@ -32,7 +32,7 @@ def main() -> int:
 
     try:
         payload = json.load(sys.stdin)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a Stop hook must never fail a turn, whatever arrives on stdin
         return 0
     if not isinstance(payload, dict):
         return 0

@@ -148,7 +148,7 @@ def demote_headings(body: str) -> list[str]:
     out, fenced = [], False
     for line in body.splitlines():
         stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             fenced = not fenced
         elif not fenced and stripped.startswith("#"):
             hashes = len(stripped) - len(stripped.lstrip("#"))
