@@ -102,23 +102,26 @@ paths:
   libghostty diagnostics across all sources, clear all session zoom, post appearance change, and notify
   non-zero diagnostics. A config-directory change reloads both co-located files. Launch also reports
   cached diagnostics.
-- **Restore running commands is opt-in, and replay is launch-only.** Capture runs at two points through
-  the same `AppDelegate.captureForegroundCommands`: `applicationWillTerminate` before `saveAllOpen()`,
-  and each window's `willClose` before its surface teardown (skipped under `isTerminating`, where the
-  quit-time capture already ran) — the second is what preserves commands when the exit is
-  close-the-last-window, whose teardown precedes `applicationWillTerminate`, and it also fires on a
-  non-last window close. Argv comes from `ghostty_surface_foreground_pid`, `sysctl(KERN_PROCARGS2)`,
+- **Restore running commands is opt-in, and both capture and replay are exit-scoped.** Capture runs at
+  two points through the same `AppDelegate.captureForegroundCommands`: `applicationWillTerminate` before
+  `saveAllOpen()`, and the LAST window's `willClose` before its surface teardown (guarded by
+  `openIDs() == [windowID]` and skipped under `isTerminating`, where the quit-time capture already ran)
+  — the second is what preserves commands when the exit is close-the-last-window, whose teardown
+  precedes `applicationWillTerminate`.
+  A NON-last window close captures nothing: such a capture has no correct consumer (mid-run reopen is
+  gated below, and a launch restore can't tell that window's file from one open at exit, so the stale
+  argv could replay via the never-windowless reopen fallback). Argv comes from `ghostty_surface_foreground_pid`, `sysctl(KERN_PROCARGS2)`,
   and host-free parsing. Capture no hidden split. A known shell with only flags is idle and omitted;
   scripts/payload args remain, including `/bin/sh <script>`. Strip login `-` before shell recognition.
   Force quit preserves snapshots/cwd but skips command capture. Replay arms ONLY on a launch restore:
   `session(from:launchRestore:)` copies `foregroundCommand`/`splitForegroundCommand` (like the pending
   override) only under `launchRestore`, so a mid-run window reopen or Reopen Closed Item comes back a
   plain shell.
-  A mid-run reopen also REWRITES the window snapshot when it carried captures
-  (`WindowLibrary.loadStore`), so the stale argv cannot survive a force-quit into the next launch;
-  and `recoverOrphanedWindows` drops captures from every recovered window (a surviving file for a
-  deliberately-closed window is indistinguishable from an open one, and a corrupt index must not
-  re-execute a closed window's last command) while the sticky override still arms.
+  Defense-in-depth against STALE files (written by older builds, or an exit capture resurrected
+  abnormally): a mid-run reopen REWRITES the window snapshot when it carried captures
+  (`WindowLibrary.loadStore`), and `recoverOrphanedWindows` drops captures from every recovered window
+  (a corrupt index must not re-execute a closed window's last command) while the sticky override
+  still arms.
 - Restore only when the toggle is on and basename is absent from user
   `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. Feed captured argv once through
   shell-quoted `config.initial_input` so exit returns to the shell, then nil it. Only one foreground

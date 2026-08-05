@@ -152,7 +152,12 @@ struct WindowAccessor: NSViewRepresentable {
                         // `applicationWillTerminate` has ALREADY captured, and a re-read here could overwrite
                         // a good value with nil for a foreground that exited in the meantime (the capture
                         // assigns unconditionally, and a dead pid reads as nil).
-                        if !library.isTerminating, GhosttyApp.shared.restoreRunningCommand {
+                        // Scoped to the app-exit close (`openIDs() == [windowID]`, read before `closeWindow`
+                        // runs): a non-last-window capture has no correct consumer — a mid-run reopen is
+                        // gated, and the launch restore can't tell this window's file from one open at exit,
+                        // so its stale argv could replay via the never-windowless reopen fallback.
+                        if !library.isTerminating, library.openIDs() == [windowID],
+                           GhosttyApp.shared.restoreRunningCommand {
                             AppDelegate.captureForegroundCommands(sessions: store.workspaces.flatMap(\.sessions))
                         }
                         store.save()

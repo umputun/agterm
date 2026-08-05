@@ -958,11 +958,11 @@ public final class AppStore {
     }
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
-    /// allowed to arm anything executable: the captured `foregroundCommand`/`splitForegroundCommand` (the
-    /// window-close capture persists them on ANY window close, so a mid-run reopen would otherwise replay a
-    /// live command without any quit) and the persisted `restoreCommand`, copied into the transient
-    /// `pendingRestoreCommand` the surface factory consumes. It defaults to false so any other rebuild
-    /// (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
+    /// allowed to arm anything executable: the captured `foregroundCommand`/`splitForegroundCommand`
+    /// (persisted only by an app-exit capture, but a stale file could still carry one — a mid-run reopen
+    /// must never replay a command without any quit) and the persisted `restoreCommand`, copied into the
+    /// transient `pendingRestoreCommand` the surface factory consumes. It defaults to false so any other
+    /// rebuild (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
     ///
     /// A split hidden at the last quit is NOT rebuilt (`hasSplit` follows `isSplit`), so its pinned override
     /// describes a pane that no longer exists and is DROPPED here, the rule `closeSplit` applies when a pane

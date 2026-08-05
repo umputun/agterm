@@ -569,9 +569,9 @@ public final class WindowLibrary {
         for info in infos {
             guard let store = loadStore(for: info.id, launchRestore: true) else { continue }
             // recovery cannot tell a deliberately-closed window's surviving file from one open at the
-            // loss (per-window snapshots carry no open marker), and the window-close capture persists a
-            // live command for ANY close — so replaying here could re-execute a command the user last
-            // saw closed. Drop the one-shot captures and persist; the sticky `session.restore` override
+            // loss (per-window snapshots carry no open marker), and a stale file — written by an older
+            // build, or an exit capture resurrected abnormally — may carry a command the user last saw
+            // closed. Drop the one-shot captures and persist; the sticky `session.restore` override
             // stays armed (the user pinned it to fire on every restart).
             var stripped = false
             for session in store.workspaces.flatMap(\.sessions)
