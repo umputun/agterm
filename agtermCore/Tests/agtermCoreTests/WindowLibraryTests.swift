@@ -659,20 +659,28 @@ final class WindowLibraryTests {
         // override (pinned to fire every restart) still arms.
         let id = UUID()
         let sessionID = UUID()
+        let splitOnlyID = UUID()
         let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
                                       foregroundCommand: ["ssh", "prod"],
                                       restoreCommand: "claude --resume abc")
-        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        // a session whose ONLY capture is the split pane exercises the other half of the strip condition.
+        let splitOnly = SessionSnapshot(id: splitOnlyID, customName: nil, cwd: "/b", isSplit: true,
+                                        splitForegroundCommand: ["tail", "-f", "/var/log/x"])
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work",
+                                                                        sessions: [session, splitOnly])]))
         // no index at all -> bootstrap falls through to recoverOrphanedWindows
 
         let library = WindowLibrary(directory: directory)
         let recovered = try #require(library.store(for: id)?.session(withID: sessionID))
         #expect(recovered.foregroundCommand == nil)
         #expect(recovered.pendingRestoreCommand == "claude --resume abc")
+        let recoveredSplitOnly = try #require(library.store(for: id)?.session(withID: splitOnlyID))
+        #expect(recoveredSplitOnly.splitForegroundCommand == nil)
 
         let persisted = PersistenceStore(directory: directory.appendingPathComponent("windows"),
                                          fileName: "\(id.uuidString).json").load()
         #expect(persisted.workspaces[0].sessions[0].foregroundCommand == nil)
+        #expect(persisted.workspaces[0].sessions[1].splitForegroundCommand == nil)
     }
 
     @Test func loadStoreUnknownIdReturnsNil() {
