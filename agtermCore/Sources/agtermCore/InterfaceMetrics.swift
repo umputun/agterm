@@ -33,7 +33,43 @@ public struct InterfaceMetrics: Equatable, Sendable {
         self.scale = scale
     }
 
-    /// A default-anchored panel length at the current size: `scaled(520)` gives the palette's panel width,
-    /// so a larger font shows the same number of rows and truncates no more titles than at 13pt.
+    /// A default-anchored panel length at the current size: `scaled(520)` gives the palette's panel width
+    /// before it is fitted to the window, so a larger font shows the same number of rows and truncates no
+    /// more titles than at 13pt — as far as `fittedPanelWidth` can grant.
     public func scaled(_ length: Double) -> Double { (length * scale).rounded() }
+
+    /// Clearance kept between a panel edge and the window edge.
+    public static let panelMargin: Double = 16
+    /// The width below which a panel stops shrinking, whatever the window leaves.
+    public static let minimumPanelWidth: Double = 280
+
+    /// The panel width that actually fits: the scaled ideal, shrunk to what the terminal area leaves once
+    /// the sidebar and the margins are taken out, and never past the window itself. Both the scaled width
+    /// and the centering offset grow without bound on their own, and they compound — at the 13pt default a
+    /// 220pt sidebar clips the 520pt panel in any window under 741pt, which the 640pt window minimum
+    /// allows.
+    public func fittedPanelWidth(idealAtDefault: Double, windowWidth: Double, terminalAreaInset: Double) -> Double {
+        let ceiling = max(0, windowWidth - 2 * Self.panelMargin)
+        let fitsTerminalArea = windowWidth - terminalAreaInset - 2 * Self.panelMargin
+        return min(min(scaled(idealAtDefault), max(Self.minimumPanelWidth, fitsTerminalArea)), ceiling)
+    }
+
+    /// How far right to shift a panel of `width` so it centers over the terminal area instead of the whole
+    /// window. Half the inset, except where that would push the right edge past the window: the panel is
+    /// centered, so its right edge sits at `(windowWidth + width) / 2 + offset`, and capping the offset at
+    /// `(windowWidth - width) / 2` is exactly the condition that keeps it inside. A too-narrow window
+    /// therefore degrades to the old whole-window centering rather than to a clipped panel.
+    public func panelOffset(width: Double, windowWidth: Double, terminalAreaInset: Double) -> Double {
+        max(0, min(terminalAreaInset / 2, (windowWidth - width) / 2))
+    }
+
+    /// The height a panel may occupy below its top inset, so a scaled panel cannot run off the bottom.
+    /// The palette's result list is a `ScrollView` and absorbs this by scrolling; the switcher's row stack
+    /// needs its own scroll container to do the same.
+    public func fittedPanelHeight(windowHeight: Double, topFraction: Double) -> Double {
+        max(Self.minimumPanelHeight, windowHeight * (1 - topFraction) - Self.panelMargin)
+    }
+
+    /// The height below which a panel stops shrinking; roughly three default rows plus the search field.
+    public static let minimumPanelHeight: Double = 160
 }

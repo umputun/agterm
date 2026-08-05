@@ -106,9 +106,11 @@ struct CommandPalette: View {
     private let metrics = CommandPalette.resolvedMetrics()
 
     /// The panel width and results height at the 13pt default, scaled by `metrics` so a larger font shows
-    /// the same rows and truncates no more titles.
+    /// the same rows and truncates no more titles, then fitted to the window.
     private static let panelWidthAtDefaultFontSize: Double = 520
     private static let resultsHeightAtDefaultFontSize: Double = 320
+    /// How far down the window the panel starts.
+    private static let topInsetFraction: Double = 0.12
 
     /// `initialQuery` seeds the search field for an explicit picker: the caller's `--query` opens the
     /// palette already filtered, since `.onAppear` runs the first `updateFiltered()` against it.
@@ -193,6 +195,9 @@ struct CommandPalette: View {
 
     var body: some View {
         GeometryReader { geo in
+            let width = metrics.fittedPanelWidth(idealAtDefault: Self.panelWidthAtDefaultFontSize,
+                                                 windowWidth: geo.size.width,
+                                                 terminalAreaInset: terminalAreaInset)
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
                     .contentShape(Rectangle())
@@ -200,9 +205,12 @@ struct CommandPalette: View {
                     .accessibilityElement()
                     .accessibilityIdentifier(explicitItems == nil ? "palette-scrim" : "pick-scrim")
                 panel
-                    .frame(width: metrics.scaled(Self.panelWidthAtDefaultFontSize))
-                    .padding(.top, geo.size.height * 0.12)
-                    .offset(x: terminalAreaInset / 2)
+                    .frame(width: width)
+                    .frame(maxHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
+                                                                topFraction: Self.topInsetFraction))
+                    .padding(.top, geo.size.height * Self.topInsetFraction)
+                    .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
+                                                   terminalAreaInset: terminalAreaInset))
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

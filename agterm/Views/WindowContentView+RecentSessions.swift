@@ -66,7 +66,7 @@ extension WindowContentView {
             }
         }
         .padding(6)
-        .frame(width: 320)
+        .frame(width: GhosttyApp.shared.interfaceMetrics.scaled(320))
         .background(terminalColor)
         .presentationBackground(terminalColor)
     }
@@ -164,7 +164,7 @@ extension WindowContentView {
             }
         }
         .padding(6)
-        .frame(width: 320)
+        .frame(width: GhosttyApp.shared.interfaceMetrics.scaled(320))
         .background(terminalColor)
         .presentationBackground(terminalColor)
     }

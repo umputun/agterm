@@ -128,8 +128,10 @@ struct SessionSwitcherOverlay: View {
     /// Ctrl-Tab, so it never renders a stale size.
     private let metrics = SessionSwitcherOverlay.resolvedMetrics()
 
-    /// The panel width at the 13pt default, scaled by `metrics`.
+    /// The panel width at the 13pt default, scaled by `metrics` and then fitted to the window.
     private static let panelWidthAtDefaultFontSize: Double = 460
+    /// How far down the window the panel starts.
+    private static let topInsetFraction: Double = 0.12
 
     private static func resolvedMetrics() -> InterfaceMetrics {
         GhosttyApp.shared.interfaceMetrics
@@ -137,22 +139,38 @@ struct SessionSwitcherOverlay: View {
 
     var body: some View {
         GeometryReader { geo in
+            let width = metrics.fittedPanelWidth(idealAtDefault: Self.panelWidthAtDefaultFontSize,
+                                                 windowWidth: geo.size.width,
+                                                 terminalAreaInset: terminalAreaInset)
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
                 panel
-                    .frame(width: metrics.scaled(Self.panelWidthAtDefaultFontSize))
-                    .padding(.top, geo.size.height * 0.12)
-                    .offset(x: terminalAreaInset / 2)
+                    .frame(width: width)
+                    .frame(maxHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
+                                                                topFraction: Self.topInsetFraction))
+                    .padding(.top, geo.size.height * Self.topInsetFraction)
+                    .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
+                                                   terminalAreaInset: terminalAreaInset))
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
+    /// The rows scroll rather than overflow: ten candidates at a large interface size want more height than
+    /// a short window has, and the stack has no other way to give. `scrollTo` keeps the cycling selection
+    /// visible, which is the whole point of the overlay.
     private var panel: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(switcher.candidates.enumerated()), id: \.element) { position, id in
-                row(id, selected: position == switcher.index)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(switcher.candidates.enumerated()), id: \.element) { position, id in
+                        row(id, selected: position == switcher.index)
+                            .id(position)
+                    }
+                }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: switcher.index) { _, index in proxy.scrollTo(index) }
         }
         .padding(6)
         .background(panelBackground, in: RoundedRectangle(cornerRadius: 12))

@@ -32,8 +32,11 @@ paths:
   `interfaceFontSize` drives the palette/picker, the session switcher, and the title-bar popover rows
   that share `SessionSwitcherRow`; `InterfaceMetrics` derives the secondary (subtitle/badge) and
   shortcut sizes plus the panel scale from it, anchored so 13 reproduces the previously hardcoded
-  `.caption`/`.callout` and the 520x320 palette, with derived text floored at 8pt.
-  Icons/status glyphs stay fixed for both.
+  `.caption`/`.callout` and the 520x320 palette, with derived text floored at 8pt. Panel widths and
+  heights are then fitted to the window (`fittedPanelWidth`, `panelOffset`, `fittedPanelHeight`): the
+  scaled width and the centering offset each grow unbounded and compound, and a panel wider than the
+  window less the inset clips at the right edge. Status glyphs stay fixed for both settings; the
+  palette's search icon scales with the field it sits in.
   Unfocused-terminal mute and sidebar tint are 0...10 with neutral/default 5.
   `muteOpacity` maps 0/5/10 to 0/0.4/0.8. `sidebarShiftAmount` maps the endpoints to signed +/-0.30;
   below 5 uses white, above 5 black, behind the transparent sidebar only, never the title strip/text.

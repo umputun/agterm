@@ -1,6 +1,14 @@
 import Testing
 @testable import agtermCore
 
+/// One window/sidebar/size combination the fitting must survive.
+struct PanelCase: Sendable {
+    let name: String
+    let size: Double
+    let window: Double
+    let inset: Double
+}
+
 struct InterfaceMetricsTests {
     @Test func defaultSizeReproducesTheHardcodedChromeFonts() {
         let metrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
@@ -39,5 +47,61 @@ struct InterfaceMetricsTests {
         let metrics = InterfaceMetrics(fontSize: 20)
         #expect(metrics.scaled(520) == 800)
         #expect(metrics.scaled(320) == 492)
+    }
+
+    /// The regression: width and offset each grew unbounded and compounded, so the panel's right edge ran
+    /// past the window. Every case here is one the shipped defaults or the settings ranges allow.
+    @Test(arguments: [PanelCase(name: "stock 13pt at the 640pt window minimum", size: 13, window: 640, inset: 221),
+                      PanelCase(name: "stock 13pt under the 741pt threshold", size: 13, window: 740, inset: 221),
+                      PanelCase(name: "sidebar at 450 in the 900pt default", size: 13, window: 900, inset: 451),
+                      PanelCase(name: "20pt interface size, default sidebar", size: 20, window: 900, inset: 221),
+                      PanelCase(name: "widest sidebar and largest size", size: 20, window: 900, inset: 561),
+                      PanelCase(name: "no sidebar", size: 13, window: 900, inset: 0)])
+    func fittedPanelStaysInsideTheWindow(_ testCase: PanelCase) {
+        for ideal in [520.0, 460.0] { // palette and switcher
+            let metrics = InterfaceMetrics(fontSize: testCase.size)
+            let width = metrics.fittedPanelWidth(idealAtDefault: ideal, windowWidth: testCase.window,
+                                                 terminalAreaInset: testCase.inset)
+            let offset = metrics.panelOffset(width: width, windowWidth: testCase.window,
+                                             terminalAreaInset: testCase.inset)
+            let left = (testCase.window - width) / 2 + offset
+            let right = (testCase.window + width) / 2 + offset
+            #expect(left >= 0, "\(testCase.name): panel starts left of the window at \(left)")
+            #expect(right <= testCase.window, "\(testCase.name): panel ends \(right - testCase.window)pt past the window")
+        }
+    }
+
+    @Test func fittedPanelKeepsTheIdealWidthWhenItFits() {
+        let metrics = InterfaceMetrics(fontSize: 13)
+        // the 900pt default window with the default 220pt sidebar: the ideal fits, so nothing shrinks
+        #expect(metrics.fittedPanelWidth(idealAtDefault: 520, windowWidth: 900, terminalAreaInset: 221) == 520)
+        #expect(metrics.panelOffset(width: 520, windowWidth: 900, terminalAreaInset: 221) == 110.5)
+    }
+
+    @Test func panelOffsetDegradesToWholeWindowCenteringRatherThanClipping() {
+        let metrics = InterfaceMetrics(fontSize: 13)
+        // a panel as wide as the window has no room to shift, so it centers rather than overflowing
+        #expect(metrics.panelOffset(width: 900, windowWidth: 900, terminalAreaInset: 400) == 0)
+        #expect(metrics.panelOffset(width: 700, windowWidth: 900, terminalAreaInset: 400) == 100)
+        #expect(metrics.panelOffset(width: 700, windowWidth: 900, terminalAreaInset: 0) == 0)
+    }
+
+    @Test func fittedPanelWidthNeverGoesBelowTheFloorOrPastTheWindow() {
+        let metrics = InterfaceMetrics(fontSize: 13)
+        // a sidebar wide enough to leave almost nothing still yields a usable panel, capped by the window
+        let cramped = metrics.fittedPanelWidth(idealAtDefault: 520, windowWidth: 640, terminalAreaInset: 561)
+        #expect(cramped == InterfaceMetrics.minimumPanelWidth)
+        let tiny = metrics.fittedPanelWidth(idealAtDefault: 520, windowWidth: 300, terminalAreaInset: 561)
+        #expect(tiny == 300 - 2 * InterfaceMetrics.panelMargin)
+    }
+
+    @Test func fittedPanelHeightLeavesTheTopInsetAndFloors() {
+        let metrics = InterfaceMetrics(fontSize: 20)
+        #expect(metrics.fittedPanelHeight(windowHeight: 1000, topFraction: 0.12) == 1000 * 0.88 - 16)
+        // the 400pt window minimum leaves 336pt, well clear of the floor
+        #expect(metrics.fittedPanelHeight(windowHeight: 400, topFraction: 0.12) == 400 * 0.88 - 16)
+        // only a degenerate height reaches the floor, and it never returns a negative
+        #expect(metrics.fittedPanelHeight(windowHeight: 100, topFraction: 0.12) == InterfaceMetrics.minimumPanelHeight)
+        #expect(metrics.fittedPanelHeight(windowHeight: 0, topFraction: 0.12) == InterfaceMetrics.minimumPanelHeight)
     }
 }
