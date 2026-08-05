@@ -128,10 +128,15 @@ struct SessionSwitcherOverlay: View {
     /// Ctrl-Tab, so it never renders a stale size.
     private let metrics = SessionSwitcherOverlay.resolvedMetrics()
 
+    /// The measured height of the row stack, so the panel hugs its rows until they outgrow the window.
+    @State private var rowsHeight: Double = 0
+
     /// The panel width at the 13pt default, scaled by `metrics` and then fitted to the window.
     private static let panelWidthAtDefaultFontSize: Double = 460
     /// How far down the window the panel starts.
     private static let topInsetFraction: Double = 0.12
+    /// Inset between the panel's rounded background and its rows.
+    private static let panelPadding: Double = 6
 
     private static func resolvedMetrics() -> InterfaceMetrics {
         GhosttyApp.shared.interfaceMetrics
@@ -144,10 +149,9 @@ struct SessionSwitcherOverlay: View {
                                                  terminalAreaInset: terminalAreaInset)
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
-                panel
+                panel(maxRowsHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
+                                                               topFraction: Self.topInsetFraction) - Self.panelPadding * 2)
                     .frame(width: width)
-                    .frame(maxHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
-                                                                topFraction: Self.topInsetFraction))
                     .padding(.top, geo.size.height * Self.topInsetFraction)
                     .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
                                                    terminalAreaInset: terminalAreaInset))
@@ -159,7 +163,13 @@ struct SessionSwitcherOverlay: View {
     /// The rows scroll rather than overflow: ten candidates at a large interface size want more height than
     /// a short window has, and the stack has no other way to give. `scrollTo` keeps the cycling selection
     /// visible, which is the whole point of the overlay.
-    private var panel: some View {
+    ///
+    /// The height is MEASURED and then capped, never proposed: a `ScrollView` takes whatever height it is
+    /// offered instead of sizing to its content, so handing `maxRowsHeight` straight to `.frame(maxHeight:)`
+    /// makes every panel that tall — three rows in a tall window drew a panel of mostly empty material.
+    /// `rowsHeight` starts at 0, where the frame stays unconstrained for the one layout pass before the
+    /// preference lands.
+    private func panel(maxRowsHeight: Double) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
@@ -168,11 +178,21 @@ struct SessionSwitcherOverlay: View {
                             .id(position)
                     }
                 }
+                .background(
+                    GeometryReader { rows in
+                        Color.clear.preference(key: RowsHeightKey.self, value: rows.size.height)
+                    }
+                )
             }
+            .frame(height: metrics.measuredPanelHeight(rowsHeight: rowsHeight,
+                                                       maxRowsHeight: maxRowsHeight).map { CGFloat($0) })
             .scrollBounceBehavior(.basedOnSize)
+            .onPreferenceChange(RowsHeightKey.self) { height in
+                MainActor.assumeIsolated { rowsHeight = height }
+            }
             .onChange(of: switcher.index) { _, index in proxy.scrollTo(index) }
         }
-        .padding(6)
+        .padding(Self.panelPadding)
         .background(panelBackground, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
@@ -193,6 +213,13 @@ struct SessionSwitcherOverlay: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
+}
+
+/// Carries the measured row-stack height out of the scroll content, so the panel can size to its rows
+/// instead of to the height it is offered.
+private struct RowsHeightKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) { value = max(value, nextValue()) }
 }
 
 /// One session row for the switcher surfaces — the display name over a `workspace · cwd` subtitle. Shared by

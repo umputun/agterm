@@ -35,8 +35,12 @@ paths:
   `.caption`/`.callout` and the 520x320 palette, with derived text floored at 8pt. Panel widths and
   heights are then fitted to the window (`fittedPanelWidth`, `panelOffset`, `fittedPanelHeight`): the
   scaled width and the centering offset each grow unbounded and compound, and a panel wider than the
-  window less the inset clips at the right edge. Status glyphs stay fixed for both settings; the
-  palette's search icon scales with the field it sits in.
+  window less the inset clips at the right edge. Never hand a height cap to `.frame(maxHeight:)` around
+  a panel: a `ScrollView` renders at the height it is offered, and a stack centers inside it and drops
+  down the window. Measure the content and set an exact height (`measuredPanelHeight`), or pass
+  `alignment: .top`. Neither is testable at the view layer — hosted tests do not render SwiftUI and
+  XCUITest cannot hold Ctrl for the switcher — so verify these by eye.
+  Status glyphs stay fixed for both settings; the palette's search icon scales with the field it sits in.
   Unfocused-terminal mute and sidebar tint are 0...10 with neutral/default 5.
   `muteOpacity` maps 0/5/10 to 0/0.4/0.8. `sidebarShiftAmount` maps the endpoints to signed +/-0.30;
   below 5 uses white, above 5 black, behind the transparent sidebar only, never the title strip/text.

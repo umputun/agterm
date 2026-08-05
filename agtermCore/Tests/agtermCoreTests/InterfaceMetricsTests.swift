@@ -95,6 +95,22 @@ struct InterfaceMetricsTests {
         #expect(tiny == 300 - 2 * InterfaceMetrics.panelMargin)
     }
 
+    /// Pins the decision behind the switcher panel's height. The rendered result has no harness — hosted
+    /// tests do not render SwiftUI and XCUITest cannot hold Ctrl for the switcher — so this covers the
+    /// choice, and the trap it exists for is named on `measuredPanelHeight`.
+    @Test func measuredPanelHeightHugsItsRowsUntilTheCap() {
+        let metrics = InterfaceMetrics(fontSize: 13)
+        // no measurement yet: unconstrained, so the panel never renders at a guessed height
+        #expect(metrics.measuredPanelHeight(rowsHeight: 0, maxRowsHeight: 764) == nil)
+        // four rows in a tall window: the panel is its rows, NOT the 764pt it was offered
+        #expect(metrics.measuredPanelHeight(rowsHeight: 160, maxRowsHeight: 764) == 160)
+        // ten rows in a short window: capped, and the scroll view takes over inside it
+        #expect(metrics.measuredPanelHeight(rowsHeight: 540, maxRowsHeight: 265) == 265)
+        #expect(metrics.measuredPanelHeight(rowsHeight: 540, maxRowsHeight: 540) == 540)
+        // a cap that goes negative on a degenerate window collapses to 0 rather than inverting
+        #expect(metrics.measuredPanelHeight(rowsHeight: 160, maxRowsHeight: -20) == 0)
+    }
+
     @Test func fittedPanelHeightLeavesTheTopInsetAndFloors() {
         let metrics = InterfaceMetrics(fontSize: 20)
         #expect(metrics.fittedPanelHeight(windowHeight: 1000, topFraction: 0.12) == 1000 * 0.88 - 16)

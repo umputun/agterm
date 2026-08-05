@@ -72,4 +72,16 @@ public struct InterfaceMetrics: Equatable, Sendable {
 
     /// The height below which a panel stops shrinking; roughly three default rows plus the search field.
     public static let minimumPanelHeight: Double = 160
+
+    /// The height a MEASURED row stack should render at: its own content height, capped by what the window
+    /// leaves, and nil until the measurement arrives so the first layout pass stays unconstrained.
+    ///
+    /// This exists because the cap cannot be handed to the container directly. `.frame(maxHeight:)` around a
+    /// `ScrollView` makes every panel that tall — a scroll view accepts the height it is offered instead of
+    /// sizing to its rows — and around a stack it centers the content, dropping the panel down the window.
+    /// Measure, then set an exact height; where an exact height will not do, pass `alignment: .top`.
+    public func measuredPanelHeight(rowsHeight: Double, maxRowsHeight: Double) -> Double? {
+        guard rowsHeight > 0 else { return nil }
+        return min(rowsHeight, max(0, maxRowsHeight))
+    }
 }

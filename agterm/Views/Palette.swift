@@ -206,8 +206,11 @@ struct CommandPalette: View {
                     .accessibilityIdentifier(explicitItems == nil ? "palette-scrim" : "pick-scrim")
                 panel
                     .frame(width: width)
+                    // `.top`, or the panel centers inside a frame taller than itself and drops down the
+                    // window: the cap is a ceiling on how far it may grow, not a height to fill.
                     .frame(maxHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
-                                                                topFraction: Self.topInsetFraction))
+                                                                topFraction: Self.topInsetFraction),
+                           alignment: .top)
                     .padding(.top, geo.size.height * Self.topInsetFraction)
                     .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
                                                    terminalAreaInset: terminalAreaInset))
