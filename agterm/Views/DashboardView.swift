@@ -133,7 +133,8 @@ struct DashboardView: View {
                               lineWidth: isHighlighted ? Self.highlightLineWidth : 1)
         }
         // the caption rides the cell's BOTTOM frame line: an overlay OUTSIDE the clip, so its lower half
-        // survives. Layered AFTER the ring so the frame line never crosses the name.
+        // survives. Layered after the ring, and the pill paints its own opaque backing — ordering alone
+        // leaves the ring showing through a translucent fill.
         .overlay(alignment: .bottom) {
             caption(for: member, session: session, isHighlighted: isHighlighted)
                 .offset(y: Self.captionBottomOffset)
@@ -185,7 +186,8 @@ struct DashboardView: View {
             DashboardCaptionPill(text: session.displayName + paneIndicator(for: member, session: session),
                                  indicator: session.agentIndicator, isHighlighted: isHighlighted,
                                  idleFill: pillColor, idleText: pillTextColor,
-                                 unselectedTextOpacity: Self.unselectedCaptionTextOpacity)
+                                 unselectedTextOpacity: Self.unselectedCaptionTextOpacity,
+                                 backing: captionBackground)
         }
         .padding(.horizontal, 6)
         .allowsHitTesting(false)
@@ -224,6 +226,9 @@ private struct DashboardCaptionPill: View {
     let idleFill: Color
     let idleText: Color
     let unselectedTextOpacity: Double
+    /// The opaque backing painted under the fill — the cell's own background, so a translucent fill never
+    /// lets the cell frame line show through the capsule.
+    let backing: Color
 
     /// peak opacity of the pulsing wash. Deep on purpose: on a large opaque capsule a shallow value reads as
     /// faint dimming rather than a blink (the small sidebar glyph needs less).
@@ -259,8 +264,14 @@ private struct DashboardCaptionPill: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background {
+                // `backing` under the fill: the idle fill falls back to a translucent wash on themes with no
+                // selection color, and the pill overhangs the cell's frame line, so a bare fill lets the
+                // highlight ring read through the capsule and cross the name.
                 Capsule()
-                    .fill(fill)
+                    .fill(backing)
+                    .overlay {
+                        Capsule().fill(fill)
+                    }
                     .overlay {
                         Capsule().fill(washColor)
                             .opacity(shouldAnimatePulse && pulsed ? Self.washPeakOpacity : 0)
