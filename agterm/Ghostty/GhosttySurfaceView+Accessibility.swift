@@ -26,10 +26,12 @@ import AppKit
 /// This extension reports the minimal shape of an editable text field: role `.textArea`,
 /// focusable, with a settable value. Tools that insert via `AXValue` land in `setAccessibilityValue`;
 /// tools that synthesize keystrokes already flow through `keyDown`. Inline text goes through the same
-/// `NSTextInputClient.insertText` path the physical keyboard and IME use; a set carrying ANY line break
-/// (LF, CR or CRLF — see `AccessibilityInsert.needsPasteRouting`) instead routes through the
-/// bracketed-paste path (`insertPasted`), so newlines can't turn into Return and submit commands (see
-/// `setAccessibilityValue`).
+/// `NSTextInputClient.insertText` path the physical keyboard and IME use; a set carrying ANY control
+/// character — a line break (LF, CR or CRLF), TAB, ESC, NUL, DEL, or anything else in C0; see
+/// `AccessibilityInsert.needsPasteRouting` — instead routes through the bracketed-paste path
+/// (`insertPasted`), so a newline can't turn into Return and submit the line and a tab can't fire the
+/// shell's completion. That is a bracketed-paste (mode 2004) guarantee, so it holds only against a program
+/// that has 2004 on — the same caveat ⌘V and drop carry (see `setAccessibilityValue`).
 ///
 /// Two deliberate scoping choices bound WHICH panes a non-dictation AX client sees. They do not bound
 /// what it is TOLD about an exposed pane — see the screen-reader and replace-semantics limitations below,
@@ -138,14 +140,17 @@ extension GhosttySurfaceView {
     /// synthesised keystrokes) still lands text. Requires `liveFocus` (key window + first responder), so a
     /// client that enumerated the window's text areas or cached a focused element across a session switch
     /// can't inject into a background pane's pty. Inline text takes the keyboard/IME `insertText` path; a
-    /// set carrying a line break routes through `insertPasted` (bracketed paste), which — unlike `inject`'s
-    /// newline→Return — treats the payload as literal text, so embedded newlines don't type Return and run
-    /// commands. The line-break test is the host-free `AccessibilityInsert.needsPasteRouting` (unit-tested
-    /// in `agtermCore`), NOT an inline `contains("\n") || contains("\r")`: CRLF is a single grapheme
-    /// cluster equal to neither, so the naive pair misses `"\r\n"` — the line ending a browser `<textarea>`
-    /// carries — and lets it through `insertText` unwrapped, where ICRNL runs the line.
-    /// The no-submit guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with
-    /// 2004 off still submits a trailing newline, exactly the caveat ⌘V and drop carry (see `insertPasted` /
+    /// set carrying any CONTROL character routes through `insertPasted` (bracketed paste), which — unlike
+    /// `inject`'s newline→Return — treats the payload as literal text, so an embedded newline doesn't type
+    /// Return and run the command and an embedded tab doesn't fire the shell's completion. The test is the
+    /// host-free `AccessibilityInsert.needsPasteRouting` (unit-tested in `agtermCore`) and covers the whole
+    /// C0 range plus DEL, not only line breaks; and it is NOT an inline `contains("\n") || contains("\r")`:
+    /// CRLF is a single grapheme cluster equal to neither, so the naive pair misses `"\r\n"` — the line
+    /// ending a browser `<textarea>` carries — and lets it through `insertText` unwrapped, where ICRNL runs
+    /// the line.
+    /// The literal-text guarantee tracks the program's bracketed-paste mode 2004, for the control
+    /// characters exactly as for the newlines: a raw prompt with 2004 off still submits a trailing newline
+    /// and still completes on a tab, exactly the caveat ⌘V and drop carry (see `insertPasted` /
     /// the libghostty note). Any in-flight IME/CJK composition is COMMITTED first on both branches (see
     /// `commitOrDiscardComposition`) — otherwise it either survives the AX insert and re-commits on the
     /// next keystroke, or is thrown away along with the characters the user already typed; the paste
@@ -169,12 +174,32 @@ extension GhosttySurfaceView {
     /// elements here changed"; posting it on the window makes a client re-resolve and land on the pane
     /// that is actually live.
     ///
-    /// Posted from `deckVisible`'s `didSet` (`GhosttySurfaceView`), the one flag whose flip drives
-    /// exposure at runtime — `viewOnly` flips only on the dashboard reparent, which flips `deckVisible`
-    /// with it, and the window/surface terms bracket the view's whole lifetime.
+    /// Driven off EVERY term of `axExposed`, not one flag taken to imply the rest — each of the four moves
+    /// on its own at runtime:
+    ///
+    /// - `deckVisible` — its `didSet` (a session switch, an overlay covering the pane);
+    /// - `viewOnly` — its `didSet` (the dashboard reparent; usually coincident with `deckVisible`, but not
+    ///   assumed to be);
+    /// - `surface != nil` — `createSurface` (creation is DEFERRED while the backing size is zero, so a pane
+    ///   in a window still being presented has no surface yet) and `destroySurface`;
+    /// - `window?.isVisible` — `viewDidMoveToWindow` plus the miniaturize/deminiaturize and app hide/unhide
+    ///   observers (`observeWindowVisibilityChanges`), since `deckVisible` is pure MODEL state and a
+    ///   minimized window leaves it `true`.
+    ///
+    /// `axPostedExposed` latches the last announced value, so the several call sites that can fire for one
+    /// transition still post once, and a notification for another window costs a bool compare.
+    ///
+    /// `NSAccessibilityUIElementsKey` carries the element that changed, which is what the notification is
+    /// documented to hold — an observer that reads it to decide what to re-resolve gets an answer instead
+    /// of an empty payload it can treat as a no-op. Posted on the window while there is one; a surface
+    /// already detached from its window falls back to the application element so the departure is still
+    /// announced.
     func postAccessibilityExposureChange() {
-        guard let window else { return }
-        NSAccessibility.post(element: window, notification: .layoutChanged)
+        let exposed = axExposed
+        guard exposed != axPostedExposed else { return }
+        axPostedExposed = exposed
+        let element: NSResponder = window ?? NSApplication.shared
+        NSAccessibility.post(element: element, notification: .layoutChanged, userInfo: [.uiElements: [self]])
     }
 
     /// Tell AX the focused element moved, because `isAccessibilityFocused` (= `liveFocus`) just changed.
@@ -182,15 +207,50 @@ extension GhosttySurfaceView {
     /// The companion to `postAccessibilityExposureChange` for the FOCUS half: a client that anchors on
     /// `AXFocusedUIElement` (MacWhisper, system Dictation) needs to hear the focus leave one pane for
     /// another — a split-pane switch or a window key change moves it without any element appearing or
-    /// disappearing. Posted from `updateGhosttyFocus`, which every focus path already funnels through
-    /// (become/resign first responder, the window key observers, reparent and surface creation), so the
-    /// AX notification can't drift from what libghostty was told.
+    /// disappearing.
+    ///
+    /// Called from BOTH focus routes, because there is no single funnel: `updateGhosttyFocus` covers the
+    /// window-key observers and the (re)attach/reparent grabs, while `becomeFirstResponder` /
+    /// `resignFirstResponder` deliberately bypass it and push `ghostty_surface_set_focus` themselves — and
+    /// those two are the ORDINARY path (a click into the other split pane, a pane-switch binding), which
+    /// moves focus without any window-key change at all. Wiring only the former left the common case
+    /// announcing nothing while `axPostedFocus` stayed latched on the pane that had lost focus.
+    ///
+    /// The post is DEFERRED one run-loop turn for exactly that reason: inside the first-responder
+    /// transitions AppKit has not yet updated `window.firstResponder`, so `liveFocus` reads stale there.
+    /// The hop also coalesces — one focus move fires resign THEN become, and `axFocusPostScheduled` makes
+    /// the pair evaluate once, after the responder has settled, so only the net result is announced.
     func postAccessibilityFocusChange() {
+        guard !axFocusPostScheduled else { return }
+        axFocusPostScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.axFocusPostScheduled = false
+            self.emitAccessibilityFocusChange()
+        }
+    }
+
+    /// Announce the settled focus state, on TRANSITIONS only (`axPostedFocus`).
+    ///
+    /// Both directions are announced. An earlier revision posted the GAIN only, on the theory that the
+    /// losing pane's post would race the winner's — but the deferred, coalesced evaluation above removes
+    /// that race outright, and gain-only silently dropped the case that has no winner: focus leaving the
+    /// terminal for the sidebar, the dashboard, or another app. There the client kept its widget anchored
+    /// to a pane that no longer accepts writes, and the next phrase fell through to
+    /// `super.setAccessibilityValue`, which stores it as an inert attribute and reports success.
+    ///
+    /// Posted on the application element AND on the window. `kAXFocusedUIElementChangedNotification` is
+    /// conventionally observed on the app element — an `AXObserver` registered there does not receive a
+    /// window-posted notification — while the window post is what the paired `.layoutChanged` uses and is
+    /// harmless to a client watching only one of the two (it re-resolves `AXFocusedUIElement` either way).
+    /// Which one a given dictation client actually listens on is not determinable from here, so both go
+    /// out rather than betting on one.
+    private func emitAccessibilityFocusChange() {
         let focused = axExposed && liveFocus
         guard focused != axPostedFocus else { return }
         axPostedFocus = focused
-        guard focused, let window else { return } // announce the GAIN; the losing pane's post would race it
-        NSAccessibility.post(element: window, notification: .focusedUIElementChanged)
+        NSAccessibility.post(element: NSApplication.shared, notification: .focusedUIElementChanged)
+        if let window { NSAccessibility.post(element: window, notification: .focusedUIElementChanged) }
     }
 
     /// The OTHER conventional AX insertion route: a client that reads `AXSelectedTextRange` and then sets
@@ -222,11 +282,24 @@ extension GhosttySurfaceView {
     /// The copy is needed because libghostty owns the preedit for rendering and hands nothing back, and
     /// `attributedSubstring(forProposedRange:)` returns nil — `_markedText` (maintained beside
     /// `_markedRange` by the three `NSTextInputClient` methods) is the only source for it.
+    ///
+    /// "Exactly once" is enforced, not assumed. `discardMarkedText()` is documented to abandon the session
+    /// without committing, but an input method that FINALIZES on teardown instead would push the same
+    /// characters back through `insertText` and land them a second time (`今日今日` ahead of the dictated
+    /// text). `committingComposition` fences that one synchronous call so a re-entrant insert is dropped;
+    /// nothing else can legitimately type inside it. The remaining unknown is whether any shipping IME
+    /// behaves that way — this makes the answer not matter.
+    ///
+    /// Scope: this is the AX write path only. `insertPasted` (drop) and `inject` (`session.type`) still
+    /// insert underneath a live composition, which survives and re-commits on the next keystroke — the
+    /// same defect, on paths this change deliberately leaves alone.
     private func commitOrDiscardComposition() {
         if hasMarkedText(), !_markedText.isEmpty {
             insertText(_markedText, replacementRange: NSRange(location: NSNotFound, length: 0))
         }
+        committingComposition = true
         inputContext?.discardMarkedText()
+        committingComposition = false
     }
 
     /// The shared AX insert: fire the input-side hooks `keyDown` fires, then route to the pty.

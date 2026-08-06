@@ -1041,8 +1041,10 @@
               Voice dictation tools that probe for a focused text field — the system Dictation, MacWhisper, and similar
               assistive apps — engage over the terminal: the on-screen pane advertises itself to the accessibility system as
               an editable text area, so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text
-              arrives at the cursor the same way typing does, and a multi-line or tab-carrying insert goes in as a bracketed
-              paste, so it lands as literal text instead of running the line.
+              arrives at the cursor the same way typing does, and an insert carrying a newline, a tab, or any other control
+              character goes in as a bracketed paste, so a program that accepts bracketed paste takes it as literal text
+              instead of running the line or completing the word. That last part is the same caveat &#8984;V carries: at a raw
+              prompt with bracketed paste off, a trailing newline still submits and a tab still triggers completion.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               Two limits are worth knowing. The scrollback is deliberately not mirrored, so the exposed pane reads to a

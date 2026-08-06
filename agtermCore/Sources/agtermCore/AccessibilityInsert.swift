@@ -24,8 +24,14 @@ public enum AccessibilityInsert {
     ///   live case: unwrapped, `insertText` hands 0x09 to the shell, readline reads it as completion and
     ///   expands a filename or spews a candidate list instead of inserting the text — and a tab is
     ///   ordinary in an indented snippet or in text pulled from a `<textarea>`. ESC and the rest of the
-    ///   range are the same class of hazard, so the whole range routes to paste, where bracketed paste
-    ///   makes it literal.
+    ///   range are the same class of hazard, so the whole range routes to paste.
+    ///
+    /// What the paste route buys is the program's bracketed-paste mode (2004), NOT an unconditional
+    /// guarantee — the same caveat that already qualifies the line-break case, and it qualifies the control
+    /// characters identically. Against a program with 2004 OFF (a raw `sh` prompt, `cat`, a bash built
+    /// without `enable-bracketed-paste`) the payload still reaches the pty as raw bytes, so a dictated tab
+    /// fires completion and a dictated ESC is read as ESC. Routing is an improvement in the common case,
+    /// not a promise in every case.
     ///
     /// Ordinary prose — the overwhelmingly common dictation payload — contains none of these and keeps
     /// the keyboard/IME path, which is what preserves IME behaviour for inline text.

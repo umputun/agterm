@@ -353,6 +353,10 @@ extension GhosttySurfaceView {
 
 extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     func insertText(_ string: Any, replacementRange _: NSRange) {
+        // the AX path commits our copy of a live composition and THEN tears the IME session down; an input
+        // method that finalizes on that teardown would re-send the same characters here. See
+        // `commitOrDiscardComposition` — the flag is set only for that one synchronous call.
+        guard !committingComposition else { return }
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
         guard !text.isEmpty else { return }
         _markedRange = NSRange(location: NSNotFound, length: 0)
@@ -370,13 +374,21 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         }
     }
 
+    /// Units matter twice here, and `text.count` (grapheme clusters) is wrong for both.
+    /// `ghostty_surface_preedit` takes a BYTE length over the UTF-8 buffer `withCString` hands it — the same
+    /// contract `insertPasted` honors with `text.utf8.count` — so a 3-character `にほん` reported as 3 had
+    /// libghostty render the first 3 BYTES, i.e. one truncated character, for every CJK/emoji/combining
+    /// composition. `NSRange`, meanwhile, is UTF-16 over the string AppKit sees, so `markedRange()` owes
+    /// `utf16.count`.
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange _: NSRange) {
         guard let surface else { return }
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
-        _markedRange = text.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: text.count)
+        _markedRange = text.isEmpty
+            ? NSRange(location: NSNotFound, length: 0)
+            : NSRange(location: 0, length: text.utf16.count)
         _markedText = text
         _selectedRange = selectedRange
-        text.withCString { ghostty_surface_preedit(surface, $0, UInt(text.count)) }
+        text.withCString { ghostty_surface_preedit(surface, $0, UInt(text.utf8.count)) }
     }
 
     func unmarkText() {
