@@ -65,6 +65,10 @@ final class RestoreCommandUITests: XCTestCase {
 
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "restored session row")
+        // the assertions below pass on a LIGHT launch too (no conditional mismatch, so no surface rebuild),
+        // so confirm the forced side actually took or the test proves nothing. The bare `debug.appearance`
+        // reads `lastAppliedIsDark`, which the dark launch's own seeding reload flips — debounced, so poll.
+        XCTAssertTrue(poll { self.appliedAppearance() == "dark" }, "the launch under test must be dark")
         let probe = try XCTUnwrap(writeEnvProbe(), "the restored pane's shell should answer the env probe")
         let fields = probe.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         XCTAssertEqual(fields.first, "agterm", "a restored pane must keep agterm's TERM_PROGRAM identity")
@@ -562,14 +566,24 @@ final class RestoreCommandUITests: XCTestCase {
         try? Data(json.utf8).write(to: stateDir.appendingPathComponent("settings.json"))
     }
 
+    /// The side the app last applied, from the XCUITest-only bare `debug.appearance`, nil when unreadable.
+    private func appliedAppearance() -> String? {
+        guard let response = try? sendCommand(#"{"cmd":"debug.appearance"}"#) else { return nil }
+        return (response["result"] as? [String: Any])?["text"] as? String
+    }
+
     /// Type a probe writing the focused shell's agterm identity + session id into `envProbe`, retried like
-    /// `runTeeMarker` because a freshly realized surface's shell may not be reading yet.
+    /// `runTeeMarker` because a freshly realized surface's shell may not be reading yet. Polls the CONTENT
+    /// the caller asserts on, not the path: `> file` truncates before `printf` writes, so an existence poll
+    /// can return an empty file — and on a retry it would return the previous attempt's file instantly.
     private func writeEnvProbe() -> String? {
         for attempt in 0..<3 {
+            try? FileManager.default.removeItem(at: envProbe)
             RunLoop.current.run(until: Date().addingTimeInterval(1))
             if attempt > 0 { app.typeKey("u", modifierFlags: .control) }
             app.typeText("printf '%s|%s' \"$TERM_PROGRAM\" \"$AGTERM_SESSION_ID\" > \(envProbe.path)\n")
-            if poll({ FileManager.default.fileExists(atPath: self.envProbe.path) }, timeout: 6) {
+            if poll({ (try? String(contentsOf: self.envProbe, encoding: .utf8))?.contains("|") == true },
+                    timeout: 6) {
                 return try? String(contentsOf: envProbe, encoding: .utf8)
             }
         }
