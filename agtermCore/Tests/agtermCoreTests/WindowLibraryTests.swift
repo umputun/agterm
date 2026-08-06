@@ -593,6 +593,29 @@ final class WindowLibraryTests {
         #expect(library.isOpen(extra.id))
     }
 
+    @Test func closingEveryWindowKeepsTheLastOneAsFrontmostForTheNextLaunch() {
+        // pins the reopen fallback: nilling frontmost on the last close sent the next launch to
+        // `windows.first`, so a multi-window user got the wrong window back.
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let last = library.newWindow(name: "extra").id
+        library.closeWindow(first)
+        library.closeWindow(last)
+        #expect(library.frontmostWindowID == last)
+        #expect(library.activeWindowID == nil)
+
+        let relaunched = WindowLibrary(directory: directory)
+        #expect(relaunched.openIDs() == [last])
+    }
+
+    @Test func closingTheFrontmostWithAnotherWindowOpenMovesFrontmostToIt() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let last = library.newWindow(name: "extra").id
+        library.closeWindow(last)
+        #expect(library.frontmostWindowID == first)
+    }
+
     @Test func loadStoreReopensAClosedWindow() {
         let library = WindowLibrary(directory: directory)
         let extra = library.newWindow(name: "extra")

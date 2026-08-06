@@ -178,7 +178,7 @@ jobs:
             if ! head -c 2 "$f" | grep -q '#!'; then
               echo "::error::$f has no shebang"; fail=1
             fi
-          done < <(find cookbook -type f \( -name '*.sh' -o -name '*.zsh' \) -print0)
+          done < <(find cookbook -type f \( -name '*.sh' -o -name '*.zsh' -o -name '*.py' \) -print0)
 
           exit $fail
       - name: shellcheck
@@ -195,3 +195,15 @@ jobs:
         # bash explicitly, for pipefail, same reason as the shellcheck step above
         shell: bash
         run: find cookbook -type f -name '*.zsh' -print0 | xargs -0 -r -n1 zsh -n
+      - name: Install ruff
+        # not on the ubuntu-latest image, unlike shellcheck. pipx, because the runner's
+        # python is externally managed and a bare pip install into it fails
+        run: pipx install ruff
+      - name: ruff
+        # the .py counterpart of shellcheck, so a recipe is linted rather than only parsed.
+        # EXE001 is ignored because it fails a shebang on a non-executable file, which
+        # collides head-on with the shebang the layout step requires of every script, and
+        # would move executable-bit policy into CI where this repo deliberately keeps it
+        # out. bash explicitly, for pipefail, same reason as the shellcheck step above
+        shell: bash
+        run: find cookbook -type f -name '*.py' -print0 | xargs -0 -r ruff check --ignore EXE001

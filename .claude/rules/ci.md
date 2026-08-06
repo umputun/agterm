@@ -25,9 +25,14 @@ paths:
   changed; its Swift membership also runs macOS jobs.
 - The cookbook job builds nothing. It compares the `cookbook/README.md` table and recipe directories in
   both directions; requires kebab-case directories, a `README.md` with all six exact
-  (`grep -qxF`) headings, and shebangs for `.sh`/`.zsh`; runs `shellcheck` on `.sh`; and parses `.zsh`
-  with `zsh -n`. `shellcheck` is preinstalled. Install absent `zsh` in a separate step immediately before
-  parsing; shellcheck cannot lint zsh.
+  (`grep -qxF`) headings, and shebangs for `.sh`/`.zsh`/`.py`; runs `shellcheck` on `.sh`; parses `.zsh`
+  with `zsh -n`; and runs `ruff check` on `.py`. `shellcheck` is preinstalled. Install absent `zsh` and
+  `ruff` in separate steps immediately before their own; shellcheck cannot lint zsh, and `ruff` needs
+  `pipx` because the runner's python is externally managed.
+- Recipes are not shell-only. A language gains a gate by adding its extension to the shebang glob plus a
+  lint or parse step; until then it merges unchecked, which is why `cookbook/CONTRIBUTING.md` tells a
+  contributor to flag any other language in the pull request. Keep that file, `cookbook/README.md` and
+  this bullet in step when the set changes.
 - Keep explicit `shell: bash` on the layout, shellcheck, and zsh steps. It supplies bash process
   substitution and `bash -eo pipefail`; default `bash -e` can hide a failed `find` behind successful
   `xargs -r`. Use `-print0 | xargs -0 -r` for whitespace and empty matches, plus `-n1` for `zsh -n`

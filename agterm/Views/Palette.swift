@@ -78,6 +78,10 @@ final class PaletteController {
 struct CommandPalette: View {
     let controller: PaletteController
     let actions: AppActions
+    /// Where the terminal area starts inside the window (sidebar plus divider, 0 when hidden). The panel
+    /// shifts by half of it so it centers over the terminal rather than the whole window; the scrim keeps
+    /// covering everything.
+    let terminalAreaInset: Double
     /// Caller-provided rows for a control-API pick. A non-nil array replaces the built-in mode's
     /// catalog, including when the array is empty.
     let explicitItems: [PaletteItem]?
@@ -97,19 +101,36 @@ struct CommandPalette: View {
     @State private var filtered: [PaletteItem] = []
     @FocusState private var fieldFocused: Bool
 
+    /// The chrome text sizes and the panel's scale, read from the non-observable `GhosttyApp` — a palette
+    /// mounts fresh on every open, so it never renders a stale size.
+    private let metrics = CommandPalette.resolvedMetrics()
+
+    /// The panel width and results height at the 13pt default, scaled by `metrics` so a larger font shows
+    /// the same rows and truncates no more titles, then fitted to the window.
+    private static let panelWidthAtDefaultFontSize: Double = 520
+    private static let resultsHeightAtDefaultFontSize: Double = 320
+    /// How far down the window the panel starts.
+    private static let topInsetFraction: Double = 0.12
+
     /// `initialQuery` seeds the search field for an explicit picker: the caller's `--query` opens the
     /// palette already filtered, since `.onAppear` runs the first `updateFiltered()` against it.
-    init(controller: PaletteController, actions: AppActions, items: [PaletteItem]? = nil,
+    init(controller: PaletteController, actions: AppActions, terminalAreaInset: Double,
+         items: [PaletteItem]? = nil,
          prompt: String? = nil, initialQuery: String? = nil, allowCustom: Bool = false,
          onCustom: ((String) -> Void)? = nil, onDismiss: (() -> Void)? = nil) {
         self.controller = controller
         self.actions = actions
+        self.terminalAreaInset = terminalAreaInset
         self.explicitItems = items
         self.prompt = prompt
         _query = State(initialValue: initialQuery ?? "")
         self.allowCustom = allowCustom
         self.onCustom = onCustom
         self.onDismiss = onDismiss
+    }
+
+    private static func resolvedMetrics() -> InterfaceMetrics {
+        GhosttyApp.shared.interfaceMetrics
     }
 
     private var allItems: [PaletteItem] {
@@ -174,6 +195,9 @@ struct CommandPalette: View {
 
     var body: some View {
         GeometryReader { geo in
+            let width = metrics.fittedPanelWidth(idealAtDefault: Self.panelWidthAtDefaultFontSize,
+                                                 windowWidth: geo.size.width,
+                                                 terminalAreaInset: terminalAreaInset)
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
                     .contentShape(Rectangle())
@@ -181,8 +205,15 @@ struct CommandPalette: View {
                     .accessibilityElement()
                     .accessibilityIdentifier(explicitItems == nil ? "palette-scrim" : "pick-scrim")
                 panel
-                    .frame(width: 520)
-                    .padding(.top, geo.size.height * 0.12)
+                    .frame(width: width)
+                    // `.top`, or the panel centers inside a frame taller than itself and drops down the
+                    // window: the cap is a ceiling on how far it may grow, not a height to fill.
+                    .frame(maxHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
+                                                                topFraction: Self.topInsetFraction),
+                           alignment: .top)
+                    .padding(.top, geo.size.height * Self.topInsetFraction)
+                    .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
+                                                   terminalAreaInset: terminalAreaInset))
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -191,17 +222,20 @@ struct CommandPalette: View {
     private var panel: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: metrics.base))
+                    .foregroundStyle(.secondary)
                 TextField(placeholder, text: $query)
                     .textFieldStyle(.plain)
                     .focused($fieldFocused)
+                    .font(.system(size: metrics.base))
                     .onSubmit { runSelected() }
                     .onChange(of: query) { selection = 0; updateFiltered(); previewSelected() }
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
                     .onKeyPress(.escape) { dismiss(); return .handled }
             }
-            .padding(12)
+            .padding(metrics.scaled(12))
             Divider()
             results
         }
@@ -234,13 +268,13 @@ struct CommandPalette: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
-                        PaletteRow(item: item, isSelected: index == selection)
+                        PaletteRow(item: item, isSelected: index == selection, metrics: metrics)
                             .id(item.id)
                             .onTapGesture { runItem(item) }
                     }
                 }
             }
-            .frame(maxHeight: 320)
+            .frame(maxHeight: metrics.scaled(Self.resultsHeightAtDefaultFontSize))
             .onChange(of: selection) { _, sel in
                 guard filtered.indices.contains(sel) else { return }
                 filtered[sel].onSelect?()
@@ -300,6 +334,7 @@ private struct PalettePanelBackground: View {
 private struct PaletteRow: View {
     let item: PaletteItem
     let isSelected: Bool
+    let metrics: InterfaceMetrics
 
     var body: some View {
         HStack {
@@ -307,9 +342,9 @@ private struct PaletteRow: View {
                 StatusGlyph(status: status, colorHex: item.statusColor, shape: item.statusShape)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(item.title)
+                Text(item.title).font(.system(size: metrics.base))
                 if let subtitle = item.subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(subtitle).font(.system(size: metrics.secondary)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                         .accessibilityIdentifier("palette-subtitle")
                         .accessibilityValue(subtitle)
@@ -318,7 +353,7 @@ private struct PaletteRow: View {
             Spacer(minLength: 8)
             if let badge = item.badge {
                 Text(badge)
-                    .font(.caption2)
+                    .font(.system(size: metrics.secondary))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -328,12 +363,12 @@ private struct PaletteRow: View {
             }
             if let shortcut = item.shortcut {
                 Text(shortcut)
-                    .font(.callout)
+                    .font(.system(size: metrics.shortcut))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, metrics.scaled(12))
+        .padding(.vertical, metrics.scaled(6))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         .contentShape(Rectangle())

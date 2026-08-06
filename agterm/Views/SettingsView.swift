@@ -39,7 +39,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 540, height: 590)
+        .frame(width: 540, height: 640)
         // without this a process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale
         // Settings window on its last tab, stealing key focus from the real launch window.
         .background(NonRestorableWindow())
@@ -288,9 +288,14 @@ private struct AppearanceSettingsView: View {
                 }
 
                 Stepper(value: sidebarFontSize, in: AppSettings.sidebarFontSizeRange, step: 1) {
-                    Text("Sidebar font size: \(Int(model.settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize))")
+                    Text("Sidebar font size: \(Int(model.settings.effectiveSidebarFontSize))")
                 }
                 .accessibilityIdentifier("settings-sidebar-font-size")
+
+                Stepper(value: interfaceFontSize, in: AppSettings.interfaceFontSizeRange, step: 1) {
+                    Text("Palette and switcher font size: \(Int(model.settings.effectiveInterfaceFontSize))")
+                }
+                .accessibilityIdentifier("settings-interface-font-size")
 
                 HStack {
                     Text("Inactive pane and backdrop mute")
@@ -316,8 +321,14 @@ private struct AppearanceSettingsView: View {
 
     /// The sidebar row-text size.
     private var sidebarFontSize: Binding<Double> {
-        Binding(get: { model.settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize },
+        Binding(get: { model.settings.effectiveSidebarFontSize },
                 set: { model.setSidebarFontSize($0 == AppSettings.defaultSidebarFontSize ? nil : $0) })
+    }
+
+    /// The palette, picker and session-switcher text size.
+    private var interfaceFontSize: Binding<Double> {
+        Binding(get: { model.settings.effectiveInterfaceFontSize },
+                set: { model.setInterfaceFontSize($0 == AppSettings.defaultInterfaceFontSize ? nil : $0) })
     }
 
     /// Whether the terminal follows the macOS appearance — reveals the alternate picker.
@@ -384,7 +395,7 @@ private struct AppearanceSettingsView: View {
 }
 
 /// Interface tab: per-element title-bar and sidebar chrome visibility, grouped by surface, two toggles per
-/// row so the tab keeps fitting the fixed 540×590 window as the element set grows. Everything shows by
+/// row so the tab keeps fitting the fixed 540×640 window as the element set grows. Everything shows by
 /// default; a toggle off adds it to `AppSettings.hiddenInterfaceElements` and live-applies — title-bar and
 /// footer elements re-gate in open windows on `.agtermAppearanceChanged`, the add-session "+" on hover.
 private struct InterfaceSettingsView: View {

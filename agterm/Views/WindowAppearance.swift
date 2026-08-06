@@ -64,7 +64,7 @@ enum WindowAppearance {
         syncSidebarBackground(in: window)
 
         // the title/terminal separator is drawn in the detail pane, so it ends at the sidebar edge.
-        guard let container = titlebarContainer(in: window) else { return }
+        guard let container = titlebarContainer(in: window, toolbarMode: chrome.toolbarMode) else { return }
         if let titlebarView = container.firstDescendant(withClassName: "NSTitlebarView") {
             titlebarView.wantsLayer = true
             titlebarView.layer?.backgroundColor = NSColor.clear.cgColor
@@ -73,9 +73,10 @@ enum WindowAppearance {
         // .hiddenTitleBar doesn't hold (the XCUITest reopen path), it paints a dark strip above the header.
         container.firstDescendant(withClassName: "NSTitlebarBackgroundView")?.isHidden = true
         // hidden mode must also suppress `_NSTitlebarDecorationView` — a full-width titlebar-height sibling
-        // of NSTitlebarView painting a vibrancy material band (macOS 26). tall/compact cover it with the
-        // custom row; hidden mode (traffic lights gone, row collapsed to the 3px drag strip) leaves it bare.
-        container.firstDescendant(withClassName: "_NSTitlebarDecorationView")?.isHidden = hideButtons
+        // of NSTitlebarView painting a vibrancy material band (macOS 26). normal/compact cover it with the
+        // custom row; hidden mode collapses that row to the 3px drag strip and leaves the band bare.
+        // Keyed off the mode, never `hideButtons`, whose fullscreen carve-out would un-hide it there.
+        container.firstDescendant(withClassName: "_NSTitlebarDecorationView")?.isHidden = chrome.toolbarMode == .hidden
     }
 
     /// Keeps the sidebar see-through — opaque terminal color at full opacity, translucent tinted background
@@ -125,8 +126,20 @@ enum WindowAppearance {
         for subview in view.subviews { forceVisualEffectsActive(in: subview) }
     }
 
-    /// The `NSTitlebarContainerView` for `window`, found from the window's root theme frame.
-    private static func titlebarContainer(in window: NSWindow) -> NSView? {
+    /// The `NSTitlebarContainerView` governing `window`'s chrome, falling back to the fullscreen child
+    /// window AppKit relocates it into, as `.claude/rules/settings.md` requires. The fallback is apply-only:
+    /// leaving hidden mode while still in fullscreen does not undo the suppression, because the other
+    /// modes decline the fallback and so write nothing back. Exiting fullscreen restores it.
+    private static func titlebarContainer(in window: NSWindow, toolbarMode: ToolbarMode) -> NSView? {
+        if let container = titlebarContainer(inHierarchyOf: window) { return container }
+        guard toolbarMode == .hidden, window.styleMask.contains(.fullScreen) else { return nil }
+        return window.childWindows?
+            .first { String(describing: type(of: $0)) == "NSToolbarFullScreenWindow" }
+            .flatMap(titlebarContainer(inHierarchyOf:))
+    }
+
+    /// The `NSTitlebarContainerView` inside `window`'s own root theme frame, if it hosts one.
+    private static func titlebarContainer(inHierarchyOf window: NSWindow) -> NSView? {
         guard let contentView = window.contentView else { return nil }
         var root: NSView = contentView
         while let parent = root.superview { root = parent }

@@ -666,9 +666,18 @@ final class AppActions {
     /// closing only HIDES it (both shells stay alive) and maximizes the focused pane, so reopening restores
     /// both in their original positions with the SAME pane focused — focus follows `splitFocused`, which
     /// `AppStore.toggleSplit` moves only for a genuinely new split.
+    ///
+    /// A session-wide cover hides the panes, so rearranging them behind it would only be seen once the cover
+    /// goes — the layout the user left is silently different. A shown scratch is DISMISSED instead, ⌘W's
+    /// cover-first rule, making this the way back to the panes as they were; hiding is keep-alive, so the
+    /// scratch shell survives. A full overlay runs a caller's program that must not be closed under it, so
+    /// the press is inert. Control's `session.split` keeps acting on the deck behind either cover.
     func toggleSplit() {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.activeSession else { return }
+        guard !session.fullOverlayActive else { return }
+        // the deck's `scratchActive` onChange reclaims first responder for the pane, as it does for ⌘J.
+        if session.scratchActive { store.toggleScratch(session.id); return }
         store.toggleSplit(session.id)
         focusSplitPane(session, wantSplit: session.splitFocused)
     }

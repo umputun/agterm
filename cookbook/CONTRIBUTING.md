@@ -10,10 +10,13 @@ These rules cover recipes. The project-wide rules for everything else are in [CO
 
 One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the scripts, nothing else.
 
-Name scripts by their shell, because the extension decides what CI does with them:
+Name scripts by their language, because the extension decides what CI does with them:
 
 - `.sh` is POSIX or bash. CI runs `shellcheck` over every one, and it has to be clean.
 - `.zsh` is zsh. CI parses every one with `zsh -n`, so a syntax error is caught, but shellcheck cannot read zsh and nothing lints these. A parse is not a lint, so run `zsh -n` yourself and read the script over before sending.
+- `.py` is Python 3. CI runs `ruff check` over every one, and it has to be clean. Say which Python version the recipe needs in *Requirements*, the same as any other external tool, and depend on the standard library unless the recipe genuinely cannot.
+
+A recipe in another language is welcome, but say so in the pull request: nothing lints an extension CI does not know, and a recipe that arrives ungated is one the reader has to trust entirely on review.
 
 Every script carries a shebang. A script whose *Setup* tells the reader to execute it is committed with the executable bit set; a shell function the reader pastes into `~/.zshrc` is committed without it, and its *Setup* says to add it to the shell config, never to run it. A perfectly good script committed non-executable passes every check and then fails on the reader's machine with "permission denied".
 

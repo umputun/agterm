@@ -85,6 +85,9 @@ final class GhosttyApp {
     /// The sidebar row-text point size. The sidebar Coordinator reads it for each row's font and the derived
     /// row height (via `AppSettings.sidebarRowHeight`); settings-mirrored like `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+    /// The sizes the palette/picker and session switcher derive from the separate `interfaceFontSize`,
+    /// resolved once per settings change rather than per row.
+    private(set) var interfaceMetrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
     /// The base terminal font size in points (the Settings default; nil → the ghostty built-in). The renderer
     /// never reads it — it is the size a session with a nil `session.fontSize` reverts to, which the dashboard
     /// font-override clear needs to recognize its own async CELL_SIZE report (`pendingFontRestore`).
@@ -205,6 +208,11 @@ final class GhosttyApp {
         // 9...20, but a hand-edited settings.json must not draw a giant font in the clamped row
         // (sidebarRowHeight clamps its own copy).
         sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
+    }
+
+    /// `InterfaceMetrics` clamps its own input, so a hand-edited out-of-range value lands in range here too.
+    func setInterfaceFontSize(_ size: Double) {
+        interfaceMetrics = InterfaceMetrics(fontSize: size)
     }
 
     /// Set the agent-status glyph colors from the user's hex settings; nil or malformed → the system default.

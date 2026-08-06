@@ -577,11 +577,26 @@ struct WindowContentView: View {
     /// `frontmostWindowID`, and is observed, so this reacts.
     private var isFrontmost: Bool { library.activeWindowID == windowID }
 
+    /// Where the terminal area starts ON SCREEN: the sidebar column plus its 1pt divider, or 0 whenever no
+    /// sidebar is showing. The palette and switcher center their panel over THAT area rather than the whole
+    /// window, which otherwise reads as off-center whenever the sidebar is up. The palette's scrim stays
+    /// full width and dismisses on a click anywhere; the switcher's is deliberately click-through and ends
+    /// on Ctrl release.
+    ///
+    /// Zoom and the dashboard are why `store.sidebarVisible` alone is not the answer: both leave that flag
+    /// set while covering the sidebar (zoom drops `alwaysMountedSplitLayer` to opacity 0, the dashboard
+    /// paints over it), and `pickPaletteOverlay` is mounted through both. Reading the flag there shifts a
+    /// picker by half a sidebar that is not on screen.
+    private var terminalAreaInset: Double {
+        guard store.sidebarVisible, terminalZoom.target == nil, !dashboard.isOpen else { return 0 }
+        return store.sidebarWidth + 1
+    }
+
     /// Mounted only while a palette is open in the frontmost window; its content (search field + result
     /// list) is rebuilt from `palette.mode`.
     @ViewBuilder private var commandPaletteOverlay: some View {
         if isFrontmost, pick.pending == nil, palette.mode != nil {
-            CommandPalette(controller: palette, actions: actions)
+            CommandPalette(controller: palette, actions: actions, terminalAreaInset: terminalAreaInset)
         }
     }
 
@@ -594,6 +609,7 @@ struct WindowContentView: View {
             CommandPalette(
                 controller: palette,
                 actions: actions,
+                terminalAreaInset: terminalAreaInset,
                 items: pending.items.enumerated().map { index, item in
                     PaletteItem(id: item.id, title: item.label, subtitle: item.subtitle) {
                         pick.resolve(ControlPickResult(
@@ -619,7 +635,7 @@ struct WindowContentView: View {
     /// The Ctrl-Tab session switcher overlay, mounted only while cycling in the frontmost window.
     @ViewBuilder private var sessionSwitcherOverlay: some View {
         if isFrontmost, sessionSwitcher.isActive {
-            SessionSwitcherOverlay(switcher: sessionSwitcher, store: store)
+            SessionSwitcherOverlay(switcher: sessionSwitcher, store: store, terminalAreaInset: terminalAreaInset)
         }
     }
 

@@ -72,7 +72,10 @@ public final class WindowLibrary {
     /// independent of window reopen semantics.
     public private(set) var recentClosedItems: [RecentClosedItem]
 
-    /// The id of the frontmost on-screen window, mirrored into the index on change.
+    /// The id of the frontmost on-screen window, mirrored into the index on change. Outlives the window
+    /// only when it was the last one closed, so the index records which window the user exited from.
+    /// Resolving it to a live window guards on the store being loaded, so that survivor still reads as
+    /// "none open"; sites that only compare or reassign the raw id are unaffected either way.
     public var frontmostWindowID: UUID?
 
     /// Live per-window stores. `@ObservationIgnored`: read imperatively (scene/control), never by a view.
@@ -403,13 +406,11 @@ public final class WindowLibrary {
         }
         store.scheduleTreeChanged()
         stores[id] = nil
+        // the persisted `frontmost` is what the next launch's `reopen` fallback picks, and nil there
+        // sends it to `windows.first`. Pin unconditionally on the close that empties the open set, so a
+        // frontmost left nil or stale by `removeWindow` still reopens the exit window; otherwise hand it
+        // to a live window, which guards on the store being loaded.
         if openIDs().isEmpty {
-            // this close empties the open set — the app-exit close. Pin the frontmost to the closing
-            // window (even if a stale frontmost pointed elsewhere): the index persists with no open
-            // entries, so the next launch reaches reopen's never-windowless fallback, and the pin makes
-            // it target THIS window — whose exit capture was just persisted — instead of windows.first,
-            // which silently loses the close-the-last-window restore for any library whose oldest window
-            // isn't the one the user was working in.
             frontmostWindowID = id
         } else if frontmostWindowID == id {
             frontmostWindowID = activeWindowID

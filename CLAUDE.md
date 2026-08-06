@@ -102,6 +102,12 @@ concurrency before changing the bridge.
 - Manual Debug UI work uses a separate `open -n` instance with isolated state and short socket. Address
   its CLI with `--socket` after the subcommand. Stop only its known PID with SIGTERM; clean quit triggers
   the visible quit-confirmation alert. Use clean quit only when testing its final cwd/running-command flush.
+- Never run the Help ▸ Install installers (agent hooks, CLI, agent skill) from a Debug or worktree
+  instance, and never invoke `AgentHooksInstaller` in a manual run. They write `~/.config/agterm/`,
+  `~/.claude/settings.json`, and `~/.codex/`, which `AGTERM_STATE_DIR` does not isolate, and bake
+  `Bundle.main`'s `agtermctl` path into the installed wrappers. A Debug install silently repoints the
+  user's live hooks at DerivedData, and removing the worktree leaves them dead with no error.
+  Verify installer behavior through `agtermCore` tests, or redeploy Release and reinstall from it.
 - Unix socket paths cap near 104 bytes. A long scratch path lets the app launch while control bind fails.
 - Use absolute repo-root paths for existence checks. Tool cwd persists across calls and often drifts into
   `agtermCore`.

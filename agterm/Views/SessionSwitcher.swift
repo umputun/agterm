@@ -119,27 +119,80 @@ final class SessionSwitcher {
 struct SessionSwitcherOverlay: View {
     let switcher: SessionSwitcher
     let store: AppStore
+    /// Where the terminal area starts inside the window (sidebar plus divider, 0 when hidden). The panel
+    /// shifts by half of it so it centers over the terminal rather than the whole window.
+    let terminalAreaInset: Double
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    /// The chrome text sizes, read from the non-observable `GhosttyApp` — the overlay mounts fresh on each
+    /// Ctrl-Tab, so it never renders a stale size.
+    private let metrics = SessionSwitcherOverlay.resolvedMetrics()
+
+    /// The measured height of the row stack, so the panel hugs its rows until they outgrow the window.
+    @State private var rowsHeight: Double = 0
+
+    /// The panel width at the 13pt default, scaled by `metrics` and then fitted to the window.
+    private static let panelWidthAtDefaultFontSize: Double = 460
+    /// How far down the window the panel starts.
+    private static let topInsetFraction: Double = 0.12
+    /// Inset between the panel's rounded background and its rows.
+    private static let panelPadding: Double = 6
+
+    private static func resolvedMetrics() -> InterfaceMetrics {
+        GhosttyApp.shared.interfaceMetrics
+    }
 
     var body: some View {
         GeometryReader { geo in
+            let width = metrics.fittedPanelWidth(idealAtDefault: Self.panelWidthAtDefaultFontSize,
+                                                 windowWidth: geo.size.width,
+                                                 terminalAreaInset: terminalAreaInset)
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
-                panel
-                    .frame(width: 460)
-                    .padding(.top, geo.size.height * 0.12)
+                panel(maxRowsHeight: metrics.fittedPanelHeight(windowHeight: geo.size.height,
+                                                               topFraction: Self.topInsetFraction) - Self.panelPadding * 2)
+                    .frame(width: width)
+                    .padding(.top, geo.size.height * Self.topInsetFraction)
+                    .offset(x: metrics.panelOffset(width: width, windowWidth: geo.size.width,
+                                                   terminalAreaInset: terminalAreaInset))
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
-    private var panel: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(switcher.candidates.enumerated()), id: \.element) { position, id in
-                row(id, selected: position == switcher.index)
+    /// The rows scroll rather than overflow: ten candidates at a large interface size want more height than
+    /// a short window has, and the stack has no other way to give. `scrollTo` keeps the cycling selection
+    /// visible, which is the whole point of the overlay.
+    ///
+    /// The height is MEASURED and then capped, never proposed: a `ScrollView` takes whatever height it is
+    /// offered instead of sizing to its content, so handing `maxRowsHeight` straight to `.frame(maxHeight:)`
+    /// makes every panel that tall — three rows in a tall window drew a panel of mostly empty material.
+    /// `rowsHeight` starts at 0, where the frame stays unconstrained for the one layout pass before the
+    /// preference lands.
+    private func panel(maxRowsHeight: Double) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(switcher.candidates.enumerated()), id: \.element) { position, id in
+                        row(id, selected: position == switcher.index)
+                            .id(position)
+                    }
+                }
+                .background(
+                    GeometryReader { rows in
+                        Color.clear.preference(key: RowsHeightKey.self, value: rows.size.height)
+                    }
+                )
             }
+            .frame(height: metrics.measuredPanelHeight(rowsHeight: rowsHeight,
+                                                       maxRowsHeight: maxRowsHeight).map { CGFloat($0) })
+            .scrollBounceBehavior(.basedOnSize)
+            .onPreferenceChange(RowsHeightKey.self) { height in
+                rowsHeight = height
+            }
+            .onChange(of: switcher.index) { _, index in proxy.scrollTo(index) }
         }
-        .padding(6)
+        .padding(Self.panelPadding)
         .background(panelBackground, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
@@ -162,6 +215,13 @@ struct SessionSwitcherOverlay: View {
     }
 }
 
+/// Carries the measured row-stack height out of the scroll content, so the panel can size to its rows
+/// instead of to the height it is offered.
+private struct RowsHeightKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) { value = max(value, nextValue()) }
+}
+
 /// One session row for the switcher surfaces — the display name over a `workspace · cwd` subtitle. Shared by
 /// the Ctrl-Tab overlay (`SessionSwitcherOverlay`) and the recent-sessions popover
 /// (`WindowContentView.recentSessionsPopover`) so the two never drift; the caller supplies the row's
@@ -179,20 +239,30 @@ struct SessionSwitcherRow: View {
     var statusColorHex: String?
     var statusShape: StatusShape?
 
+    /// Read from the non-observable `GhosttyApp` — both the Ctrl-Tab overlay and the popovers mount fresh
+    /// on every open, so neither renders a stale size.
+    private let metrics = SessionSwitcherRow.resolvedMetrics()
+
+    private static func resolvedMetrics() -> InterfaceMetrics {
+        GhosttyApp.shared.interfaceMetrics
+    }
+
     var body: some View {
         HStack {
             if let status { StatusGlyph(status: status, colorHex: statusColorHex, shape: statusShape) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).foregroundStyle(foreground ?? Color.primary)
+                Text(title)
+                    .font(.system(size: metrics.base))
+                    .foregroundStyle(foreground ?? Color.primary)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.system(size: metrics.secondary))
                     .foregroundStyle(foreground.map { $0.opacity(0.6) } ?? Color.secondary)
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, metrics.scaled(12))
+        .padding(.vertical, metrics.scaled(6))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
