@@ -22,6 +22,12 @@ paths:
 - Pass `theme = light:X,dark:Y` raw. Pinned libghostty `4dcb09ada` supports conditional themes, but
   `set_color_scheme` only changes conditional state and emits an unhandled soft reload. agterm must set
   app and surface schemes, then call `update_config`.
+- A dark launch must re-side the app config through `update_config` BEFORE the first surface exists;
+  `GhosttyApp.syncLaunchColorScheme`, called from `applicationDidFinishLaunching`, owns that.
+  `Surface.init` rebuilds a surface config whose conditional state differs from the app's, keeps only
+  `working-directory`, and drops the per-surface env, `initial_input` and `command` (#260).
+  A host-built config always resolves light, and `GhosttyApp` is built before `NSApp` exists, so its own
+  appearance read is always light; the KVO reload is debounced and lands after the launch restore.
 - Observe app-level `NSApplication.effectiveAppearance` through KVO, not per-view appearance,
   `AppleInterfaceStyle`, or the early distributed notification. Post the KVO-delivered settled `isDark`
   and thread it through `reloadConfigPreservingSessionZoom`; do not use `apply`, whose unchanged text skips

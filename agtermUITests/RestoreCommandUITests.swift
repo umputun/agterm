@@ -12,6 +12,7 @@ final class RestoreCommandUITests: XCTestCase {
     private var marker: URL!
     private var splitMarker: URL!
     private var overrideMarker: URL!
+    private var envProbe: URL!
     private var socketPath: String!
 
     override func setUp() async throws {
@@ -22,6 +23,7 @@ final class RestoreCommandUITests: XCTestCase {
         marker = stateDir.appendingPathComponent("restore-marker")
         splitMarker = stateDir.appendingPathComponent("restore-split-marker")
         overrideMarker = stateDir.appendingPathComponent("restore-override-marker")
+        envProbe = stateDir.appendingPathComponent("env-probe")
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         // short socket path in the runner's temp dir: under the ~104-byte sun_path limit AND inside the
@@ -48,6 +50,25 @@ final class RestoreCommandUITests: XCTestCase {
 
         XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
                       "restore should re-run the captured foreground `tee` command and recreate the marker")
+    }
+
+    /// #260: on a DARK launch a conditional `theme = light:,dark:` made libghostty rebuild each surface's
+    /// config from the config files alone, dropping the injected `AGTERM_*` and agterm's `TERM_PROGRAM`
+    /// identity (and, on a restored pane, the replay). A fresh session made later was unaffected, which is
+    /// why this asserts on the RESTORED one.
+    func testDarkLaunchWithDualThemeKeepsRestoredPaneEnvironment() throws {
+        seedDualTheme()
+        app.launchEnvironment["AGTERM_UITEST_FORCE_APPEARANCE"] = "dark"
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session row")
+        gracefulQuit()
+
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "restored session row")
+        let probe = try XCTUnwrap(writeEnvProbe(), "the restored pane's shell should answer the env probe")
+        let fields = probe.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        XCTAssertEqual(fields.first, "agterm", "a restored pane must keep agterm's TERM_PROGRAM identity")
+        XCTAssertFalse(fields.last?.isEmpty ?? true, "a restored pane must keep its injected AGTERM_SESSION_ID")
     }
 
     func testRestoreOffDoesNotReRun() throws {
@@ -531,6 +552,28 @@ final class RestoreCommandUITests: XCTestCase {
     private func seedRestoreFlag(_ on: Bool) {
         let json = #"{"restoreRunningCommand":\#(on)}"#
         try? Data(json.utf8).write(to: stateDir.appendingPathComponent("settings.json"))
+    }
+
+    /// Seed both theme slots + following, which makes `ghosttyConfigLines()` emit the CONDITIONAL
+    /// `theme = light:,dark:` — the config shape that triggers the surface-config rebuild.
+    private func seedDualTheme() {
+        let json = #"{"restoreRunningCommand":true,"theme":"Builtin Light","darkTheme":"agterm","#
+            + #""followSystemAppearance":true}"#
+        try? Data(json.utf8).write(to: stateDir.appendingPathComponent("settings.json"))
+    }
+
+    /// Type a probe writing the focused shell's agterm identity + session id into `envProbe`, retried like
+    /// `runTeeMarker` because a freshly realized surface's shell may not be reading yet.
+    private func writeEnvProbe() -> String? {
+        for attempt in 0..<3 {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            if attempt > 0 { app.typeKey("u", modifierFlags: .control) }
+            app.typeText("printf '%s|%s' \"$TERM_PROGRAM\" \"$AGTERM_SESSION_ID\" > \(envProbe.path)\n")
+            if poll({ FileManager.default.fileExists(atPath: self.envProbe.path) }, timeout: 6) {
+                return try? String(contentsOf: envProbe, encoding: .utf8)
+            }
+        }
+        return nil
     }
 
     /// Type `tee <marker>` into the focused terminal and confirm it created the marker (so it is the live
