@@ -19,6 +19,8 @@ paths:
 - Theme slots and following are owned by the theme-picker rule. `ToolbarMode` is
   `normal|compact|hidden`, stored raw; nil defaults compact. Normal adds cwd, hidden removes titlebar and
   traffic lights but leaves an invisible roughly 3-point drag strip above the first row at padding 6.
+  Hidden also drops the title/terminal hairline both columns draw: `titlebarHeight` is 0 there, so the line
+  would sit on the window's top edge separating nothing and read as a rendering artifact.
   `effectiveToolbarMode` falls back through legacy `compactToolbar` (`false` = normal, nil/true = compact);
   writing a mode clears the legacy field.
 - Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
