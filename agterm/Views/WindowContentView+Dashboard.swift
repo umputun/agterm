@@ -110,6 +110,7 @@ extension WindowContentView {
                 pillColor: dashboardPillColor,
                 pillTextColor: dashboardPillTextColor,
                 focusAllowed: pick.pending == nil,
+                showsTopHairline: toolbarMode != .hidden,
                 onClick: { clickDashboardMember($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }

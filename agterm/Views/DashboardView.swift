@@ -31,6 +31,9 @@ struct DashboardView: View {
     let pillTextColor: Color
     /// False while a control picker is above the dashboard, so its key catcher cannot steal focus.
     let focusAllowed: Bool
+    /// Whether to restore the title-bar hairline the opaque backdrop covers. False in hidden toolbar mode,
+    /// which draws no such line and insets the overlay by nothing, so it would sit on the window's top edge.
+    let showsTopHairline: Bool
     /// A single click on a cell: the wiring flashes the active frame, then enters after a brief delay, so the
     /// click is visibly acknowledged before the grid closes.
     let onClick: (DashboardMember) -> Void
@@ -68,9 +71,11 @@ struct DashboardView: View {
         // the margins, deliberately dropping window translucency/blur. Not a black scrim — over the
         // translucent backing that read as near-black.
         .background(captionBackground)
-        // restores the hairline the opaque backdrop covers — the same 1px themed line `detailColumn` draws
-        // under the title bar.
-        .overlay(alignment: .top) { Rectangle().fill(highlightColor.opacity(0.1)).frame(height: 1) }
+        // restores the hairline the opaque backdrop covers, matching `WindowContentView.titlebarHairline`,
+        // which likewise draws nothing in hidden toolbar mode.
+        .overlay(alignment: .top) {
+            if showsTopHairline { Rectangle().fill(highlightColor.opacity(0.1)).frame(height: 1) }
+        }
         // behind the cells so it never intercepts their click hit targets.
         .background {
             DashboardKeyCatcher(
