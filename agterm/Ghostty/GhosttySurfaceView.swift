@@ -256,7 +256,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var _selectedRange = NSRange(location: NSNotFound, length: 0)
     /// The in-flight composition's text. libghostty owns the preedit for RENDERING (`ghostty_surface_preedit`)
     /// and hands nothing back, so the only way to COMMIT a live composition instead of throwing it away is to
-    /// keep our own copy — which the AX insert path does (`commitOrDiscardComposition`). Maintained by the
+    /// keep our own copy — which every programmatic insert does (`commitOrDiscardComposition`). Maintained by the
     /// three `NSTextInputClient` methods that own `_markedRange`, and always cleared with it.
     var _markedText = ""
 
@@ -278,7 +278,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var axPostedExposed = false
 
     /// True only for the duration of the `discardMarkedText()` call inside `commitOrDiscardComposition`,
-    /// where `insertText` refuses re-entrant input. The AX path commits our copy of the composition itself
+    /// where `insertText` refuses re-entrant input. That helper commits our copy of the composition itself
     /// and then tears the IME session down; an input method that FINALIZES rather than abandons on that
     /// teardown would send the same characters back through `insertText` and land them twice. Nothing else
     /// legitimately types during that synchronous window, so dropping the re-entrant insert is safe.

@@ -80,6 +80,13 @@ paths:
   submit a trailing newline when the program disables mode 2004. Do not reuse `inject`, which intentionally
   translates newline/return into Return for `session.type`. `pasteboardText` remains shared with clipboard
   paste, and `ShellEscape.path` keeps file paths one token; #96 newline escaping remains defense in depth.
+- Both programmatic writers commit a live IME composition first through `commitOrDiscardComposition`, in
+  `GhosttySurfaceView+Input.swift` beside the `_markedText`/`_markedRange` state it operates on:
+  `insertPasted` (drop and the AX control-character branch) and `inject` (`session.type`). Text inserted
+  under a composition leaves it to re-commit on the next keystroke, landing the half-typed word after the
+  inserted text. It no-ops unless this pane is composing, and it tears the IME session down only while the
+  view holds first responder, because `inputContext` resolves to the shared context and discarding from a
+  background pane would abandon whichever view is really composing.
 - Never change the `sessionDetail` ZStack shape for per-session toggles; doing so rehosts `NSSplitView`
   into the titlebar. Search bar is a `detailPane` top-trailing overlay, above deck, scratch, and overlays.
   Overlay panel stays an always-present `sessionDetail` sibling whose internal content changes.

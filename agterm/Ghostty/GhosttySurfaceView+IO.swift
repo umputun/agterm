@@ -18,6 +18,10 @@ extension GhosttySurfaceView {
     @discardableResult
     func inject(text: String) -> Bool {
         guard let surface else { return false }
+        // automation must not type underneath a live IME composition: it would survive the injected
+        // keystrokes and re-commit on the user's next one, landing their half-typed word after the
+        // injected text. No-op unless THIS pane is composing (see `commitOrDiscardComposition`).
+        commitOrDiscardComposition()
         for segment in KeystrokeSegments.split(text) {
             switch segment {
             case let .text(segment):
@@ -42,6 +46,10 @@ extension GhosttySurfaceView {
     /// copied synchronously; a no-op when the surface is not created yet.
     func insertPasted(text: String) {
         guard let surface, !text.isEmpty else { return }
+        // same reason as `inject`: a drop (or an AX control-character insert) landing under a live
+        // composition leaves it to re-commit on the next keystroke. Committing first is what AppKit does
+        // when a field gives up a composition. No-op unless THIS pane is composing.
+        commitOrDiscardComposition()
         text.withCString { ghostty_surface_text(surface, $0, UInt(text.utf8.count)) }
     }
 

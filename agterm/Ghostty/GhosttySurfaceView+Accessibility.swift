@@ -269,39 +269,6 @@ extension GhosttySurfaceView {
         insertFromAccessibility(text)
     }
 
-    /// End any in-flight IME composition before an AX insert — by COMMITTING it, not throwing it away.
-    ///
-    /// The composition is text the user has already typed. `discardMarkedText()` alone abandons the
-    /// conversion session without committing, so a CJK user mid-word when a dictation insert arrives lost
-    /// those characters outright, with the dictated text landing in their place. AppKit's own behaviour
-    /// when a field gives up an active composition (a click away, a focus change) is to commit it, so
-    /// that is what this does: send our copy of the marked string through the ordinary `insertText` path
-    /// first, THEN `discardMarkedText()` so the input context drops its now-committed session and cannot
-    /// re-commit the same characters on the next keystroke. Exactly once, either way.
-    ///
-    /// The copy is needed because libghostty owns the preedit for rendering and hands nothing back, and
-    /// `attributedSubstring(forProposedRange:)` returns nil — `_markedText` (maintained beside
-    /// `_markedRange` by the three `NSTextInputClient` methods) is the only source for it.
-    ///
-    /// "Exactly once" is enforced, not assumed. `discardMarkedText()` is documented to abandon the session
-    /// without committing, but an input method that FINALIZES on teardown instead would push the same
-    /// characters back through `insertText` and land them a second time (`今日今日` ahead of the dictated
-    /// text). `committingComposition` fences that one synchronous call so a re-entrant insert is dropped;
-    /// nothing else can legitimately type inside it. The remaining unknown is whether any shipping IME
-    /// behaves that way — this makes the answer not matter.
-    ///
-    /// Scope: this is the AX write path only. `insertPasted` (drop) and `inject` (`session.type`) still
-    /// insert underneath a live composition, which survives and re-commits on the next keystroke — the
-    /// same defect, on paths this change deliberately leaves alone.
-    private func commitOrDiscardComposition() {
-        if hasMarkedText(), !_markedText.isEmpty {
-            insertText(_markedText, replacementRange: NSRange(location: NSNotFound, length: 0))
-        }
-        committingComposition = true
-        inputContext?.discardMarkedText()
-        committingComposition = false
-    }
-
     /// The shared AX insert: fire the input-side hooks `keyDown` fires, then route to the pty.
     ///
     /// Dictation IS typing, so it owes the same two side effects every keystroke has — without them a
@@ -314,6 +281,9 @@ extension GhosttySurfaceView {
     private func insertFromAccessibility(_ text: String) {
         onUserInput?()
         onUserInputClearsStatus?(false)
+        // ends any live composition BEFORE either branch. `insertPasted` commits for itself now, so the
+        // paste branch's second call is a no-op against the `hasMarkedText()` guard; the `insertText`
+        // branch has no commit of its own (it IS the commit path), so the call has to happen here.
         commitOrDiscardComposition()
         if AccessibilityInsert.needsPasteRouting(text) {
             unmarkText() // clear libghostty's preedit + _markedRange; the keyboard path's insertText does this itself
