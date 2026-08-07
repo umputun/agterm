@@ -315,7 +315,8 @@ public final class AppStore {
         guard session.hudActive, let spec = session.hudSpec else { return nil }
         return ControlHudNode(message: spec.message, detail: spec.detail,
                               spinner: spec.spinner?.rawValue ?? HudSpinner.noneName,
-                              backgroundColor: spec.backgroundColor, sizePercent: session.overlaySizePercent,
+                              backgroundColor: spec.backgroundColor, textColor: spec.textColor,
+                              sizePercent: session.overlaySizePercent,
                               heightPercent: session.hudHeightPercent, position: spec.position.rawValue)
     }
 

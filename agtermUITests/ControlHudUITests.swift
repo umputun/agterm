@@ -38,10 +38,37 @@ final class ControlHudUITests: ControlAPITestCase {
         XCTAssertEqual(defaulted["position"] as? String, "center",
                        "an omitted position must report its effective value, not be omitted")
 
-        try assertOK(openHud(message: "pinned to the top", position: "top"))
-        let requested = try XCTUnwrap(pollHud(session, message: "pinned to the top"),
+        try assertOK(openHud(message: "pinned to a corner", position: "top-right"))
+        let requested = try XCTUnwrap(pollHud(session, message: "pinned to a corner"),
                                       "a second hud should replace the first")
-        XCTAssertEqual(requested["position"] as? String, "top")
+        XCTAssertEqual(requested["position"] as? String, "top-right")
+
+        // the bare spelling is still accepted end to end, and normalizes to the anchor it names
+        try assertOK(openHud(message: "pinned by the alias", position: "top"))
+        let aliased = try XCTUnwrap(pollHud(session, message: "pinned by the alias"))
+        XCTAssertEqual(aliased["position"] as? String, "top-center",
+                       "an alias must read back as its canonical anchor, not as the spelling that was sent")
+    }
+
+    func testTextColorReadsBackAndAnUpdateRecolorsInPlace() throws {
+        let session = try activeSessionID()
+        try assertOK(openHud(message: "coloring", textColor: "#e0e0e0"))
+        let opened = try XCTUnwrap(pollHud(session, message: "coloring"))
+        XCTAssertEqual(opened["textColor"] as? String, "#e0e0e0")
+
+        try assertOK(sendCommand(request(command: "session.hud.update", target: session,
+                                         args: ["message": "recolored", "textColor": "#7ec07e"])))
+
+        let updated = try XCTUnwrap(pollHud(session, message: "recolored"))
+        XCTAssertEqual(updated["textColor"] as? String, "#7ec07e",
+                       "unlike the background, the text color tracks the latest update")
+    }
+
+    func testTextColorIsOmittedWhenTheCallerSetNone() throws {
+        let session = try activeSessionID()
+        try assertOK(openHud(message: "plain"))
+        let node = try XCTUnwrap(pollHud(session, message: "plain"))
+        XCTAssertNil(node["textColor"], "a panel on the terminal foreground reports no color")
     }
 
     func testHudUpdateRewritesTheReadBackInPlace() throws {
@@ -126,11 +153,13 @@ final class ControlHudUITests: ControlAPITestCase {
     // MARK: - Helpers
 
     private func openHud(message: String, detail: String? = nil, spinner: String? = nil,
-                         position: String? = nil, sizePercent: Int? = nil) throws -> [String: Any] {
+                         position: String? = nil, textColor: String? = nil,
+                         sizePercent: Int? = nil) throws -> [String: Any] {
         var args: [String: Any] = ["message": message]
         if let detail { args["detail"] = detail }
         if let spinner { args["spinner"] = spinner }
         if let position { args["position"] = position }
+        if let textColor { args["textColor"] = textColor }
         if let sizePercent { args["sizePercent"] = sizePercent }
         return try sendCommand(request(command: "session.hud.open", args: args))
     }

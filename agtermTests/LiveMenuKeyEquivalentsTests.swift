@@ -11,6 +11,23 @@ import agtermCore
 /// build the menu shapes instead.
 @MainActor
 final class LiveMenuKeyEquivalentsTests: XCTestCase {
+    private var priorUsesUserKeyEquivalents = true
+
+    // AppKit substitutes an App Shortcut from System Settings by menu-item TITLE the moment the item joins
+    // a menu, a detached one included, replacing both the key equivalent and the mask these tests just set.
+    // "Paste and Match Style", "Zoom" and "Close" are real system commands, so a developer who rebound one
+    // would fail these on his machine alone.
+    override func setUp() {
+        super.setUp()
+        priorUsesUserKeyEquivalents = NSMenuItem.usesUserKeyEquivalents
+        NSMenuItem.usesUserKeyEquivalents = false
+    }
+
+    override func tearDown() {
+        NSMenuItem.usesUserKeyEquivalents = priorUsesUserKeyEquivalents
+        super.tearDown()
+    }
+
     private func item(_ title: String, key: String, mods: NSEvent.ModifierFlags = .command,
                       action: Selector? = nil, enabled: Bool = true) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)

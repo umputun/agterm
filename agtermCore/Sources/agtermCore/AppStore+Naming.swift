@@ -24,4 +24,10 @@ extension AppStore {
         scheduleTreeChanged()
         save()
     }
+
+    /// The name of `workspaceID`; nil when it is gone, and when it is blank — `renameWorkspace` rejects a
+    /// blank one, but `AppStore+PendingClose` rebuilds a `Workspace` from a snapshot without that guard.
+    public func workspaceName(_ workspaceID: UUID) -> String? {
+        workspaces.first(where: { $0.id == workspaceID })?.name.trimmedOrNil
+    }
 }

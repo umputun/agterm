@@ -53,4 +53,13 @@ struct AppStoreNameSanitizeTests {
         // blank gate runs after sanitizing, so a control-char-only name is nil, not a new empty workspace.
         #expect(store.ensureWorkspace(named: "\u{07}") == nil)
     }
+
+    @Test func workspaceNameTreatsABlankAsAbsent() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        #expect(store.workspaceName(ws.id) == "work")
+        // renameWorkspace rejects blank; AppStore+PendingClose rebuilds from a snapshot without that gate.
+        store.workspaces[0].name = "   "
+        #expect(store.workspaceName(ws.id) == nil)
+    }
 }

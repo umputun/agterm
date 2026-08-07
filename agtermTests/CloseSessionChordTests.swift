@@ -13,6 +13,21 @@ import agtermCore
 @MainActor
 final class CloseSessionChordTests: XCTestCase {
     private let commandW = Chord(mods: [.command], key: "w")
+    private var priorUsesUserKeyEquivalents = true
+
+    // AppKit substitutes an App Shortcut from System Settings by menu-item TITLE the moment the item joins
+    // a menu, replacing the key equivalent these tests set. "Close" and Close Session are both rebindable,
+    // and both titles are load-bearing here, so the substitution is suppressed rather than the titles changed.
+    override func setUp() {
+        super.setUp()
+        priorUsesUserKeyEquivalents = NSMenuItem.usesUserKeyEquivalents
+        NSMenuItem.usesUserKeyEquivalents = false
+    }
+
+    override func tearDown() {
+        NSMenuItem.usesUserKeyEquivalents = priorUsesUserKeyEquivalents
+        super.tearDown()
+    }
 
     private func keymap(_ overrides: [BuiltinAction: Chord] = [:]) -> Keymap {
         Keymap(builtinOverrides: overrides, commands: [])

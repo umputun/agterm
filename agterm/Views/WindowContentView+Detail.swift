@@ -221,7 +221,8 @@ extension WindowContentView {
                                 .strokeBorder(Color.white.opacity(style.borderOpacity), lineWidth: 1)
                         )
                         .shadow(radius: style.shadowRadius)
-                        .offset(y: style.verticalOffset(paneHeight: geo.size.height))
+                        .offset(x: style.horizontalOffset(paneWidth: geo.size.width),
+                                y: style.verticalOffset(paneHeight: geo.size.height))
                         // a replacement (HUD→HUD, HUD→program) keeps `overlayActive` true across the swap, so
                         // without the generation SwiftUI reuses the host: `makeNSView` never re-runs and
                         // `updateNSView` hits a torn-down view with `overlaySurface` nil.
@@ -333,7 +334,8 @@ struct OverlayPanelStyle: Equatable {
     let backdrop: Bool
     /// whether the panel takes clicks and first responder at all.
     let interactive: Bool
-    /// where the panel sits vertically in the pane; program overlays are always centered.
+    /// which of the pane's nine anchors the panel sits on, read on both axes; program overlays are always
+    /// centered.
     let position: HudPosition
 
     /// The floating program overlay's chrome: a window hovering over the session, so a wide radius and a
@@ -369,19 +371,32 @@ struct OverlayPanelStyle: Equatable {
                                  position: session.hudSpec?.position ?? .center)
     }
 
-    /// The panel's offset from the pane's center, positive downward. `top`/`bottom` hold
+    /// The panel's offset from the pane's center, positive downward. A `top`/`bottom` anchor holds
     /// `HudPosition.edgeMarginPercent` of the pane clear at that edge. It is the HEIGHT that decides how far
     /// the panel can travel, and every height a HUD can reach fits that margin — `HudLayout.heightPercent`
     /// caps it at `maxSizePercent`, where two margins exactly fill the rest — so `max(0,` is defensive only,
-    /// for a panel no supported path can produce. A message-sized panel now leaves most of the pane free,
-    /// so `top` and `bottom` reach the edge instead of barely clearing center.
+    /// for a panel no supported path can produce. A message-sized panel leaves most of the pane free, so the
+    /// edge anchors reach the edge instead of barely clearing center.
     func verticalOffset(paneHeight: CGFloat) -> CGFloat {
+        Self.offset(along: paneHeight, fraction: heightFraction, band: position.verticalBand)
+    }
+
+    /// The same math across the pane's WIDTH, positive rightward, off the anchor's column. The invariant that
+    /// makes the margin always fit holds identically here: `HudLayout.clampSizePercent` bounds every width,
+    /// the caller's `--size-percent` included, at the same `maxSizePercent` two margins fill the rest of.
+    func horizontalOffset(paneWidth: CGFloat) -> CGFloat {
+        Self.offset(along: paneWidth, fraction: widthFraction, band: position.horizontalBand)
+    }
+
+    /// One axis' travel: half the free room left after the panel and its edge margin, signed by the band.
+    private static func offset(along extent: CGFloat, fraction: CGFloat,
+                               band: HudPosition.Band) -> CGFloat {
         let margin = CGFloat(HudPosition.edgeMarginPercent) / 100
-        let free = max(0, paneHeight * ((1 - heightFraction) / 2 - margin))
-        switch position {
-        case .center: return 0
-        case .top: return -free
-        case .bottom: return free
+        let free = max(0, extent * ((1 - fraction) / 2 - margin))
+        switch band {
+        case .middle: return 0
+        case .leading: return -free
+        case .trailing: return free
         }
     }
 }

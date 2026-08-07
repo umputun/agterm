@@ -77,6 +77,13 @@ extension WorkspaceSidebar.Coordinator {
             menu.addItem(rename)
         }
 
+        if node.kind == .workspace || sessionCount == 1 {
+            let copyName = NSMenuItem(title: "Copy Name", action: #selector(menuCopyName(_:)), keyEquivalent: "")
+            copyName.target = self
+            copyName.representedObject = node
+            menu.addItem(copyName)
+        }
+
         switch node.kind {
         case .session:
             // "Duplicate Session" opens a fresh shell in this session's directory, right after it.
@@ -181,6 +188,21 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuRename(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
         renameController.beginEditing(node: node)
+    }
+
+    /// Copies the clicked row's name — `Session.displayName`, or the workspace's — to the general
+    /// pasteboard.
+    @objc private func menuCopyName(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        let name = switch node.kind {
+        case .session: store.session(withID: node.id)?.displayName
+        case .workspace: store.workspaceName(node.id)
+        }
+        // a row gone between the right-click and the choice, or a blank workspace name: leave the
+        // pasteboard as the user had it rather than clearing it to write nothing.
+        guard let name else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(name, forType: .string)
     }
 
     @objc private func menuMove(_ sender: NSMenuItem) {

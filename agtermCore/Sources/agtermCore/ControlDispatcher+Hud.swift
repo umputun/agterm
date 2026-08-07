@@ -51,15 +51,20 @@ extension ControlDispatcher {
         if let color = args?.color, !WatermarkConfig.isValidColorHex(color) {
             return .rejected(ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)"))
         }
+        if let textColor = args?.textColor, !WatermarkConfig.isValidColorHex(textColor) {
+            return .rejected(ControlResponse(ok: false, error: "invalid text color: \(textColor) (#rrggbb)"))
+        }
         if let percent = args?.sizePercent, !(1...100).contains(percent) {
             return .rejected(ControlResponse(ok: false,
                                              error: "\(request.cmd.rawValue): --size-percent must be 1...100"))
         }
+        // `parse` takes the `top`/`bottom` aliases beside the nine anchors, and the rejection lists them for
+        // the same reason the spinner's does: naming only the canonical set would refuse values this accepts.
         var position = HudPosition.defaultPosition
         if let raw = args?.position {
-            guard let parsed = HudPosition(rawValue: raw) else {
+            guard let parsed = HudPosition.parse(raw) else {
                 return .rejected(ControlResponse(
-                    ok: false, error: "invalid position: \(raw) (\(HudPosition.validNamesList))"))
+                    ok: false, error: "invalid position: \(raw) (\(HudPosition.acceptedNamesList))"))
             }
             position = parsed
         }
@@ -74,6 +79,7 @@ extension ControlDispatcher {
             spinner = parsed
         }
         return .spec(HudSpec(message: message, detail: args?.detail, spinner: spinner,
-                             backgroundColor: args?.color, sizePercent: args?.sizePercent, position: position))
+                             backgroundColor: args?.color, textColor: args?.textColor,
+                             sizePercent: args?.sizePercent, position: position))
     }
 }

@@ -174,8 +174,8 @@ resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by th
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `overlay open
 --pane`, independent of the session-wide `overlay` flag),
 `hud` (the message panel occupying the session-wide slot — `{message, detail?, spinner, backgroundColor?,
-sizePercent?, heightPercent?, position}`, the two percents being the panel's width and height shares —
-omitted when none is up; the read side of `session hud`. `position` and `spinner`
+textColor?, sizePercent?, heightPercent?, position}`, the two percents being the panel's width and height
+shares — omitted when none is up; the read side of `session hud`. `position` and `spinner`
 always report the EFFECTIVE value, `center` and a static panel's `none` included, so a caller who omitted
 them never has to know the defaults; `spinner` names the STYLE, so `none` is what a caller echoes back to
 turn one off. While a HUD is up the node's `overlay` reads `false` and `overlaySizePercent` is omitted, so a
@@ -331,8 +331,8 @@ omitted when expanded).
   `--background-color` gives the overlay pane its own solid color, independent of the session's. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
-- `hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N]` ·
-  `hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--size-percent N]` ·
+- `hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N]` ·
+  `hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N]` ·
   `hud close` — post a small **passive** panel over the session saying what you are doing
   ("gathering options…"). Unlike an overlay it takes no input and steals nothing: the session keeps first
   responder, the user keeps typing, and the terminal behind it is neither dimmed nor click-blocked. Use it
@@ -342,15 +342,21 @@ omitted when expanded).
   `--spinner` animates a glyph in the default `bar` style and `--spinner-style bar|braille|circle|blocks|dot`
   picks another, turning the spinner on by itself (`dot` blinks instead of animating, for a panel up for
   minutes; an update may switch style in place). `--spinner-style none` is accepted and leaves the panel
-  static, so the `none` a read-back reports round-trips. `--position` places it vertically (default `center`; `top` and `bottom`
-  hold a fixed margin off the pane edge automatically). The panel is sized from the message on both axes —
+  static, so the `none` a read-back reports round-trips. `--position` anchors it to any of the nine
+  `top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right`
+  (default `center`), the same set `session background` takes; every anchor off center holds a fixed margin
+  off that pane edge automatically, so a corner keeps the panel out of the text the user is reading. The
+  bare `top`/`bottom` are still accepted for `top-center`/`bottom-center`, and the read-back reports the
+  canonical anchor. The panel is sized from the message on both axes —
   width from the longest line, height from the number of them — so a title and a subtitle give a wide, short
   panel, not a square one. `--size-percent N` (1-100) overrides the WIDTH only, bounded to 10-80% of the
   pane, since a message must never cover the session it is about, so a requested 100 reads back as 80. The
-  height always follows the message. `hud update` repaints in place with no re-spawn and no blink,
-  and REPLACES the whole spec — repeat `--detail`/`--spinner` to keep them, since an omitted one drops.
-  It takes no `--background-color`: the surface reads that once at creation, so only a fresh `hud` changes
-  it and `tree` keeps reporting the creation color across updates. Message and detail are capped at 256 characters and reject control characters, newline included.
+  height always follows the message. `--text-color` colors the panel's TEXT and `--background-color` its
+  backing, independently. `hud update` repaints in place with no re-spawn and no blink,
+  and REPLACES the whole spec — repeat `--detail`/`--spinner`/`--text-color` to keep them, since an omitted
+  one drops. It takes no `--background-color`: the surface reads that once at creation, so only a fresh
+  `hud` changes it and `tree` keeps reporting the creation color across updates, while the text color rides
+  the panel's body file and an update recolors it in place. Message and detail are capped at 256 characters and reject control characters, newline included.
   It occupies the SAME slot as `overlay open`, so: a second `hud` replaces the first, `overlay open`
   replaces a HUD (a running program is never replaced), `overlay close` and ⌘W take a HUD down,
   `overlay result` refuses with `no overlay result: the slot holds a hud`, `overlay resize --size-percent`

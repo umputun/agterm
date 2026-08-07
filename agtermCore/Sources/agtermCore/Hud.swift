@@ -11,6 +11,10 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public let spinner: HudSpinner?
     /// `#rrggbb` background for the panel's surface; nil keeps the session's terminal background.
     public let backgroundColor: String?
+    /// `#rrggbb` for the panel's TEXT; nil keeps the terminal foreground. Unlike `backgroundColor`, which the
+    /// surface reads once at creation, this rides the body file's header as an SGR run, so `hud update` can
+    /// change it in place — `HudLayout.renderedBody` owns the encoding.
+    public let textColor: String?
     /// Caller override for the panel's share of the pane WIDTH; nil lets `HudLayout` measure it from the
     /// message. There is no height counterpart — `HudLayout.heightPercent` owns why.
     public let sizePercent: Int?
@@ -22,26 +26,28 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public static let maxTextLength = 256
 
     public init(message: String, detail: String? = nil, spinner: HudSpinner? = nil,
-                backgroundColor: String? = nil,
+                backgroundColor: String? = nil, textColor: String? = nil,
                 sizePercent: Int? = nil, position: HudPosition = .defaultPosition) {
         self.message = message
         self.detail = detail
         self.spinner = spinner
         self.backgroundColor = backgroundColor
+        self.textColor = textColor
         self.sizePercent = sizePercent
         self.position = position
     }
 
     enum CodingKeys: String, CodingKey {
-        case message, detail, spinner, backgroundColor, sizePercent, position
+        case message, detail, spinner, backgroundColor, textColor, sizePercent, position
     }
 
     /// A copy carrying `color` in place of this spec's own background. `AppStore.updateHud` holds the LIVE
     /// panel's color across an update with it: the surface reads that color once at creation, so a stored
-    /// spec carrying any other value would report a color the panel will never paint.
+    /// spec carrying any other value would report a color the panel will never paint. `textColor` is NOT
+    /// held this way — it rides the header the helper re-reads, so an update's own value is what paints.
     func withBackgroundColor(_ color: String?) -> HudSpec {
         HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: color,
-                sizePercent: sizePercent, position: position)
+                textColor: textColor, sizePercent: sizePercent, position: position)
     }
 
     public init(from decoder: Decoder) throws {
@@ -50,6 +56,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
         detail = try c.decodeIfPresent(String.self, forKey: .detail)
         spinner = try c.decodeIfPresent(HudSpinner.self, forKey: .spinner)
         backgroundColor = try c.decodeIfPresent(String.self, forKey: .backgroundColor)
+        textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
         sizePercent = try c.decodeIfPresent(Int.self, forKey: .sizePercent)
         position = try c.decodeIfPresent(HudPosition.self, forKey: .position) ?? .defaultPosition
     }
@@ -127,28 +134,91 @@ public enum HudSpinner: String, Codable, CaseIterable, Sendable {
     public static let staticInterval = "0.5"
 }
 
-/// Where the panel sits vertically in the pane. `CaseIterable` so dispatcher validation and CLI help derive
-/// from the cases rather than repeating them.
+/// Where the panel sits in the pane: the nine anchors of a 3x3 grid, spelled exactly as
+/// `BackgroundWatermark.Position` so `--position` means one thing across `session.background` and
+/// `session.hud`. `CaseIterable` so dispatcher validation and CLI help derive from the cases rather than
+/// repeating them.
 public enum HudPosition: String, Codable, CaseIterable, Sendable {
-    case top, center, bottom
+    case topLeft = "top-left", topCenter = "top-center", topRight = "top-right"
+    case centerLeft = "center-left", center, centerRight = "center-right"
+    case bottomLeft = "bottom-left", bottomCenter = "bottom-center", bottomRight = "bottom-right"
+
+    /// The bare spellings this enum shipped with, kept accepted so a caller written against `top`/`bottom`
+    /// keeps working. They NORMALIZE: `parse` resolves them to the middle column, and the read-back reports
+    /// that canonical name, which is what makes them aliases rather than a second vocabulary to maintain.
+    /// Ordered rather than a dictionary because this list reaches help text and rejection messages, where
+    /// hashed order would reshuffle between runs.
+    static let aliases: [(name: String, position: HudPosition)] =
+        [("top", .topCenter), ("bottom", .bottomCenter)]
 
     /// The placement a caller who omits `--position` gets. The ONE spelling of that default: the memberwise
     /// initializer, the lenient decoder, and the dispatcher all read it, so changing it is one edit.
     public static let defaultPosition = HudPosition.center
 
-    /// Percent of the pane height held clear at the edge for `.top`/`.bottom`; `.center` ignores it. The
-    /// margin is held only while the panel is small enough to leave room — `OverlayPanelStyle.verticalOffset`
-    /// centers instead of overhanging the pane, so a panel at or above `HudLayout.maxSizePercent` ignores
-    /// `.top`/`.bottom` entirely.
+    /// Percent of the pane held clear at an edge the panel is anchored to, on EITHER axis; a `center` term
+    /// ignores it on that axis. The margin is held only while the panel is small enough to leave room —
+    /// `OverlayPanelStyle` centers instead of overhanging the pane, so a panel at or above
+    /// `HudLayout.maxSizePercent` ignores the anchor on that axis entirely.
     public static let edgeMarginPercent = 10
 
-    /// The accepted names pipe-joined — the control server's rejection message, as `StatusShape` does.
+    /// parse resolves a caller's spelling, aliases included. The ONE entry point for turning text into a
+    /// position: the dispatcher, the CLI's local validation, and `init(from:)` all take it, so no path can
+    /// accept a name another rejects.
+    public static func parse(_ raw: String) -> HudPosition? {
+        HudPosition(rawValue: raw) ?? aliases.first { $0.name == raw }?.position
+    }
+
+    /// Which row the anchor names.
+    public var verticalBand: Band {
+        switch self {
+        case .topLeft, .topCenter, .topRight: return .leading
+        case .centerLeft, .center, .centerRight: return .middle
+        case .bottomLeft, .bottomCenter, .bottomRight: return .trailing
+        }
+    }
+
+    /// Which column the anchor names.
+    public var horizontalBand: Band {
+        switch self {
+        case .topLeft, .centerLeft, .bottomLeft: return .leading
+        case .topCenter, .center, .bottomCenter: return .middle
+        case .topRight, .centerRight, .bottomRight: return .trailing
+        }
+    }
+
+    /// One axis' term of an anchor, so the two offsets are the same math over a different dimension. The app
+    /// target's `OverlayPanelStyle` switches on it, which is why it crosses the module boundary.
+    public enum Band: Sendable { case leading, middle, trailing }
+
+    /// The canonical names pipe-joined — the prose form for docs and help naming what the anchors ARE.
     public static var validNamesList: String { validNames.joined(separator: "|") }
 
-    /// The accepted names comma-joined — the prose form for `agtermctl --position` help.
+    /// The canonical names comma-joined.
     public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
 
+    /// Everything a caller may PASS, aliases included, pipe-joined: the control server's rejection message.
+    /// It lists more than `validNamesList` because the aliases are accepted and are not canonical names — a
+    /// rejection naming only the canonical set would refuse values the dispatcher takes, exactly as
+    /// `HudSpinner.acceptedNamesList` covers `none`.
+    public static var acceptedNamesList: String { acceptedNames.joined(separator: "|") }
+
+    /// The same accepted set comma-joined — the prose form for `agtermctl --position` help and its local
+    /// rejection, which must accept exactly what the socket does.
+    public static var acceptedNamesPhrase: String { acceptedNames.joined(separator: ", ") }
+
     private static var validNames: [String] { allCases.map(\.rawValue) }
+    private static var acceptedNames: [String] { validNames + aliases.map(\.name) }
+
+    /// Decodes through `parse` rather than the synthesized raw-value initializer, so an alias survives a
+    /// round trip through any coder and no decode path is stricter than the socket.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let parsed = HudPosition.parse(raw) else {
+            throw DecodingError.dataCorruptedError(in: try decoder.singleValueContainer(),
+                                                   debugDescription: "unknown hud position: \(raw)")
+        }
+        self = parsed
+    }
 }
 
 /// Terminal cell and pane dimensions the app measures for the sizing math. Double-backed, so no
@@ -286,17 +356,38 @@ public enum HudLayout {
         panelGrid(size: size, pane: pane) ?? box(for: spec)
     }
 
+    /// The header's spelling for "no text color", and the reason the field is never empty: the helper parses
+    /// the header by word splitting, which would swallow a blank field and shift every field after it.
+    static let noTextColor = "-"
+
+    /// foregroundSGR encodes `hex` as the SGR PARAMETERS of a truecolor foreground (`38;2;<r>;<g>;<b>`), or
+    /// `noTextColor` when there is no color to set. Parameters only — the helper wraps them in the escape —
+    /// so the shell never converts hex and the panel's color is decided entirely here. A malformed hex
+    /// resolves to `noTextColor` rather than a partial run: the dispatcher already rejects one, and painting
+    /// the terminal foreground is the honest fallback for a value that reached here anyway.
+    static func foregroundSGR(_ hex: String?) -> String {
+        guard let hex, WatermarkConfig.isValidColorHex(hex) else { return noTextColor }
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let channels = stride(from: 0, to: 6, by: 2).compactMap { offset -> Int? in
+            let start = digits.index(digits.startIndex, offsetBy: offset)
+            return Int(digits[start..<digits.index(start, offsetBy: 2)], radix: 16)
+        }
+        guard channels.count == 3 else { return noTextColor }
+        return "38;2;" + channels.map(String.init).joined(separator: ";")
+    }
+
     /// renderedBody returns the bytes written to `fileEnvKey`'s file: a
-    /// `<columns> <rows> <spinner> <pid> <interval> [frame...]` header line, then the wrapped message block,
-    /// a single empty line, and the wrapped detail block. Content lines are never empty, so that one empty
-    /// line is what tells the helper where the dimmed detail starts. The header is what lets an update change
-    /// the grid or the spinner without a re-spawn — the helper re-reads this file every tick and never
-    /// consults its own environment for either.
+    /// `<columns> <rows> <spinner> <pid> <interval> <textcolor> [frame...]` header line, then the wrapped
+    /// message block, a single empty line, and the wrapped detail block. Content lines are never empty, so
+    /// that one empty line is what tells the helper where the dimmed detail starts. The header is what lets
+    /// an update change the grid, the spinner or the text color without a re-spawn — the helper re-reads this
+    /// file every tick and never consults its own environment for any of them.
     ///
     /// The FRAMES ride the header rather than living in the helper, so a new `HudSpinner` case is one edit in
     /// this file and an update can switch style mid-flight. They are last because they are the only
-    /// variable-length part, which lets the helper `shift` the fixed fields off and take what remains. A
-    /// static panel writes no frames at all, only the slower interval it re-reads the file at.
+    /// variable-length part, which lets the helper `shift` the fixed fields off and take what remains — so
+    /// every fixed field, the text color included, must be added BEFORE them and matched by the helper's
+    /// shift count. A static panel writes no frames at all, only the slower interval it re-reads the file at.
     ///
     /// `grid` is the panel's own cell grid from `paintGrid`, which is what the helper centers in; every
     /// path that RESIZES the panel owes it a rewritten header for the same reason an update does.
@@ -309,7 +400,7 @@ public enum HudLayout {
         let interval = spec.spinner?.interval ?? HudSpinner.staticInterval
         let frames = (spec.spinner?.frames ?? []).map { " " + $0 }.joined()
         let header = "\(grid.columns) \(grid.rows) \(spec.spinner != nil ? 1 : 0) \(ownerPid) "
-            + interval + frames + "\n"
+            + interval + " " + foregroundSGR(spec.textColor) + frames + "\n"
         return header + bodyLines(for: spec).map { $0 + "\n" }.joined()
     }
 

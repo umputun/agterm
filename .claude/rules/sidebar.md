@@ -60,7 +60,10 @@ paths:
 - Right-click inside a selection preserves it; outside narrows to the clicked row.
   `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag, and
   clear-status operate on all targets.
-- Rename, Duplicate Session, and Reveal in Finder appear only for one target. Duplicate inserts a fresh
+- Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank
+  workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
+  untouched rather than clearing it. No control form — see `control-api.md`.
+- Rename, Copy Name, Duplicate Session, and Reveal in Finder appear only for one target. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's

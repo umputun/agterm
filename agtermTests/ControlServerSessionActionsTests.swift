@@ -316,10 +316,28 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(session.hudFile, file)
         XCTAssertEqual(bodyText(session), expectedBody(update))
         XCTAssertEqual(session.overlaySizePercent, 40)
-        // the grid rides in the body's header line, which is what lets a running helper re-centre
+        // the grid rides in the body's header line, which is what lets a running helper re-centre. The
+        // trailing `-` is the no-text-color sentinel, spelled out because this pins the wire format.
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init),
                        "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 "
-                           + "\(Self.ownerPid) \(HudSpinner.staticInterval)")
+                           + "\(Self.ownerPid) \(HudSpinner.staticInterval) -")
+    }
+
+    // the text color rides that same header, so an update recolors the live panel without re-opening the
+    // slot — the half of a HUD's color an update can change, unlike the surface-read background.
+    func testHudUpdateRecolorsTheTextThroughTheHeaderInPlace() throws {
+        let (_, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil,
+                                     spec: HudSpec(message: "first", textColor: "#e0e0e0")).ok)
+        let generation = session.overlaySlotGeneration
+
+        let update = HudSpec(message: "second", textColor: "#7ec07e")
+        XCTAssertTrue(server.updateHud(session.id.uuidString, window: nil, spec: update).ok)
+
+        XCTAssertEqual(session.overlaySlotGeneration, generation, "a recolor must not re-open the slot")
+        XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init)?
+            .hasSuffix(" 38;2;126;192;126"), true)
+        XCTAssertEqual(session.hudSpec?.textColor, "#7ec07e")
     }
 
     func testHudCloseClearsTheSlotAndRemovesTheBodyFile() throws {

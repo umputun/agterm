@@ -756,9 +756,20 @@ struct Session: ParsableCommand {
         )
 
         /// `--position` help and validation both derive from `HudPosition`, so a new case reaches each.
+        /// Accepts the `top`/`bottom` aliases exactly as the dispatcher does, for the reason
+        /// `validateSpinnerStyle` states about `none`: refusing one here would fail a value the identical
+        /// raw-socket request takes.
         static func validatePosition(_ position: String?) throws {
-            if let position, HudPosition(rawValue: position) == nil {
-                throw ValidationError("position must be one of: \(HudPosition.validNamesPhrase)")
+            if let position, HudPosition.parse(position) == nil {
+                throw ValidationError("position must be one of: \(HudPosition.acceptedNamesPhrase)")
+            }
+        }
+
+        /// Shared by open and update, which both set the panel's text color; `--background-color` has no
+        /// update counterpart because only the text color rides the header a live panel re-reads.
+        static func validateTextColor(_ textColor: String?) throws {
+            if let textColor, !WatermarkConfig.isValidColorHex(textColor) {
+                throw ValidationError("text-color must be a #rrggbb hex value")
             }
         }
 
@@ -802,12 +813,16 @@ struct Session: ParsableCommand {
                 \(HudSpinner.noneName) leaves the panel static.
                 """)
             var spinnerStyle: String?
+            // the canonical nine are what `session background` shares; the aliases are this command's own,
+            // so naming them in the same breath would send a caller to a --position background rejects
             @Option(name: .long, help: """
-                Vertical placement: \(HudPosition.validNamesPhrase) (default: center). \
-                top and bottom hold a fixed margin at the pane's edge.
+                Placement in the pane: \(HudPosition.validNamesPhrase) (default: center), the same \
+                anchors session background takes. Every anchor off center holds a fixed margin at that \
+                edge. Here top and bottom are also accepted, for top-center and bottom-center.
                 """)
             var position: String?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the panel, independent of the session's own.") var backgroundColor: String?
+            @Option(name: .long, help: "Color (#rrggbb) for the panel's text; omit to keep the terminal foreground.") var textColor: String?
             @Option(name: .long, help: """
                 Set the panel's WIDTH to PERCENT (1-100) of the pane instead of measuring the message; \
                 bounded to \(HudLayout.minSizePercent)-\(HudLayout.maxSizePercent), so it stays readable \
@@ -821,6 +836,7 @@ struct Session: ParsableCommand {
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
+                try Hud.validateTextColor(textColor)
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateSizePercent(sizePercent)
@@ -831,13 +847,14 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   color: backgroundColor, position: position)))
+                                   color: backgroundColor, textColor: textColor, position: position)))
             }
         }
 
         /// Repaints the live panel in place. An update replaces the whole message, so every argument it
-        /// accepts must be repeated to survive — including `--spinner`. `--background-color` is deliberately
-        /// absent: the surface reads it once at creation, so only a fresh `hud` can change it.
+        /// accepts must be repeated to survive — including `--spinner` and `--text-color`.
+        /// `--background-color` is deliberately absent: the surface reads it once at creation, so only a
+        /// fresh `hud` can change it, while the text color rides the header the helper re-reads every tick.
         struct Update: RequestCommand {
             static let configuration = CommandConfiguration(
                 abstract: "Replace the panel's text in place (no re-spawn, no blink).")
@@ -850,7 +867,8 @@ struct Session: ParsableCommand {
                 the live panel without a re-spawn. \(HudSpinner.noneName) stops it.
                 """)
             var spinnerStyle: String?
-            @Option(name: .long, help: "Move the panel to \(HudPosition.validNamesPhrase) (default: center).") var position: String?
+            @Option(name: .long, help: "Move the panel to \(HudPosition.acceptedNamesPhrase) (default: center).") var position: String?
+            @Option(name: .long, help: "Recolor the panel's text (#rrggbb); omit to return it to the terminal foreground.") var textColor: String?
             @Option(name: .long, help: """
                 Resize the panel's WIDTH to PERCENT (1-100) of the pane instead of measuring the message; \
                 bounded to \(HudLayout.minSizePercent)-\(HudLayout.maxSizePercent), so it stays readable \
@@ -861,6 +879,7 @@ struct Session: ParsableCommand {
             @OptionGroup var options: ClientOptions
 
             func validate() throws {
+                try Hud.validateTextColor(textColor)
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateSizePercent(sizePercent)
@@ -871,7 +890,7 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   position: position)))
+                                   textColor: textColor, position: position)))
             }
         }
 

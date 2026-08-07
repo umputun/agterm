@@ -443,7 +443,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
-                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, sizePercent?, heightPercent?, position}</span>, where
+                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position}</span>, where
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> names the effective style or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> —
                 omitted when none is up; mutually exclusive with
@@ -1507,8 +1507,8 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session hud [open] &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position top|center|bottom]
-                [--background-color #rrggbb] [--size-percent N] [--target T] [--window W]
+                agtermctl session hud [open] &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P]
+                [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1529,20 +1529,28 @@
                 the spinner on by itself (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> is accepted too and leaves the panel static,
                 so the value a read-back reports round-trips) (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">dot</span> blinks rather than animating, for a panel
                 that sits up for minutes), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span> places the panel vertically
-                (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center</span>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span> anchors the panel to any of the nine
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right</span>
+                (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center</span>), the same anchors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session background</span> takes.
+                Every anchor off center holds a fixed margin off that pane edge on its own, so even the largest allowed panel
+                stays inside the pane, and a corner keeps a long-lived panel clear of the text being read. The bare
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span> hold a fixed margin off the pane edge
-                on their own, so even the largest allowed panel stays inside the pane). The panel is measured from the message
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span> this argument shipped with are still
+                accepted for the middle column, and the read-back reports the canonical anchor. The panel is measured from the message
                 against the session's terminal font on BOTH axes separately — width from the longest wrapped line, height from
                 the number of them — so a title and a subtitle give a wide, short panel rather than a square one.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100)
                 overrides the WIDTH only; the height always follows the message, since a caller-set height could only strand it
                 in an empty box. The effective width is bounded to 10–80% of the pane, so a message never covers the session
                 it is about and a requested 100 reads back as 80. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> gives the
-                panel its own solid background, read once when the panel is created. Both effective shares read back, as
+                panel its own solid background, read once when the panel is created, while
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span> colors the TEXT and rides the
+                panel's body file, so an update can change it. Both effective shares read back, as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sizePercent</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">heightPercent</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">heightPercent</span>, and both colors as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">backgroundColor</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">textColor</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Message and detail cap at 256 characters and reject control characters, newline included — the panel prints
@@ -1561,15 +1569,16 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session hud update &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P] [--size-percent N]
-                [--target T] [--window W]
+                agtermctl session hud update &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P]
+                [--text-color #rrggbb] [--size-percent N] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.update</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Repaint the live panel in place — no re-spawn, no blink. It REPLACES the whole spec rather than patching it, so
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--detail</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner</span>, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span> must be repeated to survive;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span> must be repeated to survive;
                 an omitted one drops. Same required message and same rejections as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span>. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no hud</span> when none is up.
@@ -1580,6 +1589,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session hud</span> can change it. A
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">color</span> sent on an update over the raw protocol
                 is ignored for the same reason, and the read-back keeps naming the color the panel actually paints.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span> is the half that CAN change: it
+                rides the body file the panel's painter re-reads every tick, so the live text recolors with no re-spawn.
               </p>
             </div>
 

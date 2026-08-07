@@ -32,14 +32,15 @@ struct HudHelperTests {
         private let outFile: URL
         private let proc = Process()
 
-        init(_ body: String, cols: Int, rows: Int, spinner: HudSpinner? = nil,
+        init(_ body: String, cols: Int, rows: Int, spinner: HudSpinner? = nil, textColor: String? = nil,
              ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
             let fm = FileManager.default
             dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-hud-\(UUID().uuidString)")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             bodyFile = dir.appendingPathComponent("body")
             outFile = dir.appendingPathComponent("out")
-            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner, owner: ownerPid),
+            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner,
+                                                   textColor: textColor, owner: ownerPid),
                           to: bodyFile)
             fm.createFile(atPath: outFile.path, contents: nil)
 
@@ -56,10 +57,12 @@ struct HudHelperTests {
         /// Builds the header by hand rather than through `HudLayout.renderedBody`, so a test can hand the
         /// script a grid no message would produce; the FORMAT still has to match, which is the contract these
         /// tests exist to pin.
-        private static func header(cols: Int, rows: Int, spinner: HudSpinner?, owner: Int32) -> String {
+        private static func header(cols: Int, rows: Int, spinner: HudSpinner?, textColor: String?,
+                                   owner: Int32) -> String {
             let interval = spinner?.interval ?? HudSpinner.staticInterval
             let frames = (spinner?.frames ?? []).map { " " + $0 }.joined()
-            return "\(cols) \(rows) \(spinner != nil ? 1 : 0) \(owner) \(interval)\(frames)\n"
+            let color = textColor ?? HudLayout.noTextColor
+            return "\(cols) \(rows) \(spinner != nil ? 1 : 0) \(owner) \(interval) \(color)\(frames)\n"
         }
 
         private static func write(_ body: String, header: String, to file: URL) throws {
@@ -70,8 +73,10 @@ struct HudHelperTests {
         var running: Bool { proc.isRunning }
 
         func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: HudSpinner? = nil,
+                     textColor: String? = nil,
                      ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
-            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner, owner: ownerPid),
+            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner,
+                                                   textColor: textColor, owner: ownerPid),
                           to: bodyFile)
         }
         func removeBody() throws { try FileManager.default.removeItem(at: bodyFile) }
@@ -229,6 +234,49 @@ struct HudHelperTests {
         // 40 columns less 4 for "busy" less 2 for the glyph leaves 17 on both frames
         #expect(run.paints("\(Self.esc)[17C● busy"))
         #expect(run.paints("\(Self.esc)[17C\u{00A0} busy"))
+    }
+
+    @Test func theHeadersTextColorIsEmittedBeforeTheFrame() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, textColor: "38;2;126;192;126")
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[38;2;126;192;126m"))
+    }
+
+    // it goes after the erase so the cleared cells keep the terminal's own colors, and before the block so
+    // the detail's dim attribute composes over it rather than replacing it.
+    @Test func theTextColorSitsBetweenTheEraseAndTheContent() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, textColor: "38;2;0;0;255")
+        defer { run.stop() }
+        run.wait { $0.contains("busy") }
+        #expect(run.painted.contains("\(Self.esc)[J\(Self.esc)[38;2;0;0;255m"))
+    }
+
+    @Test func noColorEscapeWhenTheHeaderCarriesTheSentinel() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("busy") }
+        #expect(!run.painted.contains("\(Self.esc)[38;2"))
+    }
+
+    // the color rides the header, so an update recolors the live panel with no respawn — the one half of a
+    // HUD's color a `hud update` can change.
+    @Test func recoloringThroughTheHeaderKeepsTheHelperAlive() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("busy") }
+        try run.rewrite("busy\n", textColor: "38;2;255;0;0")
+        #expect(run.paints("\(Self.esc)[38;2;255;0;0m"))
+        #expect(run.running)
+    }
+
+    // a header field that is not SGR parameters is dropped rather than wrapped, so a malformed body cannot
+    // emit an arbitrary escape into the pane.
+    @Test(arguments: ["38;2;1m;7", "abc", "1;J"])
+    func aMalformedTextColorPaintsNoEscape(raw: String) throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, textColor: raw)
+        defer { run.stop() }
+        run.wait { $0.contains("busy") }
+        #expect(!run.painted.contains("\(Self.esc)[\(raw)m"))
     }
 
     @Test func noSpinnerGlyphWithoutTheFlag() throws {
