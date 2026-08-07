@@ -77,7 +77,6 @@ extension WorkspaceSidebar.Coordinator {
             menu.addItem(rename)
         }
 
-        // Under Rename where there is one, first on the menu for a multi-selection, which has no Rename.
         let copyTitle = node.kind == .session && sessionCount > 1 ? "Copy Names" : "Copy Name"
         let copyName = NSMenuItem(title: copyTitle, action: #selector(menuCopyName(_:)), keyEquivalent: "")
         copyName.target = self
@@ -196,9 +195,14 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuCopyName(_ sender: NSMenuItem) {
         let names: [String]
         switch sender.representedObject {
-        case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
+        case let request as SessionBatchRequest:
+            names = request.sessionIDs.compactMap { store.session(withID: $0)?.displayName }
         case let node as SidebarNode where node.kind == .workspace:
-            names = [store.workspaceName(node.id)].compactMap { $0 }
+            // blank is treated as absent: renameWorkspace rejects one, but AppStore+PendingClose rebuilds
+            // a Workspace straight from a snapshot without that guard.
+            names = [store.workspaces.first { $0.id == node.id }?.name]
+                .compactMap { $0 }
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         default: return
         }
         // rows gone between the right-click and the choice: leave the pasteboard as the user had it.

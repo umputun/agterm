@@ -24,15 +24,4 @@ extension AppStore {
         scheduleTreeChanged()
         save()
     }
-
-    /// `Session.displayName` per id, order preserved, skipping ids no longer in the tree.
-    public func sessionDisplayNames(_ sessionIDs: [UUID]) -> [String] {
-        sessionIDs.compactMap { session(withID: $0)?.displayName }
-    }
-
-    /// The name of `workspaceID`; nil when it is gone, and when it is blank — a snapshot restored through
-    /// `AppStore+PendingClose` bypasses the non-blank guard `renameWorkspace` applies.
-    public func workspaceName(_ workspaceID: UUID) -> String? {
-        workspaces.first(where: { $0.id == workspaceID })?.name.trimmedOrNil
-    }
 }
