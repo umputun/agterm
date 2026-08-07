@@ -19,6 +19,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh or fish, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
 | [opencode-session-resume](opencode-session-resume/) | each tab reopens its own opencode conversation after a restart | 0.3.1, zsh, opencode |
+| [kimi-session-resume](kimi-session-resume/) | each tab reopens its own Kimi Code conversation after a restart | 0.16.0, Kimi Code, python3 |
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code |
 | [claude-recap](claude-recap/) | one key lists what the Claude Code run in a session was working on | 0.10.0, zsh, jq, Claude Code |
 | [new-session-in-workspace](new-session-in-workspace/) | pick a workspace with fzf and start a session in it | 0.8.0, jq, fzf |
@@ -28,7 +29,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [claude-clear](claude-clear/) | one chord sends /clear to the pane's Claude Code run, and nothing when it is not running | 0.13.0, python3, Claude Code |
 | [claude-conversation-picker](claude-conversation-picker/) | pick a past Claude Code conversation by what it was about and resume it in the pane | 0.21.0, python3, Claude Code |
 
-Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. The three session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
+Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Three of the four session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI; the Kimi one is a lifecycle hook that pins its tab's restore command through `agtermctl`. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
 ## Contributing a recipe
 
