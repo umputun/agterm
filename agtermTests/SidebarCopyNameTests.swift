@@ -14,7 +14,6 @@ final class SidebarCopyNameTests: XCTestCase {
     private var window: NSWindow!
     private var outline: SidebarOutlineView!
     private var coordinator: WorkspaceSidebar.Coordinator!
-    private var savedPasteboard: String?
 
     override func setUp() async throws {
         try await super.setUp()
@@ -23,17 +22,32 @@ final class SidebarCopyNameTests: XCTestCase {
                 .appendingPathComponent("agterm-copy-name-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
             actions = AppActions(library: library)
-            savedPasteboard = NSPasteboard.general.string(forType: .string)
+            preservePasteboard()
+        }
+    }
+
+    /// Restore the SYSTEM pasteboard's full prior contents after each test — the reasoning, and the
+    /// deep-copy it requires, are documented on `ControlAPITestCase.seedPasteboard`. Not shared with it:
+    /// that lives in the UI-test target. `addTeardownBlock` rather than `tearDown` so it also runs when an
+    /// assertion fails.
+    private func preservePasteboard() {
+        let pasteboard = NSPasteboard.general
+        let saved: [NSPasteboardItem] = (pasteboard.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) { copy.setData(data, forType: type) }
+            }
+            return copy
+        }
+        addTeardownBlock {
+            let general = NSPasteboard.general
+            general.clearContents()
+            if !saved.isEmpty { general.writeObjects(saved) }
         }
     }
 
     override func tearDown() async throws {
         await MainActor.run {
-            if let savedPasteboard {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(savedPasteboard, forType: .string)
-            }
-            savedPasteboard = nil
             window?.orderOut(nil)
             window = nil
             outline = nil
