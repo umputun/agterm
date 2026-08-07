@@ -89,26 +89,33 @@ read_screen() {
 # Two independent stop conditions, because either alone has a hole. Deliberately NOT a check budget:
 # `kiro-cli chat` can sit at a prompt for a whole workday, and a fixed cap would stop reporting
 # partway through a session that is still running.
-#   1. the spawning shell died — normal teardown, and it also covers a hard-killed app, whose pty
-#      takes the shell down with it (verified: the shell does not survive with `login`)
-#   2. pane reads keep failing — no app means no socket, which catches anything path 1 misses,
-#      including a shell that somehow outlives the terminal
+#   1. the spawning shell died — ordinary teardown
+#   2. pane reads keep failing — no app means no socket. This is the one that covers a hard-killed
+#      app, which runs no teardown and sends no SIGHUP here, because the pty's session leader is the
+#      surviving `login`: the shell can outlive the app, so path 1 cannot be relied on for it.
 # The wrapper kills this process as soon as kiro-cli returns, so neither normally comes into play.
 parent=$PPID
 failures=0
 
-# Every marker is matched as a LINE, not as a substring anywhere in the tail. kiro draws each one on
-# a line of its own, whereas a screen that merely mentions the text has it mid-line: kiro quoting
-# "Kiro is working..." back at you in an answer, this recipe in a pager, a git diff of it. Substring
-# matching cannot tell those apart, and getting it wrong is not cosmetic — a quoted footer pins the
-# row blinking after the turn ended, and quoted dialog text raises a false blocked, which summons you
-# to a session that does not need you.
+# Every marker is matched as a LINE, not as a substring anywhere in the tail, so that kiro quoting
+# "Kiro is working..." back at you mid-sentence does not read as kiro working. That is the case this
+# buys and the ONLY one. What it does not buy, and what a reader should not assume from it:
+#   - a leading run of non-letters passes any quote, bullet, diff marker or line number, so a
+#     blockquoted "> Kiro is working" reads as working, and these files in a pager still match.
+#   - requiring two strings for `blocked` raises the bar but does not close it. The two greps scan the
+#     same 12-line window INDEPENDENTLY, so they need not even describe the same line: "- Shell
+#     requires approval" plus "- Yes, single permission is one option" anywhere in the tail raises a
+#     blocked, as does the single line "> Yes, single permission -- shell requires approval". That is
+#     the one false state that actively summons a human.
+# Both are accepted rather than fixed: tightening enough to exclude them costs false negatives on the
+# real dialog, and a row that stops reporting is worse than one that occasionally over-reports. The
+# debounce cannot help either, since prose sits on screen as steadily as a dialog does.
 #
 # The two anchors differ because the two lines do:
 #   " Kiro is working..." / " esc to cancel" / "> Yes, single permission" start the line, after
 #     nothing but indentation and spinner or cursor glyphs — hence a leading run of non-letters.
 #   " shell requires approval" ENDS the line but begins with a tool name, so it takes a trailing
-#     anchor instead; quoted prose keeps going after the phrase and is rejected by it.
+#     anchor instead; prose that continues past the phrase is rejected by it.
 _kas_bol='^[^[:alpha:]]*'
 _kas_eol='[[:space:]]*$'
 
