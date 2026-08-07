@@ -29,11 +29,9 @@ paths:
   commands. Never add validation to the fallback switch.
 - Every change needs protocol/round-trip types, dispatcher and app action, CLI, and dispatcher/CLI/e2e
   tests. State writes also need tree/window read-back, nil omission tests, and population coverage.
-- An action whose only effect is a system-pasteboard write gets no control command. The socket does not
-  write the user's clipboard: `session copy` returns the selection in the response precisely so it does
-  not touch it, and `session paste` reads the clipboard as input to a session. A command that wrote
-  `NSPasteboard.general` would be the first to break that, and one that returned the value instead would
-  duplicate a field `tree` already carries. Sidebar Copy Name is the case this was decided on.
+- An action whose only effect is a system-pasteboard write gets no control command. The socket never
+  writes the user's clipboard — `session copy` returns the selection so it does not have to, `session
+  paste` reads it as input — and returning the value instead duplicates what `tree` carries.
 
 ## Installation and agent integrations
 
