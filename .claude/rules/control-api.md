@@ -30,8 +30,8 @@ paths:
 - Every change needs protocol/round-trip types, dispatcher and app action, CLI, and dispatcher/CLI/e2e
   tests. State writes also need tree/window read-back, nil omission tests, and population coverage.
 - An action whose only effect is a system-pasteboard write gets no control command. The socket never
-  writes the user's clipboard — `session copy` returns the selection so it does not have to, `session
-  paste` reads it as input — and returning the value instead duplicates what `tree` carries.
+  writes the user's clipboard — `session copy` returns the selection so it does not have to,
+  `session paste` reads it as input — and returning the value instead duplicates what `tree` carries.
 
 ## Installation and agent integrations
 
