@@ -813,10 +813,12 @@ struct Session: ParsableCommand {
                 \(HudSpinner.noneName) leaves the panel static.
                 """)
             var spinnerStyle: String?
+            // the canonical nine are what `session background` shares; the aliases are this command's own,
+            // so naming them in the same breath would send a caller to a --position background rejects
             @Option(name: .long, help: """
-                Placement in the pane: \(HudPosition.acceptedNamesPhrase) (default: center), the same \
+                Placement in the pane: \(HudPosition.validNamesPhrase) (default: center), the same \
                 anchors session background takes. Every anchor off center holds a fixed margin at that \
-                edge. top and bottom are accepted for top-center and bottom-center.
+                edge. Here top and bottom are also accepted, for top-center and bottom-center.
                 """)
             var position: String?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the panel, independent of the session's own.") var backgroundColor: String?

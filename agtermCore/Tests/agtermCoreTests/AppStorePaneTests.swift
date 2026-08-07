@@ -839,6 +839,25 @@ struct AppStorePaneTests {
         #expect(session.hudSpec?.message == "three")
     }
 
+    /// The two colors have opposite update lifetimes, and both halves are asserted here so a change making
+    /// them symmetric cannot pass: the background is held forward because the surface read it once, while
+    /// the text color rides the header and so drops with every other omitted field.
+    @Test func updateHudDropsAnOmittedTextColorWhileHoldingTheBackground() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh",
+                      spec: HudSpec(message: "one", backgroundColor: "#101820", textColor: "#e0e0e0"),
+                      file: "/tmp/a", size: HudPanelSize(widthPercent: 20, heightPercent: 9))
+        #expect(session.hudSpec?.textColor == "#e0e0e0")
+
+        #expect(store.updateHud(session.id, spec: HudSpec(message: "two"),
+                                size: HudPanelSize(widthPercent: 20, heightPercent: 9)) == true)
+
+        #expect(session.hudSpec?.textColor == nil)
+        #expect(session.hudSpec?.backgroundColor == "#101820")
+    }
+
     /// Every store-only HUD teardown, none of which runs a surface teardown: a HUD closed before its panel
     /// realized would otherwise leave its message text in `/tmp` forever.
     @Test(arguments: HudTeardownPath.allCases)

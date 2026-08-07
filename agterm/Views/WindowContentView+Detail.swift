@@ -334,7 +334,8 @@ struct OverlayPanelStyle: Equatable {
     let backdrop: Bool
     /// whether the panel takes clicks and first responder at all.
     let interactive: Bool
-    /// where the panel sits vertically in the pane; program overlays are always centered.
+    /// which of the pane's nine anchors the panel sits on, read on both axes; program overlays are always
+    /// centered.
     let position: HudPosition
 
     /// The floating program overlay's chrome: a window hovering over the session, so a wide radius and a

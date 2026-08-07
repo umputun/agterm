@@ -174,8 +174,8 @@ resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by th
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `overlay open
 --pane`, independent of the session-wide `overlay` flag),
 `hud` (the message panel occupying the session-wide slot — `{message, detail?, spinner, backgroundColor?,
-sizePercent?, heightPercent?, position}`, the two percents being the panel's width and height shares —
-omitted when none is up; the read side of `session hud`. `position` and `spinner`
+textColor?, sizePercent?, heightPercent?, position}`, the two percents being the panel's width and height
+shares — omitted when none is up; the read side of `session hud`. `position` and `spinner`
 always report the EFFECTIVE value, `center` and a static panel's `none` included, so a caller who omitted
 them never has to know the defaults; `spinner` names the STYLE, so `none` is what a caller echoes back to
 turn one off. While a HUD is up the node's `overlay` reads `false` and `overlaySizePercent` is omitted, so a
