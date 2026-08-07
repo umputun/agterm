@@ -30,6 +30,21 @@ struct FuzzyTests {
         #expect(fuzzyScore(query: "xyz", target: "New Session") == nil)
     }
 
+    @Test func substringInOneTargetRanksAboveSubsequenceInAnother() {
+        // Regression for #371: unclamped, the literal "stem" at offset 43 scored 48 and ranked
+        // below /opt/steam's scattered subsequence at 46 — a real match lost to a non-match.
+        let stems = "~/Music/Ableton/Exports/2026/album/bounces/stems"
+
+        #expect(fuzzyRank(query: "stem", items: ["/opt/steam", stems], keys: { [$0] })
+            == [stems, "/opt/steam"])
+    }
+
+    @Test func substringBandCapsAtThirtyNine() {
+        // Substrings starting at or past offset 34 tie at 39, under the subsequence floor of 40.
+        #expect(fuzzyScore(query: "z", target: String(repeating: "a", count: 40) + "z") == 39)
+        #expect(fuzzyScore(query: "z", target: String(repeating: "a", count: 80) + "z") == 39)
+    }
+
     @Test func prefixBeatsSubstringBeatsSubsequence() {
         let prefix = fuzzyScore(query: "ne", target: "New Session")!
         let substring = fuzzyScore(query: "ew", target: "New Session")!

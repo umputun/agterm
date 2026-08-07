@@ -2,8 +2,10 @@
 /// The query splits on whitespace into terms (`"cap dev"` is two); EVERY term must match `target` and the
 /// score is their sum, so term order is irrelevant — `"cap dev"` and `"dev cap"` both match `caprica-dev`.
 /// An empty or whitespace-only query matches everything at `0`, keeping the unfiltered list's natural
-/// order. Case-insensitive. Per term: an exact prefix is `0`, a substring `5 +` its start offset, a
-/// scattered subsequence `40 +` the length gap.
+/// order. Case-insensitive. Per term: an exact prefix is `0`, a substring `5 + min(offset, 34)`, a
+/// scattered subsequence `40 +` the length gap. The cap keeps a single term's literal match (`39` at
+/// worst) ahead of any subsequence-only match; substrings starting at or past offset `34` tie and fall
+/// to the caller's tie-break. Summed multi-term scores can still cross bands.
 public func fuzzyScore(query: String, target: String) -> Int? {
     let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     guard !terms.isEmpty else { return 0 }
@@ -41,7 +43,8 @@ public func fuzzyRank<Item>(query: String, items: [Item], keys: (Item) -> [Strin
 private func termScore(_ term: String, in target: String) -> Int? {
     if target.hasPrefix(term) { return 0 }
     if let range = target.range(of: term) {
-        return 5 + target.distance(from: target.startIndex, to: range.lowerBound)
+        // 39 max — the substring band must stay under the subsequence floor of 40.
+        return 5 + min(target.distance(from: target.startIndex, to: range.lowerBound), 34)
     }
     // subsequence: every term char appears in order, not necessarily adjacent.
     var ti = term.startIndex
