@@ -148,7 +148,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (74 commands)
+## Command summary (76 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -186,7 +186,11 @@ session that has a split — shown or hidden; omitted when there's no split or t
 the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
 (which pane holds focus in a session that has a split — `true` = split/right, `false` = main/left; omitted
-when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
+when there's no split; the read side of `session focus`, record it to restore focus), `parentID`
+(the id of this session's PARENT when it is nested under another — omitted when top-level; reconstructs the
+tree client-side, the read side of `session new --parent` / `session move --parent`), `collapsed`
+(`true` when this parent session's subtree is folded in the sidebar, omitted when expanded — the read side
+of `session collapse`/`expand`), and `surfaces`
 (`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
 (the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
 `surface zoom`, so a script can check the zoom state and record-then-restore). It also carries the read
@@ -226,7 +230,7 @@ read the open/closed state back from the tree workspace node's `collapsed` flag,
 omitted when expanded).
 
 **session**
-- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select]` —
+- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--parent SID] [--no-select]` —
   create (and focus) a session. Target the workspace by id/prefix (`--workspace`) OR by name
   (`--workspace-name`, mutually exclusive); add `--create-workspace` to reuse-or-create the named
   workspace when absent. `--command` runs that program as the session process instead of a login shell
@@ -237,8 +241,12 @@ omitted when expanded).
   overlay's live-only wait; read back on `tree`'s `commandWait`);
   `--name` seeds the sidebar label (default: the auto basename). `--after`/`--before` place it directly
   after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
-  workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
-  create right after the current session. `--no-select` creates the session in the BACKGROUND — it is
+  workspace AND its parent, so the new session INHERITS the anchor's nesting (`new --after <child>` makes a
+  sibling child); mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
+  create right after the current session. `--parent SID` instead NESTS the new session as that session's
+  last child (the headline agent idiom `session new --parent "$AGTERM_SESSION_ID"`), rendered indented
+  under the parent in the sidebar; mutually exclusive with `--after`/`--before` and with a workspace, and an
+  unknown/cross-workspace parent is ignored (appends top-level) rather than failing. `--no-select` creates the session in the BACKGROUND — it is
   added to the sidebar but NOT selected or focused, leaving the current selection untouched (the new node
   is not `active` in `tree`); omit it for the default select-and-focus behavior.
 - `duplicate [--target]` — create a fresh session (a plain login shell) in the target's workspace, right
@@ -252,11 +260,14 @@ omitted when expanded).
   grace-period undo.
 - `select` · `rename <name>` · `reveal` (select the focused pane's cwd in Finder).
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
-- `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace) or
-  `move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
-  workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and
-  after/before placement, repeat `--target` to move several sessions as one ordered block. Do not repeat
-  `--target` with `--to up|down|top|bottom`.
+- `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the sibling group,
+  carrying the subtree) or `move --after SID | --before SID` (place after/before an anchor session; the
+  anchor carries its own workspace AND parent, so the moved session ADOPTS the anchor's nesting — relocate +
+  position + reparent in one shot, even cross-workspace) or `move --parent SID | --unparent` (reparent under
+  a session as its last child, or promote to top-level). `--parent`/`--unparent` take a SINGLE `--target`
+  and are mutually exclusive with each other and with `--to`/`--after`/`--before`/a workspace; a
+  cross-workspace parent is rejected. For workspace and after/before placement, repeat `--target` to move
+  several sessions as one ordered block. Do not repeat `--target` with `--to up|down|top|bottom`.
 - `type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
   included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
   with `--pane scratch`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's
@@ -287,6 +298,11 @@ omitted when expanded).
   selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
   no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an
   orchestrator can acknowledge a driven session's notifications without pulling focus to it.
+- `collapse [--target] [--window W]` · `expand [--target] [--window W]` — fold/unfold a PARENT session's
+  subtree in the sidebar (the per-session twin of `workspace collapse`/`expand`). A collapsed parent hides
+  its descendant rows and rolls their unseen badge + most-urgent status onto its own row. Idempotent; a leaf
+  just records the state. Read it back from the tree node's `collapsed` flag (`true` when collapsed, omitted
+  when expanded). Closing a parent instead CASCADES — the whole subtree closes together under one undo.
 - `restore ("cmd" | --none | --clear) [--pane left|right] [--pane-id TOKEN]` — pin what a pane re-runs on
   the NEXT launch, overriding the captured foreground command. A `"cmd"` shell line pins it, `--none` pins
   nothing (a plain shell), `--clear` drops the override back to auto-capture. Written now, consumed on the

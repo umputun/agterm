@@ -87,6 +87,16 @@ extension WorkspaceSidebar.Coordinator {
                 duplicate.target = self
                 duplicate.representedObject = node
                 menu.addItem(duplicate)
+                // create a child session nested under this row — the GUI twin of `session new --parent`.
+                let newChild = NSMenuItem(title: "New Child Session", action: #selector(menuNewChildSession(_:)), keyEquivalent: "")
+                newChild.target = self
+                newChild.representedObject = node
+                menu.addItem(newChild)
+                let newChildDir = NSMenuItem(title: "New Child (Open Directory…)",
+                                             action: #selector(menuNewChildOpenSession(_:)), keyEquivalent: "")
+                newChildDir.target = self
+                newChildDir.representedObject = node
+                menu.addItem(newChildDir)
             }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
@@ -223,6 +233,18 @@ extension WorkspaceSidebar.Coordinator {
         addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
     }
 
+    @objc private func menuNewChildSession(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        // this sidebar's window-local store, like Duplicate/Close — a background window nests under its own row.
+        actions.newChildSession(of: node.id, in: store)
+    }
+
+    @objc private func menuNewChildOpenSession(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode,
+              let workspace = store.workspace(forSession: node.id) else { return }
+        openDirectoryAndAddSession(toWorkspace: workspace.id, parentID: node.id)
+    }
+
     /// Inline "+" button on a workspace row, the right-click "New Session" action. The button carries no
     /// workspace id, so it is derived from the outline row at click time — reused cells target the right one.
     @objc func addSessionButtonClicked(_ sender: NSButton) {
@@ -262,9 +284,9 @@ extension WorkspaceSidebar.Coordinator {
         openDirectoryAndAddSession(toWorkspace: node.id)
     }
 
-    /// Adds a session to `workspaceID` at `cwd` and selects it.
-    private func addSession(toWorkspace workspaceID: UUID, cwd: String) {
-        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd) {
+    /// Adds a session to `workspaceID` at `cwd` and selects it; `parentID` nests it under that session.
+    private func addSession(toWorkspace workspaceID: UUID, cwd: String, parentID: UUID? = nil) {
+        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd, parentID: parentID) {
             // creating + selecting from the sidebar context menu is a user-initiated selection on THIS
             // window's store: note activity so it buys the full idle grace before auto-follow pulls away.
             store.noteUserActivity()
@@ -273,7 +295,7 @@ extension WorkspaceSidebar.Coordinator {
         }
     }
 
-    private func openDirectoryAndAddSession(toWorkspace workspaceID: UUID) {
+    private func openDirectoryAndAddSession(toWorkspace workspaceID: UUID, parentID: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -282,6 +304,6 @@ extension WorkspaceSidebar.Coordinator {
         panel.prompt = "Open"
         panel.message = "Choose a directory for the new session"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        addSession(toWorkspace: workspaceID, cwd: url.path)
+        addSession(toWorkspace: workspaceID, cwd: url.path, parentID: parentID)
     }
 }

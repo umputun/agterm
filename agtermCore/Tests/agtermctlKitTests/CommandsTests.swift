@@ -137,6 +137,15 @@ struct CommandsTests {
         #expect(try request(["workspace", "expand", "--window", "win"]) == expected)
     }
 
+    @Test func sessionCollapseDefaultsActive() throws {
+        #expect(try request(["session", "collapse"]) == ControlRequest(cmd: .sessionCollapse, target: "active"))
+    }
+
+    @Test func sessionExpandWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionExpand, target: "9f3c", args: ControlArgs(window: "win"))
+        #expect(try request(["session", "expand", "--target", "9f3c", "--window", "win"]) == expected)
+    }
+
     @Test func sessionNewWithCwdAndWorkspace() throws {
         let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(cwd: "/tmp", workspace: "ws1"))
         #expect(try request(["session", "new", "--cwd", "/tmp", "--workspace", "ws1"]) == expected)
@@ -198,6 +207,21 @@ struct CommandsTests {
     @Test func sessionNewRejectsBeforeAndWorkspaceName() {
         #expect(validationMessage(["session", "new", "--before", "a", "--workspace-name", "servers"])
             == "session.new takes --after/--before or a workspace, not both")
+    }
+
+    @Test func sessionNewParent() throws {
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(parent: "p1"))
+        #expect(try request(["session", "new", "--parent", "p1"]) == expected)
+    }
+
+    @Test func sessionNewRejectsParentAndAfter() {
+        #expect(validationMessage(["session", "new", "--parent", "p1", "--after", "a"])
+            == "session.new takes --parent, --after/--before, or a workspace, not more than one")
+    }
+
+    @Test func sessionNewRejectsParentAndWorkspace() {
+        #expect(validationMessage(["session", "new", "--parent", "p1", "--workspace", "ws1"])
+            == "session.new takes --parent, --after/--before, or a workspace, not more than one")
     }
 
     @Test func sessionDuplicateTargetsExplicitSession() throws {
@@ -295,6 +319,31 @@ struct CommandsTests {
     @Test func sessionMoveRejectsAfterAndWorkspace() {
         #expect(validationMessage(["session", "move", "ws2", "--after", "a"])
             == "session.move takes --after/--before or a workspace, not both")
+    }
+
+    @Test func sessionMoveParent() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1", args: ControlArgs(parent: "p1"))
+        #expect(try request(["session", "move", "--parent", "p1", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveUnparent() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1", args: ControlArgs(unparent: true))
+        #expect(try request(["session", "move", "--unparent", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveRejectsParentAndUnparent() {
+        #expect(validationMessage(["session", "move", "--parent", "p1", "--unparent", "--target", "s1"])
+            == "use either --parent or --unparent, not both")
+    }
+
+    @Test func sessionMoveRejectsParentAndTo() {
+        #expect(validationMessage(["session", "move", "--parent", "p1", "--to", "up", "--target", "s1"])
+            == "session.move takes --parent/--unparent alone")
+    }
+
+    @Test func sessionMoveRejectsParentAndWorkspace() {
+        #expect(validationMessage(["session", "move", "ws2", "--parent", "p1", "--target", "s1"])
+            == "session.move takes --parent/--unparent alone")
     }
 
     @Test func sessionTypeWithText() throws {

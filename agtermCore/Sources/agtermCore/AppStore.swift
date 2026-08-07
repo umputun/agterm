@@ -284,7 +284,9 @@ public final class AppStore {
                                           fontSize: fontSize(session),
                                           splitFontSize: splitFontSize(session),
                                           scratchFontSize: scratchFontSize(session),
-                                          surfaces: surfaces)
+                                          surfaces: surfaces,
+                                          parentID: session.parentID?.uuidString,
+                                          collapsed: session.isExpanded ? nil : true)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
@@ -362,11 +364,15 @@ public final class AppStore {
     /// Creates a session in the given workspace and selects it when `select` (the default); `select: false`
     /// appends it in the background, leaving selection/focus/recency untouched (`session.new --no-select`).
     /// `name` seeds `customName` (trimmed; blank = the auto basename, matching `renameSession`). `at` nil
-    /// appends, else inserts at the clamped index (`0...count`), backing `--after`/`--before`. Nil if no
-    /// workspace matches.
+    /// appends after `parentID`'s last existing child (top-level end when `parentID` is nil), else inserts
+    /// at the clamped index (`0...count`), backing `--after`/`--before` — an explicit index always wins, and
+    /// the caller is expected to pass the anchor's own `parentID` alongside it. `parentID` outside
+    /// `workspaceID` (unknown or belonging to another workspace) is ignored — the session still creates,
+    /// top-level. Nil if no workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
-                           name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true) -> Session? {
+                           name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
+                           parentID: UUID? = nil) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // cwd feeds {AGT_SESSION_PWD} through initialCwd → effectiveCwd until OSC 7 reports; name feeds
         // {AGT_SESSION_NAME}. See TerminalText.
@@ -374,11 +380,18 @@ public final class AppStore {
                               customName: name.map(TerminalText.sanitized)?.trimmedOrNil)
         session.initialCommand = command
         session.commandWait = wait
+        // an unknown/cross-workspace parent is ignored rather than failing the create — matches
+        // `appendChildIndex`'s own nil-parent fallback below, so the two can't disagree.
+        let resolvedParentID = parentID.flatMap { pid in
+            workspaces[wsIndex].sessions.contains { $0.id == pid } ? pid : nil
+        }
+        session.parentID = resolvedParentID
         if let index {
             let destination = max(0, min(index, workspaces[wsIndex].sessions.count))
             workspaces[wsIndex].sessions.insert(session, at: destination)
         } else {
-            workspaces[wsIndex].sessions.append(session)
+            let destination = SessionTree.appendChildIndex(parent: resolvedParentID, in: sessionNodes(inWorkspace: workspaceID))
+            workspaces[wsIndex].sessions.insert(session, at: destination)
         }
         if select {
             selectedSessionID = session.id
@@ -438,7 +451,10 @@ public final class AppStore {
 
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
     /// surviving session in scope (`closeReselectionTarget(after:)`), falling back to the positional neighbor.
+    /// A session with descendants cascades: `closeSessionSubtree` closes the whole subtree as one operation,
+    /// and this method's single-session path below resumes unchanged for a childless one.
     public func closeSession(_ sessionID: UUID) {
+        if closeSessionSubtree(sessionID) { return }
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
@@ -505,22 +521,34 @@ public final class AppStore {
         save()
     }
 
-    /// Moves a session to another workspace (or reorders within one), keeping the **same** `Session` instance
-    /// so its attached surface and live shell survive. `index` is the destination position **after** the
-    /// move's removal (clamped); nil appends. `selectedSessionID` is unaffected — the id is stable. No-ops on
-    /// an unknown session or target workspace, and a same-workspace move to the current slot leaves order
-    /// unchanged. Moving the **active** session out of the marked set suspends the focus filter while KEEPING
-    /// the set (the auto-reveal contract: the active session must stay inside the visible set); a non-active
-    /// session leaves the filter intact.
+    /// Moves a session to another workspace (or reorders within one), keeping the **same** `Session` instances
+    /// so attached surfaces and live shells survive. A session with descendants carries its whole subtree as
+    /// one contiguous block (inner order preserved); a childless session moves exactly as before. `index` is
+    /// the destination position **after** the move's removal (clamped); nil appends. `selectedSessionID` is
+    /// unaffected — the id is stable. No-ops on an unknown session or target workspace, and a same-workspace
+    /// move to the current slot leaves order unchanged. A subtree can't straddle workspaces, so a
+    /// cross-workspace move nils the moved root's `parentID`; descendants keep theirs and ride along. Moving
+    /// the **active** session (root or a descendant) out of the marked set suspends the focus filter while
+    /// KEEPING the set (the auto-reveal contract: the active session must stay inside the visible set); a
+    /// non-active session leaves the filter intact.
     public func moveSession(_ sessionID: UUID, toWorkspace targetID: UUID, at index: Int? = nil) {
         guard let source = location(ofSession: sessionID) else { return }
         guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return }
+        let sourceWorkspaceID = workspaces[source.workspaceIndex].id
+        guard let range = SessionTree.subtreeRange(of: sessionID, in: sessionNodes(inWorkspace: sourceWorkspaceID)) else { return }
         let before = workspaces.map { $0.sessions.map(\.id) }
 
-        let session = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
-        let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count, workspaces[targetIndex].sessions.count))
-        workspaces[targetIndex].sessions.insert(session, at: destination)
-        if sessionID == selectedSessionID { disableFocusIfSelectionOutsideSet(sessionID) }
+        let block = Array(workspaces[source.workspaceIndex].sessions[range])
+        workspaces[source.workspaceIndex].sessions.removeSubrange(range)
+        if sourceWorkspaceID != targetID {
+            block.first?.parentID = nil // a subtree can't straddle workspaces; descendants keep their parentIDs
+        }
+        let destinationCount = workspaces[targetIndex].sessions.count
+        let destination = max(0, min(index ?? destinationCount, destinationCount))
+        workspaces[targetIndex].sessions.insert(contentsOf: block, at: destination)
+        if let selectedSessionID, block.contains(where: { $0.id == selectedSessionID }) {
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
+        }
         pruneSidebarSelection()
         if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
         save()
@@ -560,13 +588,21 @@ public final class AppStore {
         return moving.count
     }
 
-    /// Reorders a session one step within its own workspace (`up`/`down`/`top`/`bottom`) via `moveSession`.
+    /// Reorders a session one step (`up`/`down`/`top`/`bottom`) WITHIN its own sibling group (sessions
+    /// sharing its parentID), carrying its subtree so the contiguity invariant holds even for a nested row.
     /// No-op (no write) on an unknown id or when the move would leave order unchanged (already at that end).
     public func reorderSession(_ id: UUID, _ direction: ReorderDirection) {
         guard let loc = location(ofSession: id) else { return }
-        let count = workspaces[loc.workspaceIndex].sessions.count
-        guard let dest = direction.destinationIndex(from: loc.sessionIndex, count: count) else { return }
-        moveSession(id, toWorkspace: workspaces[loc.workspaceIndex].id, at: dest)
+        let wsIndex = loc.workspaceIndex
+        let nodes = sessionNodes(inWorkspace: workspaces[wsIndex].id)
+        guard let order = SessionTree.reorderSibling(id, direction, in: nodes) else { return }
+        let before = workspaces[wsIndex].sessions.map(\.id)
+        guard order != before else { return }
+        var byID: [UUID: Session] = [:]
+        for session in workspaces[wsIndex].sessions { byID[session.id] = session }
+        workspaces[wsIndex].sessions = order.compactMap { byID[$0] }
+        scheduleTreeChanged()
+        save()
     }
 
     /// Moves a workspace to `index` among its siblings, mirroring `moveSession`'s remove/clamp/insert/save

@@ -165,6 +165,65 @@ public enum SidebarDrop {
         return visibleIndices[min(slot, visibleIndices.count) - 1] + 1
     }
 
+    /// The reparent a sidebar session drop resolves to within ONE workspace: the dragged block's new
+    /// `parentID` (nil = the workspace's top level) and the destination index among that parent's DIRECT
+    /// children AFTER the dragged roots are removed from the group. `AppStore.reparentSession(_:to:at:)`
+    /// consumes it.
+    public struct Reparent: Equatable, Sendable {
+        public let parentID: UUID?
+        public let destination: Int
+
+        public init(parentID: UUID?, destination: Int) {
+            self.parentID = parentID
+            self.destination = destination
+        }
+    }
+
+    /// Resolves a same-workspace session drop into a reparent. `parentID` is the drop's resolved parent — a
+    /// session row the block nests under, or nil for a workspace-row / top-level-gap drop; `childIndex` is
+    /// AppKit's proposed index among that parent's direct children (`onItemIndex` = dropped ON the row →
+    /// last child). Returns nil for an ILLEGAL drop (the target is a dragged root or a descendant of one — a
+    /// cycle) or a NO-OP (a single dragged root already parented here and landing back in its own slot).
+    /// `order` is the workspace's flat session list (contiguity-valid); `sourceIDs` the dragged roots in
+    /// drag order.
+    public static func resolveReparent(order: [SessionTree.Node], sourceIDs: [UUID], parentID: UUID?,
+                                       childIndex: Int) -> Reparent? {
+        guard !sourceIDs.isEmpty else { return nil }
+        let sources = Set(sourceIDs)
+        if let parentID {
+            guard order.contains(where: { $0.id == parentID }) else { return nil }
+            // a cycle: the new parent is a dragged root, or nested inside one of them.
+            for source in sourceIDs where SessionTree.isSelfOrDescendant(parentID, of: source, in: order) {
+                return nil
+            }
+        }
+        let directChildren = order.filter { $0.parentID == parentID }.map(\.id)
+        let rawDestination = childIndex == onItemIndex ? directChildren.count
+            : max(0, min(childIndex, directChildren.count))
+        // dragged roots already in the target group shift the destination left by however many sit above it.
+        let removedBefore = directChildren.enumerated().count { sources.contains($0.element) && $0.offset < rawDestination }
+        let destination = rawDestination - removedBefore
+
+        // no-op: a single dragged root already parented here, landing back in its own slot.
+        if sourceIDs.count == 1, let only = sourceIDs.first, let slot = directChildren.firstIndex(of: only) {
+            let landed = max(0, min(destination, directChildren.count - 1))
+            if landed == slot { return nil }
+        }
+        return Reparent(parentID: parentID, destination: destination)
+    }
+
+    /// The flat index in `order` (the node list AFTER the moved block was removed) at which to insert that
+    /// block so its root becomes `parent`'s child number `childDestination` (nil / out-of-range = last
+    /// child). A nil `parent` positions among the top-level roots. Pure arithmetic over the contiguity
+    /// invariant: a child's slot is just before the `childDestination`-th sibling's own subtree, or past the
+    /// parent's whole subtree when appending.
+    public static func flatChildInsertIndex(order: [SessionTree.Node], parent: UUID?, childDestination: Int?) -> Int {
+        let children = order.filter { $0.parentID == parent }.map(\.id)
+        let dest = childDestination.map { max(0, min($0, children.count)) } ?? children.count
+        guard dest < children.count else { return SessionTree.appendChildIndex(parent: parent, in: order) }
+        return SessionTree.subtreeRange(of: children[dest], in: order)?.lowerBound ?? order.count
+    }
+
     /// Resolves a top-level workspace reorder (validity — a between-rows root drop — is the caller's
     /// to enforce). `count` is the pre-removal workspace count.
     public static func resolveWorkspace(sourceIndex: Int, count: Int, childIndex: Int) -> WorkspaceResolution? {

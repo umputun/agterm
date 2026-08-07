@@ -123,13 +123,31 @@ extension ControlServer: ControlActions {
     /// name, there is nothing to create by id. cwd/command/name are applied in `makeSessionResponse`.
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
         resolver.resolvePlacementStore(options.window) { store in
+            // parent nesting: the parent sid self-identifies its workspace, bypassing `--workspace`/
+            // `--workspace-name`. The child appends as the parent's LAST child (`at: nil` → `addSession`
+            // computes the last-child slot from the parentID), mutually exclusive with placement above.
+            if let parent = options.parent {
+                return resolveSessionAcrossStore(parent, in: store) { parentID in
+                    guard let location = store.sessionLocation(ofSession: parentID) else {
+                        return ControlResponse(ok: false, error: "no such session")
+                    }
+                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options,
+                                               parentID: parentID, at: nil)
+                }
+            }
             // anchor-relative placement: the anchor names its own workspace, bypassing `--workspace`/
             // `--workspace-name`. `before` takes the anchor's slot, `after` the next (clamped in `addSession`).
+            // The new session INHERITS the anchor's parent, so it lands as a sibling at any depth.
             if let anchor = options.after ?? options.before {
                 let placeBefore = options.before != nil
                 return resolveAnchorLocation(anchor, in: store) { location in
                     let index = placeBefore ? location.index : location.index + 1
-                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
+                    let response = makeSessionResponse(in: store, workspaceID: location.workspace,
+                                                       options: options, parentID: location.parentID, at: index)
+                    // `--after` a subtree-bearing anchor inserts between it and its children; restore preorder
+                    // (identity for a flat/childless anchor, so plain placements stay byte-identical).
+                    store.repairContiguity(inWorkspace: location.workspace)
+                    return response
                 }
             }
             // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
@@ -156,17 +174,35 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Resolve a session address (id / unique prefix / `active`) across ALL of `store`'s workspaces to its
+    /// id — the shared spelling of the anchor/parent candidate set, so `--after`/`--before`/`--parent` all
+    /// resolve identically. Unresolved/ambiguous yields the shared resolver error.
+    private func resolveSessionAcrossStore(_ address: String, in store: AppStore,
+                                           _ body: (UUID) -> ControlResponse) -> ControlResponse {
+        resolver.resolve(address, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                       active: store.selectedSessionID, noun: "session", body)
+    }
+
+    /// An `--after`/`--before` anchor's placement: its workspace, index, and workspace session count, plus
+    /// the anchor's own `parentID` so a placed or created sibling can INHERIT it (nesting at any depth).
+    private struct AnchorLocation {
+        let workspace: UUID
+        let index: Int
+        let count: Int
+        let parentID: UUID?
+    }
+
     /// Resolve an `--after`/`--before` anchor across all workspaces (so it names its own destination) and
-    /// hand its `(workspace, index, count)` to `body`. Unresolved/ambiguous yields the shared resolver
-    /// error; the location guard is defense-in-depth — the id came from the store's own list.
+    /// hand its `AnchorLocation` to `body`. Unresolved/ambiguous yields the shared resolver error; the
+    /// location guard is defense-in-depth — the id came from the store's own list.
     private func resolveAnchorLocation(_ anchor: String, in store: AppStore,
-                                       _ body: ((workspace: UUID, index: Int, count: Int)) -> ControlResponse) -> ControlResponse {
-        resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
-                       active: store.selectedSessionID, noun: "session") { anchorID in
+                                       _ body: (AnchorLocation) -> ControlResponse) -> ControlResponse {
+        resolveSessionAcrossStore(anchor, in: store) { anchorID in
             guard let location = store.sessionLocation(ofSession: anchorID) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
-            return body(location)
+            return body(AnchorLocation(workspace: location.workspace, index: location.index,
+                                       count: location.count, parentID: store.session(withID: anchorID)?.parentID))
         }
     }
 
@@ -476,6 +512,19 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Collapse (`expanded: false`) / expand (`expanded: true`) a SINGLE parent session's subtree in a
+    /// window's sidebar — the per-session analogue of `workspace.collapse`/`.expand`. Resolves the session
+    /// (honoring `--window`), then `AppActions.setSessionExpanded` persists `Session.isExpanded` on the store
+    /// directly (source of truth for the `collapsed` read-back, so it works with the sidebar hidden) and posts
+    /// a store-scoped notification for the live outline sync. Idempotent; returns the session id — a leaf just
+    /// records the state (no subtree to fold).
+    func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            actions.setSessionExpanded(id, expanded: expanded, in: store)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Mode-bearing `session.move`: `to` (`up`|`down`|`top`|`bottom`) reorders within the session's own
     /// workspace, `workspace` relocates to another one (appending), `place` relocates + positions against an
     /// anchor session (which carries its own workspace). Exactly one form, enforced in the dispatcher.
@@ -497,12 +546,25 @@ extension ControlServer: ControlActions {
             }
         case .place(let anchor, let after):
             return placeSession(target, window: window, anchor: anchor, after: after)
+        case .parent(let anchor):
+            // `--parent`/`--unparent`: reparent the target within its own workspace. nil anchor (`--unparent`)
+            // promotes to top-level; a non-nil anchor nests under it (resolved in the target's store).
+            return resolver.resolveSession(target, window: window) { store, sessionID in
+                guard let anchor else {
+                    store.reparentSession(sessionID, to: nil)
+                    return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
+                }
+                return resolveSessionAcrossStore(anchor, in: store) { anchorID in
+                    store.reparentSession(sessionID, to: anchorID)
+                    return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
+                }
+            }
         }
     }
 
     func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
         switch move {
-        case .reorder:
+        case .reorder, .parent:
             return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
         case .workspace(let workspace):
             return resolveBatchSessions(targets, window: window) { store, ids in
@@ -531,6 +593,12 @@ extension ControlServer: ControlActions {
                     placeAfter: after) {
                     store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination)
                 }
+                // adopt the anchor's parent so `--after`/`--before` nests as a sibling at any depth; a no-op
+                // (same parent, e.g. both top-level) leaves the positional move above as the only effect.
+                store.reparentSession(sessionID, to: anchorLoc.parentID)
+                // the flat positional splice can split the ANCHOR's own subtree, which reparentSession's
+                // parent-unchanged no-op would not repair; re-establish preorder unconditionally.
+                store.repairContiguity(inWorkspace: anchorLoc.workspace)
                 return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
             }
         }

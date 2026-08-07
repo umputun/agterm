@@ -83,14 +83,14 @@ paths:
 
 ## Public catalog
 
-There are 74 public commands:
+There are 76 public commands:
 
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
-  `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
-  `.overlay.result`, `.hud.open`, `.hud.update`, `.hud.close`
+  `.flag`, `.seen`, `.collapse`, `.expand`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`,
+  `.overlay.resize`, `.overlay.result`, `.hud.open`, `.hud.update`, `.hud.close`
 - `surface.zoom`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `notify`
@@ -111,11 +111,27 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one grouped undo/reopen record, and returns actual `affected`; selecting any recent group member restores
   the group and selects that member.
 - `session.move` accepts exactly one placement intent:
-  - `--to up|down|top|bottom` reorders one session in its workspace.
+  - `--to up|down|top|bottom` reorders one session in its sibling group (carrying its subtree).
   - workspace relocates and appends.
-  - `--after`/`--before` resolves an anchor across the store, carrying destination workspace.
+  - `--after`/`--before` resolves an anchor across the store, carrying destination workspace AND the
+    anchor's `parentID` — a placed session ADOPTS the anchor's parent, so `--after <child>` nests it as a
+    sibling child. A subtree-bearing session carries its whole block, then `repairContiguity` restores
+    preorder (the placed session keeps its positional slot among the anchor's siblings).
+  - `--parent <sid>` reparents the target under that session (last child); `--unparent` promotes it to
+    top-level. Single target only; mutually exclusive with each other and with `--to`/`--after`/`--before`/
+    a workspace. Cross-workspace parents are rejected (a subtree can't straddle workspaces).
   Relative placement uses host-free `SidebarDrop.resolveRelative`; batches use tree-order remove-first
   `resolveSessions`. Reject batch `--to`. Count only actual moves. A one-member batch uses singular behavior.
+- Nested sessions: `Session.parentID` (nil = top-level) is an adjacency list; `Workspace.sessions` stays a
+  flat array whose CONTIGUITY invariant (a parent immediately followed by its whole subtree, depth-first
+  preorder) makes array order equal visual tree order. `session.new --parent <sid|active>` creates a child;
+  the sidebar's "New Child Session" is the GUI twin. Closing a parent CASCADES — its whole subtree closes
+  as one grouped undo/reopen record (the `removeWorkspace` precedent). Host-free math lives in
+  `SessionTree`; store ops in `AppStore+Nesting.swift`; drag-reparent in `SidebarDrop.resolveReparent`.
+- `session.collapse`/`.expand` fold/unfold a single parent session's subtree, the per-session analogue of
+  `workspace.collapse`/`.expand`. Persist `Session.isExpanded` on the store first (the `collapsed`
+  read-back source of truth, so it works with the sidebar hidden), then post an object-scoped notification
+  for the live outline. Read omitted/true `collapsed`.
 - Sidebar batch Flag computes one uniform value: flag all unless all are already flagged. This is not
   equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status is equivalent to
   repeated `session.status idle` and needs no batch command.
@@ -145,9 +161,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.new` chooses one mutually exclusive destination:
   - workspace ID/prefix/active;
   - exact-trimmed workspace name, optionally create-or-reuse;
-  - `--after`/`--before` anchor, which supplies workspace and insertion index.
-  Reject both anchors, placement plus workspace, name plus ID, create without name, and missing name without
-  create. Insert indices are clamped.
+  - `--after`/`--before` anchor, which supplies workspace, insertion index AND the anchor's parent (the new
+    session inherits `parentID`, so `--after <child>` creates a sibling child);
+  - `--parent <sid|active>` nests the new session as that session's last child.
+  Reject both anchors, `--parent` plus a placement anchor or a workspace, placement plus workspace, name
+  plus ID, create without name, and missing name without create. Insert indices are clamped; an unknown or
+  cross-workspace parent is ignored (the session appends top-level) rather than failing creation.
 - `--command` becomes raw libghostty `config.command`, not shell input. Ghostty quote-splits into argv and
   executes directly, so operators, expansion, redirection, and globs require an explicit `sh -c` or
   `zsh -lc`. GUI launch PATH lacks `/opt/homebrew/bin`; missing binaries exit 127, so use absolute paths
@@ -428,7 +447,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Tree and window read-back
 
 - Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
-  split ratio, split focus, status fields, flag, unseen, restore pins, and surfaces. Foreground shares the
+  split ratio, split focus, status fields, flag, unseen, restore pins, `parentID` (the nesting parent,
+  omitted when top-level — reconstructs the tree client-side), `collapsed` (true only, the read side of
+  `session.collapse`/`.expand`), and surfaces. Foreground shares the
   restore capture's pid/sysctl/host-free extraction but adds one step the capture must never take.
   libghostty's foreground pid is `tcgetpgrp`, a process GROUP id, and a pane with no job-control shell
   leaves its program in the group led by setuid-root `login`, whose argv `KERN_PROCARGS2` refuses. The tree

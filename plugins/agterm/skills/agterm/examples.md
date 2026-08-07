@@ -181,6 +181,41 @@ agtermctl session close --target "$server" --target "$logs"
 workspace — the anchor already picks the workspace. Repeated `--target` is only for workspace and
 after/before placement, not `--to up|down|top|bottom`.
 
+## Nest a session under another (a helper under the calling one)
+
+Sessions can nest: a session's children render indented under it in the sidebar. `session new --parent`
+creates the new session as that parent's LAST CHILD. The headline agent idiom is a skill spawning a
+helper nested under the session it runs in, so the two read as one unit:
+
+```bash
+# spawn a helper nested under the calling session (the parent is a session address; `active` also works)
+agtermctl session new --parent "$AGTERM_SESSION_ID" --name "helper"
+child=$(agtermctl session new --parent active --json | jq -r '.result.id')
+```
+
+An unknown or cross-workspace `--parent` is ignored (the session appends top-level), never an error.
+`session new --after <child>` also nests — it inherits the anchor's parent, creating a sibling child at
+the same depth. Reparent or promote an existing session with `session move`, or drag a sidebar row onto
+another to nest it (drag it out to top-level):
+
+```bash
+agtermctl session move --parent "$AGTERM_SESSION_ID" --target 3f2a   # reparent 3f2a under this session
+agtermctl session move --unparent --target 3f2a                      # promote it back to top-level
+```
+
+Fold a parent's subtree with `session collapse` (the per-session twin of `workspace collapse`); a
+collapsed parent hides its descendant rows and rolls their unseen badge + most-urgent status onto its own
+row. Closing a parent CASCADES — the whole subtree closes as one grouped undo/reopen record:
+
+```bash
+agtermctl session collapse --target "$AGTERM_SESSION_ID"   # fold the subtree; session expand unfolds it
+collapsed=$(agtermctl tree --json | jq -r --arg s "$child" '.result.tree.workspaces[].sessions[] | select(.id==$s) | .collapsed // false')
+agtermctl session close --target "$AGTERM_SESSION_ID"      # closes the parent AND its whole subtree, one undo
+```
+
+Read the shape back off `tree`: each session node carries `parentID` (its nesting parent, omitted when
+top-level) and `collapsed` (`true` only when its subtree is folded).
+
 ## Resize the split divider from a keybinding
 
 The divider is otherwise mouse-only — drag it, or double-click it for an even split. There is no built-in

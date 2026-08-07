@@ -184,7 +184,7 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 74 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 76 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -266,7 +266,8 @@ agtermctl session new --command "sh -c 'clear; ssh user@host'"  # --command is a
 agtermctl session new --command "zsh -lc 'make test'" --wait  # hold the session open after the command exits (press any key to close) so its final output stays readable; --wait needs --command
 agtermctl session new --name "myhost" --command "ssh user@host"  # pre-name the session (sidebar label set at creation)
 agtermctl session new --workspace-name servers --create-workspace --name "myhost"  # open in the "servers" workspace, creating it if absent (idempotent)
-agtermctl session new --after active             # create right after the current session (--before to precede it); the anchor's workspace is used
+agtermctl session new --after active             # create right after the current session (--before to precede it); the anchor's workspace AND nesting parent are used, so --after a child makes a sibling child
+agtermctl session new --parent "$AGTERM_SESSION_ID"   # nest a new session under the calling one as its last child (the sidebar's "New Child Session"; --parent active also works); unknown/cross-workspace parent appends top-level
 agtermctl session new --cwd ~/src/agterm --no-select  # create in the background without switching to it (the current session stays active)
 agtermctl session duplicate --target 9f3c        # a second plain shell in that session's workspace and cwd, right after it (only the directory carries over)
 agtermctl session type --target 9f3c $'make test\n'      # inject text into a session by id prefix
@@ -274,7 +275,9 @@ echo 'make test' | agtermctl session type --target active --stdin
 agtermctl session go --to next                   # step to the next session (next|prev|first|last; wraps at the ends, within the visible set)
 agtermctl session move --to up                   # reorder the active session within its workspace (up|down|top|bottom)
 agtermctl session move "$ws"                      # relocate the active session to another workspace (appends)
-agtermctl session move --after 9f3c              # place the active session right after another (--before to precede it); relocates cross-workspace if the anchor lives elsewhere
+agtermctl session move --after 9f3c              # place the active session right after another (--before to precede it); relocates cross-workspace if the anchor lives elsewhere, and adopts the anchor's nesting parent
+agtermctl session move --parent 9f3c --target abcd  # reparent abcd under session 9f3c as its last child (--unparent promotes it back to top-level; you can also drag a sidebar row onto another to nest it)
+agtermctl session collapse --target 9f3c         # fold a parent session's subtree in the sidebar (session expand unfolds it); closing a parent closes its whole subtree as one undo
 agtermctl session move "$ws" --target 9f3c --target abcd  # move a batch as one ordered block; --after/--before also accept repeated --target
 agtermctl session close --target 9f3c --target abcd       # close a batch with one grace-period undo
 agtermctl workspace move --to top                # reorder a workspace among its siblings (up|down|top|bottom)

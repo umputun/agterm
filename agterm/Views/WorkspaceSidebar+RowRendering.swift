@@ -64,8 +64,10 @@ extension WorkspaceSidebar.Coordinator {
             field.setAccessibilityIdentifier("session-row")
             field.setAccessibilityLabel(nil)
             let session = store.session(withID: node.id)
-            applyBadge(toCell: cell, count: effectiveUnseen(session?.unseenCount ?? 0))
-            cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
+            // a collapsed parent session rolls its hidden subtree's badge + most-urgent status onto its own
+            // row (rowUnseen/rowIndicator); an expanded parent or a leaf shows only its own.
+            applyBadge(toCell: cell, count: session.map { rowUnseen(forSession: $0) } ?? 0)
+            cell.statusIcon.apply(session.map { rowIndicator(forSession: $0) } ?? AgentIndicator())
             // the split-rectangle icon (matching the toolbar split button) shows in BOTH modes so a split
             // stays distinguishable at a glance, and `hasSplit` keeps it while merely hidden. Only the
             // filled `flagged` variant is tree-mode only — every row in the flat flagged view is flagged,

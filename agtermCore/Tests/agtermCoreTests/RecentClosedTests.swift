@@ -81,6 +81,47 @@ final class RecentClosedTests {
         #expect(loaded[0].workspace?.focusMember == nil)
     }
 
+    @Test func sessionGroupEntryRoundTripsThroughPersistence() throws {
+        let store = RecentClosedStore(directory: directory)
+        let parentID = UUID()
+        let childID = UUID()
+        let item = sessionGroupItem(rootID: parentID, childID: childID, title: "parent")
+
+        store.record(item)
+
+        let loaded = try #require(RecentClosedStore(directory: directory).load().first)
+        #expect(loaded.kind == .sessionGroup)
+        #expect(loaded.sessionGroup?.snapshots.map(\.id) == [parentID, childID]) // tree order preserved
+        #expect(loaded.sessionGroup?.snapshots[1].parentID == parentID) // nesting preserved
+        #expect(loaded.sessionGroup?.selectedSessionID == parentID)
+        #expect(loaded.subtitle == "2 sessions")
+    }
+
+    @Test func recordDedupesSessionGroupsByRootSnapshotID() {
+        let store = RecentClosedStore(directory: directory)
+        let rootID = UUID()
+
+        store.record(sessionGroupItem(id: UUID(), rootID: rootID, childID: UUID(), title: "old"))
+        store.record(sessionGroupItem(id: UUID(), rootID: rootID, childID: UUID(), title: "new"))
+
+        let loaded = store.load()
+        #expect(loaded.count == 1)
+        #expect(loaded[0].title == "new")
+    }
+
+    @Test func legacyListWithoutSessionGroupKeyStillDecodes() throws {
+        // an OLD store file predates `.sessionGroup` entirely: every item is legacy `.session`/`.workspace`
+        // shape with no "sessionGroup" key at all. `load()` must not drop the list on the upgrade.
+        let data = try JSONEncoder().encode(RecentClosedState(items: [sessionItem(title: "s"), workspaceItem(title: "w")]))
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(!json.contains("sessionGroup"))
+        try data.write(to: fileURL)
+
+        let loaded = RecentClosedStore(directory: directory).load()
+        #expect(loaded.count == 2)
+        #expect(loaded.allSatisfy { $0.sessionGroup == nil })
+    }
+
     @Test func workspaceEntryWithALegacyFocusEnabledKeyStillDecodes() throws {
         // the other direction of the same rule: a DROPPED key must not fail the decode either.
         // `focusEnabled` was one — the reopen leg marks only, so nothing reads a stored filter flag.
@@ -131,6 +172,26 @@ final class RecentClosedTests {
                 workspaceIndex: 0,
                 sessionIndex: 0,
                 snapshot: SessionSnapshot(id: snapshotID, customName: title, cwd: "/tmp")
+            )
+        )
+    }
+
+    private func sessionGroupItem(id: UUID = UUID(), rootID: UUID, childID: UUID, title: String) -> RecentClosedItem {
+        RecentClosedItem(
+            id: id,
+            kind: .sessionGroup,
+            title: title,
+            subtitle: "2 sessions",
+            sessionGroup: RecentClosedSessionGroup(
+                workspaceID: UUID(),
+                workspaceName: "work",
+                workspaceIndex: 0,
+                sessionIndex: 0,
+                snapshots: [
+                    SessionSnapshot(id: rootID, customName: title, cwd: "/tmp"),
+                    SessionSnapshot(id: childID, customName: "child", cwd: "/tmp", parentID: rootID),
+                ],
+                selectedSessionID: rootID
             )
         )
     }

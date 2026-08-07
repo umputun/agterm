@@ -179,3 +179,33 @@ paths:
   every member after tree changes would undo deliberate collapses and diverge from `tree` read-back.
   Revealing a session may expand visually without changing disk state; launch still reveals the active
   session, and its row may re-collapse next launch.
+
+## Nested sessions
+
+- A session may nest under another via `Session.parentID` (nil = top-level). `Workspace.sessions` stays a
+  flat ordered array whose CONTIGUITY invariant — a parent immediately followed by its whole subtree in
+  depth-first preorder — makes array order equal visual tree order, so every flat consumer (navigation,
+  flagged view, focus filter, persistence, recency, reorder) is unchanged. Pure math is `SessionTree`;
+  store ops are `AppStore+Nesting.swift`. The confining change is the sidebar tree-build plus block moves.
+- `rebuildAndReload` builds a NESTED `SidebarNode` tree from each workspace's `parentID`s (not one flat
+  child list). `isItemExpandable` is a workspace OR a session with children. `TreeShape` carries each
+  session's `parentID`, so a promote that keeps linear order but changes depth still rebuilds. Track parent
+  expansion in `expandedSessionIDs` (the workspace-set twin, one level deeper): seed from
+  `Session.isExpanded`, re-apply after `reloadData` top-down via `reapplySessionExpansion`, and on a genuine
+  toggle persist through `setSessionExpanded`. `syncSelection` expands the FULL ancestor chain
+  (`SessionTree.ancestorIDs` + owner workspace) so a nested selection resolves to a row.
+- A COLLAPSED parent rolls its hidden subtree up onto its own row: `rowUnseen` sums the subtree's unseen
+  badges and `rowIndicator` shows the most-urgent descendant status (`AgentStatus.attentionRank`). Both
+  feed `RowContent` so a hidden descendant's change reloads the collapsed parent. An expanded parent or a
+  leaf shows only its own.
+- Drag-to-reparent: dropping onto a session row nests (last child); dropping in a top-level gap un-nests;
+  cross-workspace clears `parentID` (a subtree can't straddle workspaces). AppKit's `proposedChildIndex`
+  counts DIRECT outline children, not the flat array, so the drop resolves in (parentID, sibling-index)
+  space via `SidebarDrop.resolveReparent` + `AppStore.reparentSession(_:to:at:)`, cycle-guarded. `session
+  new --parent` / `session move --parent|--unparent` and the row's "New Child Session" are the non-drag
+  surfaces; `session.collapse`/`.expand` fold a parent over control.
+- Closing a parent CASCADES its whole subtree as one grouped soft/hard close (the `removeWorkspace`
+  precedent); the GUI confirms with the descendant count (`confirmDelete`, like Delete Workspace) and
+  `closeSessionSubtree`/`softCloseSessions` record ONE undo/reopen. `Session.isExpanded`/`parentID` are
+  optional snapshot fields (`collapsed` inverse, emitted only when non-default) — a legacy `workspaces.json`
+  decodes every session top-level and expanded, and a non-nested tree serializes byte-identically.

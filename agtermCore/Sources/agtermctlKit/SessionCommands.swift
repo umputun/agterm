@@ -20,11 +20,11 @@ struct Session: ParsableCommand {
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
                       Text.self, Status.self, Restore.self, FlagCommand.self,
-                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self]
+                      Seen.self, Collapse.self, Expand.self, Search.self, Background.self, Overlay.self, Hud.self]
     )
 
     struct New: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Create a session.")
+        static let configuration = CommandConfiguration(abstract: "Create a session, optionally nested under a parent.")
         @Option(name: .long, help: "Working directory (defaults to $HOME).") var cwd: String?
         @Option(name: .long, help: "Target workspace by id/prefix/active (defaults to the current one). Mutually exclusive with --workspace-name.") var workspace: String?
         @Option(name: .long, help: "Target workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.") var workspaceName: String?
@@ -34,11 +34,21 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Initial session name (defaults to the auto basename).") var name: String?
         @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
         @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
+        @Option(name: .long, help: """
+            Create the session as a CHILD of this anchor session (id/prefix/active); it nests under the \
+            parent in the sidebar. Mutually exclusive with --workspace/--workspace-name and --after/--before.
+            """)
+        var parent: String?
         @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
+            // `--parent` self-identifies the destination workspace, so it's mutually exclusive with every
+            // other placement/workspace form.
+            if parent != nil, after != nil || before != nil || workspace != nil || workspaceName != nil {
+                throw ValidationError("session.new takes --parent, --after/--before, or a workspace, not more than one")
+            }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -61,7 +71,7 @@ struct Session: ParsableCommand {
             ControlRequest(cmd: .sessionNew, args: options.withWindow(
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before)))
+                            command: command, wait: wait ? true : nil, after: after, before: before, parent: parent)))
         }
     }
 
@@ -135,18 +145,35 @@ struct Session: ParsableCommand {
 
     struct Move: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Move a session: to another workspace, reorder with --to, or place relative to an anchor with --after/--before.")
-        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
+            abstract: "Move a session: to another workspace, reorder with --to, place relative to an anchor with "
+                + "--after/--before, or reparent with --parent/--unparent.")
+        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to, --after/--before, or --parent/--unparent.") var workspace: String?
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
+        @Option(name: .long, help: "Reparent the session under this anchor session (id/prefix/active).") var parent: String?
+        @Flag(name: .long, help: "Promote the session to top-level (remove its parent).") var unparent = false
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
 
         // exactly one placement intent among {workspace positional (relocate), --to (reorder), --after/--before
-        // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
-        // without a socket. the anchor carries its own workspace, so placement excludes --to and a workspace.
+        // (anchor-relative), --parent/--unparent (reparent)}; reject empty/conflicting cases at parse time as a
+        // clean usage error, unit-testable without a socket. the anchor carries its own workspace, so placement
+        // excludes --to and a workspace; --parent/--unparent self-identify the destination and take no other
+        // placement form, operating on a single --target.
         func validate() throws {
+            if parent != nil, unparent {
+                throw ValidationError("use either --parent or --unparent, not both")
+            }
+            if parent != nil || unparent {
+                if to != nil || after != nil || before != nil || workspace != nil {
+                    throw ValidationError("session.move takes --parent/--unparent alone")
+                }
+                if target.targets.count > 1 {
+                    throw ValidationError("session.move --parent takes a single --target")
+                }
+                return
+            }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -171,7 +198,11 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             let args: ControlArgs
-            if let after {
+            if let parent {
+                args = ControlArgs(parent: parent)
+            } else if unparent {
+                args = ControlArgs(unparent: true)
+            } else if let after {
                 args = ControlArgs(after: after)
             } else if let before {
                 args = ControlArgs(before: before)
@@ -466,6 +497,26 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionSeen, target: target.target, args: options.withWindow())
+        }
+    }
+
+    struct Collapse: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Collapse a parent session's subtree in the sidebar tree.")
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionCollapse, target: target.target, args: options.withWindow())
+        }
+    }
+
+    struct Expand: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Expand a parent session's subtree in the sidebar tree.")
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionExpand, target: target.target, args: options.withWindow())
         }
     }
 

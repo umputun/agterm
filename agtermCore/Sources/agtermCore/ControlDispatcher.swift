@@ -29,6 +29,9 @@ public protocol ControlActions {
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
+    /// Collapse/expand a single parent session's subtree in the sidebar — the session analogue of
+    /// `setWorkspaceExpansion`. The host persists `Session.isExpanded` and syncs the live outline.
+    func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
     /// Write a pane's PERSISTED restore-command override (consumed on the NEXT launch, never this run).
     /// The host resolves the target session and the live pane slot, then stores the tri-state value; it
@@ -171,7 +174,8 @@ public struct ControlDispatcher {
         case .eventsRead:
             return dispatchEventsRead(request)
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus, .sessionRestore:
+                .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionCollapse, .sessionExpand,
+                .sessionStatus, .sessionRestore:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
@@ -243,6 +247,13 @@ public struct ControlDispatcher {
         switch request.cmd {
         case .sessionNew:
             let args = request.args
+            // `--parent` self-identifies the destination workspace, so it's mutually exclusive with every
+            // other placement/workspace form.
+            if args?.parent != nil,
+               args?.after != nil || args?.before != nil || args?.workspace != nil || args?.workspaceName != nil {
+                return ControlResponse(ok: false,
+                                       error: "session.new takes --parent, --after/--before, or a workspace, not more than one")
+            }
             if args?.after != nil, args?.before != nil {
                 return ControlResponse(ok: false, error: "use either --after or --before, not both")
             }
@@ -271,6 +282,7 @@ public struct ControlDispatcher {
                 name: args?.name,
                 after: args?.after,
                 before: args?.before,
+                parent: args?.parent,
                 noSelect: args?.noSelect == true
             ))
         case .sessionDuplicate:
@@ -300,49 +312,15 @@ public struct ControlDispatcher {
         case .sessionReveal:
             return actions.revealSession(request.target, window: request.args?.window)
         case .sessionMove:
-            let args = request.args
-            if args?.after != nil, args?.before != nil {
-                return ControlResponse(ok: false, error: "use either --after or --before, not both")
-            }
-            // Placement mode: the anchor sid self-identifies the destination workspace, so it's
-            // mutually exclusive with --to and with a workspace parameter.
-            if let anchor = args?.after ?? args?.before {
-                if args?.to != nil {
-                    return ControlResponse(ok: false, error: "session.move takes --after/--before or --to, not both")
-                }
-                if args?.workspace != nil {
-                    return ControlResponse(ok: false, error: "session.move takes --after/--before or a workspace, not both")
-                }
-                let move = ControlSessionMove.place(anchor: anchor, after: args?.after != nil)
-                if let targets = args?.targets {
-                    return dispatchSessionMove(targets: targets, window: args?.window, move: move)
-                }
-                return actions.moveSession(request.target, window: args?.window, move: move)
-            }
-            if args?.to != nil && args?.workspace != nil {
-                return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
-            }
-            if let to = args?.to {
-                guard let direction = ReorderDirection(rawValue: to) else {
-                    return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
-                }
-                if args?.targets != nil {
-                    return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
-                }
-                return actions.moveSession(request.target, window: args?.window, move: .reorder(direction))
-            }
-            guard let workspace = args?.workspace else {
-                return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
-            }
-            let move = ControlSessionMove.workspace(workspace)
-            if let targets = args?.targets {
-                return dispatchSessionMove(targets: targets, window: args?.window, move: move)
-            }
-            return actions.moveSession(request.target, window: args?.window, move: move)
+            return dispatchSessionMoveCommand(request)
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionSeen:
             return actions.markSessionSeen(request.target, window: request.args?.window)
+        case .sessionCollapse:
+            return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: false)
+        case .sessionExpand:
+            return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: true)
         case .sessionStatus:
             guard let status = AgentStatus(rawValue: request.args?.status ?? "") else {
                 return ControlResponse(ok: false, error: "invalid status")
@@ -442,6 +420,66 @@ public struct ControlDispatcher {
     /// being no scratch pane to cover.
     private func parseOverlayPane(_ raw: String?) -> PaneSelection<OverlayPane> {
         parsePane(raw, error: PaneOverlayError.invalidPane) { OverlayPane(controlName: $0) }
+    }
+
+    /// `session.move` parsing/validation, extracted from the `dispatchSessionCommand` switch so that switch
+    /// stays under the cyclomatic limit. Accepts exactly one placement intent: `--parent`/`--unparent`
+    /// (reparent), `--after`/`--before` (anchor-relative), `--to` (reorder), or a workspace (relocate).
+    private func dispatchSessionMoveCommand(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        if args?.parent != nil, args?.unparent == true {
+            return ControlResponse(ok: false, error: "use either --parent or --unparent, not both")
+        }
+        // `--parent`/`--unparent` self-identify the destination (or top-level), so they take no other
+        // placement form and, like the anchor forms, no batch of more than one target.
+        if args?.parent != nil || args?.unparent == true {
+            if args?.to != nil || args?.after != nil || args?.before != nil || args?.workspace != nil {
+                return ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone")
+            }
+            if (args?.targets?.count ?? 0) > 1 {
+                return ControlResponse(ok: false, error: "session.move --parent takes a single --target")
+            }
+            let anchor = args?.unparent == true ? nil : args?.parent
+            return actions.moveSession(request.target, window: args?.window, move: .parent(anchor: anchor))
+        }
+        if args?.after != nil, args?.before != nil {
+            return ControlResponse(ok: false, error: "use either --after or --before, not both")
+        }
+        // Placement mode: the anchor sid self-identifies the destination workspace, so it's
+        // mutually exclusive with --to and with a workspace parameter.
+        if let anchor = args?.after ?? args?.before {
+            if args?.to != nil {
+                return ControlResponse(ok: false, error: "session.move takes --after/--before or --to, not both")
+            }
+            if args?.workspace != nil {
+                return ControlResponse(ok: false, error: "session.move takes --after/--before or a workspace, not both")
+            }
+            let move = ControlSessionMove.place(anchor: anchor, after: args?.after != nil)
+            if let targets = args?.targets {
+                return dispatchSessionMove(targets: targets, window: args?.window, move: move)
+            }
+            return actions.moveSession(request.target, window: args?.window, move: move)
+        }
+        if args?.to != nil && args?.workspace != nil {
+            return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
+        }
+        if let to = args?.to {
+            guard let direction = ReorderDirection(rawValue: to) else {
+                return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
+            }
+            if args?.targets != nil {
+                return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
+            }
+            return actions.moveSession(request.target, window: args?.window, move: .reorder(direction))
+        }
+        guard let workspace = args?.workspace else {
+            return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
+        }
+        let move = ControlSessionMove.workspace(workspace)
+        if let targets = args?.targets {
+            return dispatchSessionMove(targets: targets, window: args?.window, move: move)
+        }
+        return actions.moveSession(request.target, window: args?.window, move: move)
     }
 
     private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {

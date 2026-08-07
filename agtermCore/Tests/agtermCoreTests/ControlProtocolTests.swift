@@ -604,6 +604,28 @@ struct ControlProtocolTests {
         #expect(!json.contains("foreground"), "a nil foreground must be omitted from the JSON; got \(json)")
     }
 
+    @Test func treeSessionNodeRoundTripsWithParentIDAndCollapsed() throws {
+        let session = ControlSessionNode(id: "s2", name: "child", cwd: "/tmp", active: false, split: false,
+                                         parentID: "s1", collapsed: true)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.parentID == "s1")
+        #expect(node?.collapsed == true)
+    }
+
+    @Test func treeSessionNodeOmitsParentIDAndCollapsedWhenNil() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("parentID"), "a nil parentID must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("collapsed"), "a nil collapsed must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.parentID == nil)
+        #expect(decoded.collapsed == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithFontSizes() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
                                          fontSize: 13, splitFontSize: 9.5, scratchFontSize: 11)
@@ -1310,6 +1332,35 @@ struct ControlProtocolTests {
         #expect(decoded == request)
         #expect(decoded.args?.before == "1a2b")
         #expect(decoded.args?.after == nil)
+    }
+
+    @Test func sessionNewRoundTripsWithParent() throws {
+        let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(parent: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.parent == "active")
+        #expect(decoded.args?.after == nil)
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithParent() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(parent: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.parent == "1a2b")
+        #expect(decoded.args?.unparent == nil)
+        #expect(decoded.args?.after == nil)
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.to == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithUnparent() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(unparent: true))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.unparent == true)
+        #expect(decoded.args?.parent == nil)
     }
 
     @Test func workspaceMoveRoundTripsWithDirection() throws {

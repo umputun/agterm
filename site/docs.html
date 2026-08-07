@@ -1147,7 +1147,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 74 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 76 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1294,12 +1294,18 @@
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder: up|down|top|bottom</span><br />agtermctl session move
               <span style="color: #f2b45c">"$ws"</span> <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# relocate to a workspace</span
               ><br />agtermctl session new --after active
-              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span
+              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede); --after a child makes a sibling child</span
+              ><br />agtermctl session new --parent <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# nest a new session under the calling one as its last child (the sidebar's "New Child Session"; --parent active also works)</span
               ><br />agtermctl session new --cwd ~/src/agterm --no-select
               <span style="color: #6b727a">&nbsp;&nbsp;# create in the background without switching to it</span
               ><br />agtermctl session duplicate --target <span style="color: #f2b45c">9f3c</span>
               <span style="color: #6b727a">&nbsp;&nbsp;# a fresh shell in that session's workspace and cwd, right after it</span><br />agtermctl session move --after
-              <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
+              <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace and nesting parent are used; relocates cross-workspace)</span
+              ><br />agtermctl session move --parent <span style="color: #f2b45c">9f3c</span> --target <span style="color: #f2b45c">abcd</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# reparent abcd under 9f3c as its last child (--unparent promotes back to top-level; or drag a row onto another)</span
+              ><br />agtermctl session collapse --target <span style="color: #f2b45c">9f3c</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# fold a parent's subtree (session expand unfolds it); closing a parent closes its whole subtree as one undo</span
               ><br />agtermctl session move <span style="color: #f2b45c">"$ws"</span> --target 9f3c --target abcd
               <span style="color: #6b727a">&nbsp;&nbsp;# move a batch as one ordered block</span
               ><br />agtermctl session close --target 9f3c --target abcd

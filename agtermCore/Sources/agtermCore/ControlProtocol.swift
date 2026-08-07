@@ -24,6 +24,8 @@ public enum Command: String, Codable, Sendable {
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
     case sessionSeen = "session.seen"
+    case sessionCollapse = "session.collapse"
+    case sessionExpand = "session.expand"
     case sessionRestore = "session.restore"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
@@ -192,6 +194,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var after: String?
     /// Anchor session to place a session right BEFORE, the mirror of `after` (mutually exclusive with it).
     public var before: String?
+    /// Parent session (id / prefix / `active`) for `session.new`/`session.move`: nests the session as a
+    /// child, the parent naming its own workspace. Mutually exclusive with `after`/`before`, a workspace
+    /// param, and (on `session.move`) `unparent`.
+    public var parent: String?
+    /// For `session.move`: detach the target to top-level, dropping any parent. Mutually exclusive with
+    /// `parent` and every other placement form.
+    public var unparent: Bool?
     /// App-run UUID paired with `after` for `events.read`. Both fields are omitted for a bootstrap read.
     public var run: String?
     /// Raw event-kind filters for `events.read`. Validation happens in the dispatcher so unknown future
@@ -296,7 +305,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
-                after: String? = nil, before: String? = nil, run: String? = nil,
+                after: String? = nil, before: String? = nil, parent: String? = nil, unparent: Bool? = nil,
+                run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
@@ -337,6 +347,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.to = to
         self.after = after
         self.before = before
+        self.parent = parent
+        self.unparent = unparent
         self.run = run
         self.kinds = kinds
         self.limit = limit
@@ -542,6 +554,13 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// Addressable terminal surfaces owned by this session; nil/omitted against a server predating
     /// `surface.zoom`. Hidden-but-alive surfaces are included, so a client can zoom them without unhiding.
     public let surfaces: [ControlSurfaceNode]?
+    /// The id of this session's PARENT in the nesting tree; nil/omitted for a top-level session. Sessions
+    /// list in depth-first preorder, so a child always appears right after its parent's own row. The read
+    /// side of `session.new --parent`, `session.move --parent`, and `--unparent`.
+    public let parentID: String?
+    /// Whether this session is COLLAPSED in the sidebar tree, hiding its descendant rows; nil/omitted when
+    /// expanded (the default), so a non-collapsed tree omits it — matching `SessionSnapshot.collapsed`.
+    public let collapsed: Bool?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
@@ -554,7 +573,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 statusShape: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
-                surfaces: [ControlSurfaceNode]? = nil) {
+                surfaces: [ControlSurfaceNode]? = nil,
+                parentID: String? = nil, collapsed: Bool? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -585,6 +605,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFontSize = splitFontSize
         self.scratchFontSize = scratchFontSize
         self.surfaces = surfaces
+        self.parentID = parentID
+        self.collapsed = collapsed
     }
 }
 

@@ -53,9 +53,14 @@ extension AppStore {
     public static let pendingCloseGraceInterval: TimeInterval = 3
 
     /// Hide a session from the visible tree but keep its surfaces alive for a short undo window.
-    /// If the grace expires, `finalizePendingClose` performs the same teardown as `closeSession`.
+    /// If the grace expires, `finalizePendingClose` performs the same teardown as `closeSession`. A session
+    /// with descendants cascades: the whole subtree soft-closes as one `softCloseSessions` batch, under the
+    /// one grace timer and one undo that call already groups; this method's single-session path below
+    /// resumes unchanged for a childless one.
     @discardableResult
     public func softCloseSession(_ sessionID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
+        let subtreeIDs = sessionSubtreeIDs(sessionID)
+        if subtreeIDs.count > 1 { return softCloseSessions(subtreeIDs, grace: grace) }
         guard let location = location(ofSession: sessionID) else { return false }
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
@@ -96,13 +101,16 @@ extension AppStore {
         return true
     }
 
-    /// Hide multiple sessions as one undoable operation. The removed sessions keep their surfaces alive
-    /// until the one shared grace timer finalizes, and a single undo restores every session in the group.
+    /// Hide multiple sessions as one undoable operation. Any parent in `sessionIDs` expands to its whole
+    /// subtree first (deduped, tree order), so closing a session with children always cascades to them too.
+    /// The removed sessions keep their surfaces alive until the one shared grace timer finalizes, and a
+    /// single undo restores every session in the group.
     @discardableResult
     public func softCloseSessions(_ sessionIDs: [UUID], grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
-        let targetIDs = Set(sessionIDs)
+        let expandedIDs = expandedSubtreeIDs(sessionIDs)
+        let targetIDs = Set(expandedIDs)
         guard targetIDs.count > 1 else {
-            guard let id = sessionIDs.first else { return false }
+            guard let id = expandedIDs.first else { return false }
             return softCloseSession(id, grace: grace)
         }
 

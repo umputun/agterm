@@ -125,6 +125,26 @@ final class AppActions {
         focusActiveSession()
     }
 
+    /// Create a new session as a CHILD of `parentSessionID`, nesting it under that session (last child) in the
+    /// sidebar. Store-scoped like the other row actions so a background window's row acts on its own store;
+    /// resolves the parent's workspace, then selects + focuses the child exactly as `newSession` does.
+    func newChildSession(of parentSessionID: UUID, in store: AppStore) {
+        guard let workspace = store.workspace(forSession: parentSessionID),
+              let session = store.addSession(toWorkspace: workspace.id, cwd: resolvedNewSessionCwd(),
+                                             parentID: parentSessionID)
+        else { return }
+        store.noteUserActivity()
+        store.selectSession(session.id)
+        focusActiveSession()
+    }
+
+    /// Create a child of the ACTIVE session — the menu-bar / palette "New Child Session". Frontmost-scoped
+    /// and gated like `newSession`; a no-op without a selected session.
+    func newChildActiveSession() {
+        guard uiActionsEnabled, let store, let parentID = store.selectedSessionID else { return }
+        newChildSession(of: parentID, in: store)
+    }
+
     /// The cwd for a new session: the new-session-directory setting (home / the current session's cwd / a
     /// fixed custom dir) resolved against the active session's focused-pane cwd, home when `settingsModel`
     /// isn't wired. Read as the `addSession` argument, so it captures the cwd BEFORE the new session exists.
@@ -234,7 +254,7 @@ final class AppActions {
         // does not intercept — that pane stays live and ⌘W keeps its ordinary meaning.
         if let pane = session.focusedOverlayPane { store.closePaneOverlay(session.id, pane: pane); return true }
         // handled either way — returning true on cancel keeps the File menu from closing the whole window.
-        guard confirmCloseSession(session) else { return true }
+        guard confirmSessionClose(session, in: store) else { return true }
         closeSessionAfterConfirmation(session.id, in: store)
         focusActiveSession()
         return true
@@ -265,7 +285,7 @@ final class AppActions {
     func closeSession(_ id: UUID, in store: AppStore) {
         guard uiActionsEnabled else { return }
         guard let session = store.session(withID: id) else { return }
-        guard confirmCloseSession(session) else { return }
+        guard confirmSessionClose(session, in: store) else { return }
         closeSessionAfterConfirmation(id, in: store)
     }
 
@@ -294,6 +314,17 @@ final class AppActions {
 
     func clearRecentClosedItems() {
         library.clearRecentClosedItems()
+    }
+
+    /// Confirms a session close, adapting to whether it parents a subtree. A PARENT always confirms — closing
+    /// it cascades to its whole subtree as one grouped close — showing the descendant count, mirroring the
+    /// workspace-delete confirm. A childless session keeps the per-session `confirmCloseSession` (gated by the
+    /// Settings toggle, bypassed under XCUITest). The cascade confirm is NOT bypassed, matching Delete
+    /// Workspace, so the Task 12 UI test can drive it; no existing test closes a parent session.
+    private func confirmSessionClose(_ session: Session, in store: AppStore) -> Bool {
+        let subtreeCount = store.sessionSubtreeIDs(session.id).count
+        guard subtreeCount > 1 else { return confirmCloseSession(session) }
+        return confirmDelete(name: session.displayName, sessionCount: subtreeCount)
     }
 
     /// A native warning confirm before closing `session`, gated by `AppSettings.confirmCloseSession`. Returns
@@ -532,6 +563,19 @@ final class AppActions {
         NotificationCenter.default.post(
             name: .agtermSetWorkspaceExpanded, object: store,
             userInfo: [WorkspaceSidebar.Coordinator.workspaceIDUserInfoKey: id,
+                       WorkspaceSidebar.Coordinator.expandedUserInfoKey: expanded])
+    }
+
+    /// The session analogue of `setWorkspaceExpanded` — `session.collapse`/`.expand`. Persists
+    /// `Session.isExpanded` DIRECTLY on the store (source of truth for the `collapsed` read-back,
+    /// delta-guarded), THEN posts a store-scoped notification so that window's Coordinator folds/unfolds the
+    /// row and updates its tracked set. The persist must NOT ride the notification: with the sidebar hidden
+    /// the Coordinator is unmounted, so a notification-only write would drop and leave the read-back stale.
+    func setSessionExpanded(_ id: UUID, expanded: Bool, in store: AppStore) {
+        store.setSessionExpanded(id, expanded: expanded)
+        NotificationCenter.default.post(
+            name: .agtermSetSessionExpanded, object: store,
+            userInfo: [WorkspaceSidebar.Coordinator.sessionIDUserInfoKey: id,
                        WorkspaceSidebar.Coordinator.expandedUserInfoKey: expanded])
     }
 

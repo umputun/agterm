@@ -31,6 +31,7 @@ final class MockControlActions: ControlActions {
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionFlag(target: String?, window: String?, String?)
         case markSessionSeen(target: String?, window: String?)
+        case sessionExpansion(target: String?, window: String?, expanded: Bool)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
         case sessionSplit(target: String?, window: String?, String?)
@@ -263,6 +264,11 @@ final class MockControlActions: ControlActions {
 
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.markSessionSeen(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
+        calls.append(.sessionExpansion(target: target, window: window, expanded: expanded))
         return ControlResponse(ok: true)
     }
 

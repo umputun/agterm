@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 74 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 76 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 74 agtermctl control commands with arguments, return values, and errors."
+      content="All 76 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 74 agtermctl control commands with arguments, return values, and errors."
+      content="All 76 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -237,7 +237,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 74 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 76 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -464,8 +464,16 @@
                 restore override, omitted when none and an empty string when pinned to nothing),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parentID</span> (this session's nesting parent — the
+                read side of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --parent</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move --parent</span>; omitted
+                when top-level, so a client rebuilds the subtree by linking each node to its parent), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> only when this parent's subtree is folded,
+                omitted otherwise).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Workspace node:</strong>
@@ -791,7 +799,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session new [--cwd DIR] [--workspace W | --workspace-name NAME [--create-workspace]] [--command CMD] [--wait]
-                [--name NAME] [--after SID | --before SID] [--no-select] [--window W]
+                [--name NAME] [--after SID | --before SID] [--parent SID] [--no-select] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -811,11 +819,24 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--after SID</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--before SID</span> place the new session directly
-                after or before an anchor session instead of appending. The anchor carries its own workspace, so it names the
-                destination itself — these are mutually exclusive with each other and with
+                after or before an anchor session instead of appending. The anchor carries its own workspace <em>and</em> nesting
+                parent, so it names the destination itself and the new session adopts the anchor's parent —
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--after &lt;child&gt;</span> therefore
+                creates a sibling child at the anchor's depth. These are mutually exclusive with each other and with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>. The headline case:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">session new --after active</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent SID</span> nests the new session as that
+                session's <strong style="color: #bfbab0">last child</strong> — the control twin of the sidebar's
+                <strong style="color: #bfbab0">New Child Session</strong>. The headline agent idiom is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">session new --parent "$AGTERM_SESSION_ID"</span>,
+                spawning a helper nested under the calling session. It is mutually exclusive with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> and with the workspace options; an
+                unknown or cross-workspace parent is ignored (the session appends top-level) rather than erroring. Read the nesting
+                back from the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parentID</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> runs a program as the session's
@@ -890,6 +911,12 @@
                 to close a batch as one grouped undo when close grace is enabled, or immediately when it is disabled. Batch output
                 reports the number of sessions actually closed.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Closing a <strong style="color: #bfbab0">parent</strong> session cascades: its whole subtree closes with it as one
+                grouped undo/reopen record (the same pattern as deleting a workspace full of sessions), so a later reopen restores
+                the parent and every descendant together, and the GUI confirm shows the descendant count. The count includes the
+                descendants.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -924,21 +951,32 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session move &lt;workspace&gt; | --to up|down|top|bottom | --after SID | --before SID [--target T ...] [--window W]
+                agtermctl session move &lt;workspace&gt; | --to up|down|top|bottom | --after SID | --before SID | --parent SID | --unparent [--target T ...] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.move</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Three mutually-exclusive placement intents, exactly one required. A positional
+                Mutually-exclusive placement intents, exactly one required. A positional
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;workspace&gt;</span> relocates the session there
                 (appending). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> reorders it within its own
-                workspace. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
+                sibling group, carrying its subtree. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> place it directly after or before an
-                anchor session — the anchor carries its own workspace, so cross-workspace placement falls out for free. Repeat
+                anchor session — the anchor carries its own workspace <em>and</em> nesting parent, so cross-workspace placement and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--after &lt;child&gt;</span> making it
+                a sibling child both fall out for free. Repeat
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> with a workspace or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> to move an ordered batch atomically;
                 batch relative reorder via <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> is not supported.
                 Batch output reports the number of sessions actually moved.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent SID</span> reparents the target under that
+                session as its <strong style="color: #bfbab0">last child</strong>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--unparent</span> promotes it back to top-level. Both
+                take a single <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> only, are mutually
+                exclusive with each other and with every other placement intent, and reject a cross-workspace parent (a subtree
+                can't straddle workspaces). Dragging a sidebar row onto another does the same nesting; read the result back from the
+                session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parentID</span>.
               </p>
             </div>
 
@@ -1254,6 +1292,45 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Lets an orchestrator acknowledge a driven session's notifications over the socket, keeping the badge a real attention
                 signal on the sessions a human tends.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session collapse [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.collapse</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Fold a parent session's subtree in the sidebar tree, hiding its descendant rows — the per-session counterpart of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>. Idempotent
+                (a leaf just records the state) and persisted. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A collapsed parent rolls its descendants' unseen badge and most-urgent agent status up onto its own row, so an agent
+                working in a folded child still shows attention. Read the fold state back via the session node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> field
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when folded, omitted when expanded).
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session expand [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.expand</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Unfold a parent session's subtree, showing its descendant rows — the inverse of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session collapse</span> and the
+                per-session counterpart of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace expand</span>.
+                Idempotent and persisted. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                To toggle, read the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> field
+                off <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> first, then call
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapse</span>.
               </p>
             </div>
 

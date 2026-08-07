@@ -3,6 +3,12 @@ import Foundation
 public enum RecentClosedKind: String, Codable, Sendable {
     case session
     case workspace
+    /// A closed session SUBTREE (a parent plus every descendant), recorded as one item so a single Reopen
+    /// restores the whole group — the nested-session analog of `.workspace`. Only the hard `closeSession`
+    /// cascade produces this; a childless close still records the legacy `.session` shape, and the
+    /// grace-timer soft-close path keeps recording one `.session` item per member (its own undo already
+    /// groups the batch in memory).
+    case sessionGroup
 }
 
 public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
@@ -13,10 +19,13 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
     public let closedAt: Date
     public let session: RecentClosedSession?
     public let workspace: RecentClosedWorkspace?
+    /// OPTIONAL for the same reason `session`/`workspace` are: a file written before `.sessionGroup` existed
+    /// has no such key, and a required key would fail the whole decode — see `RecentClosedStore.load()`.
+    public let sessionGroup: RecentClosedSessionGroup?
 
     public init(id: UUID = UUID(), kind: RecentClosedKind, title: String, subtitle: String?,
                 closedAt: Date = Date(), session: RecentClosedSession? = nil,
-                workspace: RecentClosedWorkspace? = nil) {
+                workspace: RecentClosedWorkspace? = nil, sessionGroup: RecentClosedSessionGroup? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -24,6 +33,7 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
         self.closedAt = closedAt
         self.session = session
         self.workspace = workspace
+        self.sessionGroup = sessionGroup
     }
 }
 
@@ -60,6 +70,32 @@ public struct RecentClosedWorkspace: Codable, Equatable, Sendable {
         self.snapshot = snapshot
         self.selectedSessionID = selectedSessionID
         self.focusMember = focusMember
+    }
+}
+
+/// A closed session subtree: the root (the session the user actually closed) plus every descendant, in
+/// TREE ORDER (root first) with `parentID`/`collapsed` intact on each snapshot, so restoring rebuilds both
+/// the nesting and the sidebar's contiguity invariant (parent immediately followed by its whole subtree) in
+/// one insert. `workspaceID`/`workspaceName`/`workspaceIndex` rebuild a missing workspace shell exactly like
+/// `RecentClosedSession`; `sessionIndex` is the root's original slot, the whole group's reinsertion point.
+public struct RecentClosedSessionGroup: Codable, Equatable, Sendable {
+    public let workspaceID: UUID
+    public let workspaceName: String
+    public let workspaceIndex: Int
+    public let sessionIndex: Int
+    public let snapshots: [SessionSnapshot]
+    /// The session to reselect on restore — the root the user closed, when it is still present after any
+    /// live-id filtering.
+    public let selectedSessionID: UUID?
+
+    public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int,
+                snapshots: [SessionSnapshot], selectedSessionID: UUID?) {
+        self.workspaceID = workspaceID
+        self.workspaceName = workspaceName
+        self.workspaceIndex = workspaceIndex
+        self.sessionIndex = sessionIndex
+        self.snapshots = snapshots
+        self.selectedSessionID = selectedSessionID
     }
 }
 
@@ -106,6 +142,9 @@ public struct RecentClosedStore: Sendable {
                 return existing.session?.snapshot.id == item.session?.snapshot.id
             case (.workspace, .workspace):
                 return existing.workspace?.snapshot.id == item.workspace?.snapshot.id
+            case (.sessionGroup, .sessionGroup):
+                // keyed on the root (first, tree order) snapshot's id, the group's own identity.
+                return existing.sessionGroup?.snapshots.first?.id == item.sessionGroup?.snapshots.first?.id
             default:
                 return false
             }

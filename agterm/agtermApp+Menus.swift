@@ -102,6 +102,8 @@ extension agtermApp {
                 Button("New Session") { actions.newSession() }
                     .keyboardShortcut(shortcut(for: .newSession))
                     .disabled(modalActive)
+                Button("New Child Session") { actions.newChildActiveSession() }
+                    .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Button("Open Directory…") { actions.openDirectory() }
                     .keyboardShortcut(shortcut(for: .openDirectory))
                     .disabled(modalActive)

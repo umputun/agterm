@@ -309,4 +309,78 @@ struct SidebarDropTests {
         let insert = SidebarDrop.workspaceInsertIndex(visibleIndices: [1, 3], slot: 1)
         #expect(SidebarDrop.resolveWorkspace(sourceIndex: 1, count: 4, childIndex: insert) == nil)
     }
+
+    // MARK: - Nested-session reparent
+
+    // Fixture tree (flat, contiguity-valid): top-level p and e; p parents c1 and c2; c1 parents c1x.
+    private static let p = UUID(), c1 = UUID(), c1x = UUID(), c2 = UUID(), e = UUID()
+    private static var nestedOrder: [SessionTree.Node] {
+        [.init(id: p, parentID: nil), .init(id: c1, parentID: p), .init(id: c1x, parentID: c1),
+         .init(id: c2, parentID: p), .init(id: e, parentID: nil)]
+    }
+
+    @Test func reparentDroppingOntoASessionRowNestsAsItsLastChild() {
+        // drop e ONTO p's row (onItemIndex): appends after p's existing children c1, c2 → child index 2.
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.e],
+                                            parentID: Self.p, childIndex: Self.onItem)
+                == SidebarDrop.Reparent(parentID: Self.p, destination: 2))
+    }
+
+    @Test func reparentBetweenAParentsChildrenTakesThatSlot() {
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.e],
+                                            parentID: Self.p, childIndex: 1)
+                == SidebarDrop.Reparent(parentID: Self.p, destination: 1))
+    }
+
+    @Test func reparentToTopLevelUnNestsAChild() {
+        // drop c1 (currently under p) into the top-level gap after p (childIndex 1 among roots [p, e]).
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.c1],
+                                            parentID: nil, childIndex: 1)
+                == SidebarDrop.Reparent(parentID: nil, destination: 1))
+    }
+
+    @Test func reparentOntoADescendantIsACycleAndRejected() {
+        // dropping p onto c1x (p's own grandchild) would nest a node inside its own subtree.
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.p],
+                                            parentID: Self.c1x, childIndex: Self.onItem) == nil)
+    }
+
+    @Test func reparentOntoItselfIsRejected() {
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.c1],
+                                            parentID: Self.c1, childIndex: Self.onItem) == nil)
+    }
+
+    @Test func reparentIntoTheSameParentAtTheSameSlotIsANoOp() {
+        // c1 is already p's child at index 0; dropping it there changes nothing.
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.c1],
+                                            parentID: Self.p, childIndex: 0) == nil)
+    }
+
+    @Test func reparentToAnUnknownParentIsRejected() {
+        #expect(SidebarDrop.resolveReparent(order: Self.nestedOrder, sourceIDs: [Self.e],
+                                            parentID: UUID(), childIndex: Self.onItem) == nil)
+    }
+
+    // MARK: - flatChildInsertIndex
+
+    @Test func flatChildInsertIndexAppendsPastAParentsWholeSubtree() {
+        // p's subtree is [p, c1, c1x, c2] (indices 0..<4); appending a new last child lands at 4.
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: Self.p, childDestination: nil) == 4)
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: Self.p, childDestination: 9) == 4)
+    }
+
+    @Test func flatChildInsertIndexFirstChildLandsRightAfterTheParent() {
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: Self.p, childDestination: 0) == 1)
+    }
+
+    @Test func flatChildInsertIndexSecondChildLandsBeforeThatSiblingsSubtree() {
+        // p's second direct child is c2 at flat index 3 (c1's own child c1x sits between them).
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: Self.p, childDestination: 1) == 3)
+    }
+
+    @Test func flatChildInsertIndexTopLevelPositions() {
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: nil, childDestination: nil) == 5)
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: nil, childDestination: 0) == 0)
+        #expect(SidebarDrop.flatChildInsertIndex(order: Self.nestedOrder, parent: nil, childDestination: 1) == 4)
+    }
 }

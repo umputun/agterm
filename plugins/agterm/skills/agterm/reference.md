@@ -157,7 +157,12 @@ when zero), `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in 
 the read side of `font --pane`; each omitted when that pane isn't realized. `fontSize` tracks the
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
-promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
+promoted survivor are live-only — read them back here rather than from the snapshot), `parentID` (the id of
+this session's nesting PARENT — the read side of `session new --parent` / `session move --parent`; OMITTED
+when the session is top-level, so a client reconstructs the subtree by linking each node to its parent),
+`collapsed` (`true` ONLY when this PARENT session's subtree is folded in the sidebar — the read side of
+`session collapse`/`session expand`; omitted when expanded or a leaf, so an all-expanded tree carries no
+session `collapsed` keys), and `surfaces` (array
 of `{id, kind, active, visible}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
@@ -282,7 +287,7 @@ All twelve are read-only projections of GUI state.
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select] [--window W]`
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--parent SID] [--no-select] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
   (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
@@ -306,10 +311,17 @@ All twelve are read-only projections of GUI state.
   equivalent to a `session rename` right after create. `--after SID` / `--before SID` place the new
   session directly after / before an anchor session instead of appending at the end (the anchor is a
   session address — id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved
-  across all workspaces), so it names the destination workspace itself — `--after`/`--before` are
+  across all workspaces) AND ITS OWN NESTING PARENT, so it names the destination workspace itself and the
+  new session ADOPTS the anchor's `parentID` — `--after <child>` therefore creates a SIBLING CHILD at the
+  anchor's depth, not a top-level row. `--after`/`--before` are
   therefore mutually exclusive with each other and with `--workspace`/`--workspace-name` (the anchor
   already picks the workspace). `agtermctl session new --after active` is the headline case: create
-  right after the current session in one round-trip. `--no-select` creates the session in the BACKGROUND:
+  right after the current session in one round-trip. `--parent SID` instead nests the new session as that
+  session's LAST CHILD (`SID` is a session address — id / unique prefix / `active`), the control twin of
+  the sidebar's **New Child Session**. `agtermctl session new --parent "$AGTERM_SESSION_ID"` is the
+  headline agent idiom: spawn a helper nested under the calling session. It is mutually exclusive with
+  `--after`/`--before` and with `--workspace`/`--workspace-name`; an unknown or cross-workspace parent is
+  IGNORED (the session appends top-level) rather than erroring. `--no-select` creates the session in the BACKGROUND:
   it is added to the sidebar but NOT selected or focused, so the current selection and focus are left
   untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
   select-and-focus behavior. Every other addressing/placement option composes with it, and a background
@@ -333,7 +345,11 @@ All twelve are read-only projections of GUI state.
   (single-selection only).
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
-  undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
+  undo/reopen record when enabled, immediate close when disabled. Closing a PARENT session CASCADES: its
+  whole subtree closes with it as ONE grouped undo/reopen record (the same pattern as deleting a workspace
+  full of sessions), so a later reopen restores the parent and every descendant together, and the GUI
+  confirm shows the descendant count. Returns `result.affected` (every session actually closed,
+  descendants included).
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
@@ -345,13 +361,20 @@ All twelve are read-only projections of GUI state.
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
-  (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
+  (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its SIBLING GROUP,
+  carrying its subtree. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an
   anchor session (id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved across
-  all workspaces), so it relocates + positions in one shot, wherever the anchor lives — cross-workspace
-  placement falls out for free. Exactly one placement intent is required among {positional workspace,
-  `--to`, `--after`/`--before`}; `--after`/`--before` are mutually exclusive with each other, with `--to`,
-  and with a destination workspace (the anchor already names the workspace).
+  all workspaces) AND ITS OWN NESTING PARENT, so it relocates + positions + ADOPTS the anchor's parent in
+  one shot, wherever the anchor lives — cross-workspace placement and `--after <child>` slotting the
+  session as a sibling child both fall out for free. OR `session move --parent SID [--target]` reparents
+  the session under `SID` as its LAST CHILD, and `session move --unparent [--target]` promotes it back to
+  top-level. Exactly one placement intent is required among {positional workspace,
+  `--to`, `--after`/`--before`, `--parent`/`--unparent`}; `--after`/`--before` are mutually exclusive with
+  each other, with `--to`,
+  and with a destination workspace (the anchor already names the workspace). `--parent` and `--unparent`
+  are mutually exclusive with each other and with every other placement intent, take a SINGLE `--target`
+  only, and reject a cross-workspace parent (a subtree can't straddle workspaces).
   Repeat `--target` for a batch move with the workspace and after/before placement forms; the sessions
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
@@ -476,6 +499,15 @@ All twelve are read-only projections of GUI state.
   session. Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
   `unseen` field. This lets an orchestrator acknowledge a driven session's notifications over the socket
   while keeping the badge a real attention signal on the sessions a human tends.
+- `session collapse [--target] [--window W]` — fold ONE parent session's subtree in the sidebar tree
+  (hide its descendant rows); returns the session id. The per-session counterpart of `workspace collapse`.
+  A collapsed parent hides every descendant row and rolls their unseen badge and most-urgent agent status
+  up onto its own row, so an agent working in a folded child still shows attention. Idempotent — a leaf
+  just records the state. Persisted. Read back from the tree session node's `collapsed` flag.
+- `session expand [--target] [--window W]` — unfold ONE parent session's subtree (show its descendant
+  rows); returns the session id. The inverse of `session collapse`, and the per-session counterpart of
+  `workspace expand`. Idempotent. To TOGGLE, read the node's `collapsed` flag off `tree` first, then call
+  `expand` or `collapse`.
 - `session restore (<command> | --none | --clear) [--pane left|right] [--pane-id TOKEN] [--target] [--window W]`
   — pin the command a pane re-runs on the NEXT launch, overriding the captured foreground. Provide exactly
   one of: a `<command>` shell line to pin, `--none` to pin nothing (the pane restores a plain shell,

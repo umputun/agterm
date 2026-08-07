@@ -118,6 +118,14 @@ public final class Session: Identifiable {
     /// flagged view with a filled row icon. Persisted, surviving a relaunch and a workspace move.
     public var flagged: Bool = false
 
+    /// The parent session this one nests under, nil at the workspace's top level. Observed, so a reparent
+    /// reloads the sidebar. Persisted.
+    public var parentID: UUID?
+
+    /// Whether this session's children are shown in the sidebar tree; meaningless with no children.
+    /// Observed, so a collapse reloads the sidebar. Persisted as the INVERSE, like `Workspace.isExpanded`.
+    public var isExpanded: Bool = true
+
     /// Changes only when one live primary-slot surface replaces another; SwiftUI hosts fold it into their
     /// identity, so lazy nil→first creation stays at zero while split-survivor promotion remounts the view.
     @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0

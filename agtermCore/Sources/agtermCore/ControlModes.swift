@@ -114,6 +114,9 @@ public enum ControlSessionMove: Equatable, Sendable {
     /// Relocate relative to an anchor session (id / prefix / `active`); `after == false` places before it.
     /// The anchor carries its own workspace, so this form never reads the workspace parameter.
     case place(anchor: String, after: Bool)
+    /// Nest under `anchor` (id / prefix / `active`), or detach to top-level when `anchor` is nil (the
+    /// `--unparent` form). The anchor carries its own workspace, same as `place`.
+    case parent(anchor: String?)
 }
 
 /// Parsed resize request for `session.resize`.
@@ -138,12 +141,16 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let after: String?
     /// Anchor session to place the new session right BEFORE, the mirror of `after`.
     public let before: String?
+    /// Parent session (id / prefix / `active`) to nest the new session under, the parent naming its own
+    /// workspace. Mutually exclusive with `after`/`before` and `workspace`/`workspaceName`.
+    public let parent: String?
     /// Create in the background (`--no-select`): skip select+focus, leaving the current selection untouched.
     public let noSelect: Bool
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
                 createWorkspace: Bool?, command: String?, wait: Bool? = nil, name: String?,
-                after: String? = nil, before: String? = nil, noSelect: Bool = false) {
+                after: String? = nil, before: String? = nil, parent: String? = nil,
+                noSelect: Bool = false) {
         self.window = window
         self.cwd = cwd
         self.workspace = workspace
@@ -154,6 +161,7 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.name = name
         self.after = after
         self.before = before
+        self.parent = parent
         self.noSelect = noSelect
     }
 }

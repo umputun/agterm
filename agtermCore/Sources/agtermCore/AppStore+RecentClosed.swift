@@ -56,6 +56,35 @@ extension AppStore {
             }
             save()
             return true
+        case .sessionGroup:
+            guard let recent = item.sessionGroup else { return false }
+            if restoreOrSelectExistingRecentSessionGroup(recent) { return true }
+            let index: Int
+            if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
+                index = existing
+            } else {
+                let insertAt = max(0, min(recent.workspaceIndex, workspaces.count))
+                workspaces.insert(rebuiltWorkspaceShell(id: recent.workspaceID, name: recent.workspaceName), at: insertAt)
+                index = insertAt
+            }
+            // as in the `.workspace` case above: a snapshot whose id is already live or held by a pending
+            // close is skipped rather than duplicated under a shared id.
+            let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
+            let sessions = recent.snapshots.filter { !taken.contains($0.id) }.map { session(from: $0) }
+            guard !sessions.isEmpty else { return false }
+            let insertAt = max(0, min(recent.sessionIndex, workspaces[index].sessions.count))
+            workspaces[index].sessions.insert(contentsOf: sessions, at: insertAt)
+            for session in sessions { emitSessionCreated(session, workspace: workspaces[index].id) }
+            let target = recent.selectedSessionID.flatMap { id in sessions.contains { $0.id == id } ? id : nil }
+                ?? sessions.first?.id
+            if let target {
+                selectedSessionID = target
+                replaceSidebarSelection(with: target)
+                disableFocusIfSelectionOutsideSet(target)
+                recordRecency()
+            }
+            save()
+            return true
         }
     }
 
@@ -65,6 +94,19 @@ extension AppStore {
         }
         guard session(withID: recent.snapshot.id) != nil else { return false }
         selectSession(recent.snapshot.id)
+        return true
+    }
+
+    /// Mirrors `restoreOrSelectExistingRecentSession` for the group's root: the hard-close cascade that
+    /// produces a `.sessionGroup` record has no grace/pending state of its own, so `pendingCloseID` only
+    /// matters here if the root was independently re-closed (soft) after being reopened once already.
+    private func restoreOrSelectExistingRecentSessionGroup(_ recent: RecentClosedSessionGroup) -> Bool {
+        guard let rootID = recent.snapshots.first?.id else { return false }
+        if let pendingID = pendingCloseID(containingSessionID: rootID) {
+            return undoPendingClose(pendingID, selecting: rootID)
+        }
+        guard session(withID: rootID) != nil else { return false }
+        selectSession(rootID)
         return true
     }
 
@@ -161,6 +203,32 @@ extension AppStore {
                                          workspaceIndex: workspaceIndex,
                                          sessionIndex: sessionIndex,
                                          snapshot: sessionSnapshot(session))
+        ))
+        recentClosedDidChange?()
+        return id
+    }
+
+    /// Records a closed session SUBTREE as ONE item, so a single Reopen restores the whole group — the hard
+    /// `closeSession` cascade's counterpart to `recordRecentClosedSession`. `sessions` must be in tree order
+    /// (root first); `sessions.first` supplies the title and the group's dedupe identity.
+    @discardableResult
+    func recordRecentClosedSessionGroup(_ sessions: [Session],
+                                        workspaceID: UUID,
+                                        workspaceName: String,
+                                        location: (workspaceIndex: Int, sessionIndex: Int),
+                                        selectedSessionID: UUID?,
+                                        id: UUID = UUID()) -> UUID? {
+        guard let recentClosedStore, let root = sessions.first else { return nil }
+        recentClosedStore.record(RecentClosedItem(
+            id: id,
+            kind: .sessionGroup,
+            title: root.displayName,
+            subtitle: "\(sessions.count) sessions",
+            sessionGroup: RecentClosedSessionGroup(workspaceID: workspaceID, workspaceName: workspaceName,
+                                                   workspaceIndex: location.workspaceIndex,
+                                                   sessionIndex: location.sessionIndex,
+                                                   snapshots: sessions.map(sessionSnapshot),
+                                                   selectedSessionID: selectedSessionID)
         ))
         recentClosedDidChange?()
         return id

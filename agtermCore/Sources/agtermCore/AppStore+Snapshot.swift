@@ -37,7 +37,9 @@ extension AppStore {
                         initialCommand: session.initialCommand, commandWait: session.commandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark,
                         restoreCommand: session.restoreCommand,
-                        splitRestoreCommand: session.splitRestoreCommand)
+                        splitRestoreCommand: session.splitRestoreCommand,
+                        parentID: session.parentID,
+                        collapsed: session.isExpanded ? nil : true)
     }
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
@@ -73,6 +75,8 @@ extension AppStore {
         session.backgroundWatermark = snapshot.backgroundWatermark
         session.restoreCommand = snapshot.restoreCommand
         session.splitRestoreCommand = session.isSplit ? snapshot.splitRestoreCommand : nil
+        session.parentID = snapshot.parentID
+        session.isExpanded = !(snapshot.collapsed ?? false)
         if launchRestore {
             // into the TRANSIENT slots, leaving the persisted fields nil: `snapshot()` serializes those, so
             // arming them would let any save before the surface spawns rewrite the argv the launch strip

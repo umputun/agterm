@@ -173,13 +173,19 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var restoreCommand: String?
     /// The split (right) pane's restore-command override, the split analogue of `restoreCommand`.
     public var splitRestoreCommand: String?
+    /// The parent session this one nests under; nil at the workspace's top level.
+    public var parentID: UUID?
+    /// The INVERSE of `Session.isExpanded`, so missing → expanded (the default) and only a collapsed
+    /// session writes it — a non-nested, non-collapsed tree serializes byte-identically to before nesting.
+    public var collapsed: Bool?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
                 initialCommand: String? = nil, commandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil,
-                restoreCommand: String? = nil, splitRestoreCommand: String? = nil) {
+                restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
+                parentID: UUID? = nil, collapsed: Bool? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -195,12 +201,14 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.backgroundWatermark = backgroundWatermark
         self.restoreCommand = restoreCommand
         self.splitRestoreCommand = splitRestoreCommand
+        self.parentID = parentID
+        self.collapsed = collapsed
     }
 
     enum CodingKeys: String, CodingKey {
         case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait, backgroundWatermark
-        case restoreCommand, splitRestoreCommand
+        case restoreCommand, splitRestoreCommand, parentID, collapsed
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -227,5 +235,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
+        parentID = (try? c.decodeIfPresent(UUID.self, forKey: .parentID)) ?? nil
+        collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
     }
 }

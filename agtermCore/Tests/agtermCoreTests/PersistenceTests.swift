@@ -536,6 +536,62 @@ final class PersistenceTests {
         #expect(app.workspaces[0].isExpanded)
     }
 
+    @Test func sessionParentAndCollapsedRoundTripThroughDisk() throws {
+        let parent = UUID()
+        let child = UUID()
+        let original = Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: parent, customName: nil, cwd: "/a"),
+                SessionSnapshot(id: child, customName: nil, cwd: "/b", parentID: parent, collapsed: true),
+            ]),
+        ])
+        try store.save(original)
+        let decoded = store.load()
+        #expect(decoded == original)
+        #expect(decoded.workspaces[0].sessions[1].parentID == parent)
+        #expect(decoded.workspaces[0].sessions[1].collapsed == true)
+    }
+
+    @Test func sessionWithoutParentOrCollapsedRoundTripsThroughDisk() throws {
+        let original = Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: UUID(), customName: nil, cwd: "/a"),
+            ]),
+        ])
+        try store.save(original)
+        let decoded = store.load()
+        #expect(decoded == original)
+        #expect(decoded.workspaces[0].sessions[0].parentID == nil)
+        #expect(decoded.workspaces[0].sessions[0].collapsed == nil)
+    }
+
+    @Test func legacySessionWithoutParentOrCollapsedDecodesTopLevelExpanded() throws {
+        // a file written before nesting existed has neither key; it must decode rather than wipe the tree.
+        let ws = UUID()
+        let session = UUID()
+        let json = #"{ "version": 1, "workspaces": "# +
+            #"[ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(session.uuidString)", "customName": null, "cwd": "/a" } ] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces.map(\.id) == [ws])
+        #expect(loaded.workspaces[0].sessions[0].parentID == nil)
+        #expect(loaded.workspaces[0].sessions[0].collapsed == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.workspaces[0].sessions[0].parentID == nil)
+        #expect(app.workspaces[0].sessions[0].isExpanded == true)
+    }
+
+    @Test func nonNestedExpandedTreeEncodesWithoutParentOrCollapsedKeys() throws {
+        let app = AppStore(persistence: store)
+        let work = app.addWorkspace(name: "work")
+        _ = app.addSession(toWorkspace: work.id, cwd: "/a")
+        let written = try String(contentsOf: fileURL, encoding: .utf8)
+        #expect(!written.contains("\"parentID\""))
+        #expect(!written.contains("\"collapsed\""))
+    }
+
     @Test func selectSessionPersistsSelectionToDisk() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")

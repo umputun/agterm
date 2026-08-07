@@ -253,6 +253,51 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionNewRoutesParentOption() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionNewResponse = ControlResponse(ok: true, result: ControlResult(id: "child-session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(parent: "active")
+        ))
+
+        let options = ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                  createWorkspace: nil, command: nil, name: nil, parent: "active")
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "child-session")))
+        #expect(actions.calls == [.sessionNew(options)])
+    }
+
+    @Test func sessionNewRejectsParentCombinedWithOtherPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let parentAndAfter = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(after: "a", parent: "b")
+        ))
+        let parentAndBefore = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(before: "a", parent: "b")
+        ))
+        let parentAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspace: "dest", parent: "b")
+        ))
+        let parentAndWorkspaceName = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspaceName: "servers", parent: "b")
+        ))
+
+        let expectedError = "session.new takes --parent, --after/--before, or a workspace, not more than one"
+        #expect(parentAndAfter == ControlResponse(ok: false, error: expectedError))
+        #expect(parentAndBefore == ControlResponse(ok: false, error: expectedError))
+        #expect(parentAndWorkspace == ControlResponse(ok: false, error: expectedError))
+        #expect(parentAndWorkspaceName == ControlResponse(ok: false, error: expectedError))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionMoveRoutesPlacementForms() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -301,6 +346,78 @@ struct ControlDispatcherTests {
             ok: false, error: "session.move takes --after/--before or --to, not both"))
         #expect(anchorAndWorkspace == ControlResponse(
             ok: false, error: "session.move takes --after/--before or a workspace, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionMoveRoutesParentAndUnparentForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let parent = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(window: "win", parent: "anchor")
+        ))
+        let unparent = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(unparent: true)
+        ))
+
+        #expect(parent == ControlResponse(ok: true))
+        #expect(unparent == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionMove(target: "session", window: "win", .parent(anchor: "anchor")),
+            .sessionMove(target: "session", window: nil, .parent(anchor: nil))
+        ])
+    }
+
+    @Test func sessionMoveRejectsConflictingParentAndUnparentForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let both = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(parent: "a", unparent: true)
+        ))
+        let parentAndTo = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(to: "up", parent: "a")
+        ))
+        let parentAndAfter = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(after: "b", parent: "a")
+        ))
+        let parentAndBefore = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(before: "b", parent: "a")
+        ))
+        let parentAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(workspace: "dest", parent: "a")
+        ))
+        let unparentAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(workspace: "dest", unparent: true)
+        ))
+        let unparentBatch = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a", "b"], unparent: true)
+        ))
+
+        #expect(both == ControlResponse(ok: false, error: "use either --parent or --unparent, not both"))
+        #expect(parentAndTo == ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone"))
+        #expect(parentAndAfter == ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone"))
+        #expect(parentAndBefore == ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone"))
+        #expect(parentAndWorkspace == ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone"))
+        #expect(unparentAndWorkspace == ControlResponse(ok: false, error: "session.move takes --parent/--unparent alone"))
+        #expect(unparentBatch == ControlResponse(ok: false, error: "session.move --parent takes a single --target"))
         #expect(actions.calls.isEmpty)
     }
 
@@ -567,6 +684,25 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [
             .workspaceExpansion(target: "workspace", window: "win", expanded: false),
             .workspaceExpansion(target: "active", window: nil, expanded: true)
+        ])
+    }
+
+    @Test func sessionCollapseAndExpandRouteExpandedFlag() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let collapsed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionCollapse, target: "sess", args: ControlArgs(window: "win")
+        ))
+        let expanded = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionExpand, target: "active"
+        ))
+
+        #expect(collapsed == ControlResponse(ok: true))
+        #expect(expanded == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionExpansion(target: "sess", window: "win", expanded: false),
+            .sessionExpansion(target: "active", window: nil, expanded: true)
         ])
     }
 

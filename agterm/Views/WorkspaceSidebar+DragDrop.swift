@@ -38,12 +38,15 @@ extension WorkspaceSidebar.Coordinator {
             return .move
         }
         if !draggedSessionIDs(from: info).isEmpty {
-            guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
+            guard let plan = resolveSessionDrop(from: info, item: item, childIndex: index) else {
                 cancelSpringLoadedExpansion()
                 return []
             }
-            outlineView.setDropItem(workspaceNode(forID: move.workspace), dropChildIndex: move.dropChildIndex)
-            scheduleSpringLoadedExpansion(of: move.workspace, in: outlineView)
+            // nest-under-session drops highlight the target session row; top-level drops highlight the
+            // workspace row (both fall back to the workspace when the parent node isn't cached).
+            let highlight = plan.parentID.flatMap(sessionNode(forID:)) ?? workspaceNode(forID: plan.workspace)
+            outlineView.setDropItem(highlight, dropChildIndex: plan.highlightChildIndex)
+            scheduleSpringLoadedExpansion(of: plan.workspace, in: outlineView)
             return .move
         }
         guard let drop = resolveDirectoryDrop(from: info, item: item) else {
@@ -71,8 +74,8 @@ extension WorkspaceSidebar.Coordinator {
             return true
         }
         if !draggedSessionIDs(from: info).isEmpty {
-            guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
-            store.moveSessions(move.sessionIDs, toWorkspace: move.workspace, at: move.destination)
+            guard let plan = resolveSessionDrop(from: info, item: item, childIndex: index) else { return false }
+            applySessionDrop(plan)
             dropSucceeded = true
             return true
         }
@@ -108,42 +111,79 @@ extension WorkspaceSidebar.Coordinator {
         let exceedsLimit: Bool
     }
 
-    /// The resolved session drop. `dropChildIndex` is the PRE-removal slot to highlight; `destination`
-    /// is the POST-removal index `moveSessions` expects.
-    private struct SessionMove {
-        let sessionIDs: [UUID]
+    /// A resolved session drop. A SAME-workspace drop reparents the dragged roots (nest under `parentID`, or
+    /// top-level when nil), carrying each subtree and positioning at `destination` among the new siblings. A
+    /// CROSS-workspace drop always lands at the target workspace's top level (a subtree can't straddle
+    /// workspaces) at flat index `destination`. `highlightChildIndex` drives `setDropItem`.
+    private struct SessionDropPlan {
+        let roots: [UUID]
         let workspace: UUID
-        let dropChildIndex: Int
+        let parentID: UUID?
         let destination: Int
+        let crossWorkspace: Bool
+        let highlightChildIndex: Int
     }
 
-    /// Resolves a proposed session drop into the move it would perform, nil when the drop is invalid or a
-    /// no-op, so `validateDrop` and `acceptDrop` agree exactly. Reads the pasteboard + store to map dragged
-    /// sessions and the drop-target row to indices, then defers the index arithmetic (drop-on-row redirect,
-    /// post-removal insertion slot, no-op detection) to the host-free `SidebarDrop.resolveSessions`.
-    private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
-        let sessionIDs = draggedSessionIDs(from: info)
-        guard !sessionIDs.isEmpty, let node = item as? SidebarNode else { return nil }
+    /// Resolves a proposed session drop into the reparent/move it would perform, nil when invalid or a
+    /// no-op, so `validateDrop` and `acceptDrop` agree exactly. The drop target's `item` names the parent:
+    /// a workspace row → the workspace top level (parentID nil), a session row → nest under that session.
+    /// Same-workspace drops defer the sibling-index arithmetic + cycle guard to `SidebarDrop.resolveReparent`;
+    /// cross-workspace drops force top-level placement (no cross-workspace nesting) via `flatChildInsertIndex`.
+    private func resolveSessionDrop(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionDropPlan? {
+        let dragged = draggedSessionIDs(from: info)
+        guard !dragged.isEmpty, let node = item as? SidebarNode else { return nil }
+        // reduce a mixed selection to its topmost roots — a dragged child rides along inside its dragged
+        // parent's subtree, so moving it independently would double-handle it.
+        let draggedSet = Set(dragged)
+        let roots = dragged.filter { store.session(withID: $0)?.parentID.map { !draggedSet.contains($0) } ?? true }
+        guard !roots.isEmpty else { return nil }
 
-        let target: SidebarDrop.SessionDropTarget
+        let targetWorkspace: UUID
+        let parentID: UUID?
         switch node.kind {
         case .workspace:
-            let count = store.workspaces.first(where: { $0.id == node.id })?.sessions.count ?? 0
-            target = .workspaceRow(id: node.id, sessionCount: count)
+            targetWorkspace = node.id
+            parentID = nil
         case .session:
-            guard let drop = store.sessionLocation(ofSession: node.id) else { return nil }
-            target = .sessionRow(workspace: drop.workspace, sessionIndex: drop.index, sessionCount: drop.count)
+            guard let workspace = store.workspace(forSession: node.id)?.id else { return nil }
+            targetWorkspace = workspace
+            parentID = node.id
         }
+        let order = store.workspaces.first(where: { $0.id == targetWorkspace })?
+            .sessions.map { SessionTree.Node(id: $0.id, parentID: $0.parentID) } ?? []
 
-        let sources = sessionIDs.compactMap { id -> SidebarDrop.SessionSource? in
-            guard let source = store.sessionLocation(ofSession: id) else { return nil }
-            return SidebarDrop.SessionSource(workspace: source.workspace, index: source.index)
+        let allSameWorkspace = roots.allSatisfy { store.workspace(forSession: $0)?.id == targetWorkspace }
+        if allSameWorkspace {
+            guard let reparent = SidebarDrop.resolveReparent(order: order, sourceIDs: roots,
+                                                             parentID: parentID, childIndex: index) else { return nil }
+            return SessionDropPlan(roots: roots, workspace: targetWorkspace, parentID: reparent.parentID,
+                                   destination: reparent.destination, crossWorkspace: false, highlightChildIndex: index)
         }
-        guard sources.count == sessionIDs.count,
-              let move = SidebarDrop.resolveSessions(sources: sources, target: target, childIndex: index)
-        else { return nil }
-        return SessionMove(sessionIDs: sessionIDs, workspace: move.workspace,
-                           dropChildIndex: move.dropChildIndex, destination: move.destination)
+        // cross-workspace: nesting isn't allowed, so land at the target's top level — dropped ON a row appends.
+        let topChildIndex = node.kind == .workspace ? index : SidebarDrop.onItemIndex
+        let flat = SidebarDrop.flatChildInsertIndex(order: order, parent: nil,
+                                                    childDestination: topChildIndex == SidebarDrop.onItemIndex ? nil : topChildIndex)
+        return SessionDropPlan(roots: roots, workspace: targetWorkspace, parentID: nil,
+                               destination: flat, crossWorkspace: true, highlightChildIndex: topChildIndex)
+    }
+
+    /// Applies a resolved drop. A same-workspace single root repositions with its sibling index; a batch
+    /// appends each root under the new parent in drag order. A cross-workspace drop moves each root's whole
+    /// subtree to the target's top level (`moveSession` nils the root's parentID and carries descendants),
+    /// advancing the insert slot past each moved block so drag order is preserved.
+    private func applySessionDrop(_ plan: SessionDropPlan) {
+        if plan.crossWorkspace {
+            var index = plan.destination
+            for root in plan.roots {
+                let blockSize = store.sessionSubtreeIDs(root).count
+                store.moveSession(root, toWorkspace: plan.workspace, at: index)
+                index += blockSize
+            }
+        } else if plan.roots.count == 1 {
+            store.reparentSession(plan.roots[0], to: plan.parentID, at: plan.destination)
+        } else {
+            for root in plan.roots { store.reparentSession(root, to: plan.parentID, at: nil) }
+        }
     }
 
     /// Resolves a Finder drop to existing directory URLs and a destination workspace: a workspace row adds
