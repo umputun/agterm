@@ -90,8 +90,11 @@ final class SidebarCopyNameTests: XCTestCase {
 
         let row = try XCTUnwrap(rowIndex { $0.kind == .session && $0.id == first.id })
         let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        // absence alone would also hold if the selection never formed, which is not what this pins.
+        XCTAssertTrue(menu.items.contains { $0.title == "Close 2 Sessions" },
+                      "the batch must have formed, or the absence below proves nothing")
         XCTAssertFalse(menu.items.contains { $0.title == "Copy Name" },
-                       "single-target only, like Rename / Duplicate Session / Reveal in Finder")
+                       "single-target only, like Duplicate Session and Reveal in Finder")
     }
 
     func testWorkspaceRowCopiesTheWorkspaceName() throws {
