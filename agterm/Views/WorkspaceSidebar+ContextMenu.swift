@@ -77,11 +77,12 @@ extension WorkspaceSidebar.Coordinator {
             menu.addItem(rename)
         }
 
-        let copyTitle = node.kind == .session && sessionCount > 1 ? "Copy Names" : "Copy Name"
-        let copyName = NSMenuItem(title: copyTitle, action: #selector(menuCopyName(_:)), keyEquivalent: "")
-        copyName.target = self
-        copyName.representedObject = node.kind == .session ? SessionBatchRequest(sessionIDs: sessionTargets) : node
-        menu.addItem(copyName)
+        if node.kind == .workspace || sessionCount == 1 {
+            let copyName = NSMenuItem(title: "Copy Name", action: #selector(menuCopyName(_:)), keyEquivalent: "")
+            copyName.target = self
+            copyName.representedObject = node
+            menu.addItem(copyName)
+        }
 
         switch node.kind {
         case .session:
@@ -190,20 +191,18 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     /// Copies the clicked row's name — `Session.displayName`, or the workspace's — to the general
-    /// pasteboard, one per line for a batch. The `\n` join is unambiguous because `TerminalText.sanitized`
-    /// strips C0 from every source of both.
+    /// pasteboard.
     @objc private func menuCopyName(_ sender: NSMenuItem) {
-        let names: [String]
-        switch sender.representedObject {
-        case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
-        case let node as SidebarNode where node.kind == .workspace:
-            names = [store.workspaceName(node.id)].compactMap { $0 }
-        default: return
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        let name = switch node.kind {
+        case .session: store.session(withID: node.id)?.displayName
+        case .workspace: store.workspaceName(node.id)
         }
-        // rows gone between the right-click and the choice: leave the pasteboard as the user had it.
-        guard !names.isEmpty else { return }
+        // a row gone between the right-click and the choice, or a blank workspace name: leave the
+        // pasteboard as the user had it rather than clearing it to write nothing.
+        guard let name else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)
+        NSPasteboard.general.setString(name, forType: .string)
     }
 
     @objc private func menuMove(_ sender: NSMenuItem) {

@@ -25,11 +25,6 @@ extension AppStore {
         save()
     }
 
-    /// `Session.displayName` per id, order preserved, skipping ids no longer in the tree.
-    public func sessionDisplayNames(_ sessionIDs: [UUID]) -> [String] {
-        sessionIDs.compactMap { session(withID: $0)?.displayName }
-    }
-
     /// The name of `workspaceID`; nil when it is gone, and when it is blank — `renameWorkspace` rejects a
     /// blank one, but `AppStore+PendingClose` rebuilds a `Workspace` from a snapshot without that guard.
     public func workspaceName(_ workspaceID: UUID) -> String? {

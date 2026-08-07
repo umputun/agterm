@@ -58,12 +58,12 @@ paths:
   visible order. Shift/Command selection mirrors from AppKit; `allowsEmptySelection` must stay true
   because filtered views can contain no sessions.
 - Right-click inside a selection preserves it; outside narrows to the clicked row.
-  `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag,
-  clear-status, and copy-name operate on all targets.
-- Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`,
-  newline-joined for a batch; the join relies on `TerminalText.sanitized` stripping C0 from every name
-  source. A blank workspace name and a vanished row both count as absent, and an empty result leaves the
-  pasteboard untouched rather than clearing it. No control form — `tree` already carries both names.
+  `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag, and
+  clear-status operate on all targets.
+- Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. Single-target
+  like Rename, so it is absent under a multi-selection. A blank workspace name and a vanished row both
+  count as absent, and nothing to copy leaves the pasteboard untouched rather than clearing it. No control
+  form — see `control-api.md`.
 - Rename, Duplicate Session, and Reveal in Finder appear only for one target. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.

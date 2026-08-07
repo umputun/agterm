@@ -3,9 +3,8 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the row context menu's Copy Name item. The parts that can go wrong are all in the
-/// app target: which object the item carries, the plural title, and the pasteboard contract — an empty
-/// result must leave the user's clipboard alone rather than clearing it to write nothing.
+/// Hosted coverage for the row context menu's Copy Name item: which name each row kind resolves, and the
+/// pasteboard contract — nothing to copy must leave the user's clipboard alone rather than clear it.
 @MainActor
 final class SidebarCopyNameTests: XCTestCase {
     private var stateDir: URL!
@@ -80,36 +79,19 @@ final class SidebarCopyNameTests: XCTestCase {
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "beta")
     }
 
-    func testMultiSelectionIsPluralAndNewlineJoinedInSidebarOrder() throws {
+    func testTheItemIsAbsentUnderAMultiSelection() throws {
         let store = try XCTUnwrap(library.activeStore)
         let ws = try XCTUnwrap(store.workspaces.first)
         let first = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/one"))
         let second = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/two"))
         store.selectSession(first.id)
-        // reversed on purpose: the copied block must follow sidebar order, not selection order.
-        store.setSidebarSelection([second.id, first.id])
+        store.setSidebarSelection([first.id, second.id])
         buildSidebar(for: store)
 
-        let item = try menuItem(titled: "Copy Names", onRowFor: first.id)
-        coordinator.perform(item.action, with: item)
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "one\ntwo")
-    }
-
-    func testASanitizedCwdAndRenameKeepTheCopiedBlockOneLinePerRow() throws {
-        let store = try XCTUnwrap(library.activeStore)
-        let ws = try XCTUnwrap(store.workspaces.first)
-        let fromCwd = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/a\nb"))
-        let renamed = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/c"))
-        store.renameSession(renamed.id, to: "x\ny")
-        store.selectSession(fromCwd.id)
-        store.setSidebarSelection([fromCwd.id, renamed.id])
-        buildSidebar(for: store)
-
-        let item = try menuItem(titled: "Copy Names", onRowFor: fromCwd.id)
-        coordinator.perform(item.action, with: item)
-        let copied = try XCTUnwrap(NSPasteboard.general.string(forType: .string))
-        XCTAssertEqual(copied.components(separatedBy: "\n").count, 2,
-                       "two rows must copy as two lines; a name carrying \\n would split the block")
+        let row = try XCTUnwrap(rowIndex { $0.kind == .session && $0.id == first.id })
+        let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        XCTAssertFalse(menu.items.contains { $0.title == "Copy Name" },
+                       "single-target only, like Rename / Duplicate Session / Reveal in Finder")
     }
 
     func testWorkspaceRowCopiesTheWorkspaceName() throws {
