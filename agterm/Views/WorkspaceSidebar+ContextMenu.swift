@@ -195,14 +195,9 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuCopyName(_ sender: NSMenuItem) {
         let names: [String]
         switch sender.representedObject {
-        case let request as SessionBatchRequest:
-            names = request.sessionIDs.compactMap { store.session(withID: $0)?.displayName }
+        case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
         case let node as SidebarNode where node.kind == .workspace:
-            // blank is treated as absent: renameWorkspace rejects one, but AppStore+PendingClose rebuilds
-            // a Workspace straight from a snapshot without that guard.
-            names = [store.workspaces.first { $0.id == node.id }?.name]
-                .compactMap { $0 }
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            names = [store.workspaceName(node.id)].compactMap { $0 }
         default: return
         }
         // rows gone between the right-click and the choice: leave the pasteboard as the user had it.

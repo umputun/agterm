@@ -62,7 +62,6 @@ final class SidebarCopyNameTests: XCTestCase {
         let session = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/beta"))
         buildSidebar(for: store)
 
-        // the trap: customName is nil here, so copying it would put "" on the clipboard.
         try invokeCopyName(onRowFor: session.id)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "beta")
     }
@@ -73,12 +72,30 @@ final class SidebarCopyNameTests: XCTestCase {
         let first = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/one"))
         let second = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/two"))
         store.selectSession(first.id)
-        store.setSidebarSelection([first.id, second.id])
+        // reversed on purpose: the copied block must follow sidebar order, not selection order.
+        store.setSidebarSelection([second.id, first.id])
         buildSidebar(for: store)
 
         let item = try menuItem(titled: "Copy Names", onRowFor: first.id)
         coordinator.perform(item.action, with: item)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "one\ntwo")
+    }
+
+    func testNamesFromEverySourceStayNewlineFreeSoTheJoinIsUnambiguous() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let ws = try XCTUnwrap(store.workspaces.first)
+        let fromCwd = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/a\nb"))
+        let renamed = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/c"))
+        store.renameSession(renamed.id, to: "x\ny")
+        store.selectSession(fromCwd.id)
+        store.setSidebarSelection([fromCwd.id, renamed.id])
+        buildSidebar(for: store)
+
+        let item = try menuItem(titled: "Copy Names", onRowFor: fromCwd.id)
+        coordinator.perform(item.action, with: item)
+        let copied = try XCTUnwrap(NSPasteboard.general.string(forType: .string))
+        XCTAssertEqual(copied.components(separatedBy: "\n").count, 2,
+                       "two rows must copy as two lines; a name carrying \\n would split the block")
     }
 
     func testWorkspaceRowCopiesTheWorkspaceName() throws {
@@ -98,8 +115,7 @@ final class SidebarCopyNameTests: XCTestCase {
         buildSidebar(for: store)
         let item = try menuItem(titled: "Copy Name", onWorkspaceRowFor: ws.id)
 
-        // renameWorkspace rejects blank, so reach past it — AppStore+PendingClose rebuilds a Workspace
-        // from a snapshot with no such guard, which is how a blank name survives a restart.
+        // set directly because renameWorkspace rejects blank; AppStore+PendingClose does not.
         var blanked = store.workspaces[0]
         blanked.name = "   "
         store.workspaces[0] = blanked
@@ -116,8 +132,7 @@ final class SidebarCopyNameTests: XCTestCase {
         let ws = try XCTUnwrap(store.workspaces.first)
         let doomed = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/doomed"))
         buildSidebar(for: store)
-        // the menu is built while the row exists, then the row closes before the choice is made — the
-        // item goes on holding the id, which is the state this guards.
+        // the menu must be built before the close, so the item is left holding a dead id.
         let item = try menuItem(titled: "Copy Name", onRowFor: doomed.id)
         store.closeSession(doomed.id)
 
@@ -173,7 +188,7 @@ final class SidebarCopyNameTests: XCTestCase {
         scroll.documentView = outline
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 400),
                           styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
+        window.isReleasedWhenClosed = false // see SidebarStatusBlinkTests for why
         window.contentView = scroll
 
         coordinator.outlineView = outline
