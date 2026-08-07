@@ -284,14 +284,19 @@ final class CustomCommandRunner {
     }
 
     /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` over the app environment and
-    /// running in the session's cwd. A spawn error or non-zero exit posts a failure banner; no output
-    /// capture, no success banner.
+    /// running in the session's cwd. `PATH` is widened first (`CommandPath`): the app's own is launchd's, and
+    /// `sh -c` runs no profile, so a bare `agtermctl` would exit 127. A spawn error or non-zero exit posts a
+    /// failure banner; no output capture, no success banner.
     private func spawn(_ command: CustomCommand, context: CommandContext) {
         let line = context.expand(command.command)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", line]
-        process.environment = ProcessInfo.processInfo.environment.merging(context.environment()) { _, new in new }
+        var environment = ProcessInfo.processInfo.environment.merging(context.environment()) { _, new in new }
+        environment["PATH"] = CommandPath.widened(environment["PATH"],
+                                                  bundledCLIDirectory: CLIInstaller.bundledTool?
+                                                      .deletingLastPathComponent().path)
+        process.environment = environment
         // fire-and-forget: pin stdio to /dev/null rather than inherit the app's fds, which vary by launch.
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
