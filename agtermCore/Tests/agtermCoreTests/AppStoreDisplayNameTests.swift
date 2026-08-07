@@ -53,4 +53,13 @@ struct AppStoreDisplayNameTests {
         let store = makeStore()
         #expect(store.workspaceName(UUID()) == nil)
     }
+
+    @Test func workspaceNameIsNilWhenBlank() {
+        let store = makeStore()
+        var ws = store.addWorkspace(name: "work")
+        ws.name = "   "
+        store.workspaces[0] = ws
+        // a blank would otherwise reach the pasteboard as "", clearing what the user had.
+        #expect(store.workspaceName(ws.id) == nil)
+    }
 }

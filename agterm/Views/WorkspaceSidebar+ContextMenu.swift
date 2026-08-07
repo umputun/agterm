@@ -77,12 +77,7 @@ extension WorkspaceSidebar.Coordinator {
             menu.addItem(rename)
         }
 
-        // "Copy Name" sits under Rename: both act on the row's identity, and reading a name off the
-        // sidebar to paste it elsewhere is the other half of setting one. A custom command cannot cover
-        // this — `{AGT_SESSION_NAME}`/`{AGT_WORKSPACE_NAME}` resolve the ACTIVE row, while a context menu
-        // is the only surface that knows which row was clicked.
-        //
-        // Plural for a multi-session selection, joined by newlines, like the other batch items here.
+        // Under Rename where there is one, first on the menu for a multi-selection, which has no Rename.
         let copyTitle = node.kind == .session && sessionCount > 1 ? "Copy Names" : "Copy Name"
         let copyName = NSMenuItem(title: copyTitle, action: #selector(menuCopyName(_:)), keyEquivalent: "")
         copyName.target = self
@@ -195,22 +190,18 @@ extension WorkspaceSidebar.Coordinator {
         renameController.beginEditing(node: node)
     }
 
-    /// Writes the clicked row's sidebar label to the general pasteboard. Names are resolved from THIS
-    /// sidebar's window-local store, like Close/Flag/Duplicate, so a background window copies its own row.
+    /// Copies the clicked row's name — `Session.displayName`, or the workspace's — to the general
+    /// pasteboard, one per line for a batch. The `\n` join is unambiguous because `TerminalText.sanitized`
+    /// strips C0 from every source of both.
     @objc private func menuCopyName(_ sender: NSMenuItem) {
         let names: [String]
         switch sender.representedObject {
         case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
-        // the kind is matched rather than assumed: a session node reaching here would look up a session id
-        // among the workspaces, and `workspaceName` would answer nil — a silent no-op that reads as
-        // "the row went away" instead of a wiring mistake. `menu(forRow:)` only ever attaches a node for a
-        // workspace row, and this says so.
         case let node as SidebarNode where node.kind == .workspace:
             names = [store.workspaceName(node.id)].compactMap { $0 }
         default: return
         }
-        // a row closed between the right-click and the choice leaves nothing to copy; clearing the
-        // pasteboard for it would destroy whatever the user had there, so do nothing at all.
+        // rows gone between the right-click and the choice: leave the pasteboard as the user had it.
         guard !names.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)

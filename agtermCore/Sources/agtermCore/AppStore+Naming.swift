@@ -25,17 +25,14 @@ extension AppStore {
         save()
     }
 
-    /// The sidebar labels for `sessionIDs`, in the order given, skipping ids no longer in the tree.
-    ///
-    /// A session's label is `displayName` — the manual rename if there is one, else the pane's terminal
-    /// title, else the cwd basename — so this is what the row actually reads, not the stored `customName`
-    /// (usually nil) nor `{AGT_SESSION_NAME}` (the title alone).
+    /// `Session.displayName` per id, order preserved, skipping ids no longer in the tree.
     public func sessionDisplayNames(_ sessionIDs: [UUID]) -> [String] {
         sessionIDs.compactMap { session(withID: $0)?.displayName }
     }
 
-    /// The name of `workspaceID`, or nil when it is gone.
+    /// The name of `workspaceID`; nil when it is gone, and when it is blank — a snapshot restored through
+    /// `AppStore+PendingClose` bypasses the non-blank guard `renameWorkspace` applies.
     public func workspaceName(_ workspaceID: UUID) -> String? {
-        workspaces.first(where: { $0.id == workspaceID })?.name
+        workspaces.first(where: { $0.id == workspaceID })?.name.trimmedOrNil
     }
 }
