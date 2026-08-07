@@ -137,6 +137,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// riding the ephemeral indicator so it lasts only to the next `session.status` without a color
     /// (nil = the Settings color).
     public var color: String?
+    /// The `#rrggbb` color of the HUD panel's TEXT for `session.hud.open`/`.update`; nil = the terminal
+    /// foreground. Separate from `color` because a HUD sets both halves independently, and unlike `color` an
+    /// UPDATE honors it: it rides the body file's header the helper re-reads, so the live panel recolors in
+    /// place.
+    public var textColor: String?
     /// The per-call glyph-SILHOUETTE override for `session.status`: a `StatusShape` raw value
     /// (`circle|square|triangle|diamond|capsule|star`), dispatcher-validated. Rides the ephemeral indicator,
     /// lasting until the next `session.status` without a shape; nil = the Settings shape, else a circle.
@@ -146,8 +151,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// The `background-image-fit` for `session.background` (`contain|cover|stretch|none`); nil = `contain`.
     public var fit: String?
     /// The `background-image-position` for `session.background` (`center` + 8 anchors); nil = `center`. Also
-    /// the HUD panel's VERTICAL placement in the pane for `session.hud.open`/`.update` — a `HudPosition` raw
-    /// value (`top|center|bottom`), nil = `center`, which the read-back reports either way.
+    /// the HUD panel's placement in the pane for `session.hud.open`/`.update` — a `HudPosition` raw value
+    /// over the same nine anchors, nil = `center`. `HudPosition` additionally accepts the bare `top`/`bottom`
+    /// it shipped with, normalizing them to the middle column; the read-back reports the canonical name
+    /// either way.
     public var position: String?
     /// The `background-image-repeat` flag for `session.background`; nil = false.
     public var repeats: Bool?
@@ -302,7 +309,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
-                path: String? = nil, color: String? = nil, shape: String? = nil,
+                path: String? = nil, color: String? = nil, textColor: String? = nil, shape: String? = nil,
                 opacity: Double? = nil, fit: String? = nil,
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
@@ -355,6 +362,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.ratioDelta = ratioDelta
         self.path = path
         self.color = color
+        self.textColor = textColor
         self.shape = shape
         self.opacity = opacity
         self.fit = fit
@@ -427,6 +435,10 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     /// color the open set, which survives every `session.hud.update` — the surface reads it once at creation,
     /// so this always names what the panel paints.
     public let backgroundColor: String?
+    /// The panel's `#rrggbb` TEXT color; nil/omitted when it keeps the terminal foreground. Unlike
+    /// `backgroundColor` this tracks the LATEST `session.hud.update`, the header the helper re-reads being
+    /// what paints it.
+    public let textColor: String?
     /// The EFFECTIVE share of the pane's WIDTH the panel occupies — the app's measurement, or the caller's
     /// `sizePercent` override, either way bounded by `HudLayout.clampSizePercent`, so a requested 100 reads
     /// back as the maximum a HUD may take. Reported here because the node's `overlaySizePercent` stays
@@ -437,17 +449,19 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     /// because no command sets it. Reported beside `sizePercent` so a caller polling the panel's geometry
     /// reads both axes rather than assuming one square.
     public let heightPercent: Int?
-    /// The EFFECTIVE vertical placement, a `HudPosition` raw value (`top`|`center`|`bottom`). Always present,
+    /// The EFFECTIVE placement, a CANONICAL `HudPosition` raw value — one of the nine anchors, never one of
+    /// the accepted `top`/`bottom` aliases, so a caller reads one spelling whichever he sent. Always present,
     /// including the `center` default, so a caller who omitted it never has to know what the default is.
     public let position: String
 
     public init(message: String, detail: String? = nil, spinner: String = HudSpinner.noneName,
-                backgroundColor: String? = nil,
+                backgroundColor: String? = nil, textColor: String? = nil,
                 sizePercent: Int? = nil, heightPercent: Int? = nil, position: String) {
         self.message = message
         self.detail = detail
         self.spinner = spinner
         self.backgroundColor = backgroundColor
+        self.textColor = textColor
         self.sizePercent = sizePercent
         self.heightPercent = heightPercent
         self.position = position

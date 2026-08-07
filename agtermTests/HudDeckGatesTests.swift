@@ -139,19 +139,19 @@ final class HudDeckGatesTests: XCTestCase {
 
     // the HEIGHT decides the travel now, so the width is deliberately the one that cannot move the panel
     func testTopPlacementHoldsTheEdgeMarginClear() {
-        let style = OverlayPanelStyle.resolve(hudSession(position: .top, sizePercent: 90, heightPercent: 50))
+        let style = OverlayPanelStyle.resolve(hudSession(position: .topCenter, sizePercent: 90, heightPercent: 50))
         // pane 1000, panel 500 tall centered at 500; the top edge must land on the 10% margin, i.e. y = 100
         XCTAssertEqual(style.verticalOffset(paneHeight: 1000), -150, accuracy: 0.0001)
     }
 
     func testBottomPlacementMirrorsTop() {
-        let style = OverlayPanelStyle.resolve(hudSession(position: .bottom, sizePercent: 90, heightPercent: 50))
+        let style = OverlayPanelStyle.resolve(hudSession(position: .bottomCenter, sizePercent: 90, heightPercent: 50))
         XCTAssertEqual(style.verticalOffset(paneHeight: 1000), 150, accuracy: 0.0001)
     }
 
     // a message-sized panel travels nearly to the edge, which is what `top` and `bottom` are asked for
     func testAShortPanelReachesTheEdgeMargin() {
-        let style = OverlayPanelStyle.resolve(hudSession(position: .top, heightPercent: 10))
+        let style = OverlayPanelStyle.resolve(hudSession(position: .topCenter, heightPercent: 10))
         XCTAssertEqual(style.verticalOffset(paneHeight: 1000), -350, accuracy: 0.0001)
     }
 
@@ -171,7 +171,7 @@ final class HudDeckGatesTests: XCTestCase {
     // defensive: `HudLayout.heightPercent` keeps a live HUD at or under the height where both margins
     // still fit, so no supported path reaches this branch
     func testAPanelTooLargeForTheMarginStaysCentered() {
-        let style = OverlayPanelStyle.resolve(hudSession(position: .top, heightPercent: 95))
+        let style = OverlayPanelStyle.resolve(hudSession(position: .topCenter, heightPercent: 95))
         XCTAssertEqual(style.verticalOffset(paneHeight: 1000), 0)
     }
 
@@ -180,6 +180,63 @@ final class HudDeckGatesTests: XCTestCase {
             let style = OverlayPanelStyle.resolve(programSession(sizePercent: percent))
             XCTAssertEqual(style.position, .center)
             XCTAssertEqual(style.verticalOffset(paneHeight: 1000), 0)
+            XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 0)
         }
+    }
+
+    // MARK: - horizontal placement
+
+    func testCenterColumnIsUnoffsetHorizontally() {
+        for position in [HudPosition.topCenter, .center, .bottomCenter] {
+            let style = OverlayPanelStyle.resolve(hudSession(position: position, sizePercent: 40))
+            XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 0, "\(position) should not move sideways")
+        }
+    }
+
+    // the WIDTH decides the horizontal travel, mirroring the height on the vertical axis
+    func testLeftPlacementHoldsTheEdgeMarginClear() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .centerLeft, sizePercent: 50,
+                                                         heightPercent: 90))
+        // pane 1000, panel 500 wide centered at 500; the left edge must land on the 10% margin, i.e. x = 100
+        XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), -150, accuracy: 0.0001)
+    }
+
+    func testRightPlacementMirrorsLeft() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .centerRight, sizePercent: 50,
+                                                         heightPercent: 90))
+        XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 150, accuracy: 0.0001)
+    }
+
+    func testANarrowPanelReachesTheEdgeMargin() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .bottomRight, sizePercent: 10))
+        XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 350, accuracy: 0.0001)
+    }
+
+    // a corner has to travel on BOTH axes, which is the whole point of the anchor
+    func testCornersOffsetOnBothAxes() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .topRight, sizePercent: 20,
+                                                         heightPercent: 20))
+        XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 300, accuracy: 0.0001)
+        XCTAssertEqual(style.verticalOffset(paneHeight: 1000), -300, accuracy: 0.0001)
+    }
+
+    func testLargestAllowedPanelStaysInsideThePaneHorizontally() {
+        let width: CGFloat = 1000
+        for position in HudPosition.allCases {
+            let style = OverlayPanelStyle.resolve(hudSession(position: position,
+                                                             sizePercent: HudLayout.maxSizePercent,
+                                                             heightPercent: HudLayout.maxSizePercent))
+            let panel = width * style.widthFraction
+            let left = (width - panel) / 2 + style.horizontalOffset(paneWidth: width)
+            XCTAssertGreaterThanOrEqual(left, 0, "\(position) overhangs the left")
+            XCTAssertLessThanOrEqual(left + panel, width, "\(position) overhangs the right")
+        }
+    }
+
+    // defensive, matching the vertical axis: no supported width reaches this branch, `clampSizePercent`
+    // bounding every caller's percent at `maxSizePercent`
+    func testAPanelTooWideForTheMarginStaysCentered() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .centerLeft, sizePercent: 95))
+        XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 0)
     }
 }

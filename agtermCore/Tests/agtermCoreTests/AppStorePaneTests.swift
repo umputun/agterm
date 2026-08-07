@@ -763,7 +763,7 @@ struct AppStorePaneTests {
         let surface = SpySurface()
         session.overlaySurface = surface
         let generation = session.overlaySlotGeneration
-        let next = HudSpec(message: "two", detail: "still working", spinner: .braille, position: .top)
+        let next = HudSpec(message: "two", detail: "still working", spinner: .braille, position: .topCenter)
         #expect(store.updateHud(session.id, spec: next, size: HudPanelSize(widthPercent: 44, heightPercent: 15)) == true)
         #expect(session.hudSpec == next)
         // an update cannot move the file: the running helper opened the path `openHud` gave it.
@@ -924,7 +924,7 @@ struct AppStorePaneTests {
         let first = SpySurface()
         session.overlaySurface = first
         let generation = session.overlaySlotGeneration
-        let next = HudSpec(message: "two", position: .bottom)
+        let next = HudSpec(message: "two", position: .bottomCenter)
         #expect(store.openHud(session.id, command: "hud.sh", spec: next, file: "/tmp/b", size: HudPanelSize(widthPercent: 35, heightPercent: 9)) == true)
         #expect(session.hudSpec == next)
         #expect(session.hudFile == "/tmp/b")

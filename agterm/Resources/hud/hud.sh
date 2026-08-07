@@ -4,12 +4,15 @@
 # One HUD-SPECIFIC environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes (the
 # surface also inherits the session environment and the overlay wrapper's own AGTERM_OVL_* pair):
 #
-#   <columns> <rows> <spinner> <pid> <interval> [frame...]
+#   <columns> <rows> <spinner> <pid> <interval> <textcolor> [frame...]
 #                                the PANEL's own cell grid, which the text is centered in; spinner 1 shows
 #                                a glyph; pid is the app process that owns this panel; interval is the
-#                                sleep between ticks; the frames, when present, are the spinner's animation,
-#                                one single-column glyph each, cycled in order. HudSpinner owns both the
-#                                frames and the interval, so a style is an app-side edit and never one here
+#                                sleep between ticks; textcolor is the SGR PARAMETERS of the panel's
+#                                foreground (38;2;r;g;b) or - for the terminal's own, wrapped in the escape
+#                                below rather than converted here; the frames, when present, are the
+#                                spinner's animation, one single-column glyph each, cycled in order.
+#                                HudLayout and HudSpinner own the color encoding, the frames and the
+#                                interval, so a style or a color is an app-side edit and never one here
 #   message lines                wrapped by HudLayout
 #   (one empty line)             the separator HudLayout guarantees, when a detail follows
 #   detail lines                 rendered dimmed
@@ -57,6 +60,7 @@ while [ -f "$file" ]; do
     interval=0.5
     owner=''
     glyph=''
+    fg=''
 
     block=''
     sep=''
@@ -74,10 +78,14 @@ while [ -f "$file" ]; do
             case ${3:-} in 1) spinner=1 ;; esac
             case ${4:-} in ''|0|*[!0-9]*) ;; *) owner=$4 ;; esac
             case ${5:-} in ''|*[!0-9.]*) ;; *) interval=$5 ;; esac
-            # what remains after the five fixed fields is the frame list. Shifting them off is what lets the
+            # the app sends SGR parameters, never a hex color, so nothing is converted here; - means the
+            # terminal's own foreground. Anything but digits and separators is dropped rather than wrapped,
+            # so a malformed header cannot emit an arbitrary escape into the pane.
+            case ${6:-} in ''|-|*[!0-9";"]*) ;; *) fg="${csi}${6}m" ;; esac
+            # what remains after the six fixed fields is the frame list. Shifting them off is what lets the
             # frames stay variable-length, and eval indexes the rest without an array this shell lacks.
-            if [ "$spinner" = 1 ] && [ $# -gt 5 ]; then
-                shift 5
+            if [ "$spinner" = 1 ] && [ $# -gt 6 ]; then
+                shift 6
                 eval "glyph=\${$(( frame % $# + 1 ))}"
             else
                 # a spinning header that carried no frames would otherwise reserve the glyph's two cells and
@@ -128,7 +136,10 @@ while [ -f "$file" ]; do
     # UNCHANGED frame is not written at all: every write wakes the app's renderer, and a spinner-less panel
     # is finished after its first paint — repainting it twice a second would be the continuous poll the
     # rendering rule forbids.
-    out="${csi}0m${csi}H${csi}J$pad$block${csi}0m"
+    #
+    # the color goes AFTER the erase, so the cleared cells keep the terminal's own background, and BEFORE the
+    # block, so the dim attribute the detail lines carry composes over it rather than replacing it.
+    out="${csi}0m${csi}H${csi}J$fg$pad$block${csi}0m"
     if [ "$out" != "$painted" ]; then
         printf '%s' "$out"
         painted=$out

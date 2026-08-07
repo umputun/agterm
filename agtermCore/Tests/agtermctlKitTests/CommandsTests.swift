@@ -981,13 +981,42 @@ struct CommandsTests {
         #expect(built.args?.position == nil)
         #expect(built.args?.sizePercent == nil)
         #expect(built.args?.color == nil)
+        #expect(built.args?.textColor == nil)
+    }
+
+    /// The CLI must take everything the socket does, so a caller can echo back what `tree` handed him and a
+    /// script written against the original vocabulary keeps parsing.
+    @Test(arguments: ["top", "bottom"])
+    func sessionHudAcceptsTheBarePositionAliases(alias: String) throws {
+        let open = try request(["session", "hud", "wait", "--position", alias])
+        let update = try request(["session", "hud", "update", "wait", "--position", alias])
+        #expect(open.args?.position == alias)
+        #expect(update.args?.position == alias)
     }
 
     @Test func sessionHudRejectsBadPosition() {
-        #expect(validationMessage(["session", "hud", "wait", "--position", "middle"])
-            == "position must be one of: top, center, bottom")
-        #expect(validationMessage(["session", "hud", "update", "wait", "--position", "middle"])
-            == "position must be one of: top, center, bottom")
+        let expected = "position must be one of: \(HudPosition.acceptedNamesPhrase)"
+        #expect(validationMessage(["session", "hud", "wait", "--position", "middle"]) == expected)
+        #expect(validationMessage(["session", "hud", "update", "wait", "--position", "middle"]) == expected)
+    }
+
+    @Test func sessionHudCarriesTextColorOnOpenAndUpdate() throws {
+        let open = try request(["session", "hud", "wait", "--text-color", "#7ec07e"])
+        let update = try request(["session", "hud", "update", "done", "--text-color", "#e0e0e0"])
+        #expect(open.args?.textColor == "#7ec07e")
+        #expect(update.args?.textColor == "#e0e0e0")
+    }
+
+    /// The panel's backing is read once at creation, so only the text half is updatable.
+    @Test func sessionHudUpdateTakesNoBackgroundColor() {
+        #expect(validationMessage(["session", "hud", "update", "done", "--background-color", "#112233"]) != nil)
+    }
+
+    @Test func sessionHudRejectsBadTextColor() {
+        #expect(validationMessage(["session", "hud", "wait", "--text-color", "7ec07"])
+            == "text-color must be a #rrggbb hex value")
+        #expect(validationMessage(["session", "hud", "update", "done", "--text-color", "#gggggg"])
+            == "text-color must be a #rrggbb hex value")
     }
 
     @Test func sessionHudRejectsBadSizePercent() {

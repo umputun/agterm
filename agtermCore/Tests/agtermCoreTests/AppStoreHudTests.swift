@@ -9,14 +9,43 @@ struct AppStoreHudTests {
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
         let spec = HudSpec(message: "gathering options", detail: "scanning 400 files", spinner: .braille,
-                           backgroundColor: "#2a1a3a", sizePercent: 35, position: .top)
+                           backgroundColor: "#2a1a3a", textColor: "#e0e0e0", sizePercent: 35,
+                           position: .topCenter)
         store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/hud", size: HudPanelSize(widthPercent: 35, heightPercent: 12))
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
 
         #expect(node.hud == ControlHudNode(message: "gathering options", detail: "scanning 400 files",
-                                           spinner: "braille", backgroundColor: "#2a1a3a", sizePercent: 35,
-                                           heightPercent: 12, position: "top"))
+                                           spinner: "braille", backgroundColor: "#2a1a3a",
+                                           textColor: "#e0e0e0", sizePercent: 35,
+                                           heightPercent: 12, position: "top-center"))
+    }
+
+    /// A caller who sent an alias reads the canonical anchor back, which is what makes it an alias rather
+    /// than a second spelling the read-back has to carry.
+    @Test func theReadBackReportsTheCanonicalAnchorForAnAlias() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let position = try #require(HudPosition.parse("bottom"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working", position: position),
+                      file: "/tmp/hud", size: HudPanelSize(widthPercent: 22, heightPercent: 9))
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.hud?.position == "bottom-center")
+    }
+
+    @Test func theReadBackOmitsTextColorWhenTheCallerSetNone() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 22, heightPercent: 9))
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.hud?.textColor == nil)
     }
 
     @Test func controlTreeReportsTheEffectiveHudPositionAndSize() throws {

@@ -15,7 +15,7 @@ struct HudTests {
 
         #expect(box.columns == 1 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 1 + HudLayout.verticalPadding * 2)
-        #expect(HudLayout.renderedBody(for: HudSpec(message: ""), grid: box, ownerPid: 4242) == "5 3 0 4242 0.5\n")
+        #expect(HudLayout.renderedBody(for: HudSpec(message: ""), grid: box, ownerPid: 4242) == "5 3 0 4242 0.5 -\n")
     }
 
     @Test func longSingleWordIsBrokenAtMaxColumns() {
@@ -47,7 +47,7 @@ struct HudTests {
         let box = HudLayout.box(for: spec)
         let body = HudLayout.renderedBody(for: spec, grid: box, ownerPid: 4242)
 
-        #expect(body == "27 5 0 4242 0.5\ngathering options\n\nscanning 4 repositories\n")
+        #expect(body == "27 5 0 4242 0.5 -\ngathering options\n\nscanning 4 repositories\n")
         #expect(box.columns == 23 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 3 + HudLayout.verticalPadding * 2)
     }
@@ -56,7 +56,7 @@ struct HudTests {
         let spec = HudSpec(message: "working", detail: "   ")
         let body = HudLayout.renderedBody(for: spec, grid: HudLayout.box(for: spec), ownerPid: 4242)
 
-        #expect(body == "11 3 0 4242 0.5\nworking\n")
+        #expect(body == "11 3 0 4242 0.5 -\nworking\n")
     }
 
     // the header is the whole reason `session.hud.update` can grow the panel or start the spinner without
@@ -67,7 +67,7 @@ struct HudTests {
 
         let body = HudLayout.renderedBody(for: spec, grid: (columns: 30, rows: 9), ownerPid: 4242)
 
-        #expect(body == "30 9 1 4242 0.08 ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏\nworking\n")
+        #expect(body == "30 9 1 4242 0.08 - ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏\nworking\n")
     }
 
     // the frames ride the header so the helper holds no table; a static panel sends none and only carries
@@ -76,7 +76,7 @@ struct HudTests {
         let body = HudLayout.renderedBody(for: HudSpec(message: "working"), grid: (columns: 30, rows: 9),
                                           ownerPid: 4242)
 
-        #expect(body == "30 9 0 4242 0.5\nworking\n")
+        #expect(body == "30 9 0 4242 0.5 -\nworking\n")
     }
 
     // the header is word-split by the helper and `HudLayout.spinnerWidth` reserves exactly two cells, so a
@@ -182,7 +182,7 @@ struct HudTests {
         #expect(grid.rows == 3)
         #expect(box.columns == 22)
         #expect(box.rows == 3)
-        #expect(HudLayout.renderedBody(for: spec, grid: grid, ownerPid: 4242).hasPrefix("22 3 0 4242 0.5\n"))
+        #expect(HudLayout.renderedBody(for: spec, grid: grid, ownerPid: 4242).hasPrefix("22 3 0 4242 0.5 -\n"))
 
         // one line centered in three rows: one above, one below, and no empty half-panel under it
         #expect((grid.rows - HudLayout.bodyLines(for: spec).count) / 2 == 1)
@@ -274,11 +274,81 @@ struct HudTests {
     }
 
     @Test func positionNamesDeriveFromTheCases() {
-        #expect(HudPosition.validNamesList == "top|center|bottom")
-        #expect(HudPosition.validNamesPhrase == "top, center, bottom")
+        #expect(HudPosition.validNamesList
+            == "top-left|top-center|top-right|center-left|center|center-right"
+            + "|bottom-left|bottom-center|bottom-right")
+        #expect(HudPosition.validNamesPhrase
+            == "top-left, top-center, top-right, center-left, center, center-right, "
+            + "bottom-left, bottom-center, bottom-right")
     }
 
-    @Test func edgeMarginLeavesRoomForTheLargestPanel() {
+    @Test func acceptedNamesAddTheAliasesToTheCanonicalSet() {
+        #expect(HudPosition.acceptedNamesList == HudPosition.validNamesList + "|top|bottom")
+        #expect(HudPosition.acceptedNamesPhrase == HudPosition.validNamesPhrase + ", top, bottom")
+    }
+
+    @Test func hudPositionSpellingMatchesTheWatermarkAnchors() {
+        #expect(Set(HudPosition.allCases.map(\.rawValue))
+            == Set(BackgroundWatermark.Position.allCases.map(\.rawValue)))
+    }
+
+    @Test(arguments: [("top", HudPosition.topCenter), ("bottom", .bottomCenter)])
+    func bareAliasesNormalizeToTheMiddleColumn(raw: String, expected: HudPosition) {
+        #expect(HudPosition.parse(raw) == expected)
+        #expect(expected.rawValue != raw)
+    }
+
+    @Test func aliasesSurviveDecodingAndReEncodeCanonically() throws {
+        let decoded = try JSONDecoder().decode(HudPosition.self, from: Data(#""top""#.utf8))
+
+        #expect(decoded == .topCenter)
+        #expect(String(decoding: try JSONEncoder().encode(decoded), as: UTF8.self) == #""top-center""#)
+    }
+
+    @Test(arguments: ["middle", "top-middle", "TOP", "", "left"])
+    func parseRejectsEverythingOutsideTheAcceptedSet(raw: String) {
+        #expect(HudPosition.parse(raw) == nil)
+    }
+
+    @Test func everyAnchorRoundTripsThroughItsRawValue() {
+        for position in HudPosition.allCases {
+            #expect(HudPosition.parse(position.rawValue) == position)
+        }
+    }
+
+    @Test func bandsSplitTheAnchorsIntoThreeRowsAndThreeColumns() {
+        #expect(HudPosition.allCases.filter { $0.verticalBand == .leading }
+            == [.topLeft, .topCenter, .topRight])
+        #expect(HudPosition.allCases.filter { $0.horizontalBand == .trailing }
+            == [.topRight, .centerRight, .bottomRight])
+        #expect(HudPosition.center.verticalBand == .middle)
+        #expect(HudPosition.center.horizontalBand == .middle)
+    }
+
+    /// The margin has to fit on the WIDTH too now that anchors travel horizontally, and the width is the
+    /// axis a caller can override, so `clampSizePercent` is what has to hold the bound.
+    @Test func edgeMarginLeavesRoomForTheLargestPanelOnBothAxes() {
         #expect(HudPosition.edgeMarginPercent * 2 + HudLayout.maxSizePercent <= 100)
+        #expect(HudPosition.edgeMarginPercent * 2 + HudLayout.clampSizePercent(100) <= 100)
+    }
+
+    @Test(arguments: [("#000000", "38;2;0;0;0"), ("#ffffff", "38;2;255;255;255"),
+                      ("#7ec07e", "38;2;126;192;126"), ("e0e0e0", "38;2;224;224;224")])
+    func textColorEncodesAsTruecolorSGRParameters(hex: String, expected: String) {
+        #expect(HudLayout.foregroundSGR(hex) == expected)
+    }
+
+    @Test(arguments: [nil, "", "#12345", "#gggggg", "rebeccapurple"])
+    func absentOrMalformedTextColorFallsBackToTheTerminalForeground(hex: String?) {
+        #expect(HudLayout.foregroundSGR(hex) == HudLayout.noTextColor)
+    }
+
+    @Test func theHeaderCarriesTheTextColorBeforeTheFrames() {
+        let spec = HudSpec(message: "working", spinner: .circle, textColor: "#7ec07e")
+
+        let header = HudLayout.renderedBody(for: spec, grid: (columns: 30, rows: 9), ownerPid: 4242)
+            .split(separator: "\n")[0]
+
+        #expect(header == "30 9 1 4242 0.12 38;2;126;192;126 ◐ ◓ ◑ ◒")
     }
 }

@@ -267,8 +267,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   override at all. Every HUD WIDTH passes `HudLayout.clampSizePercent` (10...80), the caller's included, so
   `--full`'s refusal and the never-cover invariant cannot disagree. The height is capped at the same 80 but
   takes NO minimum floor: the box already carries `verticalPadding`, and flooring it is the square again.
-  The 80 cap is also what makes `top`/`bottom` always fit their edge margin, the height being what decides
-  how far the panel travels; `OverlayPanelStyle.verticalOffset`'s centering fallback is defensive only.
+  The 80 cap is also what makes an edge anchor always fit its margin on EITHER axis, each axis' own extent
+  being what decides how far the panel travels there; the centering fallback in `OverlayPanelStyle`'s two
+  offsets is defensive only.
+- `HudPosition` is the nine anchors of a 3x3 grid, spelled exactly as `BackgroundWatermark.Position` so
+  `--position` means one thing across `session.background` and `session.hud`. The bare `top`/`bottom` it
+  shipped with stay ACCEPTED as aliases for the middle column, and `HudPosition.parse` is the one entry
+  point that resolves them — dispatcher, CLI validation and `init(from:)` all take it, so no path accepts a
+  name another rejects. They NORMALIZE: the read-back reports the canonical anchor, which is what makes them
+  aliases rather than a second vocabulary. Rejections and CLI help list `acceptedNamesList`, never the
+  canonical set alone, for the same reason `HudSpinner` lists `none`. `verticalBand`/`horizontalBand` split
+  an anchor into its row and column so `OverlayPanelStyle` runs one offset over each axis.
 - An unmeasured pane splits the fallback: width takes `maxSizePercent` (nothing is known to fit), height
   takes `minSizePercent` (80% of a pane is a cover, not a message). `OverlayPanelStyle` falls back the same
   way for a HUD whose height has not been measured yet.
@@ -281,8 +290,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   nothing and the dispatcher validates one thing. `noneName` is ACCEPTED by both, not just the socket —
   refusing it in the CLI would fail a value `tree` had just handed the caller — and beats a bare
   `--spinner` beside it. Rejection messages list it through `acceptedNamesList`, never the styles alone.
+- The panel's two colors are owned by different layers, which is why only one is updatable:
+  `backgroundColor` is a per-surface config the factory reads ONCE at creation, `textColor` rides the body
+  file's header as SGR PARAMETERS the helper re-reads every tick. So `hud.update` recolors text in place and
+  cannot touch the backing, and the CLI's `update` takes `--text-color` but no `--background-color`.
+  `HudLayout.foregroundSGR` owns the encoding, host-free, and resolves a malformed hex to the
+  `noTextColor` sentinel rather than a partial run; the helper converts nothing and wraps only digits and
+  semicolons, so a malformed header cannot emit an arbitrary escape into the pane.
 - Read back `ControlSessionNode.hud` with BOTH shares, `sizePercent` and `heightPercent`, `overlay` false
-  and `overlaySizePercent` omitted beside it;
+  and `overlaySizePercent` omitted beside it, plus `textColor` (omitted when the panel keeps the terminal
+  foreground, and tracking the LATEST update unlike `backgroundColor`);
   `position` and `spinner` always report the effective value, defaults included — `spinner` names the STYLE
   and spells a static panel `HudSpinner.noneName`, which the dispatcher accepts back as "no spinner" so a
   caller can round-trip what `tree` gave it. HUD state is poll-only.
@@ -290,9 +307,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with
   `AGTERM_HUD_FILE` as its only HUD-SPECIFIC variable (the surface still inherits the session environment
   and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner (flag, interval
-  and frames) and the APP'S PID
+  and frames), text color and the APP'S PID
   ride the body file's HEADER line and are re-read every tick, so `hud.update` repaints in place with no
-  respawn; write that file atomically. It is per SESSION, so an update rewrites the path the running helper
+  respawn; write that file atomically. The frames are LAST because they alone are variable-length and the
+  helper shifts the fixed fields off to reach them, so a new fixed field goes before them and owes the
+  helper a matching shift count. It is per SESSION, so an update rewrites the path the running helper
   already opened. `Session.discardHudBody` is the only deleter and every store teardown runs it — close,
   ⌘W, session/workspace/window teardown — so a HUD closed before its surface realized cannot strand the
   message text in `/tmp`. An update carries the OPEN's background color forward, the factory reading it once

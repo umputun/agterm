@@ -1554,9 +1554,12 @@
               ><br />agtermctl session hud update <span style="color: #f2b45c">"ready"</span> --detail
               <span style="color: #f2b45c">"pick a branch"</span> --target
               <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
-                ># place it and set its width by hand instead of measuring the message</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top --size-percent
-              30<br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
+                ># anchor it and set its width by hand instead of measuring the message</span
+              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top-right --size-percent
+              30<br /><br /><span style="color: #6b727a"># color both halves of the panel</span
+              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --text-color
+              <span style="color: #f2b45c">"#7ec07e"</span> --background-color
+              <span style="color: #f2b45c">"#202020"</span><br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A HUD carries a message rather than a program, and it is passive: the session keeps first responder and stays
@@ -1566,17 +1569,35 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">open</span> is the default
               subcommand, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud "…"</span>
               posts one.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--position top|center|bottom</span>
-              places it vertically (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--position</span>
+              anchors it to any of the nine positions
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session background</span> takes —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-center</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-right</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center-left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center-right</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-center</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-right</span> — defaulting to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>, with every anchor off
+              center holding a margin off that pane edge on its own; a corner is what keeps a panel out of the text you are
+              reading. The bare
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> hold a margin off the
-              pane edge on their own), and the panel comes from the message on both axes — width from the longest line, height
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> this took before are
+              still accepted for the middle column. The panel comes from the message on both axes — width from the longest line, height
               from the number of them, so a title and a subtitle give a wide, short panel rather than a square one.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides the
               width only, bounded to at most 80% of the pane, so a message never covers the session it is about.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> sets the text's
+              own color and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> the panel's
+              backing, so the two halves are independent.
               An update replaces the whole message, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> have to be repeated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> have to be repeated
               to survive it. The spinner takes a style —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner-style bar|braille|circle|blocks|dot|none</span>,
               which turns it on by itself, with
@@ -1584,7 +1605,7 @@
               animating — and an update may switch style in place;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> is the
               exception, read once when the panel is created and kept — in the panel and in the read-back — across every
-              update.
+              update, which is why an update does not take it at all.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               It shares the overlay slot, so a second
