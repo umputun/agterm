@@ -201,7 +201,12 @@ extension WorkspaceSidebar.Coordinator {
         let names: [String]
         switch sender.representedObject {
         case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
-        case let node as SidebarNode: names = [store.workspaceName(node.id)].compactMap { $0 }
+        // the kind is matched rather than assumed: a session node reaching here would look up a session id
+        // among the workspaces, and `workspaceName` would answer nil — a silent no-op that reads as
+        // "the row went away" instead of a wiring mistake. `menu(forRow:)` only ever attaches a node for a
+        // workspace row, and this says so.
+        case let node as SidebarNode where node.kind == .workspace:
+            names = [store.workspaceName(node.id)].compactMap { $0 }
         default: return
         }
         // a row closed between the right-click and the choice leaves nothing to copy; clearing the
