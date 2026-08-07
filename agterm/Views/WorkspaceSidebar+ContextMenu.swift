@@ -77,6 +77,18 @@ extension WorkspaceSidebar.Coordinator {
             menu.addItem(rename)
         }
 
+        // "Copy Name" sits under Rename: both act on the row's identity, and reading a name off the
+        // sidebar to paste it elsewhere is the other half of setting one. A custom command cannot cover
+        // this — `{AGT_SESSION_NAME}`/`{AGT_WORKSPACE_NAME}` resolve the ACTIVE row, while a context menu
+        // is the only surface that knows which row was clicked.
+        //
+        // Plural for a multi-session selection, joined by newlines, like the other batch items here.
+        let copyTitle = node.kind == .session && sessionCount > 1 ? "Copy Names" : "Copy Name"
+        let copyName = NSMenuItem(title: copyTitle, action: #selector(menuCopyName(_:)), keyEquivalent: "")
+        copyName.target = self
+        copyName.representedObject = node.kind == .session ? SessionBatchRequest(sessionIDs: sessionTargets) : node
+        menu.addItem(copyName)
+
         switch node.kind {
         case .session:
             // "Duplicate Session" opens a fresh shell in this session's directory, right after it.
@@ -181,6 +193,22 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuRename(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
         renameController.beginEditing(node: node)
+    }
+
+    /// Writes the clicked row's sidebar label to the general pasteboard. Names are resolved from THIS
+    /// sidebar's window-local store, like Close/Flag/Duplicate, so a background window copies its own row.
+    @objc private func menuCopyName(_ sender: NSMenuItem) {
+        let names: [String]
+        switch sender.representedObject {
+        case let request as SessionBatchRequest: names = store.sessionDisplayNames(request.sessionIDs)
+        case let node as SidebarNode: names = [store.workspaceName(node.id)].compactMap { $0 }
+        default: return
+        }
+        // a row closed between the right-click and the choice leaves nothing to copy; clearing the
+        // pasteboard for it would destroy whatever the user had there, so do nothing at all.
+        guard !names.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)
     }
 
     @objc private func menuMove(_ sender: NSMenuItem) {
