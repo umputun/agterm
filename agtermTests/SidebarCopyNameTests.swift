@@ -81,7 +81,7 @@ final class SidebarCopyNameTests: XCTestCase {
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "one\ntwo")
     }
 
-    func testNamesFromEverySourceStayNewlineFreeSoTheJoinIsUnambiguous() throws {
+    func testASanitizedCwdAndRenameKeepTheCopiedBlockOneLinePerRow() throws {
         let store = try XCTUnwrap(library.activeStore)
         let ws = try XCTUnwrap(store.workspaces.first)
         let fromCwd = try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/tmp/a\nb"))
