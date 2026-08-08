@@ -241,11 +241,12 @@ def rebound(keymap, sheet):
     """
     if not BINDINGS.exists():
         return []
+    before = stored()["bound"]
     try:
-        before = json.loads(BINDINGS.read_text())
-        if SHEET.stat().st_mtime_ns > BINDINGS.stat().st_mtime_ns:
+        sheet_at = SHEET.stat().st_mtime_ns
+        if sheet_at > BINDINGS.stat().st_mtime_ns and sheet_at > KEYMAP.stat().st_mtime_ns:
             return []
-    except (OSError, json.JSONDecodeError):
+    except OSError:
         return []
     flat = searchable(sheet)
     return sorted(chord for chord, line in binding_lines(keymap).items()
@@ -305,7 +306,7 @@ class Hud:
             self.up = False
 
 
-def draft(lines, chords, hud, whole_sheet=False):
+def draft(lines, chords, hud, whole_sheet=False, restating=False):
     """Ask the model for one row per binding. None on any failure, so the sheet still opens.
 
     `whole_sheet` is the first run, where there is nothing to preserve: every binding is sent
@@ -340,7 +341,8 @@ def draft(lines, chords, hud, whole_sheet=False):
             if elapsed > TIMEOUT:
                 proc.kill()
                 return None
-            what = "writing the sheet" if whole_sheet else "drafting"
+            what = "writing the sheet" if whole_sheet else (
+                "rewriting what changed" if restating else "drafting")
             plural = "" if len(lines) == 1 else "s"
             hud.show(f"{what}, {len(lines)} chord{plural} · {elapsed}s")
             time.sleep(0.7)
@@ -398,9 +400,47 @@ def write(path, text):
     tmp.replace(path)
 
 
-def snapshot(keymap):
-    """Record what each chord is bound to now, as the baseline `rebound` compares against."""
-    write(BINDINGS, json.dumps(binding_lines(keymap), sort_keys=True, indent=1))
+def snapshot(keymap, wrote=None, unresolved=()):
+    """Record what each chord is bound to now, as the baseline `rebound` compares against.
+
+    `wrote` carries the descriptions the model just produced, kept alongside so a later pass
+    can tell its own draft from a sentence the reader has since written. Anything recorded
+    before is kept, so a row drafted three edits ago is still recognisable as a draft.
+    """
+    before = stored() if BINDINGS.exists() else {"bound": {}, "drafted": {}}
+    was, previously_bound = before["drafted"], before["bound"]
+    was.update(wrote or {})
+
+    bound = binding_lines(keymap)
+    # A chord whose row could not be brought up to date keeps its OLD line here, so it is
+    # still reported next time. Recording the new one would mean the pass had quietly
+    # accepted a row it knows is wrong.
+    for chord in unresolved:
+        if chord in previously_bound:
+            bound[chord] = previously_bound[chord]
+
+    write(BINDINGS, json.dumps({"bound": bound, "drafted": was}, sort_keys=True, indent=1))
+
+
+def stored():
+    """The baseline file, as {bound, drafted}.
+
+    An earlier version of this recipe wrote the bare chord-to-line map at the top level. It
+    is read as `bound` rather than discarded, because discarding it would silently answer
+    "nothing has changed" for every chord until the next keymap edit reseeded the file.
+    """
+    try:
+        raw = json.loads(BINDINGS.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"bound": {}, "drafted": {}}
+    if "bound" not in raw:
+        return {"bound": {k: v for k, v in raw.items() if isinstance(v, str)}, "drafted": {}}
+    return {"bound": raw.get("bound", {}), "drafted": raw.get("drafted", {})}
+
+
+def drafted_text(chord):
+    """What the model last wrote for this chord, or None if it never did."""
+    return stored()["drafted"].get(chord)
 
 
 def first_sheet(keymap, pairs):
@@ -429,6 +469,38 @@ def first_sheet(keymap, pairs):
     return generated(rows)
 
 
+def restate(sheet, chord, text):
+    """Replace the description beside `chord`, leaving the rest of the row alone.
+
+    The cell is found by walking the row's pipe-separated cells to the one naming the chord
+    and taking the next. That is what makes it safe in a hand-arranged table: a row holding
+    two chords across four columns has the right cell rewritten and the other pair untouched.
+    """
+    mine = drafted_text(chord)
+    out, replaced, in_holding = [], False, False
+    for line in sheet.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            in_holding = stripped == DRAFT_HEADING
+        if stripped.startswith("|") and documented(chord, stripped):
+            cells = stripped.split("|")
+            for i, one in enumerate(cells[:-1]):
+                if not documented(chord, one):
+                    continue
+                # Only over the model's own words. A cell that no longer matches what was
+                # written for this chord is one the reader has since put in their own words,
+                # and replacing that is not this recipe's to do. A row still sitting in the
+                # holding section is the model's by definition, whatever was recorded.
+                if not in_holding and (mine is None or cells[i + 1].strip() != cell(mine)):
+                    return sheet, False
+                cells[i + 1] = f" {cell(text)} "
+                replaced = True
+                break
+            line = "|".join(cells) + "\n"
+        out.append(line)
+    return "".join(out), replaced
+
+
 def sync(keymap):
     """The maintenance pass: draft rows for chords the sheet has never heard of."""
     # Seeding happens BEFORE the gate. On an existing install the stamp is already current,
@@ -438,7 +510,11 @@ def sync(keymap):
         snapshot(keymap)
 
     mtime = str(KEYMAP.stat().st_mtime_ns)
-    if STAMP.exists() and STAMP.read_text() == mtime:
+    # The timestamp says nothing new since the last pass, and that is true of the chord SET.
+    # It is not true of a row an earlier pass left out of date: the keymap change that caused
+    # it is already stamped, so the timestamp alone would never look at it again.
+    unchanged = STAMP.exists() and STAMP.read_text() == mtime
+    if unchanged and not (SHEET.exists() and rebound(keymap, SHEET.read_text())):
         return
 
     pairs = bindings(keymap)
@@ -448,13 +524,20 @@ def sync(keymap):
         snapshot(keymap)
         return
 
-    # A sheet newer than the baseline has been edited since, so take it as describing what
-    # is bound now.
-    if SHEET.stat().st_mtime_ns > BINDINGS.stat().st_mtime_ns:
+    # A sheet edited after the last keymap change describes what is bound now, so it becomes
+    # the baseline. Both comparisons are needed: newer than the baseline alone would also
+    # swallow a rebind that happened after the reader last touched the sheet, which is
+    # exactly the case worth reporting.
+    sheet_at = SHEET.stat().st_mtime_ns
+    if sheet_at > BINDINGS.stat().st_mtime_ns and sheet_at > KEYMAP.stat().st_mtime_ns:
         snapshot(keymap)
 
-    missing = undocumented(pairs, SHEET.read_text())
-    if not missing:
+    sheet = SHEET.read_text()
+    missing = undocumented(pairs, sheet)
+    # A chord that kept its key and changed its command: the row names it and describes
+    # something else, so the description is what gets replaced, in place.
+    stale = rebound(keymap, sheet)
+    if not missing and not stale:
         write(STAMP, mtime)
         return
     if not DRAFT:
@@ -462,14 +545,27 @@ def sync(keymap):
 
     hud = Hud()
     try:
-        rows = draft(source_lines(keymap, missing), missing, hud)
+        rows = draft(source_lines(keymap, missing), missing, hud) if missing else []
+        redone = draft(source_lines(keymap, stale), stale, hud, restating=True) if stale else []
     finally:
         hud.close()
-    if not rows:
+    if not rows and not redone:
+        if stale:
+            snapshot(keymap, unresolved=stale)
         return
-    write(SHEET, append_rows(SHEET.read_text(), rows))
+
+    if rows:
+        sheet = append_rows(sheet, rows)
+    wrote = {row["chord"]: row["does"] for row in rows or []}
+    fixed = set()
+    for row in redone or []:
+        sheet, replaced = restate(sheet, row["chord"], row["does"])
+        if replaced:
+            wrote[row["chord"]] = row["does"]
+            fixed.add(row["chord"])
+    write(SHEET, sheet)
     write(STAMP, mtime)
-    snapshot(keymap)
+    snapshot(keymap, wrote, unresolved=[c for c in stale if c not in fixed])
 
 
 def render(keymap):
@@ -490,12 +586,14 @@ def render(keymap):
         print("> Bound but not documented: " + ", ".join(f"`{c}`" for c in missing))
         print()
 
+    # Normally the maintenance pass has already rewritten these. What reaches here is what
+    # it could not: no model available, or a call that failed.
     changed = rebound(keymap, sheet)
     if changed:
-        print("> **Bound to something else now, so the row may be stale:** "
+        print("> **Bound to something else now, so the row is out of date:** "
               + ", ".join(f"`{c}`" for c in changed))
         print(">")
-        print("> Edit the sheet and this clears itself.")
+        print("> Rewrite it, or press again to have it rewritten.")
         print()
 
     sys.stdout.write(sheet)
