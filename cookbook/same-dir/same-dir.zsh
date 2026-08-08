@@ -68,13 +68,13 @@ fi
 # the split surface is created lazily after session split on; session type --pane right fails
 # fast with "session has no split pane" when the surface is not yet realized, so retry a few
 # times with a short sleep to let the layout pass complete.
-typeset -i tries=0
-while (( tries < 10 )); do
+tries=0
+while [ "$tries" -lt 10 ]; do
     if printf 'cd %q\n' "$CWD" | agt session type --stdin --target "$TARGET" --pane "$PANE" >/dev/null 2>&1; then
         exit 0
     fi
     sleep 0.1
-    (( tries++ ))
+    tries=$(( tries + 1 ))
 done
 
 fail "could not type into the $PANE pane after $tries attempts"
