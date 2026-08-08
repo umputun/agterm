@@ -38,6 +38,8 @@
 	<string>Command-line tools you run inside agterm (for example, an osascript one-liner or a build script) request permission to control other apps through agterm.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Command-line tools you run inside agterm request Bluetooth access through agterm.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to your calendars through agterm.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Command-line tools you run inside agterm request access to your calendars through agterm.</string>
 	<key>NSCameraUsageDescription</key>
@@ -46,14 +48,18 @@
 	<string>Command-line tools you run inside agterm request access to your contacts through agterm.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, connecting to a .local host) request local network access through agterm.</string>
-	<key>NSLocationUsageDescription</key>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Command-line tools you run inside agterm request your location through agterm.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Command-line tools you run inside agterm request your location through agterm.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, voice dictation in Claude Code) request microphone access through agterm.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Command-line tools you run inside agterm (for example, a script importing a screenshot) request permission to add to your photo library through agterm.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, osxphotos) request access to your photo library through agterm.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to your reminders through agterm.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Command-line tools you run inside agterm request access to your reminders through agterm.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
