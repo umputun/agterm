@@ -184,8 +184,8 @@ extension agtermApp {
                 Button { actions.reloadGhosttyConfig() } label: { Label("Reload Config", systemImage: "arrow.clockwise") }
             }
             // View: font zoom (on the focused terminal), the status-bar toggle, split / quick terminal /
-            // palettes. Every custom item needs an SF Symbol — the system "Enter Full Screen" item reserves
-            // an icon column, so an iconless one renders as a blank, indented slot.
+            // palettes. Every item needs an SF Symbol: one iconless item renders as a blank, indented slot
+            // beside the icon column its neighbours reserve.
             CommandGroup(after: .toolbar) {
                 // the File group's modal gate, mirrored.
                 let zoomed = actions.terminalZoomActive
@@ -287,12 +287,13 @@ extension agtermApp {
                 Button { actions.toggleTerminalZoom() } label: { Label("Toggle Terminal Zoom", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .keyboardShortcut(shortcut(for: .toggleTerminalZoom))
                 Divider()
-                // native macOS full screen for the key window (⌃⌘F default, rebindable); a second invocation
-                // exits. the green traffic-light button drives the same NSWindow.toggleFullScreen.
-                Button { actions.toggleFullscreen() } label: {
-                    Label("Toggle Full Screen", systemImage: "arrow.up.left.and.arrow.down.right")
-                }
-                .keyboardShortcut(shortcut(for: .toggleFullscreen))
+                // NO full screen item: AppKit appends its own "Enter Full Screen" (`toggleFullScreen:`,
+                // Globe+F) below this menu whenever it is displayed, and nothing suppresses it — removal
+                // before the injection is undone and afterwards changes only the model, since the menu is
+                // already snapshotted for display; `NSFullScreenMenuItemEverywhere` is ignored on macOS 26;
+                // and adopting the selector on an item of our own does not stop it either. An item here is
+                // therefore a visible duplicate. The rebindable `toggle_fullscreen` chord is matched in
+                // `CustomCommandRunner` instead, and the action palette still offers Toggle Full Screen.
             }
             // a dedicated Navigate menu keeps the View menu scannable: selection/focus movement between
             // sessions and split panes lives here, driving the SAME AppActions the View menu does, with the

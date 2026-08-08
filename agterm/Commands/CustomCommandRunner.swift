@@ -85,9 +85,17 @@ final class CustomCommandRunner {
     /// to zero sessions. Passes through for a focused text field (Settings editor, inline rename, palette
     /// search) so a bound chord never eats those keystrokes, and for an auxiliary window focused off a text
     /// field. A key repeat is ignored, so a held-down shortcut spawns one process, not one per OS repeat.
+    ///
     private func handleKeyDown(_ event: NSEvent) -> Bool {
-        guard !event.isARepeat else { return false }
         guard let keyWindow = NSApp.keyWindow else { return false }
+        return handleKeyDown(event, in: keyWindow)
+    }
+
+    /// The half above the key-window lookup, so a test can supply the window: a hosted test's own window
+    /// never becomes `NSApp.keyWindow` (the app is not active), which would make every guard here pass
+    /// vacuously. Internal for that reason alone, like `ControlServer.collectKeyEquivalents`.
+    func handleKeyDown(_ event: NSEvent, in keyWindow: NSWindow) -> Bool {
+        guard !event.isARepeat else { return false }
         let responder = keyWindow.firstResponder
         // a focused text field is the window's NSText field editor and must keep its keystrokes: drop the
         // half-typed leader, pass through.
@@ -118,6 +126,14 @@ final class CustomCommandRunner {
         guard let chord = chord(from: event) else {
             // a key with no usable base (e.g. a bare modifier) can't advance; while armed, keep waiting.
             return false
+        }
+        // `toggle_fullscreen` is the one built-in with no menu item to carry its equivalent: AppKit appends
+        // the only full screen item there is, at menu-display time, and an item of agterm's own beside it is
+        // the duplicate this avoids. So the rebindable chord is matched here instead. A half-typed leader
+        // sequence still wins, exactly as it does over a custom command sharing its first chord.
+        if !commandEngine.isArmed, chord == settings.keymap.equivalent(for: .toggleFullscreen) {
+            keyWindow.toggleFullScreen(nil)
+            return true
         }
         switch commandEngine.advance(chord) {
         case .fired(let command):

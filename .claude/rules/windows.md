@@ -101,9 +101,21 @@ session drag are out of scope.
 - `window.fullscreen` uses `toggleFullScreen`, a distinct native Space. GUI surfaces are View > Toggle Full
   Screen, palette, `BuiltinAction.toggleFullscreen` with Ctrl-Command-F, and the green button. Control
   resolves an open ID; read back the `.fullScreen` style mask.
-- AppKit reinjects its own `toggleFullScreen:` menu item whenever View opens. Remove only that selector at
-  launch and every `NSMenu.didBeginTrackingNotification`; do not install a menu delegate that would replace
-  SwiftUI updates. `testViewMenuHasSingleFullScreenItem` pins this.
+- agterm ships NO full screen menu item. AppKit appends its own "Enter Full Screen" (`toggleFullScreen:`,
+  Globe+F) to the View menu as it is prepared for display, so any item of agterm's own is a visible
+  duplicate. All of these were measured and none suppresses it: removing the injected item on
+  `NSMenu.didBeginTrackingNotification` (posted once per ROOT tracking session, before the injection);
+  removing it deferred one runloop turn (too late — the displayed menu is already snapshotted, so the model
+  loses the item while the duplicate stays on screen); registering `NSFullScreenMenuItemEverywhere` false,
+  which macOS 26 ignores; and giving agterm's own item the `toggleFullScreen:` selector, which AppKit
+  injects past anyway. Do not install a menu delegate, which would replace SwiftUI updates.
+- `toggle_fullscreen` therefore has no menu item to carry its equivalent, and is matched in
+  `CustomCommandRunner`'s key monitor instead — the one built-in that does not ride a SwiftUI shortcut.
+  A half-typed leader sequence still wins. The menu affordance and Globe+F are AppKit's item.
+- `testViewMenuHasSingleFullScreenItem` asserts the item COUNT and matches on TITLE. Matching by
+  identifier silently fails to find the injected item, which is why the assertion it replaced passed for
+  months while the duplicate was on screen. Never trust the AX tree alone here: it reflects the menu model,
+  which a removal can change without changing the pixels. Verify a menu fix by opening the menu and looking.
 - `window.minimize` accepts `on`, `off`, or `toggle` through `ControlToggleMode`, defaulting to toggle.
   Deterministic modes support park-all-but-one. GUI Command-M, yellow button, and titlebar preference use
   AppKit directly, so observe `didMiniaturize`/`didDeminiaturize` to keep control read-back current.

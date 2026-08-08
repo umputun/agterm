@@ -62,11 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // a dark launch otherwise strips the env, restore replay and command off every restored surface.
         GhosttyApp.shared.syncLaunchColorScheme()
         scheduleRestoredWindowReconciliation(reason: "did-finish-launching")
-        // AppKit auto-adds its own "Enter Full Screen" item (Globe+F / ⌃⌘F) to the View menu and RE-INJECTS
-        // it whenever the menu opens, duplicating agterm's rebindable "Toggle Full Screen" (what makes full
-        // screen drivable from keymap, palette and control). Strip the native one on every menu-tracking
-        // start — a launch-time one-shot does NOT stick.
-        AppDelegate.removeNativeFullScreenMenuItem()
         NotificationCenter.default.addObserver(self, selector: #selector(menuBeganTracking),
                                                name: NSMenu.didBeginTrackingNotification, object: nil)
         // SwiftUI defers its menu rebuild to the next app ACTIVATION, and that rebuild is what lets the
@@ -96,7 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func appDidBecomeActive(_: Notification) {
         DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated { self?.reconcileCloseSessionChord() }
+            MainActor.assumeIsolated {
+                self?.reconcileCloseSessionChord()
+            }
         }
     }
 
@@ -106,7 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuBeganTracking(_: Notification) {
         MainActor.assumeIsolated {
-            AppDelegate.removeNativeFullScreenMenuItem()
             reconcileCloseSessionChord()
         }
     }
@@ -161,19 +157,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The File-menu title of agterm's own close-the-session item, matched by `applyCloseSessionChord`.
     static let closeSessionItemTitle = "Close Session"
     private static let commandW = Chord(mods: [.command], key: "w")
-
-    /// Remove AppKit's auto-injected fullscreen item (action `toggleFullScreen:`); agterm's own is a SwiftUI
-    /// closure action, so only the native one matches. Finds the submenu by content, not a localized title.
-    @MainActor
-    private static func removeNativeFullScreenMenuItem() {
-        let selector = #selector(NSWindow.toggleFullScreen(_:))
-        for topItem in NSApp.mainMenu?.items ?? [] {
-            guard let submenu = topItem.submenu else { continue }
-            for item in submenu.items where item.action == selector {
-                submenu.removeItem(item)
-            }
-        }
-    }
 
     /// `open -a agterm /path` (the OS "open terminal here" integration): each URL resolves to a directory
     /// (folder → itself, file → its parent, via `OpenPathResolver`), queued and drained into a new session

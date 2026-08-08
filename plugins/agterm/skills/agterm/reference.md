@@ -701,7 +701,7 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
   control-native, but `zoom` mirrors a GUI action.
 - `window fullscreen <id>` — toggle NATIVE macOS full screen (a separate Space, auto-hidden menu bar),
   via `NSWindow.toggleFullScreen`. A second call exits. The window must be open. This is the control half
-  of the View ▸ Toggle Full Screen menu item (⌃⌘F, rebindable as `toggle_fullscreen`) and the green
+  of ⌃⌘F (rebindable as `toggle_fullscreen`), View ▸ Enter/Exit Full Screen, and the green
   traffic-light button — distinct from `zoom`, which only maximizes the frame in the same Space.
 - `window minimize <id> [on|off|toggle]` — minimize the window to the Dock, or restore it, via
   `NSWindow.miniaturize`/`deminiaturize`. The mode resolves against the window's current state, so `on` and
