@@ -78,8 +78,13 @@ final class LiveMenuKeyEquivalentsTests: XCTestCase {
 
     // AppKit matches an uppercase key equivalent against the SHIFTED chord even with shift absent from
     // the mask, so lowercasing without adding shift would name a chord the item can never fire.
+    //
+    // The title must NOT be one AppKit recognises as a standard menu item ("Paste and Match Style" was,
+    // and is why this used to fail): `NSMenu.addItem` rewrites such an item to the system-standard
+    // equivalent, turning ⌥⌘V into ⇧⌘V before the code under test ever sees it — a fixture that
+    // silently stops testing what it says. The rewrite keys off the title alone, not the chord.
     func testUppercaseKeyEquivalentReportsImpliedShift() throws {
-        let file = menu("Edit", [item("Paste and Match Style", key: "V", mods: [.command, .option])])
+        let file = menu("Edit", [item("Vendor Paste Special", key: "V", mods: [.command, .option])])
 
         let found = try XCTUnwrap(ControlServer.collectKeyEquivalents(in: file, menu: "Edit").first)
 
