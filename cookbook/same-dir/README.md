@@ -12,7 +12,7 @@ One key chord syncs your current working directory to the opposite split pane (`
 
 ## Requirements
 
-- agterm 0.10.0 or later.
+- agterm 0.10.0 or later, where custom commands began exporting `AGT_*` environment variables and `tree` gained `splitFocused`, `foreground`, and `splitForeground`.
 - `jq`, for parsing `agtermctl tree --json`.
 - `zsh`, the script's interpreter.
 
