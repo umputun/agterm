@@ -147,12 +147,19 @@ targets:
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
           codesign --force --options runtime --sign - "$dest"
+          # sign every other nested Mach-O too. On a CLEAN build this phase can run BEFORE Xcode
+          # signs them, so the seal below would fail with "code object is not signed at all" on
+          # agterm.debug.dylib; on an incremental build they are already signed and this is a
+          # no-op re-sign. Entitlements are deliberately not passed: a library never carries its
+          # own: the process takes the main executable's.
+          find "$CODESIGNING_FOLDER_PATH/Contents/MacOS" -name '*.dylib' -type f -print0 |
+            xargs -0 -I{} codesign --force --options runtime --sign - {}
           # re-seal the whole app: this phase can run AFTER Xcode's own code-sign on incremental
           # builds, so adding the helper would otherwise break the seal. Deliberately NOT --deep:
-          # --deep re-signs every nested Mach-O with the app's --entitlements, which stamps the
+          # --deep re-signs every nested Mach-O with the app's --entitlements, which stamped the
           # bundled agtermctl -- a standalone CLI the user puts on their PATH -- with every TCC
-          # entitlement the app declares. The helper is signed on its own line above, entitlement-
-          # free, so this seals inside-out exactly as scripts/release.sh does for Developer ID.
+          # entitlement the app declares. Everything nested is signed above, so this seals
+          # inside-out exactly as scripts/release.sh does for Developer ID builds.
           codesign --force --options runtime --entitlements "$SRCROOT/agterm/agterm.entitlements" --sign - "$CODESIGNING_FOLDER_PATH"
     dependencies:
       - framework: GhosttyKit.xcframework
