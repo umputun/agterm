@@ -98,8 +98,10 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   quit-confirm modal. `MultiWindowUITests` survives hard termination only because structural saves
   already persist the open set. Use a temp file, not unreliable `NSLog`, to instrument the callback.
 - Dismiss Settings by the close button of `app.windows.containing(.any, identifier: <a control on the
-  tab>)`, never ⌘W: that reaches the app's Close Session command and takes the seeded session with it,
-  which a session-row-count oracle reads as a collapse rather than as a closed session.
+  tab>)`. ⌘W also closes it and leaves the deck alone (issue #401, pinned by
+  `SettingsUITests.testCommandWClosesTheSettingsWindowNotTheSession`), but only while Settings is KEY —
+  the reopen path above can leave it open and non-key, where ⌘W reaches the terminal window behind it
+  and takes a session with it.
 - `ghostty_surface_foreground_pid` is `tcgetpgrp`, so it returns the foreground process GROUP id. Under a
   job-control shell that leader IS the program; a `--command` pane has no such shell and its leader is
   unreadable setuid-root `login`, which is why the tree read descends to the leader's children and the

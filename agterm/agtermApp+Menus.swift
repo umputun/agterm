@@ -34,6 +34,12 @@ extension agtermApp {
         return KeyboardShortcut(key, modifiers: modifiers)
     }
 
+    /// Whether `close_session` currently holds ⌘W, read live rather than off the deferred menu equivalent.
+    /// `AppDelegate.applyCloseSessionChord` splits the chord on the same condition.
+    private var closeSessionOwnsCommandW: Bool {
+        settingsModel.keymap.equivalent(for: .closeSession) == Chord(mods: [.command], key: "w")
+    }
+
     private func recentTitle(_ item: RecentClosedItem) -> String {
         guard let subtitle = item.subtitle, !subtitle.isEmpty else { return item.title }
         return "\(item.title) - \(subtitle)"
@@ -142,6 +148,18 @@ extension agtermApp {
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {
+                    // an auxiliary key window — Settings, the About panel, an open/save panel — is not part of
+                    // any terminal deck, so ⌘W there keeps its standard meaning and closes THAT window. It can
+                    // only come from here: `applyCloseSessionChord` strips ⌘W off the stock File ▸ Close item
+                    // while close_session owns the chord, so without this rung the keystroke falls through to
+                    // the deck behind the panel and takes a session with it (issue #401). Same predicate as
+                    // `CustomCommandRunner`'s no-surface gate. A nil key window keeps the deck behavior.
+                    // Gated on close_session still holding ⌘W: rebound off it, the stock item takes the chord
+                    // back and an auxiliary window closes itself, so the new chord means only what it says.
+                    if closeSessionOwnsCommandW, let key = NSApp.keyWindow, !WindowRegistry.shared.contains(key) {
+                        key.performClose(nil)
+                        return
+                    }
                     // closeActiveSession dismisses any cover (quick terminal / overlay / scratch) or closes the
                     // active session; only when it handled nothing (no cover, no session) fall back to the window.
                     if !actions.closeActiveSession() { NSApp.keyWindow?.performClose(nil) }

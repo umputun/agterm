@@ -124,6 +124,14 @@ paths:
   does not intercept). Only then close the active session. If no cover or session exists, the menu performs
   window close. Keep the cover check inside `closeActiveSession`, since a sessionless window can still show
   quick terminal.
+- The menu item diverts to a plain `performClose` when the key window is not an agterm terminal window —
+  Settings, the About panel, an open/save panel — because `applyCloseSessionChord` takes ⌘W off the stock
+  File ▸ Close item and nothing else would close them (issue #401). `WindowRegistry.contains` is the
+  predicate, as in `CustomCommandRunner`. A `nil` key window still runs the deck sequence: with every
+  window minimized the equivalent still dispatches, and `performClose` on nothing would make ⌘W silently
+  no-op. The divert is gated on `close_session` still holding ⌘W, the same condition
+  `applyCloseSessionChord` splits on: rebound off it, the stock item takes the chord back and the
+  auxiliary window closes itself, so the new chord keeps its labelled meaning.
 - All active-session close paths use host-free `closeReselectionTarget` (Discussion #147). Prefer the most
   recent survivor in three widening scopes: same workspace intersected with `navigableSessions`, all
   navigable sessions, then the whole tree. Build scopes from the post-removal tree; soft close retains
