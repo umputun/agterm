@@ -148,9 +148,12 @@ targets:
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
           codesign --force --options runtime --sign - "$dest"
           # re-seal the whole app: this phase can run AFTER Xcode's own code-sign on incremental
-          # builds, so adding the helper would otherwise break the seal. --deep re-signs every nested
-          # Mach-O too (the Debug agterm.debug.dylib, the helper).
-          codesign --force --deep --options runtime --entitlements "$SRCROOT/agterm/agterm.entitlements" --sign - "$CODESIGNING_FOLDER_PATH"
+          # builds, so adding the helper would otherwise break the seal. Deliberately NOT --deep:
+          # --deep re-signs every nested Mach-O with the app's --entitlements, which stamps the
+          # bundled agtermctl -- a standalone CLI the user puts on their PATH -- with every TCC
+          # entitlement the app declares. The helper is signed on its own line above, entitlement-
+          # free, so this seals inside-out exactly as scripts/release.sh does for Developer ID.
+          codesign --force --options runtime --entitlements "$SRCROOT/agterm/agterm.entitlements" --sign - "$CODESIGNING_FOLDER_PATH"
     dependencies:
       - framework: GhosttyKit.xcframework
         embed: false
