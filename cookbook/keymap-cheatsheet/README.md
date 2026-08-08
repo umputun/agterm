@@ -20,7 +20,7 @@ With no model available, or with drafting turned off, the sheet still opens and 
 > Bound but not documented: cmd+ctrl+m, cmd+ctrl+shift+m
 ```
 
-With no sheet at all, the first run writes one from your bound chords, as a table of chord and action name to rewrite.
+With no sheet at all, the first run writes the whole thing: every bound chord, described and grouped into sections by the model, in about fifteen seconds behind the progress panel. That is the one time it writes a whole file, because there is nothing to preserve yet. Every run after it only ever appends. With no model available the first sheet is a plain table of chord and action name instead.
 
 ## Requirements
 
@@ -49,7 +49,7 @@ command "Cheat sheet"  cmd+ctrl+shift+/  ~/.local/bin/agterm-cheatsheet/keymap-c
 
 Pick a chord that is free in your own keymap. A custom command cannot shadow a built-in, so one that collides is quietly demoted to palette-only and the chord appears to do nothing. On 0.19.0 and later `agtermctl keymap list` shows what every chord resolved to. Either way the command is reachable by name from the action palette, which is the quickest way to tell a bad chord from a broken script.
 
-Press it once. With no sheet at `~/.config/agterm/SHORTCUTS.md` the first run writes one and shows it, so the overlay comes up with your real chords in it. Then edit that file into something worth reading.
+Press it once. With no sheet at `~/.config/agterm/SHORTCUTS.md` the first press writes one and shows it, so the overlay comes up with your real chords already described. Then edit it into something worth reading — it is yours from that moment and nothing regenerates it.
 
 Settings, read from the environment. Put them in front of the script in the keymap line, or change the defaults at the top of the scripts — a keymap change needs a reload before it takes effect, an edit to a script does not:
 
@@ -79,6 +79,8 @@ The gate is two stages, because a press that needs nothing has to cost nothing:
 2. Changed, so compare the chord sets. Every chord bound in `keymap.conf` has to appear somewhere in the sheet. Nothing missing — a comment edit, a chord you already documented — and the stamp moves forward with no model call.
 
 Only a chord the sheet has never mentioned reaches the model. It gets the keymap lines themselves, not just the chords, so it can read the action name and the script path. It answers against a JSON schema, and the rows are appended under a `## Recently bound, drafted` heading at the end of the sheet.
+
+The first run is the exception: every binding goes in one call, and the schema asks for a section per row as well as a description, so the sheet arrives grouped rather than as one long table. A long answer can quietly come back one row short, so any chord the model skipped is added afterwards with the label the mechanical starter would have used.
 
 Appending, rather than inserting into the right section, is deliberate. Cheat sheets are hand-arranged: the one this was written for pairs two related chords per row across four columns. A generic inserter aiming for the right table would eventually corrupt the thing it is trying to keep current. A holding section at the end is a worse-looking sheet and a safe one.
 

@@ -85,6 +85,33 @@ SCHEMA = json.dumps({
     "required": ["rows"],
 })
 
+SHEET_PROMPT = (
+    "You write the first draft of someone's keyboard cheat sheet for a terminal. For each"
+    " binding you are given, say what pressing it does, from the point of view of someone"
+    " reaching for it: at most 12 words, no trailing period, no chord repeated back, no"
+    " marketing. Read the action name and any script path for what the binding actually"
+    " does, and say plainly when you cannot tell — 'runs <script name>' beats an invention."
+    " Also put each binding in a section, so related chords sit together: a handful of short"
+    " section names in plain English, reused exactly across the rows that belong together,"
+    " ordered from what someone reaches for most often to what they reach for least."
+)
+
+SHEET_SCHEMA = json.dumps({
+    "type": "object",
+    "properties": {
+        "rows": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"chord": {"type": "string"}, "section": {"type": "string"},
+                               "does": {"type": "string"}},
+                "required": ["chord", "section", "does"],
+            },
+        }
+    },
+    "required": ["rows"],
+})
+
 # `map <chord> <action>`, and `command "<name>" [chord] <shell...>` where the chord is
 # optional: a command with no chord is palette-only and has none to document. Requiring
 # a modifier prefix is what tells the two apart, since the shell word that follows a
@@ -109,6 +136,14 @@ why you reach for the chord.
 |---|---|
 """
 
+GENERATED_HEAD = """# Keyboard shortcuts
+
+Written from `keymap.conf` on the first run, by a model reading each binding. Treat it as a
+draft in someone else's words: it knows what a chord does and it cannot know why you bound
+it. Rewrite as you go, and it will never be regenerated over you.
+
+"""
+
 
 def bindings(keymap):
     """Chord and label for every chord-carrying binding, `map` lines first."""
@@ -117,9 +152,32 @@ def bindings(keymap):
     return pairs
 
 
+def chord_md(chord):
+    """A chord as markdown code. The one whose key is a backtick needs the other fence."""
+    return f"``{chord} ``" if "`" in chord else f"`{chord}`"
+
+
 def starter(pairs):
-    rows = "".join(f"| `{chord}` | {label} |\n" for chord, label in pairs)
+    rows = "".join(f"| {chord_md(chord)} | {label} |\n" for chord, label in pairs)
     return STARTER_HEAD + rows
+
+
+def generated(rows):
+    """A first sheet from the model's rows, grouped under the sections it chose."""
+    order, grouped = [], {}
+    for row in rows:
+        section = row.get("section") or "Shortcuts"
+        if section not in grouped:
+            order.append(section)
+            grouped[section] = []
+        grouped[section].append(row)
+    out = [GENERATED_HEAD]
+    for section in order:
+        out.append(f"## {section}\n\n| chord | does |\n|---|---|\n")
+        for row in grouped[section]:
+            out.append(f"| {chord_md(row['chord'])} | {cell(row['does'])} |\n")
+        out.append("\n")
+    return "".join(out)
 
 
 def documented(chord, flat):
@@ -247,11 +305,16 @@ class Hud:
             self.up = False
 
 
-def draft(lines, chords, hud):
-    """Ask the model for one row per binding. None on any failure, so the sheet still opens."""
+def draft(lines, chords, hud, whole_sheet=False):
+    """Ask the model for one row per binding. None on any failure, so the sheet still opens.
+
+    `whole_sheet` is the first run, where there is nothing to preserve: every binding is sent
+    at once and the model groups them into sections as well as describing them.
+    """
     if not CLAUDE_BIN:
         return None
     wanted = set(chords)
+    prompt, schema = (SHEET_PROMPT, SHEET_SCHEMA) if whole_sheet else (SYSTEM_PROMPT, SCHEMA)
     body = "Document these agterm keybindings:\n\n" + "\n".join(lines)
 
     # Output goes to a temp file rather than a pipe. Nothing reads a pipe until the poll
@@ -264,8 +327,8 @@ def draft(lines, chords, hud):
                  # No tools, and no hooks: a SessionStart hook that prints anything lands in
                  # this output, and a headless one-shot has no use for either.
                  "--tools", "", "--settings", '{"hooks":{}}',
-                 "--output-format", "json", "--system-prompt", SYSTEM_PROMPT,
-                 "--json-schema", SCHEMA, body],
+                 "--output-format", "json", "--system-prompt", prompt,
+                 "--json-schema", schema, body],
                 stdout=out, stderr=subprocess.DEVNULL, text=True,
                 env={**os.environ, "MAX_THINKING_TOKENS": "0"})
         except (OSError, subprocess.SubprocessError):
@@ -277,8 +340,9 @@ def draft(lines, chords, hud):
             if elapsed > TIMEOUT:
                 proc.kill()
                 return None
+            what = "writing the sheet" if whole_sheet else "drafting"
             plural = "" if len(lines) == 1 else "s"
-            hud.show(f"drafting {len(lines)} new chord{plural} · {elapsed}s")
+            hud.show(f"{what}, {len(lines)} chord{plural} · {elapsed}s")
             time.sleep(0.7)
 
         try:
@@ -314,7 +378,7 @@ def append_rows(sheet, rows):
     chords per row across four columns — so a generic inserter aiming for the right
     section would corrupt the thing it is trying to keep current.
     """
-    body = "".join(f"| `{cell(r['chord'])}` | {cell(r['does'])} |\n" for r in rows)
+    body = "".join(f"| {chord_md(r['chord'])} | {cell(r['does'])} |\n" for r in rows)
     if DRAFT_HEADING in sheet:
         return sheet.rstrip("\n") + "\n" + body
     return (sheet.rstrip("\n") + "\n\n" + DRAFT_HEADING + "\n\n" + DRAFT_INTRO
@@ -339,6 +403,32 @@ def snapshot(keymap):
     write(BINDINGS, json.dumps(binding_lines(keymap), sort_keys=True, indent=1))
 
 
+def first_sheet(keymap, pairs):
+    """The sheet a machine with none gets: the model's, or the mechanical table if it fails.
+
+    Nothing is being preserved here, so this is the one place the model writes the whole
+    file. Every later run only ever appends.
+    """
+    chords = [chord for chord, _ in pairs]
+    if not DRAFT or not chords:
+        return starter(pairs)
+    hud = Hud()
+    try:
+        rows = draft(source_lines(keymap, chords), chords, hud, whole_sheet=True)
+    finally:
+        hud.close()
+    if not rows:
+        return starter(pairs)
+
+    # A 41-row answer can quietly come back with 40. The drift banner would catch it on the
+    # next press, but an incomplete first sheet is a poor first impression when the missing
+    # rows can simply be added with the label the mechanical starter would have used.
+    described = {row["chord"] for row in rows}
+    rows += [{"chord": chord, "section": "Also bound", "does": label}
+             for chord, label in pairs if chord not in described]
+    return generated(rows)
+
+
 def sync(keymap):
     """The maintenance pass: draft rows for chords the sheet has never heard of."""
     # Seeding happens BEFORE the gate. On an existing install the stamp is already current,
@@ -353,7 +443,7 @@ def sync(keymap):
 
     pairs = bindings(keymap)
     if not SHEET.exists():
-        write(SHEET, starter(pairs))
+        write(SHEET, first_sheet(keymap, pairs))
         write(STAMP, mtime)
         snapshot(keymap)
         return
