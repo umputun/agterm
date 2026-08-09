@@ -48,9 +48,8 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     /// Animated to match the disclosure triangle; `.claude/rules/sidebar.md` owns why, why it is not gated on
-    /// Reduce Motion, and which sites stay unanimated. The proxy flips expansion and fires
-    /// didExpand/didCollapse synchronously, so the persist write-back is unaffected and the
-    /// `suppressExpansionPersist` bracketing the other sites wrap their calls in still holds.
+    /// Reduce Motion, and which sites stay unanimated. The proxy fires didExpand/didCollapse synchronously, so
+    /// the persist write-back still runs and the other sites' `suppressExpansionPersist` brackets still hold.
     private func toggleExpansion(of node: SidebarNode, in outline: NSOutlineView) {
         let proxy = outline.animator()
         if outline.isItemExpanded(node) { proxy.collapseItem(node) } else { proxy.expandItem(node) }
