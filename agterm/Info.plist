@@ -62,6 +62,8 @@
 	<string>Command-line tools you run inside agterm request access to your reminders through agterm.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Command-line tools you run inside agterm request speech recognition through agterm.</string>
+	<key>NSSystemAdministrationUsageDescription</key>
+	<string>Command-line tools you run inside agterm (for example, dscl editing a directory record) request permission to change system configuration through agterm.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
