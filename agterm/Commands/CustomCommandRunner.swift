@@ -91,9 +91,10 @@ final class CustomCommandRunner {
         return handleKeyDown(event, in: keyWindow)
     }
 
-    /// The half above the key-window lookup, so a test can supply the window: a hosted test's own window
-    /// never becomes `NSApp.keyWindow` (the app is not active), which would make every guard here pass
-    /// vacuously. Internal for that reason alone, like `ControlServer.collectKeyEquivalents`.
+    /// Everything after the key-window lookup, split out so a test can supply the window: a hosted test's
+    /// own window never becomes `NSApp.keyWindow` (the app is not active), so `handleKeyDown(_:)` returns at
+    /// that guard and none of this runs. Internal for that reason alone, like
+    /// `ControlServer.collectKeyEquivalents`.
     func handleKeyDown(_ event: NSEvent, in keyWindow: NSWindow) -> Bool {
         guard !event.isARepeat else { return false }
         let responder = keyWindow.firstResponder
