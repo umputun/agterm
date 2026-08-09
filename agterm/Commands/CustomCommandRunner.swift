@@ -78,14 +78,14 @@ final class CustomCommandRunner {
     private static let escapeKeyCode: UInt16 = 53
 
     /// Feed one key event to the matcher; returns whether it was consumed (so the caller drops it). Esc while
-    /// armed resets, `.fired` runs, `.armed` arms the leader timer — all consumed; `.unmatched` passes through.
+    /// armed resets, `.fired` runs, `.armed` arms the leader timer, and `toggle_fullscreen`'s chord toggles
+    /// full screen without reaching the matcher at all — all consumed; `.unmatched` passes through.
     ///
     /// Acts when the key window's first responder is a terminal surface (context from that surface), or when
     /// the key window is an agterm terminal window whose focus is NOT on a text field — including one emptied
     /// to zero sessions. Passes through for a focused text field (Settings editor, inline rename, palette
     /// search) so a bound chord never eats those keystrokes, and for an auxiliary window focused off a text
     /// field. A key repeat is ignored, so a held-down shortcut spawns one process, not one per OS repeat.
-    ///
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard let keyWindow = NSApp.keyWindow else { return false }
         return handleKeyDown(event, in: keyWindow)

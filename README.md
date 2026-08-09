@@ -474,7 +474,7 @@ Open the file in your editor with **File ▸ Edit Keymap…** or the ⌃⇧P pal
 
 After editing the file, apply it with **File ▸ Reload Keymap**, the action palette (⌃⇧P → "Reload Keymap"), or `agtermctl keymap reload`. A malformed line never discards the rest of the file — it surfaces in the diagnostics list in Settings ▸ Key Mapping (and `keymap.reload` returns the diagnostic count) while the good lines still apply.
 
-To check what is actually bound, `agtermctl keymap list` prints every built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is usually a menu problem, not a keymap one. The one deliberate exception is `undo_close` (⌘Z), which is delivered by a key monitor rather than a menu item so it never appears under the menu list.
+To check what is actually bound, `agtermctl keymap list` prints every built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is usually a menu problem, not a keymap one. Two deliberate exceptions never appear under the menu list, because a key monitor delivers them rather than a menu item: `undo_close` (⌘Z) and `toggle_fullscreen` (⌃⌘F).
 
 v1 limitations:
 

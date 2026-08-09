@@ -757,7 +757,9 @@ final class AppActions {
     }
 
     /// Toggle native macOS full screen for the key window: the green traffic-light behavior, moving the window
-    /// to its own Space; a second invocation exits. Shared by ⌃⌘F, the palette, `toggle_fullscreen`, `window.fullscreen`.
+    /// to its own Space; a second invocation exits. The palette's entry alone — `toggle_fullscreen`'s chord
+    /// calls `NSWindow.toggleFullScreen` from the key monitor and `window.fullscreen` through
+    /// `WindowRegistry`, so neither routes here.
     func toggleFullscreen() { NSApp.keyWindow?.toggleFullScreen(nil) }
 
     // MARK: - Font (on the focused terminal)

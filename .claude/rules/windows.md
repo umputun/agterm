@@ -98,9 +98,9 @@ session drag are out of scope.
   `AppleActionOnDoubleClick`: Zoom/Fill zooms, Minimize miniaturizes, Do Nothing does nothing, and an absent
   key defaults to Zoom. `AGTERM_UITEST_DOUBLECLICK_ACTION` overrides via environment because launch
   arguments hit FB11763863. Decorative titlebar regions disable hit testing; buttons remain above them.
-- `window.fullscreen` uses `toggleFullScreen`, a distinct native Space. GUI surfaces are View > Toggle Full
-  Screen, palette, `BuiltinAction.toggleFullscreen` with Ctrl-Command-F, and the green button. Control
-  resolves an open ID; read back the `.fullScreen` style mask.
+- `window.fullscreen` uses `toggleFullScreen`, a distinct native Space. GUI surfaces are the palette,
+  `BuiltinAction.toggleFullscreen` with Ctrl-Command-F through the key monitor, AppKit's own injected
+  View menu item, and the green button. Control resolves an open ID; read back the `.fullScreen` style mask.
 - agterm ships NO full screen menu item. AppKit appends its own "Enter Full Screen" (`toggleFullScreen:`,
   Globe+F) to the View menu as it is prepared for display, so any item of agterm's own is a visible
   duplicate. All of these were measured and none suppresses it: removing the injected item on

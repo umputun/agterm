@@ -1983,9 +1983,10 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
               built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu
               bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
-              usually a menu problem, not a keymap one. The one deliberate exception is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z), delivered by a
-              key monitor rather than a menu item, so it never appears in the menu list.
+              usually a menu problem, not a keymap one. Two deliberate exceptions never appear in the menu list, because a key
+              monitor delivers them rather than a menu item:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z) and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F).
             </p>
             <h3
               style="

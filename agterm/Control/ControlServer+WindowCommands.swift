@@ -138,7 +138,7 @@ extension ControlServer {
     }
 
     /// Toggle native macOS full screen on the resolved window; a closed one errors. The control half of
-    /// View ▸ Toggle Full Screen / the green traffic-light button.
+    /// ⌃⌘F, AppKit's own View ▸ Enter/Exit Full Screen item, and the green traffic-light button.
     func windowFullscreen(_ target: String?) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.fullscreen(id) else {

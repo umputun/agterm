@@ -19,8 +19,8 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   key equivalents the menu bar is actually dispatching. If the action's `chord` looks right but no `menu`
   entry carries it (or a different item does), the keymap is fine and the menu is the problem: SwiftUI
   rebuilds the menu only on the next app activation, so switch to another app and back, then relaunch if it
-  persists. Exception: `undo_close` (⌘Z) is delivered by a key monitor rather than a menu item, so it never
-  appears under `menu` and its absence there means nothing.
+  persists. Exceptions: `undo_close` (⌘Z) and `toggle_fullscreen` (⌃⌘F) are delivered by a key monitor
+  rather than a menu item, so they never appear under `menu` and their absence there means nothing.
 - **Ghostty settings** - `agtermctl config reload` re-reads the ghostty config and prints the diagnostic
   count (`0` = clean). The count covers every config source, not just `ghostty.conf` (libghostty does not
   record which file a diagnostic came from), so check the Console log for the offending line. `ghostty.conf`

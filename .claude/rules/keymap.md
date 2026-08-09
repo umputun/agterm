@@ -63,8 +63,10 @@ paths:
   disjoint without relying on dispatch order. Standard menu items such as ⌘Q/⌘C/⌘, remain AppKit's
   responsibility.
 - `BuiltinAction.defaultChord` is the sole built-in default. Every menu item resolves
-  override-or-default, including the six arrow actions. `undo_close` is the one keyed action delivered
-  by `UndoCloseShortcut`, not a menu equivalent, so native text undo still works.
+  override-or-default, including the six arrow actions. Two keyed actions are delivered by a monitor
+  rather than a menu equivalent: `undo_close` through `UndoCloseShortcut`, so native text undo still
+  works, and `toggle_fullscreen` through `CustomCommandRunner`, because agterm ships no full screen menu
+  item for it to ride — see [[windows]]. Both are absent from `keymap list`'s `menu` by design.
 - Write shifted symbols as `shift+<base>`: `shift+/` for `?`, `shift+=` for `+`, `shift+5` for `%`, and
   `shift+.` for `>`. `CustomCommandRunner` uses `characters(byApplyingModifiers: [])` to recover that
   base; keep `KeymapUITests.testCustomCommandShiftedSymbolFires`.

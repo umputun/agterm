@@ -15,6 +15,7 @@ final class FullScreenChordTests: XCTestCase {
     private var library: WindowLibrary!
     private var runner: CustomCommandRunner!
     private var window: RecordingWindow!
+    private var windowID: WindowInfo.ID!
 
     /// Records `toggleFullScreen` instead of performing it: the real call opens a Space and animates, which
     /// a unit test must not do to the machine running it.
@@ -38,12 +39,16 @@ final class FullScreenChordTests: XCTestCase {
                                      styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             // the monitor fires only for an agterm terminal window, which the registry is what decides.
-            WindowRegistry.shared.register(UUID(), window: window)
+            // `WindowRegistry.shared` is process-global, so the id is retained for tearDown to unregister.
+            windowID = UUID()
+            WindowRegistry.shared.register(windowID, window: window)
         }
     }
 
     override func tearDown() async throws {
         await MainActor.run {
+            WindowRegistry.shared.unregister(windowID)
+            windowID = nil
             window.orderOut(nil)
             window = nil
             runner = nil
@@ -85,6 +90,28 @@ final class FullScreenChordTests: XCTestCase {
         XCTAssertTrue(window.makeFirstResponder(text), "the text view should take first responder")
         XCTAssertFalse(runner.handleKeyDown(controlCommandF, in: window))
         XCTAssertEqual(window.toggleCount, 0)
+    }
+
+    // The other side of the `!commandEngine.isArmed` guard: a half-typed leader outranks the built-in, so
+    // ctrl+a then ⌃⌘F must fire the custom command rather than toggle full screen. Seeded through a real
+    // keymap.conf in an isolated config directory, since the matcher is built from the parsed keymap.
+    func testHalfTypedLeaderOutranksTheFullScreenChord() throws {
+        let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        let marker = stateDir.appendingPathComponent("leader-fired")
+        try "command \"Leader\" ctrl+a>ctrl+cmd+f touch \(marker.path)\n"
+            .write(to: ConfigPaths.keymapPath(configDirectory: configDir), atomically: true, encoding: .utf8)
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        settings.setConfigDirectory(configDir.path)
+        let leaderRunner = CustomCommandRunner(library: library, settings: settings, socketProvider: { "" })
+        leaderRunner.start()
+        defer { leaderRunner.stop() }
+
+        let leader = keyDown("a", keyCode: 0, mods: [.control])
+        XCTAssertTrue(leaderRunner.handleKeyDown(leader, in: window), "ctrl+a should arm the leader")
+        XCTAssertTrue(leaderRunner.handleKeyDown(controlCommandF, in: window),
+                      "the second chord completes the sequence and is consumed")
+        XCTAssertEqual(window.toggleCount, 0, "an armed leader must outrank the full screen chord")
     }
 
     func testKeyRepeatDoesNotToggleTwice() throws {
