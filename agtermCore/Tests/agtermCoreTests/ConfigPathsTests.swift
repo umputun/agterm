@@ -93,12 +93,16 @@ struct ConfigPathsTests {
         }
         // an example silently dropped from the guard must fail here: two `map` lines and three `command`.
         #expect(examples.count == 5)
+        var bound = 0
         for example in examples {
             let (keymap, diagnostics) = parseKeymap(example)
             #expect(diagnostics.isEmpty, "starter example '\(example)' is skipped: \(diagnostics.map(\.message))")
-            #expect(keymap.builtinOverrides.count + keymap.commands.count == 1,
-                    "starter example '\(example)' bound nothing")
+            // an unparseable command chord is absorbed as shell text without a diagnostic, so count the
+            // shortcuts that survived rather than the commands that parsed.
+            bound += keymap.builtinOverrides.count + keymap.commands.filter { !$0.shortcut.isEmpty }.count
         }
+        // both `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
+        #expect(bound == 4)
     }
 
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {
