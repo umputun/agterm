@@ -18,7 +18,7 @@ with ordinary clicking:
   shifts every row below.
 
 Both are worse than they look because a workspace row is not selectable
-(`WorkspaceSidebar+RowRendering.swift:14-17` returns `shouldSelectItem` only for sessions), so the whole
+(`WorkspaceSidebar+RowRendering.swift:15-18` returns `shouldSelectItem` only for sessions), so the whole
 deferral window carries no feedback at all - no pill, no press state, no disclosure movement. The click
 reads as dropped either way.
 
@@ -28,6 +28,6 @@ move workspace rename off double-click - and either would settle these two as a 
 patching them in isolation (per-node pending toggles, or hoisting the cancel above the guards) preserves
 a half-second of silent latency that is itself the complaint.
 
-Worth weighing that workspace rename already has five other entry points - the row context menu, the
-Workspace menu, the `rename_workspace` built-in, the command palette, and `workspace.rename` - so the
-deferral protects a sixth path to something already well covered.
+Worth weighing that workspace rename already has five other entry points - the row context menu, the File
+menu's Workspace section, the `rename_workspace` built-in, the command palette, and `workspace.rename` -
+so the deferral protects a sixth path to something already well covered.
