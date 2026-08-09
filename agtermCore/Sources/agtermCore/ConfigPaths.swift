@@ -39,17 +39,18 @@ public enum ConfigPaths {
         return """
         # agterm keymap — a kitty-flavored config for rebinding built-in shortcuts and defining
         # custom shell commands. Edit this file and run File ▸ Reload Keymap (or `agtermctl keymap
-        # reload`) to apply. Blank lines and lines starting with `#` are ignored.
+        # reload`) to apply. Blank lines and lines starting with `#` are ignored. A line that is
+        # rejected or skipped is reported in Settings ▸ Key Mapping and by `agtermctl keymap list`.
         #
         # Two verbs:
         #
         #   map <chord> <action>
         #       Rebind a built-in action to a single chord (no leader sequences for built-ins).
-        #       Chords use kitty syntax: mods joined by `+`, e.g. `cmd+shift+d`, `ctrl+\\``.
+        #       Chords use kitty syntax: mods joined by `+`, e.g. `cmd+shift+l`, `ctrl+\\``.
         #       Mods: ctrl, cmd, opt, shift. A Shift-typed symbol is shift+<base key>
         #       (shift+/ for ?, shift+= for +, shift+5 for %). Example:
         #
-        #           map cmd+shift+d  toggle_split
+        #           map cmd+shift+l  toggle_split
         #
         #   command "<name>" [chord] <shell...>
         #       Define a custom command, shown in the action palette marked `custom`. The quoted
@@ -86,7 +87,7 @@ public enum ConfigPaths {
         # environment variable, QUOTED, e.g. "$AGT_SELECTION".
         #
         # Uncomment and edit a line below to start.
-        # map cmd+shift+d toggle_split
+        # map cmd+shift+l toggle_split
 
         """
     }

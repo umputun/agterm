@@ -80,6 +80,23 @@ struct ConfigPathsTests {
         #expect(parsed.diagnostics.isEmpty)
     }
 
+    // issue #405: the shipped example was `map cmd+shift+d toggle_split`, a chord `dashboard` later took,
+    // so uncommenting the starter's own suggestion silently bound nothing.
+    @Test func starterKeymapMapExamplesApplyWhenUncommented() {
+        let examples = ConfigPaths.starterKeymapConf().split(separator: "\n").compactMap { line -> String? in
+            let text = line.drop { $0 == "#" || $0 == " " }
+            // `<` skips the `map <chord> <action>` syntax line, which is a grammar, not an example.
+            guard text.hasPrefix("map "), !text.contains("<") else { return nil }
+            return String(text)
+        }
+        #expect(!examples.isEmpty)
+        for example in examples {
+            let (keymap, diagnostics) = parseKeymap(example)
+            #expect(diagnostics.isEmpty, "starter example '\(example)' is skipped: \(diagnostics.map(\.message))")
+            #expect(keymap.builtinOverrides.count == 1, "starter example '\(example)' bound nothing")
+        }
+    }
+
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {
         let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
         #expect(ConfigPaths.ghosttyConfigPath(configDirectory: dir).path == "/Users/test/.config/agterm/ghostty.conf")
