@@ -27,6 +27,7 @@ final class ControlServerTests: XCTestCase {
             for server in servers { server.stop() }
             servers.removeAll()
             unlink(socketPath)
+            unlink(socketPath + ".lock")
             try? FileManager.default.removeItem(at: stateDir)
         }
         try await super.tearDown()
@@ -57,6 +58,62 @@ final class ControlServerTests: XCTestCase {
         XCTAssertNil(second.boundSocketPath, "the second server should refuse rather than displace the first")
         XCTAssertEqual(first.boundSocketPath, socketPath, "the first server should still hold the path")
         XCTAssertTrue(connects(to: socketPath), "the first server should still be reachable through the path")
+    }
+
+    /// The refusal is only half the guard: `stop()` returning early on the refused instance is what stops
+    /// it unlinking the owner's socket on quit, which is the second half of the original orphaning.
+    func testARefusedServerStopDoesNotUnlinkTheOwnersSocket() {
+        let first = makeServer()
+        first.start()
+
+        let second = makeServer()
+        second.start()
+        second.stop()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: socketPath),
+                      "the refused server's stop should leave the owner's socket node in place")
+        XCTAssertEqual(first.boundSocketPath, socketPath)
+        XCTAssertTrue(connects(to: socketPath), "the owner should still be reachable after the refusal quits")
+    }
+
+    /// A refused instance must not advertise a path it does not serve: every shell it spawns would carry
+    /// the OTHER instance's socket in `AGTERM_SOCKET` and drive that app instead.
+    func testARefusedServerAdvertisesNoSocketPath() {
+        let first = makeServer()
+        first.start()
+        XCTAssertEqual(first.resolvedSocketPath, socketPath, "the owner should advertise its path")
+
+        let second = makeServer()
+        XCTAssertEqual(second.resolvedSocketPath, socketPath,
+                       "before start, surfaces materializing early still take the path")
+
+        second.start()
+        XCTAssertNil(second.resolvedSocketPath, "a refused server should advertise nothing")
+    }
+
+    /// A live owner whose backlog is saturated answers `connect` with the same ECONNREFUSED a dead socket
+    /// node returns, so ownership cannot rest on a connect probe. Fill the backlog and quit accepting.
+    func testStartRefusesAnOwnerWhoseBacklogIsSaturated() {
+        let first = makeServer()
+        first.start()
+        XCTAssertNotNil(first.boundSocketPath)
+
+        // the first connection is accepted and parks the serial loop in a read that only times out after
+        // ControlServer.readTimeoutSeconds, so everything after it queues until the backlog is full.
+        var clients: [Int32] = []
+        defer { for fd in clients { close(fd) } }
+        for _ in 0..<24 {
+            let fd = connectFD(to: socketPath)
+            if fd < 0 { break }
+            clients.append(fd)
+        }
+        XCTAssertFalse(connects(to: socketPath), "the fixture should have saturated the listen backlog")
+
+        let second = makeServer()
+        second.start()
+
+        XCTAssertNil(second.boundSocketPath, "a saturated owner is still an owner")
+        XCTAssertEqual(first.boundSocketPath, socketPath)
     }
 
     func testStartBindsOverAForceQuitLeftover() {
@@ -99,15 +156,24 @@ final class ControlServerTests: XCTestCase {
     }
 
     private func connects(to path: String) -> Bool {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = connectFD(to: path)
         guard fd >= 0 else { return false }
-        defer { close(fd) }
+        close(fd)
+        return true
+    }
+
+    /// A connected fd the caller keeps open, or -1. Holding them is what saturates the listen backlog.
+    private func connectFD(to path: String) -> Int32 {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return -1 }
         var addr = address(for: path)
-        return withUnsafePointer(to: &addr) { ptr in
+        let ok = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
                 connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0
             }
         }
+        if !ok { close(fd); return -1 }
+        return fd
     }
 
     private func bindListener(_ fd: Int32, at path: String) -> Bool {

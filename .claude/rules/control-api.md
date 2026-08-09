@@ -76,11 +76,20 @@ paths:
   Support. CLI `--socket` overrides. Explicit short paths avoid Unix `sun_path` near 104 bytes. Use 0600.
 - Each connection sets `SO_NOSIGPIPE` and a 5-second receive timeout. Close on non-EINTR read failure,
   including EAGAIN. Start is idempotent and logs bind failure without blocking launch.
-- Start probes the path with a non-blocking `connect` before unlinking it, and refuses to bind when one
-  succeeds. Nothing on disk distinguishes a live socket from a force-quit leftover, and unlinking a live
-  one strands its owner: that instance keeps its listening fd, never learns, and only a restart recovers
-  it. `ENOENT`, `ECONNREFUSED` and a non-socket file are the stale cases; `EAGAIN` is a full backlog,
-  which means live. Non-blocking because a blocking `connect` against that backlog would stall launch.
+- Start takes an exclusive non-blocking `flock` on `<socketPath>.lock` before unlinking anything, and
+  refuses to bind while another process holds it. Nothing on disk distinguishes a live socket from a
+  force-quit leftover, and unlinking a live one strands its owner: it keeps its listening fd, never
+  learns, and only a restart recovers it. Do NOT probe with `connect` instead — on Darwin a live listener
+  whose backlog is full refuses with the same `ECONNREFUSED` a socket nobody listens on returns, so one
+  stalled client parking the serial accept loop would make a running instance read as stale. `flock` is
+  also atomic against two instances launching together, and the kernel drops it on a force-quit, which is
+  the case the unlink covers. Never unlink the lock file: the next instance would lock a fresh inode and
+  exclude nobody.
+- A refused instance reports `resolvedSocketPath` nil, and the surface factories then OMIT `AGTERM_SOCKET`
+  rather than emitting the resolved default, which would point every shell it spawns at the other
+  instance — the user's live terminal, where shared state makes persisted session ids resolve too.
+  `{AGT_SOCKET}` takes an empty string there, so a custom command fails to connect instead. Its `stop()`
+  returns early without unlinking, leaving the owner's socket intact when the refused instance quits.
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
   return structured errors. Mutations may return `result.id`; trees use `result.tree`.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses

@@ -64,7 +64,10 @@ struct agtermApp: App {
         // built last: needs the keymap (settings) and the control server's bound socket path for `{AGT_SOCKET}`.
         _customCommandRunner = State(initialValue: CustomCommandRunner(
             library: library, settings: settingsModel,
-            socketProvider: { controlServer.resolvedSocketPath }))
+            // empty when this instance refused the path: `--socket ""` fails to connect, which is the
+            // right outcome. Passing the resolved default instead would run the command against the
+            // OTHER instance, which is the user's live terminal.
+            socketProvider: { controlServer.resolvedSocketPath ?? "" }))
         // follows macOS light/dark via KVO on NSApp.effectiveAppearance; dependency-free, started in `.task`.
         _appearanceObserver = State(initialValue: SystemAppearanceObserver())
         // follows Reduce Motion / Reduce Transparency via NSWorkspace's accessibility-display notification,
@@ -532,7 +535,8 @@ struct agtermApp: App {
     /// session facts plus agterm's identity (`TERM_PROGRAM`/`TERM_PROGRAM_VERSION`). The window id comes from the
     /// open store owning the session (split/overlay/scratch inherit it), the workspace from the session's owner.
     /// `AGTERM_SOCKET` is the path `ControlServer` will bind, resolved at init so a launch-window shell
-    /// materializing before `start()` still sees it, honoring a test's `AGTERM_CONTROL_SOCKET` override. `pane`
+    /// materializing before `start()` still sees it, honoring a test's `AGTERM_CONTROL_SOCKET` override, and
+    /// OMITTED when this instance refused the path to another live one (`resolvedSocketPath` nil). `pane`
     /// injects `AGTERM_PANE` (`left`=main, `right`=split, `scratch`) so the hook wrapper forwards `--pane` and a
     /// background-pane status records which surface blocked; the overlay passes nil.
     @MainActor

@@ -186,4 +186,31 @@ struct SurfaceEnvironmentTests {
 
         #expect(env["AGTERM_SOCKET"] == "")
     }
+
+    /// an absent socket must leave the variable UNSET rather than empty: an empty one would let
+    /// `agtermctl`'s own resolution fall through to the default path, which is another instance's.
+    @Test func nilSocketPathOmitsTheVariableEntirely() {
+        let sessionID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+        let windowID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+
+        let sessionEnv = SurfaceEnvironment.session(
+            sessionID: sessionID,
+            windowID: nil,
+            workspaceID: nil,
+            socketPath: nil,
+            programVersion: "0.12.0"
+        )
+        let quickEnv = SurfaceEnvironment.quickTerminal(
+            windowID: windowID,
+            socketPath: nil,
+            programVersion: "0.12.0"
+        )
+
+        #expect(sessionEnv["AGTERM_SOCKET"] == nil)
+        #expect(sessionEnv.keys.contains("AGTERM_SOCKET") == false)
+        #expect(sessionEnv["AGTERM_SESSION_ID"] == "11111111-1111-1111-1111-111111111111")
+        #expect(quickEnv["AGTERM_SOCKET"] == nil)
+        #expect(quickEnv.keys.contains("AGTERM_SOCKET") == false)
+        #expect(quickEnv["AGTERM_WINDOW_ID"] == "22222222-2222-2222-2222-222222222222")
+    }
 }

@@ -9,14 +9,18 @@ public enum SurfaceEnvironment {
     /// when non-empty, adds `AGTERM_PANE_ID` — the surface's STABLE spawn identity
     /// (`TerminalSurface.paneToken`), which the hook forwards as `--pane-id` so the status handler resolves
     /// the LIVE role instead of the stale baked `AGTERM_PANE` after a promote + re-split (#199).
+    /// A nil `socketPath` OMITS `AGTERM_SOCKET` rather than emitting an empty one: this instance is not
+    /// serving a socket, and the resolved default would reach a different app's.
     public static func session(sessionID: UUID, windowID: UUID?, workspaceID: UUID?,
-                               socketPath: String, programVersion: String,
+                               socketPath: String?, programVersion: String,
                                pane: StatusPane? = nil, paneToken: String? = nil) -> [String: String] {
         var env = terminalIdentity(programVersion: programVersion).merging([
             "AGTERM_ENABLED": "1",
             "AGTERM_SESSION_ID": sessionID.uuidString,
-            "AGTERM_SOCKET": socketPath,
         ]) { _, agtermValue in agtermValue }
+        if let socketPath {
+            env["AGTERM_SOCKET"] = socketPath
+        }
         if let windowID {
             env["AGTERM_WINDOW_ID"] = windowID.uuidString
         }
@@ -33,13 +37,16 @@ public enum SurfaceEnvironment {
     }
 
     /// Environment for a window's quick terminal, which is not part of the session tree.
-    public static func quickTerminal(windowID: UUID, socketPath: String,
+    public static func quickTerminal(windowID: UUID, socketPath: String?,
                                      programVersion: String) -> [String: String] {
-        terminalIdentity(programVersion: programVersion).merging([
+        var env = terminalIdentity(programVersion: programVersion).merging([
             "AGTERM_ENABLED": "1",
             "AGTERM_WINDOW_ID": windowID.uuidString,
-            "AGTERM_SOCKET": socketPath,
         ]) { _, agtermValue in agtermValue }
+        if let socketPath {
+            env["AGTERM_SOCKET"] = socketPath
+        }
+        return env
     }
 
     private static func terminalIdentity(programVersion: String) -> [String: String] {

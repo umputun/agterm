@@ -89,11 +89,14 @@ concurrency before changing the bridge.
   Test fresh CLI/hooks with the Debug binary or redeploy and reinstall them. Debug uses
   `com.umputun.agterm.debug`, distinct from Release, but state/socket paths still require isolation.
 - Launching a second instance without `AGTERM_STATE_DIR` still shares state, but no longer takes the
-  running app's control socket: `ControlServer.start` probes the path with `connect` first and refuses to
-  bind one a live instance is serving, logging `already served by another instance`. The second instance
-  runs with no control socket, so isolate anyway rather than reading a silent `agtermctl` as talking to it.
+  running app's control socket. `ControlServer.start` takes an exclusive `flock` on `<socket>.lock` and
+  refuses to bind while another live instance holds it, logging `already served by another instance`.
+  A refused instance reports `resolvedSocketPath` nil, so its shells get NO `AGTERM_SOCKET` and an
+  untargeted `agtermctl` there fails instead of driving the live terminal. Isolate anyway: state is
+  still shared, and persisted session ids resolve in both instances.
 - `lsof -p <pid> | grep agterm.sock` showing an fd on a socket path `ls` cannot find means an orphaned
-  socket, which predates that guard; a window scene that never bound one is a different fault.
+  socket; a window scene that never bound one is a different fault. Reaching it now takes a build
+  predating the lock, or the socket file being deleted by hand.
 
 ## Protect the live terminal
 

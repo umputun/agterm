@@ -27,13 +27,21 @@ final class ControlServer {
     /// The listening socket fd, or -1 when not listening. `start()` is idempotent on this.
     private var listenFD: Int32 = -1
 
+    /// The held ownership lock fd, or -1 when this process does not own `socketPath`.
+    private var lockFD: Int32 = -1
+
+    /// Set when `start()` found another live instance owning the path, so this one will never serve it.
+    private var refused = false
+
     /// The bound socket path, nil when not listening (bind failed or never started).
     var boundSocketPath: String? { listenFD >= 0 ? socketPath : nil }
 
-    /// The path the listener will bind, resolved at init via `defaultSocketPath()`. The surface factories
-    /// read it into `AGTERM_SOCKET`: the launch window's surfaces can materialize BEFORE `start()` binds,
-    /// and a nil `boundSocketPath` would leak `AGTERM_SOCKET` permanently. Equals it once bound.
-    var resolvedSocketPath: String { socketPath }
+    /// The path spawned surfaces point `AGTERM_SOCKET` at, nil once this instance has refused it because
+    /// another one owns it — a shell must never be handed a socket that drives a DIFFERENT app, which for
+    /// a second instance sharing state means typing into the user's live terminal (persisted session ids
+    /// resolve there too). Not `boundSocketPath`: the launch window's surfaces can materialize BEFORE
+    /// `start()` binds, and a nil there would leak `AGTERM_SOCKET` permanently. Equals it once bound.
+    var resolvedSocketPath: String? { refused ? nil : socketPath }
     private let acceptQueue = DispatchQueue(label: "com.umputun.agterm.control.accept")
 
     /// Thread-safe window-list cache: refreshed on the main actor after every dispatched command, read under
@@ -154,21 +162,20 @@ final class ControlServer {
             return
         }
 
-        // probe BEFORE unlinking: the unlink below cannot tell a force-quit leftover from the socket a
-        // running instance is listening on, and deleting the latter strands it — it keeps its listening fd,
-        // never learns the path is gone, and only a restart recovers it.
-        guard !ControlServer.isListening(at: socketPath) else {
-            log("control socket \(socketPath) is already served by another instance — not binding")
-            return
-        }
+        // take ownership BEFORE unlinking: the unlink below cannot tell a force-quit leftover from the
+        // socket a running instance is listening on, and deleting the latter strands it — it keeps its
+        // listening fd, never learns the path is gone, and only a restart recovers it.
+        guard acquireOwnership() else { return }
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
             log("control socket() failed: \(String(cString: strerror(errno)))")
+            releaseOwnership()
             return
         }
 
-        // unlink the stale socket file (a force-quit that skipped applicationWillTerminate leaves one).
+        // unlink the stale socket file. Holding the lock is what makes this safe: nobody else is serving
+        // the path, so whatever is on disk is a force-quit leftover.
         unlink(socketPath)
 
         var addr = ControlServer.unixAddress(for: socketPath)
@@ -181,6 +188,7 @@ final class ControlServer {
         guard bound == 0 else {
             log("control bind(\(socketPath)) failed: \(String(cString: strerror(errno)))")
             close(fd)
+            releaseOwnership()
             return
         }
 
@@ -190,6 +198,7 @@ final class ControlServer {
             log("control listen() failed: \(String(cString: strerror(errno)))")
             close(fd)
             unlink(socketPath)
+            releaseOwnership()
             return
         }
 
@@ -202,32 +211,42 @@ final class ControlServer {
         close(listenFD)
         listenFD = -1
         unlink(socketPath)
+        releaseOwnership()
     }
 
-    /// Whether a server is accepting connections on `path` right now. A successful `connect()` is the only
-    /// thing that separates a live owner from the leftover file a force-quit leaves behind: both are a
-    /// socket node on disk, and `stat` cannot tell them apart. `ENOENT` (nothing there) and `ECONNREFUSED`
-    /// (a socket nobody is listening on) are the stale cases; so is a non-socket file, which `connect`
-    /// rejects and `bind` would replace anyway.
-    nonisolated private static func isListening(at path: String) -> Bool {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return false }
-        defer { close(fd) }
-
-        // non-blocking: connecting to a listener whose backlog is full BLOCKS on a unix socket, and this
-        // runs on the main actor during window setup. BSD reports that case as EAGAIN, and it means a live
-        // server just as much as a completed connect does.
-        let flags = fcntl(fd, F_GETFL, 0)
-        if flags >= 0 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
-
-        var addr = unixAddress(for: path)
-        let result = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
+    /// Take the exclusive advisory lock that marks this process the owner of `socketPath`, held for as
+    /// long as the listener is, and set `refused` when another live instance holds it.
+    ///
+    /// `connect` cannot answer the ownership question on Darwin. A live listener whose backlog is full
+    /// refuses with the same `ECONNREFUSED` a socket nobody listens on returns (measured: the app's
+    /// backlog is 8 and one stalled client parks the serial accept loop for up to `readDeadlineSeconds`,
+    /// so saturation is reachable), and a blocking `connect` against it returns immediately rather than
+    /// stalling. `flock` carries no such ambiguity, is atomic against a second instance launching in the
+    /// same moment, and the kernel releases it when a force-quit kills the holder — which is the case the
+    /// `unlink` in `start()` exists for.
+    private func acquireOwnership() -> Bool {
+        let lockPath = socketPath + ".lock"
+        let fd = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        guard fd >= 0 else {
+            log("control lock open(\(lockPath)) failed: \(String(cString: strerror(errno)))")
+            return false
         }
-        if result == 0 { return true }
-        return errno == EAGAIN || errno == EINPROGRESS
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
+            close(fd)
+            refused = true
+            log("control socket \(socketPath) is already served by another instance — not binding")
+            return false
+        }
+        lockFD = fd
+        return true
+    }
+
+    /// Drop the ownership lock. The lock FILE is deliberately left behind: unlinking it would let the next
+    /// instance create a fresh inode and lock that instead, which excludes nobody.
+    private func releaseOwnership() {
+        guard lockFD >= 0 else { return }
+        close(lockFD)
+        lockFD = -1
     }
 
     /// Fill a `sockaddr_un` with `path`. Callers guard the ~104-byte `sun_path` limit first; a longer path
