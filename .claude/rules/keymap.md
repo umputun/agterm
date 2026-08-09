@@ -108,10 +108,11 @@ paths:
   bare tokens, but bind as `shift+=`/`shift+.`. `increase_font_size`'s stored `Chord(key:"+")` cannot
   round-trip and prints `(not expressible)` in the starter file. Ctrl-Tab and Ctrl-1/2 are reserved,
   monitor-driven, and not rebindable. Palette custom hints use raw kitty syntax, not macOS glyphs.
-- The starter file's `map` examples are literal chords that rot when a new built-in claims one, as
-  `dashboard` did to the shipped `cmd+shift+d` (issue #405). Keep
-  `ConfigPathsTests.starterKeymapMapExamplesApplyWhenUncommented`, which uncomments every example and
-  requires it to parse clean and bind.
+- The starter file's `map` and `command` examples are literal chords that rot when a new built-in claims
+  one, as `dashboard` did to the shipped `cmd+shift+d` (issue #405). Keep
+  `ConfigPathsTests.starterKeymapExamplesApplyWhenUncommented`, which uncomments every example and
+  requires it to parse clean and bind; both verbs rot, `validateCommands` clearing a custom shortcut a
+  built-in has claimed just as `resolveBuiltinOverrides` drops the colliding `map`.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject
   visible shell metacharacters. `TerminalText.sanitized` strips control characters, not `;`,

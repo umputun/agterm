@@ -81,19 +81,23 @@ struct ConfigPathsTests {
     }
 
     // issue #405: the shipped example was `map cmd+shift+d toggle_split`, a chord `dashboard` later took,
-    // so uncommenting the starter's own suggestion silently bound nothing.
-    @Test func starterKeymapMapExamplesApplyWhenUncommented() {
+    // so uncommenting the starter's own suggestion silently bound nothing. A `command` example rots the
+    // same way, `validateCommands` dropping a custom shortcut a built-in has since claimed.
+    @Test func starterKeymapExamplesApplyWhenUncommented() {
         let examples = ConfigPaths.starterKeymapConf().split(separator: "\n").compactMap { line -> String? in
-            let text = line.drop { $0 == "#" || $0 == " " }
-            // `<` skips the `map <chord> <action>` syntax line, which is a grammar, not an example.
-            guard text.hasPrefix("map "), !text.contains("<") else { return nil }
+            let text = line.drop { $0 == "#" || $0.isWhitespace }
+            let verb = text.prefix { !$0.isWhitespace }
+            // `<` skips the two verb-syntax lines, which state a grammar rather than an example.
+            guard verb == "map" || verb == "command", !text.contains("<") else { return nil }
             return String(text)
         }
-        #expect(!examples.isEmpty)
+        // an example silently dropped from the guard must fail here: two `map` lines and three `command`.
+        #expect(examples.count == 5)
         for example in examples {
             let (keymap, diagnostics) = parseKeymap(example)
             #expect(diagnostics.isEmpty, "starter example '\(example)' is skipped: \(diagnostics.map(\.message))")
-            #expect(keymap.builtinOverrides.count == 1, "starter example '\(example)' bound nothing")
+            #expect(keymap.builtinOverrides.count + keymap.commands.count == 1,
+                    "starter example '\(example)' bound nothing")
         }
     }
 
