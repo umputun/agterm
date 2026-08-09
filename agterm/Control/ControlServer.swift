@@ -154,25 +154,24 @@ final class ControlServer {
             return
         }
 
+        // probe BEFORE unlinking: the unlink below cannot tell a force-quit leftover from the socket a
+        // running instance is listening on, and deleting the latter strands it — it keeps its listening fd,
+        // never learns the path is gone, and only a restart recovers it.
+        guard !ControlServer.isListening(at: socketPath) else {
+            log("control socket \(socketPath) is already served by another instance — not binding")
+            return
+        }
+
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
             log("control socket() failed: \(String(cString: strerror(errno)))")
             return
         }
 
-        // unlink any stale socket file first (a force-quit that skipped applicationWillTerminate leaves one).
+        // unlink the stale socket file (a force-quit that skipped applicationWillTerminate leaves one).
         unlink(socketPath)
 
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let pathBytes = socketPath.utf8CString
-        withUnsafeMutablePointer(to: &addr.sun_path) { dst in
-            dst.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { buf in
-                pathBytes.withUnsafeBufferPointer { src in
-                    buf.update(from: src.baseAddress!, count: src.count)
-                }
-            }
-        }
+        var addr = ControlServer.unixAddress(for: socketPath)
 
         let bound = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
@@ -203,6 +202,48 @@ final class ControlServer {
         close(listenFD)
         listenFD = -1
         unlink(socketPath)
+    }
+
+    /// Whether a server is accepting connections on `path` right now. A successful `connect()` is the only
+    /// thing that separates a live owner from the leftover file a force-quit leaves behind: both are a
+    /// socket node on disk, and `stat` cannot tell them apart. `ENOENT` (nothing there) and `ECONNREFUSED`
+    /// (a socket nobody is listening on) are the stale cases; so is a non-socket file, which `connect`
+    /// rejects and `bind` would replace anyway.
+    nonisolated private static func isListening(at path: String) -> Bool {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+
+        // non-blocking: connecting to a listener whose backlog is full BLOCKS on a unix socket, and this
+        // runs on the main actor during window setup. BSD reports that case as EAGAIN, and it means a live
+        // server just as much as a completed connect does.
+        let flags = fcntl(fd, F_GETFL, 0)
+        if flags >= 0 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
+
+        var addr = unixAddress(for: path)
+        let result = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        if result == 0 { return true }
+        return errno == EAGAIN || errno == EINPROGRESS
+    }
+
+    /// Fill a `sockaddr_un` with `path`. Callers guard the ~104-byte `sun_path` limit first; a longer path
+    /// would overrun the tuple.
+    nonisolated private static func unixAddress(for path: String) -> sockaddr_un {
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = path.utf8CString
+        withUnsafeMutablePointer(to: &addr.sun_path) { dst in
+            dst.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { buf in
+                pathBytes.withUnsafeBufferPointer { src in
+                    buf.update(from: src.baseAddress!, count: src.count)
+                }
+            }
+        }
+        return addr
     }
 
     // MARK: - Accept / read loop

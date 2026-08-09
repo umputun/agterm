@@ -75,7 +75,12 @@ paths:
 - Resolve socket from `AGTERM_CONTROL_SOCKET`, then `<AGTERM_STATE_DIR>/agterm.sock`, then Application
   Support. CLI `--socket` overrides. Explicit short paths avoid Unix `sun_path` near 104 bytes. Use 0600.
 - Each connection sets `SO_NOSIGPIPE` and a 5-second receive timeout. Close on non-EINTR read failure,
-  including EAGAIN. Start is idempotent, unlinks stale paths, and logs bind failure without blocking launch.
+  including EAGAIN. Start is idempotent and logs bind failure without blocking launch.
+- Start probes the path with a non-blocking `connect` before unlinking it, and refuses to bind when one
+  succeeds. Nothing on disk distinguishes a live socket from a force-quit leftover, and unlinking a live
+  one strands its owner: that instance keeps its listening fd, never learns, and only a restart recovers
+  it. `ENOENT`, `ECONNREFUSED` and a non-socket file are the stale cases; `EAGAIN` is a full backlog,
+  which means live. Non-blocking because a blocking `connect` against that backlog would stall launch.
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
   return structured errors. Mutations may return `result.id`; trees use `result.tree`.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses
