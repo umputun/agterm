@@ -240,6 +240,10 @@ struct CommandPalette: View {
             results
         }
         .background { PalettePanelBackground() }
+        // the rounded background is drawn, not enforced: a selected or hovered bottom row fills its full
+        // square bounds and paints over the corner arc without this. the clip stays above `.shadow`, which
+        // would otherwise be clipped away with everything else outside the shape.
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
         .accessibilityIdentifier(explicitItems == nil ? "command-palette" : "pick-palette")
