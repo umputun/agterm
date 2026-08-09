@@ -47,8 +47,14 @@ extension WorkspaceSidebar.Coordinator {
         renameController.beginEditing(node: node)
     }
 
+    /// Animated to match the disclosure triangle, which toggles the same row through AppKit's own animation —
+    /// two hit targets for one action must not render differently. Deliberately NOT gated on Reduce Motion
+    /// like the app's own pulses: both paths reach the same AppKit animation, so gating here would restore
+    /// the divergence. The proxy still flips expansion and fires didExpand/didCollapse synchronously, so the
+    /// persist write-back is unaffected. Every other call site stays unanimated — bulk or programmatic.
     private func toggleExpansion(of node: SidebarNode, in outline: NSOutlineView) {
-        if outline.isItemExpanded(node) { outline.collapseItem(node) } else { outline.expandItem(node) }
+        let proxy = outline.animator()
+        if outline.isItemExpanded(node) { proxy.collapseItem(node) } else { proxy.expandItem(node) }
     }
 
     /// Builds the per-row context menu, resolving the clicked row lazily so one menu serves every row.
