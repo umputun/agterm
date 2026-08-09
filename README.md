@@ -449,6 +449,8 @@ select_theme       toggle_fullscreen  toggle_terminal_zoom
 dashboard
 ```
 
+`toggle_fullscreen` is the one action with no menu item of its own. macOS adds an "Enter Full Screen" item to the View menu whenever that menu is drawn, and nothing suppresses it, so an item of agterm's own would sit beside it as a duplicate. The binding (⌃⌘F by default) is handled directly instead, which is why the menu entry advertises the system's Globe+F rather than your chord. Both work, and rebinding `toggle_fullscreen` changes the chord as usual — it just won't show up next to that menu item.
+
 The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):
 
 ```
