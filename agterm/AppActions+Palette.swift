@@ -41,6 +41,12 @@ extension AppActions {
 
     private func runPaletteCommand(_ command: PaletteCommand) {
         guard uiActionsEnabled || command == .toggleTerminalZoom else { return }
+        dispatch(command)
+    }
+
+    /// The action behind a palette row, ungated — every caller applies its own modal rule first, the palette's
+    /// blanket one and the key monitor's menu-mirroring one being different rules for the same rows.
+    private func dispatch(_ command: PaletteCommand) {
         switch command {
         case .newSession: newSession()
         case .newWorkspace: newWorkspace()
@@ -91,14 +97,34 @@ extension AppActions {
     }
 
     /// Run a built-in action fired by `CustomCommandRunner`'s key monitor — a `map` line's alternative beyond
-    /// the menu key equivalent. Routes through the palette row that owns the action, so the alternative
-    /// inherits `runPaletteCommand`'s modal gate; the rest go through `paletteLessHandler(for:)`.
+    /// the menu key equivalent. The MENU chord is the reference behavior: an alternative of a line does what
+    /// its menu-bound sibling does, so it runs the palette row's body under the MENU's modal rule rather than
+    /// the palette's blanket one. The rest go through `paletteLessHandler(for:)`, whose entry points carry the
+    /// same rule themselves.
     func perform(_ action: BuiltinAction) {
         if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
-            runPaletteCommand(command)
+            guard uiActionsEnabled || survivesModalCover(command) else { return }
+            dispatch(command)
             return
         }
         paletteLessHandler(for: action)?()
+    }
+
+    /// Whether the action's MENU item stays live under a modal cover — the items `agtermApp+Menus` leaves
+    /// without the `modalActive` mirror, plus `dashboard`, whose item is the open grid's own escape hatch.
+    /// Each one's `AppActions` method carries whatever narrower rule it needs (`toggleDashboard` refuses under
+    /// zoom or a picker; the font actions act on the focused surface and need none), so gating a monitor
+    /// alternative on the blanket `uiActionsEnabled` is what would make it diverge from the menu chord.
+    /// `toggleFullscreen` is deliberately absent: it has no menu item to be the reference, and its menu-chord
+    /// path is the divergence `docs/backlog/toggle-fullscreen-menu-chord-bypasses-the-modal-gate.md` owns.
+    private func survivesModalCover(_ command: PaletteCommand) -> Bool {
+        switch command {
+        case .toggleTerminalZoom, .dashboard, .closeSession, .reloadKeymap, .reloadConfig,
+             .increaseFontSize, .decreaseFontSize, .resetFontSize:
+            return true
+        default:
+            return false
+        }
     }
 
     /// The entry point for a built-in that no `PaletteCommand` row owns — window management and the three
@@ -219,20 +245,22 @@ extension AppActions {
         palette?.toggle(.attention)
     }
 
-    /// Menu/keymap palette launchers route through actions, not `palette.toggle`, so terminal zoom's modal UI
-    /// guard applies consistently to the keyboard-shortcut and menu paths.
+    /// Menu/keymap palette launchers route through actions, not `palette.toggle`, so the modal UI guard applies
+    /// consistently to the keyboard-shortcut and menu paths. The full `uiActionsEnabled` and not zoom/picker
+    /// alone: their menu items carry the `modalActive` mirror, so a launcher must not open a palette over the
+    /// dashboard grid the menu item refuses to open it over.
     func toggleSessionPalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
+        guard uiActionsEnabled else { return }
         palette?.toggle(.sessions)
     }
 
     func toggleActionPalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
+        guard uiActionsEnabled else { return }
         palette?.toggle(.actions)
     }
 
     func toggleCustomCommandPalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
+        guard uiActionsEnabled else { return }
         palette?.toggle(.customCommands)
     }
 

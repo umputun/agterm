@@ -412,6 +412,12 @@ private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative], menu
 /// dropped there cannot re-trigger here. Each diagnostic names the OTHER offender (the conflict carries both
 /// sides) so the user can find the pair; a target's alternatives are deduped, so target plus keybind locates
 /// exactly one of them.
+///
+/// A conflict against an alternative already dropped HERE is skipped: it no longer registers, so charging this
+/// side for it would cost a working key over a bind that cannot fire. `ctrl+a>b|ctrl+a|ctrl+a>c` loses the
+/// middle alternative to the first and keeps the third, which conflicted with nothing else. Conflicts arrive in
+/// index-pair order and a drop never creates one, so this single pass IS the fixpoint of dropping the first
+/// conflict and recomputing.
 private func dropConflictingAlternatives(_ alternatives: [MonitorAlternative],
                                          diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
     var position: [KeybindConflict.Side: Int] = [:]
@@ -421,6 +427,7 @@ private func dropConflictingAlternatives(_ alternatives: [MonitorAlternative],
     var otherOffender: [Int: String] = [:]
     for conflict in keybindConflicts(alternatives.map { (keybind: $0.keybind, target: $0.target) }) {
         guard let first = position[conflict.first], let second = position[conflict.second] else { continue }
+        guard otherOffender[first] == nil, otherOffender[second] == nil else { continue }
         otherOffender[second] = alternatives[first].owner
         // one binding's own alternatives can collide (`ctrl+a|ctrl+a>b`). Both fire the same thing, so the
         // ambiguity costs the user nothing and dropping the pair would take away a working key for it.

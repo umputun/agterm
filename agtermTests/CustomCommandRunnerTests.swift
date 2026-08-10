@@ -61,6 +61,7 @@ final class CustomCommandRunnerTests: XCTestCase {
     private struct Fixture {
         let runner: CustomCommandRunner
         let settings: SettingsModel
+        let actions: AppActions
         let store: AppStore
         let sidebarBefore: Bool
     }
@@ -80,7 +81,19 @@ final class CustomCommandRunnerTests: XCTestCase {
         runner.start()
         started.append(runner)
         let store = try XCTUnwrap(library.activeStore)
-        return Fixture(runner: runner, settings: settings, store: store, sidebarBefore: store.sidebarVisible)
+        return Fixture(runner: runner, settings: settings, actions: actions, store: store,
+                       sidebarBefore: store.sidebarVisible)
+    }
+
+    /// An OPEN dashboard grid over the active window — the modal cover whose menu items stay live for some
+    /// actions and not others. Unregistered by the returned closure.
+    private func openDashboard() throws -> (controller: DashboardController, close: () -> Void) {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        dashboard.open(members: [DashboardMember(session: UUID(), surface: .primary)])
+        XCTAssertTrue(dashboard.isOpen)
+        return (dashboard, { DashboardControllerRegistry.shared.unregister(windowID) })
     }
 
     private func keyDown(_ key: String, keyCode: UInt16, mods: NSEvent.ModifierFlags) -> NSEvent {
@@ -125,6 +138,37 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window),
                       "the chord is consumed either way; only the action is gated")
         XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore, "a pending picker must block the palette action")
+    }
+
+    // Navigate ▸ Dashboard keeps its key equivalent live over the open grid, so its alternative must close the
+    // grid too — the blanket palette gate would leave the user's second binding inert behind its own cover.
+    func testDashboardAlternativeClosesTheOpenGridLikeItsMenuChord() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+d|ctrl+a>d dashboard\n")
+        let dashboard = try openDashboard()
+        defer { dashboard.close() }
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("d", keyCode: 2, mods: []), in: window))
+        XCTAssertFalse(dashboard.controller.isOpen, "the alternative must reach its own escape hatch")
+    }
+
+    // the mirror case: Navigate ▸ Command Palette IS disabled over the grid, so its alternative must not open
+    // the palette the menu item refuses to open.
+    func testPaletteLauncherAlternativeStaysShutOverTheDashboardLikeItsMenuItem() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+p|ctrl+a>p command_palette\n")
+        let palette = PaletteController()
+        fix.actions.palette = palette
+        let dashboard = try openDashboard()
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("p", keyCode: 35, mods: []), in: window))
+        XCTAssertNil(palette.mode, "a launcher must not open over the dashboard grid")
+
+        dashboard.controller.close()
+        dashboard.close()
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("p", keyCode: 35, mods: []), in: window))
+        XCTAssertEqual(palette.mode, .actions, "with the cover gone the same alternative opens it")
     }
 
     // keymap.md requires the reload path, not only a seeded file: the matcher rebuilds on

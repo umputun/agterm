@@ -69,10 +69,19 @@ paths:
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; non-zero exit calls
   `notifyCommandFailure`. `.firedBuiltin` routes through `AppActions.perform(_:)`, a reverse lookup over
-  `PaletteCommand.allCases` on `builtinAction` that inherits the palette's `uiActionsEnabled` gate, falling
+  `PaletteCommand.allCases` on `builtinAction`, falling
   back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND
   `builtinSequences` on `.agtermKeymapChanged`.
+- **An alternative does what its line's MENU chord does, no more and no less.** So `perform(_:)` runs the
+  palette row's body under the MENU's modal rule, not the palette's blanket `uiActionsEnabled`:
+  `survivesModalCover` lists the actions whose menu item carries no `modalActive` mirror (close session,
+  both reloads, the three font sizes, terminal zoom) plus `dashboard`, whose item is the open grid's own
+  escape hatch. The `paletteLessHandler` half has no such wrapper, so each of its entry points holds the
+  gate itself — the three palette launchers on the full `uiActionsEnabled`, not zoom and picker alone,
+  since their menu items are disabled over the dashboard. The key is
+  consumed either way: the gate lives inside each action, so the runner cannot see the outcome, and passing
+  a leader's last chord through after swallowing its prefix would type a stray character into the terminal.
 - Fire with a focused `GhosttySurfaceView`, or in an agterm terminal window whose focus is not an `NSText`
   field editor, including a zero-session window. Pass through text fields and auxiliary windows;
   `WindowRegistry.contains(keyWindow)` gates no-surface dispatch.

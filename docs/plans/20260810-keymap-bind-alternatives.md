@@ -302,8 +302,8 @@ and falls back to a small switch for the few actions with no palette row — no 
 
 - [x] inject `AppActions` into `CustomCommandRunner` (it receives none today, `agtermApp.swift:65`)
 - [x] add `AppActions.perform(_ action: BuiltinAction)` as a reverse lookup over `PaletteCommand.allCases`
-      on `builtinAction`, routing through `runPaletteCommand` so the alternative inherits the palette's
-      `uiActionsEnabled` gate; a small switch covers the few actions with no palette row
+      on `builtinAction`, running the palette row's body under the MENU item's modal rule so an alternative
+      behaves as its line's menu chord does; a small switch covers the few actions with no palette row
 - [x] dispatch `.builtin` from `handleKeyDown(_:in:)` without the `focusedSurface` / `runNoSurface` split —
       a built-in acts on the active session and key window like a palette row
 - [x] rebuild the engine on `.agtermKeymapChanged` from both commands and built-in sequences

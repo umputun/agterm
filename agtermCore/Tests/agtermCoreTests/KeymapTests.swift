@@ -934,6 +934,29 @@ struct KeymapTests {
         #expect(diagnostics.contains { $0.message.contains("shortcut 'ctrl+space>s'") && $0.message.contains("'Lead'") })
     }
 
+    // the middle alternative loses to the first, and a dropped alternative conflicts with nothing: the third
+    // one collided only with it, so it must keep firing.
+    @Test func anAlternativeDroppedForAConflictStopsCostingItsCompatibleSiblings() {
+        let (keymap, diagnostics) = parseKeymap(#"command "X" ctrl+a>b|ctrl+a|ctrl+a>c echo hi"#)
+        #expect(keymap.commands[0].shortcut == "ctrl+a>b|ctrl+a>c")
+        #expect(diagnostics.map(\.message)
+            == ["custom command 'X' shortcut 'ctrl+a' conflicts with custom command 'X'; alternative dropped"])
+    }
+
+    @Test func aCrossTargetConflictLeavesTheLoserUnableToDropAThirdBinding() {
+        let text = """
+        command "A" ctrl+a>b echo a
+        command "B" ctrl+a echo b
+        command "C" ctrl+a>c echo c
+        """
+        let (keymap, diagnostics) = parseKeymap(text)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[1].shortcut.isEmpty)
+        #expect(keymap.commands[2].shortcut == "ctrl+a>c")
+        #expect(diagnostics.count == 2)
+        #expect(diagnostics.allSatisfy { !$0.message.contains("'C'") })
+    }
+
     @Test func singleAlternativeConflictDiagnosticsKeepTodaysWording() {
         let builtin = parseKeymap(#"command "Boom" cmd+d echo boom"#).diagnostics
         #expect(builtin.map(\.message)

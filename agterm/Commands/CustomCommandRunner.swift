@@ -134,7 +134,7 @@ final class CustomCommandRunner {
         // the duplicate this avoids. So the rebindable chord is matched here instead. A half-typed leader
         // sequence still wins, exactly as it does over a custom command sharing its first chord.
         // Its MENU chord alone comes through here, ungated; an alternative of the same `map` line goes the
-        // ordinary `.firedBuiltin` route and so inherits the palette's modal gate.
+        // ordinary `.firedBuiltin` route and so takes that route's modal rule.
         if !commandEngine.isArmed, chord == settings.keymap.equivalent(for: .toggleFullscreen) {
             keyWindow.toggleFullScreen(nil)
             return true
@@ -153,7 +153,9 @@ final class CustomCommandRunner {
         case .firedBuiltin(let action):
             cancelLeaderTimer()
             // no focusedSurface/runNoSurface split: a built-in acts on the active session and key window,
-            // like the palette row behind it.
+            // like the palette row behind it. Consumed even when `perform` finds the action gated out: the
+            // gate lives inside each action, so this cannot see the outcome, and passing a leader's LAST chord
+            // through after swallowing its prefix would type a stray character into the terminal.
             actions.perform(action)
             return true
         case .armed:
