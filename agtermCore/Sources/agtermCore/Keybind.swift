@@ -287,21 +287,26 @@ public func parseKeybinds(_ s: String) -> [Keybind]? {
     return keybinds.isEmpty ? nil : keybinds
 }
 
-/// The binding token with every alternative that repeats an earlier one removed, splicing the surviving RAW
-/// substrings instead of re-rendering the parsed chords: `command+shift+a` must reach diagnostics and
-/// `CustomCommand.shortcut` spelled as the user wrote it. Unparseable or single-alternative input is returned
-/// untouched.
-func dedupedAlternatives(_ s: String) -> String {
-    let parts = s.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-    guard parts.count > 1, let keybinds = parseKeybinds(s) else { return s }
+/// A binding token's alternatives as raw-substring / parsed-keybind pairs in file order, every repeat of an
+/// earlier keybind dropped. `nil` when any alternative is malformed, exactly as `parseKeybinds`. The raw
+/// substrings ride along so diagnostics and `CustomCommand.shortcut` quote the user's own spelling instead of
+/// a canonicalized re-render (`command+shift+a` must not become `cmd+shift+a`).
+func alternativeKeybinds(_ s: String) -> [(raw: String, keybind: Keybind)]? {
+    guard let keybinds = parseKeybinds(s) else { return nil }
 
-    var seen: [Keybind] = []
-    var kept: [String] = []
-    for (keybind, part) in zip(keybinds, parts) where !seen.contains(keybind) {
-        seen.append(keybind)
-        kept.append(part)
+    let parts = s.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+    var kept: [(raw: String, keybind: Keybind)] = []
+    for (part, keybind) in zip(parts, keybinds) where !kept.contains(where: { $0.keybind == keybind }) {
+        kept.append((part, keybind))
     }
-    return kept.joined(separator: "|")
+    return kept
+}
+
+/// The binding token with every duplicate alternative removed, splicing the surviving raw substrings.
+/// Unparseable input is returned untouched.
+func dedupedAlternatives(_ s: String) -> String {
+    guard let alternatives = alternativeKeybinds(s) else { return s }
+    return alternatives.map(\.raw).joined(separator: "|")
 }
 
 /// Parse a single chord (a `+`-joined list of modifier words plus one base key), or `nil` when it is empty,

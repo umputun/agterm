@@ -1,20 +1,37 @@
 import Foundation
 
-/// The parsed `keymap.conf`. A built-in override is single-chord only; a custom command's `shortcut` may
-/// be empty (palette-only) or a leader sequence.
+/// The parsed `keymap.conf`. A built-in override is the single chord the menu carries; a custom command's
+/// `shortcut` may be empty (palette-only) or hold `|`-separated alternatives, each a chord or a leader
+/// sequence.
 public struct Keymap: Equatable, Sendable {
     public let builtinOverrides: [BuiltinAction: Chord]
     public let commands: [CustomCommand]
+    /// The built-in binds an `NSMenuItem` cannot carry — a leader sequence, or a second chord where a menu
+    /// item holds exactly one key equivalent — dispatched by the app's key monitor instead.
+    public let builtinSequences: [BuiltinAction: [Keybind]]
+    /// Actions whose `map` line offered no menu-bindable alternative. Distinct from ABSENT, which means
+    /// "keep the shipped default": without this, `map ctrl+space>s toggle_split` would leave ⌘D live.
+    public let builtinUnbound: Set<BuiltinAction>
 
-    public init(builtinOverrides: [BuiltinAction: Chord], commands: [CustomCommand]) {
+    public init(builtinOverrides: [BuiltinAction: Chord], commands: [CustomCommand],
+                builtinSequences: [BuiltinAction: [Keybind]] = [:],
+                builtinUnbound: Set<BuiltinAction> = []) {
         self.builtinOverrides = builtinOverrides
         self.commands = commands
+        self.builtinSequences = builtinSequences
+        self.builtinUnbound = builtinUnbound
     }
 
-    /// The active chord for a built-in: the user override, else the shipped `defaultChord`, which is
-    /// `nil` only for the keyless actions.
+    /// The active menu chord for a built-in: the user override, else the shipped `defaultChord` — `nil` for
+    /// the keyless actions and for one a `map` line left explicitly unbound.
     public func equivalent(for action: BuiltinAction) -> Chord? {
-        builtinOverrides[action] ?? action.defaultChord
+        if let override = builtinOverrides[action] { return override }
+        return builtinUnbound.contains(action) ? nil : action.defaultChord
+    }
+
+    /// The monitor-bound binds for a built-in, empty when it has none.
+    public func sequences(for action: BuiltinAction) -> [Keybind] {
+        builtinSequences[action] ?? []
     }
 
     /// The effective chord (`equivalent(for:)`) as a macOS menu glyph string (`⌘N`, `⌃⌘S`); `nil` means
@@ -71,8 +88,9 @@ public struct KeymapStore: Sendable {
 ///
 /// Grammar (kitty-flavored), line-based. Blank and `#`-comment lines are ignored; `stripComment` owns the
 /// inline-comment rule. The first whitespace-token is the verb:
-/// - `map <chord> <action>`: `<chord>` goes through `parseKeybind`, a leader sequence rejected since
-///   built-ins are single-chord; `<action>` must be a `BuiltinAction` raw value. Collisions are resolved
+/// - `map <chord> <action>`: `<chord>` goes through `parseKeybinds`, so it may carry `|`-separated
+///   alternatives; the first menu-bindable single chord becomes the key equivalent and the rest are
+///   monitor-bound. `<action>` must be a `BuiltinAction` raw value. Collisions are resolved
 ///   order-INDEPENDENTLY against the final chord set, see `resolveBuiltinOverrides`.
 /// - `command "<name>" [chord] <shell...>`: `<name>` is a required double-quoted string (spaces allowed).
 ///   The token right after the closing quote is the shortcut IFF `parseKeybinds` accepts it, `|`-separated
@@ -85,7 +103,7 @@ public struct KeymapStore: Sendable {
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
     // collected in file order, NOT folded into a dict yet, so the final duplicate pass resolves them
     // against the FULLY-resolved chord set and can skip the later-in-file member of a colliding pair.
-    var parsedOverrides: [ParsedOverride] = []
+    var mapLines: [ParsedMapLine] = []
     var commands: [CustomCommand] = []
     var diagnostics: [KeymapDiagnostic] = []
 
@@ -103,7 +121,7 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
 
         switch verb {
         case "map":
-            parseMapLine(rest, line: lineNumber, overrides: &parsedOverrides, diagnostics: &diagnostics)
+            parseMapLine(rest, line: lineNumber, mapLines: &mapLines, diagnostics: &diagnostics)
         case "command":
             parseCommandLine(rest, line: lineNumber, commands: &commands, diagnostics: &diagnostics)
         default:
@@ -112,21 +130,54 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
     }
 
     // a final pass, not incremental: the custom-command validation below needs the same resolved chord set.
-    let builtinOverrides = resolveBuiltinOverrides(parsedOverrides, diagnostics: &diagnostics)
+    let resolved = resolveMapLines(mapLines)
+    let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, diagnostics: &diagnostics)
 
     // likewise final: a custom line parsed before a later keyless-built-in `map` must still be validated
     // against the override that `map` installs.
-    let keymap = Keymap(builtinOverrides: builtinOverrides, commands: commands)
+    let keymap = Keymap(builtinOverrides: builtinOverrides, commands: commands,
+                        builtinSequences: resolved.sequences, builtinUnbound: resolved.unbound)
     let validated = validateCommands(keymap.commands, against: keymap, diagnostics: &diagnostics)
 
-    return (Keymap(builtinOverrides: builtinOverrides, commands: validated), diagnostics)
+    return (Keymap(builtinOverrides: builtinOverrides, commands: validated,
+                   builtinSequences: resolved.sequences, builtinUnbound: resolved.unbound), diagnostics)
 }
 
-/// A single valid `map` line, retained in file order until the final cross-builtin duplicate pass.
+/// A single valid `map` line: the menu-bindable alternative if it has one, plus the monitor-bound rest.
+private struct ParsedMapLine {
+    let action: BuiltinAction
+    let chord: Chord?
+    let sequences: [Keybind]
+    let line: Int
+}
+
+/// A menu-bound `map` alternative, retained in file order until the final cross-builtin duplicate pass.
 private struct ParsedOverride {
     let action: BuiltinAction
     let chord: Chord
     let line: Int
+}
+
+/// Fold the file-order `map` lines to one per action and split them by dispatch path. A `map` line declares
+/// an action's WHOLE binding set, so a later line replaces the earlier one's menu chord and sequences
+/// together — including replacing a menu chord with nothing, which is what `unbound` records.
+private func resolveMapLines(_ mapLines: [ParsedMapLine])
+    -> (overrides: [ParsedOverride], sequences: [BuiltinAction: [Keybind]], unbound: Set<BuiltinAction>) {
+    var latest: [BuiltinAction: ParsedMapLine] = [:]
+    for mapLine in mapLines { latest[mapLine.action] = mapLine }
+
+    var overrides: [ParsedOverride] = []
+    var sequences: [BuiltinAction: [Keybind]] = [:]
+    var unbound: Set<BuiltinAction> = []
+    for mapLine in latest.values.sorted(by: { $0.line < $1.line }) {
+        if let chord = mapLine.chord {
+            overrides.append(ParsedOverride(action: mapLine.action, chord: chord, line: mapLine.line))
+        } else {
+            unbound.insert(mapLine.action)
+        }
+        if !mapLine.sequences.isEmpty { sequences[mapLine.action] = mapLine.sequences }
+    }
+    return (overrides, sequences, unbound)
 }
 
 /// Fold the file-order overrides into the final `[BuiltinAction: Chord]`, rejecting only a TRUE
@@ -291,10 +342,17 @@ private func stripComment(_ line: String) -> String {
     return result
 }
 
-/// Parse a `map` line's remainder, `<chord> <action>`: on success appends a `ParsedOverride` in file
-/// order, on any failure a diagnostic, leaving `overrides` untouched. Cross-builtin duplicate detection is
-/// deferred to `resolveBuiltinOverrides`.
-private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOverride],
+/// Parse a `map` line's remainder, `<chord> <action>`: on success appends a `ParsedMapLine` in file order,
+/// on any failure a diagnostic, leaving `mapLines` untouched. Cross-builtin duplicate detection is deferred
+/// to `resolveBuiltinOverrides`.
+///
+/// The chord token may hold `|`-separated alternatives. The first one that can be a menu key equivalent —
+/// a single chord passing today's `map` rules — becomes it; every other alternative is monitor-bound and
+/// follows the monitor's own rule instead. The grammar therefore tracks the DISPATCH PATH, not the verb.
+/// A malformed alternative kills the whole line (`alternativeKeybinds` returns nil), while an alternative
+/// breaking a rule drops alone; a line whose every alternative dropped records nothing at all, leaving the
+/// action on its shipped default exactly as a rejected single-chord `map` does today.
+private func parseMapLine(_ rest: String, line: Int, mapLines: inout [ParsedMapLine],
                           diagnostics: inout [KeymapDiagnostic]) {
     // split on the first run of general whitespace (space OR tab) so a tab-separated `map` line works.
     let chordText = String(rest.prefix(while: { !$0.isWhitespace }))
@@ -304,33 +362,52 @@ private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOve
         return
     }
 
-    guard let keybind = parseKeybind(chordText) else {
+    guard let alternatives = alternativeKeybinds(chordText) else {
         diagnostics.append(KeymapDiagnostic(line: line, message: "invalid chord '\(chordText)'"))
         return
     }
-    guard keybind.count == 1, let chord = keybind.first else {
-        diagnostics.append(KeymapDiagnostic(line: line, message: "built-in shortcut cannot be a leader sequence"))
-        return
+
+    // with one alternative a drop IS the line's failure, so the wording stays what it has always been.
+    let scope = alternatives.count == 1 ? "map skipped" : "alternative skipped"
+    var menuChord: Chord?
+    var sequences: [Keybind] = []
+    for alternative in alternatives {
+        // a chord owned by an always-on NSEvent monitor can't be a menu key-equivalent without dead-racing
+        // the monitor, and is just as dead deeper in a sequence, so reject it at any position.
+        guard !alternative.keybind.contains(where: isReservedMonitorChord) else {
+            diagnostics.append(KeymapDiagnostic(line: line,
+                                                message: "chord '\(alternative.raw)' is a reserved shortcut; \(scope)"))
+            continue
+        }
+        if menuChord == nil, alternative.keybind.count == 1, let chord = alternative.keybind.first {
+            // a modifier-less arrow would install an always-on menu key-equivalent swallowing the key
+            // everywhere — terminal, palettes, dashboard grid, every text field — and the menu path, unlike
+            // the custom-command monitor, has no text-field pass-through.
+            guard !(bindableArrowKeys.contains(chord.key) && chord.mods.isEmpty) else {
+                diagnostics.append(KeymapDiagnostic(line: line,
+                                                    message: "bare arrow chord '\(alternative.raw)' needs a modifier; \(scope)"))
+                continue
+            }
+            menuChord = chord
+            continue
+        }
+        // monitor-bound: a bare first chord would be swallowed everywhere in the terminal, the rule
+        // `parseCommandLine` already applies to every custom shortcut.
+        guard alternative.keybind.first?.mods.isEmpty == false else {
+            diagnostics.append(KeymapDiagnostic(line: line,
+                                                message: "chord '\(alternative.raw)' needs a modifier on its first key; \(scope)"))
+            continue
+        }
+        sequences.append(alternative.keybind)
     }
-    // a chord owned by an always-on NSEvent monitor can't be a menu key-equivalent without dead-racing
-    // the monitor, so reject it for built-ins as for custom commands.
-    guard !isReservedMonitorChord(chord) else {
-        diagnostics.append(KeymapDiagnostic(line: line, message: "chord '\(chordText)' is a reserved shortcut; map skipped"))
-        return
-    }
-    // a modifier-less arrow would install an always-on menu key-equivalent swallowing the key everywhere
-    // — terminal, palettes, dashboard grid, every text field — and the menu path, unlike the
-    // custom-command monitor, has no text-field pass-through. `parseCommandLine` requires one likewise.
-    guard !(bindableArrowKeys.contains(chord.key) && chord.mods.isEmpty) else {
-        diagnostics.append(KeymapDiagnostic(line: line,
-                                            message: "bare arrow chord '\(chordText)' needs a modifier; map skipped"))
-        return
-    }
+
+    // nothing survived: report no action diagnostic on top of the per-alternative ones, as before.
+    guard menuChord != nil || !sequences.isEmpty else { return }
     guard let action = BuiltinAction(rawValue: actionName) else {
         diagnostics.append(KeymapDiagnostic(line: line, message: "unknown action '\(actionName)'"))
         return
     }
-    overrides.append(ParsedOverride(action: action, chord: chord, line: line))
+    mapLines.append(ParsedMapLine(action: action, chord: menuChord, sequences: sequences, line: line))
 }
 
 /// Parse the remainder of a `command` line (after the verb): `"<name>" [chord] <shell...>`. On any failure

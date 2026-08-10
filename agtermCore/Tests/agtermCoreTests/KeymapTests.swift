@@ -248,12 +248,14 @@ struct KeymapTests {
         #expect(diagnostics[0].message.contains("unknown action"))
     }
 
-    @Test func parseLeaderOnBuiltinDiagnostic() {
+    @Test func parseLeaderOnBuiltinBindsTheMonitorAndUnbindsTheMenu() {
         let (keymap, diagnostics) = parseKeymap("map ctrl+a>g toggle_split")
+        #expect(diagnostics.isEmpty)
         #expect(keymap.builtinOverrides.isEmpty)
-        #expect(diagnostics.count == 1)
-        #expect(diagnostics[0].line == 1)
-        #expect(diagnostics[0].message == "built-in shortcut cannot be a leader sequence")
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "a"), Chord(mods: [], key: "g")]])
+        // the line declares the whole binding, so ⌘D must not stay live behind the sequence.
+        #expect(keymap.equivalent(for: .toggleSplit) == nil)
+        #expect(keymap.builtinUnbound == [.toggleSplit])
     }
 
     @Test func parseInvalidChordDiagnostic() {
@@ -319,6 +321,134 @@ struct KeymapTests {
         let (keymap, diagnostics) = parseKeymap("map a new_session")
         #expect(diagnostics.isEmpty)
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [], key: "a"))
+        #expect(keymap.sequences(for: .newSession).isEmpty)
+        #expect(keymap.builtinUnbound.isEmpty)
+    }
+
+    // MARK: map alternatives — `|` splits a binding into a menu-bound chord and monitor-bound rest
+
+    @Test func mapAlternativesSplitBetweenMenuAndMonitor() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|ctrl+space>s toggle_split")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "space"), Chord(mods: [], key: "s")]])
+        #expect(keymap.builtinUnbound.isEmpty)
+    }
+
+    @Test func mapTwoSingleChordAlternativesPutTheFirstOnTheMenu() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|cmd+y toggle_split")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.command], key: "y")]])
+    }
+
+    @Test func mapSequenceOnlyLineLeavesTheActionWithoutAMenuChord() {
+        let (keymap, diagnostics) = parseKeymap("map ctrl+space>s toggle_split")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == nil)
+        #expect(keymap.glyphHint(for: .toggleSplit) == nil)
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "space"), Chord(mods: [], key: "s")]])
+        // an untouched action keeps its shipped default: only the mapped one goes unbound.
+        #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))
+    }
+
+    @Test func mapBareFirstChordOnAMonitorAlternativeIsRejected() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|y>s toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message == "chord 'y>s' needs a modifier on its first key; alternative skipped")
+    }
+
+    @Test func mapWithOnlyABareSequenceKeepsTheShippedDefault() {
+        // every alternative dropped means the line records nothing, exactly as a rejected single chord does.
+        let (keymap, diagnostics) = parseKeymap("map y>s toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
+        #expect(keymap.builtinUnbound.isEmpty)
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message == "chord 'y>s' needs a modifier on its first key; map skipped")
+    }
+
+    @Test func mapReservedAlternativeDropsAloneAndLeavesTheSiblingLive() {
+        let (keymap, diagnostics) = parseKeymap("map ctrl+1|ctrl+a>s toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == nil)
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "a"), Chord(mods: [], key: "s")]])
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message == "chord 'ctrl+1' is a reserved shortcut; alternative skipped")
+    }
+
+    @Test func mapReservedChordInsideASequenceAlternativeIsRejected() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|ctrl+a>ctrl+tab toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("reserved"))
+    }
+
+    @Test func mapBareArrowAlternativeIsRejectedWhileTheSiblingSurvives() {
+        let (keymap, diagnostics) = parseKeymap("map left|cmd+opt+shift+left previous_session")
+        #expect(keymap.equivalent(for: .previousSession) == Chord(mods: [.command, .option, .shift], key: "left"))
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message == "bare arrow chord 'left' needs a modifier; alternative skipped")
+    }
+
+    @Test func mapDedupesIdenticalAlternatives() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|cmd+t toggle_split")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+    }
+
+    @Test func mapMalformedAlternativePoisonsTheWholeLine() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|cmd+f1 toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message == "invalid chord 'cmd+t|cmd+f1'")
+    }
+
+    @Test func laterMapLineReplacesTheWholeEarlierBinding() {
+        let text = """
+        map cmd+t|ctrl+space>s toggle_split
+        map ctrl+a>d toggle_split
+        """
+        let (keymap, diagnostics) = parseKeymap(text)
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == nil)
+        #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "a"), Chord(mods: [], key: "d")]])
+    }
+
+    @Test func laterMapLineDropsTheEarlierSequences() {
+        let text = """
+        map ctrl+a>d toggle_split
+        map cmd+t toggle_split
+        """
+        let (keymap, diagnostics) = parseKeymap(text)
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "t"))
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+        #expect(keymap.builtinUnbound.isEmpty)
+    }
+
+    @Test func mapAlternativesLosingTheirMenuChordToACollisionKeepTheirSequences() {
+        // cmd+d is toggle_split's unmoved default, so new_session's menu chord loses — its monitor
+        // alternative has nothing to collide with and stays.
+        let (keymap, diagnostics) = parseKeymap("map cmd+d|ctrl+a>n new_session")
+        #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))
+        #expect(keymap.sequences(for: .newSession) == [[Chord(mods: [.control], key: "a"), Chord(mods: [], key: "n")]])
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("conflicts with built-in 'toggle_split'"))
+    }
+
+    @Test func unboundActionFreesItsDefaultChordForACustomCommand() {
+        let text = """
+        map ctrl+a>d toggle_split
+        command "Split" cmd+d echo split
+        """
+        let (keymap, diagnostics) = parseKeymap(text)
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut == "cmd+d")
     }
 
     @Test func parseDuplicateBuiltinChordDiagnostic() {
@@ -456,7 +586,7 @@ struct KeymapTests {
         map cmd+shift+e toggle_split
         bogus line here
         command "Deploy" ./deploy.sh
-        map ctrl+a>g new_session
+        map cmd+f1 new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
@@ -466,7 +596,7 @@ struct KeymapTests {
         #expect(diagnostics[0].line == 2)
         #expect(diagnostics[0].message.contains("unknown verb"))
         #expect(diagnostics[1].line == 4)
-        #expect(diagnostics[1].message == "built-in shortcut cannot be a leader sequence")
+        #expect(diagnostics[1].message == "invalid chord 'cmd+f1'")
     }
 
     @Test func customChordEqualsBuiltinDefaultIsDropped() {

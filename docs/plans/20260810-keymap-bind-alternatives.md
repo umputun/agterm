@@ -243,25 +243,25 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermCore/Sources/agtermCore/Keymap.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`
 
-- [ ] replace the `keybind.count == 1` guard (`Keymap.swift:310`) with `parseKeybinds`, splitting the
+- [x] replace the `keybind.count == 1` guard (`Keymap.swift:310`) with `parseKeybinds`, splitting the
       result into the first single-chord alternative (menu-bound) and the rest (monitor-bound)
-- [ ] add `builtinSequences` and `builtinUnbound` to `Keymap`, both defaulting to empty in the memberwise
+- [x] add `builtinSequences` and `builtinUnbound` to `Keymap`, both defaulting to empty in the memberwise
       init; make `equivalent(for:)` return nil for an action in `builtinUnbound`
-- [ ] record an action as unbound when its `map` line has no single-chord alternative, so the shipped
+- [x] record an action as unbound when its `map` line has no single-chord alternative, so the shipped
       default does not silently survive
-- [ ] apply the grammar by dispatch path: the menu-bound alternative keeps today's `map` rules (bare
+- [x] apply the grammar by dispatch path: the menu-bound alternative keeps today's `map` rules (bare
       non-arrow legal, reserved chords and modifier-less arrows rejected); every monitor-bound alternative
       requires a modifier on its first chord
-- [ ] keep `isReservedMonitorChord` rejected at any position in any alternative; fold last-wins per action
+- [x] keep `isReservedMonitorChord` rejected at any position in any alternative; fold last-wins per action
       per line; dedupe identical alternatives
-- [ ] leave `resolveBuiltinOverrides` and its fixpoint untouched, and let a built-in that loses its menu
+- [x] leave `resolveBuiltinOverrides` and its fixpoint untouched, and let a built-in that loses its menu
       chord there KEEP its monitor alternatives
-- [ ] write tests: `map cmd+t|ctrl+space>s toggle_split` yields both; `map ctrl+space>s toggle_split`
+- [x] write tests: `map cmd+t|ctrl+space>s toggle_split` yields both; `map ctrl+space>s toggle_split`
       leaves the action unbound rather than on its default; `map t toggle_split` still works (bare
       non-arrow); a bare first chord on a monitor-bound alternative is rejected; two single-chord
       alternatives put the first on the menu and the second on the monitor; a later `map` line replaces the
       whole earlier one; reserved-chord and bare-arrow rejection; `map cmd+t|cmd+t toggle_split` dedupes
-- [ ] run `swift test --filter KeymapTests` — must pass before task 3
+- [x] run `swift test --filter KeymapTests` — must pass before task 3
 
 ### Task 3: Per-alternative validation across both verbs
 
