@@ -179,10 +179,12 @@ final class ControlServer {
         // description: a second `open` of a file THIS process already locked conflicts with itself.
         guard lockFD >= 0 || acquireOwnership() else { return }
 
+        // every failure below KEEPS the lock. Releasing it would let another instance bind the path while
+        // this one still advertises it, which is the leak the lock exists to close, and it buys nothing:
+        // the next window's `start()` retries the bind through the `lockFD >= 0` arm above.
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
             log("control socket() failed: \(String(cString: strerror(errno)))")
-            releaseOwnership()
             return
         }
 
@@ -200,7 +202,6 @@ final class ControlServer {
         guard bound == 0 else {
             log("control bind(\(socketPath)) failed: \(String(cString: strerror(errno)))")
             close(fd)
-            releaseOwnership()
             return
         }
 
@@ -210,7 +211,6 @@ final class ControlServer {
             log("control listen() failed: \(String(cString: strerror(errno)))")
             close(fd)
             unlink(socketPath)
-            releaseOwnership()
             return
         }
 
