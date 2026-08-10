@@ -300,19 +300,19 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agterm/agtermApp.swift`
 - Modify: `agtermTests/FullScreenChordTests.swift`
 
-- [ ] inject `AppActions` into `CustomCommandRunner` (it receives none today, `agtermApp.swift:65`)
-- [ ] add `AppActions.perform(_ action: BuiltinAction)` as a reverse lookup over `PaletteCommand.allCases`
+- [x] inject `AppActions` into `CustomCommandRunner` (it receives none today, `agtermApp.swift:65`)
+- [x] add `AppActions.perform(_ action: BuiltinAction)` as a reverse lookup over `PaletteCommand.allCases`
       on `builtinAction`, routing through `runPaletteCommand` so the alternative inherits the palette's
       `uiActionsEnabled` gate; a small switch covers the few actions with no palette row
-- [ ] dispatch `.builtin` from `handleKeyDown(_:in:)` without the `focusedSurface` / `runNoSurface` split —
+- [x] dispatch `.builtin` from `handleKeyDown(_:in:)` without the `focusedSurface` / `runNoSurface` split —
       a built-in acts on the active session and key window like a palette row
-- [ ] rebuild the engine on `.agtermKeymapChanged` from both commands and built-in sequences
-- [ ] fix the validity log at `CustomCommandRunner.swift:68` to use `parseKeybinds`, so a `|` shortcut no
+- [x] rebuild the engine on `.agtermKeymapChanged` from both commands and built-in sequences
+- [x] fix the validity log at `CustomCommandRunner.swift:68` to use `parseKeybinds`, so a `|` shortcut no
       longer logs a false "invalid shortcut; skipping keybind" while the engine binds it
-- [ ] leave `guard !event.isARepeat` where it is: holding a key bound to a built-in fires once
-- [ ] extend `FullScreenChordTests` to drive `handleKeyDown(_:in:)` through a built-in sequence alternative,
+- [x] leave `guard !event.isARepeat` where it is: holding a key bound to a built-in fires once
+- [x] extend `FullScreenChordTests` to drive `handleKeyDown(_:in:)` through a built-in sequence alternative,
       asserting the action ran and the key was consumed
-- [ ] run `make test-app -only-testing:` scoped to the new case — must pass before task 5
+- [x] run `make test-app -only-testing:` scoped to the new case — must pass before task 5
 
 ### Task 5: Read-back and display
 

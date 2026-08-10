@@ -62,9 +62,10 @@ struct agtermApp: App {
         _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
         _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
         _undoCloseShortcut = State(initialValue: UndoCloseShortcut(actions: actions))
-        // built last: needs the keymap (settings) and the control server's bound socket path for `{AGT_SOCKET}`.
+        // built last: needs the keymap (settings), the action hub for built-in monitor binds, and the control
+        // server's bound socket path for `{AGT_SOCKET}`.
         _customCommandRunner = State(initialValue: CustomCommandRunner(
-            library: library, settings: settingsModel,
+            library: library, settings: settingsModel, actions: actions,
             socketProvider: { controlServer.resolvedSocketPath }))
         // follows macOS light/dark via KVO on NSApp.effectiveAppearance; dependency-free, started in `.task`.
         _appearanceObserver = State(initialValue: SystemAppearanceObserver())

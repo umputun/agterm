@@ -7,7 +7,8 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCo
 /// Drives user-defined custom commands: an app-wide `NSEvent` local key monitor turns key presses into
 /// chords, a `CustomCommandEngine` resolves them (simple chords and leader sequences like `ctrl+a > g`), and
 /// a fired command runs detached as `/bin/sh -c` with the session's context in `{AGT_X}` tokens and `$AGT_X`
-/// environment.
+/// environment. The same matcher also carries the built-in binds an `NSMenuItem` key equivalent cannot hold —
+/// a `map` line's alternatives beyond its first single chord — dispatched through `AppActions.perform(_:)`.
 ///
 /// Constructed once as `@State` in `agtermApp`. `start()`/`stop()` install/remove the monitor; `start()` is
 /// idempotent because the scene `.task` fires once per window, and the matcher rebuilds there and on
@@ -17,6 +18,7 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCo
 final class CustomCommandRunner {
     private let library: WindowLibrary
     private let settings: SettingsModel
+    private let actions: AppActions
     private let socketProvider: () -> String
 
     private var commandEngine = CustomCommandEngine(commands: [])
@@ -28,9 +30,11 @@ final class CustomCommandRunner {
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
     private static let leaderTimeout: TimeInterval = 1.5
 
-    init(library: WindowLibrary, settings: SettingsModel, socketProvider: @escaping () -> String) {
+    init(library: WindowLibrary, settings: SettingsModel, actions: AppActions,
+         socketProvider: @escaping () -> String) {
         self.library = library
         self.settings = settings
+        self.actions = actions
         self.socketProvider = socketProvider
     }
 
@@ -59,17 +63,18 @@ final class CustomCommandRunner {
         cancelLeaderTimer()
     }
 
-    /// Rebuild the matcher and the id→command map from the current keymap, skipping empty shortcuts
-    /// (palette-only commands have none). `parseKeymap`'s cross-section validation already empties the
-    /// shortcut of a command colliding with a built-in or another custom one, so it drops out of the matcher.
+    /// Rebuild the matcher from the current keymap — custom commands plus the built-in monitor binds — skipping
+    /// empty shortcuts (palette-only commands have none). `parseKeymap`'s cross-section validation already
+    /// empties the shortcut of a command colliding with a built-in or another custom one, so it drops out of
+    /// the matcher.
     private func rebuild() {
-        let commands = settings.keymap.commands
-        for command in commands where !command.shortcut.isEmpty {
-            if parseKeybind(command.shortcut) == nil {
+        let keymap = settings.keymap
+        for command in keymap.commands where !command.shortcut.isEmpty {
+            if parseKeybinds(command.shortcut) == nil {
                 logger.notice("custom command \"\(command.name, privacy: .public)\" has invalid shortcut \"\(command.shortcut, privacy: .public)\"; skipping keybind")
             }
         }
-        commandEngine = CustomCommandEngine(commands: commands)
+        commandEngine = CustomCommandEngine(commands: keymap.commands, builtinSequences: keymap.builtinSequences)
         cancelLeaderTimer()
     }
 
@@ -78,8 +83,9 @@ final class CustomCommandRunner {
     private static let escapeKeyCode: UInt16 = 53
 
     /// Feed one key event to the matcher; returns whether it was consumed (so the caller drops it). Esc while
-    /// armed resets, `.fired` runs, `.armed` arms the leader timer, and `toggle_fullscreen`'s chord toggles
-    /// full screen without reaching the matcher at all — all consumed; `.unmatched` passes through.
+    /// armed resets, `.fired` runs a command, `.firedBuiltin` runs a built-in action, `.armed` arms the leader
+    /// timer, and `toggle_fullscreen`'s chord toggles full screen without reaching the matcher at all — all
+    /// consumed; `.unmatched` passes through.
     ///
     /// Acts when the key window's first responder is a terminal surface (context from that surface), or when
     /// the key window is an agterm terminal window whose focus is NOT on a text field — including one emptied
@@ -147,10 +153,16 @@ final class CustomCommandRunner {
                 runNoSurface(command)
             }
             return true
+        case .firedBuiltin(let action):
+            cancelLeaderTimer()
+            // no focusedSurface/runNoSurface split: a built-in acts on the active session and key window,
+            // like the palette row behind it.
+            actions.perform(action)
+            return true
         case .armed:
             startLeaderTimer()
             return true
-        case .firedBuiltin, .unmatched:
+        case .unmatched:
             cancelLeaderTimer()
             return false
         }

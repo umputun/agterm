@@ -90,6 +90,26 @@ extension AppActions {
         }
     }
 
+    /// Run a built-in action fired by `CustomCommandRunner`'s key monitor — a `map` line's alternative beyond
+    /// the menu key equivalent. Routes through the palette row that owns the action, so the alternative
+    /// inherits `runPaletteCommand`'s modal gate; the six actions with no palette row (window management and
+    /// the three palette launchers) call their own entry points, each already gated.
+    func perform(_ action: BuiltinAction) {
+        if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
+            runPaletteCommand(command)
+            return
+        }
+        switch action {
+        case .newWindow: newWindow()
+        case .renameWindow: renameActiveWindow()
+        case .deleteWindow: deleteActiveWindow()
+        case .sessionPalette: toggleSessionPalette()
+        case .commandPalette: toggleActionPalette()
+        case .customCommandPalette: toggleCustomCommandPalette()
+        default: break
+        }
+    }
+
     /// The app's commands as palette items, sharing the same logic as the menu/buttons. Includes a
     /// "Move Session to …" item per other workspace (when there's an active session to move).
     func paletteActions() -> [PaletteItem] {
