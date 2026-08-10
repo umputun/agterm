@@ -629,6 +629,13 @@ extension Notification.Name {
     static let agtermAccessibilityDisplayOptionsChanged =
         Notification.Name("agterm.accessibilityDisplayOptionsChanged")
 
+    /// Posted by `SystemWakeObserver` when the displays wake. `ghostty_surface_new` returns NULL while the
+    /// display is asleep, and `createSurface` clears `pendingSurfaceCreation` before it attempts, so a session
+    /// created in that window realizes no surface and nothing retries it — the `--command` never runs and every
+    /// later call reports `session not realized` (#416). Surfaces re-attempt creation here; an already-realized
+    /// one re-pushes its size to force a repaint, the drawable being invalidated by sleep like a reparent.
+    static let agtermScreensDidWake = Notification.Name("agterm.screensDidWake")
+
     /// Posted when a window becomes frontmost (async, via the window's didBecomeKey), so the control server can
     /// refresh its cached `window.list` — its `active` flag would otherwise stay stale until the next command.
     static let agtermWindowFrontmostChanged = Notification.Name("agterm.windowFrontmostChanged")
