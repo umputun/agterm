@@ -271,21 +271,26 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermCore/Tests/agtermCoreTests/KeybindTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`
 
-- [ ] rework pass 1 to test each alternative separately against the active built-in menu chord set,
+- [x] rework pass 1 to test each alternative separately against the active built-in menu chord set,
       **including built-in monitor alternatives**, dropping only the offending alternative
-- [ ] change `keybindConflicts` to take `(Keybind, KeybindTarget)` pairs and return `KeybindTarget` pairs,
+- [x] change `keybindConflicts` to take `(Keybind, KeybindTarget)` pairs and return `KeybindTarget` pairs,
       keeping the prefix-or-duplicate rule, and feed it every alternative from both verbs
-- [ ] drop only the conflicting alternative from each side in pass 2, keeping siblings; set `shortcut = ""`
+- [x] drop only the conflicting alternative from each side in pass 2, keeping siblings; set `shortcut = ""`
       only when every alternative is gone, preserving today's palette-only outcome
-- [ ] name the dropped alternative by its raw substring in the diagnostic, and make the single-alternative
+- [x] name the dropped alternative by its raw substring in the diagnostic, and make the single-alternative
       case produce today's exact wording character for character
-- [ ] extend the diagnostics to name a built-in action where one is the offender
-- [ ] write tests: one of two alternatives shadowed by a built-in leaves the other live; both shadowed
+- [x] extend the diagnostics to name a built-in action where one is the offender
+- [x] ➕ fix the built-in collision fixpoint so an action in `builtinUnbound` contributes no chord: today
+      `resolveBuiltinOverrides`/`firstBuiltinCollision` still count its shipped `defaultChord`, so
+      `map ctrl+a>d toggle_split` followed by `map cmd+d new_session` drops the second line against a chord
+      `toggle_split` no longer uses. Built-in-versus-built-in only — `validateCommands` already reads
+      `equivalent(for:)`, which is nil for an unbound action
+- [x] write tests: one of two alternatives shadowed by a built-in leaves the other live; both shadowed
       empties the shortcut; a built-in alternative shadowed by its own line's menu chord
       (`map cmd+t|cmd+t>s`); command-vs-built-in-alternative losing only that key; built-in-vs-built-in;
       a prefix conflict (`ctrl+space` vs `ctrl+space>s`); single-alternative diagnostics byte-identical to
       today's
-- [ ] run `swift test --filter "KeybindTests|KeymapTests"` — must pass before task 4
+- [x] run `swift test --filter "KeybindTests|KeymapTests"` — must pass before task 4
 
 ### Task 4: Fire built-in alternatives from the monitor
 

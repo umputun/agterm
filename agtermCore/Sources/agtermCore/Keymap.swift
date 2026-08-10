@@ -98,8 +98,9 @@ public struct KeymapStore: Sendable {
 ///   `{AGT_X}` tokens verbatim.
 /// - anything else is an unknown verb, skipped with a diagnostic.
 ///
-/// A SINGLE final cross-section pass (`validateCommands`) then drops any custom keybind colliding with an
-/// active built-in or another custom keybind, one diagnostic each; the command stays, palette-only.
+/// A SINGLE final cross-section pass (`validateBindings`) then drops any monitor-bound alternative, from
+/// either verb, that collides with an active built-in menu chord or with another alternative — one diagnostic
+/// each, siblings untouched. A custom command that loses every alternative stays, palette-only.
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
     // collected in file order, NOT folded into a dict yet, so the final duplicate pass resolves them
     // against the FULLY-resolved chord set and can skip the later-in-file member of a colliding pair.
@@ -129,26 +130,37 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
         }
     }
 
-    // a final pass, not incremental: the custom-command validation below needs the same resolved chord set.
+    // a final pass, not incremental: the cross-section validation below needs the same resolved chord set.
     let resolved = resolveMapLines(mapLines)
-    let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, diagnostics: &diagnostics)
+    let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, unbound: resolved.unbound,
+                                                   diagnostics: &diagnostics)
 
     // likewise final: a custom line parsed before a later keyless-built-in `map` must still be validated
     // against the override that `map` installs.
-    let keymap = Keymap(builtinOverrides: builtinOverrides, commands: commands,
-                        builtinSequences: resolved.sequences, builtinUnbound: resolved.unbound)
-    let validated = validateCommands(keymap.commands, against: keymap, diagnostics: &diagnostics)
+    let menu = Keymap(builtinOverrides: builtinOverrides, commands: [], builtinUnbound: resolved.unbound)
+    let validated = validateBindings(commands: commands, sequences: resolved.sequences, menu: menu,
+                                     diagnostics: &diagnostics)
 
-    return (Keymap(builtinOverrides: builtinOverrides, commands: validated,
-                   builtinSequences: resolved.sequences, builtinUnbound: resolved.unbound), diagnostics)
+    return (Keymap(builtinOverrides: builtinOverrides, commands: validated.commands,
+                   builtinSequences: validated.sequences, builtinUnbound: resolved.unbound), diagnostics)
 }
 
-/// A single valid `map` line: the menu-bindable alternative if it has one, plus the monitor-bound rest.
+/// A single valid `map` line: the menu-bindable alternative if it has one, plus the monitor-bound rest,
+/// each carrying the raw substring it was written as.
 private struct ParsedMapLine {
     let action: BuiltinAction
     let chord: Chord?
-    let sequences: [Keybind]
+    let sequences: [(raw: String, keybind: Keybind)]
     let line: Int
+}
+
+/// A built-in's monitor-bound alternatives held until the cross-section pass, with the `map` line to report a
+/// drop on and whether the line offered more than this one bind — the two things the diagnostics need beyond
+/// the binds themselves.
+private struct BuiltinSequences {
+    let line: Int
+    let hasSiblings: Bool
+    let alternatives: [(raw: String, keybind: Keybind)]
 }
 
 /// A menu-bound `map` alternative, retained in file order until the final cross-builtin duplicate pass.
@@ -162,12 +174,12 @@ private struct ParsedOverride {
 /// an action's WHOLE binding set, so a later line replaces the earlier one's menu chord and sequences
 /// together — including replacing a menu chord with nothing, which is what `unbound` records.
 private func resolveMapLines(_ mapLines: [ParsedMapLine])
-    -> (overrides: [ParsedOverride], sequences: [BuiltinAction: [Keybind]], unbound: Set<BuiltinAction>) {
+    -> (overrides: [ParsedOverride], sequences: [BuiltinAction: BuiltinSequences], unbound: Set<BuiltinAction>) {
     var latest: [BuiltinAction: ParsedMapLine] = [:]
     for mapLine in mapLines { latest[mapLine.action] = mapLine }
 
     var overrides: [ParsedOverride] = []
-    var sequences: [BuiltinAction: [Keybind]] = [:]
+    var sequences: [BuiltinAction: BuiltinSequences] = [:]
     var unbound: Set<BuiltinAction> = []
     for mapLine in latest.values.sorted(by: { $0.line < $1.line }) {
         if let chord = mapLine.chord {
@@ -175,7 +187,10 @@ private func resolveMapLines(_ mapLines: [ParsedMapLine])
         } else {
             unbound.insert(mapLine.action)
         }
-        if !mapLine.sequences.isEmpty { sequences[mapLine.action] = mapLine.sequences }
+        guard !mapLine.sequences.isEmpty else { continue }
+        let hasSiblings = mapLine.chord != nil || mapLine.sequences.count > 1
+        sequences[mapLine.action] = BuiltinSequences(line: mapLine.line, hasSiblings: hasSiblings,
+                                                     alternatives: mapLine.sequences)
     }
     return (overrides, sequences, unbound)
 }
@@ -190,7 +205,10 @@ private func resolveMapLines(_ mapLines: [ParsedMapLine])
 /// colliding OVERRIDES drop the later-in-file one; each drop is diagnosed. The shipped defaults are all
 /// distinct (pinned by `BuiltinActionTests`), so every collision involves ≥1 override and each iteration
 /// removes one — the loop terminates.
-private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
+///
+/// `unbound` is the set of actions a `map` line left with no menu chord at all; they occupy nothing, so
+/// another built-in may claim the default they no longer use.
+private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set<BuiltinAction>,
                                      diagnostics: inout [KeymapDiagnostic]) -> [BuiltinAction: Chord] {
     // fold last-wins, remembering each winner's file line so a two-override collision can name the later.
     var candidates: [BuiltinAction: Chord] = [:]
@@ -202,7 +220,7 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
 
     // one loser per pass. drops are line-sorted at the end so diagnostics don't depend on dictionary order.
     var pending: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
-    while let drop = firstBuiltinCollision(candidates: candidates, overrideLine: overrideLine) {
+    while let drop = firstBuiltinCollision(candidates: candidates, unbound: unbound, overrideLine: overrideLine) {
         candidates.removeValue(forKey: drop.loser)
         pending.append(drop)
     }
@@ -218,10 +236,15 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
 
 /// One fixpoint iteration: the first chord two distinct actions resolve to, returned as the loser to drop,
 /// the keeper, and the loser's file line. nil when the candidate set is collision-free.
-private func firstBuiltinCollision(candidates: [BuiltinAction: Chord],
+private func firstBuiltinCollision(candidates: [BuiltinAction: Chord], unbound: Set<BuiltinAction>,
                                    overrideLine: [BuiltinAction: Int])
     -> (loser: BuiltinAction, keeper: BuiltinAction, line: Int)? {
-    let resolvedChord: (BuiltinAction) -> Chord? = { action in candidates[action] ?? action.defaultChord }
+    // mirrors `Keymap.equivalent(for:)`: an unbound action holds no chord, so its shipped default stops
+    // blocking another built-in. It has no candidate to drop either, which keeps the loop terminating.
+    let resolvedChord: (BuiltinAction) -> Chord? = { action in
+        if let chord = candidates[action] { return chord }
+        return unbound.contains(action) ? nil : action.defaultChord
+    }
 
     var ownersByChord: [Chord: [BuiltinAction]] = [:]
     for action in BuiltinAction.allCases {
@@ -252,63 +275,131 @@ private func firstBuiltinCollision(candidates: [BuiltinAction: Chord],
     return best
 }
 
-/// Cross-section validation: drop a custom keybind whose FIRST chord equals any active built-in chord or
-/// that uses a reserved monitor chord (Ctrl-Tab / Ctrl-1/2), and drop BOTH keybinds of any custom-vs-custom
-/// duplicate/prefix conflict. A dropped keybind clears the command's `shortcut` to `""` — the command stays
-/// in the palette, unkeyed — and adds a diagnostic.
-///
-/// Built-ins are single-chord, so any custom bind STARTING with that chord, single or leader, is shadowed
-/// by the menu. The reserved chords (`isReservedMonitorChord`) belong to the app's always-on NSEvent
-/// monitors rather than the menu and are equally un-rebindable. The active built-in set already has every
-/// override applied, so a custom command may freely reuse a default chord the user moved a built-in off of.
-private func validateCommands(_ commands: [CustomCommand], against keymap: Keymap,
-                              diagnostics: inout [KeymapDiagnostic]) -> [CustomCommand] {
-    // keyless actions (defaultChord == nil) contribute only when the user mapped one; every shipped
-    // default, arrows included, is in the set, so a custom command can't shadow one.
-    let builtinChords = Set(BuiltinAction.allCases.compactMap { keymap.equivalent(for: $0) })
+/// One monitor-bound alternative entering the cross-section passes: its owner, the raw spelling to quote back,
+/// the parsed keybind the passes compare, and the line to report a drop on — `0` for a custom command, whose
+/// source line is not tracked.
+private struct MonitorAlternative {
+    let target: KeybindTarget
+    let ownerName: String
+    let raw: String
+    let keybind: Keybind
+    /// Whether the owner offered more than this one bind. The only thing separating today's wording from the
+    /// per-alternative one, so a single-alternative binding is diagnosed exactly as it always was.
+    let hasSiblings: Bool
+    let line: Int
 
-    var result = commands
+    var owner: String {
+        switch target {
+        case .command: return "custom command '\(ownerName)'"
+        case .builtin: return "built-in '\(ownerName)'"
+        }
+    }
+
+    var subject: String {
+        switch target {
+        case .command: return "\(owner) shortcut '\(raw)'"
+        case .builtin: return "\(owner) chord '\(raw)'"
+        }
+    }
+
+    var scope: String { hasSiblings ? "alternative dropped" : "keybind dropped" }
+}
+
+/// Cross-section validation over every monitor-bound alternative of both verbs: drop one whose FIRST chord
+/// equals an active built-in menu chord or that uses a reserved monitor chord (Ctrl-Tab / Ctrl-1/2), then drop
+/// BOTH sides of any duplicate/prefix conflict among the survivors. Only the offending alternative goes — its
+/// siblings keep firing, which is the whole point of offering alternatives. A custom command whose every
+/// alternative went ends up with `shortcut == ""`, staying in the palette unkeyed.
+///
+/// Built-in menu chords are single, so any bind STARTING with one, single or leader, is shadowed by the menu.
+/// Built-in monitor alternatives face the same two tests as custom ones: `map cmd+t|cmd+t>s toggle_split` would
+/// otherwise arm the monitor on the very chord that line puts on the menu. `menu` already has every override
+/// applied, so a bind may freely reuse a default chord the user moved a built-in off of.
+private func validateBindings(commands: [CustomCommand], sequences: [BuiltinAction: BuiltinSequences],
+                              menu: Keymap, diagnostics: inout [KeymapDiagnostic])
+    -> (commands: [CustomCommand], sequences: [BuiltinAction: [Keybind]]) {
+    var alternatives: [MonitorAlternative] = []
+    var keyedIDs: Set<UUID> = []
+    for command in commands {
+        guard !command.shortcut.isEmpty, let parsed = alternativeKeybinds(command.shortcut) else { continue }
+        keyedIDs.insert(command.id)
+        alternatives += parsed.map {
+            MonitorAlternative(target: .command(command.id), ownerName: command.name, raw: $0.raw,
+                               keybind: $0.keybind, hasSiblings: parsed.count > 1, line: 0)
+        }
+    }
+    for (action, entry) in sequences.sorted(by: { $0.value.line < $1.value.line }) {
+        alternatives += entry.alternatives.map {
+            MonitorAlternative(target: .builtin(action), ownerName: action.rawValue, raw: $0.raw,
+                               keybind: $0.keybind, hasSiblings: entry.hasSiblings, line: entry.line)
+        }
+    }
+
+    // keyless actions (defaultChord == nil) contribute only when the user mapped one; every shipped default,
+    // arrows included, is in the set, so a bind can't shadow one.
+    let builtinChords = Set(BuiltinAction.allCases.compactMap { menu.equivalent(for: $0) })
 
     // pass 1: a built-in collides on the FIRST chord only, a reserved monitor chord at ANY position — the
     // monitor consumes its chord wherever it lands in a leader, so `ctrl+a>ctrl+1` is just as dead as a
-    // leading one. line 0 because the command's source line isn't tracked.
-    for index in result.indices {
-        let command = result[index]
-        guard !command.shortcut.isEmpty, let keybind = parseKeybind(command.shortcut),
-              let firstChord = keybind.first else { continue }
+    // leading one.
+    var kept: [MonitorAlternative] = []
+    for alternative in alternatives {
         let conflictKind: String?
-        if builtinChords.contains(firstChord) {
+        if let first = alternative.keybind.first, builtinChords.contains(first) {
             conflictKind = "a built-in"
-        } else if keybind.contains(where: isReservedMonitorChord) {
+        } else if alternative.keybind.contains(where: isReservedMonitorChord) {
             conflictKind = "a reserved shortcut"
         } else {
             conflictKind = nil
         }
-        guard let kind = conflictKind else { continue }
+        guard let kind = conflictKind else {
+            kept.append(alternative)
+            continue
+        }
         diagnostics.append(KeymapDiagnostic(
-            line: 0,
-            message: "custom command '\(command.name)' shortcut '\(command.shortcut)' conflicts with \(kind); keybind dropped"))
-        result[index].shortcut = ""
+            line: alternative.line,
+            message: "\(alternative.subject) conflicts with \(kind); \(alternative.scope)"))
     }
 
-    // pass 2: computed over the post-pass-1 set so a keybind dropped there can't re-trigger. each
-    // diagnostic names the OTHER offender (the conflict carries both ids) so the user can find the pair.
-    let conflicts = keybindConflicts(result)
-    let nameByID = Dictionary(uniqueKeysWithValues: result.map { ($0.id, $0.name) })
-    var otherOffender: [UUID: String] = [:]
+    // pass 2: computed over the post-pass-1 set so an alternative dropped there can't re-trigger. each
+    // diagnostic names the OTHER offender (the conflict carries both sides) so the user can find the pair.
+    let conflicts = keybindConflicts(kept.map { (keybind: $0.keybind, target: $0.target) })
+    var otherOffender: [Int: String] = [:]
     for conflict in conflicts {
-        otherOffender[conflict.first] = nameByID[conflict.second]
-        otherOffender[conflict.second] = nameByID[conflict.first]
-    }
-    for index in result.indices {
-        guard let other = otherOffender[result[index].id] else { continue }
-        diagnostics.append(KeymapDiagnostic(
-            line: 0,
-            message: "custom command '\(result[index].name)' shortcut '\(result[index].shortcut)' conflicts with custom command '\(other)'; keybind dropped"))
-        result[index].shortcut = ""
+        guard let first = kept.firstIndex(where: { $0.matches(conflict.first) }),
+              let second = kept.firstIndex(where: { $0.matches(conflict.second) }) else { continue }
+        otherOffender[first] = kept[second].owner
+        otherOffender[second] = kept[first].owner
     }
 
-    return result
+    var survivingShortcuts: [UUID: [String]] = [:]
+    var survivingSequences: [BuiltinAction: [Keybind]] = [:]
+    for (index, alternative) in kept.enumerated() {
+        guard let other = otherOffender[index] else {
+            switch alternative.target {
+            case .command(let id): survivingShortcuts[id, default: []].append(alternative.raw)
+            case .builtin(let action): survivingSequences[action, default: []].append(alternative.keybind)
+            }
+            continue
+        }
+        diagnostics.append(KeymapDiagnostic(
+            line: alternative.line,
+            message: "\(alternative.subject) conflicts with \(other); \(alternative.scope)"))
+    }
+
+    var result = commands
+    for index in result.indices where keyedIDs.contains(result[index].id) {
+        result[index].shortcut = (survivingShortcuts[result[index].id] ?? []).joined(separator: "|")
+    }
+    return (result, survivingSequences)
+}
+
+private extension MonitorAlternative {
+    /// Whether this is the alternative a conflict side names. A target's alternatives are deduped, so the
+    /// target plus the keybind identifies exactly one.
+    func matches(_ side: KeybindConflict.Side) -> Bool {
+        target == side.target && keybind == side.keybind
+    }
 }
 
 /// Strip a trailing inline comment: a `#` counts only when preceded by whitespace AND outside a quoted
@@ -370,7 +461,7 @@ private func parseMapLine(_ rest: String, line: Int, mapLines: inout [ParsedMapL
     // with one alternative a drop IS the line's failure, so the wording stays what it has always been.
     let scope = alternatives.count == 1 ? "map skipped" : "alternative skipped"
     var menuChord: Chord?
-    var sequences: [Keybind] = []
+    var sequences: [(raw: String, keybind: Keybind)] = []
     for alternative in alternatives {
         // a chord owned by an always-on NSEvent monitor can't be a menu key-equivalent without dead-racing
         // the monitor, and is just as dead deeper in a sequence, so reject it at any position.
@@ -398,7 +489,7 @@ private func parseMapLine(_ rest: String, line: Int, mapLines: inout [ParsedMapL
                                                 message: "chord '\(alternative.raw)' needs a modifier on its first key; \(scope)"))
             continue
         }
-        sequences.append(alternative.keybind)
+        sequences.append(alternative)
     }
 
     // nothing survived: report no action diagnostic on top of the per-alternative ones, as before.

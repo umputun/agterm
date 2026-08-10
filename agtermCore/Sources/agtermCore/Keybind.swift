@@ -344,32 +344,40 @@ private func modifier(for token: String) -> Modifier? {
     }
 }
 
-/// A pair of custom commands whose shortcuts conflict — either identical or one a sequence-prefix
-/// of the other (the wait-or-fire ambiguity). Carries both ids so the UI can point at the offenders.
+/// A pair of monitor-bound binds that conflict — either identical or one a sequence-prefix of the other (the
+/// wait-or-fire ambiguity). Each side names its target AND the exact keybind that lost, because a target may
+/// own several alternatives and only the offending one is dropped.
 public struct KeybindConflict: Equatable, Sendable {
-    public let first: UUID
-    public let second: UUID
+    public struct Side: Equatable, Sendable {
+        public let target: KeybindTarget
+        public let keybind: Keybind
 
-    public init(first: UUID, second: UUID) {
+        public init(target: KeybindTarget, keybind: Keybind) {
+            self.target = target
+            self.keybind = keybind
+        }
+    }
+
+    public let first: Side
+    public let second: Side
+
+    public init(first: Side, second: Side) {
         self.first = first
         self.second = second
     }
 }
 
-/// Find shortcut conflicts across a list of custom commands. Two parseable, non-empty shortcuts conflict when
-/// one keybind is a prefix of the other (a duplicate is the degenerate equal-length case): the shorter would
-/// fire — or be forced to wait — ambiguously while the longer is still being typed. Commands with an empty or
-/// unparseable shortcut are skipped (palette-only / surfaced separately).
-public func keybindConflicts(_ commands: [CustomCommand]) -> [KeybindConflict] {
-    let parsed: [(id: UUID, keybind: Keybind)] = commands.compactMap { command in
-        guard !command.shortcut.isEmpty, let keybind = parseKeybind(command.shortcut) else { return nil }
-        return (command.id, keybind)
-    }
-
+/// Find conflicts across every monitor-bound bind, from both verbs and every alternative of each. Two binds
+/// conflict when one keybind is a prefix of the other (a duplicate is the degenerate equal-length case): the
+/// shorter would fire — or be forced to wait — ambiguously while the longer is still being typed. Callers pass
+/// already-parsed binds, so an empty or unparseable shortcut never reaches here.
+public func keybindConflicts(_ binds: [(keybind: Keybind, target: KeybindTarget)]) -> [KeybindConflict] {
     var conflicts: [KeybindConflict] = []
-    for i in parsed.indices {
-        for j in parsed.index(after: i)..<parsed.endIndex where isPrefix(parsed[i].keybind, of: parsed[j].keybind) {
-            conflicts.append(KeybindConflict(first: parsed[i].id, second: parsed[j].id))
+    for i in binds.indices {
+        for j in binds.index(after: i)..<binds.endIndex where isPrefix(binds[i].keybind, of: binds[j].keybind) {
+            conflicts.append(KeybindConflict(
+                first: KeybindConflict.Side(target: binds[i].target, keybind: binds[i].keybind),
+                second: KeybindConflict.Side(target: binds[j].target, keybind: binds[j].keybind)))
         }
     }
     return conflicts
