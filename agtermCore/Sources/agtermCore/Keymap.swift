@@ -35,7 +35,7 @@ public struct Keymap: Equatable, Sendable {
     }
 
     /// The action's whole binding set as macOS menu glyphs, the menu chord first and each monitor-bound
-    /// alternative after it, space-separated (`⌘T ⌃␣S`); `nil` means "not configured", the caller showing no
+    /// alternative after it, space-separated (`⌘T ⌃␣>S`); `nil` means "not configured", the caller showing no
     /// shortcut. Drives palette hints and toolbar tooltips alike.
     public func glyphHint(for action: BuiltinAction) -> String? {
         let parts = (equivalent(for: action).map { [$0.glyphString] } ?? []) + sequences(for: action).map(\.glyphString)

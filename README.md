@@ -489,7 +489,7 @@ v1 limitations:
 - A `map` line may not bind a bare, modifier-less arrow (`map left previous_session`): a built-in rides an always-on menu key-equivalent, so a bare arrow would swallow the key in the terminal, the palettes, the dashboard grid, and every text field. Any modifier makes it bindable — `map cmd+shift+left previous_session` is fine. Custom commands already require a modifier on every chord.
 - The literal `+` and `>` can't be a bare key token (they are the chord-joiner and leader separators), but those keys are still bindable as `shift+=` and `shift+.`. Only `increase_font_size`'s default ⌘+ shows as a glyph rather than editable text, because its stored form doesn't round-trip through the file.
 - The Ctrl-Tab MRU session switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet; they keep their current keys.
-- The action palette shows built-in shortcuts as macOS glyphs (⌘⇧E) and custom commands as raw kitty syntax (`cmd+shift+e`). A built-in with alternatives shows them all, space-separated (⌘T ⌃AT), in the palette and in the toolbar and sidebar tooltips alike.
+- The action palette shows built-in shortcuts as macOS glyphs (⌘⇧E) and custom commands as raw kitty syntax (`cmd+shift+e`). A built-in with alternatives shows them all, space-separated, with a sequence's chords joined by `>` as in the config (⌘T ⌃A>T), in the palette and in the toolbar and sidebar tooltips alike.
 
 ## Ghostty config
 

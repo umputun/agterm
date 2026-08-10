@@ -237,9 +237,10 @@ public extension Array where Element == Chord {
     /// The keybind in kitty syntax, chords joined with `>` (`ctrl+a>g`) — the spelling `keymap.conf` uses.
     var displayString: String { map(\.displayString).joined(separator: ">") }
 
-    /// The keybind as macOS glyphs, chords run together (`⌃␣S`). Callers list a binding's ALTERNATIVES
-    /// space-separated, so a space here would read as another alternative rather than this one's next chord.
-    var glyphString: String { map(\.glyphString).joined() }
+    /// The keybind as macOS glyphs, chords joined with `>` (`⌃A>T`). Run together they read as one chord
+    /// (`⌃AT` looks like Ctrl-Alt-T), and a space is taken: callers list a binding's ALTERNATIVES
+    /// space-separated. `>` is what `keymap.conf` already spells, so the hint matches what the user typed.
+    var glyphString: String { map(\.glyphString).joined(separator: ">") }
 }
 
 /// What a keybind fires: a custom command by id, or a built-in action. One matcher carries both verbs'

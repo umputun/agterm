@@ -462,7 +462,7 @@ struct KeybindTests {
 
     @Test func keybindGlyphStringRunsChordsTogether() {
         let keybind: Keybind = [Chord(mods: .control, key: "space"), Chord(mods: [], key: "s")]
-        #expect(keybind.glyphString == "⌃␣S")
+        #expect(keybind.glyphString == "⌃␣>S")
         #expect([Chord(mods: .command, key: "t")].glyphString == "⌘T")
     }
 

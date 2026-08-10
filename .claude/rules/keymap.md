@@ -173,7 +173,8 @@ paths:
   round-trip and prints `(not expressible)` in the starter file. Ctrl-Tab and Ctrl-1/2 are reserved,
   monitor-driven, and not rebindable. Palette custom hints use raw kitty syntax, not macOS glyphs.
 - `shortcutGlyph(for:)` over `glyphHint(for:)` is the single resolver behind built-in palette hints and
-  the toolbar/sidebar tooltips. It space-joins the menu chord's glyphs and each alternative's (`⌘T ⌃␣S`),
+  the toolbar/sidebar tooltips. It space-joins the menu chord's glyphs and each alternative's, a sequence's
+  own chords joined by `>` so a run cannot read as one chord (`⌘T ⌃␣>S`),
   returns the alternatives alone for an unbound action, and nil when there is neither.
 - The starter file's `map` and `command` examples are literal chords that rot when a new built-in claims
   one, as `dashboard` did to the shipped `cmd+shift+d` (issue #405). Keep
