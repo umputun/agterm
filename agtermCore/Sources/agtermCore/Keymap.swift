@@ -92,10 +92,12 @@ public struct KeymapStore: Sendable {
 /// rule); the first whitespace token is the verb, `map` or `command`, each owning its own grammar in
 /// `parseMapLine` / `parseCommandLine`. Anything else is skipped with a diagnostic.
 ///
-/// Three passes then run over the whole file, all order-INDEPENDENT by design: `resolveMapLines` folds the
-/// `map` lines to one per action, `resolveBuiltinOverrides` settles built-in-versus-built-in menu chord
-/// collisions, and `validateBindings` settles every monitor-bound alternative of both verbs against the
-/// resulting chord set.
+/// Four passes then run over the whole file: `resolveMapLines` folds the `map` lines last-wins to one per
+/// action, `resolveBuiltinOverrides` settles built-in-versus-built-in menu chord collisions, `validateBindings`
+/// settles every monitor-bound alternative of both verbs against the resulting chord set, and
+/// `unboundAfterRestoringStrandedDefaults` hands its default back to an action that ended up with nothing.
+/// Only `validateBindings` is order-independent; the first two are order-sensitive by design and by defect
+/// respectively (`docs/backlog/builtin-override-collisions-depend-on-line-order.md`).
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
     // collected in file order, NOT folded into a dict yet, so the final duplicate pass resolves them
     // against the FULLY-resolved chord set and can skip the later-in-file member of a colliding pair.
@@ -418,8 +420,9 @@ private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative], menu
 /// with one that also went still dies; that is the deliberate cost of determinism, not an omission — do not
 /// add a recovery pass for it.
 ///
-/// Each diagnostic names the OTHER offender so the user can find the pair; a target's alternatives are
-/// deduped, so target plus keybind locates exactly one of them.
+/// A cross-target diagnostic names the OTHER offender so the user can find the pair; a same-target one names
+/// the owner both alternatives share. A target's alternatives are deduped, so target plus keybind locates
+/// exactly one of them.
 private func dropConflictingAlternatives(_ alternatives: [MonitorAlternative],
                                          diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
     var position: [KeybindConflict.Side: Int] = [:]

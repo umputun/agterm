@@ -59,8 +59,9 @@ paths:
   a stock competitor.
 - Diagnose live shortcut state with `agtermctl keymap list`, whose `actions` and `menu` expose parsed and
   dispatched chords through host-free `namedKey(forKeyEquivalent:)`; the actions column's contract is owned
-  by [[control-api]], and only its first field can appear under `menu`. `overridden` still compares the menu
-  chord alone, so an action the user reached only by alternatives is unmarked. Test the reload path, not
+  by [[control-api]], and only its first field can appear under `menu`. `overridden` compares the resolved
+  menu chord against the shipped default, so an action left with alternatives only reports `overridden` with
+  no `chord` when it ships a default, and stays unmarked when it is keyless. Test the reload path, not
   only a seeded file: see `CloseSessionChordTests`,
   `CustomCommandRunnerTests.testKeymapReloadRebindsTheBuiltinAlternatives`, and
   `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
