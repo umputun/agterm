@@ -91,9 +91,10 @@ concurrency before changing the bridge.
 - Launching a second instance without `AGTERM_STATE_DIR` still shares state, but no longer takes the
   running app's control socket. `ControlServer.start` takes an exclusive `flock` on `<socket>.lock` and
   refuses to bind while another live instance holds it, logging `already served by another instance`.
-  A refused instance reports `resolvedSocketPath` nil, so its shells get NO `AGTERM_SOCKET` and an
-  untargeted `agtermctl` there fails instead of driving the live terminal. Isolate anyway: state is
-  still shared, and persisted session ids resolve in both instances.
+  A refused instance advertises `<socket>.unavailable` in `AGTERM_SOCKET`, so a command passing
+  `--socket "$AGTERM_SOCKET"` fails rather than reaching the owner. A BARE `agtermctl` still reaches it:
+  the CLI never reads that variable and resolves the default path. Isolate anyway — state is shared and
+  persisted session ids resolve in both instances, so an untargeted command lands on the live terminal.
 - `lsof -p <pid> | grep agterm.sock` showing an fd on a socket path `ls` cannot find means an orphaned
   socket; a window scene that never bound one is a different fault. Reaching it now takes a build
   predating the lock, or the socket file being deleted by hand.

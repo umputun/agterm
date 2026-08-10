@@ -85,11 +85,13 @@ paths:
   also atomic against two instances launching together, and the kernel drops it on a force-quit, which is
   the case the unlink covers. Never unlink the lock file: the next instance would lock a fresh inode and
   exclude nobody.
-- A refused instance reports `resolvedSocketPath` nil, and the surface factories then OMIT `AGTERM_SOCKET`
-  rather than emitting the resolved default, which would point every shell it spawns at the other
-  instance — the user's live terminal, where shared state makes persisted session ids resolve too.
-  `{AGT_SOCKET}` takes an empty string there, so a custom command fails to connect instead. Its `stop()`
-  returns early without unlinking, leaving the owner's socket intact when the refused instance quits.
+- A refused instance advertises `<socketPath>.unavailable` through `resolvedSocketPath`, so its shells and
+  `{AGT_SOCKET}` carry a path nothing serves instead of the resolved default, which would point them at
+  the other instance — the user's live terminal, where shared state makes persisted session ids resolve
+  too. Do NOT omit the variable instead: `agterm-agent-status.sh` drops `--socket` when it is absent and
+  `agtermctl` then resolves that same default, so an unset value routes agent status onto the live app.
+  `refused` clears on a later successful acquire, since `start()` re-runs per window scene and the owner
+  may have quit. Its `stop()` returns early without unlinking, leaving the owner's socket intact.
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
   return structured errors. Mutations may return `result.id`; trees use `result.tree`.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses

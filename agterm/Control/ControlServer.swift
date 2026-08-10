@@ -36,12 +36,18 @@ final class ControlServer {
     /// The bound socket path, nil when not listening (bind failed or never started).
     var boundSocketPath: String? { listenFD >= 0 ? socketPath : nil }
 
-    /// The path spawned surfaces point `AGTERM_SOCKET` at, nil once this instance has refused it because
-    /// another one owns it — a shell must never be handed a socket that drives a DIFFERENT app, which for
-    /// a second instance sharing state means typing into the user's live terminal (persisted session ids
-    /// resolve there too). Not `boundSocketPath`: the launch window's surfaces can materialize BEFORE
+    /// Suffix marking the stand-in path a refused instance advertises. Nothing ever creates it, so every
+    /// connection to it fails.
+    static let unavailableSuffix = ".unavailable"
+
+    /// The path spawned surfaces point `AGTERM_SOCKET` at. Once this instance has REFUSED the real path
+    /// because another one owns it, this becomes an unbindable sibling: a shell here must not reach the
+    /// other app, which for a second instance sharing state is the user's live terminal (persisted session
+    /// ids resolve there too). Leaving the variable UNSET is worse than a dead value — the shipped status
+    /// hooks drop `--socket` when it is absent, and `agtermctl` then resolves the very default the other
+    /// instance is serving. Not `boundSocketPath`: the launch window's surfaces can materialize BEFORE
     /// `start()` binds, and a nil there would leak `AGTERM_SOCKET` permanently. Equals it once bound.
-    var resolvedSocketPath: String? { refused ? nil : socketPath }
+    var resolvedSocketPath: String { refused ? socketPath + ControlServer.unavailableSuffix : socketPath }
     private let acceptQueue = DispatchQueue(label: "com.umputun.agterm.control.accept")
 
     /// Thread-safe window-list cache: refreshed on the main actor after every dispatched command, read under
@@ -238,6 +244,10 @@ final class ControlServer {
             return false
         }
         lockFD = fd
+        // clear it: `start()` re-runs from every window scene's task, so an instance refused while the
+        // owner was alive reaches this line once the owner quits, and a stale `refused` would leave it
+        // advertising the unavailable path forever on a socket it now serves.
+        refused = false
         return true
     }
 

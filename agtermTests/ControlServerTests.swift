@@ -77,8 +77,10 @@ final class ControlServerTests: XCTestCase {
     }
 
     /// A refused instance must not advertise a path it does not serve: every shell it spawns would carry
-    /// the OTHER instance's socket in `AGTERM_SOCKET` and drive that app instead.
-    func testARefusedServerAdvertisesNoSocketPath() {
+    /// the OTHER instance's socket in `AGTERM_SOCKET` and drive that app instead. It advertises an
+    /// unbindable path rather than nothing, because the status hooks read an ABSENT variable as
+    /// "resolve the default", which is that same other instance.
+    func testARefusedServerAdvertisesAnUnbindablePath() {
         let first = makeServer()
         first.start()
         XCTAssertEqual(first.resolvedSocketPath, socketPath, "the owner should advertise its path")
@@ -88,7 +90,29 @@ final class ControlServerTests: XCTestCase {
                        "before start, surfaces materializing early still take the path")
 
         second.start()
-        XCTAssertNil(second.resolvedSocketPath, "a refused server should advertise nothing")
+        XCTAssertEqual(second.resolvedSocketPath, socketPath + ControlServer.unavailableSuffix,
+                       "a refused server should advertise a path nothing serves")
+        XCTAssertFalse(connects(to: second.resolvedSocketPath), "that path must not connect anywhere")
+        XCTAssertNotEqual(second.resolvedSocketPath, socketPath, "and must not be the owner's")
+    }
+
+    /// `start()` re-runs from every window scene's task, so a server refused while the owner was alive
+    /// reaches it again once the owner quits. It must then serve — and advertise — the real path.
+    func testAServerThatBindsAfterRefusingAdvertisesTheRealPath() {
+        let first = makeServer()
+        first.start()
+
+        let second = makeServer()
+        second.start()
+        XCTAssertNil(second.boundSocketPath, "precondition: the second server was refused")
+
+        first.stop()
+        second.start()
+
+        XCTAssertEqual(second.boundSocketPath, socketPath, "the freed path should be bindable")
+        XCTAssertEqual(second.resolvedSocketPath, socketPath,
+                       "a server that went on to bind must stop advertising the unavailable path")
+        XCTAssertTrue(connects(to: socketPath))
     }
 
     /// A live owner whose backlog is saturated answers `connect` with the same ECONNREFUSED a dead socket
