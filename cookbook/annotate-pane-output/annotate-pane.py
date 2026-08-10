@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -168,7 +169,10 @@ class Agt:
         is ambiguous on its own: agtermctl can refuse before revdiff ever runs, "overlay already
         open" being the one a second press produces, so its own message is carried out with it.
         """
-        command = f"{revdiff} --only={src} -o {out} --exit-code-on-annotations --wrap"
+        # the overlay runs this string through a shell, so a REVDIFF path with a space in it would
+        # otherwise split into two words
+        command = (f"{shlex.quote(revdiff)} --only={shlex.quote(str(src))} -o {shlex.quote(str(out))}"
+                   " --exit-code-on-annotations --wrap")
         res = self.run("session", "overlay", "open", command, "--block",
                        "--size-percent", str(OVERLAY_PERCENT),
                        "--background-color", OVERLAY_TINT,
@@ -203,12 +207,14 @@ def captured(selection: str, pane: str) -> str:
     an empty buffer instead of the screen you meant.
 
     The pane's trailing newline is dropped so revdiff does not open on an empty last line; `--lines`
-    has already trimmed blank grid rows server-side. A selection is taken exactly as made. Only the
-    tail is touched: dropping leading blanks would shift every line number a note comes back with.
+    has already trimmed blank grid rows server-side. Newlines ONLY - a bare rstrip would eat trailing
+    spaces off the last line of a prompt or an ASCII layout, changing what is annotated. A selection
+    is taken exactly as made, and leading blanks stay: dropping them would shift every line number a
+    note comes back with.
     """
     if selection.strip():
         return selection
-    return "\n".join(pane.splitlines()).rstrip()
+    return "\n".join(pane.splitlines()).rstrip("\n")
 
 
 def parse_annotations(text: str) -> list[tuple[int, int, str]]:
