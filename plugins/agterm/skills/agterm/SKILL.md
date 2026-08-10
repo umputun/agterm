@@ -181,6 +181,11 @@ them never has to know the defaults; `spinner` names the STYLE, so `none` is wha
 turn one off. While a HUD is up the node's `overlay` reads `false` and `overlaySizePercent` is omitted, so a
 poll for "is a program covering this session" cannot mistake a message for one; HUD state is poll-only,
 no event announces it),
+`realized` (whether the session's MAIN pane has a live terminal; `false` means no shell was spawned and
+`session type`/`session text` will answer `session not realized`. `session new` returns `ok` for a model
+entry, which is weaker — libghostty will not create a surface while the display is asleep, so a session
+created by a scheduled job overnight stays unrealized until the displays wake and then recovers itself.
+Poll this after an unattended create),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
 `splitRatio` (the left-pane divider fraction 0.05–0.95 of a

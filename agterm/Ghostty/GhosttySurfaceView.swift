@@ -3,7 +3,10 @@
 import agtermCore
 import AppKit
 import GhosttyKit
+import os
 import QuartzCore
+
+private let logger = Logger(subsystem: "com.umputun.agterm", category: "GhosttySurfaceView")
 
 /// A Metal-backed NSView hosting one libghostty surface (one shell). Conforms to `TerminalSurface` so the
 /// host-free `Session` can own it without importing GhosttyKit/AppKit.
@@ -318,6 +321,34 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         setupTrackingArea()
         observeKeyWindowChanges()
         observeWindowVisibilityChanges()
+        observeDisplayWake()
+    }
+
+    /// Re-attempt creation when the displays wake. `ghostty_surface_new` returns NULL for as long as the
+    /// display is asleep, and the deck's own retries all ride SwiftUI layout, which does not run for an
+    /// off-display window — so a session a scheduled job created in that window stays dead with its
+    /// `--command` unrun until something incidental re-lays it out (#416). `object: nil` and a token in
+    /// `focusObservers` match the sibling observers, including their `NotificationCenter.default` teardown.
+    private func observeDisplayWake() {
+        let token = NotificationCenter.default.addObserver(
+            forName: .agtermScreensDidWake, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.retryCreationAfterWake() }
+        }
+        focusObservers.append(token)
+    }
+
+    /// Bounded re-attempts after a display wake: creation was measured still failing for a second or two
+    /// past `screensDidWake`, so one shot at the notification is not enough, and an unbounded retry would
+    /// spin forever against a surface that fails for some other reason. A realized surface costs nothing —
+    /// the first guard returns immediately.
+    private func retryCreationAfterWake(attempt: Int = 1) {
+        guard !isDestroyed, surface == nil else { return }
+        createSurface()
+        guard surface == nil, attempt < 10 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.retryCreationAfterWake(attempt: attempt + 1)
+        }
     }
 
     /// Watch every window's key transitions and re-evaluate focus on each. No filtering to my own window:
@@ -566,8 +597,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
                 return ghostty_surface_new(app, &config)
             }
         }
-        guard let surface else { return }
-
+        guard let surface else {
+            // libghostty declines to build a surface while the display is asleep. Silence here is what made
+            // #416 undiagnosable from outside: `session.new` had already answered ok. Re-arm the deferred-create
+            // flag so the layout path retries too — `.agtermScreensDidWake` is what makes recovery TIMELY, not
+            // what makes it possible, and a view first mounted inside the residual post-wake window registers
+            // its observer too late for the wake that just fired.
+            pendingSurfaceCreation = true
+            logger.notice("surface creation failed (display asleep?); retrying on the next wake or layout pass")
+            return
+        }
         // record the same scheme on the surface itself, so a later `update_config` re-resolves its side.
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
 

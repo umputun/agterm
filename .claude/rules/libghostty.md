@@ -64,6 +64,17 @@ paths:
   nil every store-capturing callback to break the store/session/surface/closure cycle.
 - Create surfaces only with nonzero backing size; otherwise Metal stays blank. Defer through
   `pendingSurfaceCreation` until `setFrameSize`.
+- `ghostty_surface_new` returns NULL for as long as the DISPLAY is asleep, with a valid backing size —
+  measured 21 consecutive failures over 40s, then success within ~2s of wake while the screen was still
+  LOCKED. Unlock is irrelevant; display wake is the earliest moment creation can succeed, so retrying
+  during sleep is pure spin. Nothing in the deck re-attempts on its own: every other retry path rides
+  SwiftUI layout, which does not run for an off-display window, so `updateNSView` never fires. That is why
+  a session a scheduled job creates overnight realized no surface and never ran its `--command`, while
+  `session.new` had already answered `ok` (#416). `SystemWakeObserver` posts `.agtermScreensDidWake` and
+  `GhosttySurfaceView.retryCreationAfterWake` re-attempts, bounded, because creation can still fail for a
+  second or two after the notification. A failed create also re-arms `pendingSurfaceCreation`, so the
+  layout path retries as well: the wake hook makes recovery TIMELY, not possible, and a view first
+  mounted inside that residual window registered its observer too late for the wake that just fired.
 - `working_directory`, `initial_input`, and environment strdup buffers must outlive
   `ghostty_surface_new`; retain them until destruction.
 - Reparenting invalidates the drawable while leaving terminal buffer intact. `set_size` with an unchanged

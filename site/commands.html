@@ -434,6 +434,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">title</span> (raw OSC terminal title, omitted when
                 none), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> (the split is SHOWN side by side),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">realized</span> (the session's main pane has a live
+                terminal; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">false</span> means no shell was spawned and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text</span>
+                answer <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session not realized</span>. A surface cannot be
+                created while the display is asleep, so a session made by a scheduled job overnight stays unrealized until the
+                displays wake, then recovers on its own — poll this after an unattended create),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (a second pane exists at all, shown or
                 hidden, omitted when there is none — read this rather than
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> to tell whether a session has a split),

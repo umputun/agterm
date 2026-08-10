@@ -1458,7 +1458,9 @@ struct AppStoreTests {
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: a.id, surface: .primary).rawValue,
                                                    kind: "left", active: true, visible: true),
-                               ])
+                               ],
+                               // store-only session: a surface slot with nothing in it has no terminal
+                               realized: false)
         ])
         #expect(tree.workspaces[1].sessions == [
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
@@ -1476,7 +1478,8 @@ struct AppStoreTests {
                                                    kind: "scratch", active: false, visible: false),
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .overlay).rawValue,
                                                    kind: "overlay", active: true, visible: true),
-                               ])
+                               ],
+                               realized: false)
         ])
     }
 

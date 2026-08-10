@@ -224,6 +224,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   scratch addresses that pane, including hidden scratch. Default reads viewport; `--all` includes
   scrollback; `--lines N` returns last content lines after trimming blank grid rows. All and lines are
   exclusive; N must be positive and dispatcher-validated. Blank returns empty success; API failure errors.
+  An UNREALIZED pane answers `session not realized`, not `failed to read surface buffer`, whether its slot
+  is empty or holds a view whose libghostty surface never came up — one state to a caller, and the reading
+  never happened. `failed to read surface buffer` is left to a real read failure on a realized surface.
+  `quick.text` keeps its own vocabulary and still reports that string for an unrealized quick surface.
   Output is plain text because pinned Ghostty exposes no styled-cell read.
 - `session.search` selects and realizes the target, then searches its focused surface. Text opens/updates;
   to next/prev navigates; close ends; no arguments opens empty UI. Poll async SEARCH_TOTAL and return count
@@ -474,7 +478,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Tree and window read-back
 
 - Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
-  split ratio, split focus, status fields, flag, unseen, restore pins, and surfaces. Foreground shares the
+  split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, and `realized`.
+- `realized` reports the MAIN pane's `TerminalSurface.isRealized`, populated host-free in
+  `AppStore.controlTree` (no app closure — `isRealized` is on the protocol) and false for an empty slot, so
+  only a server predating the field omits it. It exists because `session.new` answers `ok` for a model
+  insert while libghostty refuses to create a surface with the display asleep, leaving a scheduled job's
+  session unrealized until the displays wake (#416). It is the main pane because that is what `--command`
+  spawns on and what `session.type`/`session.text` address by default; per-pane liveness stays with the
+  `fontSize`/`splitFontSize`/`scratchFontSize` triple, so do not add a second per-pane spelling.
+  `agtermctl tree` tags the row `(not realized)`, beside `(split hidden)`. Foreground shares the
   restore capture's pid/sysctl/host-free extraction but adds one step the capture must never take.
   libghostty's foreground pid is `tcgetpgrp`, a process GROUP id, and a pane with no job-control shell
   leaves its program in the group led by setuid-root `login`, whose argv `KERN_PROCARGS2` refuses. The tree

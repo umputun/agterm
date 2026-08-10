@@ -172,6 +172,14 @@ extension ControlServer {
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            // a view parked in the slot whose libghostty surface never came up is UNREALIZED, not a failed
+            // read — the deck installs the view before `createSurface`, and creation is refused outright
+            // while the display sleeps (#416). Without this the same state answered `failed to read surface
+            // buffer` here and `session not realized` from every other command, naming a cause that did not
+            // happen: nothing failed to read, there was nothing to read from.
+            guard surface.isRealized else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
             guard let text = surface.readScreenText(all: all, lines: lines) else {
                 return ControlResponse(ok: false, error: "failed to read surface buffer")
             }
