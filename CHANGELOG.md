@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.22.0 - 2026-08-09
+
+### New Features
+
+- voice dictation and other assistive tools work over the terminal. MacWhisper's hold-to-dictate widget never appeared in agterm though it does in NSTextView-based terminals: the Metal-backed surface was absent from the accessibility tree, and such tools probe `AXFocusedUIElement` for a focused text field before engaging, finding nothing at all over agterm. The interactive surface now reports itself as the minimal shape of an editable text field #246 @pbldbl
+- `session hud --position` takes the nine anchors of a 3x3 grid, spelled exactly as `session background` spells them, so a panel can sit in a corner instead of over the text being read, and every anchor off center holds a fixed edge margin on each axis it names. The bare `top` and `bottom` it shipped with stay accepted as aliases for the middle column and normalize on read-back, so existing callers keep working and `tree` reports one spelling. `hud update` also recolors the panel's text in place #386 @umputun
+- a workspace or session row's name can be copied from the sidebar context menu. The row's text field is not selectable outside rename mode, so reading a name to reuse elsewhere meant retyping it or entering rename mode and copying out of the field, which risks committing an edit to a name you only wanted to read #385 @skkap
+
+### Improved
+
+- `tree` reports `hasSplit` beside `split`, so a caller can tell a session with a hidden second pane from one with no split at all. `split` means the split is shown side by side, and a pane hidden with ⌘D read as `false` there while `splitRatio` and `splitFocused` stayed populated beside it; `agtermctl tree` tags that case `(split hidden)` a585694 @umputun
+- a cookbook recipe that lists a session directory's past Claude Code conversations in the native picker, each named for what it turned out to be about rather than its opening prompt, and types the resume into the pane the chord fired from #381 @umputun
+- a cookbook recipe that reopens each tab's own Kimi Code conversation after a restart, completing the session-resume family. Kimi's SessionStart hook receives the new conversation's id, so the recipe pins the tab's restore command from the hook instead of wrapping the launch #391 @x9x9x9x9x9x91
+- a cookbook recipe joining Kiro CLI to the agent-status integration. Kiro declares hooks per agent with no global file, so it is the one agent that cannot reach the sidebar glyph through the bundled adapters #383 @bitcldr
+- a cookbook recipe that syncs the active pane's working directory to the other half of a split, splitting first when none is shown, and refusing when the target pane is running a foreground program #388 @vladislav-yevtushenko
+- the annotate-claude-replies recipe dropped revdiff's file-level notes, its header regex requiring a `:line` part that a file-level note does not carry #387 @denysshnurenko
+
+### Bug Fixes
+
+- a command-line tool run inside a session could never be granted Automation, Camera, Contacts, Calendars, Location or Photos. Under hardened runtime those services need an entitlement the app did not carry, and macOS treats agterm as the responsible process for everything it spawns, so `tccd` refused to prompt and recorded nothing. No dialog appeared, and with no record there was no entry in System Settings to grant by hand either. Grants agterm already held kept working, which is what made this easy to miss. The bundled `agtermctl` also stopped inheriting the app's entitlement set, which the build's re-seal had been stamping onto it #398 @skkap
+- the View menu showed two full screen items, agterm's own and AppKit's, both carrying the same icon as Toggle Terminal Zoom. AppKit appends its item as the menu is prepared for display and the documented opt-out is ignored on macOS 26, so agterm's own item is gone instead and a key monitor keeps its chord #412 @umputun
+- ⌘W with the Settings window open closed the active terminal session instead of Settings, and the same for the About and Open Directory panels. File ▸ Close Session is a main-menu item with no window scoping, so the keystroke reached the terminal deck whichever window was key #403 @umputun
+- a custom command bound in `keymap.conf` could not run a bare `agtermctl` or a bare Homebrew binary. It spawns as a detached `/bin/sh -c` inheriting launchd's `PATH`, and that is neither a login nor an interactive shell, so the command exited 127 with the shell's own diagnostic discarded #395 @umputun
+- a selected row at the bottom of the command palette painted over the panel's rounded corner and squared it off: the panel drew a rounded background and a stroke but never clipped to either. The `pick` free-text path showed it on every press that matched nothing #415 @umputun
+- palette rows have been full-width click targets since they were built, but nothing painted under the pointer, so there was no way to tell what a click would run without clicking it #414 @umputun
+- clicking a workspace row expanded or collapsed it without animation while the disclosure triangle beside it animated, so one toggle rendered two ways depending on where it was hit #413 @umputun
+- the starter `keymap.conf` suggested uncommenting `map cmd+shift+d toggle_split`, a line that can never apply: `cmd+shift+d` is the dashboard's own default, so the override is dropped as a built-in collision. Both examples now use a free chord, and the header points at where a skipped line is reported #411 @umputun
+- a literal substring match in a long path could rank below a scattered match on another row, the substring band being unbounded and able to score past the subsequence floor #390 @x9x9x9x9x9x91
+
 ## v0.21.0 - 2026-08-06
 
 ### New Features
