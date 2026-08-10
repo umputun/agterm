@@ -387,8 +387,15 @@ public func keybindConflicts(_ binds: [(keybind: Keybind, target: KeybindTarget)
 }
 
 /// Whether one keybind is a prefix of another (equal length counts — a duplicate is a prefix of itself).
-/// Order-independent: it checks the shorter-or-equal against the longer, so callers pass one direction only.
+/// Order-independent: it checks both directions, so callers pass one only.
 private func isPrefix(_ a: Keybind, of b: Keybind) -> Bool {
-    let (shorter, longer) = a.count <= b.count ? (a, b) : (b, a)
-    return Array(longer.prefix(shorter.count)) == shorter
+    a == b || isStrictKeybindPrefix(a, of: b) || isStrictKeybindPrefix(b, of: a)
+}
+
+/// Whether `prefix` is a STRICT (shorter, leading) prefix of `keybind` — the relation that decides which of
+/// two binds can never fire: `KeybindMatcher` fires the exact shorter match rather than waiting out the
+/// longer one.
+func isStrictKeybindPrefix(_ prefix: Keybind, of keybind: Keybind) -> Bool {
+    guard prefix.count < keybind.count else { return false }
+    return Array(keybind.prefix(prefix.count)) == prefix
 }

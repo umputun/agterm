@@ -240,6 +240,14 @@ final class AppActions {
         return true
     }
 
+    /// The whole close-session keystroke as File ▸ Close Session performs it: dismiss the frontmost cover or
+    /// close the active session, and when there was neither — a zero-session window — close `window` instead.
+    /// Shared with the key monitor so a `close_session` alternative cannot be the one binding that dies in a
+    /// window with nothing left to close.
+    func closeActiveSessionOrWindow(_ window: NSWindow?) {
+        if !closeActiveSession() { window?.performClose(nil) }
+    }
+
     /// Resolve the pending picker owned by `windowID` as cancelled. Used by ⌘W and app termination;
     /// window teardown cancels through `PickRegistry.unregister` so it can retain the terminal result.
     @discardableResult

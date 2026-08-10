@@ -934,13 +934,44 @@ struct KeymapTests {
         #expect(diagnostics.contains { $0.message.contains("shortcut 'ctrl+space>s'") && $0.message.contains("'Lead'") })
     }
 
-    // the middle alternative loses to the first, and a dropped alternative conflicts with nothing: the third
-    // one collided only with it, so it must keep firing.
-    @Test func anAlternativeDroppedForAConflictStopsCostingItsCompatibleSiblings() {
+    // a binding's own prefix pair is settled by its alternative SET, not by writing order: the matcher fires
+    // the shorter bind, so every longer sibling is dead whichever side of the `|` it was written on.
+    @Test func everyAlternativeShadowedByItsOwnShorterSiblingIsDropped() {
         let (keymap, diagnostics) = parseKeymap(#"command "X" ctrl+a>b|ctrl+a|ctrl+a>c echo hi"#)
-        #expect(keymap.commands[0].shortcut == "ctrl+a>b|ctrl+a>c")
-        #expect(diagnostics.map(\.message)
-            == ["custom command 'X' shortcut 'ctrl+a' conflicts with custom command 'X'; alternative dropped"])
+        #expect(keymap.commands[0].shortcut == "ctrl+a")
+        #expect(diagnostics.map(\.message) == [
+            "custom command 'X' shortcut 'ctrl+a>b' conflicts with custom command 'X'; alternative dropped",
+            "custom command 'X' shortcut 'ctrl+a>c' conflicts with custom command 'X'; alternative dropped",
+        ])
+    }
+
+    // reordering ONE binding's alternatives must not decide whether an unrelated binding lives: its own
+    // prefix pair settles first, so the cross-target pass sees the same set either way.
+    @Test func alternativeOrderInsideOneBindingDoesNotDecideAnotherBindingsFate() {
+        let longFirst = parseKeymap("""
+        command "A" ctrl+a>b|ctrl+a echo a
+        command "B" ctrl+a>c echo b
+        """)
+        let shortFirst = parseKeymap("""
+        command "A" ctrl+a|ctrl+a>b echo a
+        command "B" ctrl+a>c echo b
+        """)
+        #expect(longFirst.keymap.commands.map(\.shortcut) == ["", ""])
+        #expect(shortFirst.keymap.commands.map(\.shortcut) == longFirst.keymap.commands.map(\.shortcut))
+        #expect(Set(shortFirst.diagnostics.map(\.message)) == Set(longFirst.diagnostics.map(\.message)))
+    }
+
+    // the same, one step out: which of two compatible siblings a third binding collides with must not depend
+    // on which of them was written first.
+    @Test func siblingOrderDoesNotDecideWhichThirdBindingSurvives() {
+        func parse(_ alternatives: String) -> [String] {
+            parseKeymap("""
+            command "A" \(alternatives) echo a
+            command "B" ctrl+x echo b
+            command "C" ctrl+x>2 echo c
+            """).keymap.commands.map(\.shortcut)
+        }
+        #expect(parse("ctrl+x>1|ctrl+x>2") == parse("ctrl+x>2|ctrl+x>1"))
     }
 
     @Test func aCrossTargetConflictLeavesTheLoserUnableToDropAThirdBinding() {

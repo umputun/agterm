@@ -160,9 +160,9 @@ extension agtermApp {
                         key.performClose(nil)
                         return
                     }
-                    // closeActiveSession dismisses any cover (quick terminal / overlay / scratch) or closes the
-                    // active session; only when it handled nothing (no cover, no session) fall back to the window.
-                    if !actions.closeActiveSession() { NSApp.keyWindow?.performClose(nil) }
+                    // dismiss any cover (quick terminal / overlay / scratch) or close the active session; only
+                    // when it handled nothing (no cover, no session) fall back to the window.
+                    actions.closeActiveSessionOrWindow(NSApp.keyWindow)
                 }
                 .keyboardShortcut(shortcut(for: .closeSession))
                 Button("Reopen Closed Item") { actions.undoClose() }

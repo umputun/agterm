@@ -198,7 +198,7 @@ Both new members default to empty in the memberwise `init`, so the existing
 (`⌘T ⌃␣S`); with no menu chord it returns the alternatives alone; nil when there is neither.
 
 **`CustomCommandEngine`** takes `(commands:builtinSequences:)` and its `Outcome.fired` payload becomes
-`KeybindTarget`. `AppActions.perform(_:)` reverse-looks-up `PaletteCommand.allCases` on `builtinAction`
+`KeybindTarget`. `AppActions.perform(_:in:)` reverse-looks-up `PaletteCommand.allCases` on `builtinAction`
 and falls back to a small switch for the few actions with no palette row — no new 42-case table.
 
 ## What Goes Where
@@ -301,9 +301,10 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermTests/FullScreenChordTests.swift`
 
 - [x] inject `AppActions` into `CustomCommandRunner` (it receives none today, `agtermApp.swift:65`)
-- [x] add `AppActions.perform(_ action: BuiltinAction)` as a reverse lookup over `PaletteCommand.allCases`
-      on `builtinAction`, running the palette row's body under the MENU item's modal rule so an alternative
-      behaves as its line's menu chord does; a small switch covers the few actions with no palette row
+- [x] add `AppActions.perform(_ action: BuiltinAction, in window: NSWindow?)` as a reverse lookup over
+      `PaletteCommand.allCases` on `builtinAction`, running the palette row's body under the MENU item's
+      modal rule and its `isVisible(in:)` enablement so an alternative behaves as its line's menu chord
+      does; a small switch covers the few actions with no palette row
 - [x] dispatch `.builtin` from `handleKeyDown(_:in:)` without the `focusedSurface` / `runNoSurface` split —
       a built-in acts on the active session and key window like a palette row
 - [x] rebuild the engine on `.agtermKeymapChanged` from both commands and built-in sequences

@@ -11,7 +11,7 @@ be a visible duplicate. Its resolved chord is therefore matched inside `handleKe
 matcher, and calls `keyWindow.toggleFullScreen(nil)` directly.
 
 Since bind alternatives landed, the same `map` line can carry more bindings for the same action, and those
-take the ordinary route: the matcher reports `.firedBuiltin` and `AppActions.perform(_:)` runs the
+take the ordinary route: the matcher reports `.firedBuiltin` and `AppActions.perform(_:in:)` runs the
 `PaletteCommand` row under the modal rule its MENU item carries. `toggle_fullscreen` has no menu item to
 supply one, so it falls to `uiActionsEnabled` — deliberately, since making it an exception would settle
 this item rather than record it. So `map ctrl+cmd+f|ctrl+a>f toggle_fullscreen` gives one action two

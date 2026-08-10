@@ -171,6 +171,38 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(palette.mode, .actions, "with the cover gone the same alternative opens it")
     }
 
+    // View ▸ Show Flagged Sessions is disabled with nothing flagged, so its alternative must not switch the
+    // sidebar into an empty flagged view either.
+    func testFlaggedViewAlternativeStaysInertWithNothingFlaggedLikeItsMenuItem() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+f|ctrl+a>f toggle_flagged_view\n")
+        let tail = keyDown("f", keyCode: 3, mods: [])
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(tail, in: window), "the chord is consumed either way")
+        XCTAssertEqual(fix.store.sidebarMode, .tree, "an empty flagged view is what the menu item refuses")
+
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        fix.store.setFlag(true, forSession: session.id)
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(tail, in: window))
+        XCTAssertEqual(fix.store.sidebarMode, .flagged, "with something to show the same alternative flips it")
+    }
+
+    // File ▸ Close Session closes the key window once there is no cover and no session left; an alternative
+    // fired in that same zero-session window must not be swallowed and do nothing.
+    func testCloseSessionAlternativeClosesTheWindowWithNothingLeftToClose() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+w|ctrl+a>w close_session\n")
+        fix.store.selectSession(nil)
+        window.orderFront(nil)
+        XCTAssertTrue(window.isVisible)
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("w", keyCode: 13, mods: []), in: window))
+        XCTAssertFalse(window.isVisible, "the menu's fallback rung must be the alternative's too")
+    }
+
     // keymap.md requires the reload path, not only a seeded file: the matcher rebuilds on
     // `.agtermKeymapChanged`, so a built-in alternative added by an edit must start firing without a restart.
     func testKeymapReloadRebindsTheBuiltinAlternatives() throws {

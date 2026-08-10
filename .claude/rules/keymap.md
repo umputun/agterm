@@ -41,8 +41,8 @@ paths:
   text with no diagnostic, so `hasMalformedAlternative` tells a typo from a real pipeline: a `|` token where
   at least one half parses is a binding, `ls|grep foo` is not.
 - A rule violation or a conflict drops that alternative alone and leaves its siblings firing, on either
-  verb. Do not turn either into the other. A binding whose OWN alternatives form a prefix pair keeps the one
-  that fires; both run the same thing.
+  verb. Do not turn either into the other. A binding whose OWN alternatives form a prefix pair keeps the
+  SHORTER one, which is the one `KeybindMatcher` fires; both run the same thing.
 - Diagnostics quote the raw substring and never re-render it: `displayString` canonicalizes spelling and
   would change `|`-free files' diagnostics. `DropScope` owns the suffix that keeps single-alternative
   wording byte-identical (`map skipped`/`keybind dropped`/`treating the line as palette-only` with one
@@ -68,18 +68,26 @@ paths:
 - `CustomCommandRunner` uses an app-wide local `.keyDown` monitor. Its `KeybindMatcher` supports simple
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; non-zero exit calls
-  `notifyCommandFailure`. `.firedBuiltin` routes through `AppActions.perform(_:)`, a reverse lookup over
+  `notifyCommandFailure`. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
   `PaletteCommand.allCases` on `builtinAction`, falling
   back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND
   `builtinSequences` on `.agtermKeymapChanged`.
-- **An alternative does what its line's MENU chord does, no more and no less.** So `perform(_:)` runs the
+- **An alternative does what its line's MENU chord does, no more and no less.** So `perform(_:in:)` runs the
   palette row's body under the MENU's modal rule, not the palette's blanket `uiActionsEnabled`:
   `survivesModalCover` lists the actions whose menu item carries no `modalActive` mirror (close session,
   both reloads, the three font sizes, terminal zoom) plus `dashboard`, whose item is the open grid's own
-  escape hatch. The `paletteLessHandler` half has no such wrapper, so each of its entry points holds the
-  gate itself — the three palette launchers on the full `uiActionsEnabled`, not zoom and picker alone,
-  since their menu items are disabled over the dashboard. The key is
+  escape hatch. The per-action half of the same rule is `PaletteCommand.isVisible(in:)`, the host-free
+  predicate the palette already keys its rows on and the menu item spells as its own `.disabled(…)` term:
+  no flagged sessions disables Show Flagged Sessions, an unremovable workspace disables Delete Workspace,
+  an unsplit session disables the pane-focus items. Consult it rather than restating a menu predicate.
+  Where `isVisible` is `true` and the menu item still disables — no active session, no current workspace —
+  the `AppActions` method itself is the guard. `close_session` is the one row whose menu BODY differs from
+  its palette row: the menu falls back to closing the key window when there was no cover and no session, so
+  `perform` takes `closeActiveSessionOrWindow(_:)` with the window the chord fired in, not the palette's
+  ungated `closeActiveSession()`. The `paletteLessHandler` half has no such wrapper, so each of its entry
+  points holds the gate itself — the three palette launchers on the full `uiActionsEnabled`, not zoom and
+  picker alone, since their menu items are disabled over the dashboard. The key is
   consumed either way: the gate lives inside each action, so the runner cannot see the outcome, and passing
   a leader's last chord through after swallowing its prefix would type a stray character into the terminal.
 - Fire with a focused `GhosttySurfaceView`, or in an agterm terminal window whose focus is not an `NSText`
@@ -100,10 +108,19 @@ paths:
   `new_session` take it in either line order, and an action in `builtinUnbound` resolves to no chord at
   all, so it stops occupying its shipped default here too.
 - Final cross-section `validateBindings` runs after parsing all lines, over every monitor-bound
-  alternative of both verbs. It drops the alternative whose first chord hits a final built-in menu chord,
-  that holds a reserved chord, or that `keybindConflicts` reports as a duplicate or prefix of another
-  alternative; both sides of that last case lose the offending alternative only. A custom command whose
-  every alternative went ends up palette-only with `shortcut == ""`.
+  alternative of both verbs, in three ordered passes. It drops the alternative whose first chord hits a
+  final built-in menu chord or that holds a reserved chord; then every alternative one of its OWN siblings
+  prefixes; then what `keybindConflicts` reports as a duplicate or prefix ACROSS targets, both sides losing
+  the offending alternative only. A custom command whose every alternative went ends up palette-only with
+  `shortcut == ""`.
+- **The result must not depend on the order alternatives are written in.** The middle pass exists for that:
+  settling a binding against itself reads only its own alternative SET, so the cross-target pass compares
+  settled sets and a `|` order cannot decide an unrelated binding's fate. The cross-target pass is
+  sequential — it skips a conflict once either side is already dropped, since a dropped bind registers
+  nothing — so it walks conflicts in a canonical order (each side's target in file order, then the
+  keybind's own rendering), never in array-index order. Pinned by
+  `KeymapTests.alternativeOrderInsideOneBindingDoesNotDecideAnotherBindingsFate` and
+  `siblingOrderDoesNotDecideWhichThirdBindingSurvives`.
   `isReservedMonitorChord` covers control+tab with any extra modifiers and control+1/2 with Control alone,
   anywhere in a leader, and also rejects built-in maps. This keeps menu and monitor registrations
   disjoint without relying on dispatch order. Standard menu items such as ⌘Q/⌘C/⌘, remain AppKit's

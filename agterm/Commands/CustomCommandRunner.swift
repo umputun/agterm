@@ -8,7 +8,7 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCo
 /// chords, a `CustomCommandEngine` resolves them (simple chords and leader sequences like `ctrl+a > g`), and
 /// a fired command runs detached as `/bin/sh -c` with the session's context in `{AGT_X}` tokens and `$AGT_X`
 /// environment. The same matcher also carries the built-in binds an `NSMenuItem` key equivalent cannot hold —
-/// a `map` line's alternatives beyond its first single chord — dispatched through `AppActions.perform(_:)`.
+/// a `map` line's alternatives beyond its first single chord — dispatched through `AppActions.perform(_:in:)`.
 ///
 /// Constructed once as `@State` in `agtermApp`. `start()`/`stop()` install/remove the monitor; `start()` is
 /// idempotent because the scene `.task` fires once per window, and the matcher rebuilds there and on
@@ -156,7 +156,7 @@ final class CustomCommandRunner {
             // like the palette row behind it. Consumed even when `perform` finds the action gated out: the
             // gate lives inside each action, so this cannot see the outcome, and passing a leader's LAST chord
             // through after swallowing its prefix would type a stray character into the terminal.
-            actions.perform(action)
+            actions.perform(action, in: keyWindow)
             return true
         case .armed:
             startLeaderTimer()

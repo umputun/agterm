@@ -1,3 +1,4 @@
+import AppKit
 import agtermCore
 import Foundation
 
@@ -96,14 +97,24 @@ extension AppActions {
         }
     }
 
-    /// Run a built-in action fired by `CustomCommandRunner`'s key monitor — a `map` line's alternative beyond
-    /// the menu key equivalent. The MENU chord is the reference behavior: an alternative of a line does what
-    /// its menu-bound sibling does, so it runs the palette row's body under the MENU's modal rule rather than
-    /// the palette's blanket one. The rest go through `paletteLessHandler(for:)`, whose entry points carry the
-    /// same rule themselves.
-    func perform(_ action: BuiltinAction) {
+    /// Run a built-in action fired by `CustomCommandRunner`'s key monitor in `window` — a `map` line's
+    /// alternative beyond the menu key equivalent. The MENU chord is the reference behavior: an alternative of
+    /// a line does what its menu-bound sibling does, so it runs the palette row's body under the MENU's modal
+    /// rule rather than the palette's blanket one, and only while the row is relevant at all — `isVisible` is
+    /// the per-action half of the same rule, the one the menu item spells as `.disabled(…)`. The rest go
+    /// through `paletteLessHandler(for:)`, whose entry points carry the same rule themselves.
+    func perform(_ action: BuiltinAction, in window: NSWindow?) {
         if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
             guard uiActionsEnabled || survivesModalCover(command) else { return }
+            guard command.isVisible(in: paletteContext) else { return }
+            // the MENU's close rung, not the palette's: with no cover and no session left to close, ⌘W closes
+            // the window — the zero-session window a keybind still fires in. The menu's other rung, an
+            // auxiliary key window keeping its own ⌘W, is unreachable here: the monitor fires only inside an
+            // agterm terminal window.
+            if command == .closeSession {
+                closeActiveSessionOrWindow(window)
+                return
+            }
             dispatch(command)
             return
         }

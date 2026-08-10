@@ -42,7 +42,7 @@ public struct KeybindMatcher: Sendable {
             return .fired(bind.target)
         }
 
-        if binds.contains(where: { isStrictPrefix(candidate, of: $0.keybind) }) {
+        if binds.contains(where: { isStrictKeybindPrefix(candidate, of: $0.keybind) }) {
             pending = candidate
             return .armed
         }
@@ -61,11 +61,5 @@ public struct KeybindMatcher: Sendable {
     /// Clear the pending prefix (Esc or the app-side leader timeout).
     public mutating func reset() {
         pending = []
-    }
-
-    /// Whether `prefix` is a strict (shorter, leading) prefix of `keybind`.
-    private func isStrictPrefix(_ prefix: [Chord], of keybind: Keybind) -> Bool {
-        guard prefix.count < keybind.count else { return false }
-        return Array(keybind.prefix(prefix.count)) == prefix
     }
 }
