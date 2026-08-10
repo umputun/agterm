@@ -203,6 +203,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   scratch addresses that pane, including hidden scratch. Default reads viewport; `--all` includes
   scrollback; `--lines N` returns last content lines after trimming blank grid rows. All and lines are
   exclusive; N must be positive and dispatcher-validated. Blank returns empty success; API failure errors.
+  An UNREALIZED pane answers `session not realized`, not `failed to read surface buffer`, whether its slot
+  is empty or holds a view whose libghostty surface never came up — one state to a caller, and the reading
+  never happened. `failed to read surface buffer` is left to a real read failure on a realized surface.
+  `quick.text` keeps its own vocabulary and still reports that string for an unrealized quick surface.
   Output is plain text because pinned Ghostty exposes no styled-cell read.
 - `session.search` selects and realizes the target, then searches its focused surface. Text opens/updates;
   to next/prev navigates; close ends; no arguments opens empty UI. Poll async SEARCH_TOTAL and return count

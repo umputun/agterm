@@ -111,6 +111,25 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(store.selectedSessionID, other.id, "typing without select must leave the selection where it was")
     }
 
+    // a pane parked in the slot with no libghostty surface is the state a display-asleep create leaves
+    // behind (#416). It used to answer `failed to read surface buffer`, naming a cause that never happened,
+    // while every sibling command called the same state `session not realized`.
+    func testTextOnAnUnrealizedPaneReportsNotRealizedRatherThanAReadFailure() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let parked = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        target.surface = parked
+        XCTAssertFalse(parked.isRealized, "a detached view never runs createSurface, which is the point here")
+
+        let response = server.readSessionText(target.id.uuidString, window: nil,
+                                              options: ControlSessionTextOptions(pane: nil, all: false, lines: nil))
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "session not realized",
+                       "an empty slot and a parked-but-unrealized view are one state to a caller")
+    }
+
     // the true side of that branch: deleting the body of `if select` leaves every other test green while
     // `--select` silently stops selecting, so this asserts the move itself rather than the typed text.
     func testTypeWithSelectStillSelectsWhenTheSurfaceIsNotReady() async throws {
