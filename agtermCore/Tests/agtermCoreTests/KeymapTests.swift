@@ -69,6 +69,18 @@ struct KeymapTests {
         #expect(keymap.glyphHint(for: .firstSession) == nil)
     }
 
+    @Test func glyphHintAppendsAlternativesAfterTheMenuChord() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|ctrl+space>s|cmd+ctrl+y toggle_split")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.glyphHint(for: .toggleSplit) == "⌘T ⌃␣S ⌃⌘Y")
+    }
+
+    @Test func glyphHintReturnsAlternativesAloneWithoutAMenuChord() {
+        let (keymap, diagnostics) = parseKeymap("map ctrl+a>g|ctrl+a>h toggle_sidebar")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.glyphHint(for: .toggleSidebar) == "⌃AG ⌃AH")
+    }
+
     @Test func rebindToggleSearchResolvesThroughGenericPath() {
         // toggle_search resolves through the generic path, with no per-action special-casing.
         let (keymap, diagnostics) = parseKeymap("map cmd+shift+l toggle_search")
@@ -346,7 +358,7 @@ struct KeymapTests {
         let (keymap, diagnostics) = parseKeymap("map ctrl+space>s toggle_split")
         #expect(diagnostics.isEmpty)
         #expect(keymap.equivalent(for: .toggleSplit) == nil)
-        #expect(keymap.glyphHint(for: .toggleSplit) == nil)
+        #expect(keymap.glyphHint(for: .toggleSplit) == "⌃␣S")
         #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "space"), Chord(mods: [], key: "s")]])
         // an untouched action keeps its shipped default: only the mapped one goes unbound.
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))

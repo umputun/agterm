@@ -34,10 +34,12 @@ public struct Keymap: Equatable, Sendable {
         builtinSequences[action] ?? []
     }
 
-    /// The effective chord (`equivalent(for:)`) as a macOS menu glyph string (`⌘N`, `⌃⌘S`); `nil` means
-    /// "not configured", the caller showing no shortcut. Drives palette hints and toolbar tooltips alike.
+    /// The action's whole binding set as macOS menu glyphs, the menu chord first and each monitor-bound
+    /// alternative after it, space-separated (`⌘T ⌃␣S`); `nil` means "not configured", the caller showing no
+    /// shortcut. Drives palette hints and toolbar tooltips alike.
     public func glyphHint(for action: BuiltinAction) -> String? {
-        equivalent(for: action)?.glyphString
+        let parts = [equivalent(for: action)?.glyphString].compactMap { $0 } + sequences(for: action).map(\.glyphString)
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }
 

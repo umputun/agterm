@@ -191,6 +191,22 @@ struct SocketClientTests {
                 "an enabled row carries no marker")
     }
 
+    @Test func formatsKeymapJoiningAlternativesWithTheFilesOwnSeparator() {
+        let parsed = parseKeymap("map cmd+t|ctrl+space>s toggle_split\nmap ctrl+a>g toggle_sidebar")
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: parsed.diagnostics,
+                                            path: "/tmp/keymap.conf")
+
+        let out = SocketClient.formatKeymap(payload)
+        func binds(_ action: String) -> String? {
+            out.split(separator: "\n").first { $0.contains(" \(action) ") }?
+                .split(separator: " ").last.map(String.init)
+        }
+
+        #expect(binds("toggle_split") == "cmd+t|ctrl+space>s")
+        #expect(binds("toggle_sidebar") == "ctrl+a>g", "an unbound action lists its alternatives alone")
+        #expect(binds("first_session") == "-", "an action with no binding at all still prints a dash")
+    }
+
     @Test func formatsKeymapWithoutOptionalSectionsWhenEmpty() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")

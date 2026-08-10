@@ -324,19 +324,19 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
-- [ ] add `alternates: [String]?` to `ControlKeymapAction`, omitted when empty, each alternative in kitty
+- [x] add `alternates: [String]?` to `ControlKeymapAction`, omitted when empty, each alternative in kitty
       syntax; leave `chord` meaning the menu key equivalent so the `menu` half stays comparable
-- [ ] populate it in `ControlKeymap.project` from `sequences(for:)`, and report an unbound action's `chord`
+- [x] populate it in `ControlKeymap.project` from `sequences(for:)`, and report an unbound action's `chord`
       as absent rather than as its shipped default
-- [ ] render the actions column in `formatKeymap` as the full binding set joined with `|`, keeping `-` for
+- [x] render the actions column in `formatKeymap` as the full binding set joined with `|`, keeping `-` for
       an action with no binding at all
-- [ ] extend `glyphHint(for:)` to append each alternative's glyph string after the menu chord's, returning
+- [x] extend `glyphHint(for:)` to append each alternative's glyph string after the menu chord's, returning
       the alternatives alone when there is no menu chord and nil when there is neither
-- [ ] leave `shortcutGlyph(for:)` and its callers untouched — it stays the single resolver behind the
+- [x] leave `shortcutGlyph(for:)` and its callers untouched — it stays the single resolver behind the
       action palette and the toolbar/sidebar tooltips
-- [ ] write tests: action with chord plus one alternative, chord plus two, alternatives only, neither, an
+- [x] write tests: action with chord plus one alternative, chord plus two, alternatives only, neither, an
       unbound action, and the human formatter's joined column
-- [ ] run `swift test --filter "ControlKeymapTests|KeymapTests|SocketClientTests"` — must pass before task 6
+- [x] run `swift test --filter "ControlKeymapTests|KeymapTests|SocketClientTests"` — must pass before task 6
 
 ### Task 6: Pin compatibility and verify acceptance criteria
 

@@ -9,6 +9,11 @@ public struct ControlKeymapAction: Codable, Sendable, Equatable {
     /// half renders that item identically, so a placeholder would turn the one row that compares correctly
     /// into a false mismatch.
     public var chord: String?
+    /// The action's monitor-bound alternatives in kitty syntax (`ctrl+space>s`), omitted when it has none.
+    ///
+    /// `chord` stays the MENU key equivalent alone so it keeps comparing directly against the `menu` half;
+    /// a leader sequence or a second chord can only reach the key monitor, never an `NSMenuItem`.
+    public var alternates: [String]?
     /// `true` when the action's resolved chord DIFFERS from its shipped default; omitted otherwise.
     ///
     /// Deliberately a chord comparison rather than "a `map` line exists for this action": a redundant
@@ -16,9 +21,10 @@ public struct ControlKeymapAction: Codable, Sendable, Equatable {
     /// would report a difference a caller cannot see anywhere else.
     public var overridden: Bool?
 
-    public init(action: String, chord: String? = nil, overridden: Bool? = nil) {
+    public init(action: String, chord: String? = nil, alternates: [String]? = nil, overridden: Bool? = nil) {
         self.action = action
         self.chord = chord
+        self.alternates = alternates
         self.overridden = overridden
     }
 }
@@ -112,8 +118,10 @@ public extension ControlKeymap {
                         menu: [ControlKeymapMenuItem]? = nil) -> ControlKeymap {
         let actions = BuiltinAction.allCases.map { action in
             let resolved = keymap.equivalent(for: action)
+            let alternates = keymap.sequences(for: action).map(\.displayString)
             return ControlKeymapAction(action: action.rawValue,
                                        chord: resolved?.displayString,
+                                       alternates: alternates.isEmpty ? nil : alternates,
                                        overridden: resolved != action.defaultChord ? true : nil)
         }
         let commands = keymap.commands.map {

@@ -91,6 +91,57 @@ import Testing
         #expect(payload.diagnostics.first?.message == parsed.diagnostics.first?.message)
     }
 
+    @Test func reportsAlternativesBesideTheMenuChord() throws {
+        let parsed = parseKeymap("map cmd+t|ctrl+space>s toggle_split")
+        try #require(parsed.diagnostics.isEmpty)
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        let row = try #require(payload.actions.first { $0.action == "toggle_split" })
+
+        #expect(row.chord == "cmd+t", "chord stays the menu key equivalent alone")
+        #expect(row.alternates == ["ctrl+space>s"])
+        #expect(row.overridden == true)
+    }
+
+    @Test func reportsEveryAlternativeInLineOrder() throws {
+        let parsed = parseKeymap("map cmd+t|ctrl+space>s|cmd+ctrl+y toggle_split")
+        try #require(parsed.diagnostics.isEmpty)
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        let row = try #require(payload.actions.first { $0.action == "toggle_split" })
+
+        #expect(row.alternates == ["ctrl+space>s", "ctrl+cmd+y"], "kitty syntax, in the modifier order displayString fixes")
+    }
+
+    // an unbound action's shipped default must not resurface here: the file said it has no menu chord.
+    @Test func reportsAnUnboundActionWithAlternativesOnly() throws {
+        let parsed = parseKeymap("map ctrl+space>s toggle_split")
+        try #require(parsed.diagnostics.isEmpty)
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        let row = try #require(payload.actions.first { $0.action == "toggle_split" })
+
+        #expect(row.chord == nil)
+        #expect(row.alternates == ["ctrl+space>s"])
+        #expect(row.overridden == true)
+    }
+
+    @Test func omitsAlternatesForAnActionWithNone() throws {
+        let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
+                                            diagnostics: [], path: "/tmp/keymap.conf")
+        #expect(payload.actions.allSatisfy { $0.alternates == nil })
+
+        let encoded = try JSONEncoder().encode(payload)
+        #expect(!String(decoding: encoded, as: UTF8.self).contains("alternates"))
+    }
+
+    @Test func alternatesRoundTripOverTheWire() throws {
+        let parsed = parseKeymap("map cmd+t|ctrl+space>s toggle_split")
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        let encoded = try JSONEncoder().encode(ControlResponse(ok: true, result: ControlResult(keymap: payload)))
+        let back = try #require(try JSONDecoder().decode(ControlResponse.self, from: encoded).result?.keymap)
+
+        #expect(back == payload)
+        #expect(back.actions.first { $0.action == "toggle_split" }?.alternates == ["ctrl+space>s"])
+    }
+
     @Test func menuIsOmittedWhenTheCallerSuppliesNone() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")
