@@ -715,6 +715,26 @@ struct SocketClientTests {
         #expect(lines[1] == "  * shell (split hidden)  [s1]  /tmp")
     }
 
+    @Test func formatTreeTagsAnUnrealizedSession() {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         realized: false)
+        let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
+        let tree = ControlTree(workspaces: [workspace])
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines[1] == "  * shell (not realized)  [s1]  /tmp")
+    }
+
+    @Test func formatTreeLeavesARealizedSessionUntagged() {
+        let session = ControlSessionNode(id: "s2", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         realized: true)
+        let workspace = ControlWorkspaceNode(id: "w2", name: "work", active: true, sessions: [session])
+        let tree = ControlTree(workspaces: [workspace])
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines[1] == "  * shell  [s2]  /tmp", "only the failing state earns a tag; nil must stay quiet too")
+    }
+
     @Test func formatTreeShowsScratchTag() {
         let session = ControlSessionNode(id: "s3", name: "shell", cwd: "/tmp", active: true, split: false,
                                          overlay: false, scratch: true)

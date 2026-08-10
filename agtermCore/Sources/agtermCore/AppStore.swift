@@ -285,7 +285,11 @@ public final class AppStore {
                                           fontSize: fontSize(session),
                                           splitFontSize: splitFontSize(session),
                                           scratchFontSize: scratchFontSize(session),
-                                          surfaces: surfaces)
+                                          surfaces: surfaces,
+                                          // host-free: `isRealized` is on `TerminalSurface`, so this needs
+                                          // no app-side closure like the font sizes above. An empty slot is
+                                          // false, not omitted — "no terminal" either way to a caller.
+                                          realized: session.surface?.isRealized ?? false)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

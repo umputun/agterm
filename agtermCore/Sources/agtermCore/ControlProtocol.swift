@@ -564,6 +564,18 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// Addressable terminal surfaces owned by this session; nil/omitted against a server predating
     /// `surface.zoom`. Hidden-but-alive surfaces are included, so a client can zoom them without unhiding.
     public let surfaces: [ControlSurfaceNode]?
+    /// Whether the MAIN pane's terminal exists — the libghostty surface created and its program spawned —
+    /// as opposed to the session merely being in the model. False means `session.type`/`session.text` will
+    /// report `session not realized` and a `--command` has not run yet. nil/omitted only against a server
+    /// predating the field; this one always reports it.
+    ///
+    /// `session.new` answers `ok` for a model insert, which is honest but says nothing about the terminal:
+    /// libghostty refuses to create a surface while the display is asleep, so a session a scheduled job
+    /// creates overnight sits unrealized until the displays wake (#416). This is the field that tells them
+    /// apart. It reports the main pane because that is what `--command` spawns on and what the input/read
+    /// commands address by default; per-pane liveness is `fontSize`/`splitFontSize`/`scratchFontSize`,
+    /// each omitted when its pane is unrealized.
+    public let realized: Bool?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, splitRatio: Double? = nil, splitFocused: Bool? = nil,
@@ -576,7 +588,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 statusShape: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
-                surfaces: [ControlSurfaceNode]? = nil) {
+                surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -608,6 +620,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFontSize = splitFontSize
         self.scratchFontSize = scratchFontSize
         self.surfaces = surfaces
+        self.realized = realized
     }
 }
 

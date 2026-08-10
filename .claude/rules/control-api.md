@@ -457,7 +457,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Tree and window read-back
 
 - Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
-  split ratio, split focus, status fields, flag, unseen, restore pins, and surfaces. Foreground shares the
+  split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, and `realized`.
+- `realized` reports the MAIN pane's `TerminalSurface.isRealized`, populated host-free in
+  `AppStore.controlTree` (no app closure — `isRealized` is on the protocol) and false for an empty slot, so
+  only a server predating the field omits it. It exists because `session.new` answers `ok` for a model
+  insert while libghostty refuses to create a surface with the display asleep, leaving a scheduled job's
+  session unrealized until the displays wake (#416). It is the main pane because that is what `--command`
+  spawns on and what `session.type`/`session.text` address by default; per-pane liveness stays with the
+  `fontSize`/`splitFontSize`/`scratchFontSize` triple, so do not add a second per-pane spelling.
+  `agtermctl tree` tags the row `(not realized)`, beside `(split hidden)`. Foreground shares the
   restore capture's pid/sysctl/host-free extraction but adds one step the capture must never take.
   libghostty's foreground pid is `tcgetpgrp`, a process GROUP id, and a pane with no job-control shell
   leaves its program in the group led by setuid-root `login`, whose argv `KERN_PROCARGS2` refuses. The tree
