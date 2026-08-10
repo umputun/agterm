@@ -630,10 +630,10 @@ extension Notification.Name {
         Notification.Name("agterm.accessibilityDisplayOptionsChanged")
 
     /// Posted by `SystemWakeObserver` when the displays wake. `ghostty_surface_new` returns NULL while the
-    /// display is asleep, and `createSurface` clears `pendingSurfaceCreation` before it attempts, so a session
-    /// created in that window realizes no surface and nothing retries it — the `--command` never runs and every
-    /// later call reports `session not realized` (#416). Surfaces re-attempt creation here; an already-realized
-    /// one re-pushes its size to force a repaint, the drawable being invalidated by sleep like a reparent.
+    /// display is asleep, so a session created in that window realizes no surface — the `--command` never runs
+    /// and every later call reports `session not realized` (#416). Nothing re-attempts on a schedule, because
+    /// the deck's retries all ride SwiftUI layout, which does not run for an off-display window. UNREALIZED
+    /// surfaces re-attempt creation here; a realized one is left alone.
     static let agtermScreensDidWake = Notification.Name("agterm.screensDidWake")
 
     /// Posted when a window becomes frontmost (async, via the window's didBecomeKey), so the control server can

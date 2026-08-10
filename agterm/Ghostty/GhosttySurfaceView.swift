@@ -599,9 +599,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
         guard let surface else {
             // libghostty declines to build a surface while the display is asleep. Silence here is what made
-            // #416 undiagnosable from outside: `session.new` had already answered ok. `.agtermScreensDidWake`
-            // drives the re-attempt; nothing else will, so a lost wake means a permanently empty pane.
-            logger.notice("surface creation failed (display asleep?); retrying when the displays wake")
+            // #416 undiagnosable from outside: `session.new` had already answered ok. Re-arm the deferred-create
+            // flag so the layout path retries too — `.agtermScreensDidWake` is what makes recovery TIMELY, not
+            // what makes it possible, and a view first mounted inside the residual post-wake window registers
+            // its observer too late for the wake that just fired.
+            pendingSurfaceCreation = true
+            logger.notice("surface creation failed (display asleep?); retrying on the next wake or layout pass")
             return
         }
         // record the same scheme on the surface itself, so a later `update_config` re-resolves its side.
