@@ -76,8 +76,13 @@ paths:
   Support. CLI `--socket` overrides. Explicit short paths avoid Unix `sun_path` near 104 bytes. Use 0600.
 - Each connection sets `SO_NOSIGPIPE` and a 5-second receive timeout. Close on non-EINTR read failure,
   including EAGAIN. Start is idempotent and logs bind failure without blocking launch.
-- Start takes an exclusive non-blocking `flock` on `<socketPath>.lock` before unlinking anything, and
-  refuses to bind while another process holds it. Nothing on disk distinguishes a live socket from a
+- `ControlServer.init` takes an exclusive non-blocking `flock` on `<socketPath>.lock`, and start refuses
+  to bind while another process holds it. Ownership is decided at INIT, not at start: the launch window's
+  surfaces are built during the initial render pass and snapshot `AGTERM_SOCKET` into the pty environment,
+  while start runs from the scene's `.task` afterwards, so deciding there would hand the first shell the
+  owner's live socket. Start retries acquisition for the instance refused while the owner was still alive,
+  guarding on the held fd first — flock is per open file description, so re-opening a file this process
+  already locked conflicts with itself. Nothing on disk distinguishes a live socket from a
   force-quit leftover, and unlinking a live one strands its owner: it keeps its listening fd, never
   learns, and only a restart recovers it. Do NOT probe with `connect` instead — on Darwin a live listener
   whose backlog is full refuses with the same `ECONNREFUSED` a socket nobody listens on returns, so one

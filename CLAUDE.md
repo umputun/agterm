@@ -89,8 +89,10 @@ concurrency before changing the bridge.
   Test fresh CLI/hooks with the Debug binary or redeploy and reinstall them. Debug uses
   `com.umputun.agterm.debug`, distinct from Release, but state/socket paths still require isolation.
 - Launching a second instance without `AGTERM_STATE_DIR` still shares state, but no longer takes the
-  running app's control socket. `ControlServer.start` takes an exclusive `flock` on `<socket>.lock` and
-  refuses to bind while another live instance holds it, logging `already served by another instance`.
+  running app's control socket. `ControlServer.init` takes an exclusive `flock` on `<socket>.lock` and
+  `start` refuses to bind while another live instance holds it, logging `already served by another
+  instance`. Ownership is settled at init so the launch window's first shell, whose environment is
+  snapshotted before `start` runs, cannot bake the owner's path.
   A refused instance advertises `<socket>.unavailable` in `AGTERM_SOCKET`, so a command passing
   `--socket "$AGTERM_SOCKET"` fails rather than reaching the owner. A BARE `agtermctl` still reaches it:
   the CLI never reads that variable and resolves the default path. Isolate anyway — state is shared and

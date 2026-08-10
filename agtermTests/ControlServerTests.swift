@@ -80,20 +80,25 @@ final class ControlServerTests: XCTestCase {
     /// the OTHER instance's socket in `AGTERM_SOCKET` and drive that app instead. It advertises an
     /// unbindable path rather than nothing, because the status hooks read an ABSENT variable as
     /// "resolve the default", which is that same other instance.
-    func testARefusedServerAdvertisesAnUnbindablePath() {
+    ///
+    /// Refusal must be known WITHOUT `start()`: the launch window's surfaces snapshot the environment
+    /// during the initial render pass, and `start()` only runs from the scene's `.task` afterwards, so a
+    /// refusal decided there would reach that first shell too late.
+    func testARefusedServerAdvertisesAnUnbindablePathBeforeStart() {
         let first = makeServer()
         first.start()
         XCTAssertEqual(first.resolvedSocketPath, socketPath, "the owner should advertise its path")
 
         let second = makeServer()
-        XCTAssertEqual(second.resolvedSocketPath, socketPath,
-                       "before start, surfaces materializing early still take the path")
+
+        XCTAssertEqual(second.resolvedSocketPath, socketPath + ControlServer.unavailableSuffix,
+                       "a refused server should advertise a path nothing serves, from construction on")
+        XCTAssertFalse(connects(to: second.resolvedSocketPath), "that path must not connect anywhere")
+        XCTAssertNotEqual(second.resolvedSocketPath, socketPath, "and must not be the owner's")
 
         second.start()
         XCTAssertEqual(second.resolvedSocketPath, socketPath + ControlServer.unavailableSuffix,
-                       "a refused server should advertise a path nothing serves")
-        XCTAssertFalse(connects(to: second.resolvedSocketPath), "that path must not connect anywhere")
-        XCTAssertNotEqual(second.resolvedSocketPath, socketPath, "and must not be the owner's")
+                       "start should not change it")
     }
 
     /// `start()` re-runs from every window scene's task, so a server refused while the owner was alive

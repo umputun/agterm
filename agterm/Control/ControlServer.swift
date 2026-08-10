@@ -114,6 +114,12 @@ final class ControlServer {
         self.settingsModel = settingsModel
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
+        // ownership is decided HERE, not in `start()`. The launch window's surfaces are built during the
+        // initial render pass and SNAPSHOT `AGTERM_SOCKET` into the pty environment (`GhosttySurfaceView.env`
+        // is a `let` read at spawn), while `start()` runs from the scene's `.task` afterwards. Deciding late
+        // would hand that first shell the owner's live socket, which is the one thing this guard exists to
+        // prevent. Binding stays in `start()`; this only answers who owns the path.
+        _ = acquireOwnership()
         // keep the `active` flag fresh across async frontmost changes; the server lives for the app's
         // lifetime, so the observer needs no removal.
         NotificationCenter.default.addObserver(forName: .agtermWindowFrontmostChanged, object: nil, queue: .main) { [weak self] _ in
@@ -168,10 +174,10 @@ final class ControlServer {
             return
         }
 
-        // take ownership BEFORE unlinking: the unlink below cannot tell a force-quit leftover from the
-        // socket a running instance is listening on, and deleting the latter strands it — it keeps its
-        // listening fd, never learns the path is gone, and only a restart recovers it.
-        guard acquireOwnership() else { return }
+        // normally taken at init; retry here for the instance refused while the owner was still alive, which
+        // reaches this again on a later window. `lockFD >= 0` first because flock is per open file
+        // description: a second `open` of a file THIS process already locked conflicts with itself.
+        guard lockFD >= 0 || acquireOwnership() else { return }
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -220,8 +226,8 @@ final class ControlServer {
         releaseOwnership()
     }
 
-    /// Take the exclusive advisory lock that marks this process the owner of `socketPath`, held for as
-    /// long as the listener is, and set `refused` when another live instance holds it.
+    /// Take the exclusive advisory lock that marks this process the owner of `socketPath`, held from init
+    /// until `stop()`, and set `refused` when another live instance holds it.
     ///
     /// `connect` cannot answer the ownership question on Darwin. A live listener whose backlog is full
     /// refuses with the same `ECONNREFUSED` a socket nobody listens on returns (measured: the app's
