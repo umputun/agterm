@@ -139,6 +139,48 @@ struct KeymapTests {
         #expect(diagnostics.count == 1)
     }
 
+    @Test func parseCommandAlternativeShortcutsAreKeptVerbatim() {
+        let (keymap, diagnostics) = parseKeymap("command \"Midnight Commander\" ctrl+a>m|cmd+a>m mc")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut == "ctrl+a>m|cmd+a>m")
+        #expect(keymap.commands[0].command == "mc")
+    }
+
+    @Test func parseCommandDedupesIdenticalAlternatives() {
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e|command+e echo hi")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands[0].shortcut == "cmd+e")
+        #expect(keymap.commands[0].command == "echo hi")
+    }
+
+    @Test func parseCommandBareAlternativeRejectsTheWholeShortcut() {
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e|t echo hi")
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[0].command == "cmd+e|t echo hi")
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("'cmd+e|t' must include a modifier"))
+    }
+
+    @Test func parseCommandMalformedAlternativeLeavesTheLinePaletteOnly() {
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e|f1 echo hi")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[0].command == "cmd+e|f1 echo hi")
+    }
+
+    // accepted imperfection: `a|b` used to fail parseChord outright, so the tail was shell with no
+    // diagnostic. it now splits into two bare chords and earns one. the shell line is identical either way.
+    @Test func parseCommandPipedShellTokenKeepsItsShellLine() {
+        let (keymap, diagnostics) = parseKeymap("command \"X\" a|b echo hi")
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[0].command == "a|b echo hi")
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("must include a modifier"))
+    }
+
     @Test func parseCommandPreservesAgtTokens() {
         let (keymap, diagnostics) = parseKeymap("command \"Notify\" echo {AGT_SELECTION} > {AGT_SOCKET}")
         #expect(diagnostics.isEmpty)

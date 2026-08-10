@@ -233,6 +233,22 @@ public struct Chord: Equatable, Hashable, Sendable {
 /// (e.g. `ctrl+a > b`).
 public typealias Keybind = [Chord]
 
+public extension Array where Element == Chord {
+    /// The keybind in kitty syntax, chords joined with `>` (`ctrl+a>g`) — the spelling `keymap.conf` uses.
+    var displayString: String { map(\.displayString).joined(separator: ">") }
+
+    /// The keybind as macOS glyphs, chords run together (`⌃␣S`). Callers list a binding's ALTERNATIVES
+    /// space-separated, so a space here would read as another alternative rather than this one's next chord.
+    var glyphString: String { map(\.glyphString).joined() }
+}
+
+/// What a keybind fires: a custom command by id, or a built-in action. One matcher carries both verbs'
+/// monitor-bound binds, and the conflict pass names whichever side lost.
+public enum KeybindTarget: Hashable, Sendable {
+    case command(UUID)
+    case builtin(BuiltinAction)
+}
+
 /// Parse a keybind string into a `Keybind`, or `nil` when it is empty, malformed, or names an unknown modifier.
 ///
 /// The grammar is chords separated by `>`, each a `+`-joined list of modifier words and a final base key,
@@ -250,6 +266,42 @@ public func parseKeybind(_ s: String) -> Keybind? {
         keybind.append(chord)
     }
     return keybind
+}
+
+/// Parse a binding token into its alternatives, splitting on `|` — the tier above `>` (chords in a sequence)
+/// and `+` (modifiers in a chord). Alternatives live inside ONE whitespace-delimited token, with no spaces
+/// around the `|`, so `parseCommandLine`'s shell-line tokenizer needs no change.
+///
+/// Returns `nil` when ANY alternative is malformed, which kills the whole line: binding the half that parsed
+/// would hide the typo behind a line that looks like it worked. A token with no `|` yields a one-element list
+/// wrapping exactly `parseKeybind`'s result, which is what keeps a `|`-free `keymap.conf` unchanged.
+///
+/// One casualty: `cmd+|` no longer parses, since `|` splits before `parseChord` sees it. Harmless — no
+/// unshifted key produces `|`, so that binding could never fire; the spelling that does is `shift+\`.
+public func parseKeybinds(_ s: String) -> [Keybind]? {
+    var keybinds: [Keybind] = []
+    for part in s.split(separator: "|", omittingEmptySubsequences: false) {
+        guard let keybind = parseKeybind(String(part)) else { return nil }
+        keybinds.append(keybind)
+    }
+    return keybinds.isEmpty ? nil : keybinds
+}
+
+/// The binding token with every alternative that repeats an earlier one removed, splicing the surviving RAW
+/// substrings instead of re-rendering the parsed chords: `command+shift+a` must reach diagnostics and
+/// `CustomCommand.shortcut` spelled as the user wrote it. Unparseable or single-alternative input is returned
+/// untouched.
+func dedupedAlternatives(_ s: String) -> String {
+    let parts = s.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+    guard parts.count > 1, let keybinds = parseKeybinds(s) else { return s }
+
+    var seen: [Keybind] = []
+    var kept: [String] = []
+    for (keybind, part) in zip(keybinds, parts) where !seen.contains(keybind) {
+        seen.append(keybind)
+        kept.append(part)
+    }
+    return kept.joined(separator: "|")
 }
 
 /// Parse a single chord (a `+`-joined list of modifier words plus one base key), or `nil` when it is empty,

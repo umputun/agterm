@@ -220,21 +220,21 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/CustomCommandEngineTests.swift`
 
-- [ ] add `parseKeybinds(_:) -> [Keybind]?` splitting on `|`, nil when any alternative is malformed or the
+- [x] add `parseKeybinds(_:) -> [Keybind]?` splitting on `|`, nil when any alternative is malformed or the
       list is empty; leave `parseKeybind` untouched so existing callers keep compiling
-- [ ] add `displayString` and `glyphString` on `Array where Element == Chord`
-- [ ] add `KeybindTarget` and retarget `KeybindMatcher` (`init` and `MatchResult.fired`) from `UUID` to it
-- [ ] switch `parseCommandLine`'s first-token check to `parseKeybinds`, requiring a modifier on the first
+- [x] add `displayString` and `glyphString` on `Array where Element == Chord`
+- [x] add `KeybindTarget` and retarget `KeybindMatcher` (`init` and `MatchResult.fired`) from `UUID` to it
+- [x] switch `parseCommandLine`'s first-token check to `parseKeybinds`, requiring a modifier on the first
       chord of EVERY alternative; keep the existing palette-only fallback and its exact diagnostic wording
       for a token that is not a keybind at all
-- [ ] dedupe identical alternatives by splicing raw substrings, never re-rendering
-- [ ] have `CustomCommandEngine` emit one matcher entry per alternative, all sharing the command's target
-- [ ] write tests: one/two/three alternatives, sequence alternatives, empty part (`a||b`), leading and
+- [x] dedupe identical alternatives by splicing raw substrings, never re-rendering
+- [x] have `CustomCommandEngine` emit one matcher entry per alternative, all sharing the command's target
+- [x] write tests: one/two/three alternatives, sequence alternatives, empty part (`a||b`), leading and
       trailing `|`, one malformed alternative poisoning the list, both renderers on a multi-chord keybind,
       a two-alternative command firing from either, an alternative without a modifier failing the line
-- [ ] pin the accepted imperfection: `command "x" a|b echo hi` keeps the shell line `a|b echo hi` verbatim
+- [x] pin the accepted imperfection: `command "x" a|b echo hi` keeps the shell line `a|b echo hi` verbatim
       and stays palette-only
-- [ ] run `swift test --filter "KeybindTests|KeybindMatcherTests|KeymapTests|CustomCommandEngineTests"` —
+- [x] run `swift test --filter "KeybindTests|KeybindMatcherTests|KeymapTests|CustomCommandEngineTests"` —
       must pass before task 2
 
 ### Task 2: Accept alternatives on `map` lines

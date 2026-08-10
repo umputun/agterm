@@ -150,7 +150,7 @@ final class CustomCommandRunner {
         case .armed:
             startLeaderTimer()
             return true
-        case .unmatched:
+        case .firedBuiltin, .unmatched:
             cancelLeaderTimer()
             return false
         }

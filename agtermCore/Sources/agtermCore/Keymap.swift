@@ -75,8 +75,9 @@ public struct KeymapStore: Sendable {
 ///   built-ins are single-chord; `<action>` must be a `BuiltinAction` raw value. Collisions are resolved
 ///   order-INDEPENDENTLY against the final chord set, see `resolveBuiltinOverrides`.
 /// - `command "<name>" [chord] <shell...>`: `<name>` is a required double-quoted string (spaces allowed).
-///   The token right after the closing quote is the chord IFF `parseKeybind` accepts it; otherwise the
-///   whole remainder is the shell line (palette-only), keeping `{AGT_X}` tokens verbatim.
+///   The token right after the closing quote is the shortcut IFF `parseKeybinds` accepts it, `|`-separated
+///   alternatives included; otherwise the whole remainder is the shell line (palette-only), keeping
+///   `{AGT_X}` tokens verbatim.
 /// - anything else is an unknown verb, skipped with a diagnostic.
 ///
 /// A SINGLE final cross-section pass (`validateCommands`) then drops any custom keybind colliding with an
@@ -343,15 +344,15 @@ private func parseCommandLine(_ rest: String, line: Int, commands: inout [Custom
     let name = String(rest[rest.index(after: rest.startIndex)..<closeQuote])
     let afterName = String(rest[rest.index(after: closeQuote)...]).trimmingCharacters(in: .whitespaces)
 
-    // the chord must also carry a modifier: a bare key would shadow that key in the terminal, and a
-    // palette-only shell line starting with a single-char token (`[`, `:`, a one-letter alias) would be
-    // swallowed as a binding.
+    // EVERY alternative's first chord must carry a modifier: a bare key would shadow that key in the
+    // terminal, and a palette-only shell line starting with a single-char token (`[`, `:`, a one-letter
+    // alias) would be swallowed as a binding.
     let firstToken = String(afterName.prefix(while: { !$0.isWhitespace }))
     var shortcut = ""
     var shellLine = afterName
-    if !firstToken.isEmpty, let keybind = parseKeybind(firstToken) {
-        if keybind.first?.mods.isEmpty == false {
-            shortcut = firstToken
+    if !firstToken.isEmpty, let keybinds = parseKeybinds(firstToken) {
+        if keybinds.allSatisfy({ $0.first?.mods.isEmpty == false }) {
+            shortcut = dedupedAlternatives(firstToken)
             shellLine = String(afterName.dropFirst(firstToken.count)).trimmingCharacters(in: .whitespaces)
         } else {
             diagnostics.append(KeymapDiagnostic(line: line,

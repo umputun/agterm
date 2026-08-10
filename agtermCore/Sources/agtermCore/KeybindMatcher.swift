@@ -3,7 +3,7 @@ import Foundation
 /// The outcome of feeding one chord to a `KeybindMatcher`.
 public enum MatchResult: Equatable, Sendable {
     /// The pending prefix plus this chord exactly matches a bound keybind; the matcher has reset.
-    case fired(UUID)
+    case fired(KeybindTarget)
     /// The pending prefix plus this chord is a strict prefix of a longer bind; the matcher now awaits the
     /// next chord (the leader is armed).
     case armed
@@ -13,15 +13,16 @@ public enum MatchResult: Equatable, Sendable {
 
 /// The leader/sequence state machine that turns a stream of chords into command fires.
 ///
-/// Built from `(Keybind, UUID)` pairs, it holds the chords typed so far as a pending prefix; `advance(_:)`
-/// consumes one chord and reports `.fired`/`.armed`/`.unmatched`. Deadline-free — the leader timeout that
-/// abandons a half-typed sequence is app-side and calls `reset()`, as Esc does. No AppKit, no timers.
+/// Built from `(Keybind, KeybindTarget)` pairs, it holds the chords typed so far as a pending prefix;
+/// `advance(_:)` consumes one chord and reports `.fired`/`.armed`/`.unmatched`. One binding's alternatives
+/// arrive as separate pairs sharing a target. Deadline-free — the leader timeout that abandons a half-typed
+/// sequence is app-side and calls `reset()`, as Esc does. No AppKit, no timers.
 public struct KeybindMatcher: Sendable {
-    private let binds: [(keybind: Keybind, id: UUID)]
+    private let binds: [(keybind: Keybind, target: KeybindTarget)]
     private var pending: [Chord] = []
 
-    public init(_ binds: [(Keybind, UUID)]) {
-        self.binds = binds.map { (keybind: $0.0, id: $0.1) }
+    public init(_ binds: [(Keybind, KeybindTarget)]) {
+        self.binds = binds.map { (keybind: $0.0, target: $0.1) }
     }
 
     /// Whether a sequence is partway through (a leader is armed). The app uses this to gate the timeout
@@ -38,7 +39,7 @@ public struct KeybindMatcher: Sendable {
 
         for bind in binds where bind.keybind == candidate {
             pending = []
-            return .fired(bind.id)
+            return .fired(bind.target)
         }
 
         if binds.contains(where: { isStrictPrefix(candidate, of: $0.keybind) }) {

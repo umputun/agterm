@@ -84,4 +84,38 @@ struct CustomCommandEngineTests {
         #expect(engine.advance(x) == .unmatched)
         #expect(!engine.isArmed)
     }
+
+    @Test func eitherAlternativeFiresTheSameCommand() {
+        let command = CustomCommand(name: "mc", command: "mc", shortcut: "cmd+shift+e|ctrl+a>g")
+        var engine = CustomCommandEngine(commands: [command])
+
+        #expect(engine.advance(cmdShiftE) == .fired(command))
+        #expect(engine.advance(ctrlA) == .armed)
+        #expect(engine.advance(g) == .fired(command))
+    }
+
+    @Test func malformedAlternativePoisonsTheWholeShortcut() {
+        let command = CustomCommand(name: "bad", command: "echo bad", shortcut: "cmd+shift+e|f1")
+        var engine = CustomCommandEngine(commands: [command])
+
+        #expect(engine.advance(cmdShiftE) == .unmatched)
+    }
+
+    @Test func builtinSequenceFiresItsAction() {
+        var engine = CustomCommandEngine(commands: [], builtinSequences: [.toggleSplit: [[ctrlA, g]]])
+
+        #expect(engine.advance(ctrlA) == .armed)
+        #expect(engine.advance(g) == .firedBuiltin(.toggleSplit))
+        #expect(!engine.isArmed)
+    }
+
+    @Test func builtinAlternativesAndCommandsShareOneMatcher() {
+        let command = CustomCommand(name: "edit", command: "zed", shortcut: "cmd+shift+e")
+        var engine = CustomCommandEngine(commands: [command],
+                                         builtinSequences: [.toggleSplit: [[ctrlA, g], [ctrlA, x]]])
+
+        #expect(engine.advance(cmdShiftE) == .fired(command))
+        #expect(engine.advance(ctrlA) == .armed)
+        #expect(engine.advance(x) == .firedBuiltin(.toggleSplit))
+    }
 }

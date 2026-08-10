@@ -368,4 +368,90 @@ struct KeybindTests {
             #expect(parseKeybind(chord.displayString) == [chord])
         }
     }
+
+    // MARK: parseKeybinds — `|`-separated alternatives
+
+    @Test func parseKeybindsWithoutPipeWrapsTheSingleResult() {
+        #expect(parseKeybinds("cmd+shift+e") == [[Chord(mods: [.command, .shift], key: "e")]])
+        #expect(parseKeybinds("ctrl+a>g") == [[Chord(mods: .control, key: "a"), Chord(mods: [], key: "g")]])
+    }
+
+    @Test func parseKeybindsSplitsTwoAlternatives() {
+        #expect(parseKeybinds("cmd+t|ctrl+space") == [
+            [Chord(mods: .command, key: "t")],
+            [Chord(mods: .control, key: "space")],
+        ])
+    }
+
+    @Test func parseKeybindsSplitsThreeAlternatives() {
+        #expect(parseKeybinds("cmd+t|ctrl+t|opt+t") == [
+            [Chord(mods: .command, key: "t")],
+            [Chord(mods: .control, key: "t")],
+            [Chord(mods: .option, key: "t")],
+        ])
+    }
+
+    @Test func parseKeybindsAcceptsSequenceAlternatives() {
+        #expect(parseKeybinds("cmd+t|ctrl+space>s") == [
+            [Chord(mods: .command, key: "t")],
+            [Chord(mods: .control, key: "space"), Chord(mods: [], key: "s")],
+        ])
+        #expect(parseKeybinds("ctrl+a>m|cmd+a>m") == [
+            [Chord(mods: .control, key: "a"), Chord(mods: [], key: "m")],
+            [Chord(mods: .command, key: "a"), Chord(mods: [], key: "m")],
+        ])
+    }
+
+    @Test func parseKeybindsRejectsEmptyAlternatives() {
+        #expect(parseKeybinds("") == nil)
+        #expect(parseKeybinds("a||b") == nil)
+        #expect(parseKeybinds("|cmd+t") == nil)
+        #expect(parseKeybinds("cmd+t|") == nil)
+        #expect(parseKeybinds("|") == nil)
+    }
+
+    // a typo is not a collision: binding the half that parsed would hide it behind a working-looking line.
+    @Test func parseKeybindsRejectsTheWholeListWhenOneAlternativeIsMalformed() {
+        #expect(parseKeybinds("cmd+t|f1") == nil)
+        #expect(parseKeybinds("f1|cmd+t") == nil)
+        #expect(parseKeybinds("cmd+t|ctrl+") == nil)
+        #expect(parseKeybinds("cmd+t|cmd+a+b") == nil)
+    }
+
+    @Test func parseKeybindsRejectsAPipeAsABaseKey() {
+        #expect(parseKeybinds("cmd+|") == nil, "no unshifted key produces `|`; the spelling that fires is shift+\\")
+    }
+
+    // MARK: keybind rendering
+
+    @Test func keybindDisplayStringJoinsChordsWithAngle() {
+        let keybind: Keybind = [Chord(mods: .control, key: "a"), Chord(mods: [], key: "g")]
+        #expect(keybind.displayString == "ctrl+a>g")
+        #expect(parseKeybind(keybind.displayString) == keybind)
+        #expect([Chord(mods: .command, key: "t")].displayString == "cmd+t")
+    }
+
+    @Test func keybindGlyphStringRunsChordsTogether() {
+        let keybind: Keybind = [Chord(mods: .control, key: "space"), Chord(mods: [], key: "s")]
+        #expect(keybind.glyphString == "⌃␣S")
+        #expect([Chord(mods: .command, key: "t")].glyphString == "⌘T")
+    }
+
+    // MARK: dedupedAlternatives
+
+    @Test func dedupedAlternativesDropsARepeat() {
+        #expect(dedupedAlternatives("cmd+t|cmd+t") == "cmd+t")
+        #expect(dedupedAlternatives("cmd+t|ctrl+space>s|cmd+t") == "cmd+t|ctrl+space>s")
+    }
+
+    @Test func dedupedAlternativesKeepsTheRawSpellingOfTheSurvivor() {
+        #expect(dedupedAlternatives("command+shift+a|cmd+shift+a") == "command+shift+a")
+        #expect(dedupedAlternatives("CMD+T|cmd+t") == "CMD+T")
+    }
+
+    @Test func dedupedAlternativesLeavesOtherInputUntouched() {
+        #expect(dedupedAlternatives("cmd+t") == "cmd+t")
+        #expect(dedupedAlternatives("cmd+t|ctrl+t") == "cmd+t|ctrl+t")
+        #expect(dedupedAlternatives("a|b echo") == "a|b echo")
+    }
 }
