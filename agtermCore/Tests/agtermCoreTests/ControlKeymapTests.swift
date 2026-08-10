@@ -148,8 +148,14 @@ import Testing
                                             path: "/tmp/keymap.conf")
 
         #expect(payload.actions.allSatisfy { $0.alternates == nil })
-        #expect(payload.actions.map(\.chord)
-            == BuiltinAction.allCases.map { parsed.keymap.equivalent(for: $0)?.displayString })
+        #expect(payload.actions.map(\.action) == BuiltinAction.allCases.map(\.rawValue))
+        let chord: (String) -> String? = { name in payload.actions.first { $0.action == name }?.chord }
+        #expect(chord("toggle_split") == "cmd+shift+e")
+        #expect(chord("toggle_sidebar") == "t")
+        #expect(chord("focus_left_pane") == "ctrl+cmd+left")
+        #expect(chord("close_session") == "cmd+w")
+        #expect(chord("new_session") == "cmd+n", "its colliding map was dropped, so it keeps its default")
+        #expect(chord("first_session") == nil, "a keyless action reports no chord")
         let encoded = try JSONEncoder().encode(payload)
         #expect(!String(decoding: encoded, as: UTF8.self).contains("alternates"))
     }

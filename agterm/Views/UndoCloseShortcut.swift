@@ -23,11 +23,18 @@ final class UndoCloseShortcut {
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard actions.store?.pendingCloseSummary != nil else { return false }
         guard NSApp.keyWindow?.firstResponder is NSText == false else { return false }
-        guard let chord = chord(from: event) else { return false }
-        let expected = actions.settingsModel?.keymap.equivalent(for: .undoClose) ?? BuiltinAction.undoClose.defaultChord
-        guard chord == expected else { return false }
+        guard let chord = chord(from: event), matchesUndoCloseChord(chord) else { return false }
         actions.undoClose()
         return true
+    }
+
+    /// Whether `chord` is what `undo_close` is bound to right now. A wired keymap answering nil means a `map`
+    /// line left the action explicitly unbound, so NOTHING matches — only an unwired settings model falls back
+    /// to the shipped ⌘Z. Internal so a hosted test can drive the decision without a pending close.
+    func matchesUndoCloseChord(_ chord: Chord) -> Bool {
+        let expected = actions.settingsModel.map { $0.keymap.equivalent(for: .undoClose) }
+            ?? BuiltinAction.undoClose.defaultChord
+        return expected == chord
     }
 
     func chord(from event: NSEvent) -> Chord? {

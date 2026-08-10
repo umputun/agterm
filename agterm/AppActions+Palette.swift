@@ -92,8 +92,9 @@ extension AppActions {
 
     /// Run a built-in action fired by `CustomCommandRunner`'s key monitor — a `map` line's alternative beyond
     /// the menu key equivalent. Routes through the palette row that owns the action, so the alternative
-    /// inherits `runPaletteCommand`'s modal gate; the six actions with no palette row (window management and
-    /// the three palette launchers) call their own entry points, each already gated.
+    /// inherits `runPaletteCommand`'s modal gate; the `BuiltinAction.withoutPaletteRow` six call their own
+    /// entry points, each already gated. The `default` arm is unreachable while those two sets partition
+    /// `BuiltinAction.allCases`, which `PaletteCatalogTests` pins — the compiler cannot see the reverse lookup.
     func perform(_ action: BuiltinAction) {
         if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
             runPaletteCommand(command)

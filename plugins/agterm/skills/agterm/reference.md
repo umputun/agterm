@@ -962,7 +962,8 @@ parse diagnostics (0 = clean). App-global (no `--window`).
   with no menu chord), `alternates[]` (its other binds, the ones a key monitor delivers, omitted when it
   has none), and `overridden: true` when a `map` line moved it off its shipped default. Every action is
   listed, bound or not, so you can also see which chords are free.
-- `commands[]` — the custom commands: `name`, and `shortcut` omitted for a palette-only one.
+- `commands[]` — the custom commands: `name`, and `shortcut` omitted for a palette-only one. A shortcut
+  holding alternatives is one `|`-joined string, in the file's own spelling.
 - `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
 - `menu[]` — the key equivalents the menu bar carries: `chord`, the owning `menu`, the item `title`, its
   `selector`, and `enabled: false` when the item is disabled. agterm's own items report `menuAction:`;
@@ -1000,11 +1001,14 @@ Key Mapping). Two verbs, line-based; blank lines and `#` comments ignored:
 
 Either verb's chord token may hold **alternatives** joined by `|`, with no spaces around it (everything
 after the first token is the shell line): `map cmd+t|ctrl+space>s toggle_split` fires the action from
-either. A built-in's first single-chord alternative becomes its menu shortcut; every other alternative,
-and every alternative of a `command`, is delivered by a key monitor and so must carry a modifier on its
-first chord. A `map` line with no single-chord alternative (`map ctrl+a>s toggle_split`) leaves the action
-with NO menu shortcut — its shipped default is gone, not kept. A malformed alternative rejects the whole
-line; one that merely collides with another binding drops by itself and its siblings keep working.
+either. A built-in's first single-chord alternative the menu can carry becomes its menu shortcut (one that
+names a reserved chord or a bare arrow is diagnosed and dropped, and the next single chord takes the slot);
+every other alternative, and every alternative of a `command`, is delivered by a key monitor and so must
+carry a modifier on its first chord. A `map` line with no single-chord alternative
+(`map ctrl+a>s toggle_split`) leaves the action with NO menu shortcut — its shipped default is gone, not
+kept. A malformed alternative rejects the whole line; one that merely breaks a rule or collides with
+another binding drops by itself and its siblings keep working. A line left binding nothing at all leaves
+the action on the shortcut it shipped with.
 
 A **chord** is modifier words joined by `+` then a base key: modifiers `ctrl`, `cmd`, `opt`, `shift`;
 base key is a single character or `tab`/`space`/`return`/`delete`/`left`/`right`/`up`/`down`. A key typed

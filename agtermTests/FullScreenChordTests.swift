@@ -69,16 +69,24 @@ final class FullScreenChordTests: XCTestCase {
 
     private var controlCommandF: NSEvent { keyDown("f", keyCode: 3, mods: [.control, .command]) }
 
-    /// A runner over `keymap` written into an isolated config directory — the matcher is built from the
-    /// parsed keymap, so a seeded file is the only way to reach it.
-    private func runner(keymap: String) throws -> CustomCommandRunner {
-        let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
+    private var configDir: URL { stateDir.appendingPathComponent("config", isDirectory: true) }
+
+    private func write(keymap: String) throws {
         try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
         try keymap.write(to: ConfigPaths.keymapPath(configDirectory: configDir), atomically: true, encoding: .utf8)
+    }
+
+    /// A runner over `keymap` written into an isolated config directory — the matcher is built from the
+    /// parsed keymap, so a seeded file is the only way to reach it. The settings model comes back so a test
+    /// can rewrite the file and drive the reload path.
+    private func runner(keymap: String) throws -> (runner: CustomCommandRunner, settings: SettingsModel) {
+        try write(keymap: keymap)
         let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
         settings.setConfigDirectory(configDir.path)
-        return CustomCommandRunner(library: library, settings: settings,
-                                   actions: AppActions(library: library), socketProvider: { "" })
+        let actions = AppActions(library: library)
+        actions.settingsModel = settings
+        return (CustomCommandRunner(library: library, settings: settings, actions: actions,
+                                    socketProvider: { "" }), settings)
     }
 
     func testShippedChordTogglesFullScreenAndIsConsumed() throws {
@@ -111,7 +119,7 @@ final class FullScreenChordTests: XCTestCase {
     // keymap.conf in an isolated config directory, since the matcher is built from the parsed keymap.
     func testHalfTypedLeaderOutranksTheFullScreenChord() throws {
         let marker = stateDir.appendingPathComponent("leader-fired")
-        let leaderRunner = try runner(keymap: "command \"Leader\" ctrl+a>ctrl+cmd+f touch \(marker.path)\n")
+        let leaderRunner = try runner(keymap: "command \"Leader\" ctrl+a>ctrl+cmd+f touch \(marker.path)\n").runner
         leaderRunner.start()
         defer { leaderRunner.stop() }
 
@@ -123,9 +131,10 @@ final class FullScreenChordTests: XCTestCase {
     }
 
     // a `map` line's alternative beyond the menu key equivalent rides the same monitor as a custom command,
-    // so `ctrl+a>s` must run `toggle_sidebar` and consume the completing key.
+    // so `ctrl+a>s` must run `toggle_sidebar` and consume the completing key. The menu half is deliberately
+    // NOT the action's shipped chord, so the monitor cannot appear to work by accident.
     func testBuiltinSequenceAlternativeRunsTheActionAndIsConsumed() throws {
-        let sidebarRunner = try runner(keymap: "map cmd+ctrl+s|ctrl+a>s toggle_sidebar\n")
+        let sidebarRunner = try runner(keymap: "map cmd+ctrl+shift+s|ctrl+a>s toggle_sidebar\n").runner
         sidebarRunner.start()
         defer { sidebarRunner.stop() }
         let store = try XCTUnwrap(library.activeStore)
@@ -135,6 +144,66 @@ final class FullScreenChordTests: XCTestCase {
                       "ctrl+a should arm the leader")
         XCTAssertTrue(sidebarRunner.handleKeyDown(keyDown("s", keyCode: 1, mods: []), in: window),
                       "the completing chord must be consumed, not passed to the terminal")
+        XCTAssertEqual(store.sidebarVisible, !before)
+    }
+
+    // the menu-bound alternative belongs to AppKit, so the monitor must leave it alone — registering it in
+    // both places is the double dispatch the menu/monitor split exists to prevent.
+    func testTheMenuBoundAlternativeIsNotAlsoDispatchedByTheMonitor() throws {
+        let sidebarRunner = try runner(keymap: "map cmd+ctrl+shift+s|ctrl+a>s toggle_sidebar\n").runner
+        sidebarRunner.start()
+        defer { sidebarRunner.stop() }
+        let store = try XCTUnwrap(library.activeStore)
+        let before = store.sidebarVisible
+
+        let menuChord = keyDown("s", keyCode: 1, mods: [.command, .control, .shift])
+        XCTAssertFalse(sidebarRunner.handleKeyDown(menuChord, in: window), "the menu carries this one")
+        XCTAssertEqual(store.sidebarVisible, before)
+    }
+
+    // the reason `.firedBuiltin` routes through the palette rather than calling the action directly: with a
+    // picker pending, the key is still consumed but the action must not run.
+    func testBuiltinAlternativeInheritsThePalettesModalGate() throws {
+        let sidebarRunner = try runner(keymap: "map cmd+ctrl+shift+s|ctrl+a>s toggle_sidebar\n").runner
+        sidebarRunner.start()
+        defer { sidebarRunner.stop() }
+        let store = try XCTUnwrap(library.activeStore)
+        let before = store.sidebarVisible
+        let modalWindow = try XCTUnwrap(library.activeWindowID)
+        let pick = PickController()
+        PickRegistry.shared.register(modalWindow, controller: pick)
+        defer { PickRegistry.shared.unregister(modalWindow) }
+        XCTAssertTrue(pick.open(PendingPick(id: "gate", items: [ControlPickItem(id: "item", label: "Item")])))
+
+        XCTAssertTrue(sidebarRunner.handleKeyDown(keyDown("a", keyCode: 0, mods: [.control]), in: window))
+        XCTAssertTrue(sidebarRunner.handleKeyDown(keyDown("s", keyCode: 1, mods: []), in: window),
+                      "the chord is consumed either way; only the action is gated")
+        XCTAssertEqual(store.sidebarVisible, before, "a pending picker must block the palette action")
+    }
+
+    // keymap.md requires the reload path, not only a seeded file: the matcher rebuilds on
+    // `.agtermKeymapChanged`, so a built-in alternative added by an edit must start firing without a restart.
+    func testKeymapReloadRebindsTheBuiltinAlternatives() throws {
+        let seeded = try runner(keymap: "map cmd+shift+l toggle_split\n")
+        seeded.runner.start()
+        defer { seeded.runner.stop() }
+        let leader = keyDown("a", keyCode: 0, mods: [.control])
+        XCTAssertFalse(seeded.runner.handleKeyDown(leader, in: window), "nothing is bound to ctrl+a yet")
+
+        try write(keymap: "map cmd+ctrl+shift+s|ctrl+a>s toggle_sidebar\n")
+        seeded.settings.reloadKeymap()
+        // the rebuild rides a main-queue notification block, so run the loop in slices until it lands.
+        let deadline = Date().addingTimeInterval(5)
+        var armed = false
+        while !armed, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            armed = seeded.runner.handleKeyDown(leader, in: window)
+        }
+        XCTAssertTrue(armed, "the reloaded keymap should arm ctrl+a")
+
+        let store = try XCTUnwrap(library.activeStore)
+        let before = store.sidebarVisible
+        XCTAssertTrue(seeded.runner.handleKeyDown(keyDown("s", keyCode: 1, mods: []), in: window))
         XCTAssertEqual(store.sidebarVisible, !before)
     }
 

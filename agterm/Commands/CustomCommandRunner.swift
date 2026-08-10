@@ -69,11 +69,6 @@ final class CustomCommandRunner {
     /// the matcher.
     private func rebuild() {
         let keymap = settings.keymap
-        for command in keymap.commands where !command.shortcut.isEmpty {
-            if parseKeybinds(command.shortcut) == nil {
-                logger.notice("custom command \"\(command.name, privacy: .public)\" has invalid shortcut \"\(command.shortcut, privacy: .public)\"; skipping keybind")
-            }
-        }
         commandEngine = CustomCommandEngine(commands: keymap.commands, builtinSequences: keymap.builtinSequences)
         cancelLeaderTimer()
     }
@@ -138,6 +133,8 @@ final class CustomCommandRunner {
         // the only full screen item there is, at menu-display time, and an item of agterm's own beside it is
         // the duplicate this avoids. So the rebindable chord is matched here instead. A half-typed leader
         // sequence still wins, exactly as it does over a custom command sharing its first chord.
+        // Its MENU chord alone comes through here, ungated; an alternative of the same `map` line goes the
+        // ordinary `.firedBuiltin` route and so inherits the palette's modal gate.
         if !commandEngine.isArmed, chord == settings.keymap.equivalent(for: .toggleFullscreen) {
             keyWindow.toggleFullScreen(nil)
             return true

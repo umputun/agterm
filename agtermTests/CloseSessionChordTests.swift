@@ -29,8 +29,8 @@ final class CloseSessionChordTests: XCTestCase {
         super.tearDown()
     }
 
-    private func keymap(_ overrides: [BuiltinAction: Chord] = [:]) -> Keymap {
-        Keymap(builtinOverrides: overrides, commands: [])
+    private func keymap(_ overrides: [BuiltinAction: Chord] = [:], unbound: Set<BuiltinAction> = []) -> Keymap {
+        Keymap(builtinOverrides: overrides, commands: [], builtinUnbound: unbound)
     }
 
     // A File menu shaped like the real one: agterm's Close Session (a SwiftUI closure button, so no
@@ -117,14 +117,23 @@ final class CloseSessionChordTests: XCTestCase {
         XCTAssertEqual(menu.ours.keyEquivalent, "e", "our item's own chord must be left alone")
     }
 
-    func testUnboundCloseSessionLeavesTheStockCloseItsChord() {
-        // close_session is keyless only if mapped to nothing; model that as another action taking its
-        // default chord so `equivalent(for:)` no longer returns ⌘W for it.
+    // a File menu carrying neither chord yet, the shape a fresh SwiftUI build hands over.
+    func testRebindingAwayFromABareMenuLeavesTheStockCloseItsChord() {
         let menu = makeFileMenu()
         AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
 
         assertOwnsCommandW(menu.stock, "the stock Close keeps ⌘W when no built-in claims it")
         assertNoChord(menu.ours, "an item whose action does not own ⌘W must not be given the chord")
+    }
+
+    // `map ctrl+a>w close_session` binds the leader through the key monitor and leaves the action with NO menu
+    // chord at all — the one way `equivalent(for:)` answers nil for an action that ships one.
+    func testCloseSessionUnboundByAMapLineHandsCommandWToTheStockClose() {
+        let menu = makeFileMenu(oursKey: "w")
+        AppDelegate.applyCloseSessionChord(keymap(unbound: [.closeSession]), in: menu.menu)
+
+        assertOwnsCommandW(menu.stock, "no built-in holds ⌘W, so the stock Close takes it back")
+        assertNoChord(menu.ours, "our stale ⌘W must be released once the action carries no menu chord")
     }
 
     // repeated `keymap reload` flips are the reported workflow, so being correct on the first transition

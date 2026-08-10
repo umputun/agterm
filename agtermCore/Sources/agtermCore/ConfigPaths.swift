@@ -59,9 +59,9 @@ public enum ConfigPaths {
         #   command "<name>" [chord] <shell...>
         #       Define a custom command, shown in the action palette marked `custom`. The quoted
         #       name may contain spaces. An optional chord (single chord OR a leader like `ctrl+a>g`,
-        #       or several of either joined by `|`) binds it to a key; the chord MUST include a
-        #       modifier (a bare key is rejected and the line becomes palette-only). Omit the chord
-        #       for a palette-only command. The rest of the
+        #       or several of either joined by `|`) binds it to a key; every alternative MUST include
+        #       a modifier on its first chord — one that does not is dropped, and a line left with
+        #       none becomes palette-only. Omit the chord for a palette-only command. The rest of the
         #       line is run via `/bin/sh -c`, detached with no terminal — so it suits fire-and-forget
         #       launches (GUI apps, scripts), NOT a bare interactive or full-screen TUI program, which
         #       has no TTY and exits at once. Launch a TUI over a session through an overlay terminal,

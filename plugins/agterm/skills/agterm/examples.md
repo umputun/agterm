@@ -962,16 +962,17 @@ agtermctl keymap list --json \
   | jq -r '.result.keymap.menu[] | select(.enabled == false) | "\(.chord)  \(.menu) > \(.title)"'
 ```
 
-Find every chord already in use before picking one for a new binding. All THREE sources matter: a
-custom command's shortcut is delivered by the key monitor rather than a menu item, so it appears in
-`commands` and can never show up under `menu`. Miss it and a new `map` line on the same chord makes the
-next reload drop the custom binding.
+Find every chord already in use before picking one for a new binding. All FOUR sources matter: a custom
+command's shortcut and a built-in's `alternates` are delivered by the key monitor rather than a menu item,
+so they can never show up under `menu`. Miss one and a new `map` line on the same chord makes the next
+reload drop that binding. A shortcut holding alternatives is one `|`-joined string, so split it.
 
 ```bash
 agtermctl keymap list --json | jq -r '
   [ .result.keymap.actions[].chord,
-    .result.keymap.commands[].shortcut,
-    .result.keymap.menu[].chord ] | map(select(. != null)) | unique | .[]'
+    (.result.keymap.actions[].alternates // [] | .[]),
+    (.result.keymap.commands[].shortcut // "" | split("|") | .[]),
+    .result.keymap.menu[].chord ] | map(select(. != null and . != "")) | unique | .[]'
 ```
 
 Read the parse problems in full rather than just their count:

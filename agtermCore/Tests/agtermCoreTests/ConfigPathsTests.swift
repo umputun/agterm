@@ -100,10 +100,11 @@ struct ConfigPathsTests {
             // an unparseable command chord is absorbed as shell text without a diagnostic, so count the
             // shortcuts that survived rather than the commands that parsed.
             bound += keymap.builtinOverrides.count + keymap.commands.filter { !$0.shortcut.isEmpty }.count
+                + keymap.builtinSequences.values.reduce(0) { $0 + $1.count }
         }
         // all three `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
-        // the alternatives example counts once: only its menu chord lands in `builtinOverrides`.
-        #expect(bound == 5)
+        // the alternatives example counts twice, its menu chord and its monitor-bound half.
+        #expect(bound == 6)
     }
 
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {

@@ -45,6 +45,19 @@ final class UndoCloseShortcutTests: XCTestCase {
                           "needs an ASCII-capable keyboard layout; the other branch is covered in KeybindTests")
     }
 
+    /// A shortcut whose `AppActions` carries a settings model over `keymap`, seeded into an isolated config
+    /// directory — the parsed keymap is the only way to reach `equivalent(for:)`.
+    private func shortcut(keymap: String) throws -> UndoCloseShortcut {
+        let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        try keymap.write(to: ConfigPaths.keymapPath(configDirectory: configDir), atomically: true, encoding: .utf8)
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        settings.setConfigDirectory(configDir.path)
+        let actions = AppActions(library: library)
+        actions.settingsModel = settings
+        return UndoCloseShortcut(actions: actions)
+    }
+
     /// A key press as the active layout reports it: `characters` is what the layout puts on that physical
     /// position, `keyCode` is the position itself.
     private func keyDown(_ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
@@ -84,5 +97,26 @@ final class UndoCloseShortcutTests: XCTestCase {
     func testPressWithNoUsableBaseKeyMakesNoChord() throws {
         let event = try keyDown("", keyCode: 63)
         XCTAssertNil(shortcut.chord(from: event))
+    }
+
+    // MARK: which chord the monitor answers to
+
+    func testUnwiredSettingsModelFallsBackToTheShippedChord() throws {
+        let shipped = try XCTUnwrap(BuiltinAction.undoClose.defaultChord)
+        XCTAssertTrue(shortcut.matchesUndoCloseChord(shipped))
+    }
+
+    func testRemappedUndoCloseAnswersToItsNewChordOnly() throws {
+        let remapped = try shortcut(keymap: "map cmd+shift+z undo_close\n")
+        XCTAssertTrue(remapped.matchesUndoCloseChord(Chord(mods: [.command, .shift], key: "z")))
+        XCTAssertFalse(remapped.matchesUndoCloseChord(try XCTUnwrap(BuiltinAction.undoClose.defaultChord)))
+    }
+
+    // a leader-only `map` line leaves undo_close with no menu chord, and the shipped ⌘Z must NOT stand in for
+    // it — it would keep reopening closed items from a chord the user moved the action off.
+    func testUndoCloseLeftUnboundByAMapLineAnswersToNoChord() throws {
+        let unbound = try shortcut(keymap: "map ctrl+a>z undo_close\n")
+        XCTAssertFalse(unbound.matchesUndoCloseChord(try XCTUnwrap(BuiltinAction.undoClose.defaultChord)))
+        XCTAssertFalse(unbound.matchesUndoCloseChord(Chord(mods: [.control], key: "a")))
     }
 }

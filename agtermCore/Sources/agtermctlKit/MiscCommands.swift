@@ -22,7 +22,8 @@ struct Keymap: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Show the resolved keymap and the live menu key equivalents.",
             discussion: """
-            Prints every built-in with the chord the keymap resolved for it, the custom commands, any \
+            Prints every built-in with the binds the keymap resolved for it — the menu shortcut first, then \
+            any monitor-bound alternatives, joined with `|` — plus the custom commands, any \
             parse diagnostics, and the key equivalents the menu bar is actually carrying. The last \
             section is what makes a stale or hijacked chord visible: SwiftUI rebuilds the menu only on \
             the next app activation, so a chord can be right in the keymap and wrong in the menu.

@@ -27,14 +27,22 @@ paths:
   The first menu-bindable single-chord alternative of a `map` line becomes the key equivalent; every other
   alternative, from either verb, is dispatched by the `CustomCommandRunner` monitor via `builtinSequences`.
   A `map` line offering no menu-bindable alternative records the action in `builtinUnbound`, because
-  ABSENCE from `builtinOverrides` already means "keep the shipped default".
+  ABSENCE from `builtinOverrides` already means "keep the shipped default". A line that bound NOTHING is
+  different again: whether its alternatives fell to a rule at parse time or to the cross-section passes
+  afterwards, the action goes back to its shipped default, since the file never asked to move it.
+  `restoreStrandedDefaults` owns the second half and skips an action whose default something else took
+  meanwhile — being unbound is what freed it.
 - Per-alternative grammar follows the dispatch path, not the verb. The menu-bound alternative keeps `map`'s
   own rules (bare non-arrow legal, reserved chords and modifier-less arrows rejected); every monitor-bound
   alternative requires a modifier on its first chord, since a bare first key would be swallowed everywhere
   in the terminal.
 - A malformed alternative kills the whole line deliberately — `parseKeybinds` returns nil, so a typo cannot
-  hide behind a line that half worked. A rule violation or a conflict drops that alternative alone and
-  leaves its siblings firing. Do not turn either into the other. Diagnostics quote the raw substring and
+  hide behind a line that half worked. On a `command` line that token would otherwise be swallowed as shell
+  text with no diagnostic, so `hasMalformedAlternative` tells a typo from a real pipeline: a `|` token where
+  at least one half parses is a binding, `ls|grep foo` is not. A rule violation or a conflict drops that
+  alternative alone and leaves its siblings firing, on either verb. Do not turn either into the other.
+  A binding whose OWN alternatives form a prefix pair keeps the one that fires; both run the same thing.
+  Diagnostics quote the raw substring and
   never re-render it: `displayString` canonicalizes spelling and would change `|`-free files' diagnostics.
   The scope suffix keeps single-alternative wording byte-identical (`map skipped`/`keybind dropped` with
   one alternative, `alternative skipped`/`alternative dropped` with more), pinned by
@@ -50,10 +58,11 @@ paths:
   and during menu tracking because every rebuild can reapply the collision. ⌘W is the only built-in with
   a stock competitor.
 - Diagnose live shortcut state with `agtermctl keymap list`, whose `actions` and `menu` expose parsed and
-  dispatched chords through host-free `namedKey(forKeyEquivalent:)`; its actions column prints the whole
-  binding set in the file's own `|` spelling, so only its first field can appear under `menu` — see
-  [[control-api]]. Test the reload path, not only a
-  seeded file: see `CloseSessionChordTests` and
+  dispatched chords through host-free `namedKey(forKeyEquivalent:)`; the actions column's contract is owned
+  by [[control-api]], and only its first field can appear under `menu`. `overridden` still compares the menu
+  chord alone, so an action the user reached only by alternatives is unmarked. Test the reload path, not
+  only a seeded file: see `CloseSessionChordTests`,
+  `FullScreenChordTests.testKeymapReloadRebindsTheBuiltinAlternatives`, and
   `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
 - `CustomCommandRunner` uses an app-wide local `.keyDown` monitor. Its `KeybindMatcher` supports simple
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.

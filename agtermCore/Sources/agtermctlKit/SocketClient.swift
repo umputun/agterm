@@ -233,8 +233,8 @@ struct SocketClient {
     /// Render the `keymap.list` payload as sections: the resolved built-ins, then custom commands, parse
     /// diagnostics, and the live menu key equivalents (no trailing newline). An overridden built-in is
     /// marked `*`, a keyless one prints `-` rather than being dropped, so the listing is the full action set.
-    /// The chord column carries the whole binding set in the file's own `|` spelling: the menu key equivalent
-    /// first, then the monitor-bound alternatives.
+    /// The chord column carries the whole binding set joined with `|`: the menu key equivalent first, then the
+    /// monitor-bound alternatives, each in canonical kitty syntax rather than the file's own spelling.
     ///
     /// The menu section is the point of the command: comparing it against the actions above is what shows
     /// a chord the keymap resolved but the menu is not carrying. Menu items print in menu-bar order.
@@ -244,7 +244,7 @@ struct SocketClient {
         for action in keymap.actions {
             let mark = action.overridden == true ? "*" : " "
             let name = action.action.padding(toLength: max(width, action.action.count), withPad: " ", startingAt: 0)
-            let binds = ([action.chord].compactMap { $0 } + (action.alternates ?? [])).joined(separator: "|")
+            let binds = ((action.chord.map { [$0] } ?? []) + (action.alternates ?? [])).joined(separator: "|")
             lines.append("  \(mark) \(name)  \(binds.isEmpty ? "-" : binds)")
         }
         if !keymap.commands.isEmpty {

@@ -274,10 +274,11 @@ public func parseKeybind(_ s: String) -> Keybind? {
 ///
 /// Returns `nil` when ANY alternative is malformed, which kills the whole line: binding the half that parsed
 /// would hide the typo behind a line that looks like it worked. A token with no `|` yields a one-element list
-/// wrapping exactly `parseKeybind`'s result, which is what keeps a `|`-free `keymap.conf` unchanged.
+/// wrapping exactly `parseKeybind`'s result.
 ///
-/// One casualty: `cmd+|` no longer parses, since `|` splits before `parseChord` sees it. Harmless — no
-/// unshifted key produces `|`, so that binding could never fire; the spelling that does is `shift+\`.
+/// `|` being the separator makes it unspellable as a base key: `cmd+|` splits before `parseChord` sees it.
+/// Harmless — no unshifted key produces `|`, so such a binding could never fire; the spelling that does is
+/// `shift+\`.
 public func parseKeybinds(_ s: String) -> [Keybind]? {
     var keybinds: [Keybind] = []
     for part in s.split(separator: "|", omittingEmptySubsequences: false) {
@@ -285,6 +286,15 @@ public func parseKeybinds(_ s: String) -> [Keybind]? {
         keybinds.append(keybind)
     }
     return keybinds.isEmpty ? nil : keybinds
+}
+
+/// Whether a token `parseKeybinds` rejected still reads as an intended binding: it offers `|` alternatives and
+/// at least one of them parses. A `command` line's first token may legitimately be shell text (`ls|grep foo`),
+/// so this is what separates a typo in one alternative from a pipeline that happens to lead the line.
+func hasMalformedAlternative(_ s: String) -> Bool {
+    let parts = s.split(separator: "|", omittingEmptySubsequences: false)
+    guard parts.count > 1 else { return false }
+    return parts.contains { parseKeybind(String($0)) != nil }
 }
 
 /// A binding token's alternatives as raw-substring / parsed-keybind pairs in file order, every repeat of an
@@ -300,13 +310,6 @@ func alternativeKeybinds(_ s: String) -> [(raw: String, keybind: Keybind)]? {
         kept.append((part, keybind))
     }
     return kept
-}
-
-/// The binding token with every duplicate alternative removed, splicing the surviving raw substrings.
-/// Unparseable input is returned untouched.
-func dedupedAlternatives(_ s: String) -> String {
-    guard let alternatives = alternativeKeybinds(s) else { return s }
-    return alternatives.map(\.raw).joined(separator: "|")
 }
 
 /// Parse a single chord (a `+`-joined list of modifier words plus one base key), or `nil` when it is empty,
@@ -348,7 +351,7 @@ private func modifier(for token: String) -> Modifier? {
 /// wait-or-fire ambiguity). Each side names its target AND the exact keybind that lost, because a target may
 /// own several alternatives and only the offending one is dropped.
 public struct KeybindConflict: Equatable, Sendable {
-    public struct Side: Equatable, Sendable {
+    public struct Side: Hashable, Sendable {
         public let target: KeybindTarget
         public let keybind: Keybind
 

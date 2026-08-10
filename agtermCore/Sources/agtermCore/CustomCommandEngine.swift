@@ -8,8 +8,7 @@ public struct CustomCommandEngine: Sendable {
     private var matcher: KeybindMatcher
     private let commandsByID: [UUID: CustomCommand]
 
-    /// `builtinSequences` holds the built-in binds dispatched by the app's key monitor rather than by an
-    /// `NSMenuItem` key equivalent — the alternatives of a `map` line beyond the first single chord.
+    /// `builtinSequences` is `Keymap.builtinSequences`, which owns what belongs in it.
     public init(commands: [CustomCommand], builtinSequences: [BuiltinAction: [Keybind]] = [:]) {
         commandsByID = Dictionary(commands.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
@@ -19,8 +18,8 @@ public struct CustomCommandEngine: Sendable {
             binds += keybinds.map { ($0, .command(command.id)) }
         }
         // sorted so registration order does not vary with dictionary hashing.
-        for action in builtinSequences.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
-            binds += (builtinSequences[action] ?? []).map { ($0, .builtin(action)) }
+        for (action, keybinds) in builtinSequences.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            binds += keybinds.map { ($0, .builtin(action)) }
         }
         matcher = KeybindMatcher(binds)
     }

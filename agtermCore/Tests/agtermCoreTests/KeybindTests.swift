@@ -466,21 +466,34 @@ struct KeybindTests {
         #expect([Chord(mods: .command, key: "t")].glyphString == "⌘T")
     }
 
-    // MARK: dedupedAlternatives
+    // MARK: alternativeKeybinds
 
-    @Test func dedupedAlternativesDropsARepeat() {
-        #expect(dedupedAlternatives("cmd+t|cmd+t") == "cmd+t")
-        #expect(dedupedAlternatives("cmd+t|ctrl+space>s|cmd+t") == "cmd+t|ctrl+space>s")
+    /// The raw spelling a surviving alternative is quoted and stored under, spliced back together.
+    private func rawAlternatives(_ s: String) -> String? {
+        alternativeKeybinds(s).map { $0.map(\.raw).joined(separator: "|") }
     }
 
-    @Test func dedupedAlternativesKeepsTheRawSpellingOfTheSurvivor() {
-        #expect(dedupedAlternatives("command+shift+a|cmd+shift+a") == "command+shift+a")
-        #expect(dedupedAlternatives("CMD+T|cmd+t") == "CMD+T")
+    @Test func alternativeKeybindsDropsARepeat() {
+        #expect(rawAlternatives("cmd+t|cmd+t") == "cmd+t")
+        #expect(rawAlternatives("cmd+t|ctrl+space>s|cmd+t") == "cmd+t|ctrl+space>s")
     }
 
-    @Test func dedupedAlternativesLeavesOtherInputUntouched() {
-        #expect(dedupedAlternatives("cmd+t") == "cmd+t")
-        #expect(dedupedAlternatives("cmd+t|ctrl+t") == "cmd+t|ctrl+t")
-        #expect(dedupedAlternatives("a|b echo") == "a|b echo")
+    @Test func alternativeKeybindsKeepsTheRawSpellingOfTheSurvivor() {
+        #expect(rawAlternatives("command+shift+a|cmd+shift+a") == "command+shift+a")
+        #expect(rawAlternatives("CMD+T|cmd+t") == "CMD+T")
+    }
+
+    @Test func alternativeKeybindsLeavesADistinctListUntouched() {
+        #expect(rawAlternatives("cmd+t") == "cmd+t")
+        #expect(rawAlternatives("cmd+t|ctrl+t") == "cmd+t|ctrl+t")
+        #expect(rawAlternatives("a|b echo") == nil, "a shell tail is no binding at all")
+    }
+
+    // the discriminator between a typo in one alternative and a shell line that happens to lead with a pipe.
+    @Test func malformedAlternativeIsToldApartFromAShellPipeline() {
+        #expect(hasMalformedAlternative("cmd+e|f1"))
+        #expect(hasMalformedAlternative("f1|cmd+e"))
+        #expect(!hasMalformedAlternative("ls|grep"), "neither half is a keybind, so this is a pipeline")
+        #expect(!hasMalformedAlternative("f1"), "a lone token carries no alternative to be malformed")
     }
 }
