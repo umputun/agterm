@@ -101,6 +101,20 @@ final class ControlServerTests: XCTestCase {
                        "start should not change it")
     }
 
+    /// The lock is taken in `init`, so `stop()` has to release it even when `start()` never bound —
+    /// otherwise an instance that failed to bind holds the path against every later one for its lifetime.
+    func testStopReleasesALockTakenWithoutBinding() {
+        let never = makeServer()
+        XCTAssertEqual(never.resolvedSocketPath, socketPath, "precondition: it owns the path from init")
+
+        never.stop()
+
+        let next = makeServer()
+        XCTAssertEqual(next.resolvedSocketPath, socketPath, "the freed lock should let the next server own it")
+        next.start()
+        XCTAssertEqual(next.boundSocketPath, socketPath)
+    }
+
     /// `start()` re-runs from every window scene's task, so a server refused while the owner was alive
     /// reaches it again once the owner quits. It must then serve — and advertise — the real path.
     func testAServerThatBindsAfterRefusingAdvertisesTheRealPath() {

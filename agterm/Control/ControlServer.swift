@@ -219,11 +219,13 @@ final class ControlServer {
     }
 
     func stop() {
+        // outside the guard: the lock is taken in `init`, so an instance that never bound (path too long,
+        // or a bind that failed) still holds one and would otherwise keep it for the whole process.
+        defer { releaseOwnership() }
         guard listenFD >= 0 else { return }
         close(listenFD)
         listenFD = -1
         unlink(socketPath)
-        releaseOwnership()
     }
 
     /// Take the exclusive advisory lock that marks this process the owner of `socketPath`, held from init
