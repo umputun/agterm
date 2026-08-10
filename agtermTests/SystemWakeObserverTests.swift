@@ -28,10 +28,16 @@ final class SystemWakeObserverTests: XCTestCase {
                                                           queue: .main) { _ in reposts += 1 }
         defer { NotificationCenter.default.removeObserver(token) }
 
-        let settled = expectation(description: "repost delivered")
+        // wait on the repost itself, not on one main-queue turn: the observer reposts from its own
+        // `DispatchQueue.main.async` while the workspace notification arrives via `OperationQueue.main`, and
+        // nothing orders those two, so a turn-based wait can assert before the first repost lands.
+        let arrived = expectation(forNotification: .agtermScreensDidWake, object: nil, notificationCenter: .default)
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.screensDidWakeNotification, object: nil)
-        DispatchQueue.main.async { settled.fulfill() }
-        wait(for: [settled], timeout: 2)
+        wait(for: [arrived], timeout: 2)
+        // then drain, so a second and third repost from the duplicate starts would be counted rather than missed.
+        let drained = expectation(description: "any further reposts delivered")
+        DispatchQueue.main.async { DispatchQueue.main.async { drained.fulfill() } }
+        wait(for: [drained], timeout: 2)
 
         XCTAssertEqual(reposts, 1, "the scene .task starts this per window, so repeated starts must not fan out")
     }
