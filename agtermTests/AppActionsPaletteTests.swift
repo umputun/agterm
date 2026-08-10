@@ -3,9 +3,10 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the ⌃⇧P palette's "Move Session to X" destinations. The list is built from live
-/// `AppStore` state in the app target, so it needs a window library and a real store; the store-side
-/// resolution it depends on is pinned host-free in `AppStoreCurrentWorkspaceTests`.
+/// Hosted coverage for `AppActions`' palette surface: the ⌃⇧P palette's "Move Session to X" destinations,
+/// built from live `AppStore` state in the app target so it needs a window library and a real store (the
+/// store-side resolution behind it is pinned host-free in `AppStoreCurrentWorkspaceTests`), and the built-in
+/// dispatch `perform(_:)` routes a keybound action through.
 @MainActor
 final class AppActionsPaletteTests: XCTestCase {
     private var stateDir: URL!
@@ -58,5 +59,15 @@ final class AppActionsPaletteTests: XCTestCase {
         store.selectSession(nil)
 
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
+    }
+
+    // an action neither a palette row nor `paletteLessHandler(for:)` covers can still be bound in
+    // keymap.conf, where it would swallow its key and do nothing.
+    func testEveryBuiltinActionReachesADispatchPath() {
+        let viaPalette = Set(PaletteCommand.allCases.compactMap(\.builtinAction))
+        let paletteLess = Set(BuiltinAction.allCases.filter { actions.paletteLessHandler(for: $0) != nil })
+
+        XCTAssertTrue(viaPalette.isDisjoint(with: paletteLess), "an action must have exactly one dispatch path")
+        XCTAssertEqual(viaPalette.union(paletteLess), Set(BuiltinAction.allCases))
     }
 }

@@ -30,8 +30,8 @@ paths:
   ABSENCE from `builtinOverrides` already means "keep the shipped default". A line that bound NOTHING is
   different again: whether its alternatives fell to a rule at parse time or to the cross-section passes
   afterwards, the action goes back to its shipped default, since the file never asked to move it.
-  `restoreStrandedDefaults` owns the second half and skips an action whose default something else took
-  meanwhile — being unbound is what freed it.
+  `unboundAfterRestoringStrandedDefaults` owns the second half and skips an action whose default something
+  else took meanwhile — being unbound is what freed it.
 - Per-alternative grammar follows the dispatch path, not the verb. The menu-bound alternative keeps `map`'s
   own rules (bare non-arrow legal, reserved chords and modifier-less arrows rejected); every monitor-bound
   alternative requires a modifier on its first chord, since a bare first key would be swallowed everywhere
@@ -39,13 +39,14 @@ paths:
 - A malformed alternative kills the whole line deliberately — `parseKeybinds` returns nil, so a typo cannot
   hide behind a line that half worked. On a `command` line that token would otherwise be swallowed as shell
   text with no diagnostic, so `hasMalformedAlternative` tells a typo from a real pipeline: a `|` token where
-  at least one half parses is a binding, `ls|grep foo` is not. A rule violation or a conflict drops that
-  alternative alone and leaves its siblings firing, on either verb. Do not turn either into the other.
-  A binding whose OWN alternatives form a prefix pair keeps the one that fires; both run the same thing.
-  Diagnostics quote the raw substring and
-  never re-render it: `displayString` canonicalizes spelling and would change `|`-free files' diagnostics.
-  The scope suffix keeps single-alternative wording byte-identical (`map skipped`/`keybind dropped` with
-  one alternative, `alternative skipped`/`alternative dropped` with more), pinned by
+  at least one half parses is a binding, `ls|grep foo` is not.
+- A rule violation or a conflict drops that alternative alone and leaves its siblings firing, on either
+  verb. Do not turn either into the other. A binding whose OWN alternatives form a prefix pair keeps the one
+  that fires; both run the same thing.
+- Diagnostics quote the raw substring and never re-render it: `displayString` canonicalizes spelling and
+  would change `|`-free files' diagnostics. `DropScope` owns the suffix that keeps single-alternative
+  wording byte-identical (`map skipped`/`keybind dropped`/`treating the line as palette-only` with one
+  alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
   `BuiltinAction` (42 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
@@ -62,14 +63,15 @@ paths:
   by [[control-api]], and only its first field can appear under `menu`. `overridden` still compares the menu
   chord alone, so an action the user reached only by alternatives is unmarked. Test the reload path, not
   only a seeded file: see `CloseSessionChordTests`,
-  `FullScreenChordTests.testKeymapReloadRebindsTheBuiltinAlternatives`, and
+  `CustomCommandRunnerTests.testKeymapReloadRebindsTheBuiltinAlternatives`, and
   `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
 - `CustomCommandRunner` uses an app-wide local `.keyDown` monitor. Its `KeybindMatcher` supports simple
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; non-zero exit calls
   `notifyCommandFailure`. `.firedBuiltin` routes through `AppActions.perform(_:)`, a reverse lookup over
-  `PaletteCommand.allCases` on `builtinAction` that inherits the palette's `uiActionsEnabled` gate, with a
-  small switch for the actions holding no palette row. Rebuild the matcher from commands AND
+  `PaletteCommand.allCases` on `builtinAction` that inherits the palette's `uiActionsEnabled` gate, falling
+  back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
+  against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND
   `builtinSequences` on `.agtermKeymapChanged`.
 - Fire with a focused `GhosttySurfaceView`, or in an agterm terminal window whose focus is not an `NSText`
   field editor, including a zero-session window. Pass through text fields and auxiliary windows;

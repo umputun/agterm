@@ -279,7 +279,7 @@ public func parseKeybind(_ s: String) -> Keybind? {
 /// `|` being the separator makes it unspellable as a base key: `cmd+|` splits before `parseChord` sees it.
 /// Harmless — no unshifted key produces `|`, so such a binding could never fire; the spelling that does is
 /// `shift+\`.
-public func parseKeybinds(_ s: String) -> [Keybind]? {
+func parseKeybinds(_ s: String) -> [Keybind]? {
     var keybinds: [Keybind] = []
     for part in s.split(separator: "|", omittingEmptySubsequences: false) {
         guard let keybind = parseKeybind(String(part)) else { return nil }

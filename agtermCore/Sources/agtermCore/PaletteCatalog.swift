@@ -185,13 +185,3 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         }
     }
 }
-
-public extension BuiltinAction {
-    /// The actions no `PaletteCommand` row owns — window management and the three palette launchers. Every
-    /// other action reaches a keybind through the palette row that runs it, so `AppActions.perform(_:)`
-    /// dispatches exactly these by hand. An action in neither set would bind, swallow its key and do
-    /// nothing, which `PaletteCatalogTests` is what stops.
-    static let withoutPaletteRow: Set<BuiltinAction> = [
-        .newWindow, .renameWindow, .deleteWindow, .sessionPalette, .commandPalette, .customCommandPalette,
-    ]
-}

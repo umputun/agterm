@@ -92,22 +92,29 @@ extension AppActions {
 
     /// Run a built-in action fired by `CustomCommandRunner`'s key monitor — a `map` line's alternative beyond
     /// the menu key equivalent. Routes through the palette row that owns the action, so the alternative
-    /// inherits `runPaletteCommand`'s modal gate; the `BuiltinAction.withoutPaletteRow` six call their own
-    /// entry points, each already gated. The `default` arm is unreachable while those two sets partition
-    /// `BuiltinAction.allCases`, which `PaletteCatalogTests` pins — the compiler cannot see the reverse lookup.
+    /// inherits `runPaletteCommand`'s modal gate; the rest go through `paletteLessHandler(for:)`.
     func perform(_ action: BuiltinAction) {
         if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
             runPaletteCommand(command)
             return
         }
+        paletteLessHandler(for: action)?()
+    }
+
+    /// The entry point for a built-in that no `PaletteCommand` row owns — window management and the three
+    /// palette launchers, each already gated where it needs to be — and nil for every action the palette
+    /// covers. The SINGLE listing of those actions: `perform(_:)` dispatches through it and
+    /// `AppActionsPaletteTests` partitions `BuiltinAction.allCases` across it and `PaletteCommand`, so a new
+    /// action reaching neither fails a test instead of binding a key that swallows itself and does nothing.
+    func paletteLessHandler(for action: BuiltinAction) -> (() -> Void)? {
         switch action {
-        case .newWindow: newWindow()
-        case .renameWindow: renameActiveWindow()
-        case .deleteWindow: deleteActiveWindow()
-        case .sessionPalette: toggleSessionPalette()
-        case .commandPalette: toggleActionPalette()
-        case .customCommandPalette: toggleCustomCommandPalette()
-        default: break
+        case .newWindow: return { self.newWindow() }
+        case .renameWindow: return renameActiveWindow
+        case .deleteWindow: return deleteActiveWindow
+        case .sessionPalette: return toggleSessionPalette
+        case .commandPalette: return toggleActionPalette
+        case .customCommandPalette: return toggleCustomCommandPalette
+        default: return nil
         }
     }
 

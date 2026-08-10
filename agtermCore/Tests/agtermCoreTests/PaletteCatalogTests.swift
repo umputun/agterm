@@ -134,12 +134,4 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.addWorkspaceToFocus.builtinAction == nil)
         #expect(PaletteCommand.expandWorkspaces.builtinAction == nil)
     }
-
-    // a `map` alternative bound to an action neither set covers reaches `AppActions.perform(_:)`, gets
-    // swallowed by its `default` arm and does nothing, with the key consumed.
-    @Test func everyBuiltinActionReachesADispatchPath() {
-        let viaPalette = Set(PaletteCommand.allCases.compactMap(\.builtinAction))
-        #expect(viaPalette.isDisjoint(with: BuiltinAction.withoutPaletteRow))
-        #expect(viaPalette.union(BuiltinAction.withoutPaletteRow) == Set(BuiltinAction.allCases))
-    }
 }

@@ -14,9 +14,9 @@ public enum MatchResult: Equatable, Sendable {
 /// The leader/sequence state machine that turns a stream of chords into command fires.
 ///
 /// Built from `(Keybind, KeybindTarget)` pairs, it holds the chords typed so far as a pending prefix;
-/// `advance(_:)` consumes one chord and reports `.fired`/`.armed`/`.unmatched`. One binding's alternatives
-/// arrive as separate pairs sharing a target. Deadline-free — the leader timeout that abandons a half-typed
-/// sequence is app-side and calls `reset()`, as Esc does. No AppKit, no timers.
+/// `advance(_:)` consumes one chord and reports `.fired`/`.armed`/`.unmatched`. Deadline-free — the leader
+/// timeout that abandons a half-typed sequence is app-side and calls `reset()`, as Esc does. No AppKit, no
+/// timers.
 public struct KeybindMatcher: Sendable {
     private let binds: [(keybind: Keybind, target: KeybindTarget)]
     private var pending: [Chord] = []
