@@ -91,8 +91,8 @@ struct ConfigPathsTests {
             guard verb == "map" || verb == "command", !text.contains("<") else { return nil }
             return String(text)
         }
-        // an example silently dropped from the guard must fail here: two `map` lines and three `command`.
-        #expect(examples.count == 5)
+        // an example silently dropped from the guard must fail here: three `map` lines and three `command`.
+        #expect(examples.count == 6)
         var bound = 0
         for example in examples {
             let (keymap, diagnostics) = parseKeymap(example)
@@ -101,8 +101,9 @@ struct ConfigPathsTests {
             // shortcuts that survived rather than the commands that parsed.
             bound += keymap.builtinOverrides.count + keymap.commands.filter { !$0.shortcut.isEmpty }.count
         }
-        // both `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
-        #expect(bound == 4)
+        // all three `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
+        // the alternatives example counts once: only its menu chord lands in `builtinOverrides`.
+        #expect(bound == 5)
     }
 
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {

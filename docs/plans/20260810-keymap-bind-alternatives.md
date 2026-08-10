@@ -365,17 +365,19 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `plugins/agterm/skills/agterm/reference.md`
 - Modify: `README.md`, `site/docs.html`, `site/commands.html`
 
-- [ ] rewrite `.claude/rules/keymap.md:18` ("`map <chord> <action>` accepts one chord, not a leader") and
+- [x] rewrite `.claude/rules/keymap.md:18` ("`map <chord> <action>` accepts one chord, not a leader") and
       `:109` ("Built-in leaders remain unsupported; leaders are custom-only") — both become wrong
-- [ ] document the `|` tier, the first-single-chord-wins-the-menu rule, the unbound case, the
+- [x] document the `|` tier, the first-single-chord-wins-the-menu rule, the unbound case, the
       grammar-follows-dispatch-path rule, and per-alternative conflict dropping in `keymap.md`; document
       `alternates` in `control-api.md`
-- [ ] update the bundled skill (`SKILL.md`, `reference.md`), the sole source for installed Claude/Codex
+- [x] update the bundled skill (`SKILL.md`, `reference.md`), the sole source for installed Claude/Codex
       copies
-- [ ] update README's keymap section, mirror it in `site/docs.html`, add `alternates` to
+- [x] update README's keymap section, mirror it in `site/docs.html`, add `alternates` to
       `site/commands.html`
-- [ ] leave `cookbook/` alone — it is not a synchronized surface
-- [ ] move this plan to `docs/plans/completed/`
+- [x] ➕ correct the starter `keymap.conf` text in `ConfigPaths.swift`, which still told users built-ins
+      take no leader sequences, and add an alternatives example (`ConfigPathsTests` counts updated)
+- [x] leave `cookbook/` alone — it is not a synchronized surface
+- [ ] move this plan to `docs/plans/completed/` — owned by the orchestrator, not this task
 
 ## Post-Completion
 

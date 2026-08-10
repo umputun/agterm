@@ -2380,8 +2380,12 @@
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.keymap</span> with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">path</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">actions</span> (every built-in with the chord it
-                resolved to, marked when a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">map</span> line moved it
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">actions</span> (every built-in with the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">chord</span> it resolved to — the menu key equivalent
+                alone, so it compares against the menu list — plus
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">alternates</span>, its other binds in kitty syntax,
+                omitted when it has none, and marked when a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">map</span> line moved it
                 off its default), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commands</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">diagnostics</span> (line and message, not just the
                 count), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">menu</span> — the key equivalents the menu

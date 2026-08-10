@@ -1785,12 +1785,15 @@
                 color: #e6e1d7;
               "
             >
-              <span style="color: #6b727a"># rebind a built-in to a single chord (no leader sequences for built-ins)</span><br /><span
+              <span style="color: #6b727a"># rebind a built-in to a chord (mods joined by +)</span><br /><span
                 style="color: #5ea1f2"
                 >map</span
               >
               cmd+shift+l&nbsp;&nbsp;&nbsp;toggle_split<br /><span style="color: #5ea1f2">map</span>
               ctrl+shift+k&nbsp;&nbsp;command_palette<br /><br /><span style="color: #6b727a"
+                ># or to several alternatives, joined by | with no spaces around it</span
+              ><br /><span style="color: #5ea1f2">map</span>
+              cmd+t|ctrl+a&gt;t&nbsp;&nbsp;toggle_scratch<br /><br /><span style="color: #6b727a"
                 ># define custom commands ("name" shows in the palette; chord optional)</span
               ><br /><span style="color: #5ea1f2">command</span>
               <span style="color: #f2b45c">"Open in Zed"</span>&nbsp;&nbsp;cmd+shift+e&nbsp;&nbsp;open -a Zed {AGT_SESSION_PWD}<br /><span
@@ -1830,6 +1833,20 @@
               shifted symbol. Custom commands may also use a leader sequence
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
               must include a modifier — a bare key can't shadow a plain terminal key.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span> inside a single token with no
+              spaces around it —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+t|ctrl+a&gt;t toggle_scratch</span>
+              fires the action from either, and a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
+              takes alternatives the same way. For a built-in, the first single-chord alternative becomes the menu shortcut; every
+              other alternative, on either verb, is delivered by a key monitor and so must carry a modifier on its first chord. This
+              is also how a built-in gets a leader sequence, because a menu item holds exactly one key equivalent:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map ctrl+a&gt;s toggle_split</span> binds
+              the sequence and leaves the action with no menu shortcut at all — its shipped ⌘D is gone rather than kept, and free for
+              another action to claim. A typo in one alternative rejects the whole line, so a mistake can't hide behind a line that
+              half worked; an alternative that merely collides with an existing binding drops on its own and its siblings keep firing.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that cannot type ASCII —
@@ -1981,12 +1998,15 @@
             <p style="font-size: 15.5px; line-height: 1.75; color: #cbc6bc; margin: 0 0 18px">
               To check what is actually bound,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
-              built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu
+              built-in with the binds it resolved to (the menu shortcut first, then any alternatives, in the file's own
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span> spelling), the custom commands,
+              each diagnostic in full, and the key equivalents the menu
               bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
-              usually a menu problem, not a keymap one. Two deliberate exceptions never appear in the menu list, because a key
-              monitor delivers them rather than a menu item:
+              usually a menu problem, not a keymap one. Only the menu shortcut can appear there — an alternative never does, and
+              neither do
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z) and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F).
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F), which a
+              key monitor delivers rather than a menu item.
             </p>
             <h3
               style="
@@ -2004,7 +2024,8 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                >Built-in rebinds are single-chord only; leader sequences work only for custom commands.
+                >A built-in's <em>menu</em> shortcut is single-chord only: a leader sequence binds through the key monitor
+                instead, as an alternative, and so never shows next to its menu item.
               </li>
               <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
                 <span

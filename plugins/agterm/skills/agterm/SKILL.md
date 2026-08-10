@@ -439,7 +439,7 @@ Visibility/mode act on the frontmost window; `expand`/`collapse` default to the 
 
 **font** — `font inc|dec|reset [--pane left|right|scratch]` — change a session pane's font size (omitted/`left` = main pane, `right` = the split pane, `scratch` = the scratch terminal). Read the resulting size back from `tree` (`fontSize`/`splitFontSize`/`scratchFontSize` per pane).
 
-**keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count). `keymap list` — show the resolved keymap AND the live menu key equivalents: every built-in with its current chord, the custom commands, the parse diagnostics, and what the menu bar is actually dispatching. Use it to check a rebind took effect, to find a free chord, or to spot a chord the keymap resolved but the menu is not carrying.
+**keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count). `keymap list` — show the resolved keymap AND the live menu key equivalents: every built-in with its current binds (the menu chord first, then any `|`-separated alternatives a key monitor delivers), the custom commands, the parse diagnostics, and what the menu bar is actually dispatching. Use it to check a rebind took effect, to find a free chord, or to spot a chord the keymap resolved but the menu is not carrying.
 
 **config** - `config reload` - re-read the agterm-scoped `ghostty.conf` (prints the diagnostic count).
 
@@ -495,7 +495,8 @@ Full detail, templates, and the exact `gh` commands are in **troubleshooting.md*
 
 - **reference.md** — full per-command detail: every flag, the JSON return shapes
   (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`), error strings, the scratch/overlay/split
-  lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `{AGT_X}` tokens).
+  lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `|` alternatives,
+  `{AGT_X}` tokens).
 - **examples.md** — copy-paste agtermctl recipes for common tasks (build a layout, run a program in a
   blocking overlay and read its status, type into a fresh session, notify, inspect the tree).
 - **troubleshooting.md** — diagnosing common problems (keymap editor, custom actions, logs) and the

@@ -446,7 +446,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - `keymap.reload` shares GUI reload and returns diagnostic count. `keymap.list` reports:
   resolved built-in actions and override state; live AppKit menu equivalents/menu/title/selector; path;
-  custom commands; diagnostics. The two chord sets may differ during deferred rebuild or collision.
+  custom commands; diagnostics. An action's `chord` is the menu key equivalent alone, so it keeps comparing
+  against `menu`, while `alternates` holds its monitor-bound binds in kitty syntax and is omitted when
+  empty; the human actions column joins the whole set with `|`.
+  The two chord sets may differ during deferred rebuild or collision.
   Host-free projection names arrow/return; represent AppKit globe as `fn+` even though grammar lacks it.
 - `config.reload` shares GUI/Edit-overlay reload and returns Ghostty diagnostic count. Keymap and config are
   app-global and take no window.

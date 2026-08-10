@@ -957,10 +957,11 @@ parse diagnostics (0 = clean). App-global (no `--window`).
 `result.keymap`:
 
 - `path` — the `keymap.conf` this came from.
-- `actions[]` — every rebindable built-in: `action` (its `keymap.conf` name), `chord` (the resolved
-  chord in the same kitty syntax the file uses, omitted when the action is keyless), and
-  `overridden: true` when a `map` line moved it off its shipped default. Every action is listed, bound
-  or not, so you can also see which chords are free.
+- `actions[]` — every rebindable built-in: `action` (its `keymap.conf` name), `chord` (the resolved menu
+  chord in the same kitty syntax the file uses, omitted when the action is keyless or a `map` line left it
+  with no menu chord), `alternates[]` (its other binds, the ones a key monitor delivers, omitted when it
+  has none), and `overridden: true` when a `map` line moved it off its shipped default. Every action is
+  listed, bound or not, so you can also see which chords are free.
 - `commands[]` — the custom commands: `name`, and `shortcut` omitted for a palette-only one.
 - `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
 - `menu[]` — the key equivalents the menu bar carries: `chord`, the owning `menu`, the item `title`, its
@@ -979,7 +980,8 @@ item carries it.
 Two built-ins are legitimately absent from `menu`, both delivered by a key monitor rather than a menu
 item: `undo_close` (⌘Z by default), so native text undo keeps working in the rename, palette and Settings
 fields, and `toggle_fullscreen` (⌃⌘F by default), because agterm ships no full screen menu item — macOS
-adds its own, carrying `fn+f`. Their missing menu entries are expected and not a fault.
+adds its own, carrying `fn+f`. Their missing menu entries are expected and not a fault. So is an
+`alternates` entry: only an action's `chord` can reach the menu bar.
 
 Menu chords use the same vocabulary as the file (`cmd+opt+up`, `cmd+shift+return`), so the two lists
 compare as plain strings. One exception: the globe/fn modifier prints as `fn+`, which no `keymap.conf`
@@ -990,11 +992,19 @@ line can express — such an item is AppKit's own and never matches an action.
 The file lives at `<config dir>/keymap.conf` (default `~/.config/agterm`; the dir is set in Settings ▸
 Key Mapping). Two verbs, line-based; blank lines and `#` comments ignored:
 
-- `map <chord> <action>` — rebind a built-in menu action to a single chord (no leaders for built-ins).
+- `map <chord> <action>` — rebind a built-in menu action.
 - `command "<name>" [chord] <shell...>` — define a custom shell command, listed in the action palette
   marked `custom`. The quoted name may contain spaces. The post-name token is the chord only if it
   parses AND carries a modifier (a bare modifier-less key is rejected). A custom chord may be a leader
   sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
+
+Either verb's chord token may hold **alternatives** joined by `|`, with no spaces around it (everything
+after the first token is the shell line): `map cmd+t|ctrl+space>s toggle_split` fires the action from
+either. A built-in's first single-chord alternative becomes its menu shortcut; every other alternative,
+and every alternative of a `command`, is delivered by a key monitor and so must carry a modifier on its
+first chord. A `map` line with no single-chord alternative (`map ctrl+a>s toggle_split`) leaves the action
+with NO menu shortcut — its shipped default is gone, not kept. A malformed alternative rejects the whole
+line; one that merely collides with another binding drops by itself and its siblings keep working.
 
 A **chord** is modifier words joined by `+` then a base key: modifiers `ctrl`, `cmd`, `opt`, `shift`;
 base key is a single character or `tab`/`space`/`return`/`delete`/`left`/`right`/`up`/`down`. A key typed
