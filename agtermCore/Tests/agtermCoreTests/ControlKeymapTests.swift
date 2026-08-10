@@ -142,6 +142,18 @@ import Testing
         #expect(back.actions.first { $0.action == "toggle_split" }?.alternates == ["ctrl+space>s"])
     }
 
+    @Test func projectsAPipeFreeKeymapWithNoAlternatesAtAll() throws {
+        let parsed = parseKeymap(pipeFreeKeymapFixture)
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: parsed.diagnostics,
+                                            path: "/tmp/keymap.conf")
+
+        #expect(payload.actions.allSatisfy { $0.alternates == nil })
+        #expect(payload.actions.map(\.chord)
+            == BuiltinAction.allCases.map { parsed.keymap.equivalent(for: $0)?.displayString })
+        let encoded = try JSONEncoder().encode(payload)
+        #expect(!String(decoding: encoded, as: UTF8.self).contains("alternates"))
+    }
+
     @Test func menuIsOmittedWhenTheCallerSuppliesNone() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")

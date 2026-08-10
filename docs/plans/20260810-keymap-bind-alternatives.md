@@ -344,16 +344,19 @@ and falls back to a small switch for the few actions with no palette row — no 
 - Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlKeymapTests.swift`
 
-- [ ] add a test parsing a realistic `keymap.conf` with no `|` and no multi-chord `map` — several `map`
+- [x] add a test parsing a realistic `keymap.conf` with no `|` and no multi-chord `map` — several `map`
       lines including a bare non-arrow one, keyed and palette-only `command` lines, a deliberate conflict —
       asserting `builtinOverrides`, `commands` and diagnostic strings match today's output exactly, with
       `builtinSequences` and `builtinUnbound` empty
-- [ ] assert an empty keymap leaves every built-in on its shipped default chord
-- [ ] assert `ControlKeymap.project` omits `alternates` entirely for that keymap and `formatKeymap`'s output
+- [x] assert an empty keymap leaves every built-in on its shipped default chord
+- [x] assert `ControlKeymap.project` omits `alternates` entirely for that keymap and `formatKeymap`'s output
       is byte-identical to the pre-change format
-- [ ] verify by hand against the plan: both alternatives fire a command; a sequence-only `map` leaves the
-      action with no menu shortcut; a conflicting alternative drops alone with its siblings still firing
-- [ ] run the full gates ONCE: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] verify by hand against the plan: both alternatives fire a command; a sequence-only `map` leaves the
+      action with no menu shortcut; a conflicting alternative drops alone with its siblings still firing —
+      each already asserted by `CustomCommandEngineTests.eitherAlternativeFiresTheSameCommand`,
+      `KeymapTests.mapSequenceOnlyLineLeavesTheActionWithoutAMenuChord`, and
+      `KeymapTests.commandAlternativeShadowedByABuiltinDropsAloneAndKeepsTheSibling`
+- [x] run the full gates ONCE: `cd agtermCore && swift test`, `make test-app`, `make lint`
 
 ### Task 7: [Final] Update documentation
 

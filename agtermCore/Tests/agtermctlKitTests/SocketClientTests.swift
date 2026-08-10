@@ -207,6 +207,88 @@ struct SocketClientTests {
         #expect(binds("first_session") == "-", "an action with no binding at all still prints a dash")
     }
 
+    // the compatibility invariant: the same `|`-free fixture agtermCoreTests pins, rendered exactly as the
+    // pre-alternatives formatter rendered it — every expected byte below came from that formatter.
+    @Test func formatsAPipeFreeKeymapByteIdenticallyToThePreAlternativesOutput() {
+        let fixture = """
+        # regression fixture: no `|` anywhere, no multi-chord map
+        map cmd+shift+e toggle_split
+        map t toggle_sidebar
+        map ctrl+cmd+left focus_left_pane
+        map cmd+w new_session
+
+        command "Deploy" cmd+shift+y ./deploy.sh
+        command "Open Notes" vim {AGT_SESSION_PWD}/notes.md
+        command "Clash" command+shift+e echo clash
+        command "First" control+shift+g echo one
+        command "Second" ctrl+shift+g echo two
+        """
+        let parsed = parseKeymap(fixture)
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: parsed.diagnostics,
+                                            path: "/tmp/keymap.conf")
+
+        #expect(SocketClient.formatKeymap(payload) == """
+        keymap: /tmp/keymap.conf
+
+        actions:
+            new_window                  cmd+opt+n
+            rename_window               -
+            delete_window               -
+            new_workspace               cmd+shift+n
+            rename_workspace            -
+            delete_workspace            -
+            new_session                 cmd+n
+            open_directory              cmd+o
+            rename_session              -
+            duplicate_session           -
+            close_session               cmd+w
+            reopen_recent               cmd+shift+t
+            undo_close                  cmd+z
+            clear_status                -
+            increase_font_size          cmd++
+            decrease_font_size          cmd+-
+            reset_font_size             cmd+0
+          * toggle_split                cmd+shift+e
+            toggle_scratch              cmd+j
+            toggle_terminal_zoom        cmd+shift+return
+            toggle_search               cmd+f
+          * toggle_sidebar              t
+            select_theme                -
+            toggle_fullscreen           ctrl+cmd+f
+            toggle_flagged_view         -
+            toggle_flag                 cmd+shift+f
+            focus_workspace             -
+            toggle_workspace_filter     -
+          * focus_left_pane             ctrl+cmd+left
+            focus_right_pane            cmd+opt+right
+            previous_session            cmd+opt+up
+            next_session                cmd+opt+down
+            previous_attention_session  ctrl+opt+up
+            next_attention_session      ctrl+opt+down
+            first_session               -
+            last_session                -
+            quick_terminal              ctrl+`
+            session_palette             ctrl+p
+            command_palette             ctrl+shift+p
+            custom_command_palette      ctrl+shift+o
+            show_attention              ctrl+shift+i
+            dashboard                   cmd+shift+d
+
+        commands:
+            Deploy  cmd+shift+y
+            Open Notes  (palette only)
+            Clash  (palette only)
+            First  (palette only)
+            Second  (palette only)
+
+        diagnostics:
+            line 5: chord conflicts with built-in 'close_session'; map skipped
+            custom command 'Clash' shortcut 'command+shift+e' conflicts with a built-in; keybind dropped
+            custom command 'First' shortcut 'control+shift+g' conflicts with custom command 'Second'; keybind dropped
+            custom command 'Second' shortcut 'ctrl+shift+g' conflicts with custom command 'First'; keybind dropped
+        """)
+    }
+
     @Test func formatsKeymapWithoutOptionalSectionsWhenEmpty() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")

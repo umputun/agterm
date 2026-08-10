@@ -2,6 +2,24 @@ import Foundation
 import Testing
 @testable import agtermCore
 
+/// A realistic `keymap.conf` holding no `|` and no multi-chord `map` — the exact shape the compatibility
+/// invariant covers. It carries the paths that could drift: a bare non-arrow map, a modified arrow, keyed and
+/// palette-only commands, and three conflicts whose diagnostics quote non-canonical raw spellings.
+/// `ControlKeymapTests` and `SocketClientTests` pin the projection and the rendering of the same text.
+let pipeFreeKeymapFixture = """
+# regression fixture: no `|` anywhere, no multi-chord map
+map cmd+shift+e toggle_split
+map t toggle_sidebar
+map ctrl+cmd+left focus_left_pane
+map cmd+w new_session
+
+command "Deploy" cmd+shift+y ./deploy.sh
+command "Open Notes" vim {AGT_SESSION_PWD}/notes.md
+command "Clash" command+shift+e echo clash
+command "First" control+shift+g echo one
+command "Second" ctrl+shift+g echo two
+"""
+
 struct KeymapTests {
     @Test func overrideWinsOverDefault() {
         let override = Chord(mods: [.command, .shift], key: "e")
@@ -862,6 +880,41 @@ struct KeymapTests {
         #expect(keymap.builtinOverrides[.newSession] == Chord(mods: [.command], key: "d"))
         #expect(keymap.equivalent(for: .toggleSplit) == nil)
         #expect(keymap.sequences(for: .toggleSplit) == [[Chord(mods: [.control], key: "a"), Chord(mods: [], key: "d")]])
+    }
+
+    // the compatibility invariant: values below are the pre-alternatives parser's output, captured from it.
+    @Test func pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives() {
+        let (keymap, diagnostics) = parseKeymap(pipeFreeKeymapFixture)
+
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e"),
+                                            .toggleSidebar: Chord(mods: [], key: "t"),
+                                            .focusLeftPane: Chord(mods: [.control, .command], key: "left")])
+        #expect(keymap.builtinSequences.isEmpty)
+        #expect(keymap.builtinUnbound.isEmpty)
+
+        #expect(keymap.commands.map(\.name) == ["Deploy", "Open Notes", "Clash", "First", "Second"])
+        #expect(keymap.commands.map(\.shortcut) == ["cmd+shift+y", "", "", "", ""])
+        #expect(keymap.commands.map(\.command) == ["./deploy.sh", "vim {AGT_SESSION_PWD}/notes.md",
+                                                   "echo clash", "echo one", "echo two"])
+
+        #expect(diagnostics == [
+            KeymapDiagnostic(line: 5, message: "chord conflicts with built-in 'close_session'; map skipped"),
+            KeymapDiagnostic(line: 0,
+                             message: "custom command 'Clash' shortcut 'command+shift+e' conflicts with a built-in; keybind dropped"),
+            KeymapDiagnostic(line: 0,
+                             message: "custom command 'First' shortcut 'control+shift+g' conflicts with custom command 'Second'; keybind dropped"),
+            KeymapDiagnostic(line: 0,
+                             message: "custom command 'Second' shortcut 'ctrl+shift+g' conflicts with custom command 'First'; keybind dropped"),
+        ])
+    }
+
+    @Test func emptyKeymapLeavesEveryBuiltinOnItsShippedDefault() {
+        let (keymap, diagnostics) = parseKeymap("")
+        #expect(diagnostics.isEmpty)
+        for action in BuiltinAction.allCases {
+            #expect(keymap.equivalent(for: action) == action.defaultChord)
+            #expect(keymap.sequences(for: action).isEmpty)
+        }
     }
 
     @Test func keymapStoreLoadsFileAndRecoversWhenMissing() throws {
