@@ -72,7 +72,7 @@ The capture is `session text --lines 50 --pane <pane>`, or `$AGT_SELECTION` when
 
 The text goes to a scratch file and revdiff opens on it with `--only`, which is its no-VCS mode: the file is shown in full as context, no `+`/`-` gutter, annotations working normally. The overlay is opened with `--block`, so the script sits there until you quit. `--exit-code-on-annotations` makes revdiff exit `10` when it wrote notes and `0` when you quit without any, which is how the script knows there is nothing to paste without reading the file.
 
-The reply goes through the **clipboard**, saved and restored around the paste. That is not a shortcut. `session type` sends real keystrokes, so a multi-line reply submits itself one line at a time — the first line goes as a command and the rest land wherever that left you. `session paste` is the only bracketed-paste path the control API exposes, and it reads the system clipboard. Against a pty with DECSET 2004 on, `type` produced bare lines and `paste` produced one `^[[200~…^[[201~` block. So the reply arrives whole and unsent. The plain text that was on the clipboard is put back afterwards.
+The reply goes through the **clipboard**, saved and restored around the paste. That is not a shortcut. `session type` sends real keystrokes, so a multi-line reply submits itself one line at a time — the first line goes as a command and the rest land wherever that left you. `session paste` is the only bracketed-paste path the control API exposes, and it reads the system clipboard. Against a pty with DECSET 2004 on, `type` produced bare lines and `paste` produced one `^[[200~…^[[201~` block. So the reply arrives whole and unsent — with the caveat in *Limits*. The plain text that was on the clipboard is put back afterwards.
 
 `session paste` takes no `--pane`. It runs on the session's main surface, so a chord fired from a split's right pane or from the scratch would drop the notes at a different prompt than the one you annotated. Those two panes get the notes on the clipboard and a banner saying so, for a manual ⌘V. The capture side has no such limit: `session text` does take `--pane`, so what you annotate is always the pane you pressed in.
 
@@ -80,7 +80,9 @@ A nonzero exit from the overlay call is ambiguous — agtermctl can refuse befor
 
 ## Limits
 
-Nothing is closed, deleted, or killed. The reply is pasted, never submitted. Three things are touched outside the session: the clipboard, restored afterwards; the run log at `$TMPDIR/agterm-annotate.log`; and revdiff's own annotation history, which it auto-saves under `~/.config/revdiff/history/` for any review you quit with `q`, so a durable copy of your notes outlives the temp file the script deletes.
+Nothing is closed, deleted, or killed. Three things are touched outside the session: the clipboard, restored afterwards; the run log at `$TMPDIR/agterm-annotate.log`; and revdiff's own annotation history, which it auto-saves under `~/.config/revdiff/history/` for any review you quit with `q`, so a durable copy of your notes outlives the temp file the script deletes.
+
+The reply arrives unsent against a program with bracketed paste on, which is what an agent CLI, a readline shell prompt and any full-screen editor turn on. Bracketed paste is the program's mode, not a property of the paste, so a destination with it off — macOS `/bin/sh`, a `read` loop, a bare REPL — takes the newlines as Return and runs the lines. That is what a manual ⌘V of the same notes would do there, and nothing in the control API can ask which mode a program is in, so the chord cannot check first.
 
 The clipboard restore is plain text only. Copy an image or a file in Finder, press the chord, and what comes back afterwards is the empty string — `pbpaste` cannot carry a pasteboard's non-text flavors.
 

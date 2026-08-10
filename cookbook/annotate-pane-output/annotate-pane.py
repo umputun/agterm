@@ -13,10 +13,11 @@ point: a note like "why this one?" is unreadable on its own once the pane has sc
 
 The reply is delivered through the CLIPBOARD, saved and restored around the paste. This is not a
 convenience - `session type` sends real keystrokes, so a multi-line reply submits itself one line at
-a time, while `session paste` is the only bracketed-paste path agterm exposes and it reads the
-system clipboard. Measured against a pty with DECSET 2004 on: type produced bare lines, paste
-produced one `^[[200~...^[[201~` block. So the reply lands whole and unsent, for you to read and
-send.
+a time whatever is reading, while `session paste` is the only bracketed-paste path agterm exposes
+and it reads the system clipboard. Measured against a pty with DECSET 2004 on: type produced bare
+lines, paste produced one `^[[200~...^[[201~` block, so the reply lands whole and unsent. 2004 is
+the PROGRAM's mode, not a property of the route: against one with it off the newlines submit, the
+same as any manual paste. There is no way to ask over the control API which it is.
 
 `session paste` takes no --pane and always runs on the session's main surface, so from a split's
 right pane or the scratch it would deliver to the wrong prompt. Those panes keep the notes on the
