@@ -74,18 +74,13 @@ paths:
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND
   `builtinSequences` on `.agtermKeymapChanged`.
 - **An alternative does what its line's MENU chord does, no more and no less.** So `perform(_:in:)` runs the
-  palette row's body under the MENU's modal rule, not the palette's blanket `uiActionsEnabled`:
-  `survivesModalCover` lists the actions whose menu item carries no `modalActive` mirror (close session,
-  both reloads, the three font sizes, terminal zoom) plus `dashboard`, whose item is the open grid's own
-  escape hatch. The per-action half of the same rule is `PaletteCommand.isVisible(in:)`, the host-free
-  predicate the palette already keys its rows on and the menu item spells as its own `.disabled(…)` term:
-  no flagged sessions disables Show Flagged Sessions, an unremovable workspace disables Delete Workspace,
-  an unsplit session disables the pane-focus items. Consult it rather than restating a menu predicate.
-  Where `isVisible` is `true` and the menu item still disables — no active session, no current workspace —
-  the `AppActions` method itself is the guard. `close_session` is the one row whose menu BODY differs from
+  palette row's body behind `PaletteCommand.isEnabled(in:)`, the single predicate the menu item spells as
+  its `.disabled(…)`; [[menu-actions]] owns it, so never restate a menu term here or in `perform`.
+  `close_session` is the one row whose menu BODY differs from
   its palette row: the menu falls back to closing the key window when there was no cover and no session, so
   `perform` takes `closeActiveSessionOrWindow(_:)` with the window the chord fired in, not the palette's
-  ungated `closeActiveSession()`. The `paletteLessHandler` half has no such wrapper, so each of its entry
+  ungated `closeActiveSession()`. The `paletteLessHandler` half has no palette row to carry the predicate,
+  so each of its entry
   points holds the gate itself — the three palette launchers on the full `uiActionsEnabled`, not zoom and
   picker alone, since their menu items are disabled over the dashboard. The key is
   consumed either way: the gate lives inside each action, so the runner cannot see the outcome, and passing

@@ -12,9 +12,10 @@ matcher, and calls `keyWindow.toggleFullScreen(nil)` directly.
 
 Since bind alternatives landed, the same `map` line can carry more bindings for the same action, and those
 take the ordinary route: the matcher reports `.firedBuiltin` and `AppActions.perform(_:in:)` runs the
-`PaletteCommand` row under the modal rule its MENU item carries. `toggle_fullscreen` has no menu item to
-supply one, so it falls to `uiActionsEnabled` — deliberately, since making it an exception would settle
-this item rather than record it. So `map ctrl+cmd+f|ctrl+a>f toggle_fullscreen` gives one action two
+`PaletteCommand` row behind `isEnabled(in:)`, which carries the modal rule of the row's MENU item.
+`toggle_fullscreen` has no menu item to supply one, so it falls to the predicate's default arm, the whole
+modal cover — deliberately, since making it an exception would settle this item rather than record it. So
+`map ctrl+cmd+f|ctrl+a>f toggle_fullscreen` gives one action two
 dispatch paths with two different gating rules: with a picker or another modal pending, `ctrl+a>f` no-ops
 and `ctrl+cmd+f` still toggles.
 

@@ -6,6 +6,7 @@ paths:
   - "agterm/Views/Palette.swift"
   - "agterm/Views/PaneShortcuts.swift"
   - "agterm/Views/SessionSwitcher.swift"
+  - "agtermCore/Sources/agtermCore/PaletteCatalog.swift"
   - "agtermCore/Sources/agtermCore/RecencyStack.swift"
   - "agtermCore/Sources/agtermCore/Fuzzy.swift"
   - "agtermUITests/MenuUITests.swift"
@@ -20,8 +21,22 @@ paths:
 
 - `@MainActor AppActions` shares nontrivial behavior among titlebar/footer, menu, palette, and control:
   placement, directory picking, split/focus, and font. Trivial toggles may call their owner directly.
-- `toggleQuickTerminal` gates on all `uiActionsEnabled`, including terminal zoom and dashboard. Menu
-  `.disabled(modalActive)` also gates rebound key equivalents; palette dispatch and Dock invocation recheck.
+- **`PaletteCommand.isEnabled(in:)` is the single owner of menu enablement.** Every menu item backed by a
+  palette row spells its `.disabled(…)` as that predicate, the palette row renders inert on it, and a
+  `keymap.conf` alternative dispatches through it in `AppActions.perform(_:in:)` (see [[keymap]]), so the
+  three cannot drift. It layers `isVisible(in:)`, then the modal cover, then the presence terms
+  (no active session, no current workspace). Add a term to `PaletteContext` and the predicate; never to one
+  item's `.disabled(…)`. An action's own `AppActions` method keeps its guard as well — belt and braces, not
+  the contract.
+- The modal cover — terminal zoom, the open dashboard grid, a pending native picker — reads off the same
+  predicate. Close Session, both reloads, the three font sizes and Toggle Terminal Zoom carry no modal term
+  (⌘W is how a cover is dismissed); Dashboard carries every cover but its own grid, its item being that
+  grid's escape hatch. Items with no palette row (window management, the three palette launchers) keep the
+  bare `context.modalActive`.
+- `isVisible(in:)` stays WIDER than `isEnabled(in:)`: the palette lists Rename Session with no session and
+  renders it disabled, and `runItem` neither runs nor dismisses it. Do not narrow `isVisible` to match the
+  menu — that deletes rows users search for.
+- `toggleQuickTerminal` gates on all `uiActionsEnabled`, including terminal zoom and dashboard.
   Control drives `QuickTerminalRegistry` directly. The titlebar button is replaced by dashboard chrome,
   which hides an open quick terminal before showing the grid.
 - Every new action must satisfy the control contract in [[control-api]]: protocol, dispatch, CLI, and

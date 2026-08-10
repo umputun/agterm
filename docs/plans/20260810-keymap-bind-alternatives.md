@@ -380,6 +380,43 @@ and falls back to a small switch for the few actions with no palette row — no 
 - [x] leave `cookbook/` alone — it is not a synchronized surface
 - [ ] move this plan to `docs/plans/completed/` — owned by the orchestrator, not this task
 
+### Task 8: [Scope expansion, approved mid-run] One predicate owns menu enablement
+
+Task 4 kept menu/monitor equivalence by hand in three places, and review closed the drift twice more. Two of
+the three hand-maintained pieces go: `survivesModalCover`, the list of actions whose menu item carries no
+`modalActive` mirror, and the "no active session / no current workspace" terms each menu item spells itself
+while the matching `AppActions` method merely happens to guard the same way. The `close_session` body
+special case STAYS — removing it would change what the palette's Close Session row does.
+
+`PaletteCommand.isEnabled(in:)` becomes the single owner: the menu item's `.disabled(…)`, the palette row
+and `perform(_:in:)` all read it. The palette keeps showing rows the menu disables (Rename Session with no
+session), so it needs a shown-but-inert state rather than the rows vanishing.
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/PaletteCatalog.swift`
+- Modify: `agterm/AppActions+Palette.swift`, `agterm/agtermApp+Menus.swift`, `agterm/Views/Palette.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/PaletteCatalogTests.swift`
+- Modify: `agtermTests/AppActionsPaletteTests.swift`, `agtermTests/CustomCommandRunnerTests.swift`
+- Modify: `.claude/rules/menu-actions.md`, `.claude/rules/keymap.md`, `README.md`, `site/docs.html`,
+  `docs/backlog/toggle-fullscreen-menu-chord-bypasses-the-modal-gate.md`
+
+- [x] widen `PaletteContext` with `hasActiveSession`, `hasCurrentWorkspace` and the three covers
+      (`terminalZoomActive`, `dashboardOpen`, `pickerActive`) plus a derived `modalActive`
+- [x] add `PaletteCommand.isEnabled(in:)` = `isVisible` then the modal cover then the presence terms, with
+      the cover arm carrying what `survivesModalCover` listed, and keep `isVisible` deliberately wider
+- [x] have every `PaletteCommand`-backed menu item read it, leaving the bare `modalActive` only for the
+      items with no palette row (window management, Open Recent, the three palette launchers)
+- [x] have `perform(_:in:)` read it and delete `survivesModalCover`; leave the `close_session` body case
+- [x] give `PaletteItem` an `enabled` flag; the row renders the system disabled-control color, takes no
+      hover tint, and `runItem` neither runs nor dismisses it
+- [x] write tests: host-free enablement sweeps over every command for each cover and each presence term,
+      plus rows staying visible where they go inert; hosted, a palette row listed-but-inert and live again
+      once a session exists, a monitor alternative inert on the same term its menu item disables on, and
+      close session dismissing the cover its sidebar sibling is blocked by
+- [x] update `menu-actions.md` (the owner), `keymap.md` (cross-reference), README, `site/docs.html` and the
+      `toggle_fullscreen` backlog item's now-stale wording
+- [x] run the full gates ONCE: `cd agtermCore && swift test`, `make test-app`, `make lint`
+
 ## Post-Completion
 
 **Manual verification** (no automated test replaces this):

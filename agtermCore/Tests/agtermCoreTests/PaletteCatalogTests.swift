@@ -121,6 +121,101 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.toggleWorkspaceFilter.title(in: PaletteContext(hasMarkedWorkspaces: true)) == "Toggle Workspace Filter")
     }
 
+    /// Everything present, nothing covering: every command's menu item is live here.
+    private static let live = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                             sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                             activeSessionHasSplit: true, hasPendingClose: true,
+                                             hasRecentClosed: true, hasActiveSession: true,
+                                             hasCurrentWorkspace: true)
+
+    /// The commands whose menu item carries no `modalActive` term at all.
+    private static let coverProof: Set<PaletteCommand> = [
+        .closeSession, .reloadKeymap, .reloadConfig,
+        .increaseFontSize, .decreaseFontSize, .resetFontSize, .toggleTerminalZoom,
+    ]
+
+    private static let needSession: Set<PaletteCommand> = [
+        .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleScratch, .find,
+        .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
+        .firstSession, .lastSession,
+    ]
+
+    @Test func everyCommandIsLiveWhenNothingIsMissingOrCovering() {
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: Self.live), "\(command) should be live")
+        }
+    }
+
+    @Test func sessionPresenceGatesTheSameCommandsTheMenuDoes() {
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: false,
+                                     hasCurrentWorkspace: true)
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: context) == !Self.needSession.contains(command), "\(command)")
+        }
+    }
+
+    @Test func workspacePresenceGatesTheWorkspaceEntries() {
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: true,
+                                     hasCurrentWorkspace: false)
+        let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus]
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: context) == !needWorkspace.contains(command), "\(command)")
+        }
+    }
+
+    @Test func terminalZoomLeavesOnlyTheItemsCarryingNoModalTerm() {
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: true,
+                                     hasCurrentWorkspace: true, terminalZoomActive: true)
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: context) == Self.coverProof.contains(command), "\(command)")
+        }
+    }
+
+    @Test func aPendingPickerLeavesTheSameSet() {
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: true,
+                                     hasCurrentWorkspace: true, pickerActive: true)
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: context) == Self.coverProof.contains(command), "\(command)")
+        }
+    }
+
+    // Navigate ▸ Dashboard is the open grid's own escape hatch, so its item alone survives that one cover.
+    @Test func theOpenDashboardSparesItsOwnToggle() {
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: true,
+                                     hasCurrentWorkspace: true, dashboardOpen: true)
+        for command in PaletteCommand.allCases {
+            let expected = Self.coverProof.contains(command) || command == .dashboard
+            #expect(command.isEnabled(in: context) == expected, "\(command)")
+        }
+        #expect(!PaletteCommand.dashboard.isEnabled(
+            in: PaletteContext(hasActiveSession: true, hasCurrentWorkspace: true,
+                               terminalZoomActive: true, dashboardOpen: true)))
+    }
+
+    // the palette lists rows the menu disables, so a missing session must not remove them from the catalog.
+    @Test func rowsStayVisibleWhereTheMenuItemGoesDisabled() {
+        let context = PaletteContext(hasActiveSession: false, hasCurrentWorkspace: false)
+        for command in Self.needSession.union([.renameWorkspace, .focusWorkspace]) {
+            #expect(command.isVisible(in: context), "\(command) stays listed")
+            #expect(!command.isEnabled(in: context), "\(command) stays inert")
+        }
+    }
+
     @Test func builtinMappingsCoverRebindableCommands() {
         #expect(PaletteCommand.newSession.builtinAction == .newSession)
         #expect(PaletteCommand.find.builtinAction == .toggleSearch)

@@ -61,6 +61,33 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
     }
 
+    private func actionRow(_ command: PaletteCommand) throws -> PaletteItem {
+        let title = command.title(in: actions.paletteContext)
+        return try XCTUnwrap(actions.paletteActions().first { $0.title == title })
+    }
+
+    // the palette deliberately LISTS rows the menu disables, so a user can still look the action up. It must
+    // render them inert instead of running an action the same keystroke would be refused for.
+    func testARowTheMenuDisablesIsListedButInert() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.selectSession(nil)
+        XCTAssertNil(store.activeSession)
+
+        let inert = try actionRow(.renameSession)
+        XCTAssertFalse(inert.enabled, "the menu item is disabled with no session, so the row is inert")
+        inert.run()
+        XCTAssertFalse(actions.renamePending, "an inert row runs nothing")
+
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        store.selectSession(session.id)
+
+        let live = try actionRow(.renameSession)
+        XCTAssertTrue(live.enabled, "with a session the same row is live")
+        live.run()
+        XCTAssertTrue(actions.renamePending, "and runs the action its menu item would")
+    }
+
     // an action neither a palette row nor `paletteLessHandler(for:)` covers can still be bound in
     // keymap.conf, where it would swallow its key and do nothing.
     func testEveryBuiltinActionReachesADispatchPath() {

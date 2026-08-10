@@ -59,12 +59,13 @@ extension agtermApp {
             // File: replace the default "New" group with agterm's creation/management actions, grouped by
             // entity into Window, Workspace, Session. System Close / Close All stay below in their own group.
             CommandGroup(replacing: .newItem) {
-                // zoom, the dashboard grid, or a topmost native picker makes the UI modal (the AppActions
-                // gate already no-ops these); `.disabled` mirrors it so items read as unavailable instead
-                // of dead and key equivalents cannot mutate the covered deck.
-                let zoomed = actions.terminalZoomActive
-                let pickActive = actions.pickActive(for: library.activeWindowID)
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
+                // every item backed by a `PaletteCommand` reads `isEnabled(in:)` — the SINGLE predicate the
+                // palette row and a keymap.conf alternative on the same action read too, so an item cannot
+                // grow a term the other two miss. `modalActive` remains for the items with no palette row:
+                // zoom, the dashboard grid or a topmost native picker covers the deck, and neither a click
+                // nor a key equivalent may mutate what it hides.
+                let context = actions.paletteContext
+                let modalActive = context.modalActive
                 // Window: Open Window lists the library with a checkmark on already-open ones (picking a
                 // closed one opens it, an open one raises it). Delete is disabled with one window left.
                 Button("New Window") { actions.newWindow() }
@@ -95,22 +96,22 @@ extension agtermApp {
                 // Workspace.
                 Button("New Workspace") { actions.newWorkspace() }
                     .keyboardShortcut(shortcut(for: .newWorkspace))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.newWorkspace.isEnabled(in: context))
                 Button("Rename Workspace") { actions.renameActiveWorkspace() }
                     .keyboardShortcut(shortcut(for: .renameWorkspace))
-                    .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
+                    .disabled(!PaletteCommand.renameWorkspace.isEnabled(in: context))
                 Button("Delete Workspace") { actions.deleteActiveWorkspace() }
                     .keyboardShortcut(shortcut(for: .deleteWorkspace))
-                    .disabled(library.activeStore?.canRemoveWorkspace != true || modalActive)
+                    .disabled(!PaletteCommand.deleteWorkspace.isEnabled(in: context))
 
                 Divider()
                 // Session.
                 Button("New Session") { actions.newSession() }
                     .keyboardShortcut(shortcut(for: .newSession))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.newSession.isEnabled(in: context))
                 Button("Open Directory…") { actions.openDirectory() }
                     .keyboardShortcut(shortcut(for: .openDirectory))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.openDirectory.isEnabled(in: context))
                 Menu("Open Recent") {
                     let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
                     let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
@@ -138,13 +139,13 @@ extension agtermApp {
                 .disabled(library.recentClosedItems.isEmpty || modalActive)
                 Button("Reopen Last Closed Item") { actions.openLatestRecentClosed() }
                     .keyboardShortcut(shortcut(for: .reopenRecent))
-                    .disabled(library.recentClosedItems.isEmpty || modalActive)
+                    .disabled(!PaletteCommand.reopenRecent.isEnabled(in: context))
                 Button("Rename Session") { actions.renameActiveSession() }
                     .keyboardShortcut(shortcut(for: .renameSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.renameSession.isEnabled(in: context))
                 Button("Duplicate Session") { actions.duplicateActiveSession() }
                     .keyboardShortcut(shortcut(for: .duplicateSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.duplicateSession.isEnabled(in: context))
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {
@@ -165,76 +166,79 @@ extension agtermApp {
                     actions.closeActiveSessionOrWindow(NSApp.keyWindow)
                 }
                 .keyboardShortcut(shortcut(for: .closeSession))
+                .disabled(!PaletteCommand.closeSession.isEnabled(in: context))
                 Button("Reopen Closed Item") { actions.undoClose() }
-                    .disabled(library.activeStore?.pendingCloseSummary == nil || modalActive)
+                    .disabled(!PaletteCommand.undoClose.isEnabled(in: context))
                 Button("Clear Status") { actions.clearActiveSessionStatus() }
                     .keyboardShortcut(shortcut(for: .clearStatus))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.clearStatus.isEnabled(in: context))
                 Divider()
                 // open keymap.conf in $EDITOR in a 95% overlay over the active session; reloads when the
                 // editor exits. keyless, like Reload Keymap.
                 Button { actions.editKeymap() } label: { Label("Edit Keymap…", systemImage: "pencil") }
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.editKeymap.isEnabled(in: context))
                 // re-read keymap.conf and apply — menu shortcuts, runner and palette rebuild. keyless.
                 Button { actions.reloadKeymap() } label: { Label("Reload Keymap", systemImage: "keyboard") }
+                    .disabled(!PaletteCommand.reloadKeymap.isEnabled(in: context))
                 // open the agterm-scoped ghostty.conf in $EDITOR in a 95% overlay; reloads on editor exit.
                 Button { actions.editGhosttyConfig() } label: { Label("Edit ghostty.conf…", systemImage: "slider.horizontal.3") }
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.editGhosttyConfig.isEnabled(in: context))
                 // re-read ghostty.conf and rebroadcast to every surface; banner-warns on a malformed file.
                 Button { actions.reloadGhosttyConfig() } label: { Label("Reload Config", systemImage: "arrow.clockwise") }
+                    .disabled(!PaletteCommand.reloadConfig.isEnabled(in: context))
             }
             // View: font zoom (on the focused terminal), the status-bar toggle, split / quick terminal /
             // palettes. Every item needs an SF Symbol: one iconless item renders as a blank, indented slot
             // beside the icon column its neighbours reserve.
             CommandGroup(after: .toolbar) {
-                // the File group's modal gate, mirrored.
-                let zoomed = actions.terminalZoomActive
-                let pickActive = actions.pickActive(for: library.activeWindowID)
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
+                // the File group's predicate, mirrored. Every item here has a palette row, so none needs the
+                // bare modal term.
+                let context = actions.paletteContext
                 Button { actions.increaseFontSize() } label: { Label("Increase Font Size", systemImage: "textformat.size.larger") }
                     .keyboardShortcut(shortcut(for: .increaseFontSize))
+                    .disabled(!PaletteCommand.increaseFontSize.isEnabled(in: context))
                 Button { actions.decreaseFontSize() } label: { Label("Decrease Font Size", systemImage: "textformat.size.smaller") }
                     .keyboardShortcut(shortcut(for: .decreaseFontSize))
+                    .disabled(!PaletteCommand.decreaseFontSize.isEnabled(in: context))
                 Button { actions.resetFontSize() } label: { Label("Actual Size", systemImage: "textformat.size") }
                     .keyboardShortcut(shortcut(for: .resetFontSize))
+                    .disabled(!PaletteCommand.resetFontSize.isEnabled(in: context))
                 // open the live-preview theme picker (the .themes palette). keyless by default, rebindable
                 // via select_theme; the control half is theme.set / theme.list.
                 Button { actions.openThemePalette() } label: { Label("Select Theme…", systemImage: "paintpalette") }
                     .keyboardShortcut(shortcut(for: .selectTheme))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.selectTheme.isEnabled(in: context))
                 Divider()
                 let sidebarShown = library.activeStore?.sidebarVisible ?? true
                 Button { actions.toggleSidebar() } label: {
                     Label(sidebarShown ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut(shortcut(for: .toggleSidebar))
-                .disabled(modalActive)
+                .disabled(!PaletteCommand.toggleSidebar.isEnabled(in: context))
                 // expand every workspace / collapse all but the active one. plain keyless items, disabled
-                // with no active store or in flagged mode (no workspace rows); control sidebar.expand/collapse.
-                let treeMode = library.activeStore?.sidebarMode == .tree
+                // outside tree mode, where there are no workspace rows; control sidebar.expand/collapse.
                 Button { actions.expandAllWorkspaces() } label: { Label("Expand Workspaces", systemImage: "chevron.down") }
-                    .disabled(library.activeStore == nil || !treeMode || modalActive)
+                    .disabled(!PaletteCommand.expandWorkspaces.isEnabled(in: context))
                 Button { actions.collapseOtherWorkspaces() } label: { Label("Collapse Workspaces", systemImage: "chevron.right") }
-                    .disabled(library.activeStore == nil || !treeMode || modalActive)
+                    .disabled(!PaletteCommand.collapseWorkspaces.isEnabled(in: context))
                 // flip the sidebar between the workspace tree and the flat flagged working-set list. one
                 // 2-state item, keyless by default (rebindable via toggle_flagged_view); control sidebar.mode.
+                // Disabled with nothing to show (tree mode + no flags), live in flagged mode so it can
+                // always switch back to the tree.
                 let flaggedMode = library.activeStore?.sidebarMode == .flagged
-                // disabled (along with its shortcut) when there's nothing to show: tree mode + no flags.
-                // Enabled in flagged mode so it can always switch back to the tree.
-                let noFlaggedToShow = !flaggedMode && (library.activeStore?.flaggedSessions.isEmpty ?? true)
                 Button { actions.toggleFlaggedView() } label: {
                     Label(flaggedMode ? "Show All Sessions" : "Show Flagged Sessions", systemImage: "flag")
                 }
                 .keyboardShortcut(shortcut(for: .toggleFlaggedView))
-                .disabled(noFlaggedToShow || modalActive)
+                .disabled(!PaletteCommand.toggleFlaggedView.isEnabled(in: context))
                 let sessionFlagged = library.activeStore?.activeSession?.flagged == true
                 Button { actions.toggleFlagActiveSession() } label: {
                     Label(sessionFlagged ? "Unflag Session" : "Flag Session", systemImage: "flag.badge.ellipsis")
                 }
                 .keyboardShortcut(shortcut(for: .toggleFlag))
-                .disabled(library.activeStore?.activeSession == nil || modalActive)
+                .disabled(!PaletteCommand.toggleFlag.isEnabled(in: context))
                 Button { actions.clearFlags() } label: { Label("Clear Flagged", systemImage: "flag.slash") }
-                    .disabled(library.activeStore?.flaggedSessions.isEmpty ?? true || modalActive)
+                    .disabled(!PaletteCommand.clearFlagged.isEnabled(in: context))
                 // collapse the tree to the current workspace's subtree (or unfocus when already focused).
                 // keyless, rebindable via focus_workspace; control workspace.focus. the label tracks the toggle.
                 let focusStore = library.activeStore
@@ -243,7 +247,7 @@ extension agtermApp {
                           systemImage: "scope")
                 }
                 .keyboardShortcut(shortcut(for: .focusWorkspace))
-                .disabled(focusStore?.currentWorkspaceID == nil || modalActive)
+                .disabled(!PaletteCommand.focusWorkspace.isEnabled(in: context))
                 // the ADDITIVE sibling of Focus Workspace: mark the current workspace without dropping the
                 // other members, so a working set can be built from the menu. plain keyless item; control
                 // workspace.focus add. disabled once the workspace is marked, where it would be a silent
@@ -252,40 +256,40 @@ extension agtermApp {
                 Button { actions.addActiveWorkspaceToFocus() } label: {
                     Label("Add Workspace to Focus", systemImage: "square.grid.2x2")
                 }
-                .disabled(focusStore?.currentWorkspaceID == nil
-                    || focusStore?.isCurrentWorkspaceFocusMember == true || modalActive)
+                .disabled(!PaletteCommand.addWorkspaceToFocus.isEnabled(in: context))
                 // apply or suspend the filter without losing the marked set — the menu twin of the bottom-bar
                 // grid toggle, disabled on an empty set (the store refuses one); control workspace.filter.
                 Button { actions.toggleFocusFilter() } label: {
                     Label("Toggle Workspace Filter", systemImage: "square.grid.2x2")
                 }
                 .keyboardShortcut(shortcut(for: .toggleWorkspaceFilter))
-                .disabled((focusStore?.focusedWorkspaceIDs.isEmpty ?? true) || modalActive)
+                .disabled(!PaletteCommand.toggleWorkspaceFilter.isEnabled(in: context))
                 // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar toggle is primary.
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
-                    .disabled((focusStore?.focusedWorkspaceIDs.isEmpty ?? true) || modalActive)
+                    .disabled(!PaletteCommand.clearFocus.isEnabled(in: context))
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }
                 .keyboardShortcut(shortcut(for: .toggleSplit))
-                .disabled(library.activeStore?.activeSession == nil || modalActive)
+                .disabled(!PaletteCommand.toggleSplit.isEnabled(in: context))
                 let scratchShown = library.activeStore?.activeSession?.scratchActive == true
                 Button { actions.toggleScratch() } label: {
                     // static neutral icon like the Split menu item above; state is shown by the label text.
                     Label(scratchShown ? "Hide Scratch" : "Show Scratch", systemImage: "rectangle")
                 }
                 .keyboardShortcut(shortcut(for: .toggleScratch))
-                .disabled(library.activeStore?.activeSession == nil || modalActive)
+                .disabled(!PaletteCommand.toggleScratch.isEnabled(in: context))
                 // search the focused terminal's scrollback. data-driven shortcut (⌘F default), no hardcoded
                 // literal; the bar's open/close toggle lives in onSearchStart.
                 Button { actions.toggleSearch() } label: { Label("Find…", systemImage: "magnifyingglass") }
                     .keyboardShortcut(shortcut(for: .toggleSearch))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.find.isEnabled(in: context))
                 Button { actions.toggleQuickTerminal() } label: { Label("Quick Terminal", systemImage: "terminal") }
                     .keyboardShortcut(shortcut(for: .quickTerminal))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.quickTerminal.isEnabled(in: context))
                 Button { actions.toggleTerminalZoom() } label: { Label("Toggle Terminal Zoom", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .keyboardShortcut(shortcut(for: .toggleTerminalZoom))
+                    .disabled(!PaletteCommand.toggleTerminalZoom.isEnabled(in: context))
                 Divider()
                 // NO full screen item: AppKit appends its own "Enter Full Screen" (`toggleFullScreen:`,
                 // Globe+F) below this menu whenever it is displayed, and nothing suppresses it — removal
@@ -299,10 +303,9 @@ extension agtermApp {
             // sessions and split panes lives here, driving the SAME AppActions the View menu does, with the
             // control API / palette / keymap surfaces untouched.
             CommandMenu("Navigate") {
-                // the File/View modal gate, mirrored.
-                let zoomed = actions.terminalZoomActive
-                let pickActive = actions.pickActive(for: library.activeWindowID)
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
+                // the File/View predicate and modal gate, mirrored.
+                let context = actions.paletteContext
+                let modalActive = context.modalActive
                 Button { actions.toggleSessionPalette() } label: { Label("Go to Session", systemImage: "rectangle.stack") }
                     .keyboardShortcut(shortcut(for: .sessionPalette))
                     .disabled(modalActive)
@@ -314,12 +317,12 @@ extension agtermApp {
                     .disabled(modalActive)
                 Button { actions.toggleAttentionPalette() } label: { Label("Go to Attention…", systemImage: "bell") }
                     .keyboardShortcut(shortcut(for: .showAttention))
-                    .disabled(modalActive)
+                    .disabled(!PaletteCommand.showAttention.isEnabled(in: context))
                 Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "rectangle.split.2x2") }
                     .keyboardShortcut(shortcut(for: .dashboard))
-                    // not disabled when the dashboard itself is open: ⌘⇧D remains its close escape hatch.
-                    // zoom and a topmost native picker still block the toggle.
-                    .disabled(zoomed || pickActive)
+                    // the predicate spares this one the dashboard's own term: ⌘⇧D stays the open grid's
+                    // close escape hatch, while zoom and a topmost native picker still block the toggle.
+                    .disabled(!PaletteCommand.dashboard.isEnabled(in: context))
                 Divider()
                 // step between sessions in the sidebar's flattened order. prev/next ride ⌥⌘↑/↓, NOT bare
                 // ⌘+arrows (which shadow text-field caret nav in rename/palette/settings fields), and
@@ -327,34 +330,34 @@ extension agtermApp {
                 // menu dispatch swallows the shortcut before libghostty and nothing leaks to the shell.
                 Button { actions.selectPreviousSession() } label: { Label("Previous Session", systemImage: "chevron.up") }
                     .keyboardShortcut(shortcut(for: .previousSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.previousSession.isEnabled(in: context))
                 Button { actions.selectNextSession() } label: { Label("Next Session", systemImage: "chevron.down") }
                     .keyboardShortcut(shortcut(for: .nextSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.nextSession.isEnabled(in: context))
                 // step only through sessions needing attention (blocked/completed glyphs), wrapping.
                 Button { actions.selectPreviousAttentionSession() } label: { Label("Previous Attention Session", systemImage: "chevron.up.circle") }
                     .keyboardShortcut(shortcut(for: .previousAttentionSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.previousAttentionSession.isEnabled(in: context))
                 Button { actions.selectNextAttentionSession() } label: { Label("Next Attention Session", systemImage: "chevron.down.circle") }
                     .keyboardShortcut(shortcut(for: .nextAttentionSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.nextAttentionSession.isEnabled(in: context))
                 Button { actions.selectFirstSession() } label: { Label("First Session", systemImage: "arrow.up.to.line") }
                     .keyboardShortcut(shortcut(for: .firstSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.firstSession.isEnabled(in: context))
                 Button { actions.selectLastSession() } label: { Label("Last Session", systemImage: "arrow.down.to.line") }
                     .keyboardShortcut(shortcut(for: .lastSession))
-                    .disabled(library.activeStore?.activeSession == nil || modalActive)
+                    .disabled(!PaletteCommand.lastSession.isEnabled(in: context))
                 Divider()
                 Button { actions.focusPane(.main) } label: {
                     Label("Focus Left Pane", systemImage: "rectangle.lefthalf.filled")
                 }
                 .keyboardShortcut(shortcut(for: .focusLeftPane))
-                .disabled(library.activeStore?.activeSession?.hasSplit != true || modalActive)
+                .disabled(!PaletteCommand.focusLeftPane.isEnabled(in: context))
                 Button { actions.focusPane(.split) } label: {
                     Label("Focus Right Pane", systemImage: "rectangle.righthalf.filled")
                 }
                 .keyboardShortcut(shortcut(for: .focusRightPane))
-                .disabled(library.activeStore?.activeSession?.hasSplit != true || modalActive)
+                .disabled(!PaletteCommand.focusRightPane.isEnabled(in: context))
             }
             CommandGroup(replacing: .help) {
                 Button("Developer Documentation…") {

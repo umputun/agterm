@@ -190,6 +190,43 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(fix.store.sidebarMode, .flagged, "with something to show the same alternative flips it")
     }
 
+    // File ▸ Rename Session is disabled with no session, and its `AppActions` method is not the only thing
+    // saying so: the alternative must be inert on exactly the same term the menu item spells.
+    func testRenameAlternativeIsInertWithoutASessionLikeItsMenuItem() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+r|ctrl+a>r rename_session\n")
+        let tail = keyDown("r", keyCode: 15, mods: [])
+        fix.store.selectSession(nil)
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(tail, in: window), "the chord is consumed either way")
+        XCTAssertFalse(fix.actions.renamePending, "no session is what the menu item disables on")
+
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        fix.store.selectSession(session.id)
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(tail, in: window))
+        XCTAssertTrue(fix.actions.renamePending, "with a session the same alternative renames")
+    }
+
+    // File ▸ Close Session carries no modal term at all — ⌘W is how the cover itself is dismissed — while
+    // View ▸ Show Sidebar carries the whole one. Under the same cover the two alternatives must part company.
+    func testCloseSessionAlternativeDismissesTheCoverTheSidebarAlternativeIsBlockedBy() throws {
+        let fix = try fixture(keymap: "map cmd+ctrl+shift+w|ctrl+a>w close_session\n"
+            + CustomCommandRunnerTests.sidebarKeymap)
+        let dashboard = try openDashboard()
+        defer { dashboard.close() }
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore, "View ▸ Show Sidebar is disabled here")
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("w", keyCode: 13, mods: []), in: window))
+        XCTAssertFalse(dashboard.controller.isOpen, "close session reaches the grid its menu chord does")
+    }
+
     // File ▸ Close Session closes the key window once there is no cover and no session left; an alternative
     // fired in that same zero-session window must not be swallowed and do nothing.
     func testCloseSessionAlternativeClosesTheWindowWithNothingLeftToClose() throws {

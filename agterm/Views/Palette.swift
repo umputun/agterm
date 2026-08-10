@@ -24,11 +24,16 @@ struct PaletteItem: Identifiable {
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/click).
     /// Only `.themes` sets it, driving the live theme preview.
     let onSelect: (() -> Void)?
+    /// False for a row the palette LISTS but cannot run — an action whose menu item is disabled right now
+    /// (`PaletteCommand.isEnabled(in:)`). It renders like a disabled menu item and stays searchable, rather
+    /// than vanishing: the palette is where a user looks the action up.
+    let enabled: Bool
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
          badge: String? = nil, status: AgentStatus? = nil, statusColor: String? = nil,
-         statusShape: StatusShape? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
+         statusShape: StatusShape? = nil, enabled: Bool = true, onSelect: (() -> Void)? = nil,
+         run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
@@ -37,6 +42,7 @@ struct PaletteItem: Identifiable {
         self.status = status
         self.statusColor = statusColor
         self.statusShape = statusShape
+        self.enabled = enabled
         self.onSelect = onSelect
         self.run = run
     }
@@ -307,7 +313,10 @@ struct CommandPalette: View {
         runItem(filtered[selection])
     }
 
+    /// An inert row neither runs nor dismisses, like clicking a disabled menu item: the palette stays open on
+    /// the query the user is still working with.
     private func runItem(_ item: PaletteItem) {
+        guard item.enabled else { return }
         item.run()
         dismiss()
     }
@@ -348,7 +357,8 @@ private struct PaletteRow: View {
 
     private var rowTint: Color {
         if isSelected { return Color.accentColor.opacity(0.25) }
-        return hovering ? Self.hoverTint : .clear
+        // no hover tint on an inert row: the tint reads as "click this".
+        return hovering && item.enabled ? Self.hoverTint : .clear
     }
 
     var body: some View {
@@ -358,6 +368,7 @@ private struct PaletteRow: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.system(size: metrics.base))
+                    .foregroundStyle(item.enabled ? Color.primary : Color(nsColor: .disabledControlTextColor))
                 if let subtitle = item.subtitle {
                     Text(subtitle).font(.system(size: metrics.secondary)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)

@@ -1,4 +1,5 @@
-/// The UI facts needed to decide which static action-palette rows are relevant right now.
+/// The UI facts behind `PaletteCommand.isVisible(in:)` (which rows are relevant at all) and
+/// `isEnabled(in:)` (which of them can run right now).
 public struct PaletteContext: Sendable, Equatable {
     public let canRemoveWorkspace: Bool
     public let hasFlaggedSessions: Bool
@@ -15,6 +16,18 @@ public struct PaletteContext: Sendable, Equatable {
     public let activeSessionHasSplit: Bool
     public let hasPendingClose: Bool
     public let hasRecentClosed: Bool
+    /// Whether the frontmost window has an active session at all.
+    public let hasActiveSession: Bool
+    /// Whether it has a current workspace — nil only with no store, since a window always keeps one.
+    public let hasCurrentWorkspace: Bool
+    public let terminalZoomActive: Bool
+    public let dashboardOpen: Bool
+    /// Whether a control-API native picker is pending over the window.
+    public let pickerActive: Bool
+
+    /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
+    /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
+    public var modalActive: Bool { terminalZoomActive || dashboardOpen || pickerActive }
 
     public init(canRemoveWorkspace: Bool = false,
                 hasFlaggedSessions: Bool = false,
@@ -25,7 +38,12 @@ public struct PaletteContext: Sendable, Equatable {
                 activeWorkspaceMarked: Bool = false,
                 activeSessionHasSplit: Bool = false,
                 hasPendingClose: Bool = false,
-                hasRecentClosed: Bool = false) {
+                hasRecentClosed: Bool = false,
+                hasActiveSession: Bool = false,
+                hasCurrentWorkspace: Bool = false,
+                terminalZoomActive: Bool = false,
+                dashboardOpen: Bool = false,
+                pickerActive: Bool = false) {
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -36,6 +54,11 @@ public struct PaletteContext: Sendable, Equatable {
         self.activeSessionHasSplit = activeSessionHasSplit
         self.hasPendingClose = hasPendingClose
         self.hasRecentClosed = hasRecentClosed
+        self.hasActiveSession = hasActiveSession
+        self.hasCurrentWorkspace = hasCurrentWorkspace
+        self.terminalZoomActive = terminalZoomActive
+        self.dashboardOpen = dashboardOpen
+        self.pickerActive = pickerActive
     }
 }
 
@@ -53,6 +76,41 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case addWorkspaceToFocus, toggleWorkspaceFilter
     case expandWorkspaces, collapseWorkspaces, focusLeftPane, focusRightPane
 
+    /// Whether the command can RUN right now — the single owner of menu enablement, read by the menu item's
+    /// `.disabled(…)`, by the palette row (which stays listed but renders inert) and by the key monitor's
+    /// `AppActions.perform(_:in:)`, so a built-in's menu chord and its `keymap.conf` alternatives cannot
+    /// diverge. Relevance, then the modal cover, then the presence terms.
+    public func isEnabled(in context: PaletteContext) -> Bool {
+        guard isVisible(in: context), !isCoveredByModal(context) else { return false }
+        switch self {
+        case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleScratch,
+             .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
+             .firstSession, .lastSession:
+            return context.hasActiveSession
+        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus:
+            return context.hasCurrentWorkspace
+        default:
+            return true
+        }
+    }
+
+    /// Whether a cover blocks the command. Most menu items mirror the whole cover; the font sizes, both
+    /// reloads, terminal zoom and Close Session carry no modal term at all, and Dashboard carries every
+    /// cover but its own grid, its item being that grid's escape hatch.
+    private func isCoveredByModal(_ context: PaletteContext) -> Bool {
+        switch self {
+        case .increaseFontSize, .decreaseFontSize, .resetFontSize,
+             .reloadKeymap, .reloadConfig, .toggleTerminalZoom, .closeSession:
+            return false
+        case .dashboard:
+            return context.terminalZoomActive || context.pickerActive
+        default:
+            return context.modalActive
+        }
+    }
+
+    /// Whether the command's row is worth listing at all. Deliberately WIDER than `isEnabled(in:)`: the
+    /// palette lists Rename Session with no session open, showing it inert, while the menu item disables.
     public func isVisible(in context: PaletteContext) -> Bool {
         switch self {
         case .deleteWorkspace:

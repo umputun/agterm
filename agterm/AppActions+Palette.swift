@@ -17,7 +17,9 @@ extension AppActions {
         return keymap.glyphHint(for: action)
     }
 
-    private var paletteContext: PaletteContext {
+    /// The live facts behind `PaletteCommand.isEnabled(in:)`. Read by the palette rows, by `perform(_:in:)`
+    /// and by the menu items in `agtermApp+Menus`, so the three read one predicate over one set of facts.
+    var paletteContext: PaletteContext {
         let activeStore = store
         return PaletteContext(
             canRemoveWorkspace: activeStore?.canRemoveWorkspace == true,
@@ -29,24 +31,31 @@ extension AppActions {
             activeWorkspaceMarked: activeStore?.isCurrentWorkspaceFocusMember == true,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
-            hasRecentClosed: !library.recentClosedItems.isEmpty
+            hasRecentClosed: !library.recentClosedItems.isEmpty,
+            hasActiveSession: activeStore?.activeSession != nil,
+            hasCurrentWorkspace: activeStore?.currentWorkspaceID != nil,
+            terminalZoomActive: terminalZoomActive,
+            dashboardOpen: frontmostDashboard?.isOpen == true,
+            pickerActive: pickActive(for: library.activeWindowID)
         )
     }
 
     private func paletteItem(for command: PaletteCommand, context: PaletteContext) -> PaletteItem {
         PaletteItem(title: command.title(in: context),
-                    shortcut: command.builtinAction.flatMap { shortcutGlyph(for: $0) }) { [weak self] in
+                    shortcut: command.builtinAction.flatMap { shortcutGlyph(for: $0) },
+                    enabled: command.isEnabled(in: context)) { [weak self] in
             self?.runPaletteCommand(command)
         }
     }
 
+    /// Rechecked at run time rather than trusting the row's build-time `enabled`: the palette stays open
+    /// while state moves under it.
     private func runPaletteCommand(_ command: PaletteCommand) {
-        guard uiActionsEnabled || command == .toggleTerminalZoom else { return }
+        guard command.isEnabled(in: paletteContext) else { return }
         dispatch(command)
     }
 
-    /// The action behind a palette row, ungated — every caller applies its own modal rule first, the palette's
-    /// blanket one and the key monitor's menu-mirroring one being different rules for the same rows.
+    /// The action behind a palette row, ungated: both callers apply `PaletteCommand.isEnabled(in:)` first.
     private func dispatch(_ command: PaletteCommand) {
         switch command {
         case .newSession: newSession()
@@ -99,14 +108,12 @@ extension AppActions {
 
     /// Run a built-in action fired by `CustomCommandRunner`'s key monitor in `window` — a `map` line's
     /// alternative beyond the menu key equivalent. The MENU chord is the reference behavior: an alternative of
-    /// a line does what its menu-bound sibling does, so it runs the palette row's body under the MENU's modal
-    /// rule rather than the palette's blanket one, and only while the row is relevant at all — `isVisible` is
-    /// the per-action half of the same rule, the one the menu item spells as `.disabled(…)`. The rest go
-    /// through `paletteLessHandler(for:)`, whose entry points carry the same rule themselves.
+    /// a line does what its menu-bound sibling does, so it runs the palette row's body behind
+    /// `isEnabled(in:)`, the predicate the menu item spells as its `.disabled(…)`. The rest go through
+    /// `paletteLessHandler(for:)`, whose entry points carry their gate themselves.
     func perform(_ action: BuiltinAction, in window: NSWindow?) {
         if let command = PaletteCommand.allCases.first(where: { $0.builtinAction == action }) {
-            guard uiActionsEnabled || survivesModalCover(command) else { return }
-            guard command.isVisible(in: paletteContext) else { return }
+            guard command.isEnabled(in: paletteContext) else { return }
             // the MENU's close rung, not the palette's: with no cover and no session left to close, ⌘W closes
             // the window — the zero-session window a keybind still fires in. The menu's other rung, an
             // auxiliary key window keeping its own ⌘W, is unreachable here: the monitor fires only inside an
@@ -119,23 +126,6 @@ extension AppActions {
             return
         }
         paletteLessHandler(for: action)?()
-    }
-
-    /// Whether the action's MENU item stays live under a modal cover — the items `agtermApp+Menus` leaves
-    /// without the `modalActive` mirror, plus `dashboard`, whose item is the open grid's own escape hatch.
-    /// Each one's `AppActions` method carries whatever narrower rule it needs (`toggleDashboard` refuses under
-    /// zoom or a picker; the font actions act on the focused surface and need none), so gating a monitor
-    /// alternative on the blanket `uiActionsEnabled` is what would make it diverge from the menu chord.
-    /// `toggleFullscreen` is deliberately absent: it has no menu item to be the reference, and its menu-chord
-    /// path is the divergence `docs/backlog/toggle-fullscreen-menu-chord-bypasses-the-modal-gate.md` owns.
-    private func survivesModalCover(_ command: PaletteCommand) -> Bool {
-        switch command {
-        case .toggleTerminalZoom, .dashboard, .closeSession, .reloadKeymap, .reloadConfig,
-             .increaseFontSize, .decreaseFontSize, .resetFontSize:
-            return true
-        default:
-            return false
-        }
     }
 
     /// The entry point for a built-in that no `PaletteCommand` row owns — window management and the three
