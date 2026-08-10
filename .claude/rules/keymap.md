@@ -41,8 +41,7 @@ paths:
   text with no diagnostic, so `hasMalformedAlternative` tells a typo from a real pipeline: a `|` token where
   at least one half parses is a binding, `ls|grep foo` is not.
 - A rule violation or a conflict drops that alternative alone and leaves its siblings firing, on either
-  verb. Do not turn either into the other. A binding whose OWN alternatives form a prefix pair keeps the
-  SHORTER one, which is the one `KeybindMatcher` fires; both run the same thing.
+  verb. Do not turn either into the other.
 - Diagnostics quote the raw substring and never re-render it: `displayString` canonicalizes spelling and
   would change `|`-free files' diagnostics. `DropScope` owns the suffix that keeps single-alternative
   wording byte-identical (`map skipped`/`keybind dropped`/`treating the line as palette-only` with one
@@ -103,19 +102,22 @@ paths:
   `new_session` take it in either line order, and an action in `builtinUnbound` resolves to no chord at
   all, so it stops occupying its shipped default here too.
 - Final cross-section `validateBindings` runs after parsing all lines, over every monitor-bound
-  alternative of both verbs, in three ordered passes. It drops the alternative whose first chord hits a
-  final built-in menu chord or that holds a reserved chord; then every alternative one of its OWN siblings
-  prefixes; then what `keybindConflicts` reports as a duplicate or prefix ACROSS targets, both sides losing
-  the offending alternative only. A custom command whose every alternative went ends up palette-only with
-  `shortcut == ""`.
-- **The result must not depend on the order alternatives are written in.** The middle pass exists for that:
-  settling a binding against itself reads only its own alternative SET, so the cross-target pass compares
-  settled sets and a `|` order cannot decide an unrelated binding's fate. The cross-target pass is
-  sequential — it skips a conflict once either side is already dropped, since a dropped bind registers
-  nothing — so it walks conflicts in a canonical order (each side's target in file order, then the
-  keybind's own rendering), never in array-index order. Pinned by
-  `KeymapTests.alternativeOrderInsideOneBindingDoesNotDecideAnotherBindingsFate` and
-  `siblingOrderDoesNotDecideWhichThirdBindingSurvives`.
+  alternative of both verbs, in two passes. `dropShadowedAlternatives` drops the alternative whose first
+  chord hits a final built-in menu chord or that holds a reserved chord; it reads one alternative against
+  the menu chord set, nothing else. `dropConflictingAlternatives` then settles what `keybindConflicts`
+  reports. A custom command whose every alternative went ends up palette-only with `shortcut == ""`.
+- **The whole conflict rule, and the only one:** compute the relation ONCE over what pass 1 left, then in a
+  single pass drop BOTH sides of a cross-target duplicate-or-prefix pair and the LONGER side of a same-target
+  prefix pair, which is dead anyway because `KeybindMatcher` fires the shorter. Nothing is recomputed, no
+  drop cascades, and no target ranking or ordering tie-break enters it, so neither `|` order nor line order
+  can decide an outcome. **Accepted cost:** an alternative whose only conflict was with one that also
+  dropped still dies. That is the price of determinism — never add a recovery pass, a fixpoint or a
+  re-derivation to reclaim it. Pinned by
+  `KeymapTests.aBindConflictingWithTwoOthersDropsBothOfThemInEitherLineOrder`,
+  `anAlternativeChargedForAConflictWithADroppedOneGoesInEitherAlternativeOrder`,
+  `lineOrderDoesNotDecideWhichBindingsSurvive` and
+  `alternativeOrderInsideOneBindingDoesNotDecideAnotherBindingsFate`. Only the offender a diagnostic quotes
+  follows file order, where a bind conflicts with several.
   `isReservedMonitorChord` covers control+tab with any extra modifiers and control+1/2 with Control alone,
   anywhere in a leader, and also rejects built-in maps. This keeps menu and monitor registrations
   disjoint without relying on dispatch order. Standard menu items such as ⌘Q/⌘C/⌘, remain AppKit's

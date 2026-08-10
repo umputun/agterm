@@ -40,16 +40,20 @@ extension AppActions {
         )
     }
 
+    /// `context` supplies only the title, which the palette's own rebuild refreshes. Enablement takes a closure
+    /// over LIVE state instead: the row renders and runs against the state of the moment, not of the last build.
     private func paletteItem(for command: PaletteCommand, context: PaletteContext) -> PaletteItem {
         PaletteItem(title: command.title(in: context),
                     shortcut: command.builtinAction.flatMap { shortcutGlyph(for: $0) },
-                    enabled: command.isEnabled(in: context)) { [weak self] in
-            self?.runPaletteCommand(command)
-        }
+                    isEnabled: { [weak self] in
+                        guard let self else { return false }
+                        return command.isEnabled(in: paletteContext)
+                    },
+                    run: { [weak self] in self?.runPaletteCommand(command) })
     }
 
-    /// Rechecked at run time rather than trusting the row's build-time `enabled`: the palette stays open
-    /// while state moves under it.
+    /// The row's body keeps the predicate too, so a caller reaching `run` without asking `isEnabled` still
+    /// cannot run a disabled action.
     private func runPaletteCommand(_ command: PaletteCommand) {
         guard command.isEnabled(in: paletteContext) else { return }
         dispatch(command)

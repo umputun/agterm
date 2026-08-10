@@ -24,15 +24,18 @@ struct PaletteItem: Identifiable {
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/click).
     /// Only `.themes` sets it, driving the live theme preview.
     let onSelect: (() -> Void)?
-    /// False for a row the palette LISTS but cannot run — an action whose menu item is disabled right now
-    /// (`PaletteCommand.isEnabled(in:)`). It renders like a disabled menu item and stays searchable, rather
-    /// than vanishing: the palette is where a user looks the action up.
-    let enabled: Bool
+    /// Whether the row can run right now, asked of LIVE state on every render and again at the keystroke —
+    /// never cached — because a session can exit or a cover open while the palette sits there. False for a row
+    /// the palette LISTS but cannot run, an action whose menu item is disabled (`PaletteCommand.isEnabled(in:)`):
+    /// it renders like a disabled menu item and stays searchable rather than vanishing, since the palette is
+    /// where a user looks the action up.
+    let isEnabled: () -> Bool
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
          badge: String? = nil, status: AgentStatus? = nil, statusColor: String? = nil,
-         statusShape: StatusShape? = nil, enabled: Bool = true, onSelect: (() -> Void)? = nil,
+         statusShape: StatusShape? = nil, isEnabled: @escaping () -> Bool = { true },
+         onSelect: (() -> Void)? = nil,
          run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
@@ -42,9 +45,18 @@ struct PaletteItem: Identifiable {
         self.status = status
         self.statusColor = statusColor
         self.statusShape = statusShape
-        self.enabled = enabled
+        self.isEnabled = isEnabled
         self.onSelect = onSelect
         self.run = run
+    }
+
+    /// Run the row if live state still allows it, reporting whether it ran. The palette dismisses on that
+    /// answer alone, so an inert row neither acts nor closes the palette — like clicking a disabled menu item.
+    @discardableResult
+    func runIfEnabled() -> Bool {
+        guard isEnabled() else { return false }
+        run()
+        return true
     }
 }
 
@@ -313,11 +325,11 @@ struct CommandPalette: View {
         runItem(filtered[selection])
     }
 
-    /// An inert row neither runs nor dismisses, like clicking a disabled menu item: the palette stays open on
-    /// the query the user is still working with.
+    /// An inert row neither runs nor dismisses: the palette stays open on the query the user is still working
+    /// with. The enablement is re-asked HERE, so a row that went inert while the palette sat open cannot slip
+    /// through on what it looked like when the list was built.
     private func runItem(_ item: PaletteItem) {
-        guard item.enabled else { return }
-        item.run()
+        guard item.runIfEnabled() else { return }
         dismiss()
     }
 
@@ -358,8 +370,12 @@ private struct PaletteRow: View {
     private var rowTint: Color {
         if isSelected { return Color.accentColor.opacity(0.25) }
         // no hover tint on an inert row: the tint reads as "click this".
-        return hovering && item.enabled ? Self.hoverTint : .clear
+        return hovering && enabled ? Self.hoverTint : .clear
     }
+
+    /// Asked during body evaluation, not read off a snapshot, so the observable state it consults re-renders
+    /// the row the moment the action becomes runnable or stops being.
+    private var enabled: Bool { item.isEnabled() }
 
     var body: some View {
         HStack {
@@ -368,7 +384,7 @@ private struct PaletteRow: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.system(size: metrics.base))
-                    .foregroundStyle(item.enabled ? Color.primary : Color(nsColor: .disabledControlTextColor))
+                    .foregroundStyle(enabled ? Color.primary : Color(nsColor: .disabledControlTextColor))
                 if let subtitle = item.subtitle {
                     Text(subtitle).font(.system(size: metrics.secondary)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)

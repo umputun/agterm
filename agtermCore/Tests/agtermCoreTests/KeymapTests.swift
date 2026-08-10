@@ -974,18 +974,69 @@ struct KeymapTests {
         #expect(parse("ctrl+x>1|ctrl+x>2") == parse("ctrl+x>2|ctrl+x>1"))
     }
 
-    @Test func aCrossTargetConflictLeavesTheLoserUnableToDropAThirdBinding() {
-        let text = """
+    // the conflict relation is computed once and every side of it goes, so a bind conflicting with two others
+    // takes both down. Under the earlier drop-then-skip rule this same text kept whichever of A and C the file
+    // happened to list last.
+    @Test func aBindConflictingWithTwoOthersDropsBothOfThemInEitherLineOrder() {
+        let forward = parseKeymap("""
         command "A" ctrl+a>b echo a
         command "B" ctrl+a echo b
         command "C" ctrl+a>c echo c
-        """
-        let (keymap, diagnostics) = parseKeymap(text)
-        #expect(keymap.commands[0].shortcut.isEmpty)
-        #expect(keymap.commands[1].shortcut.isEmpty)
-        #expect(keymap.commands[2].shortcut == "ctrl+a>c")
-        #expect(diagnostics.count == 2)
-        #expect(diagnostics.allSatisfy { !$0.message.contains("'C'") })
+        """)
+        let reversed = parseKeymap("""
+        command "C" ctrl+a>c echo c
+        command "B" ctrl+a echo b
+        command "A" ctrl+a>b echo a
+        """)
+        #expect(forward.keymap.commands.map(\.shortcut) == ["", "", ""])
+        #expect(reversed.keymap.commands.map(\.shortcut) == ["", "", ""])
+        #expect(forward.diagnostics.count == 3)
+        #expect(reversed.diagnostics.count == 3)
+    }
+
+    // an alternative whose only conflict is with one that also drops dies with it. That is the accepted price
+    // of settling everything in one pass, and it must cost the same whichever side of the `|` it was written on.
+    @Test func anAlternativeChargedForAConflictWithADroppedOneGoesInEitherAlternativeOrder() {
+        func shortcuts(_ alternatives: String) -> [String] {
+            parseKeymap("""
+            command "A" \(alternatives) echo a
+            command "B" ctrl+a echo b
+            """).keymap.commands.map(\.shortcut)
+        }
+        #expect(shortcuts("ctrl+a|ctrl+a>b") == ["", ""])
+        #expect(shortcuts("ctrl+a>b|ctrl+a") == ["", ""])
+    }
+
+    // the whole file, not one binding: the same lines in any order must bind the same keys.
+    @Test func lineOrderDoesNotDecideWhichBindingsSurvive() {
+        let lines = [
+            "map cmd+t|ctrl+a>t toggle_split",
+            #"command "Boom" ctrl+a>t|ctrl+b>t echo boom"#,
+            #"command "Lead" ctrl+c echo lead"#,
+            #"command "Seq" ctrl+c>s echo seq"#,
+            "map cmd+y|ctrl+d>n new_session",
+        ]
+        let forward = bindingSummary(parseKeymap(lines.joined(separator: "\n")).keymap)
+
+        #expect(forward.contains("toggle_split=cmd+t"))
+        #expect(forward.contains("new_session=cmd+y|ctrl+d>n"))
+        #expect(forward.contains("Boom=ctrl+b>t"))
+        #expect(forward.contains("Lead="))
+        #expect(forward.contains("Seq="))
+        #expect(bindingSummary(parseKeymap(lines.reversed().joined(separator: "\n")).keymap) == forward)
+        #expect(bindingSummary(parseKeymap(([lines[2], lines[4], lines[0], lines[3], lines[1]])
+            .joined(separator: "\n")).keymap) == forward)
+    }
+
+    /// Every binding the keymap ended up with, in an order derived from the model rather than from the file, so
+    /// two spellings of the same set compare equal.
+    private func bindingSummary(_ keymap: Keymap) -> [String] {
+        let builtins = BuiltinAction.allCases.compactMap { action -> String? in
+            let binds = (keymap.equivalent(for: action).map { [$0.displayString] } ?? [])
+                + keymap.sequences(for: action).map(\.displayString)
+            return binds.isEmpty ? nil : "\(action.rawValue)=\(binds.joined(separator: "|"))"
+        }
+        return builtins + keymap.commands.map { "\($0.name)=\($0.shortcut)" }.sorted()
     }
 
     @Test func singleAlternativeConflictDiagnosticsKeepTodaysWording() {

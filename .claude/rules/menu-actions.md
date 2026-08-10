@@ -36,6 +36,11 @@ paths:
 - `isVisible(in:)` stays WIDER than `isEnabled(in:)`: the palette lists Rename Session with no session and
   renders it disabled, and `runItem` neither runs nor dismisses it. Do not narrow `isVisible` to match the
   menu — that deletes rows users search for.
+- **`PaletteItem.isEnabled` is a closure over live state, never a flag captured when the list was built.**
+  `filtered` refreshes only on appear, query and mode, so a snapshot goes stale under an open palette: a
+  session exits, a pending close expires, control mutates the tree. The row asks it during body evaluation
+  and `runIfEnabled()` asks it again at the keystroke, returning whether it ran — which is the only thing
+  that dismisses the palette, so an inert row cannot close it on a keystroke that did nothing.
 - `toggleQuickTerminal` gates on all `uiActionsEnabled`, including terminal zoom and dashboard.
   Control drives `QuickTerminalRegistry` directly. The titlebar button is replaced by dashboard chrome,
   which hides an open quick terminal before showing the grid.

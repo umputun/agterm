@@ -417,6 +417,38 @@ session), so it needs a shown-but-inert state rather than the rows vanishing.
       `toggle_fullscreen` backlog item's now-stale wording
 - [x] run the full gates ONCE: `cd agtermCore && swift test`, `make test-app`, `make lint`
 
+### Task 9: [Scope expansion, approved mid-run] One conflict rule, and a palette flag that is not a snapshot
+
+Two interacting conflict rules plus a `dropSiblingShadowedAlternatives` pre-pass produced order-dependence
+twice. Review found both in the shipped code: `targetRank` still derived the traversal from file order, so
+`A = ctrl+a>b`, `B = ctrl+a`, `C = ctrl+a>c` kept whichever of A and C the file listed last; and the sibling
+pre-pass dropped a longer alternative for a shorter sibling that then died itself. They are replaced by ONE
+rule, stated in `keymap.md`. Separately, `PaletteItem.enabled` cached enablement in `filtered`, which
+refreshes only on appear/query/mode, so a row that went inert under an open palette still passed the guard
+and dismissed it.
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/Keymap.swift`
+- Modify: `agterm/Views/Palette.swift`, `agterm/AppActions+Palette.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/KeymapTests.swift`, `agtermTests/AppActionsPaletteTests.swift`
+- Modify: `.claude/rules/keymap.md`, `.claude/rules/menu-actions.md`
+
+- [x] keep the menu-shadow pass first and unchanged; compute the conflict relation ONCE over its survivors
+      and settle it in one pass — both sides of a cross-target pair, the longer side of a same-target prefix
+      pair — with no fixpoint, no re-derivation, no target ranking and no ordering tie-break
+- [x] accept that an alternative charged for a conflict with one that also dropped still dies; add no
+      recovery pass
+- [x] delete `dropSiblingShadowedAlternatives`, the `targetRank`/canonical-ordering machinery and the
+      comments explaining them; keep `isStrictKeybindPrefix`, shared with `KeybindMatcher`
+- [x] replace `aCrossTargetConflictLeavesTheLoserUnableToDropAThirdBinding`, which encoded the
+      order-dependent outcome of counterexample (i), and add order-independence tests over reordered
+      alternatives and reordered lines
+- [x] make `PaletteItem.enabled` a live `isEnabled` closure, read during row body evaluation and again by
+      the new `runIfEnabled()`, which is what `runItem` dismisses on
+- [x] write tests: a row flipping live→inert→live under an open palette, and an inert row running and
+      dismissing nothing
+- [x] run the full gates ONCE: `cd agtermCore && swift test`, `make test-app`, `make lint`
+
 ## Post-Completion
 
 **Manual verification** (no automated test replaces this):

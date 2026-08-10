@@ -374,8 +374,7 @@ private func monitorAlternatives(commandLines: [ParsedCommandLine],
 private func validateBindings(_ alternatives: [MonitorAlternative], menuChords: Set<Chord>,
                               diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
     let unshadowed = dropShadowedAlternatives(alternatives, menuChords: menuChords, diagnostics: &diagnostics)
-    let settled = dropSiblingShadowedAlternatives(unshadowed, diagnostics: &diagnostics)
-    return dropConflictingAlternatives(settled, diagnostics: &diagnostics)
+    return dropConflictingAlternatives(unshadowed, diagnostics: &diagnostics)
 }
 
 /// Drop every alternative the app would never let the monitor see: one whose FIRST chord is an active built-in
@@ -409,68 +408,37 @@ private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative], menu
     return kept
 }
 
-/// Settle each binding against ITSELF before any cross-target comparison: an alternative with a shorter
-/// sibling of its own that is a prefix of it can never fire, since `KeybindMatcher` fires the exact shorter
-/// match instead of waiting the longer one out. Dropping it changes no behavior — the whole binding fires
-/// either way — and because "does a sibling prefix me" reads only the target's alternative SET, the outcome
-/// cannot depend on the order the alternatives were written in. That is what keeps the cross-target pass
-/// below from deciding an unrelated binding's fate on the strength of a `|` order.
-private func dropSiblingShadowedAlternatives(_ alternatives: [MonitorAlternative],
-                                             diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
-    var siblings: [KeybindTarget: [Keybind]] = [:]
-    for alternative in alternatives { siblings[alternative.target, default: []].append(alternative.keybind) }
-
-    var survivors: [MonitorAlternative] = []
-    for alternative in alternatives {
-        let shadowed = (siblings[alternative.target] ?? [])
-            .contains { isStrictKeybindPrefix($0, of: alternative.keybind) }
-        guard shadowed else {
-            survivors.append(alternative)
-            continue
-        }
-        diagnostics.append(KeymapDiagnostic(
-            line: alternative.line,
-            message: "\(alternative.subject) conflicts with \(alternative.owner); \(alternative.scope.dropped)"))
-    }
-    return survivors
-}
-
-/// Drop each side of a duplicate/prefix conflict among the alternatives that survived the two passes above, so
-/// one dropped there cannot re-trigger here. Each diagnostic names the OTHER offender (the conflict carries
-/// both sides) so the user can find the pair; a target's alternatives are deduped, so target plus keybind
-/// locates exactly one of them. Every conflict left is cross-target: `dropSiblingShadowedAlternatives` settled
-/// the same-target ones.
+/// Settle every duplicate-or-prefix conflict among the alternatives pass 1 left, in ONE pass over a relation
+/// computed once. A CROSS-TARGET pair drops both sides, upstream's rule for single binds. A SAME-TARGET prefix
+/// pair drops the longer alternative, since `KeybindMatcher` fires the exact shorter match and the longer could
+/// never run; both spell the same thing, so nothing is lost.
 ///
-/// A conflict against an alternative already dropped HERE is skipped: it no longer registers, so charging this
-/// side for it would cost a working key over a bind that cannot fire. That makes the pass sequential, so it
-/// walks the conflicts in a CANONICAL order — by each side's target in file order, then by the keybind's own
-/// rendering — rather than in array-index order, where a binding's `|` order would pick which of its siblings
-/// is charged first and, through it, which other binding survives. A drop never creates a conflict, so this
-/// single ordered pass IS the fixpoint of dropping the first conflict and recomputing.
+/// Nothing is recomputed and no drop cascades, which is what makes the outcome independent of the order the
+/// file writes its lines and its `|` alternatives in. The price is that an alternative whose only conflict was
+/// with one that also went still dies; that is the deliberate cost of determinism, not an omission — do not
+/// add a recovery pass for it.
+///
+/// Each diagnostic names the OTHER offender so the user can find the pair; a target's alternatives are
+/// deduped, so target plus keybind locates exactly one of them.
 private func dropConflictingAlternatives(_ alternatives: [MonitorAlternative],
                                          diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
     var position: [KeybindConflict.Side: Int] = [:]
-    var targetRank: [KeybindTarget: Int] = [:]
     for (index, alternative) in alternatives.enumerated() {
         position[KeybindConflict.Side(target: alternative.target, keybind: alternative.keybind)] = index
-        if targetRank[alternative.target] == nil { targetRank[alternative.target] = index }
-    }
-    func targets(_ conflict: KeybindConflict) -> (Int, Int) {
-        (targetRank[conflict.first.target] ?? 0, targetRank[conflict.second.target] ?? 0)
-    }
-    func binds(_ conflict: KeybindConflict) -> (String, String) {
-        (conflict.first.keybind.displayString, conflict.second.keybind.displayString)
     }
     var otherOffender: [Int: String] = [:]
-    let conflicts = keybindConflicts(alternatives.map { (keybind: $0.keybind, target: $0.target) })
-    let ordered = conflicts.sorted {
-        targets($0) == targets($1) ? binds($0) < binds($1) : targets($0) < targets($1)
+    func charge(_ index: Int, with offender: String) {
+        if otherOffender[index] == nil { otherOffender[index] = offender }
     }
-    for conflict in ordered {
+    for conflict in keybindConflicts(alternatives.map { (keybind: $0.keybind, target: $0.target) }) {
         guard let first = position[conflict.first], let second = position[conflict.second] else { continue }
-        guard otherOffender[first] == nil, otherOffender[second] == nil else { continue }
-        otherOffender[second] = alternatives[first].owner
-        otherOffender[first] = alternatives[second].owner
+        guard conflict.first.target != conflict.second.target else {
+            let longer = isStrictKeybindPrefix(conflict.first.keybind, of: conflict.second.keybind) ? second : first
+            charge(longer, with: alternatives[longer].owner)
+            continue
+        }
+        charge(first, with: alternatives[second].owner)
+        charge(second, with: alternatives[first].owner)
     }
 
     var survivors: [MonitorAlternative] = []
