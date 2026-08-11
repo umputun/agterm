@@ -141,13 +141,47 @@ final class SplitToggleCoverTests: XCTestCase {
         XCTAssertFalse(session.hasSplit)
     }
 
-    func testCloseSplitWithoutASplitIsInert() throws {
-        let session = try activeSession()
+    // the sibling's split is the discriminating half: without a session to act on, "nothing happened" is
+    // indistinguishable from a closeSplit that reached the wrong one, or removed the session outright.
+    func testCloseSplitWithoutASplitLeavesEveryOtherSessionAlone() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let sibling = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(sibling.id)
+        actions.toggleSplit()
+        let plain = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(plain.id)
 
         actions.closeSplit()
 
+        XCTAssertTrue(sibling.hasSplit, "the split belongs to another session and must survive")
+        XCTAssertNotNil(store.session(withID: plain.id), "an inert action must not remove the session")
+        XCTAssertEqual(store.selectedSessionID, plain.id)
+        XCTAssertFalse(plain.hasSplit)
+    }
+
+    func testShownScratchIsDismissedInsteadOfClosingTheSplit() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        session.scratchActive = true
+
+        actions.closeSplit()
+
+        XCTAssertFalse(session.scratchActive, "the cover goes first, as it does for ⌘D and ⌘W")
+        XCTAssertTrue(session.hasSplit, "a live pane must not be destroyed behind a cover that hides it")
+    }
+
+    // so the teardown is a second, deliberate press with the panes back in view.
+    func testPressAfterTheScratchIsGoneClosesTheSplit() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        session.scratchActive = true
+
+        actions.closeSplit()
+        actions.closeSplit()
+
+        XCTAssertFalse(session.scratchActive)
         XCTAssertFalse(session.hasSplit)
-        XCTAssertFalse(session.isSplit)
     }
 
     func testFullOverlayMakesCloseSplitInert() throws {
