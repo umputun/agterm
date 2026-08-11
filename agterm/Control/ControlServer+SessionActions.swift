@@ -251,7 +251,8 @@ extension ControlServer: ControlActions {
 
     /// Drive the split on the target's OWN store, not active-only `AppActions.toggleSplit()`. `on|off|toggle`
     /// is computed against `isSplit`, so both are idempotent. Always `AppStore.toggleSplit` — a ⌘D-style
-    /// keep-alive hide/show that never tears the hidden pane's surface down (`closeSplit` is shell-exit-only).
+    /// keep-alive hide/show that never tears the hidden pane's surface down; `session.split.close` is the
+    /// verb that does.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
@@ -265,6 +266,25 @@ extension ControlServer: ControlActions {
                 store.toggleSplit(id)
             }
             actions.focusSplitPane(session, wantSplit: session.splitFocused)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Tear the target's split pane down, the state `session.split off` cannot reach: it hides and keeps the
+    /// shell alive, while this frees the surface and clears `hasSplit`/`splitRatio`/`splitFocused`. Idempotent
+    /// — a session with no right pane answers ok, having nothing to close, so a script need not read `tree`
+    /// first. Kills whatever the pane is running, which is the point: `session.type $'exit\n'` reaches only a
+    /// shell sitting at a prompt.
+    func closeSessionSplit(_ target: String?, window: String?) -> ControlResponse {
+        return resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            guard session.hasSplit else {
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
+            store.closeSplit(id)
+            actions.focusSplitPane(session, wantSplit: false)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

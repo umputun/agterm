@@ -54,8 +54,8 @@ extension AppStore {
     }
 
     /// Closes the split pane: hides it AND tears down its surface, so a later split starts a fresh shell.
-    /// Used on the split shell's own exit; resets `splitFocused`, else it points the collapsed view at the
-    /// gone pane.
+    /// Reached by the split shell's own exit, by the palette's Close Split and by `session.split.close`;
+    /// resets `splitFocused`, else it points the collapsed view at the gone pane.
     public func closeSplit(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.isSplit = false

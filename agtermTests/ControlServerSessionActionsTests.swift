@@ -465,6 +465,57 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(session.overlaySizePercent, 35, "a refused resize must leave the panel where it was")
     }
 
+    private func splitSession() throws -> (AppStore, Session) {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.toggleSplit(session.id)
+        return (store, session)
+    }
+
+    func testSplitCloseTearsThePaneDown() throws {
+        let (_, session) = try splitSession()
+        session.splitRatio = 0.7
+
+        let response = server.closeSessionSplit(session.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(response.result?.id, session.id.uuidString)
+        XCTAssertFalse(session.hasSplit)
+        XCTAssertFalse(session.isSplit)
+        XCTAssertFalse(session.splitFocused)
+        XCTAssertNil(session.splitRatio)
+    }
+
+    // `session.split off` hides and keeps the shell, so the pane it leaves behind is what this must reach.
+    func testSplitCloseReachesAHiddenPane() throws {
+        let (store, session) = try splitSession()
+        store.toggleSplit(session.id)
+        XCTAssertTrue(session.hasSplit)
+
+        let response = server.closeSessionSplit(session.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertFalse(session.hasSplit)
+    }
+
+    func testSplitCloseWithoutASplitAnswersOk() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+
+        let response = server.closeSessionSplit(session.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertFalse(session.hasSplit)
+    }
+
+    func testSplitCloseRejectsAnUnknownSession() throws {
+        let response = server.closeSessionSplit(UUID().uuidString, window: nil)
+
+        XCTAssertFalse(response.ok)
+    }
+
     // the helper centers on the grid in the body's header, so a resize that changes the panel must rewrite
     // that file rather than wait for the next `hud.update` to re-center the message.
     func testOverlayResizeRewritesTheHudBody() throws {

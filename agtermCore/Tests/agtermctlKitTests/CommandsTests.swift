@@ -353,6 +353,20 @@ struct CommandsTests {
         #expect(try request(["session", "split", "on"]) == expected)
     }
 
+    @Test func sessionSplitWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionSplit, target: "s1", args: ControlArgs(mode: "off", window: "w1"))
+        #expect(try request(["session", "split", "off", "--target", "s1", "--window", "w1"]) == expected)
+    }
+
+    @Test func sessionSplitClose() throws {
+        #expect(try request(["session", "split", "close"]) == ControlRequest(cmd: .sessionSplitClose, target: "active"))
+    }
+
+    @Test func sessionSplitCloseWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionSplitClose, target: "s1", args: ControlArgs(window: "w1"))
+        #expect(try request(["session", "split", "close", "--target", "s1", "--window", "w1"]) == expected)
+    }
+
     @Test func sessionScratchDefaultsToggle() throws {
         let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle"))
         #expect(try request(["session", "scratch"]) == expected)

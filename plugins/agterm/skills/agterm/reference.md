@@ -414,8 +414,12 @@ All twelve are read-only projections of GUI state.
   settles asynchronously, so the command waits briefly for it. Without `--json` it prints `result.text`
   (or `ok` on close / an empty bar).
 - `session split [on|off|toggle] [--target] [--window W]` — side-by-side second shell. `off` HIDES it
-  but keeps the shell alive (mirrors ⌘D); the pane's surface is torn down only when its shell exits.
-  Unknown mode errors.
+  but keeps the shell alive (mirrors ⌘D); tearing the pane down takes `session split close` or the
+  shell's own exit. Unknown mode errors.
+- `session split close [--target] [--window W]` — tear the split pane down: the surface dies, whatever it
+  runs dies with it, and `hasSplit`/`splitRatio`/`splitFocused` drop out of `tree`. Reaches a HIDDEN pane
+  too, which is what `session type --pane right $'exit\n'` cannot do once the pane is past a prompt
+  (nested shell, ssh, an agent). Answers ok on a session with no split.
 - `session scratch [on|off|toggle] [--command CMD] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
   `exit` in it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the

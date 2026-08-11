@@ -3,7 +3,8 @@ import XCTest
 import agtermCore
 
 /// Hosted coverage for `AppActions.toggleSplit`'s cover rung — ⌘D / the toolbar button / View ▸ Split /
-/// the palette all funnel through it. Lives here rather than in `agtermUITests` for the same reasons as
+/// the palette all funnel through it — and for `closeSplit`, the palette's teardown beside it.
+/// Lives here rather than in `agtermUITests` for the same reasons as
 /// `SessionNavRevealTests`: it reaches `AppActions` through `@testable import agterm`, observes MODEL flags
 /// (`isSplit`, `scratchActive`) that need no terminal surface, and runs on every push via `scripts/test-app.sh`.
 @MainActor
@@ -112,5 +113,51 @@ final class SplitToggleCoverTests: XCTestCase {
         actions.toggleSplit()
 
         XCTAssertTrue(session.isSplit)
+    }
+
+    func testCloseSplitTearsTheShownPaneDown() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        session.splitRatio = 0.7
+
+        actions.closeSplit()
+
+        XCTAssertFalse(session.isSplit)
+        XCTAssertFalse(session.hasSplit, "closing is what clears the flag a hide leaves set")
+        XCTAssertFalse(session.splitFocused)
+        XCTAssertNil(session.splitRatio)
+    }
+
+    // the state the row exists for: ⌘D hid the pane, which keeps it alive and keeps reporting it.
+    func testCloseSplitReachesAHiddenPane() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        actions.toggleSplit()
+        XCTAssertFalse(session.isSplit)
+        XCTAssertTrue(session.hasSplit)
+
+        actions.closeSplit()
+
+        XCTAssertFalse(session.hasSplit)
+    }
+
+    func testCloseSplitWithoutASplitIsInert() throws {
+        let session = try activeSession()
+
+        actions.closeSplit()
+
+        XCTAssertFalse(session.hasSplit)
+        XCTAssertFalse(session.isSplit)
+    }
+
+    func testFullOverlayMakesCloseSplitInert() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        session.overlayActive = true
+        session.overlaySizePercent = nil
+
+        actions.closeSplit()
+
+        XCTAssertTrue(session.hasSplit, "the panes are invisible under a full overlay and must not be torn down")
     }
 }

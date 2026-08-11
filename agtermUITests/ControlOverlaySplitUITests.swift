@@ -417,7 +417,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
     }
 
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
-    // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
+    // pane's surface is NOT destroyed, only closeSplit does that), clearing split:false.
     func testSessionSplitToggle() throws {
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"toggle"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "session.split toggle should succeed: \(split)")
@@ -426,6 +426,43 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let unsplit = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"off"}}"#)
         XCTAssertEqual(unsplit["ok"] as? Bool, true, "session.split off should succeed: \(unsplit)")
         XCTAssertTrue(pollActiveSessionSplit(false, timeout: 10), "off should clear the split")
+    }
+
+    // `off` only hides, so the HIDDEN pane it leaves behind — still alive, still reported by `hasSplit` —
+    // is what `session.split.close` has to reach; the tree is the only surface that tells the two apart.
+    func testSessionSplitCloseTearsDownAHiddenPane() throws {
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "session.split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"off"}}"#)["ok"] as? Bool,
+                       true, "session.split off should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(false, timeout: 10), "off should hide the split")
+        XCTAssertEqual(try activeSessionNode()["hasSplit"] as? Bool, true, "a hidden pane is still alive")
+
+        let closed = try sendCommand(#"{"cmd":"session.split.close","target":"active"}"#)
+        XCTAssertEqual(closed["ok"] as? Bool, true, "session.split.close should succeed: \(closed)")
+
+        var node = try activeSessionNode()
+        let deadline = Date().addingTimeInterval(10)
+        while node["hasSplit"] != nil, Date() < deadline {
+            usleep(200_000)
+            node = try activeSessionNode()
+        }
+        XCTAssertNil(node["hasSplit"], "closing drops the pane out of the tree entirely")
+        XCTAssertNil(node["splitFocused"], "and the fields that ride on it")
+
+        let again = try sendCommand(#"{"cmd":"session.split.close","target":"active"}"#)
+        XCTAssertEqual(again["ok"] as? Bool, true, "closing with no split is ok, not an error: \(again)")
+    }
+
+    /// The active session's `tree` node, so a test can read fields the hermetic snapshot does not persist.
+    private func activeSessionNode() throws -> [String: Any] {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        return try XCTUnwrap(sessions.first, "should have a seeded session")
     }
 
     // session.scratch toggle shows scratch:true in the tree; off hides it (keep-alive — the shell's

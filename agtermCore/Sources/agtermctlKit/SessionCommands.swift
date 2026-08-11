@@ -214,14 +214,36 @@ struct Session: ParsableCommand {
         }
     }
 
-    struct Split: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Show or hide a session split (on|off|toggle).")
-        @Argument(help: "Mode: on (show), off (hide), or toggle (default). Hidden panes stay alive.") var mode: String = "toggle"
-        @OptionGroup var target: TargetOptions
-        @OptionGroup var options: ClientOptions
+    struct Split: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Show, hide, or close a session split.",
+            subcommands: [Visibility.self, Close.self],
+            defaultSubcommand: Visibility.self
+        )
 
-        func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionSplit, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        /// `agtermctl session split [on|off|toggle]` — the default subcommand, so the bare verb keeps working
+        /// (the `sidebar` group's shape).
+        struct Visibility: RequestCommand {
+            static let configuration = CommandConfiguration(commandName: "visibility",
+                                                           abstract: "Show or hide a session split (on|off|toggle).")
+            @Argument(help: "Mode: on (show), off (hide), or toggle (default). Hidden panes stay alive.") var mode: String = "toggle"
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionSplit, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+            }
+        }
+
+        struct Close: RequestCommand {
+            static let configuration = CommandConfiguration(
+                abstract: "Close the split pane (destroys it, killing whatever it runs); ok when there is none.")
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionSplitClose, target: target.target, args: options.withWindow())
+            }
         }
     }
 

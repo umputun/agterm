@@ -22,6 +22,7 @@ struct PaletteCatalogTests {
             "Last Session",
             "Show Attention",
             "Toggle Split",
+            "Close Split",
             "Toggle Scratch",
             "Toggle Terminal Zoom",
             "Toggle Sidebar",
@@ -53,7 +54,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 45)
+        #expect(PaletteCommand.allCases.count == 46)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -94,6 +95,8 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.clearFocus.isVisible(in: PaletteContext(hasMarkedWorkspaces: true)))
         #expect(!PaletteCommand.focusLeftPane.isVisible(in: PaletteContext(activeSessionHasSplit: false)))
         #expect(PaletteCommand.focusRightPane.isVisible(in: PaletteContext(activeSessionHasSplit: true)))
+        #expect(!PaletteCommand.closeSplit.isVisible(in: PaletteContext(activeSessionHasSplit: false)))
+        #expect(PaletteCommand.closeSplit.isVisible(in: PaletteContext(activeSessionHasSplit: true)))
         #expect(!PaletteCommand.undoClose.isVisible(in: PaletteContext(hasPendingClose: false)))
         #expect(PaletteCommand.undoClose.isVisible(in: PaletteContext(hasPendingClose: true)))
         #expect(!PaletteCommand.reopenRecent.isVisible(in: PaletteContext(hasRecentClosed: false)))

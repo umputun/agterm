@@ -27,6 +27,7 @@ public enum Command: String, Codable, Sendable {
     case sessionRestore = "session.restore"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
+    case sessionSplitClose = "session.split.close"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"

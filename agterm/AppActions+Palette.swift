@@ -80,6 +80,7 @@ extension AppActions {
         case .lastSession: selectLastSession()
         case .showAttention: openAttentionPalette()
         case .toggleSplit: toggleSplit()
+        case .closeSplit: closeSplit()
         case .toggleScratch: toggleScratch()
         case .toggleTerminalZoom: toggleTerminalZoom()
         case .toggleSidebar: toggleSidebar()
