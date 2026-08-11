@@ -2,8 +2,10 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the window-scoped predicate used by both terminal focus retry loops. The
-/// registry is app-side state, so this cannot live in agtermCore's host-free tests.
+/// Hosted coverage for the guards on the terminal focus retry loops: the window-scoped picker predicate
+/// both loops read, and the selection gate that keeps a control-addressed background session from taking
+/// first responder. The registries and the window library are app-side state, so this cannot live in
+/// agtermCore's host-free tests.
 @MainActor
 final class PickFocusGuardTests: XCTestCase {
     private var stateDir: URL!
@@ -66,6 +68,37 @@ final class PickFocusGuardTests: XCTestCase {
     func testMissingWindowOrRegistrationDoesNotGuardFocus() {
         XCTAssertFalse(actions.pickActive(for: nil))
         XCTAssertFalse(actions.pickActive(for: UUID()))
+    }
+
+    func testSelectionGuardReadsTheSessionsOwnWindowNotTheFrontmostOne() throws {
+        let frontStore = try XCTUnwrap(library.activeStore)
+        let frontWorkspace = try XCTUnwrap(frontStore.currentWorkspaceID)
+        let front = try XCTUnwrap(frontStore.addSession(toWorkspace: frontWorkspace, cwd: NSHomeDirectory()))
+        frontStore.selectSession(front.id)
+
+        let backgroundID = library.newWindow(name: "background").id
+        let backStore = try XCTUnwrap(library.store(for: backgroundID))
+        let backWorkspace = try XCTUnwrap(backStore.currentWorkspaceID)
+        let shown = try XCTUnwrap(backStore.addSession(toWorkspace: backWorkspace, cwd: NSHomeDirectory()))
+        let hidden = try XCTUnwrap(backStore.addSession(toWorkspace: backWorkspace, cwd: NSHomeDirectory()))
+        backStore.selectSession(shown.id)
+
+        XCTAssertTrue(actions.sessionIsSelected(front))
+        XCTAssertTrue(actions.sessionIsSelected(shown),
+                      "selected in its own window is enough; being in a background window is not a block")
+        XCTAssertFalse(actions.sessionIsSelected(hidden),
+                       "a mounted-but-hidden session must not take first responder")
+
+        backStore.selectSession(hidden.id)
+        XCTAssertTrue(actions.sessionIsSelected(hidden))
+        XCTAssertFalse(actions.sessionIsSelected(shown), "the guard follows the selection, both ways")
+    }
+
+    func testSelectionGuardDoesNotBlockASessionWithNoResolvableWindow() {
+        let orphan = Session(initialCwd: NSHomeDirectory())
+
+        XCTAssertTrue(actions.sessionIsSelected(orphan),
+                      "unresolvable ownership must not block, matching the window-scoped cover gates")
     }
 
     func testTerminalRetryGuardTracksPickerForOwningAppKitWindow() throws {
