@@ -8,7 +8,7 @@ These rules cover recipes. The project-wide rules for everything else are in [CO
 
 ## Layout
 
-One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the scripts, nothing else.
+One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the scripts, nothing else — with one exception: a recipe whose chord hands work to a coding agent may ship the agent skill it needs, as `SKILL.md` beside the scripts, and *Setup* says where to copy it. The skill is part of the recipe and is read the same way, so keep it to what this recipe needs rather than shipping your whole configuration.
 
 Name scripts by their language, because the extension decides what CI does with them:
 
