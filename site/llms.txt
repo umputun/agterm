@@ -1,8 +1,8 @@
 # agterm
 
-> Native macOS terminal on libghostty for running many AI coding agents in named workspaces
+> Native macOS terminal on libghostty with a deliberately small interface and a full control API
 
-agterm is a native macOS terminal, built on libghostty (Ghostty's engine), for running many AI coding agents at once. Instead of scattering sessions across tabs, it groups them into named workspaces, shows each agent's status on its sidebar row, and exposes almost every action to a scriptable control CLI — so a screen of concurrent agents stays legible and it's obvious which one needs you. It is also a fast, modern general-purpose terminal for everyday work.
+agterm is a native macOS terminal, built on libghostty (Ghostty's engine), with a deliberately small interface and a full control API. Instead of scattering sessions across tabs, it groups them into named workspaces, and almost everything that structure holds is also an object a script can address: the bundled agtermctl creates and types into sessions, runs overlays, moves windows, sets a session's status glyph, and reads that state back over a local socket. Running many AI coding agents at once is the obvious use, and far from the only one. With nothing scripted it is a fast, modern general-purpose terminal for everyday work.
 
 ## Key Features
 

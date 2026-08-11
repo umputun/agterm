@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Documentation — agterm | terminal for AI coding agents</title>
+    <title>Documentation — agterm | a simply good terminal with a full control API</title>
     <meta
       name="description"
       content="agterm documentation: install, workspaces and sessions, split panes, overlays, the agtermctl control CLI, agent status, keymaps, themes, and window management."
@@ -245,7 +245,7 @@
             agterm
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            A native macOS terminal for working with AI coding agents across many sessions at once.
+            A native macOS terminal with a deliberately small interface and a full control API.
           </p>
 
           <!-- OVERVIEW -->
@@ -265,13 +265,14 @@
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               agterm is intentionally opinionated: rather than scattering shells across tabs, it organizes them into named
-              workspaces, each holding the sessions for one project or context. Several agent-driven sessions run side by side and
-              you move between them without losing track of which is which.
+              workspaces, each holding the sessions for one project or context. That hierarchy is the whole model, and there is
+              nothing else to learn before it is useful.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              The design is deliberately minimal: a sensible minimum out of the box, plus a complete control API and CLI on top.
-              Almost everything is scriptable, so anything past the defaults you build yourself. None of it is limited to agents —
-              it works as a capable general-purpose terminal too.
+              Everything the model holds is also an object a script can address. Almost anything you can do by hand,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> can do over a local
+              socket, and every state it sets it reads back. That is what keeps a screen of concurrent coding agents in order, but
+              nothing here is limited to agents: with nothing scripted at all it is a capable general-purpose terminal.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
               For the real terminal work — rendering, VT parsing, and shell I/O — agterm embeds

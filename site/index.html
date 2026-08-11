@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>agterm — macOS terminal for running many AI agents at once</title>
+    <title>agterm — a simply good macOS terminal with a full control API</title>
     <meta
       name="description"
-      content="Native macOS terminal built on libghostty that keeps many concurrent AI coding agents organized in named workspaces, with at-a-glance status and a scriptable CLI."
+      content="Native macOS terminal with named workspaces and a local control API for scripts, AI coding agents, and multi-session workflows."
     />
     <meta
       name="keywords"
-      content="agterm, macOS terminal, terminal for AI agents, Claude Code terminal, Codex terminal, Pi coding agent terminal, OpenCode terminal, libghostty, ghostty, agtermctl, concurrent AI agents, agentic terminal"
+      content="agterm, macOS terminal, scriptable terminal, terminal control API, terminal for AI agents, Claude Code terminal, Codex terminal, Pi coding agent terminal, OpenCode terminal, libghostty, ghostty, agtermctl, concurrent AI agents, agentic terminal"
     />
     <meta name="author" content="umputun" />
     <link rel="canonical" href="https://agterm.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="agterm — macOS terminal for running many AI agents at once" />
+    <meta property="og:title" content="agterm — a simply good macOS terminal with a full control API" />
     <meta
       property="og:description"
-      content="Native macOS terminal built on libghostty that keeps many concurrent AI coding agents organized in named workspaces, with at-a-glance status and a scriptable CLI."
+      content="Native macOS terminal with named workspaces and a local control API for scripts, AI coding agents, and multi-session workflows."
     />
     <meta property="og:url" content="https://agterm.com/" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -27,10 +27,10 @@
     <meta property="og:site_name" content="agterm" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@umputun" />
-    <meta name="twitter:title" content="agterm — macOS terminal for running many AI agents at once" />
+    <meta name="twitter:title" content="agterm — a simply good macOS terminal with a full control API" />
     <meta
       name="twitter:description"
-      content="Native macOS terminal built on libghostty that keeps concurrent AI coding agents organized, with at-a-glance status and a scriptable CLI."
+      content="Native macOS terminal with named workspaces and a local control API for scripts, AI coding agents, and multi-session workflows."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -46,7 +46,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "agterm",
-        "description": "Native macOS terminal built on libghostty for running many AI coding agents at once, organizing sessions into named workspaces with at-a-glance agent status and a scriptable control CLI.",
+        "description": "Native macOS terminal built on libghostty with a deliberately small workspace and session interface and a full local control API, so scripts and AI coding agents can drive almost every part of it and read the state back.",
         "url": "https://agterm.com",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS 14+",
@@ -55,62 +55,6 @@
         "codeRepository": "https://github.com/umputun/agterm",
         "downloadUrl": "https://github.com/umputun/agterm/releases",
         "softwareVersion": "0.22.0"
-      }
-    </script>
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What is agterm?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "agterm is a native macOS terminal, built on libghostty, for running many AI coding agents at once. It organizes sessions into named workspaces and shows each agent's status on its sidebar row, so a screen of concurrent agents stays legible."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Does agterm work with Claude Code, Codex, Pi, and OpenCode?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. agterm auto-wires agent status for Claude Code, Codex, Pi, and OpenCode, and ships an installable agent skill that teaches Claude Code and Codex its control model and the full agtermctl command set."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is agterm free?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. agterm is free and installs on Apple Silicon macOS 14 or later with: brew install --cask umputun/apps/agterm."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What is agtermctl?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "agtermctl is a bundled CLI that drives agterm over a local socket: create and type into sessions, run overlays, move windows, and post notifications tied to a specific session."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is agterm built on Ghostty?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "agterm embeds Ghostty's rendering engine through libghostty. It is a separate app with its own workspace and session model, not a fork of the Ghostty app."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Does agterm require macOS?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. agterm is a native macOS app for Apple Silicon, macOS 14 or later, signed and notarized."
-            }
-          }
-        ]
       }
     </script>
   </head>
@@ -237,15 +181,16 @@
             line-height: 0.98;
             letter-spacing: -0.03em;
             margin: 0 0 26px;
-            max-width: 16ch;
+            max-width: 24ch;
           "
         >
-          A terminal for running <span style="color: var(--accent, #6d82f3)">many agents</span> at once.
+          A simply good terminal. <span style="color: var(--accent, #6d82f3)">Full control API.</span>
         </h1>
         <p style="font-size: clamp(17px, 2vw, 21px); line-height: 1.55; color: #bfbab0; max-width: 60ch; margin: 0 0 38px">
-          agterm organizes AI coding sessions into named workspaces instead of scattering them across tabs — so a screen full of
-          concurrent agents stays legible, and it's obvious which one needs you. And when there's no agent in sight, it's simply a
-          fast, modern terminal for everyday work.
+          agterm organizes sessions into named workspaces. The bundled
+          <code style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 0.92em">agtermctl</code> drives all of it over
+          a local socket: build layouts, type into any pane and read its text back, open overlays, dashboards, and native pickers.
+          Running many AI coding agents at once is the obvious use, and far from the only one.
         </p>
 
         <!-- install command -->
@@ -458,11 +403,12 @@
             max-width: 20ch;
           "
         >
-          Built for concurrent agent-driven work.
+          A small structure, and a command for every part of it.
         </h2>
         <p style="font-size: 18px; line-height: 1.55; color: #bfbab0; max-width: 58ch; margin: 0 0 56px">
-          Running several coding agents means many long-lived sessions, each progressing on its own. A tabbed terminal loses track
-          of them quickly. agterm doesn't.
+          Workspaces and sessions are the whole model, and there is nothing to learn beyond them. Everything they hold is also an
+          object the control API can create, move, inspect, and read back. Running several coding agents means many long-lived
+          sessions, each progressing on its own. A tabbed terminal loses track of them quickly. agterm doesn't.
         </p>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px">
@@ -583,12 +529,11 @@
                 letter-spacing: -0.01em;
               "
             >
-              Driven by agents
+              Agents drive it too
             </h3>
             <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-              An installable agent skill teaches Claude Code or Codex the control model and the full agtermctl command set — so an
-              agent running inside agterm builds its own layout, runs overlays, and manages windows without you explaining the
-              API.
+              An installable skill teaches Claude Code or Codex the control model and the full agtermctl command set, so an agent
+              running inside agterm builds its own layout, runs overlays, and manages windows without you explaining the API.
             </p>
           </div>
 
@@ -605,11 +550,11 @@
                 letter-spacing: -0.01em;
               "
             >
-              Not just for agents
+              A terminal first
             </h3>
             <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-              Everything works as a capable general-purpose terminal for everyday multi-project work — 512 bundled themes,
-              live-preview theme picker, custom key mappings, and full session persistence across launches.
+              With nothing scripted at all it handles everyday multi-project work: 512 bundled themes, live-preview theme picker,
+              custom key mappings, and full session persistence across launches.
             </p>
           </div>
         </div>
@@ -1105,10 +1050,10 @@
                 A genuinely good terminal, first.
               </h2>
               <p style="font-size: 18px; line-height: 1.6; color: #bfbab0; margin: 0">
-                None of this is limited to agents. agterm is built on Ghostty's engine — the same fast, GPU-accelerated rendering
-                and VT parsing — and works as a capable general-purpose terminal for everyday multi-project work. The workspaces,
-                palettes, and keyboard-first navigation help just as much whether you're running coding agents or just juggling a
-                dozen shells.
+                None of this is limited to agents. agterm is built on Ghostty's engine, the
+                same fast, GPU-accelerated rendering and VT parsing, and handles everyday multi-project work with nothing scripted
+                at all. The workspaces, palettes, and keyboard-first navigation help just as much whether you're running coding
+                agents or juggling a dozen shells.
               </p>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px">
@@ -1190,7 +1135,9 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> can do over a
               local socket — no hidden UI-only actions. That turns the terminal into something you program around your own flow: a
               script or an agent builds and steers its own layout, and you extend the app's behavior without ever touching its
-              source.
+              source. What people have built on it lives in the
+              <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a>: complete
+              workflows, each a directory with a README and its scripts, written to be copied into your own setup and edited.
             </p>
           </div>
 
@@ -1486,7 +1433,7 @@ agtermctl session status completed --auto-reset \
               margin: 0 0 16px;
             "
           >
-            Stop losing track of your agents.
+            A terminal you can pick up and drive.
           </h2>
           <p style="font-size: 17px; color: #bfbab0; max-width: 48ch; margin: 0 auto 32px; line-height: 1.55">
             Open source. Native. Built on Ghostty's terminal engine.
