@@ -135,8 +135,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .expandWorkspaces, .collapseWorkspaces:
             return context.sidebarShowsWorkspaceTree
         case .focusLeftPane, .focusRightPane, .closeSplit:
-            // `hasSplit`, not `isSplit`: a HIDDEN split is exactly the state this row exists for — the pane
-            // is still alive and still reported, and hiding it is what makes the user forget it.
+            // `hasSplit`, not `isSplit`: a hidden pane is alive and still reported, the state Close Split
+            // exists for.
             return context.activeSessionHasSplit
         case .undoClose:
             return context.hasPendingClose

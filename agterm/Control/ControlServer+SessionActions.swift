@@ -270,11 +270,9 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// Tear the target's split pane down, the state `session.split off` cannot reach: it hides and keeps the
-    /// shell alive, while this frees the surface and clears `hasSplit`/`splitRatio`/`splitFocused`. Idempotent
-    /// — a session with no right pane answers ok, having nothing to close, so a script need not read `tree`
-    /// first. Kills whatever the pane is running, which is the point: `session.type $'exit\n'` reaches only a
-    /// shell sitting at a prompt.
+    /// Tear the target's split pane down, which `session.split off` cannot: it hides and keeps the shell.
+    /// Kills whatever the pane runs, the point of it — `session.type $'exit\n'` reaches only a shell at a
+    /// prompt. Idempotent: no right pane answers ok, so a script need not read `tree` first.
     func closeSessionSplit(_ target: String?, window: String?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {

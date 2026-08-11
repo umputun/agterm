@@ -128,7 +128,6 @@ final class SplitToggleCoverTests: XCTestCase {
         XCTAssertNil(session.splitRatio)
     }
 
-    // the state the row exists for: ⌘D hid the pane, which keeps it alive and keeps reporting it.
     func testCloseSplitReachesAHiddenPane() throws {
         let session = try activeSession()
         actions.toggleSplit()
@@ -141,8 +140,6 @@ final class SplitToggleCoverTests: XCTestCase {
         XCTAssertFalse(session.hasSplit)
     }
 
-    // the sibling's split is the discriminating half: without a session to act on, "nothing happened" is
-    // indistinguishable from a closeSplit that reached the wrong one, or removed the session outright.
     func testCloseSplitWithoutASplitLeavesEveryOtherSessionAlone() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
@@ -171,7 +168,6 @@ final class SplitToggleCoverTests: XCTestCase {
         XCTAssertTrue(session.hasSplit, "a live pane must not be destroyed behind a cover that hides it")
     }
 
-    // so the teardown is a second, deliberate press with the panes back in view.
     func testPressAfterTheScratchIsGoneClosesTheSplit() throws {
         let session = try activeSession()
         actions.toggleSplit()

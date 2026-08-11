@@ -487,7 +487,6 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertNil(session.splitRatio)
     }
 
-    // `session.split off` hides and keeps the shell, so the pane it leaves behind is what this must reach.
     func testSplitCloseReachesAHiddenPane() throws {
         let (store, session) = try splitSession()
         store.toggleSplit(session.id)

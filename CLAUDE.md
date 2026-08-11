@@ -39,6 +39,8 @@ concurrency before changing the bridge.
   or reasons the obvious implementation fails. Never narrate code, repeat a fact across surfaces, use a
   paragraph where a clause works, or preserve change history. Own each contract once and cross-reference it.
   If 25 lines of logic seem to need 100 lines of comment, fix the code.
+- A doc comment longer than the body it documents is wrong. The usual cause is writing it to justify a
+  review fix rather than to document the code, which belongs in the commit message.
 - Test comments are rare and one line. Add one only when neither the test name nor setup reveals the goal.
   Never label arrange/act/assert, restate an assertion, or explain why a test exists.
 - Review severity follows user-visible consequences: critical for data loss or broken primary paths, major

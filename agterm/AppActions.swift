@@ -690,16 +690,11 @@ final class AppActions {
         focusSplitPane(session, wantSplit: session.splitFocused)
     }
 
-    /// Tear the active session's split pane down — the palette's Close Split, the GUI twin of
-    /// `session.split.close`. `hasSplit`, so a HIDDEN split (the state ⌘D leaves behind, and the one users
-    /// forget about) is reachable too. Immediate and unconfirmed, like every other pane teardown here —
-    /// `closeOverlay`, `closePaneOverlay`, `toggleScratch` — while the session-scoped confirm and its undo
-    /// window stay with `closeActiveSession`.
-    ///
-    /// Carries `toggleSplit`'s cover rungs, and needs them harder: behind a cover this destroys a live shell
-    /// rather than rearranging panes, so the user would see an unchanged screen and find the work gone once
-    /// the cover went. A shown scratch is DISMISSED and the pane survives, so the teardown is a second,
-    /// deliberate press with the panes in view.
+    /// The palette's Close Split, GUI twin of `session.split.close`. Gated on `hasSplit`, so the hidden
+    /// split ⌘D leaves behind is reachable. Immediate and unconfirmed like the other pane teardowns; the
+    /// confirm and undo window stay with `closeActiveSession`. Carries `toggleSplit`'s cover rungs, which
+    /// matter more here: behind a cover this destroys a live shell instead of rearranging panes, so the
+    /// dismissed scratch makes the teardown a second, deliberate press with the panes in view.
     func closeSplit() {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.activeSession else { return }

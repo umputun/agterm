@@ -428,8 +428,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertTrue(pollActiveSessionSplit(false, timeout: 10), "off should clear the split")
     }
 
-    // `off` only hides, so the HIDDEN pane it leaves behind — still alive, still reported by `hasSplit` —
-    // is what `session.split.close` has to reach; the tree is the only surface that tells the two apart.
+    // the tree is the only surface that tells a hidden pane from a closed one.
     func testSessionSplitCloseTearsDownAHiddenPane() throws {
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)["ok"] as? Bool,
                        true, "session.split on should succeed")
