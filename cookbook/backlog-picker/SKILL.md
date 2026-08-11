@@ -29,12 +29,14 @@ user's last-window capture replays only when the exited window happened to be `w
 reviewing PR #370; the fix touches restore ordering, which is why it was deferred rather than done inline.
 ```
 
-Three frontmatter fields, written once and not rewritten afterwards:
+Three frontmatter fields, written once and rewritten only when a later sighting of the same item
+sharpens it, which is the one case **Appending** below allows:
 
 - **`worth: yes | no | later`** — the honest triage call. **`no` is a valid answer**: a real item not worth
   the edit still belongs here, because writing it down is what stops it being rediscovered every review.
 - **`where: path:line`** — omit when the item is not anchored to one place. The dedupe key alongside the slug.
 - **`added: YYYY-MM-DD`** — never updated, so it reads as age. A year-old item is itself information.
+  Zero-pad it: a reader sorting on this field has nothing to fall back on when the value is not an ISO date.
 
 The H1 is the title. The body below it is free — repro, what was tried, the review that surfaced it, links,
 a snippet. No required sections: a two-line item stays two lines, a gnarly one gets a page.

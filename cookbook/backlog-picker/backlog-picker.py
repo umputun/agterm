@@ -14,7 +14,7 @@ Whether claude is running here is read from the pane's live foreground argv, so 
 long as BACKLOG_FG_MATCH matches it.
 
 Environment:
-    AGTERMCTL           agtermctl to use, when the one on PATH is not the right one
+    AGTERMCTL           agtermctl to use, taken as given, when the one on PATH is not the right one
     BACKLOG_DIR         item directory relative to the repo root (default docs/backlog)
     BACKLOG_CLAUDE_CMD  launcher typed at a bare prompt (default claude)
     BACKLOG_FG_MATCH    argv pattern that means "claude runs here" (default (^|/)claude$)
@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -61,7 +62,7 @@ class Item(NamedTuple):
     title: str
     worth: str
     where: str
-    added: str   # the frontmatter date verbatim, "" when absent or unparseable
+    added: str   # the frontmatter's ISO date, "" when absent or unparseable
     mtime: float
 
 
@@ -77,20 +78,30 @@ def log(message: str) -> None:
 def parse_item(path: Path, text: str, mtime: float) -> Item:
     """parse_item reads one item file; a missing field costs that field, never the item.
 
-    The backlog format writes its three fields once and never rewrites them, so a file that predates
-    a field or omits `where` for an unanchored item is normal input, not an error. A plain markdown
-    note with no frontmatter at all still lists, under its H1 or its file name.
+    The backlog format writes its three fields once and rewrites them only when a later sighting
+    changes the call, so a file that predates a field or omits `where` for an unanchored item is
+    normal input, not an error. A plain markdown note with no frontmatter at all still lists, under
+    its H1 or its file name.
+
+    An `added` that is not an ISO date is dropped rather than kept verbatim, because it is the
+    primary sort key: `2026-8-5` compares above every well-formed `2026-...` and would park a typo
+    at the top of a newest-first list, with no age in its subtitle to explain why.
     """
     fields: dict[str, str] = {}
     front = FRONTMATTER_RE.match(text)
     if front:
         fields = {m.group(1): m.group(2).strip() for m in FIELD_RE.finditer(front.group(1))}
     title = H1_RE.search(text)
+    added = fields.get("added", "")
+    try:
+        date.fromisoformat(added)
+    except ValueError:
+        added = ""
     return Item(slug=path.stem,
                 title=title.group(1) if title else path.stem,
                 worth=fields.get("worth", ""),
                 where=fields.get("where", ""),
-                added=fields.get("added", ""),
+                added=added,
                 mtime=mtime)
 
 
@@ -124,14 +135,18 @@ def load_items(root: Path) -> list[Item]:
 
     Sorted by the `added` date and then by mtime, because a day's granularity cannot separate two
     items written in one session and the newest is what the user is coming back to.
+
+    A file name carrying a control character is refused: the slug is typed into the pane, and a
+    newline in it would submit a second line of its own to whatever is running there. `glob` needs
+    no guard of its own - it reports a missing, unreadable or non-directory path as no matches, which
+    ends in the same "no backlog items" as an empty directory.
     """
     directory = root / BACKLOG_DIR
     items: list[Item] = []
-    try:
-        paths = sorted(directory.glob("*.md"))
-    except OSError as err:
-        fail(f"cannot read {directory}: {err}")
-    for path in paths:
+    for path in sorted(directory.glob("*.md")):
+        if any(ch < " " or ch == "\x7f" for ch in path.stem):
+            log(f"skipped {path!r}: control character in the file name")
+            continue
         try:
             items.append(parse_item(path, path.read_text(errors="replace"), path.stat().st_mtime))
         except OSError as err:
@@ -166,9 +181,14 @@ class Agt:
         "Install Command Line Tool..." symlink pointing at an app that is not the one holding the
         socket. So the running app's own bundle is asked first and the rest are probed for the
         subcommand rather than trusted by version, since two builds can report the same version and
-        differ in what they carry. Set AGTERMCTL to skip all of it.
+        differ in what they carry. AGTERMCTL skips all of it and is taken as given: the probe reads a
+        help layout a wrapper script does not reproduce, so probing the reader's explicit choice would
+        discard exactly the binary the override exists to name.
         """
-        candidates = [os.environ.get("AGTERMCTL", ""), running_app_ctl(),
+        override = os.environ.get("AGTERMCTL", "")
+        if override:
+            return override if os.access(override, os.X_OK) else ""
+        candidates = [running_app_ctl(),
                       f"{os.environ.get('GHOSTTY_BIN_DIR', '')}/agtermctl",
                       "/usr/local/bin/agtermctl",
                       "/Applications/agterm.app/Contents/MacOS/agtermctl",
@@ -193,8 +213,9 @@ class Agt:
         if not field or not self.sid:
             return []
         try:
-            tree = json.loads(self.run("tree", "--json").stdout)["result"]["tree"]
-        except (ValueError, KeyError):
+            tree = json.loads(self.run("tree", "--json", "--window", self.window).stdout)["result"]["tree"]
+        except (ValueError, KeyError) as err:
+            log(f"tree read failed, so the pane reads as a shell: {err}")
             return []
         for workspace in tree.get("workspaces", []):
             for session in workspace.get("sessions", []):
@@ -215,9 +236,15 @@ class Agt:
             return ""
         return str(choice.get("id", "")) if choice.get("result") == "picked" else ""
 
-    def type_line(self, line: str, pane: str) -> None:
-        """type_line sends the command into the pane the chord fired from, Return included."""
-        self.run("session", "type", line + "\n", "--target", self.sid or "active", "--pane", pane)
+    def type_line(self, line: str, pane: str) -> subprocess.CompletedProcess[str]:
+        """type_line sends the command into the pane the chord fired from, Return included.
+
+        The caller reports a nonzero exit. The pane can be gone by the time an item is picked - the
+        split closed while the picker was open - and a dropped result is the one failure on the
+        recipe's own path that would otherwise reach no channel at all.
+        """
+        return self.run("session", "type", line + "\n", "--target", self.sid or "active",
+                        "--pane", pane)
 
     def notify(self, message: str) -> None:
         """notify is the only channel a keybinding has: its stdout goes to /dev/null."""
@@ -275,10 +302,12 @@ def fail(message: str, agt: Agt | None = None) -> Any:
 def command_for(slug: str, running: bool) -> str:
     """command_for is what gets typed: a slash command into a live claude, else one that starts it.
 
-    The quotes matter only in the shell case - the slash command is one argument there, while the TUI
-    takes the line as typed.
+    The shell case is quoted with shlex, not by hand: the slug is a file name from the repo the
+    session sits in, so a cloned tree can carry `a"; id; :"b.md`, and double quotes leave `$(...)`,
+    backticks and a closing quote live. The TUI case needs no quoting - it is typed as text - and is
+    safe from the same file name only because load_items refuses a slug carrying a newline.
     """
-    return f"/backlog {slug}" if running else f'{CLAUDE_CMD} "/backlog {slug}"'
+    return f"/backlog {slug}" if running else f"{CLAUDE_CMD} {shlex.quote(f'/backlog {slug}')}"
 
 
 def main(argv: list[str]) -> int:
@@ -296,7 +325,8 @@ def main(argv: list[str]) -> int:
 
     agt = Agt()
     if not agt.bin:
-        fail("no agtermctl with pick support found (the one on PATH is too old)")
+        fail(f"AGTERMCTL is not executable: {os.environ['AGTERMCTL']}" if os.environ.get("AGTERMCTL")
+             else "no agtermctl with pick support found (the one on PATH is too old)")
     if not items:
         fail(f"no backlog items in {root / BACKLOG_DIR}", agt)
 
@@ -307,7 +337,9 @@ def main(argv: list[str]) -> int:
         fail(f"picker returned an unknown item: {chosen}", agt)
 
     running = any(FG_MATCH.search(part) for part in agt.foreground(pane))
-    agt.type_line(command_for(chosen, running), pane)
+    res = agt.type_line(command_for(chosen, running), pane)
+    if res.returncode != 0:
+        fail(f"could not type into the {pane} pane: {res.stderr.strip() or f'exit {res.returncode}'}", agt)
     return 0
 
 
@@ -340,6 +372,14 @@ class Tests(unittest.TestCase):
                 item = parse_item(Path("/x/slug.md"), text, 1.0)
                 self.assertEqual((item.title, item.worth, item.where), (title, worth, where))
 
+    def test_parse_item_drops_an_unusable_added(self) -> None:
+        for added in ["2026-8-5", "nonsense", "", "2026-13-01"]:
+            with self.subTest(added):
+                item = parse_item(Path("/x/slug.md"), f"---\nadded: {added}\n---\n# t\n", 1.0)
+                self.assertEqual(item.added, "")
+        item = parse_item(Path("/x/slug.md"), "---\nadded: 2026-08-05\n---\n# t\n", 1.0)
+        self.assertEqual(item.added, "2026-08-05")
+
     def test_age_label(self) -> None:
         today = date(2026, 8, 5)
         for added, want in [("2026-08-05", "today"), ("2026-08-04", "1d"), ("2026-07-06", "30d"),
@@ -349,7 +389,14 @@ class Tests(unittest.TestCase):
 
     def test_command_for(self) -> None:
         self.assertEqual(command_for("some-slug", running=True), "/backlog some-slug")
-        self.assertEqual(command_for("some-slug", running=False), 'claude "/backlog some-slug"')
+        self.assertEqual(command_for("some-slug", running=False), "claude '/backlog some-slug'")
+
+    def test_command_for_quotes_a_hostile_slug(self) -> None:
+        # a file name is attacker-authored in a cloned repo; the shell must see one argument
+        for slug in ['a"; id; :"b', "x$(id)", "y`id`", "z'q"]:
+            with self.subTest(slug):
+                line = command_for(slug, running=False)
+                self.assertEqual(shlex.split(line), ["claude", f"/backlog {slug}"])
 
     def test_items_of(self) -> None:
         today = date(2026, 8, 5)
@@ -378,10 +425,31 @@ class Tests(unittest.TestCase):
             os.utime(directory / "same-day.md", (0, 0))
             self.assertEqual([i.slug for i in load_items(Path(tmp))], ["new", "same-day", "mid", "old"])
 
+    def test_resolve_bin_takes_the_override_as_given(self) -> None:
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            wrapper = Path(tmp) / "agtermctl-wrapper"
+            wrapper.write_text("#!/bin/sh\nexec true\n")   # no `pick` in its --help, so the probe would drop it
+            wrapper.chmod(0o755)
+            with mock.patch.dict(os.environ, {"AGTERMCTL": str(wrapper)}):
+                self.assertEqual(Agt.resolve_bin(), str(wrapper))
+            with mock.patch.dict(os.environ, {"AGTERMCTL": str(Path(tmp) / "not-there")}):
+                self.assertEqual(Agt.resolve_bin(), "")
+
     def test_load_items_missing_dir(self) -> None:
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(load_items(Path(tmp)), [])
+
+    def test_load_items_refuses_a_control_character_in_the_name(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / BACKLOG_DIR
+            directory.mkdir(parents=True)
+            (directory / "ok.md").write_text("# ok\n")
+            (directory / "bad\nrm -rf x.md").write_text("# bad\n")
+            self.assertEqual([i.slug for i in load_items(Path(tmp))], ["ok"])
 
 
 if __name__ == "__main__":
