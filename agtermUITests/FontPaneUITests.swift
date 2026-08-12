@@ -77,9 +77,9 @@ final class FontPaneUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "invalid pane: middle", "should report the invalid pane: \(response)")
     }
 
-    // when the primary pane's shell exits, closePrimaryPane tears the primary surface down (surface == nil)
-    // and promotes the split shell. Both the default WRITE and the tree's fontSize read-back must resolve
-    // addressableSurface (= surface ?? splitSurface): a read off bare `surface` would OMIT fontSize here.
+    // when the primary pane's shell exits, closePrimaryPane moves the split survivor into `surface` and nils
+    // `splitSurface`, so the default WRITE and the tree's fontSize read-back must both land on the survivor
+    // as the MAIN pane rather than following the split fields it no longer occupies.
     func testFontDefaultTargetsPromotedSplitSurvivor() throws {
         let id = try activeSessionID()
 
@@ -94,7 +94,7 @@ final class FontPaneUITests: ControlAPITestCase {
                       "exiting the primary should promote the split survivor (session survives, split -> false)")
 
         let baseline = try XCTUnwrap(pollMainFontSize(target: id, timeout: 8),
-                                     "fontSize must read the promoted survivor via addressableSurface (surface is nil)")
+                                     "fontSize must read the promoted survivor, which is now the main pane")
 
         for _ in 0..<4 {
             let response = try sendCommand(fontRequest(cmd: "font.dec", target: id, pane: nil))
