@@ -524,6 +524,29 @@
                 ># host-free unit tests, no Xcode needed</span
               ><br /><span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift test
             </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0">
+              The app bundles the CLI, but it also lives in the
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermCore</span> Swift package and
+              builds standalone, without Xcode or libghostty:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                line-height: 1.9;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift build -c release<br /><span
+                style="color: #6b727a"
+                ># binary at agtermCore/.build/release/agtermctl</span
+              >
+            </div>
           </section>
 
           <!-- WORKSPACES -->
@@ -618,7 +641,9 @@
                 flat working-set view (a flag is durable and survives a move), or <strong style="color: #e6e1d7">focus</strong> a
                 set of workspaces to collapse the tree to just their sessions. Focus one workspace to zoom to it, or mark
                 several from their row menus and apply the filter once with the sidebar's grid button — marking never
-                narrows the tree on its own, and suspending the filter keeps the set for one click back. If narrowing
+                narrows the tree on its own, and suspending the filter keeps the set for one click back. Creating a workspace
+                while the filter is on adds it to the set, and selecting a session outside the set suspends the filter rather
+                than discarding it. The set is per-window and remembered across restarts. If narrowing
                 the sidebar would hide the session you are working in, agterm moves you to the most recent session still
                 on screen, unless the narrowing leaves nothing visible at all. The two are independent.
               </li>
@@ -1111,6 +1136,11 @@
                 background opacity and blur, the sidebar tint, the sidebar font size, the palette and switcher font size, and how much the terminal behind a floating
                 panel dims — the inactive half of a split, and the session left visible around a floating overlay or the
                 quick terminal.
+                A <strong style="color: #e6e1d7">Follow system appearance</strong> toggle (off by default) reveals a second
+                picker for the other appearance, so the theme tracks the macOS light/dark switch live; while following, the
+                Theme picker edits the appearance you are currently in.
+                In Hidden toolbar mode an invisible strip along the window's top edge still drags the window and zooms it on a
+                double-click, and you close, minimize, or zoom the window from the keyboard or the Window menu.
                 With macOS Reduce Transparency enabled, agterm temporarily presents translucent windows, command palettes, and
                 session switchers as opaque and unblurred without changing the saved opacity or blur; disabling it restores those
                 settings. Reduce Motion keeps status colors and glyphs visible but suppresses their repeating sidebar and dashboard
@@ -1216,30 +1246,6 @@
               isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session new --cwd &lt;path&gt;</span>.
             </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              The app bundles the CLI, but it also lives in the
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermCore</span> Swift package and
-              builds standalone, without Xcode or libghostty:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 0 0 16px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 14px;
-                color: #e6e1d7;
-                line-height: 1.9;
-                overflow-x: auto;
-              "
-            >
-              <span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift build -c release<br /><span
-                style="color: #6b727a"
-                ># binary at agtermCore/.build/release/agtermctl</span
-              >
-            </div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> (the selected session /
@@ -2455,6 +2461,12 @@
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
               the default set is gemini, cursor-agent, aider, crush, goose), four Claude Code hooks (prompt → active,
               tool run → active, Stop → completed, permission prompt → blocked), and an OpenCode lifecycle plugin.
+              Before it changes an existing
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.claude/settings.json</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>, the
+              installer copies it beside the original with a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.bak</span> suffix, so the previous
+              config is recoverable.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Six Codex lifecycle events run a dedicated adapter.
@@ -2532,7 +2544,13 @@
                 Only a single-process command restores faithfully; a force-quit or crash captures nothing, and a capture replays
                 exactly once, since the launch that arms it clears it from the state file; and the multiplexers in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
-                (seeded with tmux/screen/zellij) start fresh. A per-session override,
+                (seeded with tmux/screen/zellij) start fresh. That file is yours to edit: agterm writes a commented starter at
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >~/.config/agterm/restore-denylist.conf</span
+                >
+                when none exists, one command name per line, matched on the command's basename. Delete a line to let that
+                program restore, or add one to keep another from re-running; the file is read at launch, so an edit takes
+                effect on the next one. A per-session override,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session restore</span>, pins what a
                 pane restores (or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--none</span> for a plain
                 shell, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--clear</span> to drop it) —

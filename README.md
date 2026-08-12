@@ -81,23 +81,23 @@ codex plugin marketplace add umputun/agterm
 codex plugin add agterm@agterm
 ```
 
-Install the skill by one route or the other, never both.
+Install the skill by one route or the other, never both: two copies leave it undefined which one the agent picks.
 
 ## Scripting agterm
 
 `agtermctl` drives a running agterm over a local unix socket, one command per invocation. Terminal output is not streamed; `session text` reads a session's buffer when a script needs to see it.
 
 ```sh
-ws=$(agtermctl workspace new demo)                        # objects have stable ids
+ws=$(agtermctl workspace new demo)                        # capture the new workspace's id
 sid=$(agtermctl session new --workspace "$ws" --cwd "$PWD" --no-select)
 agtermctl session type $'pwd\n' --target "$sid"           # drive a session you are not looking at
 agtermctl session text --target "$sid" --lines 10         # read its terminal back
 agtermctl session status blocked --target "$sid"          # set the sidebar status glyph
-printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"   # borrow the native picker
-agtermctl tree --json                                     # the whole model, inspectable
+printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"   # open the native picker
+agtermctl tree --json                                     # dump the whole model as JSON
 ```
 
-These are representative commands rather than a script to paste. `session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
+`session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
 
 The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. All 75 commands are at [agterm.com/commands](https://agterm.com/commands).
 
@@ -107,7 +107,7 @@ The same interface covers windows, splits, overlays, dashboards, HUDs, notificat
 - [Command reference](https://agterm.com/commands) documents every `agtermctl` command with its arguments and return values.
 - [cookbook/](cookbook/) collects recipes built on the control API.
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers building from source.
-- [ARCHITECTURE.md](ARCHITECTURE.md) describes the internals.
+- [ARCHITECTURE.md](ARCHITECTURE.md) describes the internals: the module split, surface ownership, and the libghostty C boundary.
 
 Sessions come back on the next launch with their directory, font size, and split state. Restore reconstructs that structure, not the running processes.
 
@@ -116,7 +116,7 @@ Log locations and the common problems are in [docs/troubleshooting.md](docs/trou
 ## Related projects
 
 <details>
-<summary>Ports, forks, and companion tools maintained by others</summary>
+<summary>Ports, forks, reimplementations, and companion tools</summary>
 
 A small ecosystem has grown around agterm. These are independent projects, not maintained here.
 

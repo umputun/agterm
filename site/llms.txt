@@ -19,7 +19,7 @@ agterm is a native macOS terminal, built on libghostty (Ghostty's engine), with 
 
 - [Documentation](https://agterm.com/docs): full reference — install, keybindings, keymap.conf, ghostty config, themes, control API
 - [Control API commands](https://agterm.com/commands): the complete agtermctl command catalog
-- [README](https://github.com/umputun/agterm/blob/master/README.md): the project synopsis in the source repository, covering what agterm is, install, the model, and a control API demonstration
+- [README](https://github.com/umputun/agterm/blob/master/README.md): the project synopsis, with install, the model, and the control-API demo
 - [Architecture](https://github.com/umputun/agterm/blob/master/ARCHITECTURE.md): module split, surface ownership, and the libghostty C boundary
 
 ## Install
