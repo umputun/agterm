@@ -1,0 +1,6 @@
+# Proper names that are correctly lowercase at the start of a sentence.
+# Read by ~/.claude/skills/writing-style/scripts/lint.sh, one name per line.
+agterm
+agtermctl
+libghostty
+ghostty
