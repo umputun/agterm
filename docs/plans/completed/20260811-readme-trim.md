@@ -382,7 +382,7 @@ Other checks:
 **Files:**
 - Modify: `docs/plans/20260811-readme-trim.md`
 
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
