@@ -613,7 +613,10 @@
                 <strong style="color: #e6e1d7">Copy Name</strong> on a session or workspace row copies its name to the clipboard.
                 <strong style="color: #e6e1d7">Duplicate Session</strong> from a single session's context menu for a fresh shell in the
                 same workspace, right after it, in its current directory — only the directory carries over. Shift-click and ⌘-click
-                select multiple sessions for batch flag, close, move, and drag. Dragged sessions keep running, shell and scrollback
+                select multiple sessions for batch flag, close, move, and drag. Right-clicking inside the selection keeps the whole
+                batch, so <strong style="color: #e6e1d7">Flag</strong>, <strong style="color: #e6e1d7">Close</strong>, and
+                <strong style="color: #e6e1d7">Move to</strong> act on all of it; right-clicking a row outside narrows the menu to
+                that row. Dragged sessions keep running, shell and scrollback
                 intact.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
@@ -626,8 +629,13 @@
                     font-family: &quot;JetBrains Mono&quot;, monospace;
                   "
                   >›</span
-                >Drag up to 20 folders from Finder onto the tree to open sessions there. Collapsed workspaces spring open while
-                hovering and close again on cancel. Reveal a session's focused-pane directory in Finder from its context menu.
+                >Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's
+                workspace; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter
+                narrows the tree to exactly one. Collapsed workspaces spring open while
+                hovering and close again on cancel. Reveal a session's focused-pane directory in Finder from its context menu;
+                the item is greyed out when that directory no longer exists. Folder-picking panels (<strong style="color: #e6e1d7">Open
+                Directory…</strong> and the Settings directory choosers) open in the focused pane's directory, or in the directory
+                already configured where there is one, falling back to your home directory.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -715,7 +723,8 @@
                 </div>
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
                   A single throwaway shell per window, not tied to any session, overlaid at 90% of the window and opening in the
-                  active session's directory. Click again or the surrounding margin to dismiss; hiding keeps its shell alive.
+                  active session's directory. Click again or the surrounding margin to dismiss; hiding keeps its shell alive. Not
+                  restored across launches.
                 </p>
               </div>
               <div
@@ -982,7 +991,9 @@
                 </div>
                 <div style="padding: 12px 16px; background: #15191c; color: #6d82f3">Ctrl-Tab</div>
                 <div style="padding: 12px 16px; background: #22272b; color: #cbc6bc">
-                  MRU session switcher (app-switcher style; survives a relaunch)
+                  MRU session switcher: hold Ctrl and tap Tab to walk the most-recently-used list (Shift-Tab reverses, Esc
+                  cancels), release Ctrl to switch; a single tap flips straight back to the session you came from. The order
+                  survives a relaunch.
                 </div>
               </div>
             </div>
@@ -1125,7 +1136,8 @@
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste, whether clicking a workspace
-                row expands or collapses it (on by default; the disclosure triangle always does), where a new session opens, an
+                row expands or collapses it (on by default; the disclosure triangle always does), where a new session opens (your home
+                directory by default, the current session's directory, or a fixed folder you pick), an
                 opt-in re-run of each pane's foreground command on restart, an opt-in confirm before closing a session, and
                 whether to load your global Ghostty config.
               </div>
@@ -1175,7 +1187,9 @@
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and shapes, the blocked-session
-                sound, and an idle timeout to auto-follow blocked sessions.
+                sound, and an idle timeout to auto-follow blocked sessions. A
+                <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, and sound back to the
+                shipped values.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -2102,6 +2116,21 @@
                   >›</span
                 >The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet.
               </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >Shortcut hints are not written the same way for both verbs. A built-in shows macOS glyphs (⌘⇧E), with every
+                alternative listed space-separated and a sequence's chords joined by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> as in the file
+                (⌘T ⌃A&gt;T), in the palette and in the toolbar and sidebar tooltips alike. A
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> shows the raw kitty
+                spelling you typed instead (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >cmd+shift+e</span
+                >), alternatives still joined by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >|</span
+                >.
+              </li>
             </ul>
           </section>
 
@@ -2155,7 +2184,8 @@
               (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >~/.config/agterm/ghostty.conf</span
               >) is the place to customize agterm. It sits next to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>, is always loaded,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span> and gets the same
+              treatment: a fully commented starter file is written on first launch, so a fresh one changes nothing. It is always loaded,
               and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty config key there — the keys
               agterm manages from Settings (font, theme, opacity, blur, scroll speed) still win. A common use:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">macos-option-as-alt = true</span>. The
