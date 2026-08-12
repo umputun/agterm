@@ -207,13 +207,25 @@ the minimum macOS version, and the positioning line.
 **Files:**
 - Modify: `README.md`
 
-- [ ] keep brew and DMG; fold `### Optional Help-menu installers` down to the CLI-install note (brew includes `agtermctl`, DMG users install it from Help) plus one line for the status hooks and agent skill
-- [ ] keep the plugin/skill marketplace one-liners for Claude Code and Codex
-- [ ] add a `## Documentation` section routing to `agterm.com/docs`, `agterm.com/commands`, `cookbook/`, `CONTRIBUTING.md` for building, `ARCHITECTURE.md` for internals
-- [ ] name the model explicitly in the docs link text so the dropped vocabulary has a one-click definition
-- [ ] add the restore boundary in one sentence: restoration reconstructs structure, not running processes
-- [ ] add the troubleshooting pointer in one line, to the docs section plus Issues and Discussions
-- [ ] verify every link added in this task resolves
+- [x] keep brew and DMG; fold `### Optional Help-menu installers` down to the CLI-install note (brew includes `agtermctl`, DMG users install it from Help) plus one line for the status hooks and agent skill
+- [x] keep the plugin/skill marketplace one-liners for Claude Code and Codex
+- [x] add a `## Documentation` section routing to `agterm.com/docs`, `agterm.com/commands`, `cookbook/`, `CONTRIBUTING.md` for building, `ARCHITECTURE.md` for internals
+- [x] name the model explicitly in the docs link text so the dropped vocabulary has a one-click definition
+- [x] add the restore boundary in one sentence: restoration reconstructs structure, not running processes
+- [x] add the troubleshooting pointer in one line, to the docs section plus Issues and Discussions
+- [x] verify every link added in this task resolves
+
+Decisions taken in this task:
+
++ [decision] the marketplace one-liners were removed with `## Scripting agterm`'s reference prose in Task 2; restored
+  from `c08ce8dc^:README.md` into `## Install`, where the rest of the skill installation now lives.
++ [decision] dropped the old "the cask also installs `agtermctl`" sentence that followed the brew fence, since the
+  folded install line carries the same fact once.
++ [deviation] the troubleshooting pointer links `docs/troubleshooting.md` directly instead of the docs-site section,
+  because `site/docs.html`'s `troubleshooting` section is itself only a forward to that file. Issues and Discussions
+  are linked alongside it as planned.
++ `~/.claude/skills/writing-style/scripts/lint.sh README.md` reports one violation at `README.md:165`, in the
+  untouched Attribution paragraph: `agterm` opening a sentence as a code identifier, a false positive.
 
 ### Task 6: Fix anchors and the screenshot gallery
 

@@ -91,19 +91,25 @@ Homebrew:
 brew install --cask umputun/apps/agterm
 ```
 
-The cask also installs the `agtermctl` command-line tool, so cask users should not run the in-app installer as well.
-
 Direct download:
 
 Download the latest `.dmg` from the [releases page](https://github.com/umputun/agterm/releases), open it, and drag `agterm.app` into `/Applications`.
 
-### Optional Help-menu installers
+The Homebrew cask already installs the `agtermctl` command-line tool; from the DMG, put it on your `PATH` with **Help ▸ Install Command Line Tool…**. The same **Help** menu also installs the agent status hooks and the agent skill, both optional and one-time.
 
-The app's **Help** menu has three one-time installers. None are needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later. The first launch on a machine points them out in a welcome dialog, which offers the skill and the status hooks and never appears again.
+The skill is also published as a plugin from this repository, which puts it wherever your agent looks for one:
 
-- **Install Command Line Tool…** puts the bundled `agtermctl` on your `PATH` (a symlink in `/usr/local/bin`) so you can script the app from a shell. The Homebrew cask already installs it, so cask users can skip this one. See [Scripting agterm](#scripting-agterm).
-- **Install Agent Status Hooks…** lets a coding agent (Claude Code, Codex, Pi, OpenCode, or others) report its state onto its session's sidebar row, so you can tell at a glance which of several running agents is active, blocked, or finished. See [Agent status](#agent-status).
-- **Install Agent Skill…** teaches Claude Code or Codex how to drive agterm through `agtermctl`, so an agent running inside a session can build its own layout, run overlays, and manage windows without you explaining the API. It drives the app through the command-line tool, so install that one too.
+```sh
+# Claude Code
+claude plugin marketplace add umputun/agterm
+claude plugin install agterm@agterm
+
+# Codex
+codex plugin marketplace add umputun/agterm
+codex plugin add agterm@agterm
+```
+
+Install the skill by one route or the other, never both.
 
 ## Scripting agterm
 
@@ -122,6 +128,18 @@ agtermctl tree --json                                     # the whole model, ins
 These are representative commands rather than a script to paste. `session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
 
 The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. All 75 commands are at [agterm.com/commands](https://agterm.com/commands).
+
+## Documentation
+
+- [Documentation](https://agterm.com/docs) is the user guide: the workspace and session model, windows, splits and overlays, keymap, and settings.
+- [Command reference](https://agterm.com/commands) documents every `agtermctl` command with its arguments and return values.
+- [cookbook/](cookbook/) collects recipes built on the control API.
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers building from source.
+- [ARCHITECTURE.md](ARCHITECTURE.md) describes the internals.
+
+Sessions come back on the next launch with their directory, font size, and split state. Restore reconstructs that structure, not the running processes.
+
+Log locations and the common problems are in [docs/troubleshooting.md](docs/troubleshooting.md). Report bugs in [Issues](https://github.com/umputun/agterm/issues), ask questions in [Discussions](https://github.com/umputun/agterm/discussions).
 
 ## Related projects
 
