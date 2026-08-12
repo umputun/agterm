@@ -26,7 +26,7 @@ The repo is whichever one the session sits in, so the same chord in another tab 
 - Python 3.9 or later, which macOS ships as `/usr/bin/python3`
 - [tabiew](https://github.com/shshemi/tabiew) (`brew install tabiew`), or another viewer you point `SQLITE_VIEWER` at.
 
-Set `AGTERMCTL` if your binary is somewhere unusual; the script otherwise tries the usual install directories and then `PATH`.
+Set `AGTERMCTL` if your binary is somewhere unusual; the script otherwise takes the `agtermctl` on `PATH`, which the chord's own widened `PATH` provides. The viewer is looked up differently, in the usual install directories before `PATH`, because it has to reach the overlay as an absolute path.
 
 ## Setup
 

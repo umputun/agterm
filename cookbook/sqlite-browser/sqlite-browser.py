@@ -99,7 +99,9 @@ def find_dbs(root: Path) -> list[Db]:
         dirnames[:] = [d for d in dirnames if d not in PRUNE and not d.startswith(".")]
         for name in filenames:
             path = Path(dirpath) / name
-            if path.suffix.lower() not in EXTS or not is_sqlite(path):
+            # is_file before is_sqlite, and both follow the link: opening a FIFO read-only blocks until
+            # something writes to it, and a chord whose stdout is /dev/null would hang with no sign of it.
+            if path.suffix.lower() not in EXTS or not path.is_file() or not is_sqlite(path):
                 continue
             rel = str(path.relative_to(root))
             if any(ch < " " or ch == "\x7f" for ch in rel):
@@ -189,10 +191,12 @@ class Agt:
             return ""
         if res.returncode != 0:
             fail(f"picker failed: {res.stderr.strip() or f'exit {res.returncode}'}", self)
+        # not a quiet "" here: a cancel is exit 2 and was handled above, so exit 0 owes us the result
+        # JSON, and treating a body we cannot read as a cancel would turn the failure into a dead key.
         try:
             choice = json.loads(res.stdout)
         except ValueError:
-            return ""
+            fail(f"picker returned no readable result: {res.stdout.strip()[:120]!r}", self)
         return str(choice.get("id", "")) if choice.get("result") == "picked" else ""
 
     def overlay(self, command: str) -> subprocess.CompletedProcess[str]:
@@ -386,6 +390,14 @@ class Tests(unittest.TestCase):
             (root / "inner" / "real.db").write_bytes(MAGIC)
             (root / "loop").symlink_to(root)   # a walk that followed this would never finish
             self.assertEqual([db.rel for db in find_dbs(root)], ["inner/real.db"])
+
+    def test_find_dbs_skips_a_fifo(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "real.db").write_bytes(MAGIC)
+            os.mkfifo(root / "pipe.db")   # reading this one would block until something writes to it
+            self.assertEqual([db.rel for db in find_dbs(root)], ["real.db"])
 
     def test_find_dbs_refuses_a_control_character(self) -> None:
         import tempfile
