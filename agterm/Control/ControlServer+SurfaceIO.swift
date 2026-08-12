@@ -85,6 +85,11 @@ extension ControlServer {
             guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            // an unrealized pane has no selection to report EITHER way, and `readSelection` cannot tell the
+            // two apart — so answer it as `session.selectall` does rather than blaming an empty selection.
+            guard surface.isRealized else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
             guard let text = surface.readSelection() else {
                 return ControlResponse(ok: false, error: "no selection")
             }

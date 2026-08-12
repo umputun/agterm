@@ -150,6 +150,24 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(selectAll.error, "session not realized")
     }
 
+    // `session.copy` is `session.selectall`'s documented read-back, so the pair has to name this state the
+    // same way. `readSelection` returns nil for an unrealized pane exactly as it does for an empty buffer,
+    // which the arm used to report as `no selection`.
+    func testCopyOnAnUnrealizedPaneReportsNotRealizedRatherThanNoSelection() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let parked = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        target.surface = parked
+        XCTAssertFalse(parked.isRealized, "a detached view never runs createSurface, which is the point here")
+
+        let response = server.copySelection(target.id.uuidString, window: nil)
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "session not realized",
+                       "`no selection` blames an empty buffer for a pane that has no terminal")
+    }
+
     // the true side of that branch: deleting the body of `if select` leaves every other test green while
     // `--select` silently stops selecting, so this asserts the move itself rather than the typed text.
     func testTypeWithSelectStillSelectsWhenTheSurfaceIsNotReady() async throws {

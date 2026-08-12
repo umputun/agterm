@@ -210,7 +210,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `inject` emits Ghostty key events and Return keycode 36 for newline/CR/CRLF. Never replace it with
   `ghostty_surface_text`, whose bracketed paste suppresses Return and can expose `\e[200~`/`\e[201~`
   markers under rapid use.
-- `session.copy` returns the addressed main selection without touching clipboard; empty is `no selection`.
+- `session.copy` returns the addressed main selection without touching clipboard; empty is `no selection`,
+  and an unrealized pane is `session not realized` — `readSelection` cannot tell the two apart, and copy is
+  select-all's read-back, so both name that state the same way.
   `session.paste` and `.selectall` run Ghostty bindings on main. They use
   `Session.addressableSurface = surface ?? splitSurface`, never focus-aware `activeSurface`, so select-all
   and copy share one pane. Read paste through text and select-all through copy.
