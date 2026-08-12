@@ -6,14 +6,17 @@ import agtermCore
 extension ControlServer {
     /// Runs a libghostty binding action on the target's addressable surface — a SPECIFIC one, unlike the menu
     /// path's focused pane. Shared by `session.paste`/`session.selectall`. `addressableSurface` falls back to
-    /// a promoted split survivor whose primary shell exited (which nils `surface`), else a session the user
-    /// is typing in reports "session not realized"; a never-shown session has no surface at all → error.
+    /// a promoted split survivor whose primary shell exited (which nils `surface`). An empty slot and a
+    /// parked view whose surface never came up are one state to a caller: "session not realized".
     private func surfaceBindingAction(_ target: String?, window: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
-            surface.performBindingAction(action)
+            // the cast alone only proves the SLOT is filled; a false return is the view without a surface.
+            guard surface.performBindingAction(action) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

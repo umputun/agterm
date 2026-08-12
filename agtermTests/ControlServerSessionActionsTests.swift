@@ -130,6 +130,26 @@ final class ControlServerSessionActionsTests: XCTestCase {
                        "an empty slot and a parked-but-unrealized view are one state to a caller")
     }
 
+    // the same parked pane, one command over: `surfaceBindingAction`'s cast proves only that the SLOT is
+    // filled, so both used to discard `performBindingAction`'s false and answer ok with nothing pasted or
+    // selected, while their neighbours called that state `session not realized`.
+    func testPasteAndSelectAllOnAnUnrealizedPaneReportNotRealized() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let parked = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        target.surface = parked
+        XCTAssertFalse(parked.isRealized, "a detached view never runs createSurface, which is the point here")
+
+        let paste = server.pasteSession(target.id.uuidString, window: nil)
+        XCTAssertFalse(paste.ok, "session.paste pasted nothing and must not report a false ok")
+        XCTAssertEqual(paste.error, "session not realized")
+
+        let selectAll = server.selectAllSession(target.id.uuidString, window: nil)
+        XCTAssertFalse(selectAll.ok, "session.selectall selected nothing and must not report a false ok")
+        XCTAssertEqual(selectAll.error, "session not realized")
+    }
+
     // the true side of that branch: deleting the body of `if select` leaves every other test green while
     // `--select` silently stops selecting, so this asserts the move itself rather than the typed text.
     func testTypeWithSelectStillSelectsWhenTheSurfaceIsNotReady() async throws {
