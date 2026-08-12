@@ -177,8 +177,10 @@ C-boundary concurrency before changing the bridge.
   `README.md` is the product synopsis: pitch, install, the model, and the control-API demo.
   `site/llms.txt` is the crawler-oriented summary and discovery index.
   These four facts stay synchronized across every surface that states them: the command count, the install
-  commands, the minimum macOS version, and the positioning line
+  commands, the minimum macOS version, and the positioning claim
   (`a simply good terminal with a full control API`).
+  The positioning claim must stay consistent in substance, not byte-identical: `site/index.html`'s title and
+  social tags insert `macOS` for search intent, and `site/llms.txt` carries a libghostty-based variant.
 - `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
   every command, arguments, and read-back field.
 - `cookbook/` is not a synchronized surface. Recipes pin a minimum version and are fixed reactively;

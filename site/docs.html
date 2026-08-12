@@ -453,7 +453,9 @@
                 ><strong style="color: #e6e1d7">Install Command Line Tool…</strong> puts the bundled
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> on your PATH (a
                 symlink in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/usr/local/bin</span>)
-                so you can script the app. The Homebrew cask already installs it.
+                so you can script the app. When that directory is writable by you it links with no prompt; when it is root-owned,
+                which is the case on a clean Apple Silicon Mac, macOS asks once for an administrator password. The Homebrew cask
+                already installs it.
               </li>
               <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1139,8 +1141,11 @@
                 A <strong style="color: #e6e1d7">Follow system appearance</strong> toggle (off by default) reveals a second
                 picker for the other appearance, so the theme tracks the macOS light/dark switch live; while following, the
                 Theme picker edits the appearance you are currently in.
-                In Hidden toolbar mode an invisible strip along the window's top edge still drags the window and zooms it on a
-                double-click, and you close, minimize, or zoom the window from the keyboard or the Window menu.
+                In Hidden toolbar mode an invisible strip along the window's top edge still drags the window, and a double-click
+                there runs whatever macOS is configured to do on a title-bar double-click, from
+                <strong style="color: #e6e1d7">Desktop &amp; Dock ▸ Double-click a window's title bar to</strong>: Zoom or Fill
+                zooms, Minimize minimizes, Do Nothing does nothing, and the macOS default is Zoom.
+                You can also close, minimize, or zoom the window from the keyboard or the Window menu.
                 With macOS Reduce Transparency enabled, agterm temporarily presents translucent windows, command palettes, and
                 session switchers as opaque and unblurred without changing the saved opacity or blur; disabling it restores those
                 settings. Reduce Motion keeps status colors and glyphs visible but suppresses their repeating sidebar and dashboard
@@ -2461,10 +2466,23 @@
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
               the default set is gemini, cursor-agent, aider, crush, goose), four Claude Code hooks (prompt → active,
               tool run → active, Stop → completed, permission prompt → blocked), and an OpenCode lifecycle plugin.
-              Before it changes an existing
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.claude/settings.json</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>, the
-              installer copies it beside the original with a
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              The scripts go to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/agterm/agent-status/</span>,
+              with the bundled <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>'s
+              absolute path baked in so they work even without the CLI on your PATH. A marker-guarded
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">source</span> line for the generic
+              shell integration is added to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.zshrc</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.bashrc</span>, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/fish/config.fish</span>
+              (fish only when that directory already exists); open a new terminal for it to take effect. The per-agent hooks are
+              merged into each agent's own config: four Claude Code hooks into
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.claude/settings.json</span> and
+              six Codex lifecycle hooks into
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>. Before it
+              changes either of those, the installer copies it beside the original with a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.bak</span> suffix, so the previous
               config is recoverable.
             </p>
@@ -2475,6 +2493,15 @@
               On Stop, a final assistant message containing
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span> reports blocked;
               every other final message reports completed and auto-resets.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <strong style="color: #e6e1d7"
+                >Codex only: run <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/hooks</span> in Codex after
+                installing or upgrading.</strong
+              >
+              Codex requires changed command hooks to be reviewed and approved before they run, so the merged lifecycle hooks stay
+              inert until you open Codex, run
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/hooks</span> once, and approve them.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               When Pi
@@ -2546,9 +2573,18 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
                 (seeded with tmux/screen/zellij) start fresh. That file is yours to edit: agterm writes a commented starter at
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >~/.config/agterm/restore-denylist.conf</span
+                  >&lt;config dir&gt;/restore-denylist.conf</span
                 >
-                when none exists, one command name per line, matched on the command's basename. Delete a line to let that
+                (default
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >~/.config/agterm/restore-denylist.conf</span
+                >) when none exists, one command name per line, matched on the command's basename. It sits next to
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty.conf</span>, so changing the
+                directory in <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong> moves all three; with no such setting,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_STATE_DIR</span> puts them in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&lt;state dir&gt;/config</span>
+                instead. Delete a line to let that
                 program restore, or add one to keep another from re-running; the file is read at launch, so an edit takes
                 effect on the next one. A per-session override,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session restore</span>, pins what a

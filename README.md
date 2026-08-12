@@ -67,7 +67,7 @@ Direct download:
 
 Download the latest `.dmg` from the [releases page](https://github.com/umputun/agterm/releases), open it, and drag `agterm.app` into `/Applications`.
 
-The Homebrew cask already installs the `agtermctl` command-line tool; from the DMG, put it on your `PATH` with **Help ▸ Install Command Line Tool…**. The same **Help** menu also installs the agent status hooks and the agent skill, both optional and one-time.
+The Homebrew cask already installs the `agtermctl` command-line tool; from the DMG, put it on your `PATH` with **Help ▸ Install Command Line Tool…**. The same **Help** menu also installs the agent status hooks and the agent skill, both optional and safe to rerun.
 
 The skill is also published as a plugin from this repository, which puts it wherever your agent looks for one:
 
