@@ -164,10 +164,10 @@ the minimum macOS version, and the positioning line.
 - Modify: `CONTRIBUTING.md`
 - Modify: `site/docs.html`
 
-- [ ] add the Node.js 22.7+ / 20.19+ prereq for `OpenCodeStatusHookTests` to CONTRIBUTING's development setup
-- [ ] add `cd agtermCore && swift build -c release` to `site/docs.html`'s agtermctl section as the way to build the CLI without Xcode
-- [ ] add the marketplace caveat (one route not both, full-repo clone, `--sparse` must cover the manifest) beside the one-liners at `site/docs.html:475`
-- [ ] verify each of the three now appears in its new home with `grep`
+- [x] add the Node.js 22.7+ / 20.19+ prereq for `OpenCodeStatusHookTests` to CONTRIBUTING's development setup
+- [x] add `cd agtermCore && swift build -c release` to `site/docs.html`'s agtermctl section as the way to build the CLI without Xcode
+- [x] add the marketplace caveat (one route not both, full-repo clone, `--sparse` must cover the manifest) beside the one-liners at `site/docs.html:475`
+- [x] verify each of the three now appears in its new home with `grep`
 
 ### Task 2: Cut the reference sections from README
 

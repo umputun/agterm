@@ -479,7 +479,12 @@
                   >claude plugin install agterm@agterm</span
                 >, or the matching
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">codex plugin</span> commands. Use
-                one route or the other, not both.
+                one route or the other, not both: a machine with two copies of the skill leaves it undefined which one the agent
+                picks. Adding the marketplace clones this whole repository, which is an app rather than a skill library; both CLIs
+                take <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sparse</span> on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">marketplace add</span> to limit the
+                checkout, and it has to cover the marketplace manifest as well as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">plugins/agterm</span>.
               </li>
             </ul>
             <h3
@@ -1211,6 +1216,30 @@
               isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session new --cwd &lt;path&gt;</span>.
             </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              The app bundles the CLI, but it also lives in the
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermCore</span> Swift package and
+              builds standalone, without Xcode or libghostty:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 0 0 16px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                line-height: 1.9;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift build -c release<br /><span
+                style="color: #6b727a"
+                ># binary at agtermCore/.build/release/agtermctl</span
+              >
+            </div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> (the selected session /

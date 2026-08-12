@@ -38,6 +38,8 @@ After that:
 
 All four must be green before you send a PR. `make lint` runs with `--strict`, so a warning fails it and the tree is kept at zero findings.
 
+The OpenCode status-plugin tests inside `make test` spawn Node.js, so they need 22.7+ (or 20.19+ on the 20.x line) on `PATH`; those versions unflag module-syntax detection for the plugin's bare `.js`. Without a qualifying Node they skip, and the app itself never needs Node at runtime.
+
 None of those four runs the XCUITests in `agtermUITests/`. Those need the `agterm` scheme, which drives the running app through the accessibility API:
 
 ```
