@@ -174,12 +174,12 @@ the minimum macOS version, and the positioning line.
 **Files:**
 - Modify: `README.md`
 
-- [ ] delete `## Concepts`, `## Keyboard and navigation`, `## Accessibility`, `## Settings`
-- [ ] delete `## Customizing keys`, `## Ghostty config`, `## Agent status`
-- [ ] delete `## Troubleshooting`, `## Restore limitations`, `## Build from source`, `## Cookbook`
-- [ ] delete the `### Native picker` and `### Control events` subsections and the reference prose in `## Scripting agterm`, leaving the heading itself in place
-- [ ] record every internal anchor these deletions orphan, for Task 6
-- [ ] confirm the three Task 1 items are gone from README and present in their new homes
+- [x] delete `## Concepts`, `## Keyboard and navigation`, `## Accessibility`, `## Settings`
+- [x] delete `## Customizing keys`, `## Ghostty config`, `## Agent status`
+- [x] delete `## Troubleshooting`, `## Restore limitations`, `## Build from source`, `## Cookbook`
+- [x] delete the `### Native picker` and `### Control events` subsections and the reference prose in `## Scripting agterm`, leaving the heading itself in place
+- [x] record every internal anchor these deletions orphan, for Task 6
+- [x] confirm the three Task 1 items are gone from README and present in their new homes
 
 ### Task 3: Add the model section
 
@@ -225,6 +225,13 @@ the minimum macOS version, and the positioning line.
 - [ ] leave the now-unreferenced files in `docs/screenshots/` in place; they are cheap to keep and may be linked from issues or posts
 - [ ] check every link newly added or reworded by this change resolves
 - [ ] run `wc -l README.md` and confirm it is near the ~145 target
+
+Anchors orphaned by Task 2's deletions (recorded for this task):
+
++ `README.md:97` — `[Agent status](#agent-status)`, in the Help-menu installers bullet list. `## Agent status`
+  is deleted, so the link is dangling; Task 5 rewrites that bullet list, which is where it gets fixed.
++ `#scripting-agterm` at `README.md:96` still resolves; the heading was kept deliberately.
++ no other `](#…)` link survives in README; every other internal anchor lived inside a deleted section.
 
 ### Task 7: Collapse Related projects
 
