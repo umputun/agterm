@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Pick a SQLite database from THIS session's repo and open it in a TUI viewer, in an overlay.
 
-Runs as an agterm keymap custom command, so the runner exports $AGT_* and the app spawns it with
-launchd's PATH and stdout on /dev/null.
+Runs as an agterm keymap custom command, so the runner exports $AGT_*, widens PATH with the CLI and
+Homebrew directories, and pins stdout to /dev/null.
 
 Candidates are files under the repo root carrying a database extension AND starting with the SQLite
 magic header, so a `.db` that is really a Berkeley DB or a text file never reaches the picker. The
@@ -34,6 +34,10 @@ EXTS = {".db", ".db3", ".sqlite", ".sqlite3", ".sqlitedb"}
 # rather than a list: .mypy_cache alone put 32 of its own sqlite files ahead of every real one in a
 # repo tried during development, and .pytest_cache, .tox and .venv are the same shape.
 PRUNE = {"node_modules", "vendor", "venv", "__pycache__", "site-packages", "target", "Pods"}
+# agterm's picker refuses a longer list outright (ControlPickItem.maxItems) rather than truncating it,
+# so a tree with more databases than this would open no picker at all. Rows are newest-first, so the
+# cut falls on the least interesting end.
+MAX_ROWS = 1000
 # tabiew: it opens ON the data - every table of the database becomes a tab, H/L cycles them, `:schema`
 # lists them with column stats. The SQL clients tried first (lazysql, harlequin, rainfrog, dblab) all
 # open on an empty editor or a logo instead. The format is passed rather than inferred: tabiew maps
@@ -67,11 +71,16 @@ def log(message: str) -> None:
 
 
 def is_sqlite(path: Path) -> bool:
-    """is_sqlite reads the file header; the extension alone proves nothing about the format."""
+    """is_sqlite reads the file header; the extension alone proves nothing about the format.
+
+    An unreadable file is logged rather than dropped quietly: it looks identical to a wrong-format one
+    in the result, and a permission error is the whole explanation for a database that never appears.
+    """
     try:
         with path.open("rb") as fh:
             return fh.read(len(MAGIC)) == MAGIC
-    except OSError:
+    except OSError as err:
+        log(f"skipped {path}: {err}")
         return False
 
 
@@ -154,16 +163,12 @@ class Agt:
     def resolve_bin() -> str:
         """resolve_bin returns the agtermctl to drive, "" when there is none to run.
 
-        A keybinding runs with launchd's PATH rather than a login shell's, so the usual install
-        directories are tried by hand before falling back to a lookup.
+        A plain PATH lookup is enough from 0.22.0 on: the custom-command runner widens the child's PATH
+        with the CLI install directory and Homebrew's prefix before spawning it.
         """
         override = os.environ.get("AGTERMCTL", "")
         if override:
             return override if os.access(override, os.X_OK) else ""
-        for directory in ("/usr/local/bin", os.environ.get("GHOSTTY_BIN_DIR", ""), "/opt/homebrew/bin"):
-            candidate = os.path.join(directory, "agtermctl") if directory else ""
-            if candidate and os.access(candidate, os.X_OK):
-                return candidate
         return shutil.which("agtermctl") or ""
 
     def run(self, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -173,13 +178,17 @@ class Agt:
             cmd += ["--socket", self.socket]
         return subprocess.run(cmd, input=stdin, capture_output=True, text=True, check=False)
 
-    def pick(self, rows: list[dict[str, str]]) -> str:
-        """pick opens the native picker and returns the chosen path, "" when cancelled."""
-        res = self.run("pick", "--prompt", "sqlite", "--window", self.window, stdin=json.dumps(rows))
+    def pick(self, rows: list[dict[str, str]], dropped: int = 0) -> str:
+        """pick opens the native picker and returns the chosen path, "" when cancelled.
+
+        The prompt says when the list was cut, since a truncation nothing names reads as the whole tree.
+        """
+        prompt = f"sqlite (newest {len(rows)} of {len(rows) + dropped})" if dropped else "sqlite"
+        res = self.run("pick", "--prompt", prompt, "--window", self.window, stdin=json.dumps(rows))
         if res.returncode == 2:
             return ""
         if res.returncode != 0:
-            fail(f"picker failed (exit {res.returncode})", self)
+            fail(f"picker failed: {res.stderr.strip() or f'exit {res.returncode}'}", self)
         try:
             choice = json.loads(res.stdout)
         except ValueError:
@@ -223,8 +232,9 @@ class Agt:
 def resolve_viewer() -> str:
     """resolve_viewer returns the viewer's absolute path, "" when it is not installed.
 
-    PATH cannot be trusted at either end: this script runs with launchd's PATH, and the overlay it
-    opens gets the app's, so /opt/homebrew/bin is missing from both.
+    Absolute because of where the name is going, not where it is resolved: the OVERLAY is spawned with
+    the app's own PATH, which no runner widens, so a bare viewer name exits 127 there. The directory
+    ladder runs ahead of the lookup for a PATH that reaches this script without Homebrew's prefix.
     """
     if os.path.isabs(VIEWER):
         return VIEWER if os.access(VIEWER, os.X_OK) else ""
@@ -248,6 +258,37 @@ def repo_root(cwd: str) -> Path:
     return Path(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip() else Path(cwd)
 
 
+def scan_root() -> Path | None:
+    """scan_root resolves the tree to walk, None when there is no session behind the chord.
+
+    The three states of AGT_SESSION_PWD are three different situations and only the variable tells them
+    apart. UNSET is a plain shell run, so the shell's own cwd is the subject. SET AND EMPTY is the chord
+    firing in a window holding no session: agterm exports every token whether or not it resolved, and
+    leaves the child in the APP's working directory, which is / for a Dock-launched bundle. Reading that
+    as "no value, use the cwd" is what turns one keypress into a walk of the whole filesystem, a TCC
+    prompt per protected folder, and a picker listing personal databases.
+    """
+    pwd = os.environ.get("AGT_SESSION_PWD")
+    if pwd is None:
+        return repo_root(os.getcwd())
+    return repo_root(pwd) if pwd else None
+
+
+def too_broad(root: Path) -> str:
+    """too_broad names what the root would drag in, "" when it is safe to walk.
+
+    Only reachable when git found no repo, since a repo root is neither of these. The home directory is
+    the one that actually happens: a shell opened there scans ~/Library's hundreds of application
+    databases and raises a macOS permission prompt for every protected folder on the way. A non-repo
+    subdirectory is left alone — that is a normal place to keep a database.
+    """
+    if root == Path(root.root):
+        return "the whole filesystem"
+    if root == Path.home():
+        return "the whole home directory"
+    return ""
+
+
 def fail(message: str, agt: Agt | None = None) -> Any:
     """fail reports through the only channels a keybinding has, then exits."""
     log(message)
@@ -265,12 +306,11 @@ def announce(agt: Agt, message: str, detail: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    cwd = os.environ.get("AGT_SESSION_PWD") or os.getcwd()
-    root = repo_root(cwd)
-    dbs = find_dbs(root)
+    root = scan_root()
 
     if "--list" in argv:
-        now = time.time()
+        root = root or repo_root(os.getcwd())
+        dbs, now = find_dbs(root), time.time()
         for db in dbs:
             print(f"{db.rel:60} {human_size(db.size):>7}  {age_label(db.mtime, now)}")
         print(f"{len(dbs)} databases under {root}")
@@ -281,18 +321,32 @@ def main(argv: list[str]) -> int:
         fail(f"AGTERMCTL is not executable: {os.environ['AGTERMCTL']}" if os.environ.get("AGTERMCTL")
              else "no agtermctl found; install the command line tool or set AGTERMCTL")
 
+    if root is None:
+        # not announce: with no session there is no target, so the hud and the notification both
+        # resolve `active` to nothing. A nonzero exit is the one channel left — agterm banners it.
+        fail("no session here: the chord needs a session to take its directory from", agt)
+    if reason := too_broad(root):
+        announce(agt, f"refusing to scan {reason}", f"this session's directory is {root}")
+        return 0
+
     viewer = resolve_viewer()
     if not viewer:
         announce(agt, f"{VIEWER} is not installed", f"brew install {VIEWER}")
         return 0
+
+    dbs = find_dbs(root)
     if not dbs:
         announce(agt, "no sqlite databases", str(root))
         return 0
 
-    chosen = agt.pick(rows_of(dbs, time.time()))
+    shown, dropped = dbs[:MAX_ROWS], max(0, len(dbs) - MAX_ROWS)
+    if dropped:
+        log(f"{dropped} databases past the picker's {MAX_ROWS}-item cap were not offered")
+
+    chosen = agt.pick(rows_of(shown, time.time()), dropped)
     if not chosen:
         return 0
-    picked = next((db for db in dbs if db.rel == chosen), None)
+    picked = next((db for db in shown if db.rel == chosen), None)
     if not picked:
         fail(f"picker returned an unknown database: {chosen}", agt)
 
@@ -390,6 +444,60 @@ class Tests(unittest.TestCase):
                 self.assertEqual(Agt.resolve_bin(), str(binary))
             with mock.patch.dict(os.environ, {"AGTERMCTL": str(Path(tmp) / "gone")}):
                 self.assertEqual(Agt.resolve_bin(), "")
+
+    def test_scan_root_tells_the_three_pwd_states_apart(self) -> None:
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            session = Path(tmp) / "session"
+            session.mkdir()
+            with mock.patch.object(sys.modules[__name__], "repo_root", Path):
+                with mock.patch.dict(os.environ):
+                    os.environ.pop("AGT_SESSION_PWD", None)
+                    self.assertEqual(scan_root(), Path(os.getcwd()))
+                with mock.patch.dict(os.environ, {"AGT_SESSION_PWD": ""}):
+                    self.assertIsNone(scan_root())
+                with mock.patch.dict(os.environ, {"AGT_SESSION_PWD": str(session)}):
+                    self.assertEqual(scan_root(), session)
+
+    def test_too_broad_refuses_the_root_and_the_home_directory(self) -> None:
+        self.assertEqual(too_broad(Path("/")), "the whole filesystem")
+        self.assertEqual(too_broad(Path.home()), "the whole home directory")
+        self.assertEqual(too_broad(Path.home() / "dev" / "project"), "")
+        self.assertEqual(too_broad(Path("/opt/data")), "")
+
+    def test_pick_prompt_names_a_truncated_list(self) -> None:
+        from unittest import mock
+        for dropped, want in ((0, "sqlite"), (5, "sqlite (newest 2 of 7)")):
+            with self.subTest(dropped=dropped):
+                agt = Agt.__new__(Agt)
+                agt.bin, agt.socket, agt.sid, agt.window = "/x/agtermctl", "", "sid-1", "active"
+                calls: list[tuple[str, ...]] = []
+                with mock.patch.object(Agt, "run", lambda self, *a, _c=calls, **kw: _c.append(a) or
+                                       subprocess.CompletedProcess(a, 2, "", "")):
+                    agt.pick([{"id": "a"}, {"id": "b"}], dropped)
+                self.assertEqual(calls[0][2], want)
+
+    def test_pick_failure_carries_the_server_reason(self) -> None:
+        import tempfile
+        from unittest import mock
+        agt = Agt.__new__(Agt)
+        agt.bin, agt.socket, agt.sid, agt.window = "/x/agtermctl", "", "sid-1", "active"
+        said = []
+
+        def fake_run(self: Agt, *args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[0] == "notify":
+                said.append(args[1])
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return subprocess.CompletedProcess(args, 1, "", "too many items (max 1000)\n")
+
+        with tempfile.TemporaryDirectory() as tmp, open(os.devnull, "w") as quiet, \
+             mock.patch.object(sys.modules[__name__], "LOG", Path(tmp) / "log"), \
+             mock.patch.object(Agt, "run", fake_run), \
+             mock.patch.object(sys, "stderr", quiet), \
+             self.assertRaises(SystemExit):
+            agt.pick([{"id": "a"}])
+        self.assertEqual(said, ["picker failed: too many items (max 1000)"])
 
     def test_overlay_targets_this_session(self) -> None:
         from unittest import mock

@@ -16,7 +16,7 @@ testdata/fixture.sqlite3
 48K · 3d ago
 ```
 
-Choosing one opens the viewer in a 90% overlay over the session. Escape closes the overlay and the session is where it was.
+Choosing one opens the viewer in a 90% overlay over the session. The overlay closes when the viewer exits — `q` in tabiew — and the session is where it was.
 
 The repo is whichever one the session sits in, so the same chord in another tab lists that project's databases.
 
@@ -82,11 +82,17 @@ Rows are sorted by mtime, newest first, on the assumption that the database just
 
 The file name is treated as hostile, because in a repo you cloned it is someone else's. The viewer's command line is quoted with `shlex`, so `a"; id; :"b.db` reaches `zsh -c` as one argument rather than as a second statement, and a name carrying a control character is refused outright and logged.
 
-PATH is the gotcha, and it bites at both ends. This script runs from a keybinding, so it gets launchd's PATH rather than a login shell's; the overlay it opens gets the app's, which is a different minimal one. Neither carries `/opt/homebrew/bin`. So the viewer is resolved to an absolute path here and passed as one to the overlay, rather than named and hoped for — a viewer named bare works when you test it in a shell and fails from the chord.
+PATH is the gotcha, and the two halves of it are not the same. A custom command's own PATH is widened by the runner from 0.22.0 on, with the CLI install directory and Homebrew's prefix, so a bare `agtermctl` resolves from the chord. The overlay it opens is a different matter: nothing widens that one, it is the app's own, and a bare viewer name exits 127 there with the overlay flashing open and vanishing. So the viewer is resolved to an absolute path here and passed as one — which is also why the recipe reports "not installed" up front rather than letting the overlay fail silently.
 
 The overlay is opened without `--follow`. It belongs to this session, and pulling focus to it would move the selection out from under whatever you are doing in another one.
 
-Everything the script needs about where it is comes from the environment agterm exports to a custom command: `AGT_SESSION_PWD` for the repo, `AGT_SESSION_ID` for which session gets the overlay, `AGT_WINDOW_ID` for which window shows the picker, and `AGT_SOCKET` for the instance to talk to. The repo root itself is `git rev-parse --show-toplevel` from that directory, so the chord works from a subdirectory. A session that is not in a repo falls back to its own working directory, which for a home directory means a long scan.
+Everything the script needs about where it is comes from the environment agterm exports to a custom command: `AGT_SESSION_PWD` for the repo, `AGT_SESSION_ID` for which session gets the overlay, `AGT_WINDOW_ID` for which window shows the picker, and `AGT_SOCKET` for the instance to talk to. The repo root itself is `git rev-parse --show-toplevel` from that directory, so the chord works from a subdirectory.
+
+`AGT_SESSION_PWD` has three states and they are three different situations, which is worth knowing if you port this pattern. Unset means nobody is passing one — a plain shell run, so the shell's own directory is the subject. A real path is a session. **Set but empty is the trap**: agterm exports every `AGT_` token whether or not it resolved, and a chord fired in a window holding no session gets an empty one while the process is left in the app's own working directory, `/` for a Dock-launched bundle. Read that as "no value, use the cwd" and one keypress walks the entire filesystem, raising a macOS permission prompt for every protected folder on the way. The recipe tests the variable rather than its truthiness, and refuses.
+
+Refusing is easy; saying so is not. With no session there is no target, so the panel and the desktop notification both resolve `active` to nothing and neither arrives — which is the same absence that sent the chord down this path. What is left is the exit code: agterm banners a custom command's nonzero exit by itself, as `SQLite › (exit 1)`, and that is what the reader actually sees.
+
+The other end of the same problem is a session in a directory git does not recognise as a repo, where the scan root is that directory verbatim. A subdirectory is fine and is a normal place to keep a database. The home directory is not: `~/Library` alone holds hundreds of application databases, and reaching `~/Documents` and `~/Desktop` costs a macOS permission prompt each. That one and the filesystem root are refused by name.
 
 ## Limits
 
@@ -97,3 +103,9 @@ The overlay takes the session's overlay slot, so a chord pressed while a program
 The scan walks the whole repo on every press. On a large checkout with a cold page cache that is a visible pause before the picker appears, with no progress shown.
 
 Databases are found by extension, so one stored under a name that is not on the list is invisible to the recipe, however valid its header.
+
+The picker takes at most 1000 rows, which is agterm's own cap. Past that the list is cut to the 1000 newest and the prompt says so.
+
+The chord does nothing in the home directory, at the filesystem root, or in a window with no session. Those are refusals rather than failures — see *How it works* for why.
+
+A file symlink is followed. A cloned repo can carry `cache.db` as a link to a database outside the checkout, and it appears under its repo-relative name.
