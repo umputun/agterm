@@ -1,6 +1,6 @@
 ---
 worth: later
-where: agtermCore/Sources/agtermCore/Keymap.swift:141
+where: agtermCore/Sources/agtermCore/Keymap.swift:262
 added: 2026-08-10
 ---
 # swapping two colliding `map` lines can drop an unrelated custom command's shortcut
