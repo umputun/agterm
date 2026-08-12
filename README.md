@@ -71,6 +71,14 @@ A file open in the quick terminal, the window's shared scratch overlay:
 
 </details>
 
+## The model
+
+- **Window.** A top-level bundle of workspaces and sessions in its own macOS window, with its own sidebar tree.
+- **Workspace.** A named group of sessions for one project or context.
+- **Session.** One running shell with a name, a working directory, and its own scrollback. It is the row you see in the sidebar, and it keeps running while you work in another one.
+- **Split and scratch.** A session can split into two shells side by side, both sharing the one sidebar row, and it can open a scratch terminal over itself for a quick aside.
+- **Overlay.** One program running in a temporary terminal over a session. It disappears when the program exits and leaves the shell underneath unchanged.
+
 ## Install
 
 Pre-built releases are for **Apple Silicon (arm64) Macs running macOS 14 or later**.

@@ -186,9 +186,9 @@ the minimum macOS version, and the positioning line.
 **Files:**
 - Modify: `README.md`
 
-- [ ] write 5-8 descriptive lines after the screenshots: window owns a workspace/session tree; workspace groups sessions by project or context; session is the named, persistent sidebar unit; a session holds a main pane plus an optional split pane and scratch terminal; an overlay sits over a session without replacing its shell
-- [ ] confirm no comparative framing against tabbed terminals appears
-- [ ] verify each claim against `site/docs.html` sections `workspaces` and `terminals` so the two agree
+- [x] write 5-8 descriptive lines after the screenshots: window owns a workspace/session tree; workspace groups sessions by project or context; session is the named, persistent sidebar unit; a session holds a main pane plus an optional split pane and scratch terminal; an overlay sits over a session without replacing its shell
+- [x] confirm no comparative framing against tabbed terminals appears
+- [x] verify each claim against `site/docs.html` sections `workspaces` and `terminals` so the two agree
 
 ### Task 4: Rewrite the Scripting section around one demo block
 
