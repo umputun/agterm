@@ -115,6 +115,9 @@ Log locations and the common problems are in [docs/troubleshooting.md](docs/trou
 
 ## Related projects
 
+<details>
+<summary>Ports, forks, and companion tools maintained by others</summary>
+
 A small ecosystem has grown around agterm. These are independent projects, not maintained here.
 
 **Built on agterm**
@@ -131,6 +134,8 @@ A small ecosystem has grown around agterm. These are independent projects, not m
 - [agterm-remote](https://github.com/k0nsta/agterm-remote) carries agterm's agent-status colors and pushes to agents running in a remote tmux over SSH.
 - [pi-agterm](https://github.com/khanton/pi-agterm) is a pi extension that reports agent status onto agterm's status indicator.
 - [agterm-experimental](https://github.com/rashpile/agterm-experimental) collects custom skills and scripts for agterm.
+
+</details>
 
 ## Attribution
 

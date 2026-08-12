@@ -266,9 +266,26 @@ Anchors orphaned by Task 2's deletions (recorded for this task):
 **Files:**
 - Modify: `README.md`
 
-- [ ] wrap `## Related projects` in a `<details>` block, keeping all seven entries and their attributions
-- [ ] confirm the Rook entry survives, since it appears nowhere on the site
-- [ ] confirm the collapsed block renders correctly in the GitHub markdown preview
+- [x] wrap `## Related projects` in a `<details>` block, keeping all seven entries and their attributions
+- [x] confirm the Rook entry survives, since it appears nowhere on the site
+- [x] confirm the collapsed block renders correctly in the GitHub markdown preview
+
+Decisions taken in this task:
+
++ [decision] the `## Related projects` heading stays outside the `<details>`, matching the screenshots block, which
+  keeps its surrounding prose outside and wraps only the collapsible body. The heading also stays in GitHub's
+  generated table of contents this way.
++ [decision] summary line: `Ports, forks, and companion tools maintained by others`.
++ [correction] the section lists **six** projects, not seven; the plan's count in Context and in this task's first
+  checkbox was wrong. Verified against `df76f7a3:README.md`, the pre-trim original: agterm-linux, Rook, agwinterm,
+  agterm-remote, pi-agterm, agterm-experimental. Nothing was lost by an earlier task. `diff` of the section before
+  and after this change shows only the four added markup lines; every entry, description, link and handle is
+  byte-identical, and Rook / @jokius survives.
++ [deviation] GitHub preview was not opened; rendering was verified structurally instead (blank line after
+  `<summary>`, blank line before `</details>`, both tag pairs balanced, markup identical to the working screenshots
+  block). Task 9 already carries the render-on-GitHub check before merge.
++ `wc -l README.md` is 150, up from 145 by the four markup lines plus one blank.
+  `lint.sh README.md` reports zero violations.
 
 ### Task 8: Update the four files that assert something now false
 
