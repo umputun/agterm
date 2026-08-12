@@ -107,6 +107,22 @@ The app's **Help** menu has three one-time installers. None are needed to use ag
 
 ## Scripting agterm
 
+`agtermctl` drives a running agterm over a local unix socket, one command per invocation. Terminal output is not streamed; `session text` reads a session's buffer when a script needs to see it.
+
+```sh
+ws=$(agtermctl workspace new demo)                        # objects have stable ids
+sid=$(agtermctl session new --workspace "$ws" --cwd "$PWD" --no-select)
+agtermctl session type $'pwd\n' --target "$sid"           # drive a session you are not looking at
+agtermctl session text --target "$sid" --lines 10         # read its terminal back
+agtermctl session status blocked --target "$sid"          # set the sidebar status glyph
+printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"   # borrow the native picker
+agtermctl tree --json                                     # the whole model, inspectable
+```
+
+These are representative commands rather than a script to paste. `session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
+
+The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. All 75 commands are at [agterm.com/commands](https://agterm.com/commands).
+
 ## Related projects
 
 A small ecosystem has grown around agterm. These are independent projects, not maintained here.

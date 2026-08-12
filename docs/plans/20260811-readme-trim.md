@@ -195,12 +195,12 @@ the minimum macOS version, and the positioning line.
 **Files:**
 - Modify: `README.md`
 
-- [ ] keep the heading exactly `## Scripting agterm` so `#scripting-agterm` still resolves
-- [ ] write two opening sentences: `agtermctl` drives agterm over a local socket, terminal output is not streamed, `session text` reads a buffer
-- [ ] add the annotated demo block from Technical Details, one comment per line
-- [ ] verify every flag in the block against `agtermCore/Sources/agtermctlKit/`
-- [ ] add one sentence naming windows, layouts, notifications, events, dashboards, HUDs, themes, restoration
-- [ ] link to the command reference and confirm the command count matches `site/commands.html`
+- [x] keep the heading exactly `## Scripting agterm` so `#scripting-agterm` still resolves
+- [x] write two opening sentences: `agtermctl` drives agterm over a local socket, terminal output is not streamed, `session text` reads a buffer
+- [x] add the annotated demo block from Technical Details, one comment per line
+- [x] verify every flag in the block against `agtermCore/Sources/agtermctlKit/`
+- [x] add one sentence naming windows, layouts, notifications, events, dashboards, HUDs, themes, restoration
+- [x] link to the command reference and confirm the command count matches `site/commands.html`
 
 ### Task 5: Rework Install and add the Documentation section
 
