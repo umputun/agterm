@@ -33,41 +33,13 @@ An agent's interactive prompt mid-session, with attention glyphs on the sessions
 
 ![Agent prompt](docs/screenshots/agent-prompt.png)
 
-The attention list, collecting every session that needs you, sorted blocked then active then completed:
-
-![Attention list](docs/screenshots/attention.png)
-
-A split session (agent and shell side by side) with the action palette open:
-
-![Action palette](docs/screenshots/action-palette.png)
-
-A full-screen diff TUI running inside a session:
-
-![Diff TUI](docs/screenshots/diff-tui.png)
-
 A file manager in a floating overlay over the active session:
 
 ![Floating overlay](docs/screenshots/floating-overlay.png)
 
-The fuzzy session palette for jumping to any session by name:
-
-![Session palette](docs/screenshots/session-palette.png)
-
-A session's right-click context menu:
-
-![Context menu](docs/screenshots/context-menu.png)
-
-The keymap editor:
-
-![Keymap editor](docs/screenshots/keymap-editor.png)
-
 A split session, two panes side by side on different color themes:
 
 ![Split session](docs/screenshots/split-theme.png)
-
-A file open in the quick terminal, the window's shared scratch overlay:
-
-![Quick terminal](docs/screenshots/quick-terminal.png)
 
 </details>
 
@@ -162,7 +134,7 @@ A small ecosystem has grown around agterm. These are independent projects, not m
 
 ## Attribution
 
-agterm embeds **libghostty**, the terminal engine from [Ghostty](https://github.com/ghostty-org/ghostty) (MIT). It does all the real terminal work: rendering, VT parsing, and shell I/O. agterm builds it from upstream source at a pinned commit via `scripts/setup.sh`, with no fork and no prebuilt binary.
+agterm embeds **libghostty**, the terminal engine from [Ghostty](https://github.com/ghostty-org/ghostty) (MIT). It does all the real terminal work: rendering, VT parsing, and shell I/O. The app builds it from upstream source at a pinned commit via `scripts/setup.sh`, with no fork and no prebuilt binary.
 
 The way agterm drives libghostty's C API from a SwiftUI/AppKit app, under the Swift 6 strict-concurrency toolchain, was learned from [macterm](https://github.com/thdxg/macterm) (`thdxg/macterm`, MIT). The libghostty bridge files (`GhosttyApp`, `GhosttyCallbacks`, `GhosttyResources`, `GhosttySurfaceView`, `WindowAppearance`) are adapted from it and each carries an attribution comment. The model, sidebar, persistence, control channel, and multi-window code are original to agterm.
 

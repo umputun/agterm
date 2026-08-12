@@ -232,11 +232,27 @@ Decisions taken in this task:
 **Files:**
 - Modify: `README.md`
 
-- [ ] resolve every remaining internal `(#anchor)` in README against surviving headings
-- [ ] trim the screenshots `<details>` block to 3-4 shots and confirm each referenced file exists in `docs/screenshots/`
-- [ ] leave the now-unreferenced files in `docs/screenshots/` in place; they are cheap to keep and may be linked from issues or posts
-- [ ] check every link newly added or reworded by this change resolves
-- [ ] run `wc -l README.md` and confirm it is near the ~145 target
+- [x] resolve every remaining internal `(#anchor)` in README against surviving headings
+- [x] trim the screenshots `<details>` block to 3-4 shots and confirm each referenced file exists in `docs/screenshots/`
+- [x] leave the now-unreferenced files in `docs/screenshots/` in place; they are cheap to keep and may be linked from issues or posts
+- [x] check every link newly added or reworded by this change resolves
+- [x] run `wc -l README.md` and confirm it is near the ~145 target
++ [x] fix the `## Attribution` writing-style violation at former `README.md:165`: the sentence opening with the
+  lowercase identifier `agterm` after a period now reads "The app builds it from upstream source at a pinned
+  commit via `scripts/setup.sh`, with no fork and no prebuilt binary." Meaning, MIT attribution, project names
+  and links are unchanged. `lint.sh README.md` now reports zero violations.
+
+Decisions taken in this task:
+
++ [decision] kept four gallery shots: `dashboard.png` (several sessions' live output at once), `agent-prompt.png`
+  (an agent prompt with attention glyphs), `floating-overlay.png` (a program over a session), and `split-theme.png`
+  (two panes side by side). Each shows a model element the single-window hero cannot: the grid, the status glyphs,
+  the overlay, and the split.
++ [decision] dropped `attention.png`, `action-palette.png`, `diff-tui.png`, `session-palette.png`, `context-menu.png`,
+  `keymap-editor.png`, and `quick-terminal.png` from the README. All seven stay on disk in `docs/screenshots/`.
++ README has no `](#…)` links at all, so no internal anchor can dangle; the orphan recorded below was removed with
+  its bullet list in Task 5.
++ `wc -l README.md` is 145, exactly the plan target.
 
 Anchors orphaned by Task 2's deletions (recorded for this task):
 
