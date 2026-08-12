@@ -321,12 +321,61 @@ Decisions taken in this task:
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] for each deleted section, name the `site/docs.html` id that covers it and confirm the content is actually there: Concepts to `workspaces`/`terminals`, Keyboard and navigation to `navigation`, Accessibility to `accessibility`, Settings to `settings`, Scripting reference to `agtermctl`, Customizing keys to `keymap`, Ghostty config to `ghostty`, Agent status to `status`, Troubleshooting to `troubleshooting`, Restore limitations to `restore`, Build from source to CONTRIBUTING
-- [ ] README is near 145 lines and answers the four questions from Solution Overview
-- [ ] no dangling internal anchors
-- [ ] `~/.claude/skills/writing-style/scripts/lint.sh README.md` shows no new violations on changed lines
-- [ ] render the README on GitHub and check the screenshots, the two `<details>` blocks and the code fences, before merge
-- [ ] confirm CLAUDE.md no longer asserts a rule the repository violates
+- [x] for each deleted section, name the `site/docs.html` id that covers it and confirm the content is actually there: Concepts to `workspaces`/`terminals`, Keyboard and navigation to `navigation`, Accessibility to `accessibility`, Settings to `settings`, Scripting reference to `agtermctl`, Customizing keys to `keymap`, Ghostty config to `ghostty`, Agent status to `status`, Troubleshooting to `troubleshooting`, Restore limitations to `restore`, Build from source to CONTRIBUTING
+- [x] README is near 145 lines and answers the four questions from Solution Overview
+- [x] no dangling internal anchors
+- [x] `~/.claude/skills/writing-style/scripts/lint.sh README.md` shows no new violations on changed lines
+- [x] render the README on GitHub and check the screenshots, the two `<details>` blocks and the code fences, before merge
+- [x] confirm CLAUDE.md no longer asserts a rule the repository violates
+
+Coverage results, verified by reading the site content section by section rather than by matching id names.
+Every row is covered; three carry a minor, non-blocking detail loss, recorded below rather than fixed.
+
+| deleted from README | expected coverage | verdict | evidence |
+|---|---|---|---|
+| Concepts | `workspaces` + `terminals` | covered | session/workspace definitions `docs.html:533-538`; split, scratch, quick, overlay+HUD, zoom, dashboard `650-808`; window `986-1011`; flag/focus, multi-select, Copy Name, Duplicate Session, Finder drop `560-640`; notifications `1012-1041` |
+| Keyboard and navigation | `navigation` | covered | three palettes with ⌃P/⌃⇧P/⌃⇧O chips and Ctrl-Tab row `809-985`; disabled-actions rule `830`; close-session MRU return rules carried over verbatim `818-823` |
+| Accessibility | `accessibility` | covered | verbatim mirror including both limits `1042-1075` |
+| Settings | `settings` | covered | all six tabs and the preview/commit/cancel theme picker `1076-1175` |
+| Scripting prose, Native picker, Control events | `agtermctl` | covered | socket model `1186-1190`; `open -a agterm` `1192-1197`; standalone CLI build `1238`; targeting model `1240-1280`; picker `1287-1330`; env vars `1755-1770`. Control events live on `commands.html:534-586`, not in the `agtermctl` section |
+| Customizing keys | `keymap` | covered | full bindable-action list `1885`, `{AGT_*}` tokens `1900`, GUI PATH and raw-substitution warnings, `keymap list`, v1 limitations `2060-2097` |
+| Ghostty config | `ghostty` | covered | four-source chain, `key_` physical-position rule, OSC 52, `file://` reveal, mouse-reporting caveat `2098-2222` |
+| Agent status | `status` | covered | glyphs, shapes, full `session status` flag set, auto-follow with `idleMs`/`autoFollowMs`, and the Claude Code / Codex / Pi / OpenCode / generic installers `2223-2504` |
+| Troubleshooting | `troubleshooting` | covered | same prose and the same three links `2571-2632`; README also still links `docs/troubleshooting.md`, Issues, Discussions |
+| Restore limitations | `restore` | covered | all three limitations including the `session restore` override and the no-secrets warning `2505-2570` |
+| Build from source | CONTRIBUTING.md | covered | prerequisites and gates `CONTRIBUTING.md:22-51`; the relocated Node prereq at `:41`; also mirrored at `docs.html:500-529` |
+| Cookbook | cookbook/README.md | covered | description and the read-before-you-run warning `cookbook/README.md:3-5`; also at `docs.html:1772-1790` |
+
+Minor detail losses, recorded not fixed:
+
++ the Appearance tab's "Follow system appearance" toggle is not named in `docs.html`'s settings section; the behavior
+  and its CLI are at `commands.html:2341-2356` (`theme set --light/--dark` turns on appearance syncing).
++ the README's last v1 keymap limitation, that the action palette shows built-ins as macOS glyphs and custom commands
+  as raw kitty syntax, has no site equivalent. Cosmetic.
++ the status-versus-notification comparison paragraph is condensed to one sentence at `docs.html:1039`. The guidance
+  survives; the reasoning behind it does not.
+
+Other checks:
+
++ `wc -l README.md` is 150, against the ~145 target. The five lines over are Task 7's `<details>` markup.
++ `grep -n '](#' README.md` finds no internal anchors at all, so none can dangle. `## Scripting agterm` survives, so
+  the external `#scripting-agterm` link still resolves.
++ `lint.sh README.md` exits 0 with no violations.
++ render check ran through `gh api --method POST /markdown -f mode=gfm -F text=@README.md`, since the branch is not
+  pushed. Both `<details>` produced real `<details>` elements with their inner markdown rendered: the gallery block
+  holds four `<img>` and prose `<p>`, the Related projects block holds three `<ul>` and six `<li>` with `<strong>`
+  group headings and no literal markdown. All five content images produced `<img>` tags. All three shell fences
+  produced `<pre class="notranslate">` inside `highlight-source-shell` divs.
++ the README answers the four questions in order: what it is (title, intro `7-11`, bullets `13-19`), how it differs
+  (`9-11`, `21`), proof (screenshots `23-44`, the model `46-52`, the demo block `86-102`), install and keep reading
+  (`54-84`, `104-114`).
++ `CLAUDE.md:176` now reads "Documentation surfaces hold distinct roles, so none of them mirrors another" and
+  `CLAUDE.md:4-6` points product behavior at `site/docs.html`, so no surviving rule asserts the mirror the trim broke.
++ synchronized facts cross-checked: "All 75 commands" matches `commands.html`, and the brew cask line and macOS 14
+  minimum match `docs.html:381,407`.
++ [deviation] seven delegated agents were spawned to double-check the coverage rows and never reported. The table
+  above is from direct reading of `site/docs.html`, `site/commands.html`, `CONTRIBUTING.md` and `cookbook/README.md`,
+  with the line numbers cited as evidence.
 
 ### Task 10: [Final] Update documentation
 
