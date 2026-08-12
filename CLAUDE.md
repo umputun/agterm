@@ -1,8 +1,9 @@
 # agterm project notes
 
 agterm is a native macOS SwiftUI terminal on libghostty with a workspace-to-session sidebar.
-Read `README.md` for product behavior and `ARCHITECTURE.md` for modules, surface ownership, and C-boundary
-concurrency before changing the bridge.
+Read `site/docs.html` for product behavior and `ARCHITECTURE.md` for modules, surface ownership, and
+C-boundary concurrency before changing the bridge.
+`README.md` is the product synopsis, not the reference.
 
 ## Working norms
 
@@ -172,8 +173,14 @@ concurrency before changing the bridge.
 - Event arguments must appear in `EventFormatter.human`, not only JSON payloads.
 - Control API, keymap, and model changes also update bundled
   `plugins/agterm/skills/agterm/`, the sole source for installed Claude/Codex copies.
-- `site/docs.html` mirrors README. `site/index.html` reflects major features and current
-  `softwareVersion`; `site/commands.html` mirrors every command, arguments, and read-back field.
+- Documentation surfaces hold distinct roles, so none of them mirrors another.
+  `site/docs.html` is the canonical user guide and `site/commands.html` the canonical command reference.
+  `README.md` is the product synopsis: pitch, install, the model, and the control-API proof.
+  `site/llms.txt` is the crawler-oriented summary and discovery index.
+  These four facts stay synchronized across every surface that states them: the command count, the install
+  commands, the minimum macOS version, and the positioning line.
+- `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
+  every command, arguments, and read-back field.
 - `cookbook/` is not a synchronized surface. Recipes pin a minimum version and are fixed reactively;
   its CI checks structure and shell hygiene, not current API parity.
 - Cookbook recipes are third-party work published by their author, not code the project owns.

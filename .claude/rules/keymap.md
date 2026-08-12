@@ -165,8 +165,8 @@ paths:
   host-free measured-data tests cover.
 - `ghostty.conf` has a separate upstream grammar: bare `g` is Unicode and `key_g` physical; Unicode
   triggers cannot fire on non-Latin layouts. agterm matches Ghostty.app and cannot fix this app-side.
-  Use `key_`, as `ghostty-defaults.conf` does for `super+key_c/key_v/key_a` (issue #30). README and
-  `site/docs.html` document the distinction.
+  Use `key_`, as `ghostty-defaults.conf` does for `super+key_c/key_v/key_a` (issue #30).
+  The `ghostty` section of `site/docs.html` documents the distinction.
 - A built-in reaches a leader only as an alternative, never as its menu equivalent: an `NSMenuItem` holds
   exactly one key-equivalent character. Literal `+`/`>` are separators and not
   bare tokens, but bind as `shift+=`/`shift+.`. `increase_font_size`'s stored `Chord(key:"+")` cannot

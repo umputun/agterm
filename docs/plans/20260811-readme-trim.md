@@ -295,13 +295,29 @@ Decisions taken in this task:
 - Modify: `docs/troubleshooting.md`
 - Modify: `site/llms.txt`
 
-- [ ] replace the `site/docs.html` mirrors README clause at `CLAUDE.md:175` with the four roles from Technical Details, plus the synchronized-facts list
-- [ ] reword `CLAUDE.md:4` so product behavior points at the docs site, with README as the synopsis
-- [ ] repoint `.claude/rules/keymap.md:169` at `site/docs.html` alone for the ghostty `key_` distinction
-- [ ] repoint `docs/troubleshooting.md:76` at the keymap section of the docs site for the token list
-- [ ] reword `site/llms.txt:22` so README is the project synopsis, not "the same documentation in the source repository"
-- [ ] `grep -rn "README" --include='*.md' --include='*.html' --include='*.txt' .` and confirm no surviving reference describes content this change removed
-- [ ] keep CLAUDE.md's semantic-line formatting
+- [x] replace the `site/docs.html` mirrors README clause at `CLAUDE.md:175` with the four roles from Technical Details, plus the synchronized-facts list
+- [x] reword `CLAUDE.md:4` so product behavior points at the docs site, with README as the synopsis
+- [x] repoint `.claude/rules/keymap.md:169` at `site/docs.html` alone for the ghostty `key_` distinction
+- [x] repoint `docs/troubleshooting.md:76` at the keymap section of the docs site for the token list
+- [x] reword `site/llms.txt:22` so README is the project synopsis, not "the same documentation in the source repository"
+- [x] `grep -rn "README" --include='*.md' --include='*.html' --include='*.txt' .` and confirm no surviving reference describes content this change removed
+- [x] keep CLAUDE.md's semantic-line formatting
+
+Decisions taken in this task:
+
++ [decision] the `site/index.html` clause that shared the old bullet became its own bullet rather than a
+  trailing sentence on the roles bullet, since it states a different obligation (feature and version parity)
+  from the roles it would otherwise be appended to.
++ [decision] `CONTRIBUTING.md:7` still lists `[README](README.md)` among the places to look before proposing
+  a feature, alongside `agterm.com/docs` and the bundled skill. Left as is: the README's "What it does"
+  bullets survive the trim, so the line asserts nothing the README no longer holds, and the file is not in
+  this task's scope.
++ [decision] `.claude/rules/control-api.md:566` keeps README in the command-count alignment list. Verified
+  still true: `README.md:102` reads "All 75 commands", matching `site/commands.html`.
++ verified before repointing: the ghostty `key_` versus bare-key distinction is in `site/docs.html`'s
+  `ghostty` section (line 2153-2169), and the full `{AGT_*}` token list is in its `keymap` section
+  (line 1963), so both new pointers resolve to content that is actually present.
++ `~/.claude/skills/writing-style/scripts/lint.sh README.md` reports zero violations.
 
 ### Task 9: Verify acceptance criteria
 
