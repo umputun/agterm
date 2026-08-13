@@ -199,7 +199,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Surface input, output, and search
 
-- `session.type --pane left|right|scratch` defaults to main for compatibility, not focused/on-screen.
+- `session.type --pane` accepts `primary|left|top`, `split|right|bottom`, or `scratch`; omission defaults
+  to primary for compatibility, not focused/on-screen. Read-back and the stable invalid-value error use
+  canonical `left|right|scratch` names.
   Hidden live scratch is addressable; missing panes error. Main alone bounded-polls (12 × 30ms) a newly
   unrealized session, with or without `select`, so `session.new --no-select` plus an immediate type does
   not race the mount+layout gap (#349). The probe precedes every sleep, so a realized session pays nothing

@@ -2,10 +2,8 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// Shared `--pane` validation for the commands accepting `left|right|scratch` (session type, text, status,
-/// font). Rejects anything else with a clean usage error before the socket round-trip, matching the
-/// server-side switch, which still catches a raw socket client. They reuse `StatusPane`'s value set as the
-/// shared pane-addressing vocabulary — named for agent status, but its cases are the pane names.
+/// Shared `--pane` validation for session type, text, status, restore, and font. Accepts role and position
+/// aliases through `StatusPane`; the stable rejection names the canonical read-back values.
 func validatePaneArgument(_ pane: String?) throws {
     if let pane, StatusPane(controlName: pane) == nil {
         throw ValidationError("--pane must be left, right, or scratch")

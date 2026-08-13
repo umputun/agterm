@@ -446,7 +446,8 @@ public struct ControlDispatcher {
         return .pane(parsed)
     }
 
-    /// The role selector (`session.status`, `session.restore`), spelled `left|right|scratch`.
+    /// The role selector (`session.status`, `session.restore`). It accepts role and position aliases; the
+    /// stable rejection names the canonical `left|right|scratch` read-back values.
     private func parsePane(_ raw: String?) -> PaneSelection<StatusPane> {
         parsePane(raw, error: "--pane must be left, right, or scratch") { StatusPane(controlName: $0) }
     }

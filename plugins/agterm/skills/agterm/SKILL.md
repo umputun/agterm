@@ -265,6 +265,9 @@ omitted when expanded).
   workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and
   after/before placement, repeat `--target` to move several sessions as one ordered block. Do not repeat
   `--target` with `--to up|down|top|bottom`.
+- Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
+  `split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.
+  Syntax and read-back use canonical `left`/`right`/`scratch`; the invalid-value error keeps those names.
 - `type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
   included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
   with `--pane scratch`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's

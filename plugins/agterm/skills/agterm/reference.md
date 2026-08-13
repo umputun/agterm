@@ -371,6 +371,12 @@ All twelve are read-only projections of GUI state.
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
   counting only sessions whose position/workspace changed.
+
+Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
+`split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.
+The signatures and read-back below use canonical `left`/`right`/`scratch`; the stable invalid-value
+error keeps those names for compatibility.
+
 - `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
   `--stdin` reads the text from stdin instead of the argument. Any session is typable without `--select`,
@@ -466,7 +472,7 @@ All twelve are read-only projections of GUI state.
   `statusColor`), and rides the `status` control event's `shape` payload field so an `events` consumer can
   explain a shape-only change.
   A `--shape` on `idle` is accepted and ignored, since an idle session draws no glyph.
-  `--pane` (`left`|`right`|`scratch`, `left`=main, `right`=split; defaults to `left` when omitted) records
+  `--pane` (canonical `left`|`right`|`scratch`; role and position aliases above are also accepted) records
   which pane set the status. It has two effects: (1) keystroke-clear becomes pane-scoped — a status set
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
   no longer wiped by foreground typing in the main pane, and only a keystroke in the OWNING pane clears
@@ -479,7 +485,7 @@ All twelve are read-only projections of GUI state.
   only STEPS the selection to attention sessions; it does not itself move focus into the tagged pane — the
   reveal is a GUI/auto-follow concern.) An agent that runs in a split or scratch should set its own pane so
   the user lands on it. The value is read back on `tree` as the session node's `statusPane`. An invalid
-  value errors (`--pane must be left, right, or scratch`).
+  value errors with the stable canonical-name message (`--pane must be left, right, or scratch`).
   `--pane-id` is the surface's stable spawn token (the shell's `$AGTERM_PANE_ID`) — the agent-status hook
   forwards it automatically. When it resolves against the session's LIVE surfaces it OVERRIDES `--pane`, so
   a status from a pane whose baked role went stale (a split survivor promoted into the main pane, then a
@@ -1158,6 +1164,8 @@ restore; a `session restore --pane right` on a session with no split also return
 `invalid shape: <value> (circle|square|triangle|diamond|capsule|star)` (session status --shape over the
 raw socket; the `agtermctl` CLI rejects the same value locally with
 `shape must be one of: circle, square, triangle, diamond, capsule, star`),
-`--pane must be left, right, or scratch` (the `--pane` value check — the `agtermctl` CLI rejects a bad pane
-with this for session status/type/text, and over the raw socket `session.status` returns this same string;
+`--pane must be left, right, or scratch` (the `--pane` value check; the message intentionally lists the
+canonical read-back names while the role and position aliases documented above are accepted. The
+`agtermctl` CLI rejects a bad pane with this for session status/type/text, and over the raw socket
+`session.status` returns this same string;
 `session.type`/`session.text` over the raw socket instead return `invalid pane: <value>`). Unknown commands fail to decode and return a structured error, never a crash.
