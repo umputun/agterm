@@ -21,7 +21,8 @@ struct PaletteCatalogTests {
             "First Session",
             "Last Session",
             "Show Attention",
-            "Toggle Split",
+            "Toggle Vertical Split",
+            "Toggle Horizontal Split",
             "Close Split",
             "Toggle Scratch",
             "Toggle Terminal Zoom",
@@ -54,7 +55,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 46)
+        #expect(PaletteCommand.allCases.count == 47)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -68,6 +69,8 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.toggleFlag.title(in: PaletteContext(activeSessionFlagged: true)) == "Unflag Session")
         #expect(PaletteCommand.toggleFlaggedView.title(in: PaletteContext(sidebarShowsFlaggedOnly: false)) == "Show Flagged Sessions")
         #expect(PaletteCommand.toggleFlaggedView.title(in: PaletteContext(sidebarShowsFlaggedOnly: true)) == "Show All Sessions")
+        #expect(PaletteCommand.focusLeftPane.title(in: PaletteContext(activeSplitAxis: .topBottom)) == "Focus Top Pane")
+        #expect(PaletteCommand.focusRightPane.title(in: PaletteContext(activeSplitAxis: .topBottom)) == "Focus Bottom Pane")
     }
 
     @Test func clearFlaggedVisibleOnlyWhenSomethingIsFlagged() {
@@ -138,7 +141,8 @@ struct PaletteCatalogTests {
     ]
 
     private static let needSession: Set<PaletteCommand> = [
-        .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleScratch, .find,
+        .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
+        .toggleScratch, .find,
         .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
         .firstSession, .lastSession,
     ]

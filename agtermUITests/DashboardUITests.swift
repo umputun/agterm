@@ -343,7 +343,7 @@ final class DashboardUITests: ControlAPITestCase {
                           + "so the click hit the dashboard, not the terminal beneath")
     }
 
-    // the title-bar Dashboard button opens the MRU dashboard grid — the GUI opener alongside ⌘⇧D / Navigate ▸
+    // the title-bar Dashboard button opens the MRU dashboard grid, the GUI opener alongside ⌘⇧G / Navigate ▸
     // Dashboard. It lives in the trailing action cluster in its own separator group (before the quick-terminal
     // button). Disabled with no sessions, so this seeds one first.
     func testTitlebarDashboardButtonOpensDashboard() throws {
@@ -426,7 +426,7 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "close removes the overlay after the resize")
     }
 
-    // the Navigate ▸ Dashboard menu item (⌘⇧D) is the GUI opener for the MRU dashboard grid — it TOGGLES:
+    // the Navigate ▸ Dashboard menu item (⌘⇧G) is the GUI opener for the MRU dashboard grid. It TOGGLES:
     // opening the window's most-recently-used sessions when closed, closing when open. Seeds a known recency
     // via explicit selects, opens via the menu item, asserts the overlay renders one cell per recent session
     // (the mru members), then toggles it closed via the same menu item and asserts the overlay is gone.
@@ -457,7 +457,7 @@ final class DashboardUITests: ControlAPITestCase {
     // way terminal zoom gates them. ⌘N (new_session) routes through the menu (performKeyEquivalent, PAST the
     // grid's keyDown-only key-catcher), but the New Session item is .disabled while the dashboard is open AND
     // AppActions.newSession guards on uiActionsEnabled, so it neither creates a session nor dismisses the grid.
-    // The Dashboard toggle stays enabled so ⌘⇧D still closes the grid — the user is never trapped.
+    // The Dashboard toggle stays enabled so ⌘⇧G still closes the grid, and the user is never trapped.
     func testDashboardGatesSessionShortcutsWhileOpen() throws {
         let ids = try prepareSessions(extra: 1) // [seeded, new1] → two sessions
         XCTAssertEqual(ids.count, 2)
@@ -474,9 +474,9 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertEqual(dashMembers()?.count, 2, "the gated shortcut leaves the dashboard members unchanged")
         XCTAssertFalse(pollSessionCount(3, timeout: 3), "⌘N must not create a session while the dashboard is open")
 
-        // the Dashboard toggle stays enabled (the escape hatch): ⌘⇧D closes the grid cleanly.
-        app.typeKey("d", modifierFlags: [.command, .shift])
-        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "⌘⇧D closes the open dashboard")
+        // the Dashboard toggle stays enabled (the escape hatch): ⌘⇧G closes the grid cleanly.
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "⌘⇧G closes the open dashboard")
         XCTAssertNil(dashMembers(), "the dashboard read-backs clear on the toggle-close")
         XCTAssertTrue(pollSessionCount(2, timeout: 5), "the session set is unchanged after gating + close")
     }

@@ -14,6 +14,7 @@ public struct PaletteContext: Sendable, Equatable {
     /// The ONLY term that entry keys on, matching the View-menu twin — marking is offered in either mode.
     public let activeWorkspaceMarked: Bool
     public let activeSessionHasSplit: Bool
+    public let activeSplitAxis: SplitAxis?
     public let hasPendingClose: Bool
     public let hasRecentClosed: Bool
     /// Whether the frontmost window has an active session at all.
@@ -37,6 +38,7 @@ public struct PaletteContext: Sendable, Equatable {
                 hasMarkedWorkspaces: Bool = false,
                 activeWorkspaceMarked: Bool = false,
                 activeSessionHasSplit: Bool = false,
+                activeSplitAxis: SplitAxis? = nil,
                 hasPendingClose: Bool = false,
                 hasRecentClosed: Bool = false,
                 hasActiveSession: Bool = false,
@@ -52,6 +54,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasMarkedWorkspaces = hasMarkedWorkspaces
         self.activeWorkspaceMarked = activeWorkspaceMarked
         self.activeSessionHasSplit = activeSessionHasSplit
+        self.activeSplitAxis = activeSplitAxis
         self.hasPendingClose = hasPendingClose
         self.hasRecentClosed = hasRecentClosed
         self.hasActiveSession = hasActiveSession
@@ -68,7 +71,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case firstSession, lastSession, showAttention
-    case toggleSplit, closeSplit, toggleScratch, toggleTerminalZoom, toggleSidebar, toggleFlag, focusWorkspace
+    case toggleSplit, toggleHorizontalSplit, closeSplit, toggleScratch, toggleTerminalZoom
+    case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
     case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
@@ -83,7 +87,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     public func isEnabled(in context: PaletteContext) -> Bool {
         guard isVisible(in: context), !isCoveredByModal(context) else { return false }
         switch self {
-        case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleScratch,
+        case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
+             .toggleHorizontalSplit, .toggleScratch,
              .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
              .firstSession, .lastSession:
             return context.hasActiveSession
@@ -170,7 +175,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .firstSession: return "First Session"
         case .lastSession: return "Last Session"
         case .showAttention: return "Show Attention"
-        case .toggleSplit: return "Toggle Split"
+        case .toggleSplit: return "Toggle Vertical Split"
+        case .toggleHorizontalSplit: return "Toggle Horizontal Split"
         case .closeSplit: return "Close Split"
         case .toggleScratch: return "Toggle Scratch"
         case .toggleTerminalZoom: return "Toggle Terminal Zoom"
@@ -197,8 +203,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleWorkspaceFilter: return "Toggle Workspace Filter"
         case .expandWorkspaces: return "Expand Workspaces"
         case .collapseWorkspaces: return "Collapse Workspaces"
-        case .focusLeftPane: return "Focus Left Pane"
-        case .focusRightPane: return "Focus Right Pane"
+        case .focusLeftPane: return context.activeSplitAxis == .topBottom ? "Focus Top Pane" : "Focus Left Pane"
+        case .focusRightPane: return context.activeSplitAxis == .topBottom ? "Focus Bottom Pane" : "Focus Right Pane"
         }
     }
 
@@ -222,6 +228,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .lastSession: return .lastSession
         case .showAttention: return .showAttention
         case .toggleSplit: return .toggleSplit
+        case .toggleHorizontalSplit: return .toggleHorizontalSplit
         case .toggleScratch: return .toggleScratch
         case .toggleTerminalZoom: return .toggleTerminalZoom
         case .toggleSidebar: return .toggleSidebar

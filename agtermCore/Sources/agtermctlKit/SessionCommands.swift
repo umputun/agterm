@@ -7,7 +7,7 @@ import agtermCore
 /// server-side switch, which still catches a raw socket client. They reuse `StatusPane`'s value set as the
 /// shared pane-addressing vocabulary — named for agent status, but its cases are the pane names.
 func validatePaneArgument(_ pane: String?) throws {
-    if let pane, StatusPane(rawValue: pane) == nil {
+    if let pane, StatusPane(controlName: pane) == nil {
         throw ValidationError("--pane must be left, right, or scratch")
     }
 }
@@ -192,7 +192,7 @@ struct Session: ParsableCommand {
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
         @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
         @Flag(name: .long, help: "Select the session first if its surface is not ready (main pane only; a split pane must already exist).") var select = false
-        @Option(name: .long, help: "Which pane to type into: left (main), right (split), or scratch (the session's scratch terminal, even when hidden). Defaults to the left pane.") var pane: String?
+        @Option(name: .long, help: "Which pane to type into: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to primary.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -227,11 +227,19 @@ struct Session: ParsableCommand {
             static let configuration = CommandConfiguration(commandName: "visibility",
                                                            abstract: "Show or hide a session split (on|off|toggle).")
             @Argument(help: "Mode: on (show), off (hide), or toggle (default). Hidden panes stay alive.") var mode: String = "toggle"
+            @Option(name: .long, help: "Divider direction: vertical (left/right) or horizontal (top/bottom).") var axis: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
+            func validate() throws {
+                if let axis, SplitAxis(rawValue: axis) == nil {
+                    throw ValidationError("--axis must be vertical or horizontal")
+                }
+            }
+
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: .sessionSplit, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+                ControlRequest(cmd: .sessionSplit, target: target.target,
+                               args: options.withWindow(ControlArgs(mode: mode, axis: axis)))
             }
         }
 
@@ -260,8 +268,8 @@ struct Session: ParsableCommand {
     }
 
     struct Focus: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Focus a split session's pane (left|right|other).")
-        @Argument(help: "Pane: left, right, or other (toggle, default).") var pane: String = "other"
+        static let configuration = CommandConfiguration(abstract: "Focus a split session's pane by position or role.")
+        @Argument(help: "Pane: primary/left/top, split/right/bottom, or other (toggle, default).") var pane: String = "other"
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -272,19 +280,23 @@ struct Session: ParsableCommand {
 
     struct Resize: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Resize a split session's divider (set or nudge the left-pane fraction).")
-        @Option(name: .customLong("split-ratio"), help: "Absolute left-pane fraction 0..1 (e.g. 0.7). Clamped to 0.05..0.95.") var splitRatio: Double?
+            abstract: "Resize a split session's divider (set or nudge the primary-pane fraction).")
+        @Option(name: .customLong("split-ratio"), help: "Absolute primary-pane fraction 0..1 (left or top; e.g. 0.7). Clamped to 0.05..0.95.") var splitRatio: Double?
         @Option(name: .customLong("grow-left"), help: "Grow the left pane by this fraction (e.g. 0.05); shrinks the right.") var growLeft: Double?
         @Option(name: .customLong("grow-right"), help: "Grow the right pane by this fraction (e.g. 0.05); shrinks the left.") var growRight: Double?
+        @Option(name: .customLong("grow-primary"), help: "Grow the primary pane by this fraction.") var growPrimary: Double?
+        @Option(name: .customLong("grow-split"), help: "Grow the split pane by this fraction.") var growSplit: Double?
+        @Option(name: .customLong("grow-top"), help: "Alias for --grow-primary in a horizontal split.") var growTop: Double?
+        @Option(name: .customLong("grow-bottom"), help: "Alias for --grow-split in a horizontal split.") var growBottom: Double?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
         // exactly one of the three forms must be set; reject neither/multiple at parse time so it's a clean
         // usage error, unit-testable without a socket. Prints the applied (clamped) fraction.
         func validate() throws {
-            let values = [splitRatio, growLeft, growRight].compactMap { $0 }
+            let values = [splitRatio, growLeft, growRight, growPrimary, growSplit, growTop, growBottom].compactMap { $0 }
             guard values.count == 1 else {
-                throw ValidationError("provide exactly one of --split-ratio, --grow-left, or --grow-right")
+                throw ValidationError("provide exactly one split ratio or grow option")
             }
             // nan/inf parse as Double but fail to JSON-encode (a generic error after the socket opens), so
             // reject non-finite input here with a clean usage error.
@@ -294,14 +306,14 @@ struct Session: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            // grow-left/grow-right map to a signed wire delta (+ grows the left pane); split-ratio is absolute.
+            // legacy left/right and role/axis aliases map to the same signed primary-pane delta.
             let args: ControlArgs
             if let splitRatio {
                 args = ControlArgs(ratio: splitRatio)
-            } else if let growLeft {
-                args = ControlArgs(ratioDelta: growLeft)
+            } else if let grow = growLeft ?? growPrimary ?? growTop {
+                args = ControlArgs(ratioDelta: grow)
             } else {
-                args = ControlArgs(ratioDelta: -(growRight ?? 0))
+                args = ControlArgs(ratioDelta: -(growRight ?? growSplit ?? growBottom ?? 0))
             }
             return ControlRequest(cmd: .sessionResize, target: target.target, args: options.withWindow(args))
         }
@@ -342,7 +354,7 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Print a session's terminal buffer as plain text (does not touch the system clipboard).")
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
         @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
-        @Option(name: .long, help: "Which pane to read: left (main), right (split), or scratch (the session's scratch terminal, even when hidden). Defaults to the on-screen pane.") var pane: String?
+        @Option(name: .long, help: "Which pane to read: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to the on-screen pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -381,7 +393,11 @@ struct Session: ParsableCommand {
             reverts on the next status set without it.
             """)
         var shape: String?
-        @Option(name: .long, help: "Which pane set this status: left (main), right (split), or scratch. Records the blocked pane so nav lands on it. Defaults to the left pane.") var pane: String?
+        @Option(name: .long, help: """
+            Which pane set this status: primary/left/top, split/right/bottom, or scratch. Records the blocked \
+            pane so navigation reaches it. Defaults to primary.
+            """)
+        var pane: String?
         @Option(name: .customLong("pane-id"), help: """
             A surface's stable token (the shell's $AGTERM_PANE_ID) — the agent-status hook forwards it so a \
             status set from a promoted-then-re-split pane lands on the pane's current slot. Overrides --pane \
@@ -434,7 +450,7 @@ struct Session: ParsableCommand {
         @Argument(help: "Shell line to run on the next launch (omit with --none or --clear).") var command: String?
         @Flag(name: .long, help: "Pin the pane to nothing: it restores a plain shell, suppressing the captured command.") var none = false
         @Flag(name: .long, help: "Drop the override so the pane goes back to restoring its captured foreground command.") var clear = false
-        @Option(name: .long, help: "Which pane to pin: left (main), right (split), or scratch (rejected — the scratch is never restored). Defaults to the left pane.") var pane: String?
+        @Option(name: .long, help: "Which pane to pin: primary/left/top or split/right/bottom; scratch is rejected. Defaults to primary.") var pane: String?
         @Option(name: .customLong("pane-id"), help: """
             A surface's stable token (the shell's $AGTERM_PANE_ID) — resolves to the pane's CURRENT slot, \
             so a hook in a promoted-then-re-split pane still pins the right one. Unlike `session status`, \
@@ -625,7 +641,7 @@ struct Session: ParsableCommand {
             subcommands: [Open.self, Close.self, Resize.self, Result.self]
         )
 
-        /// `--pane` validation for the overlay commands: `left|right` only, deliberately NOT the shared
+        /// `--pane` validation for the overlay commands: the two pane roles only, deliberately NOT the shared
         /// `validatePaneArgument`, which also accepts `scratch` — there is no scratch pane to cover, and
         /// reusing it would send `scratch` to the socket instead of failing as a usage error.
         static func validatePane(_ pane: String?) throws {
@@ -644,7 +660,7 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
             @Option(name: .long, help: """
-                Scope the overlay to ONE split pane (left or right), leaving the sibling pane live and \
+                Scope the overlay to ONE split pane (primary/left/top or split/right/bottom), leaving the sibling pane live and \
                 visible; omit for the session-wide overlay. A pane overlay is always full-pane, so this \
                 cannot be combined with --size-percent.
                 """)
@@ -714,7 +730,7 @@ struct Session: ParsableCommand {
 
         struct Close: RequestCommand {
             static let configuration = CommandConfiguration(abstract: "Close the overlay terminal (destroys it).")
-            @Option(name: .long, help: "Close that split pane's overlay (left or right); omit for the session-wide overlay.")
+            @Option(name: .long, help: "Close that split pane's overlay (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
             var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
@@ -752,7 +768,7 @@ struct Session: ParsableCommand {
 
         struct Result: RequestCommand {
             static let configuration = CommandConfiguration(abstract: "Print the overlay program's exit status (errors if it is still running or never ran).")
-            @Option(name: .long, help: "Read that split pane's overlay status (left or right); omit for the session-wide overlay.")
+            @Option(name: .long, help: "Read that split pane's overlay status (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
             var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions

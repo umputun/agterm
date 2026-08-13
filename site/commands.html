@@ -433,7 +433,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">title</span> (raw OSC terminal title, omitted when
                 none), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> (the split is SHOWN side by side),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> (both split panes are SHOWN),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">realized</span> (the session's main pane has a live
                 terminal; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">false</span> means no shell was spawned and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text</span>
@@ -443,6 +443,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (a second pane exists at all, shown or
                 hidden, omitted when there is none — read this rather than
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> to tell whether a session has a split),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">vertical</span> for left/right or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">horizontal</span> for top/bottom),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRatio</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitFocused</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>,
@@ -1097,15 +1098,16 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session split [on|off|toggle] [--target T] [--window W]
+                agtermctl session split [on|off|toggle] [--axis vertical|horizontal] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.split</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                A side-by-side second shell in the same session.
+                A second shell in the same session. Vertical gives left/right panes; horizontal gives top/bottom.
+                Omitting <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--axis</span> preserves the current axis and the legacy left/right default.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> <em>hides</em> it but keeps the shell alive
                 (mirroring ⌘D); tearing the pane down takes
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session split close</span> or the shell's own exit.
-                Idempotent; an unknown mode errors.
+                Idempotent; an unknown mode or axis errors.
                 Read back via the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> (shown) and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (exists at all); a hidden split reads
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split: false</span> with the pane still alive, and
@@ -1155,13 +1157,13 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session focus [left|right|other] [--target T] [--window W]
+                agtermctl session focus [primary|split|left|right|top|bottom|other] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.focus</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Move keyboard focus between the two split panes;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">other</span> toggles and is the default. Errors when
-                the session has no split. It works whether the split is shown side-by-side or hidden — when hidden, focusing a pane
+                the session has no split. It works whether the split is shown in either orientation or hidden. When hidden, focusing a pane
                 swaps which one shows maximized. Read back via the session node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitFocused</span>.
               </p>
@@ -1169,14 +1171,13 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session resize (--split-ratio R | --grow-left D | --grow-right D) [--target T] [--window W]
+                agtermctl session resize (--split-ratio R | --grow-primary D | --grow-split D | --grow-left D | --grow-right D | --grow-top D | --grow-bottom D) [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.resize</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Move the split divider. Provide exactly one form:
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--split-ratio</span> sets the absolute left-pane
-                fraction (0–1); <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--grow-left D</span> /
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--grow-right D</span> nudge it by the fraction D. The
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--split-ratio</span> sets the absolute primary-pane
+                fraction (left or top, 0-1); the grow options are role and position aliases that nudge it by the fraction D. The
                 result is clamped to 0.05–0.95 and persisted.
                 <strong style="color: #bfbab0">Returns</strong> the applied fraction as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.ratio</span>. Errors when the session has no
@@ -1943,7 +1944,7 @@
                 pane's own font untouched.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                The GUI openers — ⌘⇧D, Navigate ▸ Dashboard, and the command palette's Dashboard entry — toggle the frontmost
+                The GUI openers, ⌘⇧G, Navigate ▸ Dashboard, and the command palette's Dashboard entry, toggle the frontmost
                 window's most-recently-used grid auto-sized (the
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard --mru --auto-size</span> equivalent; no separate
                 control command). Read back from the tree's top-level

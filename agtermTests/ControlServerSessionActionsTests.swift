@@ -511,6 +511,42 @@ final class ControlServerSessionActionsTests: XCTestCase {
         return (store, session)
     }
 
+    func testSplitVisibilityDefaultsLeftRightAndAcceptsHorizontalAxis() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil, mode: "on", axis: nil).ok)
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .leftRight)
+
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil, mode: "on", axis: .topBottom).ok)
+        XCTAssertTrue(session.isSplit, "on with another axis transposes rather than hides")
+        XCTAssertEqual(session.splitAxis, .topBottom)
+    }
+
+    func testAxisSpecificControlToggleUsesTheSameHideTransposeMatrixAsTheGui() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil,
+                                          mode: "toggle", axis: .topBottom).ok)
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
+
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil,
+                                          mode: "toggle", axis: .leftRight).ok)
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .leftRight)
+
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil,
+                                          mode: "toggle", axis: .leftRight).ok)
+        XCTAssertFalse(session.isSplit)
+        XCTAssertTrue(session.hasSplit)
+        XCTAssertEqual(session.splitAxis, .leftRight)
+    }
+
     func testSplitCloseTearsThePaneDown() throws {
         let (_, session) = try splitSession()
         session.splitRatio = 0.7

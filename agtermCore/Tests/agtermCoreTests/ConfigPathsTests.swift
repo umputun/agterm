@@ -80,7 +80,7 @@ struct ConfigPathsTests {
         #expect(parsed.diagnostics.isEmpty)
     }
 
-    // issue #405: the shipped example was `map cmd+shift+d toggle_split`, a chord `dashboard` later took,
+    // issue #405: a shipped map example once used a chord a later built-in default took,
     // so uncommenting the starter's own suggestion silently bound nothing. A `command` example rots the
     // same way, `validateCommands` dropping a custom shortcut a built-in has since claimed.
     @Test func starterKeymapExamplesApplyWhenUncommented() {

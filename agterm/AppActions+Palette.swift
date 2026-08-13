@@ -30,6 +30,7 @@ extension AppActions {
             hasMarkedWorkspaces: activeStore?.focusedWorkspaceIDs.isEmpty == false,
             activeWorkspaceMarked: activeStore?.isCurrentWorkspaceFocusMember == true,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
+            activeSplitAxis: activeStore?.activeSession?.splitAxis,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
             hasRecentClosed: !library.recentClosedItems.isEmpty,
             hasActiveSession: activeStore?.activeSession != nil,
@@ -80,6 +81,7 @@ extension AppActions {
         case .lastSession: selectLastSession()
         case .showAttention: openAttentionPalette()
         case .toggleSplit: toggleSplit()
+        case .toggleHorizontalSplit: toggleHorizontalSplit()
         case .closeSplit: closeSplit()
         case .toggleScratch: toggleScratch()
         case .toggleTerminalZoom: toggleTerminalZoom()

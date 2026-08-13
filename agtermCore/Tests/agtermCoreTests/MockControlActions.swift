@@ -33,7 +33,7 @@ final class MockControlActions: ControlActions {
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
-        case sessionSplit(target: String?, window: String?, String?)
+        case sessionSplit(target: String?, window: String?, String?, SplitAxis?)
         case sessionSplitClose(target: String?, window: String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
         case sessionFocus(target: String?, window: String?, String?)
@@ -280,7 +280,11 @@ final class MockControlActions: ControlActions {
     }
 
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
-        calls.append(.sessionSplit(target: target, window: window, mode))
+        splitSession(target, window: window, mode: mode, axis: nil)
+    }
+
+    func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse {
+        calls.append(.sessionSplit(target: target, window: window, mode, axis))
         return ControlResponse(ok: true)
     }
 

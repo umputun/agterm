@@ -177,11 +177,14 @@ paths:
   own chords joined by `>` so a run cannot read as one chord (`⌘T ⌃␣>S`),
   returns the alternatives alone for an unbound action, and nil when there is neither.
 - The starter file's `map` and `command` examples are literal chords that rot when a new built-in claims
-  one, as `dashboard` did to the shipped `cmd+shift+d` (issue #405). Keep
+  one, as `dashboard` previously did to the shipped `cmd+shift+d` (issue #405). Keep
   `ConfigPathsTests.starterKeymapExamplesApplyWhenUncommented`, which uncomments every example, requires
   it to parse clean, and counts the chords that survive.
   Both verbs rot: `validateBindings` clears a custom shortcut a built-in has claimed just as
   `resolveBuiltinOverrides` drops the colliding `map`.
+- New shipped defaults must not break a valid existing keymap. `parseKeymap` vacates the new horizontal
+  split default when an old file explicitly uses `cmd+shift+d`, and vacates Dashboard's new default when
+  an old file explicitly uses `cmd+shift+g`. An explicit map for the new action opts into its new chord.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject
   visible shell metacharacters. `TerminalText.sanitized` strips control characters, not `;`,

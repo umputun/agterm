@@ -82,6 +82,31 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(NSCursor.current, NSCursor.resizeLeftRight)
     }
 
+    func testHorizontalDividerUsesHeightRatioAndUpDownCursor() throws {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        session.splitRatio = 0.75
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 150, accuracy: 1)
+        let pointInSplit = NSPoint(x: split.bounds.midX,
+                                   y: split.arrangedSubviews[0].frame.maxY + split.dividerThickness / 2)
+        let pointInWindow = split.convert(pointInSplit, to: nil)
+        let pointInParent = try XCTUnwrap(split.superview).convert(pointInWindow, from: nil)
+        XCTAssertTrue(split.hitTest(pointInParent) === split,
+                      "the probe point must land on the horizontal divider; frames: \(split.arrangedSubviews.map(\.frame))")
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved,
+                                                     location: pointInWindow,
+                                                     modifierFlags: [], timestamp: 0,
+                                                     windowNumber: window.windowNumber, context: nil,
+                                                     eventNumber: 0, clickCount: 0, pressure: 0))
+        NSCursor.arrow.set()
+        probe.mouseMoved(with: event)
+        XCTAssertEqual(NSCursor.current, NSCursor.resizeUpDown)
+    }
+
     /// The tracking area covers the whole split, not the band, so every move over a pane arrives here too.
     func testLeavesTheCursorAloneOverAPane() throws {
         probe.layout()

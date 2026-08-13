@@ -1465,7 +1465,7 @@ struct AppStoreTests {
         #expect(tree.workspaces[1].sessions == [
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
                                title: "remote:~/b", active: true, split: true,
-                               hasSplit: true, splitFocused: false,
+                               hasSplit: true, splitAxis: "vertical", splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
                                status: "blocked", statusPane: "right",
                                background: BackgroundWatermark(kind: .text, text: "PROD"),

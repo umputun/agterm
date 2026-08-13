@@ -64,6 +64,17 @@ struct AgentStatusTests {
         #expect(StatusPane.allCases == [.left, .right, .scratch])
     }
 
+    @Test func statusPaneControlAliasesPreserveCanonicalReadback() {
+        for alias in ["left", "top", "primary"] {
+            #expect(StatusPane(controlName: alias) == .left)
+            #expect(StatusPane(controlName: alias)?.rawValue == "left")
+        }
+        for alias in ["right", "bottom", "split"] {
+            #expect(StatusPane(controlName: alias) == .right)
+            #expect(StatusPane(controlName: alias)?.rawValue == "right")
+        }
+    }
+
     @Test func indicatorCarriesStatusPane() {
         let indicator = AgentIndicator(status: .blocked, statusPane: .right)
         #expect(indicator.status == .blocked)

@@ -11,9 +11,9 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
 
     public init?(controlName: String) {
         switch controlName {
-        case "left", "primary":
+        case "left", "top", "primary":
             self = .primary
-        case "right", "split":
+        case "right", "bottom", "split":
             self = .split
         case "scratch":
             self = .scratch

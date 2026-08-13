@@ -390,8 +390,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   no IDs/MRU/font; open needs IDs or MRU; fixed size must be finite positive.
 - A split expands to primary and split `DashboardMember`s, unless the id carries a `:left`/`:right` suffix
   (#331) selecting one pane. Host-free `DashboardTarget` owns that grammar: split on the FIRST colon,
-  accept only `left`/`right` case-insensitively, reject everything else including `primary`/`split`,
-  `scratch`/`overlay`, and a pasted `surface:<id>:<pane>`. The dispatcher rejects bad grammar outright; a
+  accept `primary`/`left`/`top` and `split`/`right`/`bottom` case-insensitively while readback stays
+  `left`/`right`; reject `scratch`/`overlay` and a pasted `surface:<id>:<pane>`. The dispatcher rejects bad grammar outright; a
   well-formed ref naming no pane (`:right` without a split) is a soft miss joining `unresolved`.
 - Resolve targets in order and deduplicate by session+pane, then cap panes app-side at
   `DashboardLayout.maxCells` 9. Append dropped-pane text to unresolved text with `;`. Guard emptiness on the
@@ -402,7 +402,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `promoteSplitMember` rewrites that session's `.split` cell to `.primary` from `agtermApp.handlePaneExit`.
   Reconcile cannot do this: `closeSplit` and `closePrimaryPane` leave identical `hasSplit == false` state,
   and only the exit path knows which happened.
-- Dashboard is per-window and view-only; GUI Command-Shift-D/menu/palette toggles MRU auto-size.
+- Dashboard is per-window and view-only; GUI Command-Shift-G/menu/palette toggles MRU auto-size.
   Arrows navigate ragged `ceil(sqrt(n))` grid, Enter closes then selects/focuses exact pane, Esc closes.
   It is reciprocal with zoom. Read live `dashboardMembers`, highlighted member, applied font size, and
   `auto|fixed|untouched` mode. See [[libghostty]] for reparent, input gates, and transient font.

@@ -43,8 +43,8 @@ public enum ControlPaneFocusMode: Equatable, Sendable {
 
     public static func parse(_ pane: String?) -> ControlPaneFocusMode? {
         switch pane ?? "other" {
-        case "left", "primary": return .primary
-        case "right", "split": return .split
+        case "left", "top", "primary": return .primary
+        case "right", "bottom", "split": return .split
         case "other", "toggle": return .toggle
         default: return nil
         }

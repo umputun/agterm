@@ -59,10 +59,13 @@ struct DashboardTargetTests {
         #expect(DashboardTarget(rawValue: "\(uuid):lft") == nil)
     }
 
-    // primary/split parse as TerminalZoomSurface but are not the spelling dashboardMembers emits
-    @Test(arguments: ["primary", "split"])
-    func enumAliasSpellingsAreRejected(_ suffix: String) {
-        #expect(DashboardTarget(rawValue: "\(uuid):\(suffix)") == nil)
+    @Test func roleAndAxisAliasesResolveWithoutChangingReadbackRoles() {
+        for suffix in ["primary", "left", "top"] {
+            #expect(DashboardTarget(rawValue: "\(uuid):\(suffix)")?.pane == .primary)
+        }
+        for suffix in ["split", "right", "bottom"] {
+            #expect(DashboardTarget(rawValue: "\(uuid):\(suffix)")?.pane == .split)
+        }
     }
 
     @Test(arguments: ["scratch", "overlay"])

@@ -74,7 +74,7 @@ paths:
   stepping, pane focus, and Dashboard. File UI tests against the menu that owns the item.
 - Workspace focus controls are mode-agnostic because membership applies when tree mode returns.
   Expand/Collapse Workspaces alone are disabled outside tree mode, in both menu and palette.
-- Dashboard uses Command-Shift-D, `BuiltinAction.dashboard`, and `toggleDashboard`; it toggles an MRU,
+- Dashboard uses Command-Shift-G, `BuiltinAction.dashboard`, and `toggleDashboard`; it toggles an MRU,
   auto-sized grid unless terminal zoom is active. Share `dashboardMembers` with control.
 - The View menu carries no fullscreen item of agterm's own, and `toggle_fullscreen` rides the key monitor
   rather than a menu shortcut; see [[windows]]. It remains rebindable and control-drivable.
@@ -104,8 +104,9 @@ paths:
 
 ## Split panes
 
-- `isSplit` means shown side-by-side, `hasSplit` means the second shell exists, and `splitFocused` chooses
-  focus. Split title/cwd feed focus-aware display name and focused cwd based on `splitFocused`, even hidden.
+- `isSplit` means both panes are shown, `hasSplit` means the second shell exists, `splitAxis` chooses
+  left/right or top/bottom, and `splitFocused` chooses focus. Split title/cwd feed focus-aware display name
+  and focused cwd based on `splitFocused`, even hidden.
   `effectiveCwd` remains primary for new panes and `AGTERM_SESSION_PWD`; `activeSurface` follows focus.
 - Creating a split focuses right. Hiding retains both shells and shows the focused pane maximized;
   reshown splits preserve focus. `closePrimaryPane` promotes right into primary with cwd/title/foreground
@@ -114,8 +115,8 @@ paths:
 - Pane focus actions, menu/palette, and `session.focus` gate on `hasSplit`, not `isSplit`, so they also swap
   the maximized hidden pane. Ctrl-1/Ctrl-2 use an app-wide event monitor and always consume these reserved
   keys, even when no split exists.
-- Persist each pane cwd and the 0...1 left-pane `splitRatio`. `SplitRatioAccessor` is an unconditional
-  background representable on primary, introspects `NSSplitView`, retries until width exists, observes
+- Persist each pane cwd and the 0...1 primary-pane `splitRatio`. `SplitRatioAccessor` is an unconditional
+  background representable on primary, introspects `NSSplitView`, retries until its axis extent exists, observes
   `didResizeSubviews`, and debounces save by about 0.4 seconds. Regular saves and quit flush also persist it.
 - Double-clicking the divider restores `splitRatioDefault` through the same `applyRatio` path as
   `session.resize`, persisting immediately rather than through the drag debounce. AppKit offers no hook:
@@ -132,7 +133,8 @@ paths:
   padding lies inside the safe-area band and AppKit expands `NSSplitView` full height; normal 48px mode is
   already bounded. Compute the live overrun and apply a CALayer mask, removing it at zero.
   Do not use SwiftUI mask/clipping because it reflows and loses the terminal's top row; do not use an
-  opaque cover because it breaks translucency. Key `HSplitView` identity by session.
+  opaque cover because it breaks translucency. Key each `HSplitView`/`VSplitView` identity by session and
+  keep the terminal surface identities stable when changing axis.
 - Sidebar icon follows `hasSplit`. The titlebar's four-state icon is outline with none,
   `rectangle.split.2x1.fill` while shown, left-half filled for hidden primary, and right-half filled for
   hidden split.

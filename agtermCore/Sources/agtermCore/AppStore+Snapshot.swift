@@ -29,7 +29,8 @@ extension AppStore {
 
     func sessionSnapshot(_ session: Session) -> SessionSnapshot {
         SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
-                        isSplit: session.isSplit, fontSize: session.fontSize,
+                        isSplit: session.isSplit, splitAxis: session.isSplit ? session.splitAxis : nil,
+                        fontSize: session.fontSize,
                         splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio,
                         flagged: session.flagged,
                         foregroundCommand: session.foregroundCommand,
@@ -63,6 +64,7 @@ extension AppStore {
         let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName)
         session.isSplit = snapshot.isSplit ?? false
         session.hasSplit = session.isSplit
+        session.splitAxis = session.isSplit ? (snapshot.splitAxis ?? .leftRight) : .leftRight
         session.fontSize = snapshot.fontSize
         session.initialSplitCwd = snapshot.splitCwd
         session.splitRatio = snapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }

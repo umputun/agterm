@@ -268,10 +268,15 @@ extension agtermApp {
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
                     .disabled(!PaletteCommand.clearFocus.isEnabled(in: context))
                 Button { actions.toggleSplit() } label: {
-                    Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
+                    Label("Toggle Vertical Split", systemImage: "rectangle.split.2x1")
                 }
                 .keyboardShortcut(shortcut(for: .toggleSplit))
                 .disabled(!PaletteCommand.toggleSplit.isEnabled(in: context))
+                Button { actions.toggleHorizontalSplit() } label: {
+                    Label("Toggle Horizontal Split", systemImage: "rectangle.split.1x2")
+                }
+                .keyboardShortcut(shortcut(for: .toggleHorizontalSplit))
+                .disabled(!PaletteCommand.toggleHorizontalSplit.isEnabled(in: context))
                 let scratchShown = library.activeStore?.activeSession?.scratchActive == true
                 Button { actions.toggleScratch() } label: {
                     // static neutral icon like the Split menu item above; state is shown by the label text.
@@ -320,7 +325,7 @@ extension agtermApp {
                     .disabled(!PaletteCommand.showAttention.isEnabled(in: context))
                 Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "rectangle.split.2x2") }
                     .keyboardShortcut(shortcut(for: .dashboard))
-                    // the predicate spares this one the dashboard's own term: ⌘⇧D stays the open grid's
+                    // the predicate spares this one the dashboard's own term: its shortcut stays the open grid's
                     // close escape hatch, while zoom and a topmost native picker still block the toggle.
                     .disabled(!PaletteCommand.dashboard.isEnabled(in: context))
                 Divider()
@@ -348,13 +353,16 @@ extension agtermApp {
                     .keyboardShortcut(shortcut(for: .lastSession))
                     .disabled(!PaletteCommand.lastSession.isEnabled(in: context))
                 Divider()
+                let topBottom = library.activeStore?.activeSession?.splitAxis == .topBottom
                 Button { actions.focusPane(.main) } label: {
-                    Label("Focus Left Pane", systemImage: "rectangle.lefthalf.filled")
+                    Label(topBottom ? "Focus Top Pane" : "Focus Left Pane",
+                          systemImage: topBottom ? "rectangle.tophalf.filled" : "rectangle.lefthalf.filled")
                 }
                 .keyboardShortcut(shortcut(for: .focusLeftPane))
                 .disabled(!PaletteCommand.focusLeftPane.isEnabled(in: context))
                 Button { actions.focusPane(.split) } label: {
-                    Label("Focus Right Pane", systemImage: "rectangle.righthalf.filled")
+                    Label(topBottom ? "Focus Bottom Pane" : "Focus Right Pane",
+                          systemImage: topBottom ? "rectangle.bottomhalf.filled" : "rectangle.righthalf.filled")
                 }
                 .keyboardShortcut(shortcut(for: .focusRightPane))
                 .disabled(!PaletteCommand.focusRightPane.isEnabled(in: context))

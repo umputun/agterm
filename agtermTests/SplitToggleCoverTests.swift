@@ -45,6 +45,48 @@ final class SplitToggleCoverTests: XCTestCase {
 
         XCTAssertTrue(session.isSplit, "the cover rung must not disarm the ordinary split toggle")
         XCTAssertTrue(session.hasSplit)
+        XCTAssertEqual(session.splitAxis, .leftRight)
+    }
+
+    func testHorizontalActionCreatesAndTogglesAHorizontalSplit() throws {
+        let session = try activeSession()
+
+        actions.toggleHorizontalSplit()
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
+
+        actions.toggleHorizontalSplit()
+        XCTAssertFalse(session.isSplit)
+        XCTAssertTrue(session.hasSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
+    }
+
+    func testOrientationActionsTransposeAShownSplitWithoutChangingItsState() throws {
+        let session = try activeSession()
+        actions.toggleSplit()
+        session.splitRatio = 0.7
+        let focused = session.splitFocused
+
+        actions.toggleHorizontalSplit()
+
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
+        XCTAssertEqual(session.splitRatio, 0.7)
+        XCTAssertEqual(session.splitFocused, focused)
+        XCTAssertTrue(session.hasSplit)
+    }
+
+    func testTitlebarStyleTogglePreservesTheCurrentAxis() throws {
+        let session = try activeSession()
+        actions.toggleHorizontalSplit()
+
+        actions.toggleCurrentSplit()
+        XCTAssertFalse(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
+
+        actions.toggleCurrentSplit()
+        XCTAssertTrue(session.isSplit)
+        XCTAssertEqual(session.splitAxis, .topBottom)
     }
 
     func testShownScratchIsDismissedInsteadOfSplitting() throws {

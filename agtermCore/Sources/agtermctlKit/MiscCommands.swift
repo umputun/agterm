@@ -564,9 +564,9 @@ struct Font: ParsableCommand {
         subcommands: [Inc.self, Dec.self, Reset.self]
     )
 
-    /// Help for the shared `--pane` option, reusing the `left|right|scratch` vocabulary of `session type`.
+    /// Help for the shared `--pane` option; role and axis-position aliases resolve to the same stable slots.
     static let paneHelp = "Which pane's font to change: left (main), right (split), or scratch (the "
-        + "session's scratch terminal, even when hidden). Defaults to the left pane."
+        + "session's scratch terminal, even when hidden). primary/left/top and split/right/bottom are aliases. Defaults to the left pane."
 
     struct Inc: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Increase font size.")

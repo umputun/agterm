@@ -62,6 +62,47 @@ struct AppStorePaneTests {
         #expect(session.splitFocused == false)  // regression guard: no jerk back to the right pane
     }
 
+    @Test func axisSpecificSplitFollowsCreateHideTransposeAndReshowMatrix() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+
+        store.toggleSplit(session.id, axis: .topBottom)
+        #expect(session.isSplit && session.hasSplit)
+        #expect(session.splitAxis == .topBottom)
+        #expect(session.splitFocused)
+
+        session.splitFocused = false
+        store.toggleSplit(session.id, axis: .leftRight)
+        #expect(session.isSplit)
+        #expect(session.splitAxis == .leftRight)
+        #expect(!session.splitFocused, "transposition preserves the focused pane")
+
+        store.toggleSplit(session.id, axis: .leftRight)
+        #expect(!session.isSplit)
+        #expect(session.hasSplit)
+        #expect(session.splitAxis == .leftRight)
+
+        store.toggleSplit(session.id, axis: .topBottom)
+        #expect(session.isSplit)
+        #expect(session.splitAxis == .topBottom)
+        #expect(!session.splitFocused, "reshowing a hidden split preserves the focused pane")
+    }
+
+    @Test func genericSplitPreservesLegacyBehaviorAndCurrentAxis() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.splitAxis = .topBottom
+
+        store.toggleSplit(session.id)
+        #expect(session.isSplit)
+        #expect(session.splitAxis == .topBottom)
+        store.toggleSplit(session.id)
+        #expect(!session.isSplit)
+        #expect(session.splitAxis == .topBottom)
+    }
+
     @Test func closeSplitHidesAndTearsDownSurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -73,6 +114,7 @@ struct AppStorePaneTests {
         session.splitSurface = split
         session.splitCwd = "/var/log"
         session.splitRatio = 0.7
+        session.splitAxis = .topBottom
         store.closeSplit(session.id)
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
@@ -81,6 +123,7 @@ struct AppStorePaneTests {
         #expect(session.splitCwd == nil)
         #expect(session.initialSplitCwd == nil)
         #expect(session.splitRatio == nil) // teardown clears geometry too, so a fresh re-split opens even
+        #expect(session.splitAxis == .leftRight)
         #expect(split.teardownCount == 1)
     }
 

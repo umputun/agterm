@@ -63,6 +63,42 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(collapsedTTY, rightTTY, "closing the split keeps the focused (right) pane, not the primary")
     }
 
+    func testHorizontalShortcutCreatesTransposesAndTogglesWithoutReplacingPanes() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        let primaryTTY = ttyAfterCommand(named: "horizontal-primary")
+        XCTAssertNotNil(primaryTTY)
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5))
+
+        app.typeKey("d", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitSplitValue(splitButton, "both-horizontal"), "⌘⇧D creates a top/bottom split")
+        let splitTTY = ttyAfterCommand(named: "horizontal-split")
+        XCTAssertNotNil(splitTTY)
+        XCTAssertNotEqual(splitTTY, primaryTTY)
+
+        app.typeKey("1", modifierFlags: .control)
+        XCTAssertEqual(ttyAfterCommand(named: "horizontal-primary-before-transpose"), primaryTTY)
+        app.typeKey("d", modifierFlags: .command)
+        XCTAssertTrue(waitSplitValue(splitButton, "both"), "⌘D transposes the shown split to left/right")
+        XCTAssertEqual(ttyAfterCommand(named: "horizontal-primary-after-transpose"), primaryTTY,
+                       "transposing preserves the focused primary terminal")
+
+        app.typeKey("d", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitSplitValue(splitButton, "both-horizontal"), "⌘⇧D transposes it back to top/bottom")
+        app.typeKey("2", modifierFlags: .control)
+        XCTAssertEqual(ttyAfterCommand(named: "horizontal-split-after-transpose"), splitTTY,
+                       "transposing preserves the split terminal")
+
+        app.typeKey("d", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitSplitValue(splitButton, "bottom"), "same-axis shortcut hides onto the focused bottom pane")
+        app.typeKey("d", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitSplitValue(splitButton, "both-horizontal"), "same-axis shortcut re-shows top/bottom")
+    }
+
     func testCtrlNumberFocusesPaneDirectly() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -366,7 +402,7 @@ final class SplitUITests: XCTestCase {
         return nil
     }
 
-    /// Polls the split button's accessibilityValue (none/both/left/right) until it equals `value`,
+    /// Polls the split button's accessibilityValue (none/both/left/right/both-horizontal/top/bottom),
     /// covering the observation lag between a state change and the title-bar re-render.
     private func waitSplitValue(_ button: XCUIElement, _ value: String, timeout: TimeInterval = 8) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

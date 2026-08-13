@@ -60,6 +60,17 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
 /// navigation read it off `AgentIndicator` to know which surface blocked.
 public enum StatusPane: String, Codable, Sendable, CaseIterable {
     case left, right, scratch
+
+    /// Parses every accepted positional or role spelling while keeping `rawValue` stable for read-back and
+    /// the `AGTERM_PANE` environment (`left|right|scratch`).
+    public init?(controlName: String) {
+        switch controlName {
+        case "left", "top", "primary": self = .left
+        case "right", "bottom", "split": self = .right
+        case "scratch": self = .scratch
+        default: return nil
+        }
+    }
 }
 
 /// StatusShape is the silhouette a status glyph draws, so shape carries the state alongside the tint. Every

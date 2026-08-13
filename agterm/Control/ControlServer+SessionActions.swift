@@ -254,6 +254,10 @@ extension ControlServer: ControlActions {
     /// keep-alive hide/show that never tears the hidden pane's surface down; `session.split.close` is the
     /// verb that does.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+        splitSession(target, window: window, mode: mode, axis: nil)
+    }
+
+    func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
@@ -261,9 +265,13 @@ extension ControlServer: ControlActions {
             guard let parsedMode = ControlToggleMode.parse(mode) else {
                 return ControlResponse(ok: false, error: "invalid split mode: \(mode ?? "toggle")")
             }
-            let want = parsedMode.desiredValue(current: session.isSplit)
-            if want != session.isSplit {
-                store.toggleSplit(id)
+            switch parsedMode {
+            case .on:
+                store.setSplitVisibility(id, shown: true, axis: axis)
+            case .off:
+                store.setSplitVisibility(id, shown: false)
+            case .toggle:
+                store.toggleSplit(id, axis: axis)
             }
             actions.focusSplitPane(session, wantSplit: session.splitFocused)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -337,8 +345,8 @@ extension ControlServer: ControlActions {
     }
 
     /// Resize a split's divider (control-native — the GUI only drags it, or double-clicks it for an even
-    /// split). `ratio` is an absolute left-pane
-    /// fraction, `delta` a signed nudge (positive grows the left pane) on the current fraction (0.5 when
+    /// split). `ratio` is an absolute primary-pane
+    /// fraction, `delta` a signed nudge (positive grows the primary pane) on the current fraction (0.5 when
     /// never moved); exactly one must be set. `applySplitRatio` clamps + persists, then
     /// `.agtermApplySplitRatio` pokes the session's `SplitProbeView` to move the live divider — a no-op
     /// while the split is hidden, where the stored value applies on next show. Errors without a split, and

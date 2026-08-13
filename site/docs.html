@@ -811,7 +811,7 @@
                   <code style="color: #e6e1d7">tree --json</code> reports in <code style="color: #e6e1d7">dashboardMembers</code> — so
                   <code style="color: #e6e1d7">agtermctl dashboard "$a:left" "$b:right"</code> keeps the panes you did not ask for
                   out of the nine-cell budget. The most-recently-used grid also has a built-in opener —
-                  <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
+                  <strong>⌘⇧G</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
                   title-bar grid button) opens it auto-sized. Cell fonts size absolutely
                   (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid
                   (<code style="color: #e6e1d7">--auto-size</code>). Mutually exclusive with terminal zoom.
@@ -1483,9 +1483,9 @@
                 color: #e6e1d7;
               "
             >
-              agtermctl session split toggle<br />agtermctl session split close
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# tear the pane down; hide keeps its shell alive</span><br />agtermctl session resize --split-ratio 0.7
-              <span style="color: #6b727a">&nbsp;# or --grow-left/--grow-right D</span><br />agtermctl session scratch toggle
+              agtermctl session split toggle --axis horizontal<br />agtermctl session split close
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# vertical=left/right; horizontal=top/bottom</span><br />agtermctl session resize --split-ratio 0.7
+              <span style="color: #6b727a">&nbsp;# primary fraction; grow role/position aliases also work</span><br />agtermctl session scratch toggle
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle</span><br />agtermctl session flag on
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl session seen --target 9f3c
               <span style="color: #6b727a">&nbsp;# clear the unseen badge, focus-free</span><br />agtermctl

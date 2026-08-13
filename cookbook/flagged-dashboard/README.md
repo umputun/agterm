@@ -10,7 +10,7 @@ The unit is a pane, not a session, which is what makes the filter worth having. 
 
 Pressing the chord while the grid already shows that same set closes it, so the key both opens and dismisses. Start something in another flagged pane first and the same press reopens the grid with it included.
 
-⌘⇧D already grids a window's most-recently-used sessions, which is a different question. Recency is what you touched last, not what is working: a build you started twenty minutes ago and have not typed in since is exactly the thing that falls off the recent list while still being the thing you want on screen.
+⌘⇧G already grids a window's most-recently-used sessions, which is a different question. Recency is what you touched last, not what is working: a build you started twenty minutes ago and have not typed in since is exactly the thing that falls off the recent list while still being the thing you want on screen.
 
 ## Requirements
 
@@ -61,7 +61,7 @@ The toggle is a set comparison against the tree's top-level `dashboardMembers`, 
 
 A full grid needs a second rule. The grid holds nine cells and drops the rest, so once the set overflows, what is on screen can never equal what the script would open, and a plain equality test would leave the chord unable to ever close it. A grid holding nine cells that are all cells the script wants therefore counts as a match too. Unflagging something that is on screen still fails that test, which is what keeps the refresh working.
 
-`--auto-size` sizes the cells relative to your Settings font, shrinking them as the grid grows. It is what ⌘⇧D uses, so a flagged grid and a recent-sessions grid look alike. Swap in `--font-size N` for an absolute size in points if you would rather the cells stay put whatever the count.
+`--auto-size` sizes the cells relative to your Settings font, shrinking them as the grid grows. It is what ⌘⇧G uses, so a flagged grid and a recent-sessions grid look alike. Swap in `--font-size N` for an absolute size in points if you would rather the cells stay put whatever the count.
 
 ## Limits
 
@@ -75,6 +75,6 @@ The grid holds nine cells. Past that the extra panes are dropped, the script rep
 
 Everything is scoped to the frontmost window. The script reads `tree` and calls `dashboard` without a window selector, so flagged sessions in another window are not part of the set and need a run in that window.
 
-The toggle recognises the set, not who opened it. A ⌘⇧D recent-sessions grid that happens to hold exactly these panes will be closed by the chord rather than reopened.
+The toggle recognises the set, not who opened it. A ⌘⇧G recent-sessions grid that happens to hold exactly these panes will be closed by the chord rather than reopened.
 
 The grid is view-only, so no cell takes keyboard input. Opening and closing it does resize each pane's pty to its cell, so a full-screen program may redraw as the grid appears and again as it goes.

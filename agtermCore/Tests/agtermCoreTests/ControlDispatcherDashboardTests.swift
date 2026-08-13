@@ -56,7 +56,7 @@ struct ControlDispatcherDashboardTests {
         ])
     }
 
-    @Test(arguments: ["a:lft", "a:primary", "a:split", "a:scratch", "a:overlay", "a:", ":left",
+    @Test(arguments: ["a:lft", "a:scratch", "a:overlay", "a:", ":left",
                       "surface:9F3CAAAA-0000-0000-0000-000000000001:left"])
     func malformedPaneRefIsRejected(_ target: String) async {
         let actions = MockControlActions()

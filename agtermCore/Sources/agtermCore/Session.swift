@@ -8,13 +8,13 @@ public enum OverlayPane: String, CaseIterable, Codable, Sendable {
     case right
 
     /// Accepts the same pane spellings as `TerminalZoomSurface`, minus `scratch`: a pane overlay covers a
-    /// split pane only. `primary`/`split` are accepted as aliases, so the rejection message naming only
+    /// split pane only. Role and axis names are accepted as aliases, so the rejection message naming only
     /// `left or right` is guidance, not the full accepted set.
     public init?(controlName: String) {
         switch controlName {
-        case "left", "primary":
+        case "left", "top", "primary":
             self = .left
-        case "right", "split":
+        case "right", "bottom", "split":
             self = .right
         default:
             return nil
@@ -131,18 +131,22 @@ public final class Session: Identifiable {
         }
     }
 
-    /// Whether the session is SHOWN as a one-level vertical split; the detail pane shows/hides the second pane.
+    /// Whether the session is SHOWN as a one-level split; the detail pane shows/hides the second pane.
     public var isSplit: Bool = false
 
     /// Whether the session HAS a split pane at all, shown or hidden/maximized, unlike `isSplit`. Stays true
     /// across a hide, cleared only by `closeSplit`, so the sidebar + title-bar indicators persist while hidden.
     public var hasSplit: Bool = false
 
+    /// The split's physical arrangement. A fresh or legacy session starts left/right; changing this while
+    /// both panes exist transposes their layout without replacing either terminal surface.
+    public var splitAxis: SplitAxis = .leftRight
+
     /// While split, whether the second pane holds focus rather than the primary; the detail pane dims the
     /// inactive one. Meaningless when not split.
     public var splitFocused: Bool = false
 
-    /// The split divider's left-pane fraction, captured from the live `NSSplitView` and persisted, so it
+    /// The split divider's primary-pane fraction, captured from the live `NSSplitView` and persisted, so it
     /// survives a hide/show and a relaunch. Within `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95):
     /// capture skips degenerate extremes, restore clamps and seeds. nil = even; never read by a SwiftUI view.
     @ObservationIgnored public var splitRatio: Double?

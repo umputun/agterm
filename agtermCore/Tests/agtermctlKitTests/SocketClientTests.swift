@@ -249,6 +249,7 @@ struct SocketClientTests {
             decrease_font_size          cmd+-
             reset_font_size             cmd+0
           * toggle_split                cmd+shift+e
+            toggle_horizontal_split     cmd+shift+d
             toggle_scratch              cmd+j
             toggle_terminal_zoom        cmd+shift+return
             toggle_search               cmd+f
@@ -272,7 +273,7 @@ struct SocketClientTests {
             command_palette             ctrl+shift+p
             custom_command_palette      ctrl+shift+o
             show_attention              ctrl+shift+i
-            dashboard                   cmd+shift+d
+            dashboard                   cmd+shift+g
 
         commands:
             Deploy  cmd+shift+y

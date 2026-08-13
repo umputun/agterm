@@ -40,8 +40,10 @@ struct ControlModesTests {
 
     @Test func paneFocusModeParsesAliases() {
         #expect(ControlPaneFocusMode.parse("left") == .primary)
+        #expect(ControlPaneFocusMode.parse("top") == .primary)
         #expect(ControlPaneFocusMode.parse("primary") == .primary)
         #expect(ControlPaneFocusMode.parse("right") == .split)
+        #expect(ControlPaneFocusMode.parse("bottom") == .split)
         #expect(ControlPaneFocusMode.parse("split") == .split)
         #expect(ControlPaneFocusMode.parse("other") == .toggle)
         #expect(ControlPaneFocusMode.parse("toggle") == .toggle)

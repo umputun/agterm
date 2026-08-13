@@ -22,9 +22,8 @@ public struct DashboardTarget: Equatable, Sendable {
     /// accepts only `active`, a full UUID, or a UUID prefix. So `surface:<uuid>:left` (the `surface.zoom`
     /// form) fails here instead of half-resolving to a head of `surface`.
     ///
-    /// Only `left`/`right` are accepted, case-insensitively. `primary`/`split` parse as
-    /// `TerminalZoomSurface` but are refused: the `dashboardMembers` read-back emits `left`/`right`, and
-    /// one spelling per pane keeps the write form identical to the read form.
+    /// Positional and role aliases are accepted case-insensitively. Read-back remains `left`/`right`, so
+    /// adding aliases does not change the wire representation existing callers consume.
     public init?(rawValue: String) {
         guard let colon = rawValue.firstIndex(of: ":") else {
             guard !rawValue.isEmpty else { return nil }
@@ -35,8 +34,8 @@ public struct DashboardTarget: Equatable, Sendable {
         let suffix = String(rawValue[rawValue.index(after: colon)...]).lowercased()
         guard !head.isEmpty else { return nil }
         switch suffix {
-        case "left": self.init(head: head, pane: .primary)
-        case "right": self.init(head: head, pane: .split)
+        case "left", "top", "primary": self.init(head: head, pane: .primary)
+        case "right", "bottom", "split": self.init(head: head, pane: .split)
         default: return nil
         }
     }

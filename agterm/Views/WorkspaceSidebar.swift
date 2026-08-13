@@ -98,7 +98,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // reload; a touch inside viewFor wouldn't register it. The badge-visibility toggle
         // (GhosttyApp.notificationBadgeEnabled) is NOT observable and drives a re-reconcile via
         // .agtermAppearanceChanged, like toolbarMode.
-        _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
+        _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
         _ = store.selectedSessionID
         _ = store.sidebarSelectionIDs
         // sidebarMode flips the whole data source (tree ↔ flat flagged list), so a mode change must rebuild.
@@ -343,6 +343,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private struct RowContent: Equatable {
             let label: String
             let hasSplit: Bool
+            let splitAxis: SplitAxis
             let unseen: Int
             let indicator: AgentIndicator
             /// Whether the session is flagged (tree-mode filled-icon variant). A change re-badges just this
@@ -430,7 +431,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// The visible content of a workspace row. One builder shared by `reloadChangedContentRows` and
         /// `snapshotRowContent` so the snapshot and the diff can't drift.
         private func rowContent(forWorkspace workspace: Workspace) -> RowContent {
-            RowContent(label: workspace.name, hasSplit: false, unseen: effectiveUnseen(workspace.unseenCount),
+            RowContent(label: workspace.name, hasSplit: false, splitAxis: .leftRight,
+                       unseen: effectiveUnseen(workspace.unseenCount),
                        indicator: AgentIndicator(), flagged: false,
                        focusMember: store.focusedWorkspaceIDs.contains(workspace.id))
         }
@@ -440,6 +442,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// `workspaceName` in, so the label needs no per-session lookup and the reconcile stays linear.
         private func rowContent(forSession session: Session, workspaceName: String) -> RowContent {
             RowContent(label: rowLabel(for: session, workspaceName: workspaceName), hasSplit: session.hasSplit,
+                       splitAxis: session.splitAxis,
                        unseen: effectiveUnseen(session.unseenCount),
                        indicator: effectiveIndicator(forSession: session.id), flagged: session.flagged,
                        focusMember: false)
@@ -730,9 +733,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var workspaceIcon = Self.rowIcon("square.grid.2x2")
         lazy var focusedWorkspaceIcon = Self.rowIcon("square.grid.2x2", weight: .black)
         lazy var splitSessionIcon = Self.rowIcon("rectangle.split.2x1")
+        lazy var horizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2")
         lazy var sessionIcon = Self.rowIcon("terminal")
         lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
         lazy var flaggedSplitSessionIcon = Self.rowIcon("rectangle.split.2x1.fill")
+        lazy var flaggedHorizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2.fill")
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)

@@ -4,6 +4,15 @@ import Testing
 
 @MainActor
 struct TerminalZoomTests {
+    @Test func controlAliasesPreserveCanonicalSurfaceRoles() {
+        for alias in ["left", "top", "primary"] {
+            #expect(TerminalZoomSurface(controlName: alias) == .primary)
+        }
+        for alias in ["right", "bottom", "split"] {
+            #expect(TerminalZoomSurface(controlName: alias) == .split)
+        }
+    }
+
     @Test func resolveTargetPrioritizesQuickThenSessionCoversThenFocusedPane() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -670,7 +670,7 @@ final class AppActions {
 
     // MARK: - Split
 
-    /// Toggle the active session's split. A NEW split shows both panes and focuses the new (right) one;
+    /// Toggle the active session's vertical split. A NEW split shows both panes and focuses the new one;
     /// closing only HIDES it (both shells stay alive) and maximizes the focused pane, so reopening restores
     /// both in their original positions with the SAME pane focused — focus follows `splitFocused`, which
     /// `AppStore.toggleSplit` moves only for a genuinely new split.
@@ -681,12 +681,27 @@ final class AppActions {
     /// scratch shell survives. A full overlay runs a caller's program that must not be closed under it, so
     /// the press is inert. Control's `session.split` keeps acting on the deck behind either cover.
     func toggleSplit() {
+        toggleSplit(axis: .leftRight)
+    }
+
+    /// Toggle the active session's horizontal split, or transpose a shown vertical split in place.
+    func toggleHorizontalSplit() {
+        toggleSplit(axis: .topBottom)
+    }
+
+    /// Preserve the current axis. Used by the titlebar's stateful split button rather than either
+    /// orientation-specific menu/keymap action.
+    func toggleCurrentSplit() {
+        toggleSplit(axis: nil)
+    }
+
+    private func toggleSplit(axis: SplitAxis?) {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.activeSession else { return }
         guard !session.fullOverlayActive else { return }
         // the deck's `scratchActive` onChange reclaims first responder for the pane, as it does for ⌘J.
         if session.scratchActive { store.toggleScratch(session.id); return }
-        store.toggleSplit(session.id)
+        store.toggleSplit(session.id, axis: axis)
         focusSplitPane(session, wantSplit: session.splitFocused)
     }
 
@@ -756,7 +771,7 @@ final class AppActions {
         frontmostTerminalZoom?.toggle()
     }
 
-    /// Toggle the frontmost window's dashboard — the ⌘⇧D / Navigate ▸ Dashboard MRU grid, equivalent to
+    /// Toggle the frontmost window's dashboard, the ⌘⇧G / Navigate ▸ Dashboard MRU grid, equivalent to
     /// `agtermctl dashboard --mru --auto-size`. Inert while terminal zoom or a pending picker is up, but NOT
     /// while the dashboard itself is open, so the grid stays its own escape hatch. Open → close and refocus;
     /// closed → open over the window's most-recently-used sessions, auto-sized; no-op with none.

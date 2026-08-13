@@ -358,6 +358,14 @@ struct CommandsTests {
         #expect(try request(["session", "split", "off", "--target", "s1", "--window", "w1"]) == expected)
     }
 
+    @Test func sessionSplitAcceptsAnOptionalAxis() throws {
+        let expected = ControlRequest(cmd: .sessionSplit, target: "active",
+                                      args: ControlArgs(mode: "toggle", axis: "horizontal"))
+        #expect(try request(["session", "split", "--axis", "horizontal"]) == expected)
+        #expect(validationMessage(["session", "split", "--axis", "diagonal"])
+            == "--axis must be vertical or horizontal")
+    }
+
     @Test func sessionSplitClose() throws {
         #expect(try request(["session", "split", "close"]) == ControlRequest(cmd: .sessionSplitClose, target: "active"))
     }
@@ -387,6 +395,12 @@ struct CommandsTests {
         #expect(try request(["session", "focus", "right"]) == expected)
     }
 
+    @Test func sessionFocusAcceptsRoleAndAxisAliasesVerbatim() throws {
+        for pane in ["primary", "left", "top", "split", "right", "bottom"] {
+            #expect(try request(["session", "focus", pane]).args?.pane == pane)
+        }
+    }
+
     @Test func sessionResizeAbsolute() throws {
         let expected = ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratio: 0.7))
         #expect(try request(["session", "resize", "--split-ratio", "0.7"]) == expected)
@@ -400,6 +414,15 @@ struct CommandsTests {
     @Test func sessionResizeGrowRightIsNegativeDelta() throws {
         let expected = ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratioDelta: -0.05))
         #expect(try request(["session", "resize", "--grow-right", "0.05"]) == expected)
+    }
+
+    @Test func sessionResizeRoleAndAxisAliasesKeepThePrimaryFractionConvention() throws {
+        for option in ["--grow-primary", "--grow-top"] {
+            #expect(try request(["session", "resize", option, "0.05"]).args?.ratioDelta == 0.05)
+        }
+        for option in ["--grow-split", "--grow-bottom"] {
+            #expect(try request(["session", "resize", option, "0.05"]).args?.ratioDelta == -0.05)
+        }
     }
 
     @Test func sessionResizeRequiresExactlyOneForm() {
@@ -848,6 +871,10 @@ struct CommandsTests {
         let right = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
                                    args: ControlArgs(command: "htop", pane: "right"))
         #expect(try request(["session", "overlay", "open", "htop", "--pane", "right", "--target", "9f3c"]) == right)
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "top"]).args?.pane == "top")
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "bottom"]).args?.pane == "bottom")
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "primary"]).args?.pane == "primary")
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "split"]).args?.pane == "split")
     }
 
     @Test func sessionOverlayOpenPaneWithTheOtherFlags() throws {

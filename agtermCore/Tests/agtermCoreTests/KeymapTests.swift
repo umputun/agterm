@@ -1106,6 +1106,47 @@ struct KeymapTests {
         }
     }
 
+    @Test func splitAndDashboardShipTheirNewDistinctDefaults() {
+        let keymap = parseKeymap("").keymap
+        #expect(keymap.equivalent(for: .toggleSplit) == Chord(mods: [.command], key: "d"))
+        #expect(keymap.equivalent(for: .toggleHorizontalSplit) == Chord(mods: [.command, .shift], key: "d"))
+        #expect(keymap.equivalent(for: .dashboard) == Chord(mods: [.command, .shift], key: "g"))
+    }
+
+    @Test func legacyExplicitDashboardBindingKeepsCmdShiftD() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+d dashboard")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .dashboard) == Chord(mods: [.command, .shift], key: "d"))
+        #expect(keymap.equivalent(for: .toggleHorizontalSplit) == nil)
+        #expect(keymap.builtinUnbound.contains(.toggleHorizontalSplit))
+    }
+
+    @Test func existingCmdShiftDCustomCommandIsNotBrokenByHorizontalSplitDefault() {
+        let (keymap, diagnostics) = parseKeymap("""
+        map ctrl+shift+y dashboard
+        command "Old binding" cmd+shift+d echo ok
+        """)
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.first?.shortcut == "cmd+shift+d")
+        #expect(keymap.equivalent(for: .toggleHorizontalSplit) == nil)
+        #expect(keymap.builtinUnbound.contains(.toggleHorizontalSplit))
+    }
+
+    @Test func existingCmdShiftGBuiltinBindingIsNotBrokenByDashboardDefault() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+g toggle_workspace_filter")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == Chord(mods: [.command, .shift], key: "g"))
+        #expect(keymap.equivalent(for: .dashboard) == nil)
+        #expect(keymap.builtinUnbound.contains(.dashboard))
+    }
+
+    @Test func existingCmdShiftGCustomCommandIsNotBrokenByDashboardDefault() {
+        let (keymap, diagnostics) = parseKeymap("command \"Old binding\" cmd+shift+g echo ok")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.first?.shortcut == "cmd+shift+g")
+        #expect(keymap.equivalent(for: .dashboard) == nil)
+    }
+
     @Test func keymapStoreLoadsFileAndRecoversWhenMissing() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

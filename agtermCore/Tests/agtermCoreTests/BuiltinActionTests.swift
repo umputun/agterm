@@ -12,6 +12,7 @@ struct BuiltinActionTests {
     @Test func rawNamesAreTheKittyStyleNames() {
         #expect(BuiltinAction.newWindow.rawValue == "new_window")
         #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
+        #expect(BuiltinAction.toggleHorizontalSplit.rawValue == "toggle_horizontal_split")
         #expect(BuiltinAction.toggleTerminalZoom.rawValue == "toggle_terminal_zoom")
         #expect(BuiltinAction.toggleSearch.rawValue == "toggle_search")
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
@@ -29,7 +30,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
         #expect(BuiltinAction.dashboard.rawValue == "dashboard")
         #expect(BuiltinAction.duplicateSession.rawValue == "duplicate_session")
-        #expect(BuiltinAction.allCases.count == 42)
+        #expect(BuiltinAction.allCases.count == 43)
     }
 
     @Test func rejectsUnknownName() {
@@ -91,6 +92,7 @@ struct BuiltinActionTests {
             .decreaseFontSize: Chord(mods: [.command], key: "-"),
             .resetFontSize: Chord(mods: [.command], key: "0"),
             .toggleSplit: Chord(mods: [.command], key: "d"),
+            .toggleHorizontalSplit: Chord(mods: [.command, .shift], key: "d"),
             .toggleScratch: Chord(mods: [.command], key: "j"),
             .toggleTerminalZoom: Chord(mods: [.command, .shift], key: "return"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
@@ -114,7 +116,7 @@ struct BuiltinActionTests {
             .commandPalette: Chord(mods: [.control, .shift], key: "p"),
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
-            .dashboard: Chord(mods: [.command, .shift], key: "d"),
+            .dashboard: Chord(mods: [.command, .shift], key: "g"),
         ]
         #expect(expected.count == BuiltinAction.allCases.count)
         for action in BuiltinAction.allCases {

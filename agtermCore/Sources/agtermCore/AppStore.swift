@@ -79,15 +79,15 @@ public final class AppStore {
     public static let sidebarWidthMin: Double = 160
     public static let sidebarWidthMax: Double = 560
 
-    /// The persisted split-divider left-pane fraction bounds: live capture skips degenerate extremes outside
+    /// The persisted split-divider primary-pane fraction bounds: live capture skips degenerate extremes outside
     /// this range and `restore()` clamps to it, so the on-disk ratio is always within bounds.
     public static let splitRatioMin: Double = 0.05
     public static let splitRatioMax: Double = 0.95
-    /// The even split a never-moved divider renders at (the `HSplitView` default); the base for a relative
+    /// The even split a never-moved divider renders at; the base for a relative
     /// `session.resize` while `Session.splitRatio` is nil.
     public static let splitRatioDefault: Double = 0.5
 
-    /// Clamp a left-pane split fraction to `splitRatioMin...splitRatioMax`.
+    /// Clamp a primary-pane split fraction to `splitRatioMin...splitRatioMax`.
     public static func clampSplitRatio(_ ratio: Double) -> Double {
         min(splitRatioMax, max(splitRatioMin, ratio))
     }
@@ -261,6 +261,7 @@ public final class AppStore {
                                           active: session.id == activeID,
                                           split: session.isSplit,
                                           hasSplit: session.hasSplit ? true : nil,
+                                          splitAxis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                           splitRatio: session.hasSplit ? session.splitRatio : nil,
                                           splitFocused: session.hasSplit ? session.splitFocused : nil,
                                           overlay: session.programOverlayActive,

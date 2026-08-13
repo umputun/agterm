@@ -24,7 +24,7 @@ extension WindowContentView {
         }
     }
 
-    /// One session's terminal content: the primary pane, a side-by-side split (`HSplitView`), or the
+    /// One session's terminal content: the primary pane, an axis-aware split, or the
     /// maximized hidden-split pane, plus any overlay. `isActive` gates which pane auto-grabs focus — the
     /// visible deck entry, and within a split the focused pane.
     ///
@@ -62,22 +62,7 @@ extension WindowContentView {
             // hides them (opacity 0) so its translucency reveals the window backing, not the session.
             Group {
                 if session.isSplit {
-                    HSplitView {
-                        deckPane(session, pane: .left, focused: !session.splitFocused, gates: gates)
-                            // persists/restores the divider ratio and clips the NSSplitView out of the
-                            // titlebar strip; a background on the stable pane wrapper (not a third pane, not
-                            // inside its swapped content), so ONE probe survives zoom and suspend/resume.
-                            .background {
-                                SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight,
-                                                   suspended: !deckInteractive,
-                                                   deckVisible: gates.visible && !gates.overlaid,
-                                                   onPersist: { store.save() })
-                            }
-                        deckPane(session, pane: .right, focused: session.splitFocused, gates: gates)
-                    }
-                    // per-session identity: without it SwiftUI reuses one NSSplitView across session
-                    // switches and the divider (and arranged subviews) leak between sessions.
-                    .id("\(session.id.uuidString)-hsplit")
+                    shownSplit(session, gates: gates, deckInteractive: deckInteractive)
                 } else if session.splitFocused, session.splitSurface != nil {
                     // split hidden while the right pane had focus: show that pane maximized.
                     deckPane(session, pane: .right, focused: true, gates: gates)
@@ -141,6 +126,37 @@ extension WindowContentView {
             guard after.count < before.count, deckInteractive, isActive, !quickTerminal.isVisible else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
+    }
+
+    /// The terminal hosts keep their pane roles and surface identity when the split axis changes. Only the
+    /// AppKit split container is replaced, transposing the existing primary/split pair in place.
+    @ViewBuilder private func shownSplit(_ session: Session, gates: DeckPaneGates,
+                                         deckInteractive: Bool) -> some View {
+        if session.splitAxis == .topBottom {
+            VSplitView {
+                splitPrimaryPane(session, gates: gates, deckInteractive: deckInteractive)
+                deckPane(session, pane: .right, focused: session.splitFocused, gates: gates)
+            }
+            .id("\(session.id.uuidString)-vsplit")
+        } else {
+            HSplitView {
+                splitPrimaryPane(session, gates: gates, deckInteractive: deckInteractive)
+                deckPane(session, pane: .right, focused: session.splitFocused, gates: gates)
+            }
+            .id("\(session.id.uuidString)-hsplit")
+        }
+    }
+
+    /// The ratio probe belongs to the stable primary pane wrapper, never a third arranged subview.
+    private func splitPrimaryPane(_ session: Session, gates: DeckPaneGates,
+                                  deckInteractive: Bool) -> some View {
+        deckPane(session, pane: .left, focused: !session.splitFocused, gates: gates)
+            .background {
+                SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight,
+                                   suspended: !deckInteractive,
+                                   deckVisible: gates.visible && !gates.overlaid,
+                                   onPersist: { store.save() })
+            }
     }
 
     /// ONE pane of a session's deck entry: its terminal — or the `Color.clear` placeholder while zoom or the

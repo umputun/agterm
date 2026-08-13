@@ -129,13 +129,43 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
 
     // a final pass, not incremental: the cross-section validation below needs the same resolved chord set.
     let resolved = resolveMapLines(mapLines)
-    let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, unbound: resolved.unbound,
+    // Cmd-Shift-D belonged to Dashboard before horizontal split existed. Any valid old configuration that
+    // explicitly used that chord keeps it: vacate the new action's default unless the file maps that action.
+    var compatibilityUnbound = resolved.unbound
+    let horizontalMapped = resolved.overrides.contains { $0.action == .toggleHorizontalSplit }
+        || resolved.alternatives[.toggleHorizontalSplit] != nil
+        || resolved.unbound.contains(.toggleHorizontalSplit)
+    let oldDashboardChord = Chord(mods: [.command, .shift], key: "d")
+    let oldConfigUsesHorizontalChord = resolved.overrides.contains {
+        $0.action != .toggleHorizontalSplit && $0.chord == oldDashboardChord
+    } || resolved.alternatives.contains { action, entry in
+        action != .toggleHorizontalSplit && entry.alternatives.contains { $0.keybind.first == oldDashboardChord }
+    } || commandLines.contains { line in
+        line.alternatives.contains { $0.keybind.first == oldDashboardChord }
+    }
+    if !horizontalMapped, oldConfigUsesHorizontalChord {
+        compatibilityUnbound.insert(.toggleHorizontalSplit)
+    }
+    // Cmd-Shift-G was previously free. An existing explicit binding on it keeps working; Dashboard becomes
+    // keyless until the user maps it, instead of a new shipped default invalidating their configuration.
+    let newDashboardChord = Chord(mods: [.command, .shift], key: "g")
+    let dashboardMapped = resolved.overrides.contains { $0.action == .dashboard }
+        || resolved.alternatives[.dashboard] != nil || resolved.unbound.contains(.dashboard)
+    let oldConfigUsesNewDashboardChord = resolved.overrides.contains {
+        $0.action != .dashboard && $0.chord == newDashboardChord
+    } || resolved.alternatives.contains { action, entry in
+        action != .dashboard && entry.alternatives.contains { $0.keybind.first == newDashboardChord }
+    } || commandLines.contains { line in
+        line.alternatives.contains { $0.keybind.first == newDashboardChord }
+    }
+    if !dashboardMapped, oldConfigUsesNewDashboardChord { compatibilityUnbound.insert(.dashboard) }
+    let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, unbound: compatibilityUnbound,
                                                    alternatives: resolved.alternatives, diagnostics: &diagnostics)
 
     // likewise final: a custom line parsed before a later keyless-built-in `map` must still be validated
     // against the override that `map` installs.
     let menuChords = Set(BuiltinAction.allCases.compactMap {
-        resolvedMenuChord($0, overrides: builtinOverrides, unbound: resolved.unbound)
+        resolvedMenuChord($0, overrides: builtinOverrides, unbound: compatibilityUnbound)
     })
     let survivors = validateBindings(monitorAlternatives(commandLines: commandLines,
                                                          mapAlternatives: resolved.alternatives),
@@ -144,7 +174,7 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
     return (Keymap(builtinOverrides: builtinOverrides,
                    commands: applySurvivingShortcuts(to: commandLines, survivors: survivors),
                    builtinSequences: survivingAlternatives(survivors),
-                   builtinUnbound: unboundAfterRestoringStrandedDefaults(resolved.unbound,
+                   builtinUnbound: unboundAfterRestoringStrandedDefaults(compatibilityUnbound,
                                                                          overrides: builtinOverrides,
                                                                          survivors: survivors)),
             diagnostics)

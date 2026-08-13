@@ -14,7 +14,7 @@ What it does:
 
 - **Workspaces.** Sessions are grouped under named workspaces like "work" and "personal", which keeps a screen of concurrent sessions organized. You reach a session by name, by recency, or from the keyboard.
 - **Control API and CLI.** A bundled tool, `agtermctl`, drives almost everything over a local socket: create sessions, type into them, run a program in an overlay and read its exit status, move and resize windows, or post a notification tied to a specific session. A script or an agent can set up and drive its own layout, and send you a notification from the session it was working in.
-- **Splits, scratch, and overlays.** Split a session into two shells, open a scratch terminal over it, or run a program in a full or floating overlay without disturbing the shell underneath.
+- **Splits, scratch, and overlays.** Split a session into two shells side by side or top and bottom, open a scratch terminal over it, or run a program in a full or floating overlay without disturbing the shell underneath.
 - **Agent skill.** An installable skill (Help ▸ Install Agent Skill…) teaches Claude Code or Codex the control model and the `agtermctl` commands, so an agent running inside agterm can build its own layout, run overlays, manage windows, and show images inline without you explaining the API.
 - **Agent status.** A coding agent reports its state (active, blocked, or completed) onto its session's row, so you can see which of many running agents needs you. Status hooks for Claude Code, Codex, Pi, OpenCode, and other agents install from Help ▸ Install Agent Status Hooks….
 
@@ -48,7 +48,7 @@ A split session, two panes side by side on different color themes:
 - **Window.** A top-level bundle of workspaces and sessions in its own macOS window, with its own sidebar tree.
 - **Workspace.** A named group of sessions for one project or context.
 - **Session.** One running shell with a name, a working directory, and its own scrollback. It is the row you see in the sidebar, and it keeps running while you work in another one.
-- **Split and scratch.** A session can split into two shells side by side, both sharing the one sidebar row, and it can open a scratch terminal over itself for a quick aside.
+- **Split and scratch.** A session can split into two shells side by side or top and bottom, both sharing the one sidebar row, and it can open a scratch terminal over itself for a quick aside.
 - **Overlay.** One program running in a temporary terminal over a session. It disappears when the program exits and leaves the shell underneath unchanged.
 
 ## Install
@@ -90,6 +90,7 @@ Install the skill by one route or the other, never both: two copies leave it und
 ```sh
 ws=$(agtermctl workspace new demo)                        # capture the new workspace's id
 sid=$(agtermctl session new --workspace "$ws" --cwd "$PWD" --no-select)
+agtermctl session split on --axis horizontal --target "$sid" # add a top-and-bottom shell
 agtermctl session type $'pwd\n' --target "$sid"           # drive a session you are not looking at
 agtermctl session text --target "$sid" --lines 10         # read its terminal back
 agtermctl session status blocked --target "$sid"          # set the sidebar status glyph

@@ -11,11 +11,31 @@ public enum PaneOverlayOpenFailure: Equatable, Sendable {
 }
 
 extension AppStore {
-    /// Toggles the one-level split. The second pane's surface is created lazily by the detail pane and kept
-    /// alive when hidden, so this only flips the persisted flag.
-    public func toggleSplit(_ sessionID: UUID) {
+    /// Toggles the one-level split. With no axis this is the legacy preserve-axis hide/show operation. With
+    /// an axis it is the axis-specific UI command: the same shown axis hides, another shown axis transposes,
+    /// and a hidden or absent split is shown in the requested arrangement.
+    public func toggleSplit(_ sessionID: UUID, axis: SplitAxis? = nil) {
         guard let session = session(withID: sessionID) else { return }
-        session.isSplit.toggle()
+        let show: Bool
+        if let axis {
+            show = !session.isSplit || session.splitAxis != axis
+            if show { session.splitAxis = axis }
+        } else {
+            show = !session.isSplit
+        }
+        setSplitVisibility(session, shown: show)
+    }
+
+    /// Idempotently shows or hides a split, optionally selecting its arrangement when showing. Hiding never
+    /// changes the stored axis, so generic hide/show and a later same-axis command preserve the layout.
+    public func setSplitVisibility(_ sessionID: UUID, shown: Bool, axis: SplitAxis? = nil) {
+        guard let session = session(withID: sessionID) else { return }
+        if shown, let axis { session.splitAxis = axis }
+        setSplitVisibility(session, shown: shown)
+    }
+
+    private func setSplitVisibility(_ session: Session, shown: Bool) {
+        session.isSplit = shown
         // a NEW split focuses the new (right) pane; RE-showing a hidden one keeps the pane focused before
         // hiding, so a hide/show round-trip (the tmux-style zoom script) doesn't jerk focus right. hiding
         // leaves `hasSplit`/`splitFocused` set — indicators persist, the focused pane shows maximized — and
@@ -31,7 +51,7 @@ extension AppStore {
         save()
     }
 
-    /// Sets a session's split-divider left-pane fraction, clamped and persisted; returns the applied
+    /// Sets a session's split-divider primary-pane fraction, clamped and persisted; returns the applied
     /// fraction, nil for an unknown id. Moving the LIVE divider is the caller's job (`session.resize` posts
     /// `.agtermApplySplitRatio` to the pane view): control-native, no GUI path through `AppActions`.
     @discardableResult
@@ -61,6 +81,7 @@ extension AppStore {
         session.isSplit = false
         session.hasSplit = false
         session.splitFocused = false
+        session.splitAxis = .leftRight
         session.splitSurface?.teardown()
         session.splitSurface = nil
         session.splitCwd = nil
@@ -103,6 +124,7 @@ extension AppStore {
         session.isSplit = false
         session.hasSplit = false
         session.splitFocused = false
+        session.splitAxis = .leftRight
         session.splitRatio = nil // promoted to a single pane; a later split should open even, not stale
         // the promoted survivor is a plain shell: drop the creation command and its held-open flag together,
         // or a restart resurrects the exited command and a snapshot persists commandWait with no initialCommand.

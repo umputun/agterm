@@ -140,8 +140,8 @@ the pane you duplicated from.
 ws=$(agtermctl workspace new "build" --json | jq -r '.result.id')
 a=$(agtermctl session new --workspace "$ws" --cwd "$HOME/proj" --json | jq -r '.result.id')
 agtermctl session rename "server" --target "$a"
-agtermctl session split on --target "$a"          # second shell side by side
-agtermctl session resize --split-ratio 0.7 --target "$a"   # left pane gets 70% (prints 0.700)
+agtermctl session split on --axis horizontal --target "$a" # second shell below the primary
+agtermctl session resize --split-ratio 0.7 --target "$a"   # top pane gets 70% (prints 0.700)
 b=$(agtermctl session new --workspace "$ws" --json | jq -r '.result.id')
 agtermctl session rename "logs" --target "$b"
 ```
@@ -669,7 +669,7 @@ suffix, capped at 9 cells total. No cell takes input:
 the keyboard navigates a highlight (arrows), Enter jumps into the highlighted session AND focuses that
 exact pane then closes, Esc closes. Open it over the socket with explicit session ids, or with `--mru` to
 pull the window's most-recently-used sessions automatically. The most-recently-used grid also has a built-in
-opener — **⌘⇧D** (the `dashboard` action), **Navigate ▸ Dashboard**, or the command palette's **Dashboard**
+opener: **⌘⇧G** (the `dashboard` action), **Navigate ▸ Dashboard**, or the command palette's **Dashboard**
 toggle it auto-sized (the `dashboard --mru --auto-size` equivalent), so the recent-sessions view needs no
 script for the common case.
 
@@ -707,7 +707,7 @@ agtermctl tree --json | jq '.result.tree | {dashboardMembers, dashboardHighlight
 agtermctl dashboard --close
 ```
 
-The MRU grid is already on **⌘⇧D** (the built-in `dashboard` action) — rebind that chord in `keymap.conf`
+The MRU grid is already on **⌘⇧G** (the built-in `dashboard` action). Rebind that chord in `keymap.conf`
 with `map <chord> dashboard`. To dashboard a FIXED set of explicit ids instead, bind a `keymap.conf` custom
 action (then `agtermctl keymap reload`):
 
