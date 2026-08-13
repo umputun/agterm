@@ -2569,6 +2569,98 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>.
               Restart OpenCode after installing it.
             </p>
+
+            <h3
+              id="codex-hooks-manual"
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 17px;
+                color: #e6e1d7;
+                margin: 28px 0 12px;
+                scroll-margin-top: 88px;
+              "
+            >
+              Add Codex hooks by hand
+            </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              The installer never rewrites a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>
+              it does not own. If that file already defines its own
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[hooks…]</span>
+              entries, or is not valid TOML, it is left untouched and the install alert sends you here. Add the
+              six blocks below yourself, replacing
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/Users/you</span>
+              with your own home directory — the path has to be absolute, since Codex runs the hook without
+              your shell's PATH.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              Check the shape of your existing hooks first, because that is the reason the installer declined to
+              do this for you. If every one of them is written as an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[[hooks.…]]</span>
+              array-of-tables entry, appending is safe, including for events you already hook — a repeated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[[…]]</span>
+              header adds an element rather than redefining a key, so both your hook and agterm's run. If
+              instead you have an inline
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks = { … }</span>
+              table or a plain
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[hooks.SessionStart]</span>
+              table, appending makes the file stop parsing, since TOML allows neither extending a closed inline
+              table nor overwriting a defined value. Convert those entries to the array-of-tables form first,
+              then append. Do not add a second
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
+              line inside an existing entry — a repeated key in one table breaks the file just as surely.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                color: #e6e1d7;
+                overflow-x: auto;
+                white-space: pre;
+              "
+            >[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' session-start"
+
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' user-prompt-submit"
+
+[[hooks.PreToolUse]]
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' pre-tool-use"
+
+[[hooks.PostToolUse]]
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' post-tool-use"
+
+[[hooks.PermissionRequest]]
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' permission-request"
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"</div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              The adapter script itself is already in place — the installer copies it to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/agterm/agent-status/</span>
+              on every run, whether or not the config merge succeeded. Once the blocks are added, run
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/hooks</span>
+              in Codex and approve them; command hooks stay inert until you do. For the unparseable case, fixing
+              the TOML and re-running the installer is the easier route — it will merge the blocks for you.
+            </p>
           </section>
 
           <!-- RESTORE -->

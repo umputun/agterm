@@ -50,6 +50,14 @@ paths:
 - TOML merging refreshes managed markers while preserving trust tables. Leave foreign markers, existing
   user hooks, and invalid TOML untouched; show manual instructions for the last two. Require `/hooks`
   review for command-hook changes.
+- Every install-result alert line stays ONE LINE and embeds no generated block; two or three sentences on
+  that line are fine, and `AgentHooksInstallerTests` pins exactly that. `NSAlert` sizes itself to fit
+  `informativeText` with no scroll and no height cap, so embedding the hooks block grew the window past the
+  bottom of the screen (#430) — the block's long `command =` lines wrap several times each in that narrow
+  column. The two manual-merge cases open `site/docs.html#codex-hooks-manual` through a second button
+  instead, `informativeText` being plain unselectable text that renders no link. Keep the button second so
+  OK stays the default and Return still dismisses. That docs section carries a copy of `codexHooksBlock`
+  and drifts from it silently.
 - Install Pi only when `~/.pi/agent` exists. Start is active; settle only after retries, compaction, and
   queued continuations. Pi exposes no reliable blocked event, so never infer it from prose.
 - Install OpenCode only when its config exists and export only `AgtermStatusPlugin`; the legacy loader

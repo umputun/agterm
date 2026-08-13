@@ -157,9 +157,9 @@ public enum AgentHooksInstall {
         /// The file already carries the current agterm hooks block — nothing to do.
         case unchanged
         /// The file already defines its OWN `hooks` — appending ours would duplicate (array-of-tables form) or
-        /// break (compact form) them, so the merge is skipped; surface `codexHooksBlock` for a manual merge.
+        /// break (compact form) them, so the merge is skipped; point the user at the docs for a manual merge.
         case hooksExist
-        /// The existing file is not valid TOML — leave it untouched and surface the block for a manual add.
+        /// The existing file is not valid TOML — leave it untouched and point at the docs for a manual add.
         case unparseable
     }
 
@@ -294,8 +294,9 @@ public enum AgentHooksInstall {
         scriptDir + "/" + codexWrapperName
     }
 
-    /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges in (or surfaces for a manual
-    /// add when the file already has hooks or doesn't parse), wiring Codex's lifecycle events to the indicator.
+    /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges in, wiring Codex's lifecycle
+    /// events to the indicator. `site/docs.html#codex-hooks-manual` reproduces this block for the cases the
+    /// merge declines, and nothing checks the two against each other.
     /// The wrapper's absolute path is baked into each command — shell-quoted (so a path with spaces stays one
     /// token) inside a TOML basic string — so the hook fires without the CLI on PATH.
     public static func codexHooksBlock(scriptDir: String) -> String {
