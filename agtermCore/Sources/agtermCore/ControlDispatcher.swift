@@ -36,9 +36,10 @@ public protocol ControlActions {
     /// unresolvable `paneID` given without an explicit `pane`).
     func setSessionRestore(_ target: String?, window: String?,
                            update: ControlSessionRestoreUpdate) -> ControlResponse
-    /// Original axis-agnostic entry point, retained so existing conformers and callers keep compiling.
+    /// Source-compatible axis-agnostic entry point retained for existing conformers and callers.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
-    /// Axis-aware entry point. The default implementation below delegates to the original method.
+    /// Axis-aware entry point. Its default delegates to the original method so an existing conformer does
+    /// not have to implement the new requirement until it needs axis support.
     func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse
     /// Tear the split pane down rather than hide it, the write side `splitSession`'s `on|off|toggle` cannot
     /// express: the surface dies and `hasSplit`/`splitRatio`/`splitFocused` go nil in `tree`.

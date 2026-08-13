@@ -135,9 +135,10 @@ paths:
   Do not use SwiftUI mask/clipping because it reflows and loses the terminal's top row; do not use an
   opaque cover because it breaks translucency. Key each `HSplitView`/`VSplitView` identity by session and
   keep the terminal surface identities stable when changing axis.
-- Sidebar icon follows `hasSplit`. The titlebar's four-state icon is outline with none,
-  `rectangle.split.2x1.fill` while shown, left-half filled for hidden primary, and right-half filled for
-  hidden split.
+- Sidebar icon follows `hasSplit` and `splitAxis`. The titlebar has seven accessibility states: `none`,
+  `both`, `left`, and `right` for the left/right symbols, plus `both-horizontal`, `top`, and `bottom` for
+  the top/bottom symbols. A shown split fills both halves; a hidden split fills the visible primary or
+  split half on its current axis.
 
 ## Close and reselection
 

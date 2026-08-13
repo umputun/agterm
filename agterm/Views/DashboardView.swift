@@ -193,10 +193,10 @@ struct DashboardView: View {
         .allowsHitTesting(false)
     }
 
-    /// The caption's pane marker follows the session axis: right/left arrows or bottom/top arrows.
-    /// session, nothing for a non-split session. It marks which pane the cell hosts, not that its sibling
-    /// is on the grid — a `<id>:left` request puts a lone `◀` cell up, which still says the session has
-    /// another pane you are not watching.
+    /// The caption's pane marker follows the session axis: right/left arrows or bottom/top arrows, and
+    /// nothing for a non-split session. It marks which pane the cell hosts, not that its sibling is on the
+    /// grid: a `<id>:left` request puts a lone `◀` cell up, which still says the session has another pane
+    /// you are not watching.
     private func paneIndicator(for member: DashboardMember, session: Session) -> String {
         if member.surface == .split { return session.splitAxis == .topBottom ? " ▼" : " ▶" }
         guard session.hasSplit else { return "" }

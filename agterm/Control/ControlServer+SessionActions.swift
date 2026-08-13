@@ -249,14 +249,15 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// Drive the split on the target's OWN store, not active-only `AppActions.toggleSplit()`. `on|off|toggle`
-    /// is computed against `isSplit`, so both are idempotent. Always `AppStore.toggleSplit` — a ⌘D-style
-    /// keep-alive hide/show that never tears the hidden pane's surface down; `session.split.close` is the
-    /// verb that does.
+    /// Compatibility entry point. An omitted axis preserves an existing split's axis and defaults a new
+    /// split to left/right.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         splitSession(target, window: window, mode: mode, axis: nil)
     }
 
+    /// Drive the split on the target's own store. An explicit axis creates or transposes; `nil` preserves
+    /// the current axis. `on|off|toggle` is computed against `isSplit` and keeps a hidden pane alive;
+    /// `session.split.close` is the teardown verb.
     func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
