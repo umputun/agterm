@@ -36,6 +36,8 @@
 	<string>© 2026 Umputun</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, an osascript one-liner or a build script) request permission to control other apps through agterm.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Command-line tools you run inside agterm (for example, a system-audio capture or transcription tool) request permission to record system audio through agterm.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Command-line tools you run inside agterm request Bluetooth access through agterm.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

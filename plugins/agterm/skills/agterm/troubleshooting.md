@@ -139,12 +139,12 @@ posted and the suppressed case under the `NotificationManager` category.
 ### "a tool cannot get a macOS permission"
 
 Programs run in a session request Automation, Camera, Contacts, Calendars, Reminders, Photos, Location,
-Bluetooth, local network and speech recognition THROUGH agterm: macOS treats agterm as the responsible app,
-so the prompt names agterm and the answer is recorded against agterm, not the tool. One grant then covers
-every program in every session with no further prompt, and a dismissed prompt is never re-offered
-(`osascript` keeps returning "Not authorized to send Apple events"). The user changes the answer in
-System Settings ▸ Privacy & Security under the matching service, e.g. Automation ▸ agterm. This is macOS
-policy, not an agterm bug: do not file it.
+Bluetooth, local network, speech recognition and system audio recording THROUGH agterm: macOS treats
+agterm as the responsible app, so the prompt names agterm and the answer is recorded against agterm, not
+the tool. One grant then covers every program in every session with no further prompt, and a dismissed
+prompt is never re-offered (`osascript` keeps returning "Not authorized to send Apple events"). The user
+changes the answer in System Settings ▸ Privacy & Security under the matching service, e.g. Automation ▸
+agterm. This is macOS policy, not an agterm bug: do not file it.
 
 ### "The agent-status glyph does not update"
 
