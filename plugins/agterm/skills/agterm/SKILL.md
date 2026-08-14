@@ -332,9 +332,12 @@ omitted when expanded).
   waits and exits with its status.
   `overlay copy` returns the selection made INSIDE the overlay and `overlay text` its terminal buffer:
   `session copy` and `session text` both address the pane the overlay COVERS, so a selection made in the
-  overlay reads there as `no selection` and `session text --pane right` returns the shell underneath. Use
-  these whenever a chord needs what the user picked out of a program you opened. `overlay text` returns a
-  TUI's drawn screen wrapped as rendered — for a program's OUTPUT, still prefer its own output file.
+  overlay reads there as `no selection` and `session text --pane right` returns the shell underneath.
+  Reach for them when the read is NOT chord-driven — polling from outside, or reading some time after the
+  fact. A chord already gets the firing surface's selection synchronously in `$AGT_SELECTION`, the
+  overlay's included, so a custom command should use that rather than a later socket read.
+  `overlay text` returns a TUI's drawn screen wrapped as rendered — for a program's OUTPUT, still prefer
+  its own output file.
   `overlay resize` changes an ALREADY-OPEN overlay: `--size-percent N` (1-100) makes it a floating panel,
   `--full` switches it back to the full-pane overlay; the program keeps running (no re-spawn).
   `--pane left|right` scopes the overlay to ONE split pane instead of the whole session, leaving the

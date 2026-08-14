@@ -170,7 +170,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `left`/main, parsed to `StatusPane`); and `session.restore` pins (same `StatusPane` spelling, omitted
     /// = `left`/main, `scratch` rejected app-side).
     ///
-    /// `session.overlay.open`/`.close`/`.result` scope to ONE pane with it, parsed to `OverlayPane`, which
+    /// The `session.overlay.*` family (`.open`/`.close`/`.result`/`.copy`/`.text`) scopes to ONE pane with
+    /// it, parsed to `OverlayPane`, which
     /// takes the `TerminalZoomSurface` spellings minus `scratch` (`left`/`primary`, `right`/`split`);
     /// `scratch` is rejected, there being no scratch pane to cover, and the rejection names only
     /// `left or right` as guidance. Omitted keeps the session-wide overlay, so every existing caller is

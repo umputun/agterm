@@ -190,9 +190,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
-    // #434: `session.text --pane` reads the pane UNDER an overlay, so the program drawn over it had no
-    // address at all. The `session.text` contrast is what makes this discriminating — an arm that still
-    // resolved the pane would find the marker too if both reads pointed at one surface.
+    // DISCRIMINATING: the `session.text` contrast, or an arm still resolving the pane would pass too (#434).
     func testOverlayTextReadsTheCoveringProgramNotThePaneBeneathIt() throws {
         let id = try activeSessionID()
         let ovlCmd = "sh -c 'echo OVERLAY-MARKER; cat'"
@@ -226,10 +224,8 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(after["error"] as? String, "no overlay")
     }
 
-    // the selection half of #434, the one the reporter hit: Select All goes to the first responder, which is
-    // the overlay while one is up, so `session.copy` — pinned to `addressableSurface` — answers about the
-    // pane and finds nothing. The typed line first is load-bearing: it proves the overlay HELD focus, or
-    // ⌘A landed somewhere else entirely and the copy assertion means nothing.
+    // DISCRIMINATING: the typed line proves the overlay held focus, or ⌘A below selected something else and
+    // the copy assertion means nothing (#434).
     func testOverlayCopyReturnsTheSelectionMadeInsideTheOverlay() throws {
         let id = try activeSessionID()
         let focusMarker = markerDir.appendingPathComponent("overlay-copy-keys")
@@ -240,10 +236,16 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
 
-        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
-        app.typeText("OVLFOCUS")
-        app.typeKey(.return, modifierFlags: [])
-        XCTAssertEqual(pollMarker(focusMarker, timeout: 12), "OVLFOCUS",
+        // retype rather than sleep a fixed span: `pollSessionOverlay` returns on the model flag, which is set
+        // before the surface realizes and takes focus, so the first burst can land on the pane or be dropped.
+        // The shell's `read` consumes only the first line; later ones fall through to its `cat`.
+        var focused: String?
+        for _ in 0..<6 where focused == nil {
+            app.typeText("OVLFOCUS")
+            app.typeKey(.return, modifierFlags: [])
+            focused = pollMarker(focusMarker, timeout: 3)
+        }
+        XCTAssertEqual(focused, "OVLFOCUS",
                        "the overlay must hold keyboard focus, else Select All below selects something else")
 
         app.typeKey("a", modifierFlags: .command)

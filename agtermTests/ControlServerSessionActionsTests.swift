@@ -235,9 +235,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
     // MARK: - session.overlay.copy / .text
 
-    // `session.copy`/`.text` address the pane UNDER an overlay, so a selection made inside one is unreachable
-    // there (#434); these two read the covering surface. An empty slot and a filled-but-unrealized one are
-    // different answers: the second is the ms after `overlay.open`, where the session itself is fine.
+    // #434: an empty slot and a filled-but-unrealized one are different answers.
     func testOverlayReadsSeparateAnEmptySlotFromAnUnrealizedSurface() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
@@ -504,8 +502,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
                        "no overlay result", "a closed hud records no exit code either")
     }
 
-    // the same shared slot: a hud paints agterm's own message, so reading it hands a caller back the text it
-    // wrote rather than a program's output, and `overlayActive` is true either way.
+    // `overlayActive` is true for a hud too, so the refusal has to name it.
     func testOverlayReadsRefuseAHudByName() throws {
         let (store, session) = try makeHudSession()
         XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working")).ok)

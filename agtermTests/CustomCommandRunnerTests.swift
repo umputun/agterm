@@ -277,9 +277,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         return nil
     }
 
-    // #434: an overlay's view carries no session, so a chord fired inside one fell through to the palette
-    // path, which reads the FOCUSED pane. With focus on the split and the LEFT pane covered, that reported
-    // `right` and handed `$AGT_SELECTION` the surface under the overlay instead of the overlay itself.
+    // #434: an overlay view is sessionless, so a chord fired inside one took the palette path's FOCUSED pane.
     func testAChordFiredInsideAPaneOverlayNamesThePaneThatOverlayCovers() throws {
         let fix = try fixture()
         let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
@@ -309,13 +307,45 @@ final class CustomCommandRunnerTests: XCTestCase {
         session.overlaySurface = overlay
         session.overlayActive = true
 
-        let written = try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE $AGT_SESSION_ID\"")
+        XCTAssertEqual(try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE\""), "left")
 
-        XCTAssertEqual(written, "left \(session.id.uuidString)")
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitFocused = true
+
+        XCTAssertEqual(try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE $AGT_SESSION_ID\""),
+                       "right \(session.id.uuidString)", "it follows the focused pane, not a fixed left")
     }
 
-    // the quick terminal is nobody's pane, so it must keep falling through to the plain active-session path
-    // rather than being adopted by the rung the overlays now take.
+    // `topmostSurface` puts the scratch above both panes and a pane overlay, and a session-wide overlay above
+    // the scratch — so whichever overlay closes, focus returns to the scratch and the pane name would send
+    // the reply into a surface the user cannot see.
+    func testAChordFiredInsideAnOverlayOverAShownScratchNamesTheScratch() throws {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.scratchSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.scratchActive = true
+
+        let sessionWide = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.overlaySurface = sessionWide
+        session.overlayActive = true
+        XCTAssertEqual(try fired(fix.runner, from: sessionWide, writing: "\"$AGT_PANE\""), "scratch")
+
+        session.overlaySurface = nil
+        session.overlayActive = false
+        XCTAssertNil(fix.store.openPaneOverlay(session.id, pane: .left, command: "true"))
+        let paneOverlay = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.setPaneOverlaySurface(paneOverlay, pane: .left)
+        XCTAssertEqual(try fired(fix.runner, from: paneOverlay, writing: "\"$AGT_PANE\""), "scratch")
+
+        session.scratchActive = false
+        XCTAssertEqual(try fired(fix.runner, from: paneOverlay, writing: "\"$AGT_PANE\""), "left",
+                       "with the scratch hidden the pane overlay names its own pane again")
+    }
+
+    // the quick terminal is nobody's pane, so it keeps falling through to the plain active-session path.
     func testAChordFiredFromAnUnrelatedSessionlessSurfaceStillTakesTheActiveSessionPath() throws {
         let fix = try fixture()
         let owner = try XCTUnwrap(fix.store.currentWorkspaceID)

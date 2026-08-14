@@ -1560,9 +1560,14 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 What comes back is a TUI's DRAWN screen, wrapped as rendered, not the output the program would have printed —
-                for output, prefer the program's own output file. Same errors as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay copy</span>, plus
+                for output, prefer the program's own output file. Errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay not realized</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no overlay to read: the slot holds a hud</span> as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay copy</span> does, plus
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failed to read surface buffer</span> on a real read failure.
+                It has no <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no selection</span>: a blank
+                realized screen is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ok</span> with an empty string.
               </p>
             </div>
           </section>

@@ -633,7 +633,9 @@ error keeps those names for compatibility.
   `--pane right` returns the shell, not the program drawn over it. `--all` and `--lines N` mean what they do
   on `session text` and are mutually exclusive. What comes back is a TUI's DRAWN screen, wrapped as
   rendered, not the output the program would have printed — for output, prefer the program's own output
-  file. Same errors as `session overlay copy`, plus `failed to read surface buffer` on a real read failure.
+  file. Errors `no overlay`, `overlay not realized` and `no overlay to read: the slot holds a hud` as
+  `session overlay copy` does, plus `failed to read surface buffer` on a real read failure. It has no
+  `no selection`: a blank realized screen is `ok` with an empty string.
 - `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--target] [--window W]`
   — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
   as `session overlay open`, but carries a message rather than a program: it takes no input, the session

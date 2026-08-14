@@ -117,6 +117,52 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         XCTAssertNotNil(text, "session.type --pane \(pane) should reach the promoted survivor")
     }
 
+    // #434: an overlay view is sessionless, so the chord took the palette path and read the pane UNDER the
+    // overlay. DISCRIMINATING on both tokens at once — the selection proves which surface was read, and the
+    // pane proves the reply still routes to the one the user returns to.
+    func testAgtSelectionAndPaneInsideAnOverlay() throws {
+        let marker = markerDir.appendingPathComponent("agt-overlay-selection")
+        try relaunch(withKeymap:
+            "command \"Sel Probe\" cmd+shift+e printf %s \"$AGT_PANE|$AGT_SELECTION\" > \"\(marker.path)\"\n")
+
+        focusMainTerminal()
+        let id = try activeSessionID()
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": "sh -c 'echo OVLPICK; cat'"]])
+        XCTAssertEqual(try sendCommand(String(data: ovlJSON, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "overlay open should succeed")
+        // wait on the overlay's own buffer rather than the model flag, which is set before the surface
+        // realizes: the chord below needs a terminal that exists and a shell that has already printed.
+        var drawn = false
+        let deadline = Date().addingTimeInterval(15)
+        while !drawn, Date() < deadline {
+            let read = try sendCommand(#"{"cmd":"session.overlay.text","target":"\#(id)"}"#)
+            drawn = (((read["result"] as? [String: Any])?["text"] as? String) ?? "").contains("OVLPICK")
+            if !drawn { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+        }
+        XCTAssertTrue(drawn, "the overlay's program should have drawn before the chord fires")
+
+        // Select All reaches the first responder, so it selects the OVERLAY's buffer once that has focus.
+        // Both it and the chord ride the same async focus grab, so retry the pair until the selection lands.
+        app.activate()
+        var reported: String?
+        for _ in 0..<12 {
+            try? FileManager.default.removeItem(at: marker)
+            app.typeKey("a", modifierFlags: .command)
+            app.typeKey("e", modifierFlags: [.command, .shift])
+            if let seen = pollMarker(marker, timeout: 2) {
+                reported = seen
+                if seen.contains("OVLPICK") { break }
+            }
+        }
+        let value = try XCTUnwrap(reported, "the chord should fire while the overlay holds focus")
+        let parts = value.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+        XCTAssertEqual(parts.first.map(String.init), "left",
+                       "an overlay names the pane underneath it, so the reply routes back there")
+        XCTAssertTrue(parts.count == 2 && parts[1].contains("OVLPICK"),
+                      "$AGT_SELECTION must come from the overlay, not the pane it covers: \(value)")
+    }
+
     // MARK: - Helpers
 
     /// Click the seeded session row so the main terminal surface is first responder (the custom-command

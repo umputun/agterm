@@ -476,7 +476,8 @@ public struct ControlDispatcher {
         parsePane(raw, error: "--pane must be left, right, or scratch") { StatusPane(controlName: $0) }
     }
 
-    /// The `session.overlay.open`/`.close`/`.result` selector: absent keeps the session-wide overlay,
+    /// The `session.overlay.*` selector (`.open`/`.close`/`.result`/`.copy`/`.text`): absent keeps the
+    /// session-wide overlay,
     /// `left`/`right` (and their `primary`/`split` aliases) scope to one pane, `scratch` is rejected — there
     /// being no scratch pane to cover.
     private func parseOverlayPane(_ raw: String?) -> PaneSelection<OverlayPane> {
