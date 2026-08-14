@@ -415,7 +415,8 @@ final class ControlServer {
         switch request.cmd {
         case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove,
-                .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFocus,
+                .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
+                .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
                 .sessionStatus, .sessionFlag, .sessionSeen, .sessionRestore, .notify,

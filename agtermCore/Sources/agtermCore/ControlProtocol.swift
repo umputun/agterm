@@ -7,6 +7,7 @@ public enum Command: String, Codable, Sendable {
     case workspaceRename = "workspace.rename"
     case workspaceDelete = "workspace.delete"
     case workspaceSelect = "workspace.select"
+    case workspaceGo = "workspace.go"
     case sessionNew = "session.new"
     case sessionDuplicate = "session.duplicate"
     case sessionClose = "session.close"

@@ -1314,6 +1314,24 @@ struct ControlProtocolTests {
         #expect(SessionNavigation(wire: decoded.args!.to!) == .nextAttention)
     }
 
+    @Test func workspaceGoRoundTripsWithDirection() throws {
+        let request = ControlRequest(cmd: .workspaceGo, args: ControlArgs(window: "w1", to: "prev"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .workspaceGo)
+        #expect(decoded.args?.window == "w1")
+        #expect(WorkspaceNavigation(wire: decoded.args!.to!) == .previous)
+    }
+
+    @Test func workspaceNavigationWireMapping() {
+        #expect(WorkspaceNavigation(wire: "next") == .next)
+        #expect(WorkspaceNavigation(wire: "prev") == .previous)
+        #expect(WorkspaceNavigation(wire: "previous") == .previous)
+        #expect(WorkspaceNavigation(wire: "first") == nil)
+        #expect(WorkspaceNavigation(wire: "next-attention") == nil)
+        #expect(WorkspaceNavigation(wire: "") == nil)
+    }
+
     @Test func sessionMoveReorderRoundTripsWithDirection() throws {
         let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(to: "up"))
         let decoded = try roundTrip(request)

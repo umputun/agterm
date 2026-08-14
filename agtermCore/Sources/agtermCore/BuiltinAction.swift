@@ -15,6 +15,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case toggleSidebar = "toggle_sidebar", selectTheme = "select_theme", toggleFullscreen = "toggle_fullscreen"
     case toggleFlaggedView = "toggle_flagged_view", toggleFlag = "toggle_flag", focusWorkspace = "focus_workspace"
     case toggleWorkspaceFilter = "toggle_workspace_filter"
+    case previousWorkspace = "previous_workspace", nextWorkspace = "next_workspace"
+    case toggleWorkspaceCollapse = "toggle_workspace_collapse"
     case focusLeftPane = "focus_left_pane", focusRightPane = "focus_right_pane"
     case previousSession = "previous_session", nextSession = "next_session"
     case previousAttentionSession = "previous_attention_session", nextAttentionSession = "next_attention_session"
@@ -61,7 +63,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .nextAttentionSession: return Chord(mods: [.control, .option], key: "down")
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
-             .toggleWorkspaceFilter:
+             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse:
             return nil
         }
     }

@@ -28,6 +28,16 @@ extension ControlServer {
         }
     }
 
+    func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse {
+        // relative nav acts on the store's current workspace: no target, just the frontmost/`--window` store.
+        resolver.resolvePlacementStore(window) { store in
+            guard let step = store.navigateWorkspace(direction) else {
+                return ControlResponse(ok: false, error: "no other workspace to navigate to")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: step.workspaceID.uuidString))
+        }
+    }
+
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
         resolver.resolveWorkspace(target, window: window) { store, id in
             store.renameWorkspace(id, to: name)

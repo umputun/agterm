@@ -179,6 +179,12 @@ paths:
   Option-Command-Left/Right remains pane focus.
 - `navigateSession` uses `navigableSessions`, wraps previous/next, selects ends for first/last, chooses
   first on nil/invalid selection, and no-ops when empty. Menu, palette, and `session.go` share it.
+- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through
+  `visibleWorkspaces` and lands on the target's FIRST session, so the keybind, the palette row and
+  `workspace.go` mean one thing. Keyless, tree mode only, and it reveals a landed pane off the step's
+  captured indicator exactly as plain session nav does. **Collapse is not a navigation filter** —
+  `navigableSessions` and `navigateWorkspace` both ignore `isExpanded`, and adding a term to either would
+  silently rewrite where every existing keystroke, `session.go` call and Ctrl-Tab candidate lands.
 - When selection moves, GUI callers reveal a captured blocked/completed pane; unchanged plain navigation
   only refocuses, preventing a one-item wrap from resetting split focus. Modal focus guards still apply.
 - Attention navigation defaults to Control-Option-Up/Down, includes blocked/completed only, wraps, and

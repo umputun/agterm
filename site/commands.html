@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 75 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 76 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 75 agtermctl control commands with arguments, return values, and errors."
+      content="All 76 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 75 agtermctl control commands with arguments, return values, and errors."
+      content="All 76 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -237,7 +237,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 75 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 76 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -646,6 +646,27 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.select</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">Select the target workspace.</p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace go --to next|prev [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.go</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Step the current workspace one place through the sidebar's visible order, wrapping at both ends, and select the
+                first session of the workspace it lands on. Relative, so it takes no
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> —
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspace move</span> is the verb that reorders instead.
+                Returns the workspace id.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Whether a workspace is collapsed makes no difference — a folded workspace is stepped into like any other. While the
+                workspace focus filter is applied, stepping stays inside the marked workspaces, the same scoping
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session go</span> gets. With nowhere to step — the flagged
+                flat list, or a single visible workspace — it errors with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other workspace to navigate to</span>.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">

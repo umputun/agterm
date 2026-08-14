@@ -178,7 +178,7 @@ struct AppStoreCurrentWorkspaceTests {
         store.selectSession(session.id)
         store.addWorkspace(name: "fresh")
 
-        #expect(store.selectWorkspace(work.id))
+        #expect(store.selectWorkspace(work.id) != nil)
         #expect(store.selectedSessionID == session.id)
         #expect(store.currentWorkspaceID == work.id)
     }
@@ -193,7 +193,7 @@ struct AppStoreCurrentWorkspaceTests {
         store.addWorkspace(name: "fresh")
         let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
 
-        #expect(store.selectWorkspace(empty.id))
+        #expect(store.selectWorkspace(empty.id) != nil)
         #expect(store.selectedSessionID == session.id)
         #expect(store.currentWorkspaceID == empty.id)
     }
@@ -208,7 +208,7 @@ struct AppStoreCurrentWorkspaceTests {
         store.setFocusedWorkspace(work.id)
         #expect(store.visibleWorkspaces.map(\.id) == [work.id])
 
-        #expect(store.selectWorkspace(empty.id))
+        #expect(store.selectWorkspace(empty.id) != nil)
         #expect(store.currentWorkspaceID == empty.id)
         #expect(store.visibleWorkspaces.map(\.id) == [work.id, empty.id], "the target must be on screen")
         #expect(store.focusEnabled, "the filter must widen, not switch off")
@@ -247,7 +247,7 @@ struct AppStoreCurrentWorkspaceTests {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
 
-        #expect(!store.selectWorkspace(UUID()))
+        #expect(store.selectWorkspace(UUID()) == nil)
         #expect(store.currentWorkspaceID == work.id)
     }
 

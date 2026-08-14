@@ -260,6 +260,9 @@ struct SocketClientTests {
             toggle_flag                 cmd+shift+f
             focus_workspace             -
             toggle_workspace_filter     -
+            previous_workspace          -
+            next_workspace              -
+            toggle_workspace_collapse   -
           * focus_left_pane             ctrl+cmd+left
             focus_right_pane            cmd+opt+right
             previous_session            cmd+opt+up

@@ -54,6 +54,18 @@ struct CommandsTests {
         #expect(try request(["workspace", "select", "--target", "ab"]) == ControlRequest(cmd: .workspaceSelect, target: "ab"))
     }
 
+    @Test func workspaceGo() throws {
+        #expect(try request(["workspace", "go", "--to", "next"]) == ControlRequest(cmd: .workspaceGo, args: ControlArgs(to: "next")))
+        let windowed = ControlRequest(cmd: .workspaceGo, args: ControlArgs(window: "w1", to: "prev"))
+        #expect(try request(["workspace", "go", "--to", "prev", "--window", "w1"]) == windowed)
+    }
+
+    // relative to what is current, so unlike its `workspace.*` siblings it carries no target at all
+    @Test func workspaceGoTakesNoTarget() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "go", "--to", "next", "--target", "ab"]) }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "go"]) }
+    }
+
     @Test func workspaceMove() throws {
         let expected = ControlRequest(cmd: .workspaceMove, target: "active", args: ControlArgs(to: "top"))
         #expect(try request(["workspace", "move", "--to", "top"]) == expected)

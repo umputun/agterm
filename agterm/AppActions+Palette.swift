@@ -29,6 +29,7 @@ extension AppActions {
             activeSessionFlagged: activeStore?.activeSession?.flagged == true,
             hasMarkedWorkspaces: activeStore?.focusedWorkspaceIDs.isEmpty == false,
             activeWorkspaceMarked: activeStore?.isCurrentWorkspaceFocusMember == true,
+            activeWorkspaceCollapsed: activeStore?.isCurrentWorkspaceCollapsed == true,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             activeSplitAxis: activeStore?.activeSession?.splitAxis,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
@@ -77,6 +78,8 @@ extension AppActions {
         case .nextSession: selectNextSession()
         case .previousAttentionSession: selectPreviousAttentionSession()
         case .nextAttentionSession: selectNextAttentionSession()
+        case .previousWorkspace: selectPreviousWorkspace()
+        case .nextWorkspace: selectNextWorkspace()
         case .firstSession: selectFirstSession()
         case .lastSession: selectLastSession()
         case .showAttention: openAttentionPalette()
@@ -108,6 +111,7 @@ extension AppActions {
         case .toggleWorkspaceFilter: toggleFocusFilter()
         case .expandWorkspaces: expandAllWorkspaces()
         case .collapseWorkspaces: collapseOtherWorkspaces()
+        case .toggleWorkspaceCollapse: toggleActiveWorkspaceCollapse()
         case .focusLeftPane: focusPane(.main)
         case .focusRightPane: focusPane(.split)
         }

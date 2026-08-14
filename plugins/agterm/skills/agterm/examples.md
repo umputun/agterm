@@ -832,6 +832,8 @@ a RUNNING program is refused instead: a message is replaceable, a program is not
 ```bash
 agtermctl session go --to next            # step selection to the next session
 agtermctl session go --to next-attention  # jump to the next blocked/completed session
+agtermctl workspace go --to next          # step a whole workspace, landing on its first session
+agtermctl workspace go --to prev          # wraps at both ends; no --target, it is relative
 w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
 # or park one in the Dock right after creating it (it appears briefly on its way there):
 # p=$(agtermctl window new "proj-b" --minimized --json | jq -r '.result.id')

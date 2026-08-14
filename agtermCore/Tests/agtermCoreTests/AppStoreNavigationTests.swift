@@ -417,4 +417,95 @@ struct AppStoreNavigationTests {
         _ = store.addSession(toWorkspace: ws.id, cwd: "/b")
         #expect(store.attentionSessions.isEmpty)
     }
+
+    /// Three workspaces (work: a, b; personal: c; scratch: d) so a step's landing session is unambiguous.
+    static func makeWorkspaceNavTree() -> (store: AppStore, workspaces: [UUID], sessions: [UUID]) {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let scratch = store.addWorkspace(name: "scratch")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        let c = store.addSession(toWorkspace: personal.id, cwd: "/c")!
+        let d = store.addSession(toWorkspace: scratch.id, cwd: "/d")!
+        return (store, [work.id, personal.id, scratch.id], [a.id, b.id, c.id, d.id])
+    }
+
+    @Test func navigateWorkspaceNextStepsForwardAndWraps() throws {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[1]) // b, the SECOND session of work
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[1])
+        #expect(store.selectedSessionID == sessions[2], "lands on the target's FIRST session")
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[2])
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[0])
+        #expect(store.selectedSessionID == sessions[0])
+    }
+
+    @Test func navigateWorkspacePreviousStepsBackwardAndWraps() throws {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[1]) // b, so previous leaves work from its middle
+        #expect(try #require(store.navigateWorkspace(.previous)).workspaceID == workspaces[2])
+        #expect(store.selectedSessionID == sessions[3])
+        #expect(try #require(store.navigateWorkspace(.previous)).workspaceID == workspaces[1])
+        #expect(store.selectedSessionID == sessions[2])
+    }
+
+    @Test func navigateWorkspaceStaysWithinTheFocusFilter() {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[0])
+        store.setFocusedWorkspace(workspaces[0])
+        #expect(store.navigateWorkspace(.next) == nil, "a sole marked workspace has nowhere to step")
+        #expect(store.selectedSessionID == sessions[0])
+    }
+
+    @Test func navigateWorkspaceIsANoOpInFlaggedMode() {
+        let (store, _, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[0])
+        store.setFlag(true, forSession: sessions[0])
+        store.setSidebarMode(.flagged)
+        #expect(store.navigateWorkspace(.next) == nil)
+        #expect(store.selectedSessionID == sessions[0])
+    }
+
+    @Test func navigateWorkspaceIsANoOpWithOneWorkspace() {
+        let store = makeStore()
+        let only = store.addWorkspace(name: "only")
+        let a = store.addSession(toWorkspace: only.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: only.id, cwd: "/b")!
+        store.selectSession(b.id)
+        #expect(store.navigateWorkspace(.next) == nil)
+        #expect(store.selectedSessionID == b.id, "a lone workspace must not yank the selection to its first session")
+        #expect(a.id != b.id)
+    }
+
+    // issue #435 assumed collapsing a workspace steers navigation. it does not, and must not: the fold is a
+    // display state, so a step lands the same way whether or not the target is folded
+    @Test func navigateWorkspaceIgnoresCollapseState() throws {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[0])
+        store.setWorkspaceExpanded(workspaces[1], expanded: false)
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[1])
+        #expect(store.selectedSessionID == sessions[2])
+    }
+
+    // `currentWorkspaceID` falls back to the LAST workspace, which the filter can leave off screen — the
+    // step has to enter the visible set rather than no-op there
+    @Test func navigateWorkspaceEntersTheVisibleSetWhenCurrentIsOutsideIt() throws {
+        let (store, workspaces, _) = Self.makeWorkspaceNavTree()
+        store.setFocusMembership(workspaces[0], member: true)
+        store.setFocusMembership(workspaces[1], member: true)
+        store.setFocusEnabled(true)
+        store.selectSession(nil)
+        #expect(store.visibleWorkspaces.map(\.id) == [workspaces[0], workspaces[1]])
+        #expect(store.currentWorkspaceID == workspaces[2], "the fallback sits outside the visible set")
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[0])
+
+        let (other, otherWorkspaces, _) = Self.makeWorkspaceNavTree()
+        other.setFocusMembership(otherWorkspaces[0], member: true)
+        other.setFocusMembership(otherWorkspaces[1], member: true)
+        other.setFocusEnabled(true)
+        other.selectSession(nil)
+        #expect(try #require(other.navigateWorkspace(.previous)).workspaceID == otherWorkspaces[1],
+                "previous enters from the other end")
+    }
 }

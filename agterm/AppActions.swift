@@ -423,6 +423,21 @@ final class AppActions {
     func selectFirstSession() { navigatePlain(.first) }
     func selectLastSession() { navigatePlain(.last) }
 
+    /// Step the CURRENT workspace prev/next through the sidebar's visible order and select its first session,
+    /// through shared `navigateWorkspace` so the menu, the palette and `workspace.go` can't drift. Notes the
+    /// step as user activity like session nav, then routes pane reveal off the step's captured indicator —
+    /// the same treatment plain session nav gives, so where focus lands does not depend on which keystroke
+    /// got you there. A step with nowhere to go (flagged mode, one visible workspace) leaves focus alone.
+    private func navigateWorkspace(_ direction: WorkspaceNavigation) {
+        guard uiActionsEnabled else { return }
+        store?.noteUserActivity()
+        guard let step = store?.navigateWorkspace(direction) else { return }
+        revealActiveBlockedPane(captured: step.indicator)
+    }
+
+    func selectNextWorkspace() { navigateWorkspace(.next) }
+    func selectPreviousWorkspace() { navigateWorkspace(.previous) }
+
     /// Step to the next/previous session needing attention (`blocked`/`completed`), wrapping and skipping
     /// idle/active, through `navigateSession` shared with the palette and `session.go next-attention|prev-attention`.
     /// Notes user activity like plain nav, then `revealActiveBlockedPane` focuses the split/scratch pane that
@@ -526,6 +541,16 @@ final class AppActions {
     /// and how `sidebar.collapse` targets a specific (default frontmost) window.
     func collapseOtherWorkspaces(in store: AppStore) {
         NotificationCenter.default.post(name: .agtermCollapseWorkspaces, object: store)
+    }
+
+    /// Fold or unfold the CURRENT workspace alone, for the keyless `toggle_workspace_collapse`, its View-menu
+    /// item and its palette row. The per-workspace counterpart of Expand / Collapse Workspaces, which act on
+    /// every row and deliberately keep this one open — so before this there was no built-in way to fold the
+    /// workspace you are in. Tree mode only, matching those two and the rows it acts on.
+    func toggleActiveWorkspaceCollapse() {
+        guard uiActionsEnabled else { return }
+        guard let store, store.sidebarMode == .tree, let id = store.currentWorkspaceID else { return }
+        setWorkspaceExpanded(id, expanded: store.isCurrentWorkspaceCollapsed, in: store)
     }
 
     /// Collapse/expand a SINGLE workspace in `store`'s window sidebar — the `workspace.collapse`/`.expand`

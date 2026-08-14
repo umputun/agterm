@@ -22,6 +22,31 @@ extension SessionNavigation {
     }
 }
 
+/// A relative step through the visible workspace list. Only `next`/`previous`: a workspace carries no
+/// attention state, and the tree ends are already reachable by wrapping.
+public enum WorkspaceNavigation: Sendable { case next, previous }
+
+/// What one workspace step landed on: the workspace now current, and the indicator of the session it
+/// selected, captured BEFORE an `autoReset` status cleared. Both halves are needed — `workspace.go` reports
+/// the workspace, while the GUI needs the indicator to route pane reveal exactly as session nav does
+/// (`AppActions.revealActiveBlockedPane`). An empty workspace carries no indicator.
+public struct WorkspaceStep: Sendable {
+    public let workspaceID: UUID
+    public let indicator: AgentIndicator?
+}
+
+extension WorkspaceNavigation {
+    /// Maps a control-channel direction string to a case, nil for an unknown one. Accepts both spellings of
+    /// previous, like `SessionNavigation`.
+    public init?(wire: String) {
+        switch wire {
+        case "next": self = .next
+        case "prev", "previous": self = .previous
+        default: return nil
+        }
+    }
+}
+
 /// The whole app state: the workspace tree and the current selection. `@Observable @MainActor` so views
 /// observe mutations and all model access is main-actor isolated (implicitly `Sendable` via isolation).
 /// Selection is one `Session.ID?` — workspace rows are non-selectable headers, so the workspace is derived.
@@ -184,14 +209,16 @@ public final class AppStore {
     /// Makes `workspaceID` the current one and selects its first session when it has one. Both halves are
     /// needed: the first session may already BE the selection, and a same-value write leaves the target
     /// alone; an empty workspace has nothing to select at all, and reporting success while targeting
-    /// somewhere else is what made `workspace.select --target <empty>` a lie. Backs `workspace.select`.
+    /// somewhere else is what made `workspace.select --target <empty>` a lie. Nil for an unknown id, which
+    /// is the only failure. Backs `workspace.select` and `navigateWorkspace`; the returned step carries the
+    /// pre-auto-reset indicator the GUI needs for pane reveal, nil for an empty workspace.
     @discardableResult
-    public func selectWorkspace(_ workspaceID: UUID) -> Bool {
-        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else { return false }
+    public func selectWorkspace(_ workspaceID: UUID) -> WorkspaceStep? {
+        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else { return nil }
         if let first = workspace.sessions.first {
-            selectSession(first.id)
+            let indicator = selectSession(first.id)
             freshWorkspaceID = nil
-            return true
+            return WorkspaceStep(workspaceID: workspaceID, indicator: indicator)
         }
         // an empty workspace the filter hides would be a target with no row: reveal it, the same
         // auto-reveal `addWorkspace` performs, so what is current is always on screen. the target itself
@@ -200,7 +227,7 @@ public final class AppStore {
         revealNewFocusMember(workspaceID)
         freshWorkspaceID = workspaceID
         if focusedWorkspaceIDs != marked { save() }
-        return true
+        return WorkspaceStep(workspaceID: workspaceID, indicator: nil)
     }
 
     /// Drops the target when the focus filter has hidden it, so turning the filter off later cannot make it
@@ -634,6 +661,32 @@ public final class AppStore {
         return selectSession(target)
     }
 
+    /// Steps the CURRENT workspace one place through `visibleWorkspaces` and makes it current, WRAPPING at
+    /// both ends. Scoped to the same filtered set `navigableSessions` uses, so a focus filter confines
+    /// workspace traversal exactly as it confines session navigation. Collapse state is deliberately not a
+    /// term: a collapsed workspace is a display state, and skipping it here would make the sidebar's fold
+    /// silently rewrite where a keystroke lands. Routes through `selectWorkspace`, inheriting its
+    /// first-session selection and its empty-workspace reveal. Returns what it landed on, nil when there is
+    /// nowhere to step: flagged mode renders no workspace rows, and a lone visible workspace would only
+    /// reselect itself, yanking the selection to its first session. Backs `next_workspace`/
+    /// `previous_workspace` and `workspace.go`.
+    @discardableResult
+    public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
+        guard sidebarMode == .tree else { return nil }
+        let ids = visibleWorkspaces.map(\.id)
+        guard ids.count > 1 else { return nil }
+        let target: UUID
+        if let current = currentWorkspaceID, let i = ids.firstIndex(of: current) {
+            let step = direction == .next ? 1 : -1
+            target = ids[((i + step) % ids.count + ids.count) % ids.count]
+        } else {
+            // current sits outside the visible set: land on the end the step comes from, so the first
+            // keystroke enters the set rather than no-opping, mirroring `navigateSession`'s fallback.
+            target = direction == .next ? ids[0] : ids[ids.count - 1]
+        }
+        return selectWorkspace(target)
+    }
+
     /// The next/previous session needing attention (`blocked`/`completed`) in the flattened order, scanning
     /// from the current selection and WRAPPING; the current session is excluded, so repeated steps cycle
     /// through the others. With no/invalid selection the scan starts from the tree end opposite the
@@ -708,6 +761,14 @@ public final class AppStore {
         guard let index = workspaces.firstIndex(where: { $0.id == id }), workspaces[index].isExpanded != expanded else { return }
         workspaces[index].isExpanded = expanded
         save()
+    }
+
+    /// Whether the CURRENT workspace's subtree is folded — the persisted `!isExpanded`, matching the `collapsed`
+    /// tree read-back rather than the sidebar's transient reveal. Names the Collapse/Expand Workspace row and
+    /// picks the value its keystroke writes. False with no current workspace, so the toggle folds it.
+    public var isCurrentWorkspaceCollapsed: Bool {
+        guard let id = currentWorkspaceID else { return false }
+        return workspaces.first(where: { $0.id == id })?.isExpanded == false
     }
 
     /// Marks each workspace expanded iff its id is in `expandedIDs`, one `save()` for the whole diff and no

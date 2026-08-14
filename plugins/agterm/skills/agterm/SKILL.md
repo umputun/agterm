@@ -19,7 +19,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
-  session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
+  session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
@@ -148,7 +148,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (75 commands)
+## Command summary (76 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -216,6 +216,9 @@ rebaselined. There is no terminal-output event stream.
 **workspace** — `new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
 it with `session new --no-select` without it opening, and keeps it out of the focus set; a plain create
 joins the marked set while the filter is applied, so it is visible) · `rename <name>` · `delete` · `select` ·
+`go --to next|prev` (step the CURRENT workspace one place through the sidebar's visible order, wrapping,
+and select the first session of the one it lands on — relative, so no `--target`, and unaffected by
+whether a workspace is collapsed; `move` REORDERS instead) ·
 `move --to up|down|top|bottom` ·
 `focus [on|off|toggle|add]` (mark ONE workspace in the sidebar's focus set — `on` marks it alone and
 applies the filter, `off` unmarks it, `toggle` (default) replace-toggles, and `add` marks it alongside

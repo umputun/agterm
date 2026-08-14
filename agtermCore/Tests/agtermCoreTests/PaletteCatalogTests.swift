@@ -18,6 +18,8 @@ struct PaletteCatalogTests {
             "Next Session",
             "Previous Attention Session",
             "Next Attention Session",
+            "Previous Workspace",
+            "Next Workspace",
             "First Session",
             "Last Session",
             "Show Attention",
@@ -49,13 +51,14 @@ struct PaletteCatalogTests {
             "Toggle Workspace Filter",
             "Expand Workspaces",
             "Collapse Workspaces",
+            "Collapse Workspace",
             "Focus Left Pane",
             "Focus Right Pane",
         ])
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 47)
+        #expect(PaletteCommand.allCases.count == 50)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -71,6 +74,8 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.toggleFlaggedView.title(in: PaletteContext(sidebarShowsFlaggedOnly: true)) == "Show All Sessions")
         #expect(PaletteCommand.focusLeftPane.title(in: PaletteContext(activeSplitAxis: .topBottom)) == "Focus Top Pane")
         #expect(PaletteCommand.focusRightPane.title(in: PaletteContext(activeSplitAxis: .topBottom)) == "Focus Bottom Pane")
+        #expect(PaletteCommand.toggleWorkspaceCollapse.title(in: PaletteContext(activeWorkspaceCollapsed: false)) == "Collapse Workspace")
+        #expect(PaletteCommand.toggleWorkspaceCollapse.title(in: PaletteContext(activeWorkspaceCollapsed: true)) == "Expand Workspace")
     }
 
     @Test func clearFlaggedVisibleOnlyWhenSomethingIsFlagged() {
@@ -89,6 +94,12 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.collapseWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
         #expect(!PaletteCommand.expandWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
         #expect(!PaletteCommand.collapseWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
+        for command in [PaletteCommand.toggleWorkspaceCollapse, .previousWorkspace, .nextWorkspace] {
+            #expect(command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
+            #expect(!command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
+            #expect(command.isEnabled(in: PaletteContext(sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true)))
+            #expect(!command.isEnabled(in: PaletteContext(sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: false)))
+        }
     }
 
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
@@ -170,7 +181,8 @@ struct PaletteCatalogTests {
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: false)
-        let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus]
+        let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus,
+                                                  .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse]
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !needWorkspace.contains(command), "\(command)")
         }

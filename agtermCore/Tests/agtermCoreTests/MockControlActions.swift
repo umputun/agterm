@@ -21,6 +21,7 @@ final class MockControlActions: ControlActions {
         case sessionReveal(target: String?, window: String?)
         case workspaceNew(window: String?, String?, collapsed: Bool)
         case workspaceSelect(target: String?, window: String?)
+        case workspaceGo(window: String?, WorkspaceNavigation)
         case workspaceRename(target: String?, window: String?, String)
         case workspaceDelete(target: String?, window: String?)
         case sessionMove(target: String?, window: String?, ControlSessionMove)
@@ -205,6 +206,11 @@ final class MockControlActions: ControlActions {
 
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.workspaceSelect(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse {
+        calls.append(.workspaceGo(window: window, direction))
         return ControlResponse(ok: true)
     }
 

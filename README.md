@@ -100,7 +100,7 @@ agtermctl tree --json                                     # dump the whole model
 
 `session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
 
-The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. All 75 commands are at [agterm.com/commands](https://agterm.com/commands).
+The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. All 76 commands are at [agterm.com/commands](https://agterm.com/commands).
 
 ## Documentation
 

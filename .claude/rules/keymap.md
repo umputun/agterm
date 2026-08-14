@@ -48,7 +48,7 @@ paths:
   alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
-  `BuiltinAction` (43 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
+  `BuiltinAction` (46 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
   `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts on the next activation, not immediately after

@@ -17,6 +17,9 @@ public protocol ControlActions {
     func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
+    /// Step the placement store's CURRENT workspace one place through the sidebar's visible order and select
+    /// its first session. Relative, so it takes no target — the counterpart of `session.go` one level up.
+    func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
@@ -192,7 +195,7 @@ public struct ControlDispatcher {
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionBackground,
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
-        case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
+        case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
@@ -476,6 +479,11 @@ public struct ControlDispatcher {
                                            collapsed: request.args?.collapsed ?? false)
         case .workspaceSelect:
             return actions.selectWorkspace(request.target, window: request.args?.window)
+        case .workspaceGo:
+            guard let dir = (request.args?.to).flatMap(WorkspaceNavigation.init(wire:)) else {
+                return ControlResponse(ok: false, error: "workspace.go requires --to next|prev")
+            }
+            return actions.goWorkspace(window: request.args?.window, direction: dir)
         case .workspaceRename:
             guard let name = request.args?.name?.trimmedOrNil else {
                 return ControlResponse(ok: false, error: "workspace.rename requires a name")

@@ -6,7 +6,7 @@ import agtermCore
 struct Workspace: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Workspace commands.",
-        subcommands: [New.self, Rename.self, Delete.self, Select.self, Move.self, Focus.self, Filter.self,
+        subcommands: [New.self, Rename.self, Delete.self, Select.self, Go.self, Move.self, Focus.self, Filter.self,
                       Collapse.self, Expand.self]
     )
 
@@ -50,6 +50,20 @@ struct Workspace: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .workspaceSelect, target: target.target, args: options.withWindow())
+        }
+    }
+
+    /// `agtermctl workspace go --to next|prev` — steps the CURRENT workspace and selects its first session.
+    /// Deliberately NO `--target`: it is relative to what is current, the shape `session go` takes, not the
+    /// `workspace.*` target commands. `move` is the neighbouring verb that REORDERS instead.
+    struct Go: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "go",
+            abstract: "Navigate workspaces: next|prev.")
+        @Option(name: .long, help: "Direction: next or prev.") var to: String
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .workspaceGo, args: options.withWindow(ControlArgs(to: to)))
         }
     }
 
