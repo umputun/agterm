@@ -1577,9 +1577,12 @@
               overlay covers: text you highlight in an overlay reads there as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">no selection</span>, and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session text --pane right</span> hands
-              back the shell underneath. Reach for them when a chord needs what you picked out of a program an agent opened over
-              your session. The buffer one returns a TUI's screen as drawn, wrapped where it wrapped — for a program's real
-              output, still read the file it writes.
+              back the shell underneath. Reach for them when the read is not chord-driven: an agent polling from outside, or a
+              script wanting the selection some time after the fact. A chord already receives the selection of the surface it
+              fired in, the overlay included, as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SELECTION</span>, so a custom
+              command should use that rather than a later socket read. The buffer one returns a TUI's screen as drawn, wrapped
+              where it wrapped — for a program's real output, still read the file it writes.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left|right</span> scopes the
