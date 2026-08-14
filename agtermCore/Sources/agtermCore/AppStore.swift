@@ -23,7 +23,7 @@ extension SessionNavigation {
 }
 
 /// A relative step through the visible workspace list. Only `next`/`previous`: a workspace carries no
-/// attention state, and the tree ends are already reachable by wrapping.
+/// attention state, and wrapping already reaches both ends.
 public enum WorkspaceNavigation: Sendable { case next, previous }
 
 /// What one workspace step landed on. The indicator is the selected session's, captured BEFORE an
@@ -35,8 +35,7 @@ public struct WorkspaceStep: Sendable {
 }
 
 extension WorkspaceNavigation {
-    /// Maps a control-channel direction string to a case, nil for an unknown one. Accepts both spellings of
-    /// previous, like `SessionNavigation`.
+    /// Maps a control-channel direction string to a case, nil for unknown. Both spellings of previous.
     public init?(wire: String) {
         switch wire {
         case "next": self = .next
@@ -268,7 +267,9 @@ public final class AppStore {
                             dashboardFontSize: () -> Double? = { nil },
                             dashboardFontMode: () -> String? = { nil }) -> ControlTree {
         let activeID = selectedSessionID
-        let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
+        // `currentWorkspaceID`, not the selected session's owner: an EMPTY destination selects nothing, so
+        // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
+        let activeWorkspaceID = currentWorkspaceID
         let nodes = workspaces.map { workspace in
             let sessions = workspace.sessions.map { session in
                 let idle = session.agentIndicator.status == .idle
@@ -659,12 +660,11 @@ public final class AppStore {
         return selectSession(target)
     }
 
-    /// Steps the CURRENT workspace one place through `visibleWorkspaces`, WRAPPING, via `selectWorkspace`.
-    /// Scoped to the set `navigableSessions` uses, so a focus filter confines it as it does session nav.
-    /// Collapse state is deliberately NOT a term: skipping a folded workspace would let the sidebar's fold
-    /// silently rewrite where a keystroke lands. Nil when there is nowhere to step — flagged mode renders no
-    /// workspace rows, and a lone workspace would only reselect itself, yanking the selection to its first
-    /// session. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
+    /// Steps the CURRENT workspace one place through `visibleWorkspaces`, WRAPPING, via `selectWorkspace`, so
+    /// a focus filter confines it as it does session nav. Collapse state is deliberately NOT a term: skipping
+    /// a folded workspace would let the sidebar's fold silently rewrite where a keystroke lands. Nil with
+    /// nowhere to step — flagged mode renders no workspace rows, and a lone workspace would only reselect
+    /// itself. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
     @discardableResult
     public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
         guard sidebarMode == .tree else { return nil }
@@ -760,20 +760,20 @@ public final class AppStore {
 
     /// The workspace rows the sidebar renders OPEN, mirrored from its outline. View state: not persisted, not
     /// in `snapshot()`, and deliberately at odds with `Workspace.isExpanded` wherever a reveal opened a row
-    /// collapsed on disk. `@ObservationIgnored` because the mirror is written from inside the outline's own
-    /// update pass, where an observed write would feed back into the rebuild that caused it.
+    /// collapsed on disk. `@ObservationIgnored` — the mirror is written from inside the outline's own update
+    /// pass, where an observed write would feed back into the rebuild that caused it.
     @ObservationIgnored public private(set) var sidebarExpandedWorkspaceIDs = Set<UUID>()
 
-    /// Records what the sidebar outline now shows expanded. Called by its coordinator alone.
+    /// Records what the outline now shows expanded. Called by the sidebar coordinator alone.
     public func noteSidebarExpansion(_ ids: Set<UUID>) {
         sidebarExpandedWorkspaceIDs = ids
     }
 
     /// Whether the CURRENT workspace is folded ON SCREEN — what Collapse/Expand Workspace acts on, NOT the
-    /// persisted `!isExpanded` the `collapsed` read-back reports. The two diverge constantly here: a reveal
-    /// opens the owner of a newly selected session without persisting, and the current workspace is by
-    /// definition the one holding the selection, so the persisted flag would call a visibly open row collapsed
-    /// and spend the keystroke re-persisting instead of folding. With no sidebar there are no rows to read.
+    /// persisted `!isExpanded` the `collapsed` read-back reports. The two diverge constantly here, since a
+    /// reveal opens the owner of a newly selected session without persisting and this workspace is by
+    /// definition the selection's owner: the persisted flag would call a visibly open row collapsed and spend
+    /// the keystroke re-persisting. With no sidebar there are no rows to read.
     public var isCurrentWorkspaceCollapsed: Bool {
         guard let id = currentWorkspaceID else { return false }
         guard sidebarVisible else { return workspaces.first(where: { $0.id == id })?.isExpanded == false }

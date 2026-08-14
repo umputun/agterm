@@ -517,6 +517,23 @@ struct AppStoreNavigationTests {
         #expect(!store.isCurrentWorkspaceCollapsed)
     }
 
+    // an empty destination has no session to select, so the selection stays behind and only the current
+    // workspace moves — `tree` has to name the workspace `workspace.go` reported, not the one it left
+    @Test func treeReportsTheEmptyWorkspaceAStepLandedOnAsActive() throws {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
+        store.selectSession(sessions[0])
+
+        let step = try #require(store.selectWorkspace(empty.id))
+        #expect(step.workspaceID == empty.id)
+        #expect(step.indicator == nil, "an empty workspace selects nothing, so it carries no indicator")
+        #expect(store.selectedSessionID == sessions[0], "the selection stays where it was")
+
+        let tree = store.controlTree()
+        #expect(tree.workspaces.first(where: { $0.active })?.id == empty.id.uuidString)
+        #expect(tree.workspaces.first(where: { $0.id == workspaces[0].uuidString })?.active == false)
+    }
+
     @Test func currentWorkspaceCollapseIsFalseWithNoCurrentWorkspace() {
         let store = makeStore()
         #expect(store.currentWorkspaceID == nil)

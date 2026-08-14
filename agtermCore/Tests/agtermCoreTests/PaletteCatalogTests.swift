@@ -97,9 +97,21 @@ struct PaletteCatalogTests {
         for command in [PaletteCommand.toggleWorkspaceCollapse, .previousWorkspace, .nextWorkspace] {
             #expect(command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
             #expect(!command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
-            #expect(command.isEnabled(in: PaletteContext(sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true)))
             #expect(!command.isEnabled(in: PaletteContext(sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: false)))
         }
+    }
+
+    // a step below two visible workspaces cannot move, and `isEnabled` is the single run-now predicate, so
+    // it has to say so rather than leaving a live item that no-ops. Folding one workspace still works.
+    @Test func workspaceStepsDisableWithNowhereToStep() {
+        let alone = PaletteContext(sidebarShowsWorkspaceTree: true, canStepWorkspaces: false, hasCurrentWorkspace: true)
+        let several = PaletteContext(sidebarShowsWorkspaceTree: true, canStepWorkspaces: true, hasCurrentWorkspace: true)
+        for command in [PaletteCommand.previousWorkspace, .nextWorkspace] {
+            #expect(!command.isEnabled(in: alone))
+            #expect(command.isEnabled(in: several))
+            #expect(command.isVisible(in: alone), "still listed, just inert")
+        }
+        #expect(PaletteCommand.toggleWorkspaceCollapse.isEnabled(in: alone))
     }
 
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
@@ -141,6 +153,7 @@ struct PaletteCatalogTests {
     /// Everything present, nothing covering: every command's menu item is live here.
     private static let live = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                              sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                             canStepWorkspaces: true,
                                              activeSessionHasSplit: true, hasPendingClose: true,
                                              hasRecentClosed: true, hasActiveSession: true,
                                              hasCurrentWorkspace: true)
@@ -167,6 +180,7 @@ struct PaletteCatalogTests {
     @Test func sessionPresenceGatesTheSameCommandsTheMenuDoes() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: false,
                                      hasCurrentWorkspace: true)
@@ -178,6 +192,7 @@ struct PaletteCatalogTests {
     @Test func workspacePresenceGatesTheWorkspaceEntries() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: false)
@@ -191,6 +206,7 @@ struct PaletteCatalogTests {
     @Test func terminalZoomLeavesOnlyTheItemsCarryingNoModalTerm() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, terminalZoomActive: true)
@@ -202,6 +218,7 @@ struct PaletteCatalogTests {
     @Test func aPendingPickerLeavesTheSameSet() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, pickerActive: true)
@@ -214,6 +231,7 @@ struct PaletteCatalogTests {
     @Test func theOpenDashboardSparesItsOwnToggle() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, dashboardOpen: true)

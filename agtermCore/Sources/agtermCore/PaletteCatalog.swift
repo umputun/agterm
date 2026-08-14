@@ -14,8 +14,13 @@ public struct PaletteContext: Sendable, Equatable {
     /// The ONLY term that entry keys on, matching the View-menu twin — marking is offered in either mode.
     public let activeWorkspaceMarked: Bool
     /// Whether the CURRENT workspace's sidebar subtree is folded, so the collapse toggle can name what the
-    /// keystroke will do. Mirrors the `collapsed` tree read-back, i.e. the persisted `!isExpanded`.
+    /// keystroke will do. `AppStore.isCurrentWorkspaceCollapsed`: what the ROW shows, deliberately not the
+    /// persisted `!isExpanded` the `collapsed` tree read-back reports.
     public let activeWorkspaceCollapsed: Bool
+    /// Whether more than one workspace is visible, i.e. whether a workspace step has anywhere to go.
+    /// `navigateWorkspace` no-ops below that, so without this term the menu item and the mapped key stay
+    /// live while provably doing nothing.
+    public let canStepWorkspaces: Bool
     public let activeSessionHasSplit: Bool
     public let activeSplitAxis: SplitAxis?
     public let hasPendingClose: Bool
@@ -41,6 +46,7 @@ public struct PaletteContext: Sendable, Equatable {
                 hasMarkedWorkspaces: Bool = false,
                 activeWorkspaceMarked: Bool = false,
                 activeWorkspaceCollapsed: Bool = false,
+                canStepWorkspaces: Bool = false,
                 activeSessionHasSplit: Bool = false,
                 activeSplitAxis: SplitAxis? = nil,
                 hasPendingClose: Bool = false,
@@ -58,6 +64,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasMarkedWorkspaces = hasMarkedWorkspaces
         self.activeWorkspaceMarked = activeWorkspaceMarked
         self.activeWorkspaceCollapsed = activeWorkspaceCollapsed
+        self.canStepWorkspaces = canStepWorkspaces
         self.activeSessionHasSplit = activeSessionHasSplit
         self.activeSplitAxis = activeSplitAxis
         self.hasPendingClose = hasPendingClose
@@ -98,9 +105,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
              .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
              .firstSession, .lastSession:
             return context.hasActiveSession
-        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus,
-             .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse:
+        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse:
             return context.hasCurrentWorkspace
+        case .previousWorkspace, .nextWorkspace:
+            // a step needs somewhere to go, so a lone visible workspace disables rather than no-ops
+            return context.hasCurrentWorkspace && context.canStepWorkspaces
         default:
             return true
         }

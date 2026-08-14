@@ -30,6 +30,7 @@ extension AppActions {
             hasMarkedWorkspaces: activeStore?.focusedWorkspaceIDs.isEmpty == false,
             activeWorkspaceMarked: activeStore?.isCurrentWorkspaceFocusMember == true,
             activeWorkspaceCollapsed: activeStore?.isCurrentWorkspaceCollapsed == true,
+            canStepWorkspaces: (activeStore?.visibleWorkspaces.count ?? 0) > 1,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             activeSplitAxis: activeStore?.activeSession?.splitAxis,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
