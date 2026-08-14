@@ -132,7 +132,7 @@ There are 76 public commands:
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
 
-`debug.appearance` is a private 76th `Command` case used only by `AppearanceFlipUITests`.
+`debug.appearance` is a private 77th `Command` case used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
 

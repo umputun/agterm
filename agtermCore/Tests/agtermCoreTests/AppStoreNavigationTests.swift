@@ -488,6 +488,41 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == sessions[2])
     }
 
+    // the collapse toggle folds what the ROW shows, and a reveal opens a row without persisting, so reading
+    // the persisted flag there spends the keystroke re-persisting instead of folding
+    @Test func currentWorkspaceCollapseFollowsTheSidebarRowNotThePersistedFlag() {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[0])
+        store.setWorkspaceExpanded(workspaces[0], expanded: false)
+        #expect(store.isCurrentWorkspaceCollapsed, "persisted collapsed with no row open reads collapsed")
+
+        store.noteSidebarExpansion([workspaces[0]]) // the reveal opens the row, persisting nothing
+        #expect(store.workspaces[0].isExpanded == false, "the reveal must not touch the persisted flag")
+        #expect(!store.isCurrentWorkspaceCollapsed, "an open row reads expanded, so the toggle folds it")
+
+        store.noteSidebarExpansion([])
+        #expect(store.isCurrentWorkspaceCollapsed)
+    }
+
+    // with no sidebar mounted there is no row to read, so the persisted intent is the only state there is
+    @Test func currentWorkspaceCollapseFallsBackToThePersistedFlagWithNoSidebar() {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[0])
+        store.noteSidebarExpansion([workspaces[0]])
+        store.setSidebarVisible(false)
+        store.setWorkspaceExpanded(workspaces[0], expanded: false)
+        #expect(store.isCurrentWorkspaceCollapsed, "a stale live set must not outvote the persisted flag")
+
+        store.setWorkspaceExpanded(workspaces[0], expanded: true)
+        #expect(!store.isCurrentWorkspaceCollapsed)
+    }
+
+    @Test func currentWorkspaceCollapseIsFalseWithNoCurrentWorkspace() {
+        let store = makeStore()
+        #expect(store.currentWorkspaceID == nil)
+        #expect(!store.isCurrentWorkspaceCollapsed)
+    }
+
     // `currentWorkspaceID` falls back to the LAST workspace, which the filter can leave off screen — the
     // step has to enter the visible set rather than no-op there
     @Test func navigateWorkspaceEntersTheVisibleSetWhenCurrentIsOutsideIt() throws {

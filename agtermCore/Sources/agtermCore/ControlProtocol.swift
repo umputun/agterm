@@ -194,9 +194,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var all: Bool?
     /// For `session.text` / `quick.text`: keep only the last N lines of the full buffer.
     public var lines: Int?
-    /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for the reorder form of
-    /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
-    /// (`next`|`prev`|`close`).
+    /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for `workspace.go`
+    /// (`next`|`prev`|`previous` — a workspace has no attention state and no ends to jump to), for the
+    /// reorder form of `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for
+    /// `session.search` (`next`|`prev`|`close`).
     public var to: String?
     /// Anchor session (id / unique prefix / `active`) to place a session right AFTER, for the placement form
     /// of `session.new`/`session.move`. The anchor carries its own workspace (resolved across the whole

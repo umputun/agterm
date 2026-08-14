@@ -137,7 +137,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Workspace ids the user has expanded, tracked via the expand/collapse callbacks. The source of
         /// truth for restoring expansion on rebuild: NSOutlineView discards its own expansion state for
         /// items it no longer renders, and the flagged-mode reload drops every workspace node.
-        private var expandedWorkspaceIDs = Set<UUID>()
+        /// Mirrored into the store on every change — a suppressed reveal opens a row without touching
+        /// `Workspace.isExpanded`, so the persisted flag alone cannot answer "is this row open right now",
+        /// which is what Collapse/Expand Workspace has to fold. One `didSet` rather than a push beside each
+        /// of the seven mutation sites, because a missed site desynchronizes silently.
+        private var expandedWorkspaceIDs = Set<UUID>() {
+            didSet {
+                guard expandedWorkspaceIDs != oldValue else { return }
+                store.noteSidebarExpansion(expandedWorkspaceIDs)
+            }
+        }
         /// Set true around PROGRAMMATIC `expandItem`/`collapseItem` (the launch/rebuild re-apply, the
         /// `syncSelection` reveal, the focus force-expand): the didExpand/DidCollapse callbacks still update
         /// the visual `expandedWorkspaceIDs` but SKIP the persist write-back, so a view-only reveal never

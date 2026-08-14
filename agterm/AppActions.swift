@@ -546,15 +546,19 @@ final class AppActions {
     /// Fold or unfold the CURRENT workspace alone, for the keyless `toggle_workspace_collapse`, its View-menu
     /// item and its palette row. The per-workspace counterpart of Expand / Collapse Workspaces, which act on
     /// every row and deliberately keep this one open — so before this there was no built-in way to fold the
-    /// workspace you are in. Tree mode only, matching those two and the rows it acts on.
+    /// workspace you are in. Tree mode only, matching those two and the rows it acts on. Targets what the row
+    /// SHOWS (`isCurrentWorkspaceCollapsed`), not what is persisted: a reveal routinely leaves this workspace
+    /// open on screen while its stored flag still says collapsed, and toggling the stored flag there costs the
+    /// user a keystroke that changes nothing he can see.
     func toggleActiveWorkspaceCollapse() {
         guard uiActionsEnabled else { return }
         guard let store, store.sidebarMode == .tree, let id = store.currentWorkspaceID else { return }
         setWorkspaceExpanded(id, expanded: store.isCurrentWorkspaceCollapsed, in: store)
     }
 
-    /// Collapse/expand a SINGLE workspace in `store`'s window sidebar — the `workspace.collapse`/`.expand`
-    /// control path and its only caller (a GUI row click drives the outline directly). Persists
+    /// Collapse/expand a SINGLE workspace in `store`'s window sidebar — the shared path for
+    /// `workspace.collapse`/`.expand` and for `toggleActiveWorkspaceCollapse` above (a GUI row click drives
+    /// the outline directly instead). Persists
     /// `Workspace.isExpanded` DIRECTLY on the store (source of truth for the `collapsed` read-back,
     /// delta-guarded so it's idempotent), THEN posts a store-scoped notification so that window's Coordinator
     /// syncs the live outline row and its tracked expansion set. The persist must NOT ride the notification:

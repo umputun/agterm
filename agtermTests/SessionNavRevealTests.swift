@@ -72,4 +72,46 @@ final class SessionNavRevealTests: XCTestCase {
         XCTAssertFalse(second.splitFocused,
                        "a step that moved should reveal the untagged block's primary pane")
     }
+
+    // workspace nav has to route pane reveal exactly as session nav does, which is only true while
+    // `selectWorkspace` returns the destination's indicator AND `selectNextWorkspace` hands it on. Both are
+    // invisible to a test asserting selection alone: passing nil still selects the right session, and only
+    // the reveal's `.left`/nil arm clears `splitFocused`.
+    func testWorkspaceNavRunsTheRevealOnTheStepsIndicator() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.activeSession)
+        let second = store.addWorkspace(name: "second")
+        let away = try XCTUnwrap(store.addSession(toWorkspace: second.id, cwd: NSHomeDirectory()))
+
+        store.selectSession(first.id)
+        away.agentIndicator = AgentIndicator(status: .blocked)
+        away.splitFocused = true
+
+        actions.selectNextWorkspace()
+
+        XCTAssertEqual(store.selectedSessionID, away.id, "the step should land on the next workspace's first session")
+        XCTAssertFalse(away.splitFocused, "the step must reveal the untagged block's primary pane")
+    }
+
+    // the auto-reset case is what makes the indicator have to travel WITH the step: selecting the session
+    // clears its status, so an `AppActions` that read the indicator back off the store afterwards would see
+    // idle and skip the reveal entirely.
+    func testWorkspaceNavRevealsAnAutoResetStatusClearedByTheSelect() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.activeSession)
+        let second = store.addWorkspace(name: "second")
+        let away = try XCTUnwrap(store.addSession(toWorkspace: second.id, cwd: NSHomeDirectory()))
+
+        // the status goes on AFTER the selection settles: creating a session selects it, and selecting away
+        // from an auto-reset session is itself one of the two clears, so seeding it earlier would arrive idle
+        store.selectSession(first.id)
+        away.agentIndicator = AgentIndicator(status: .completed, autoReset: true)
+        away.splitFocused = true
+
+        actions.selectNextWorkspace()
+
+        XCTAssertEqual(store.selectedSessionID, away.id, "the step should land on the next workspace's first session")
+        XCTAssertEqual(away.agentIndicator.status, .idle, "selecting an auto-reset session clears its status")
+        XCTAssertFalse(away.splitFocused, "the reveal must run off the indicator captured BEFORE that clear")
+    }
 }
