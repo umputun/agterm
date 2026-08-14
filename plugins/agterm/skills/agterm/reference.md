@@ -233,6 +233,14 @@ All twelve are read-only projections of GUI state.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
+- `workspace go --to next|prev [--window W]` — step the CURRENT workspace one place through the
+  sidebar's visible order, wrapping at both ends, and select the workspace it lands on. Relative, so it
+  takes NO `--target`; `workspace move` is the neighbouring verb that REORDERS a workspace instead.
+  Landing selects that workspace's FIRST session, exactly as `workspace select` does. Returns the
+  workspace id. A workspace's COLLAPSED state does not affect it — a folded workspace is stepped into
+  like any other. While the focus filter is applied, stepping is confined to the marked workspaces, the
+  same scoping `session go` gets. Errors with `no other workspace to navigate to` when there is nowhere
+  to step: the flagged flat list (which renders no workspace rows), or a single visible workspace.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
   foreground-created workspace that still holds the target, else the selected session's, else

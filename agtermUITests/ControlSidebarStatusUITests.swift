@@ -408,6 +408,85 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue(sessionRowValueExists(containing: "hidden"), "the collapsed workspace's session should return")
     }
 
+    func testWorkspaceGoStepsBetweenWorkspacesAndWraps() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        let firstWs = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        let firstWsID = try XCTUnwrap(firstWs["id"] as? String, "the workspace should carry an id")
+        let seededID = try XCTUnwrap((firstWs["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session")
+
+        let newWs = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"second"}}"#)
+        let secondWsID = try XCTUnwrap((newWs["result"] as? [String: Any])?["id"] as? String, "workspace.new returns an id")
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(secondWsID)"}}"#)
+        let secondSessID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns an id")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(seededID)"}"#)["ok"] as? Bool, true,
+                       "selecting the seeded session should succeed")
+
+        let next = try sendCommand(#"{"cmd":"workspace.go","args":{"to":"next"}}"#)
+        XCTAssertEqual(next["ok"] as? Bool, true, "workspace.go next should succeed: \(next)")
+        XCTAssertEqual((next["result"] as? [String: Any])?["id"] as? String, secondWsID, "it should land on the second workspace")
+        XCTAssertTrue(pollActiveSession(secondSessID, timeout: 10), "landing selects the target's first session")
+
+        // wrapping is what makes a repeated keystroke a cycle rather than a dead end at the last workspace
+        let wrapped = try sendCommand(#"{"cmd":"workspace.go","args":{"to":"next"}}"#)
+        XCTAssertEqual((wrapped["result"] as? [String: Any])?["id"] as? String, firstWsID, "next at the end wraps to the first")
+        XCTAssertTrue(pollActiveSession(seededID, timeout: 10), "the wrap selects the first workspace's first session")
+
+        let back = try sendCommand(#"{"cmd":"workspace.go","args":{"to":"prev"}}"#)
+        XCTAssertEqual((back["result"] as? [String: Any])?["id"] as? String, secondWsID, "prev at the start wraps to the last")
+
+        let bad = try sendCommand(#"{"cmd":"workspace.go","args":{"to":"sideways"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown direction is rejected")
+        XCTAssertEqual(bad["error"] as? String, "workspace.go requires --to next|prev")
+    }
+
+    // issue #435: collapsing a workspace must not steer navigation — the fold is a display state, so the
+    // step lands on the collapsed workspace exactly as it would on an open one
+    func testWorkspaceGoStepsIntoACollapsedWorkspace() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        let firstWs = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        let seededID = try XCTUnwrap((firstWs["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session")
+
+        let newWs = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"folded"}}"#)
+        let foldedWsID = try XCTUnwrap((newWs["result"] as? [String: Any])?["id"] as? String, "workspace.new returns an id")
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(foldedWsID)"}}"#)
+        let foldedSessID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns an id")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(seededID)"}"#)["ok"] as? Bool, true,
+                       "selecting the seeded session should succeed")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.collapse","target":"\#(foldedWsID)"}"#)["ok"] as? Bool, true,
+                       "collapsing the second workspace should succeed")
+
+        let next = try sendCommand(#"{"cmd":"workspace.go","args":{"to":"next"}}"#)
+        XCTAssertEqual((next["result"] as? [String: Any])?["id"] as? String, foldedWsID, "a folded workspace is still stepped into")
+        XCTAssertTrue(pollActiveSession(foldedSessID, timeout: 10), "it selects the folded workspace's first session")
+    }
+
+    /// Polls `tree` until `sessionID` reports `active`. Selection lands through the store and the outline's
+    /// row sync, so an immediate read can race the step.
+    private func pollActiveSession(_ sessionID: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let tree = try? sendCommand(#"{"cmd":"tree"}"#),
+               let result = tree["result"] as? [String: Any],
+               let t = result["tree"] as? [String: Any],
+               let workspaces = t["workspaces"] as? [[String: Any]] {
+                let sessions = workspaces.flatMap { ($0["sessions"] as? [[String: Any]]) ?? [] }
+                if sessions.first(where: { $0["id"] as? String == sessionID })?["active"] as? Bool == true { return true }
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
     /// Whether any `session-row` exposes `needle` in its accessibility value (the row's displayed name —
     /// `session : workspace` in flagged mode). The sidebar surfaces the row name via `value`, not `label`.
     private func sessionRowValueExists(containing needle: String) -> Bool {

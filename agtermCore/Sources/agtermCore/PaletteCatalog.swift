@@ -13,6 +13,14 @@ public struct PaletteContext: Sendable, Equatable {
     /// offering a silent no-op (the sidebar row's item has a clicked row and flips to "Remove from Focus").
     /// The ONLY term that entry keys on, matching the View-menu twin — marking is offered in either mode.
     public let activeWorkspaceMarked: Bool
+    /// Whether the CURRENT workspace's sidebar subtree is folded, so the collapse toggle can name what the
+    /// keystroke will do. `AppStore.isCurrentWorkspaceCollapsed`: what the ROW shows, deliberately not the
+    /// persisted `!isExpanded` the `collapsed` tree read-back reports.
+    public let activeWorkspaceCollapsed: Bool
+    /// Whether more than one workspace is visible, i.e. whether a workspace step has anywhere to go.
+    /// `navigateWorkspace` no-ops below that, so without this term the menu item and the mapped key stay
+    /// live while provably doing nothing.
+    public let canStepWorkspaces: Bool
     public let activeSessionHasSplit: Bool
     public let activeSplitAxis: SplitAxis?
     public let hasPendingClose: Bool
@@ -37,6 +45,8 @@ public struct PaletteContext: Sendable, Equatable {
                 activeSessionFlagged: Bool = false,
                 hasMarkedWorkspaces: Bool = false,
                 activeWorkspaceMarked: Bool = false,
+                activeWorkspaceCollapsed: Bool = false,
+                canStepWorkspaces: Bool = false,
                 activeSessionHasSplit: Bool = false,
                 activeSplitAxis: SplitAxis? = nil,
                 hasPendingClose: Bool = false,
@@ -53,6 +63,8 @@ public struct PaletteContext: Sendable, Equatable {
         self.activeSessionFlagged = activeSessionFlagged
         self.hasMarkedWorkspaces = hasMarkedWorkspaces
         self.activeWorkspaceMarked = activeWorkspaceMarked
+        self.activeWorkspaceCollapsed = activeWorkspaceCollapsed
+        self.canStepWorkspaces = canStepWorkspaces
         self.activeSessionHasSplit = activeSessionHasSplit
         self.activeSplitAxis = activeSplitAxis
         self.hasPendingClose = hasPendingClose
@@ -70,6 +82,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case newSession, newWorkspace, openDirectory
     case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
+    case previousWorkspace, nextWorkspace
     case firstSession, lastSession, showAttention
     case toggleSplit, toggleHorizontalSplit, closeSplit, toggleScratch, toggleTerminalZoom
     case toggleSidebar, toggleFlag, focusWorkspace
@@ -78,7 +91,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
     case addWorkspaceToFocus, toggleWorkspaceFilter
-    case expandWorkspaces, collapseWorkspaces, focusLeftPane, focusRightPane
+    case expandWorkspaces, collapseWorkspaces, toggleWorkspaceCollapse, focusLeftPane, focusRightPane
 
     /// Whether the command can RUN right now — the single owner of menu enablement, read by the menu item's
     /// `.disabled(…)`, by the palette row (which stays listed but renders inert) and by the key monitor's
@@ -92,8 +105,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
              .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
              .firstSession, .lastSession:
             return context.hasActiveSession
-        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus:
+        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse:
             return context.hasCurrentWorkspace
+        case .previousWorkspace, .nextWorkspace:
+            // a step needs somewhere to go, so a lone visible workspace disables rather than no-ops
+            return context.hasCurrentWorkspace && context.canStepWorkspaces
         default:
             return true
         }
@@ -137,7 +153,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             // `workspace.focus`/`workspace.filter`. the tree-mode gate belongs to expand/collapse, whose rows
             // flagged mode never renders.
             return !context.activeWorkspaceMarked
-        case .expandWorkspaces, .collapseWorkspaces:
+        case .expandWorkspaces, .collapseWorkspaces, .toggleWorkspaceCollapse,
+             .previousWorkspace, .nextWorkspace:
+            // the tree-mode gate the sibling comment on `addWorkspaceToFocus` describes: these five act on
+            // workspace ROWS, which flagged mode's flat list does not render, and `navigateWorkspace` no-ops
+            // there for the same reason.
             return context.sidebarShowsWorkspaceTree
         case .focusLeftPane, .focusRightPane, .closeSplit:
             // `hasSplit`, not `isSplit`: a hidden pane is alive and still reported, the state Close Split
@@ -172,6 +192,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .nextSession: return "Next Session"
         case .previousAttentionSession: return "Previous Attention Session"
         case .nextAttentionSession: return "Next Attention Session"
+        case .previousWorkspace: return "Previous Workspace"
+        case .nextWorkspace: return "Next Workspace"
         case .firstSession: return "First Session"
         case .lastSession: return "Last Session"
         case .showAttention: return "Show Attention"
@@ -203,6 +225,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleWorkspaceFilter: return "Toggle Workspace Filter"
         case .expandWorkspaces: return "Expand Workspaces"
         case .collapseWorkspaces: return "Collapse Workspaces"
+        case .toggleWorkspaceCollapse: return context.activeWorkspaceCollapsed ? "Expand Workspace" : "Collapse Workspace"
         case .focusLeftPane: return context.activeSplitAxis == .topBottom ? "Focus Top Pane" : "Focus Left Pane"
         case .focusRightPane: return context.activeSplitAxis == .topBottom ? "Focus Bottom Pane" : "Focus Right Pane"
         }
@@ -224,6 +247,9 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .nextSession: return .nextSession
         case .previousAttentionSession: return .previousAttentionSession
         case .nextAttentionSession: return .nextAttentionSession
+        case .previousWorkspace: return .previousWorkspace
+        case .nextWorkspace: return .nextWorkspace
+        case .toggleWorkspaceCollapse: return .toggleWorkspaceCollapse
         case .firstSession: return .firstSession
         case .lastSession: return .lastSession
         case .showAttention: return .showAttention

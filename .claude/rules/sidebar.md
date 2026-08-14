@@ -164,7 +164,9 @@ paths:
   leave the data source, so expand/collapse delegate callbacks and `expandAll` update the set and
   `rebuildAndReload` reapplies it after flagged-mode round trips.
 - Expand Workspaces opens all. Collapse Workspaces closes all except the active workspace and scrolls it
-  visible. Scope notifications by the target `AppStore` object so only that window's Coordinator acts.
+  visible. Collapse/Expand Workspace (singular, `toggle_workspace_collapse`) folds the active one alone,
+  which is the row those two never fold; it routes through `AppActions.setWorkspaceExpanded(_:expanded:in:)`,
+  the same persist-then-notify path as `workspace.collapse`/`.expand`. Scope notifications by the target `AppStore` object so only that window's Coordinator acts.
   Both no-op in flagged mode. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
 

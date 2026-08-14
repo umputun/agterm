@@ -115,10 +115,10 @@ paths:
 
 ## Public catalog
 
-There are 77 public commands:
+There are 78 public commands:
 
 - `tree`, `events.read`
-- `workspace.new`, `.rename`, `.delete`, `.select`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
+- `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
@@ -132,7 +132,7 @@ There are 77 public commands:
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
 
-`debug.appearance` is a private 78th `Command` case used only by `AppearanceFlipUITests`.
+`debug.appearance` is a private 79th `Command` case used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
 
@@ -156,6 +156,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
   first, then the selected session's, then `workspaces.last` — so repeated moves may target a different
   workspace; use an ID to keep one target.
+- `workspace.go --to next|prev` steps the CURRENT workspace through `visibleWorkspaces`, wrapping, and
+  routes through `selectWorkspace`, so it lands on the target's FIRST session and inherits the
+  empty-workspace reveal. Relative like `session.go`, so it takes no target; `workspace.move` is the
+  neighbouring verb that reorders instead. Returns the workspace id it landed on. Collapse state is NOT a
+  term — a folded workspace is stepped into like any other, and issue #435 assumed otherwise. Errors with
+  `no other workspace to navigate to` where there is nowhere to step: flagged mode, or one visible
+  workspace. Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
 - `session.split` drives the addressed session, not active-only `AppActions.toggleSplit`. `--axis
   vertical|horizontal` selects left/right or top/bottom; omitting it preserves an existing split's axis
   and defaults a new split to left/right. Off hides and retains the shell; `session.split.close` and the

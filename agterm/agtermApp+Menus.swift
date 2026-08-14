@@ -221,6 +221,15 @@ extension agtermApp {
                     .disabled(!PaletteCommand.expandWorkspaces.isEnabled(in: context))
                 Button { actions.collapseOtherWorkspaces() } label: { Label("Collapse Workspaces", systemImage: "chevron.right") }
                     .disabled(!PaletteCommand.collapseWorkspaces.isEnabled(in: context))
+                // fold the current workspace alone — the one row the two items above never fold, since
+                // Collapse Workspaces keeps it open. keyless, rebindable via toggle_workspace_collapse;
+                // control workspace.collapse/.expand. the label tracks the toggle.
+                Button { actions.toggleActiveWorkspaceCollapse() } label: {
+                    Label(PaletteCommand.toggleWorkspaceCollapse.title(in: context),
+                          systemImage: context.activeWorkspaceCollapsed ? "chevron.down.square" : "chevron.right.square")
+                }
+                .keyboardShortcut(shortcut(for: .toggleWorkspaceCollapse))
+                .disabled(!PaletteCommand.toggleWorkspaceCollapse.isEnabled(in: context))
                 // flip the sidebar between the workspace tree and the flat flagged working-set list. one
                 // 2-state item, keyless by default (rebindable via toggle_flagged_view); control sidebar.mode.
                 // Disabled with nothing to show (tree mode + no flags), live in flagged mode so it can
@@ -352,6 +361,19 @@ extension agtermApp {
                 Button { actions.selectLastSession() } label: { Label("Last Session", systemImage: "arrow.down.to.line") }
                     .keyboardShortcut(shortcut(for: .lastSession))
                     .disabled(!PaletteCommand.lastSession.isEnabled(in: context))
+                // step between WORKSPACES, landing on each one's first session. keyless, rebindable via
+                // previous_workspace/next_workspace; control workspace.go. tree mode only, like the
+                // expansion items in View — flagged mode renders no workspace rows to step through.
+                Button { actions.selectPreviousWorkspace() } label: {
+                    Label("Previous Workspace", systemImage: "chevron.up.2")
+                }
+                .keyboardShortcut(shortcut(for: .previousWorkspace))
+                .disabled(!PaletteCommand.previousWorkspace.isEnabled(in: context))
+                Button { actions.selectNextWorkspace() } label: {
+                    Label("Next Workspace", systemImage: "chevron.down.2")
+                }
+                .keyboardShortcut(shortcut(for: .nextWorkspace))
+                .disabled(!PaletteCommand.nextWorkspace.isEnabled(in: context))
                 Divider()
                 let topBottom = library.activeStore?.activeSession?.splitAxis == .topBottom
                 Button { actions.focusPane(.main) } label: {

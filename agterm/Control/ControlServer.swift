@@ -415,7 +415,8 @@ final class ControlServer {
         switch request.cmd {
         case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove,
-                .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFocus,
+                .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
+                .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
                 .sessionStatus, .sessionFlag, .sessionSeen, .sessionRestore, .notify,
@@ -576,7 +577,8 @@ final class ControlServer {
     }
 
     /// Project a window's workspace tree into the wire `ControlTree`, marking the active session and the
-    /// active workspace (the one owning the selected session).
+    /// active workspace (`currentWorkspaceID`, what `--target active` resolves to — not necessarily the
+    /// selected session's owner, since an empty or foreground-created workspace becomes current on its own).
     func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         // the projected window owns its quick terminal; find its id by store identity to read the live

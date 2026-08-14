@@ -137,7 +137,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Workspace ids the user has expanded, tracked via the expand/collapse callbacks. The source of
         /// truth for restoring expansion on rebuild: NSOutlineView discards its own expansion state for
         /// items it no longer renders, and the flagged-mode reload drops every workspace node.
-        private var expandedWorkspaceIDs = Set<UUID>()
+        /// Mirrored into the store on every assignment — a suppressed reveal opens a row without touching
+        /// `Workspace.isExpanded`, so the persisted flag alone cannot answer "is this row open right now",
+        /// which is what Collapse/Expand Workspace has to fold. One `didSet` rather than a push beside each
+        /// of the seven mutation sites, because a missed site desynchronizes silently. Deliberately NOT
+        /// delta-guarded: a fresh Coordinator starts empty, so seeding an all-collapsed tree assigns empty
+        /// over empty and a guard would skip the push, leaving the PREVIOUS mount's ids in the store while
+        /// the outline shows every row folded. The store field is `@ObservationIgnored`, so a redundant
+        /// push costs one set copy and invalidates nothing.
+        private var expandedWorkspaceIDs = Set<UUID>() {
+            didSet { store.noteSidebarExpansion(expandedWorkspaceIDs) }
+        }
         /// Set true around PROGRAMMATIC `expandItem`/`collapseItem` (the launch/rebuild re-apply, the
         /// `syncSelection` reveal, the focus force-expand): the didExpand/DidCollapse callbacks still update
         /// the visual `expandedWorkspaceIDs` but SKIP the persist write-back, so a view-only reveal never
@@ -311,7 +321,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             collapseOthers()
         }
 
-        /// Sync the sidebar to a SINGLE workspace's collapse/expand (`workspace.collapse`/`.expand`).
+        /// Sync the sidebar to a SINGLE workspace's collapse/expand — `workspace.collapse`/`.expand` and the
+        /// GUI's own Collapse/Expand Workspace, which share `AppActions.setWorkspaceExpanded`.
         /// `AppActions.setWorkspaceExpanded` has ALREADY persisted `Workspace.isExpanded` — the source of
         /// truth, independent of this Coordinator — so this handler only keeps the tracked
         /// `expandedWorkspaceIDs` in step (letting the intent survive a flagged-mode or focused-away row and
@@ -800,8 +811,9 @@ extension Notification.Name {
     /// one, with the frontmost window's `AppStore` as the object so only that window's sidebar reacts.
     static let agtermExpandWorkspaces = Notification.Name("agterm.expandWorkspaces")
     static let agtermCollapseWorkspaces = Notification.Name("agterm.collapseWorkspaces")
-    /// Posted by the `workspace.collapse`/`workspace.expand` control arm for a SINGLE workspace, with the
-    /// target window's `AppStore` as the object and the workspace id + desired state in `userInfo`.
+    /// Posted for a SINGLE workspace by the `workspace.collapse`/`workspace.expand` control arm and by the
+    /// GUI's Collapse/Expand Workspace, with the target window's `AppStore` as the object and the workspace
+    /// id + desired state in `userInfo`.
     static let agtermSetWorkspaceExpanded = Notification.Name("agterm.setWorkspaceExpanded")
     /// Posted by the `session.resize` control arm after storing a new split-divider fraction, with the
     /// target `Session` as the object so only that session's `SplitProbeView` (in `ContentView`) moves its
