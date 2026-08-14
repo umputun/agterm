@@ -115,7 +115,9 @@ paths:
 
 ## Public catalog
 
-There are 78 public commands:
+The public commands, which no surface states a COUNT of: a total is stated nowhere and pinned by nothing, so
+adding one is an edit to this list and the surfaces that document the command itself, never a synchronized
+renumbering. Do not reintroduce a count anywhere.
 
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
@@ -132,7 +134,7 @@ There are 78 public commands:
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
 
-`debug.appearance` is a private 79th `Command` case used only by `AppearanceFlipUITests`.
+`debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
 
@@ -596,9 +598,6 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Documentation mirrors
 
-- Keep the bundled skill synchronized with commands, arguments, results, keymap, model, and command count.
-  `SkillInstallTests` checks its `Command summary (N commands)`.
-- `site/commands.html` documents every command, invocation, arguments, and read-back. Keep its four count
-  mentions, README, docs mirror, skill, and test aligned.
-- Search count patterns, not an assumed old/new value, then inspect every two/three-digit number in this
-  file. Counting only explicit raw-value assignments undercounts implicit cases.
+- Keep the bundled skill synchronized with commands, arguments, results, keymap, and model.
+- `site/commands.html` documents every command, invocation, arguments, and read-back; `site/docs.html`,
+  README and the skill link to it rather than restating the catalog.
