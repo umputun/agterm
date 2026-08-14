@@ -642,7 +642,9 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let active: Bool
     /// Whether this workspace is a MEMBER of the sidebar's focus set; nil/omitted when not. Reported
     /// INDEPENDENTLY of whether the filter is applied (that flag is the tree top-level `workspaceFilter`), so
-    /// a marked-but-not-filtering set reads back. Distinct from `active` (the SELECTED workspace). The read
+    /// a marked-but-not-filtering set reads back. Distinct from `active` (the CURRENT workspace — what
+    /// `--target active` resolves to, which an empty or foreground-created destination makes current while
+    /// the selected session stays behind in another one). The read
     /// side of the write-only `workspace.focus`/`workspace.filter`.
     ///
     /// A workspace ROW is VISIBLE iff `tree.sidebarVisible && tree.sidebarMode == "tree" &&

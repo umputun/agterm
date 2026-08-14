@@ -17,8 +17,9 @@ public protocol ControlActions {
     func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
-    /// Step the placement store's CURRENT workspace one place through the sidebar's visible order and select
-    /// its first session. Relative, so it takes no target — the counterpart of `session.go` one level up.
+    /// Step the placement store's CURRENT workspace one place through the sidebar's visible order, selecting
+    /// the destination's first session when it has one — an EMPTY destination becomes current with the
+    /// selection left where it was. Relative, so no target: the counterpart of `session.go` one level up.
     func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse

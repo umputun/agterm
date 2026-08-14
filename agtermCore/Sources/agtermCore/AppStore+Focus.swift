@@ -169,6 +169,19 @@ extension AppStore {
         return visible.isEmpty ? workspaces : visible
     }
 
+    /// Whether a workspace step has anywhere to go. The predicate `navigateWorkspace` itself turns on, and
+    /// what `PaletteCommand.isEnabled` reads, so the menu item and the mapped key cannot claim to do
+    /// something the action then declines. A lone visible workspace is a dead end only while it is ALREADY
+    /// current: when the current one is filtered out, entering the sole survivor is the whole point of the
+    /// step. Flagged mode renders no workspace rows at all.
+    public var canStepWorkspaces: Bool {
+        guard sidebarMode == .tree else { return false }
+        let ids = visibleWorkspaces.map(\.id)
+        guard !ids.isEmpty else { return false }
+        guard let current = currentWorkspaceID, ids.contains(current) else { return true }
+        return ids.count > 1
+    }
+
     /// The session set navigation operates over — the VISIBLE/FILTERED set, not the whole tree: flagged
     /// sessions in `.flagged` mode, the marked workspaces' sessions while the filter is on, else all. Computed
     /// live, so clearing the flag/filter restores the full set. `navigateSession` next/prev WRAP within it,

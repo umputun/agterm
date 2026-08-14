@@ -467,6 +467,21 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == sessions[0])
     }
 
+    // a lone visible workspace is a dead end only while it is ALREADY current — when the filter hid the
+    // current one, entering the sole survivor is the whole point of the step
+    @Test func navigateWorkspaceEntersTheSoleVisibleWorkspaceWhenCurrentIsHidden() throws {
+        let (store, workspaces, _) = Self.makeWorkspaceNavTree()
+        store.setFocusMembership(workspaces[0], member: true)
+        store.setFocusEnabled(true)
+        store.selectSession(nil)
+        #expect(store.visibleWorkspaces.map(\.id) == [workspaces[0]])
+        #expect(store.currentWorkspaceID == workspaces[2], "the fallback sits outside the visible set")
+
+        #expect(store.canStepWorkspaces, "the menu item must not go dead on a reachable workspace")
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[0])
+        #expect(!store.canStepWorkspaces, "and once inside the sole workspace there is nowhere left to step")
+    }
+
     @Test func navigateWorkspaceIsANoOpWithOneWorkspace() {
         let store = makeStore()
         let only = store.addWorkspace(name: "only")

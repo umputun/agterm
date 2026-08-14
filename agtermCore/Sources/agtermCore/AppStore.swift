@@ -667,9 +667,8 @@ public final class AppStore {
     /// itself. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
     @discardableResult
     public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
-        guard sidebarMode == .tree else { return nil }
+        guard canStepWorkspaces else { return nil }
         let ids = visibleWorkspaces.map(\.id)
-        guard ids.count > 1 else { return nil }
         let target: UUID
         if let current = currentWorkspaceID, let i = ids.firstIndex(of: current) {
             let step = direction == .next ? 1 : -1
