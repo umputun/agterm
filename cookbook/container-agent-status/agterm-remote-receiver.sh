@@ -7,14 +7,16 @@ set -u
 AGTERMCTL=${AGTERMCTL:-agtermctl}
 
 PORT=9998
+BIND=""
 LOG_FILE=""
 VERBOSE=false
 TARGET_SOCKET="$HOME/Library/Application Support/agterm/agterm.sock"
 
 usage() {
-  echo "Usage: $0 [--port PORT] [--log-file FILE] [--socket PATH] [--verbose]"
+  echo "Usage: $0 [--port PORT] [--bind ADDR] [--log-file FILE] [--socket PATH] [--verbose]"
   echo ""
   echo "  --port PORT       TCP port to listen on (default 9998)"
+  echo "  --bind ADDR       Address to bind (default: every interface)"
   echo "  --log-file FILE   Append logs here instead of stdout"
   echo "  --socket PATH     agterm control socket to forward status to"
   echo "                    (default: \$HOME/Library/Application Support/agterm/agterm.sock)"
@@ -25,6 +27,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --port)
       PORT=$2
+      shift 2
+      ;;
+    --bind)
+      BIND=$2
       shift 2
       ;;
     --log-file)
@@ -54,7 +60,10 @@ done
 log() {
   level=$1
   shift
-  line="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
+  # socket bytes reach the log verbatim, so strip control characters here: an
+  # OSC 52 sequence in a logged line would rewrite the clipboard of whoever
+  # has this output on screen, and --log-file replays it on every later cat.
+  line="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $(printf '%s' "$*" | tr -d '[:cntrl:]')"
   if [ -n "$LOG_FILE" ]; then
     echo "$line" >>"$LOG_FILE"
   else
@@ -76,6 +85,7 @@ process_event() {
   state=$(printf '%s' "$json" | grep -o '"state":"[^"]*"' | head -1 | cut -d'"' -f4)
   session_id=$(printf '%s' "$json" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4)
   pane=$(printf '%s' "$json" | grep -o '"pane":"[^"]*"' | head -1 | cut -d'"' -f4)
+  pane_id=$(printf '%s' "$json" | grep -o '"pane_id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
   log "INFO" "event: cmd=$cmd state=$state session_id=$session_id"
 
@@ -87,6 +97,18 @@ process_event() {
   if [ -n "$pane" ]; then
     args+=("--pane" "$pane")
   fi
+  if [ -n "$pane_id" ]; then
+    args+=("--pane-id" "$pane_id")
+  fi
+
+  # the sender's "args" array carries the hook's own flags; allowlist rather
+  # than forward, so a line off the socket cannot pick agtermctl's arguments.
+  sent_args=$(printf '%s' "$json" | grep -o '"args":\[[^]]*\]' | head -1)
+  for flag in --blink --auto-reset; do
+    case "$sent_args" in
+      *"\"$flag\""*) args+=("$flag") ;;
+    esac
+  done
 
   if [ "$VERBOSE" = true ]; then
     log "DEBUG" "forwarding: $AGTERMCTL ${args[*]}"
@@ -100,16 +122,20 @@ if ! command -v nc >/dev/null 2>&1; then
   exit 1
 fi
 
-log "INFO" "listening on port $PORT"
+log "INFO" "listening on ${BIND:-*}:$PORT"
 
-while true; do
-  nc -l "$PORT" 2>/dev/null | while IFS= read -r json_line; do
-    [ -z "$json_line" ] && continue
-    case "$json_line" in
-      "{"*) process_event "$json_line" ;;
-      *) log "WARN" "ignoring non-JSON line: $json_line" ;;
-    esac
-  done
-  log "WARN" "connection closed, relistening..."
-  sleep 1
+# -k keeps the port bound across connections; a relisten loop would leave it
+# closed between events, and a status arriving in that gap is lost silently.
+if [ -n "$BIND" ]; then
+  nc -k -l "$BIND" "$PORT" 2>/dev/null
+else
+  nc -k -l "$PORT" 2>/dev/null
+fi | while IFS= read -r json_line; do
+  [ -z "$json_line" ] && continue
+  case "$json_line" in
+    "{"*) process_event "$json_line" ;;
+    *) log "WARN" "ignoring non-JSON line: $json_line" ;;
+  esac
 done
+
+log "ERROR" "listener exited"

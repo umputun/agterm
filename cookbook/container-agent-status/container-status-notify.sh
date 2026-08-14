@@ -18,11 +18,17 @@ set -u
 state=$1
 shift
 
+case "$AGTERM_REMOTE_HOST" in
+  *:*) ;;
+  *) exit 0 ;; # without a port the split below silently yields host == port
+esac
+
 remote_host=${AGTERM_REMOTE_HOST%:*}
 remote_port=${AGTERM_REMOTE_HOST##*:}
 
 json="{\"cmd\":\"session-status\",\"state\":\"$state\",\"session_id\":\"$AGTERM_SESSION_ID\""
 [ -n "${AGTERM_PANE:-}" ] && json="$json,\"pane\":\"$AGTERM_PANE\""
+[ -n "${AGTERM_PANE_ID:-}" ] && json="$json,\"pane_id\":\"$AGTERM_PANE_ID\""
 
 if [ $# -gt 0 ]; then
   args_json=""
