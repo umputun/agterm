@@ -236,6 +236,33 @@ agtermctl session overlay open "make test" --target "$AGTERM_SESSION_ID"   # thi
 agtermctl session overlay result --json   # errors "still running" until it exits, then result.exitCode
 ```
 
+## Read what the user highlighted inside an overlay
+
+`session copy` and `session text` address the pane the overlay COVERS, so a selection the user made in
+the overlay reads as `no selection` there and `session text --pane right` returns the shell underneath.
+`session overlay copy`/`text` read the covering surface instead:
+
+```bash
+agtermctl session overlay copy --target "$AGTERM_SESSION_ID" --json   # result.text = the overlay's selection
+agtermctl session overlay text --target "$AGTERM_SESSION_ID" --lines 40
+```
+
+Both take the overlay family's `--pane left|right` for a pane-scoped overlay; omit it for the
+session-wide one.
+
+A chord bound to a custom command gets this for free — `$AGT_SELECTION` already carries the selection of
+the surface the chord fired in, the overlay included, while `$AGT_PANE` keeps naming the pane underneath
+so the reply routes back with `session type --pane`:
+
+```bash
+# keymap.conf: command "note" ctrl+a>n ...
+printf '%s' "$AGT_SELECTION" > /tmp/note.txt
+agtermctl session type "see /tmp/note.txt" --target "$AGT_SESSION_ID" --pane "$AGT_PANE"
+```
+
+Reach for `session overlay copy` when the read is NOT chord-driven — an agent polling from outside, or a
+script that needs the selection some time after the fact.
+
 ## Cover only your own pane, leaving the user's other pane usable
 
 `--pane left|right` scopes the overlay to ONE split pane instead of the whole session. Your shell

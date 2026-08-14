@@ -1248,7 +1248,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 75 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 77 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1541,7 +1541,11 @@
               9f3c<br />agtermctl session overlay result
               <span style="color: #6b727a">&nbsp;&nbsp;# last overlay's exit status</span><br /><br /><span style="color: #6b727a"
                 ># cover only one split pane, leaving the sibling pane live</span
-              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --target 9f3c --pane right
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --target 9f3c --pane right<br /><br /><span
+                style="color: #6b727a"
+                ># read what is INSIDE the overlay — the selection the user made, or its drawn screen</span
+              ><br />agtermctl session overlay copy --target 9f3c --pane right<br />agtermctl session overlay text --target 9f3c
+              --pane right
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> keeps a "press any key
@@ -1564,6 +1568,20 @@
               whose overlay is open.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay copy</span> returns the
+              selection made inside the overlay and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay text</span> its terminal
+              buffer. These exist because
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session copy</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session text</span> address the pane the
+              overlay covers: text you highlight in an overlay reads there as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">no selection</span>, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session text --pane right</span> hands
+              back the shell underneath. Reach for them when a chord needs what you picked out of a program an agent opened over
+              your session. The buffer one returns a TUI's screen as drawn, wrapped where it wrapped — for a program's real
+              output, still read the file it writes.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left|right</span> scopes the
               overlay to one split pane instead of the whole session: it covers exactly that pane and leaves the sibling pane
               visible and interactive, so an agent working in the split can show a diff or a TUI over its own pane without
@@ -1580,8 +1598,10 @@
               without checking whether the session is split. A pane that is not on screen is refused with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane not visible</span>; hiding the
               split after opening is fine, the program keeps running and reappears when the split comes back.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result</span> take the same
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">copy</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">text</span> take the same
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, ⌘W dismisses the
               focused pane's overlay before it would close the session (one on the other pane is not in front of you, so ⌘W keeps
               its ordinary meaning), and

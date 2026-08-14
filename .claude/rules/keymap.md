@@ -94,8 +94,12 @@ paths:
   in `{...}` or `$...` form, no-op with notice; empty `{AGT_SESSION_PWD}` can turn `rm -rf .../*` into a
   root glob. Commands using only `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE` may run sessionless.
 - `{AGT_PANE}`/`$AGT_PANE` is `left`, `right`, or `scratch`, derived from the firing surface for keybinds
-  and `splitFocused` for palette runs. Scratch is the only sessionless surface with a pane; quick terminal
-  and overlays use active-session context. A single pane is always `left`. Primary exit promotes the
+  and `splitFocused` for palette runs. The scratch and both overlay kinds are the sessionless surfaces with
+  a pane, resolved together in `sessionlessPane`; the quick terminal is nobody's pane and takes the plain
+  active-session path. An overlay reads its OWN selection into `$AGT_SELECTION` but names the pane
+  UNDERNEATH it (#434), so a note taken in one still pastes back through `session type --pane` — which is
+  why `CommandContext.Pane` deliberately cannot spell an overlay; its buffer is `session overlay copy`/
+  `text`, owned by [[control-api]]. A single pane is always `left`. Primary exit promotes the
   split into the main slot, clears `isSplitPane`, and makes it addressable only as `left`.
 - `resolveBuiltinOverrides` is order-independent: fold last-wins candidates, resolve all final chords,
   then detect collisions. An override loses to another action's unmoved default; for two overrides, the

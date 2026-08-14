@@ -245,17 +245,31 @@ final class CustomCommandRunner {
     }
 
     /// The keybind fallback for a sessionless focused surface (quick terminal, overlay, scratch). The scratch
-    /// belongs to the ACTIVE session, so a chord from it runs against that session with `pane = .scratch` and
-    /// reads the scratch's own selection — the read leg of `$AGT_PANE` → `session type --pane scratch`. The
-    /// others are not panes and take the plain palette path.
+    /// and the overlays belong to the ACTIVE session, so a chord from one runs against that session and reads
+    /// THAT surface's own selection — the read leg of `$AGT_PANE` → `session type --pane scratch`. The quick
+    /// terminal is nobody's pane and takes the plain palette path.
     private func runFromSessionlessSurface(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
-        if let store = library.activeStore, let session = store.activeSession,
-           (session.scratchSurface as? GhosttySurfaceView) === focusedSurface {
-            let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: .scratch)
-            spawn(command, context: context)
+        guard let store = library.activeStore, let session = store.activeSession,
+              let pane = sessionlessPane(of: focusedSurface, in: session) else {
+            runNoSurface(command)
             return
         }
-        runNoSurface(command)
+        let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
+        spawn(command, context: context)
+    }
+
+    /// Which pane `session`'s sessionless surface reports as `$AGT_PANE`, nil when the surface is not one of
+    /// them (the quick terminal). The scratch names itself; an overlay names the pane UNDERNEATH it, so a
+    /// note taken in it still pastes back through `session type --pane` — the overlay's own buffer is
+    /// `session overlay copy`/`text`, which `CommandContext.Pane` deliberately cannot spell.
+    private func sessionlessPane(of surface: GhosttySurfaceView, in session: Session) -> CommandContext.Pane? {
+        if (session.scratchSurface as? GhosttySurfaceView) === surface { return .scratch }
+        if let pane = session.paneOverlayRole(of: surface) { return pane == .right ? .right : .left }
+        // the session-wide overlay covers both panes, so it names the one focus returns to on close.
+        if (session.overlaySurface as? GhosttySurfaceView) === surface {
+            return session.focusedPane == .right ? .right : .left
+        }
+        return nil
     }
 
     /// Keybind fire with NO usable fired-from session — an emptied window, or focus off any surface. Uses the

@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 75 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 77 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 75 agtermctl control commands with arguments, return values, and errors."
+      content="All 77 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 75 agtermctl control commands with arguments, return values, and errors."
+      content="All 77 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -237,7 +237,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 75 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 77 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -1515,6 +1515,54 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no overlay result: the slot holds a hud</span>. The
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> arm is unaffected — a HUD only ever takes
                 the session-wide slot.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay copy [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.copy</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span> with the selection made INSIDE the
+                overlay, without touching the system clipboard.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session copy</span> cannot reach it: that one addresses
+                the pane the overlay covers, so a selection made in the overlay reads there as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no selection</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> reads that split pane's overlay; omit it
+                for the session-wide one.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> with nothing in the slot,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay not realized</span> in the moment after
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span> before its terminal is up,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no selection</span> when nothing is selected, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no overlay to read: the slot holds a hud</span> for a
+                <a href="#hud" style="color: #6d82f3">HUD</a>, whose text is agterm's own.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay text [--all] [--lines N] [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.text</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span> with the overlay's terminal buffer as
+                plain text. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text</span> reads the surface UNDERNEATH — its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane right</span> returns the shell, not the program
+                drawn over it.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--all</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--lines N</span> mean what they do on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text</span> and are mutually exclusive.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                What comes back is a TUI's DRAWN screen, wrapped as rendered, not the output the program would have printed —
+                for output, prefer the program's own output file. Same errors as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay copy</span>, plus
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failed to read surface buffer</span> on a real read failure.
               </p>
             </div>
           </section>

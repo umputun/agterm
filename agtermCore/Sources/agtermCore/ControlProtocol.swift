@@ -42,6 +42,8 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayClose = "session.overlay.close"
     case sessionOverlayResize = "session.overlay.resize"
     case sessionOverlayResult = "session.overlay.result"
+    case sessionOverlayCopy = "session.overlay.copy"
+    case sessionOverlayText = "session.overlay.text"
     case sessionHudOpen = "session.hud.open"
     case sessionHudUpdate = "session.hud.update"
     case sessionHudClose = "session.hud.close"
@@ -897,6 +899,10 @@ public enum OverlayHudError {
     public static let fullResize = "a hud is always floating: pass --size-percent, not --full"
     /// `session.hud.update`/`.close` against a slot that holds no HUD — empty, or running a caller's program.
     public static let noHud = "no hud"
+    /// `session.overlay.copy`/`.text` against a HUD. The panel paints agterm's own message, so reading it
+    /// would hand a caller back the text it wrote rather than a program's output, and the slot being
+    /// occupied is not enough to tell the two apart.
+    public static let noRead = "no overlay to read: the slot holds a hud"
     /// The body file the helper reads could not be written, so the panel would paint nothing or stale text.
     public static let writeFailed = "could not write the hud message"
 }

@@ -211,10 +211,16 @@ struct ControlDispatcherOverlayTests {
             cmd: .sessionOverlayClose, target: "session", args: ControlArgs(pane: "scratch")))
         let result = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayResult, target: "session", args: ControlArgs(pane: "middle")))
+        let copy = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayCopy, target: "session", args: ControlArgs(pane: "scratch")))
+        let text = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(pane: "middle")))
 
         #expect(open == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
         #expect(close == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
         #expect(result == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
+        #expect(copy == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
+        #expect(text == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
         #expect(actions.calls.isEmpty)
     }
 
@@ -266,5 +272,63 @@ struct ControlDispatcherOverlayTests {
             .overlayResult(target: "session", window: nil, pane: nil),
             .overlayResize(target: "session", window: nil, sizePercent: 60)
         ])
+    }
+
+    @Test func sessionOverlayCopyRoutesTargetWindowAndPaneAndEchoesActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextOverlayCopyResponse = ControlResponse(ok: true, result: ControlResult(text: "picked"))
+
+        let scoped = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayCopy, target: "session", args: ControlArgs(window: "win", pane: "split")))
+        let sessionWide = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayCopy, target: "session"))
+
+        #expect(scoped == ControlResponse(ok: true, result: ControlResult(text: "picked")))
+        #expect(sessionWide == ControlResponse(ok: true, result: ControlResult(text: "picked")))
+        #expect(actions.calls == [
+            .overlayCopy(target: "session", window: "win", pane: .right),
+            .overlayCopy(target: "session", window: nil, pane: nil)
+        ])
+    }
+
+    @Test func sessionOverlayTextRoutesExtentPaneAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session",
+            args: ControlArgs(window: "win", pane: "primary", all: true)))
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(lines: 12)))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayText, target: "session"))
+
+        #expect(actions.calls == [
+            .overlayText(target: "session", window: "win",
+                         ControlSessionOverlayTextOptions(pane: .left, all: true, lines: nil)),
+            .overlayText(target: "session", window: nil,
+                         ControlSessionOverlayTextOptions(pane: nil, all: false, lines: 12)),
+            .overlayText(target: "session", window: nil,
+                         ControlSessionOverlayTextOptions(pane: nil, all: false, lines: nil))
+        ])
+    }
+
+    @Test func sessionOverlayTextRejectsConflictingAndNonpositiveExtentBeforeThePane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let both = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(all: true, lines: 5)))
+        let zero = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(lines: 0)))
+        let negative = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(lines: -3)))
+        let extentAndPane = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayText, target: "session", args: ControlArgs(pane: "scratch", all: true, lines: 5)))
+
+        #expect(both == ControlResponse(ok: false, error: "use either --all or --lines, not both"))
+        #expect(zero == ControlResponse(ok: false, error: "--lines must be greater than 0"))
+        #expect(negative == ControlResponse(ok: false, error: "--lines must be greater than 0"))
+        #expect(extentAndPane == ControlResponse(ok: false, error: "use either --all or --lines, not both"))
+        #expect(actions.calls.isEmpty)
     }
 }

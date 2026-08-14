@@ -635,8 +635,8 @@ struct Session: ParsableCommand {
 
     struct Overlay: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Open, resize, or close an ephemeral overlay terminal on a session.",
-            subcommands: [Open.self, Close.self, Resize.self, Result.self]
+            abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
+            subcommands: [Open.self, Close.self, Resize.self, Result.self, Copy.self, Text.self]
         )
 
         /// `--pane` validation for the overlay commands: the two pane roles only, deliberately NOT the shared
@@ -776,6 +776,47 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayResult, target: target.target,
                                args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
+            }
+        }
+
+        struct Copy: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Print the selection made INSIDE the overlay (session copy reads the pane underneath).")
+            @Option(name: .long, help: "Read that split pane's overlay (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
+            var pane: String?
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func validate() throws { try Overlay.validatePane(pane) }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionOverlayCopy, target: target.target,
+                               args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
+            }
+        }
+
+        struct Text: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Print the overlay's terminal buffer as plain text (a TUI's drawn screen, wrapped as rendered).")
+            @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
+            @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
+            @Option(name: .long, help: "Read that split pane's overlay (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
+            var pane: String?
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            // same order as the dispatcher, so the CLI and the socket reject the same call the same way.
+            func validate() throws {
+                if all, lines != nil {
+                    throw ValidationError("use either --all or --lines, not both")
+                }
+                if let lines, lines <= 0 {
+                    throw ValidationError("--lines must be greater than 0")
+                }
+                try Overlay.validatePane(pane)
+            }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionOverlayText, target: target.target,
+                               args: options.withWindow(ControlArgs(pane: pane, all: all ? true : nil, lines: lines)))
             }
         }
     }

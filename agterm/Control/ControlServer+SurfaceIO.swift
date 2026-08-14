@@ -97,6 +97,79 @@ extension ControlServer {
         }
     }
 
+    /// The outcome of resolving an overlay read's surface: the view, or the rejection the arm returns as-is.
+    private enum OverlayReadSurface {
+        case surface(GhosttySurfaceView)
+        case rejected(ControlResponse)
+    }
+
+    /// The surface `session.overlay.copy`/`.text` address: the pane's own overlay with `pane`, else the
+    /// session-wide slot. Shared by both, so `no overlay` and `overlay not realized` cannot come to mean
+    /// different things on one command than the other. A filled slot with an unrealized surface is the ms
+    /// after `overlay.open`, and it names the OVERLAY rather than borrowing `session not realized`: the
+    /// session is fine, it is the cover that is not up. A HUD is refused ahead of everything, `overlayActive`
+    /// alone being unable to tell the app's own painter from a caller's program.
+    private func overlayReadSurface(_ session: Session, pane: OverlayPane?) -> OverlayReadSurface {
+        let occupied: Bool
+        let surface: (any TerminalSurface)?
+        if let pane {
+            occupied = session.paneOverlay(pane) != nil
+            surface = session.paneOverlaySurface(pane)
+        } else {
+            if session.hudActive {
+                return .rejected(ControlResponse(ok: false, error: OverlayHudError.noRead))
+            }
+            occupied = session.overlayActive
+            surface = session.overlaySurface
+        }
+        guard occupied else { return .rejected(ControlResponse(ok: false, error: "no overlay")) }
+        guard let view = surface as? GhosttySurfaceView, view.isRealized else {
+            return .rejected(ControlResponse(ok: false, error: "overlay not realized"))
+        }
+        return .surface(view)
+    }
+
+    /// Returns the OVERLAY's current selection (`session.overlay.copy`), which `session.copy` cannot reach:
+    /// that one addresses `addressableSurface`, the pane the overlay covers, so a selection the user made in
+    /// the overlay reads as `no selection` there. Returns the text rather than writing the clipboard, like
+    /// its session-level twin. The realization gate above runs first, so nil here is genuinely no selection.
+    func copySessionOverlaySelection(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
+        return resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            switch self.overlayReadSurface(session, pane: pane) {
+            case .rejected(let response): return response
+            case .surface(let surface):
+                guard let text = surface.readSelection() else {
+                    return ControlResponse(ok: false, error: "no selection")
+                }
+                return ControlResponse(ok: true, result: ControlResult(text: text))
+            }
+        }
+    }
+
+    /// Returns the OVERLAY's terminal buffer (`session.overlay.text`), `session.text`'s counterpart for the
+    /// covering surface — `--pane right` reads the shell underneath, never the program drawn over it. `all`
+    /// and `lines` mean what they do on `session.text`, the dispatcher having validated them the same way.
+    /// What comes back is a TUI's DRAWN screen, wrapped as rendered, not the output it would have printed.
+    func readSessionOverlayText(_ target: String?, window: String?,
+                                options: ControlSessionOverlayTextOptions) -> ControlResponse {
+        return resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            switch self.overlayReadSurface(session, pane: options.pane) {
+            case .rejected(let response): return response
+            case .surface(let surface):
+                guard let text = surface.readScreenText(all: options.all, lines: options.lines) else {
+                    return ControlResponse(ok: false, error: "failed to read surface buffer")
+                }
+                return ControlResponse(ok: true, result: ControlResult(text: text))
+            }
+        }
+    }
+
     /// Sets or clears a session's background watermark (mode `image|text|clear`): validate the inputs (shared
     /// `WatermarkConfig` enum checks; image format + existence), persist the spec on the session so it rides
     /// `SessionSnapshot`, then apply it to the realized surface(s). A never-shown session keeps the spec and

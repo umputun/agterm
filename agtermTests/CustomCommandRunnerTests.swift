@@ -260,4 +260,70 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window))
         XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
     }
+
+    /// Runs `command` from `surface` and returns what it wrote, or nil if it never wrote anything. The spawn
+    /// is a detached `/bin/sh`, so the file is the only channel back.
+    private func fired(_ runner: CustomCommandRunner, from surface: GhosttySurfaceView,
+                       writing body: String) throws -> String? {
+        let probe = stateDir.appendingPathComponent("probe-\(UUID().uuidString).txt")
+        runner.runFromKeybind(CustomCommand(name: "probe", command: "printf '%s' \(body) > \(probe.path)",
+                                            shortcut: "ctrl+a>p"),
+                              focusedSurface: surface)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            if let written = try? String(contentsOf: probe, encoding: .utf8) { return written }
+        }
+        return nil
+    }
+
+    // #434: an overlay's view carries no session, so a chord fired inside one fell through to the palette
+    // path, which reads the FOCUSED pane. With focus on the split and the LEFT pane covered, that reported
+    // `right` and handed `$AGT_SELECTION` the surface under the overlay instead of the overlay itself.
+    func testAChordFiredInsideAPaneOverlayNamesThePaneThatOverlayCovers() throws {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitFocused = true
+        XCTAssertEqual(session.focusedPane, .right, "focus sits in the split, which is what makes this a trap")
+        XCTAssertNil(fix.store.openPaneOverlay(session.id, pane: .left, command: "true"))
+        let overlay = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.setPaneOverlaySurface(overlay, pane: .left)
+        XCTAssertNil(overlay.session, "an overlay view is sessionless; that is what routed it to the palette path")
+
+        let written = try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE $AGT_SESSION_ID\"")
+
+        XCTAssertEqual(written, "left \(session.id.uuidString)",
+                       "the chord must name the covered pane and stay on the overlay's own session")
+    }
+
+    // the session-wide slot takes the same rung, and there it names the pane focus returns to on close.
+    func testAChordFiredInsideTheSessionWideOverlayStaysOnTheFocusedPane() throws {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let overlay = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.overlaySurface = overlay
+        session.overlayActive = true
+
+        let written = try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE $AGT_SESSION_ID\"")
+
+        XCTAssertEqual(written, "left \(session.id.uuidString)")
+    }
+
+    // the quick terminal is nobody's pane, so it must keep falling through to the plain active-session path
+    // rather than being adopted by the rung the overlays now take.
+    func testAChordFiredFromAnUnrelatedSessionlessSurfaceStillTakesTheActiveSessionPath() throws {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let stray = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        let written = try fired(fix.runner, from: stray, writing: "\"$AGT_PANE $AGT_SESSION_ID\"")
+
+        XCTAssertEqual(written, "left \(session.id.uuidString)")
+    }
 }

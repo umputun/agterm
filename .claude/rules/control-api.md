@@ -115,7 +115,7 @@ paths:
 
 ## Public catalog
 
-There are 75 public commands:
+There are 77 public commands:
 
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
@@ -123,7 +123,7 @@ There are 75 public commands:
   `.split.close`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
-  `.overlay.result`, `.hud.open`, `.hud.update`, `.hud.close`
+  `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
 - `surface.zoom`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `notify`
@@ -132,7 +132,7 @@ There are 75 public commands:
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
 
-`debug.appearance` is a private 76th `Command` case used only by `AppearanceFlipUITests`.
+`debug.appearance` is a private 78th `Command` case used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
 
@@ -224,7 +224,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   markers under rapid use.
 - `session.copy` returns the addressed main selection without touching clipboard; empty is `no selection`,
   and an unrealized pane is `session not realized` — `readSelection` cannot tell the two apart, and copy is
-  select-all's read-back, so both name that state the same way.
+  select-all's read-back, so both name that state the same way. It stays on the PANE while an overlay covers
+  it, so a selection made inside one is `session.overlay.copy`'s, not this command's.
   `session.paste` and `.selectall` run Ghostty bindings on main. They use
   `Session.addressableSurface = surface ?? splitSurface`, never focus-aware `activeSurface`, so select-all
   and copy share one pane. Read paste through text and select-all through copy.
@@ -249,6 +250,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   never happened. `failed to read surface buffer` is left to a real read failure on a realized surface.
   `quick.text` keeps its own vocabulary and still reports that string for an unrealized quick surface.
   Output is plain text because pinned Ghostty exposes no styled-cell read.
+  `onScreenSurface` is pane-vs-scratch only, so every `--pane` and the default alike read the surface
+  UNDER an overlay; the covering program is `session.overlay.text`.
 - `session.search` selects and realizes the target, then searches its focused surface. Text opens/updates;
   to next/prev navigates; close ends; no arguments opens empty UI. Poll async SEARCH_TOTAL and return count
   plus `searchDisplayText`. Search fields are ephemeral and shared with the GUI.
@@ -282,6 +285,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   output, and exits with captured status.
 - `overlay.resize` requires an open overlay and exactly one valid percent or `--full`; mutate the same
   surface host. Read `overlaySizePercent`, gated by overlay-active because nil means either full or absent.
+- `overlay.copy`/`overlay.text` read the COVERING surface, which `session.copy`/`session.text` cannot reach
+  (#434) — those address the pane the overlay hides, so a selection made in the overlay reads as
+  `no selection` and `--pane right` returns the shell underneath. Both take the overlay family's own
+  `--pane`, never the shared `left|right|scratch` one: widening that would let `session.status`/`.restore`
+  reach a `StatusPane` that has no overlay case, over persisted state. `ControlServer.overlayReadSurface`
+  resolves both, so an empty slot (`no overlay`) and a filled one whose surface has not come up
+  (`overlay not realized`, naming the cover rather than borrowing `session not realized`) cannot mean
+  different things on one command than the other. A HUD is refused ahead of both with
+  `OverlayHudError.noRead`: it paints the app's own message, and `overlayActive` alone cannot tell it from
+  a caller's program. `overlay.text` validates `--all`/`--lines` through the same `parseBufferExtent` as
+  `session.text`, before the pane, so identical flags produce the identical first error. These are reads,
+  so they add no read-back field.
 - `session.hud.*` puts a passive message panel in the SESSION-WIDE overlay slot rather than adding a cover,
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from

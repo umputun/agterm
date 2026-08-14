@@ -233,6 +233,39 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(sessionWide.error, "no overlay result", "a pane overlay must not fill the session slot")
     }
 
+    // MARK: - session.overlay.copy / .text
+
+    // `session.copy`/`.text` address the pane UNDER an overlay, so a selection made inside one is unreachable
+    // there (#434); these two read the covering surface. An empty slot and a filled-but-unrealized one are
+    // different answers: the second is the ms after `overlay.open`, where the session itself is fine.
+    func testOverlayReadsSeparateAnEmptySlotFromAnUnrealizedSurface() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let sessionWide = ControlSessionOverlayTextOptions(pane: nil, all: false, lines: nil)
+        let leftPane = ControlSessionOverlayTextOptions(pane: .left, all: false, lines: nil)
+
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: nil).error,
+                       "no overlay")
+        XCTAssertEqual(server.readSessionOverlayText(session.id.uuidString, window: nil, options: sessionWide).error,
+                       "no overlay")
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: .left).error,
+                       "no overlay")
+
+        XCTAssertNil(store.openPaneOverlay(session.id, pane: .left, command: "true"))
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: .left).error,
+                       "overlay not realized", "the slot is filled; it is the cover that has no terminal yet")
+        XCTAssertEqual(server.readSessionOverlayText(session.id.uuidString, window: nil, options: leftPane).error,
+                       "overlay not realized")
+
+        // the other half of that branch: a view parked in the slot whose libghostty surface never came up
+        session.setPaneOverlaySurface(GhosttySurfaceView(workingDirectory: NSTemporaryDirectory()), pane: .left)
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: .left).error,
+                       "overlay not realized")
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: .right).error,
+                       "no overlay", "the sibling slot is independent, not borrowed from the open one")
+    }
+
     // MARK: - session.hud.*
 
     private func makeHudSession() throws -> (AppStore, Session) {
@@ -469,6 +502,25 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(store.closeHud(session.id))
         XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
                        "no overlay result", "a closed hud records no exit code either")
+    }
+
+    // the same shared slot: a hud paints agterm's own message, so reading it hands a caller back the text it
+    // wrote rather than a program's output, and `overlayActive` is true either way.
+    func testOverlayReadsRefuseAHudByName() throws {
+        let (store, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working")).ok)
+        let options = ControlSessionOverlayTextOptions(pane: nil, all: false, lines: nil)
+
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: nil).error,
+                       "no overlay to read: the slot holds a hud")
+        XCTAssertEqual(server.readSessionOverlayText(session.id.uuidString, window: nil, options: options).error,
+                       "no overlay to read: the slot holds a hud")
+        XCTAssertTrue(session.hudActive, "a refused read must leave the panel up")
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: .left).error,
+                       "no overlay", "the pane-scoped arm reads its own slot, uncoloured by a session hud")
+        XCTAssertTrue(store.closeHud(session.id))
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: nil).error,
+                       "no overlay")
     }
 
     func testOverlayCloseClosesAHudAndRemovesItsBody() throws {

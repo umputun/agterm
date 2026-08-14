@@ -190,6 +190,80 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
+    // #434: `session.text --pane` reads the pane UNDER an overlay, so the program drawn over it had no
+    // address at all. The `session.text` contrast is what makes this discriminating — an arm that still
+    // resolved the pane would find the marker too if both reads pointed at one surface.
+    func testOverlayTextReadsTheCoveringProgramNotThePaneBeneathIt() throws {
+        let id = try activeSessionID()
+        let ovlCmd = "sh -c 'echo OVERLAY-MARKER; cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd]])
+        let open = try sendCommand(String(data: ovlJSON, encoding: .utf8)!)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        var overlayText = ""
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            let read = try sendCommand(#"{"cmd":"session.overlay.text","target":"\#(id)"}"#)
+            overlayText = ((read["result"] as? [String: Any])?["text"] as? String) ?? ""
+            if overlayText.contains("OVERLAY-MARKER") { break }
+            usleep(200_000)
+        }
+        XCTAssertTrue(overlayText.contains("OVERLAY-MARKER"),
+                      "session.overlay.text should read the covering program: \(overlayText)")
+
+        let pane = try sendCommand(#"{"cmd":"session.text","target":"\#(id)"}"#)
+        let paneText = ((pane["result"] as? [String: Any])?["text"] as? String) ?? ""
+        XCTAssertFalse(paneText.contains("OVERLAY-MARKER"),
+                       "session.text must still read the pane underneath: \(paneText)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10), "the overlay should be gone")
+        let after = try sendCommand(#"{"cmd":"session.overlay.text","target":"\#(id)"}"#)
+        XCTAssertEqual(after["ok"] as? Bool, false, "the slot is empty again")
+        XCTAssertEqual(after["error"] as? String, "no overlay")
+    }
+
+    // the selection half of #434, the one the reporter hit: Select All goes to the first responder, which is
+    // the overlay while one is up, so `session.copy` — pinned to `addressableSurface` — answers about the
+    // pane and finds nothing. The typed line first is load-bearing: it proves the overlay HELD focus, or
+    // ⌘A landed somewhere else entirely and the copy assertion means nothing.
+    func testOverlayCopyReturnsTheSelectionMadeInsideTheOverlay() throws {
+        let id = try activeSessionID()
+        let focusMarker = markerDir.appendingPathComponent("overlay-copy-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(focusMarker.path); echo SELECTME; cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd]])
+        let open = try sendCommand(String(data: ovlJSON, encoding: .utf8)!)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
+        app.typeText("OVLFOCUS")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(focusMarker, timeout: 12), "OVLFOCUS",
+                       "the overlay must hold keyboard focus, else Select All below selects something else")
+
+        app.typeKey("a", modifierFlags: .command)
+
+        var copied = ""
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let read = try sendCommand(#"{"cmd":"session.overlay.copy","target":"\#(id)"}"#)
+            copied = ((read["result"] as? [String: Any])?["text"] as? String) ?? ""
+            if copied.contains("SELECTME") { break }
+            usleep(200_000)
+        }
+        XCTAssertTrue(copied.contains("SELECTME"),
+                      "session.overlay.copy should return the overlay's own selection: \(copied)")
+
+        let pane = try sendCommand(#"{"cmd":"session.copy","target":"\#(id)"}"#)
+        XCTAssertEqual(pane["ok"] as? Bool, false, "session.copy addresses the pane, which has no selection")
+        XCTAssertEqual(pane["error"] as? String, "no selection")
+    }
+
     // a sidebar click must restore focus to the cover ON TOP, not the pane behind it — otherwise the
     // cover's program silently stops receiving input.
     //

@@ -134,6 +134,10 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(sizePercent: 60)),
             ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(full: true)),
             ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"),
+            ControlRequest(cmd: .sessionOverlayCopy, target: "9f3c"),
+            ControlRequest(cmd: .sessionOverlayCopy, target: "9f3c", args: ControlArgs(pane: "right")),
+            ControlRequest(cmd: .sessionOverlayText, target: "9f3c", args: ControlArgs(pane: "left", all: true)),
+            ControlRequest(cmd: .sessionOverlayText, target: "9f3c", args: ControlArgs(lines: 20)),
             ControlRequest(cmd: .surfaceZoom, target: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right",
                            args: ControlArgs(mode: "show", window: "win")),
         ]

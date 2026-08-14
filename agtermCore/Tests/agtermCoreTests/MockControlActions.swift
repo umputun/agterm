@@ -63,6 +63,8 @@ final class MockControlActions: ControlActions {
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
         case overlayResult(target: String?, window: String?, pane: OverlayPane?)
+        case overlayCopy(target: String?, window: String?, pane: OverlayPane?)
+        case overlayText(target: String?, window: String?, ControlSessionOverlayTextOptions)
         case hudOpen(target: String?, window: String?, HudSpec)
         case hudUpdate(target: String?, window: String?, HudSpec)
         case hudClose(target: String?, window: String?)
@@ -124,6 +126,8 @@ final class MockControlActions: ControlActions {
     var nextOverlayCloseResponse = ControlResponse(ok: true)
     var nextOverlayResizeResponse = ControlResponse(ok: true)
     var nextOverlayResultResponse = ControlResponse(ok: true)
+    var nextOverlayCopyResponse = ControlResponse(ok: true)
+    var nextOverlayTextResponse = ControlResponse(ok: true)
     var nextHudOpenResponse = ControlResponse(ok: true)
     var nextHudUpdateResponse = ControlResponse(ok: true)
     var nextHudCloseResponse = ControlResponse(ok: true)
@@ -437,6 +441,17 @@ final class MockControlActions: ControlActions {
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         calls.append(.overlayResult(target: target, window: window, pane: pane))
         return nextOverlayResultResponse
+    }
+
+    func copySessionOverlaySelection(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
+        calls.append(.overlayCopy(target: target, window: window, pane: pane))
+        return nextOverlayCopyResponse
+    }
+
+    func readSessionOverlayText(_ target: String?, window: String?,
+                                options: ControlSessionOverlayTextOptions) -> ControlResponse {
+        calls.append(.overlayText(target: target, window: window, options))
+        return nextOverlayTextResponse
     }
 
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {

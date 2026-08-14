@@ -391,8 +391,9 @@ error keeps those names for compatibility.
   already exist.
 - `session copy [--target] [--window W]` — returns `result.text` with the session's current selection.
   Does NOT touch the system clipboard (pipe the returned text into another `session type`). No/empty
-  selection → `no selection` error. Selection is readable on any realized session regardless of focus;
-  a never-shown session → `session not realized`, as with `session select-all`.
+  selection → `no selection` error. Selection is readable on any realized session regardless of focus, but
+  always from the main PANE — a selection made in a covering overlay is `session overlay copy`'s, not this
+  command's. A never-shown session → `session not realized`, as with `session select-all`.
 - `session paste [--target] [--window W]` — paste the system clipboard (`NSPasteboard.general`) into the
   session's main pane, the socket analogue of ⌘V / Edit ▸ Paste. Runs libghostty's `paste_from_clipboard`
   (bracketed paste, no prompt), so the text lands at the prompt without auto-submitting. Read it back with
@@ -409,7 +410,9 @@ error keeps those names for compatibility.
   session's scratch terminal even while it is hidden (its buffer is kept alive; `session has no scratch
   terminal` when none opened); omit `--pane` for the visible pane (the scratch terminal when it covers the
   session, else the focused pane). NOTE: unlike
-  `session focus`, `--pane` here has NO `other` value — only `left`/`right`/`scratch`. A genuinely BLANK screen is
+  `session focus`, `--pane` here has NO `other` value — only `left`/`right`/`scratch`, and no overlay value:
+  every one of them reads the surface UNDER a covering overlay, whose buffer is `session overlay text`'s.
+  A genuinely BLANK screen is
   NOT an error (returns `ok` with an empty string, unlike `session copy`'s `no selection`), but a failed
   read IS an error (`failed to read surface buffer`). Pipe the text into `grep`/`fzf` to extract URLs,
   paths, etc.
@@ -618,6 +621,19 @@ error keeps those names for compatibility.
   not a caller's program, so there is no status to report and the session-wide arm errors
   `no overlay result: the slot holds a hud`; the `--pane` arm is unaffected, since a HUD only ever takes
   the session-wide slot.
+- `session overlay copy [--pane left|right] [--target] [--window W]` — returns `result.text` with the
+  selection made INSIDE the overlay. `session copy` cannot reach it: that one addresses the pane the overlay
+  covers, so a selection the user made in the overlay reads as `no selection` there. Does NOT touch the
+  system clipboard. `--pane` reads that pane's overlay; omit it for the session-wide one. Errors
+  `no overlay` with nothing in the slot, `overlay not realized` in the moment after `open` before its
+  terminal is up, `no selection` when nothing is selected, and
+  `no overlay to read: the slot holds a hud` for a HUD, whose text is agterm's own.
+- `session overlay text [--all] [--lines N] [--pane left|right] [--target] [--window W]` — returns
+  `result.text` with the overlay's terminal buffer. `session text` reads the surface UNDERNEATH — its
+  `--pane right` returns the shell, not the program drawn over it. `--all` and `--lines N` mean what they do
+  on `session text` and are mutually exclusive. What comes back is a TUI's DRAWN screen, wrapped as
+  rendered, not the output the program would have printed — for output, prefer the program's own output
+  file. Same errors as `session overlay copy`, plus `failed to read surface buffer` on a real read failure.
 - `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--target] [--window W]`
   — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
   as `session overlay open`, but carries a message rather than a program: it takes no input, the session

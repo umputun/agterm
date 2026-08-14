@@ -75,6 +75,14 @@ public protocol ControlActions {
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
+    /// The overlay's own current selection, the arm `session.copy` cannot reach: that one addresses the pane
+    /// UNDER the overlay, and the selection the user made is on the surface covering it. `pane` nil reads
+    /// the session-wide overlay.
+    func copySessionOverlaySelection(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
+    /// The overlay's own terminal buffer, `session.text`'s counterpart for the covering surface. A TUI's
+    /// buffer is its drawn screen, so this reads what is rendered, not what the program would print.
+    func readSessionOverlayText(_ target: String?, window: String?,
+                                options: ControlSessionOverlayTextOptions) -> ControlResponse
     /// Post a message panel over the session, occupying the same overlay slot a program overlay uses. The
     /// dispatcher validated the text, color, percent, and position; the host measures the terminal font,
     /// renders the message to a file, and drives the store.
@@ -167,6 +175,21 @@ public struct ControlSessionTextOptions: Equatable, Sendable {
     }
 }
 
+/// `session.overlay.text`'s inputs. `pane` is the parsed `OverlayPane` rather than
+/// `ControlSessionTextOptions`' raw string: the overlay family takes only `left`/`right`, so the dispatcher
+/// resolves it and the host never re-parses a vocabulary it could widen by accident.
+public struct ControlSessionOverlayTextOptions: Equatable, Sendable {
+    public let pane: OverlayPane?
+    public let all: Bool
+    public let lines: Int?
+
+    public init(pane: OverlayPane?, all: Bool, lines: Int?) {
+        self.pane = pane
+        self.all = all
+        self.lines = lines
+    }
+}
+
 /// Routes control commands through a host-provided action seam. The dispatcher owns command parsing and
 /// response shape; host actions keep target resolution, AppKit state, and terminal-surface side effects.
 @MainActor
@@ -189,7 +212,8 @@ public struct ControlDispatcher {
         case .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize,
                 .surfaceZoom, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
-                .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionBackground,
+                .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionOverlayCopy,
+                .sessionOverlayText, .sessionBackground,
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
@@ -628,6 +652,14 @@ public struct ControlDispatcher {
             case .pane(let pane):
                 return actions.sessionOverlayResult(request.target, window: request.args?.window, pane: pane)
             }
+        case .sessionOverlayCopy:
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.copySessionOverlaySelection(request.target, window: request.args?.window, pane: pane)
+            }
+        case .sessionOverlayText:
+            return dispatchSessionOverlayText(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)
         case .sessionText:
@@ -772,19 +804,56 @@ public struct ControlDispatcher {
                                             options: ControlSessionBackgroundOptions(watermark: watermark))
     }
 
-    private func dispatchSessionText(_ request: ControlRequest) -> ControlResponse {
-        let all = request.args?.all ?? false
-        let lines = request.args?.lines
+    /// How much of a buffer a read covers, or the rejection its arm returns as-is. Shared by `session.text`
+    /// and `session.overlay.text` so the two cannot drift; an unchecked nonpositive `lines` would fall
+    /// through to the full buffer.
+    private enum BufferExtent {
+        case extent(all: Bool, lines: Int?)
+        case rejected(ControlResponse)
+    }
+
+    private func parseBufferExtent(_ args: ControlArgs?) -> BufferExtent {
+        let all = args?.all ?? false
+        let lines = args?.lines
         if all, lines != nil {
-            return ControlResponse(ok: false, error: "use either --all or --lines, not both")
+            return .rejected(ControlResponse(ok: false, error: "use either --all or --lines, not both"))
         }
         if let lines, lines <= 0 {
-            return ControlResponse(ok: false, error: "--lines must be greater than 0")
+            return .rejected(ControlResponse(ok: false, error: "--lines must be greater than 0"))
         }
-        return actions.readSessionText(request.target, window: request.args?.window,
-                                       options: ControlSessionTextOptions(pane: request.args?.pane,
-                                                                          all: all,
-                                                                          lines: lines))
+        return .extent(all: all, lines: lines)
+    }
+
+    private func dispatchSessionText(_ request: ControlRequest) -> ControlResponse {
+        switch parseBufferExtent(request.args) {
+        case .rejected(let response): return response
+        case .extent(let all, let lines):
+            return actions.readSessionText(request.target, window: request.args?.window,
+                                           options: ControlSessionTextOptions(pane: request.args?.pane,
+                                                                              all: all,
+                                                                              lines: lines))
+        }
+    }
+
+    /// The extent is checked before the pane, so the same flags produce the same first error here and on
+    /// `session.text`.
+    private func dispatchSessionOverlayText(_ request: ControlRequest) -> ControlResponse {
+        let all: Bool
+        let lines: Int?
+        switch parseBufferExtent(request.args) {
+        case .rejected(let response): return response
+        case .extent(let parsedAll, let parsedLines):
+            all = parsedAll
+            lines = parsedLines
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return actions.readSessionOverlayText(request.target, window: request.args?.window,
+                                                  options: ControlSessionOverlayTextOptions(pane: pane,
+                                                                                            all: all,
+                                                                                            lines: lines))
+        }
     }
 
     private func dispatchWindowCommand(_ request: ControlRequest) async -> ControlResponse {

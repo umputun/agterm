@@ -148,7 +148,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (75 commands)
+## Command summary (77 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -326,8 +326,15 @@ omitted when expanded).
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `overlay resize (--size-percent N | --full)` ·
   `overlay close [--pane left|right]` ·
-  `overlay result [--pane left|right]` — run a program on top of a session; `--block` waits and exits
-  with its status.
+  `overlay result [--pane left|right]` ·
+  `overlay copy [--pane left|right]` ·
+  `overlay text [--all] [--lines N] [--pane left|right]` — run a program on top of a session; `--block`
+  waits and exits with its status.
+  `overlay copy` returns the selection made INSIDE the overlay and `overlay text` its terminal buffer:
+  `session copy` and `session text` both address the pane the overlay COVERS, so a selection made in the
+  overlay reads there as `no selection` and `session text --pane right` returns the shell underneath. Use
+  these whenever a chord needs what the user picked out of a program you opened. `overlay text` returns a
+  TUI's drawn screen wrapped as rendered — for a program's OUTPUT, still prefer its own output file.
   `overlay resize` changes an ALREADY-OPEN overlay: `--size-percent N` (1-100) makes it a floating panel,
   `--full` switches it back to the full-pane overlay; the program keeps running (no re-spawn).
   `--pane left|right` scopes the overlay to ONE split pane instead of the whole session, leaving the
