@@ -50,11 +50,11 @@ extension WindowContentView {
         // Shared by BOTH split panes (unlike focus-gated `isActive`), it gates drag-type (un)registration and
         // mouse-cursor tracking (the `deckVisible` note in libghostty.md). Without the quick-terminal term a
         // covered pane races it for the cursor and fans mouse-motion into the covered TUI (issue #225).
-        let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.isVisible
+        let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.holdsKey
         // focus gate: a visible quick terminal OWNS first responder, so no deck surface may be `isActive`
         // behind it — `updateNSView` would grab focus and send keystrokes to a covered session. Every
         // automatic reselection (`reselectIfSelectionHidden`, auto-follow) reaches this, not just a click.
-        let focusable = deckInteractive && isActive && !quickTerminal.isVisible
+        let focusable = deckInteractive && isActive && !quickTerminal.holdsKey
         let gates = DeckPaneGates(focusable: focusable, overlaid: DeckPaneGates.coverActive(session),
                                   visible: visible)
         ZStack {
@@ -84,7 +84,7 @@ extension WindowContentView {
                 // makeScratchSurface's autoFocus suppression); `deckVisible` keeps drops to an on-screen one.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                              isActive: focusable && !session.programOverlayActive,
-                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
+                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch")
@@ -104,14 +104,14 @@ extension WindowContentView {
         // it on the HUD's close would instead YANK focus out of whatever holds it — an open ⌘F search field,
         // an in-progress sidebar rename — and `retryReparentFocus` re-grabs for ~0.36s.
         .onChange(of: session.programOverlayActive) { _, isOpen in
-            if !isOpen, deckInteractive, isActive, !quickTerminal.isVisible {
+            if !isOpen, deckInteractive, isActive, !quickTerminal.holdsKey {
                 (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
             }
         }
         // the scratch needs the same retry on SHOW too: its surface is kept alive across hides, so a re-show
         // remounts it and `autoFocus`'s one-shot latch won't re-fire.
         .onChange(of: session.scratchActive) { _, _ in
-            guard deckInteractive, isActive, !quickTerminal.isVisible else { return }
+            guard deckInteractive, isActive, !quickTerminal.holdsKey else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
         // the deck is the authority on which panes it lays out, so it also retires a pane overlay whose pane
@@ -123,7 +123,7 @@ extension WindowContentView {
         .onChange(of: terminalZoom.target) { _, _ in session.dropUnrealizedPaneOverlays() }
         // a closing pane overlay un-hides its pane and loses the same race.
         .onChange(of: session.openPaneOverlays) { before, after in
-            guard after.count < before.count, deckInteractive, isActive, !quickTerminal.isVisible else { return }
+            guard after.count < before.count, deckInteractive, isActive, !quickTerminal.holdsKey else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
     }

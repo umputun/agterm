@@ -187,7 +187,11 @@ struct WindowContentView: View {
         .onChange(of: pick.pending?.id) { old, new in
             if old == nil, new != nil, !pickSuppressesAutoFollow {
                 // a socket-driven picker may arrive with either title-bar popover already open; dismiss
-                // both so no second interactive surface remains above the modal picker.
+                // both so no second interactive surface remains above the modal picker. The quick-terminal
+                // panel is now exactly that surface and the worst of them: it floats above every window and
+                // holds key, so the picker would open under it with neither the screen nor the keyboard.
+                // `canShow` stops the reverse order; this is the same class from the other direction.
+                QuickTerminalController.shared.hide()
                 recentSessionsShown = false
                 attentionPopoverShown = false
                 store.suppressAutoFollow()

@@ -127,7 +127,7 @@ extension AppActions {
         // palette, then opens the .themes picker a tick later) keeps its field focus.
         if palette?.mode != nil { return }
         if pickActive(for: library.activeWindowID) { return }
-        if quickTerminal.isVisible { return }
+        if quickTerminal.holdsKey { return }
         if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
@@ -180,7 +180,7 @@ extension AppActions {
         }
         // the quick-terminal panel owns focus above EVERY window, not just this session's; its own hide
         // restores the session.
-        if quickTerminal.isVisible { return }
+        if quickTerminal.holdsKey { return }
         if let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }

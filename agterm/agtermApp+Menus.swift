@@ -157,7 +157,11 @@ extension agtermApp {
                     // `CustomCommandRunner`'s no-surface gate. A nil key window keeps the deck behavior.
                     // Gated on close_session still holding ⌘W: rebound off it, the stock item takes the chord
                     // back and an auxiliary window closes itself, so the new chord means only what it says.
-                    if closeSessionOwnsCommandW, let key = NSApp.keyWindow, !WindowRegistry.shared.contains(key) {
+                    // the quick-terminal panel is the one unregistered key window that is NOT auxiliary: it is
+                    // a cover, and `closeActiveSession`'s top two rungs exist to un-zoom then hide it. It also
+                    // has no close button (borderless), so `performClose` would only beep.
+                    if closeSessionOwnsCommandW, let key = NSApp.keyWindow, !WindowRegistry.shared.contains(key),
+                       !(key is QuickTerminalPanel) {
                         key.performClose(nil)
                         return
                     }

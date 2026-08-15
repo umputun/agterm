@@ -44,7 +44,9 @@ final class GlobalHotkey {
                                            MemoryLayout<EventHotKeyID>.size, nil, &firedID)
             guard status == noErr, firedID.id == GlobalHotkey.hotKeyID.id else { return OSStatus(eventNotHandledErr) }
             DispatchQueue.main.async {
-                QuickTerminalController.shared.toggle()
+                // a keypress from another application causes no blur of its own, so it must not be
+                // coalesced with one the user's own click just caused.
+                QuickTerminalController.shared.toggle(fromGlobalHotkey: true)
             }
             return noErr
         }, 1, &eventType, nil, &handlerRef)

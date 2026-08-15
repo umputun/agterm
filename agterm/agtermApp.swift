@@ -104,7 +104,7 @@ struct agtermApp: App {
                         // suppress the scratch's creation autoFocus when a caller's program overlay or the
                         // quick terminal is up — each renders above it and owns focus. A HUD renders
                         // above it too but owns nothing, so it must not hold focus off a scratch just shown.
-                        let qtVisible = QuickTerminalController.shared.isVisible
+                        let qtVisible = QuickTerminalController.shared.holdsKey
                         return Self.makeScratchSurface(for: session, store: store,
                                                        env: surfaceEnv(for: session, pane: .scratch),
                                                        suppressAutoFocus: session.programOverlayActive || qtVisible,
@@ -347,7 +347,7 @@ struct agtermApp: App {
             // so bail while that is up — it refocuses on hide; the retry outlasts the SwiftUI teardown.
             guard store.selectedSessionID == sessionID else { return }
             let windowID = library.windowID(forSession: sessionID)
-            guard !QuickTerminalController.shared.isVisible else { return }
+            guard !QuickTerminalController.shared.holdsKey else { return }
             // terminal zoom owns focus above the deck and zoom-enter ends an open search; this END lands a tick
             // later, so refocusing would steal first responder back from the zoomed terminal.
             guard windowID.flatMap({ TerminalZoomRegistry.shared.controller(for: $0) })?.target == nil else { return }

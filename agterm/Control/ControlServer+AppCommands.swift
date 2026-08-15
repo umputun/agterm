@@ -218,8 +218,9 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid quick mode: \(mode ?? "toggle")")
         }
         let want = parsedMode.desiredValue(current: controller.isVisible)
-        if want, !controller.isVisible,
-           PickRegistry.shared.controller(for: library.activeWindowID)?.pending != nil {
+        // NOT gated on the panel being hidden: `show` also carries the pin, and `canShow` refuses under a
+        // pending pick, so an already-visible panel would answer ok with the pin silently not applied.
+        if want, PickRegistry.shared.controller(for: library.activeWindowID)?.pending != nil {
             return ControlResponse(ok: false, error: "pick pending")
         }
         // `show` runs even when the panel is ALREADY visible, which `hide` has no equivalent of: it is what

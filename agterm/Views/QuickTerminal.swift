@@ -18,6 +18,12 @@ final class QuickTerminalController {
     /// Whether the panel is on screen. Observed, so the deck's gates and the control read-back follow it.
     private(set) var isVisible = false
 
+    /// Whether the panel currently owns the keyboard. Distinct from `isVisible`, and it is this — not mere
+    /// visibility — that every deck gate and focus guard reads: a PINNED panel (a control `quick show`) stays
+    /// on screen after agterm loses key, and treating that as "a cover owns focus" would revoke first
+    /// responder in every window and leave the user unable to type outside the panel's own frame.
+    private(set) var holdsKey = false
+
     /// Whether the panel fills its screen instead of taking the inset 90% frame — the re-homed
     /// `surface.zoom --target quick`, which used to be a per-window `TerminalZoomTarget`. Cleared on hide,
     /// so a dismissed panel never reports a stale zoom.
@@ -80,12 +86,17 @@ final class QuickTerminalController {
 
     /// Toolbar-button / hotkey / menu action: show if hidden, hide if visible. Always the human path, so the
     /// panel it shows dismisses on blur.
-    func toggle() {
+    ///
+    /// `fromGlobalHotkey` bypasses the re-show suppression. That window exists because a CLICK on the
+    /// toolbar button blurs the panel before its action arrives, and a keypress from another application
+    /// causes no such blur — so suppressing it there would swallow a deliberate summon made within 300ms of
+    /// the user clicking away.
+    func toggle(fromGlobalHotkey: Bool = false) {
         if isVisible {
             hide()
             return
         }
-        if let autoHiddenAt, Date().timeIntervalSince(autoHiddenAt) < Self.reshowSuppression {
+        if !fromGlobalHotkey, let autoHiddenAt, Date().timeIntervalSince(autoHiddenAt) < Self.reshowSuppression {
             self.autoHiddenAt = nil
             return
         }
@@ -121,12 +132,16 @@ final class QuickTerminalController {
         guard isVisible else { return }
         isVisible = false
         isZoomed = false
+        holdsKey = false
         dismissesOnFocusLoss = true
         panel?.orderOut(nil)
     }
 
-    /// The panel lost key. Only a human-summoned panel dismisses itself here.
+    /// The panel lost key. `holdsKey` drops either way — a PINNED panel stays on screen without owning the
+    /// keyboard, and that is exactly the state the deck gates must not read as a cover. Only a human-summoned
+    /// panel dismisses itself.
     private func handleResignKey() {
+        holdsKey = false
         guard dismissesOnFocusLoss, isVisible else { return }
         hide()
         autoHiddenAt = Date()
@@ -175,7 +190,8 @@ final class QuickTerminalController {
 
     private func ensurePanel() -> QuickTerminalPanel {
         if let panel { return panel }
-        let panel = QuickTerminalPanel(onResignKey: { [weak self] in self?.handleResignKey() })
+        let panel = QuickTerminalPanel(onBecomeKey: { [weak self] in self?.holdsKey = true },
+                                       onResignKey: { [weak self] in self?.handleResignKey() })
         let host = NSHostingView(rootView: QuickTerminalPanelContent(
             controller: self, terminalColor: terminalColorProvider()
         ))
@@ -194,6 +210,7 @@ final class QuickTerminalController {
         // left standing here would silently outlive the control show that set it.
         dismissesOnFocusLoss = true
         autoHiddenAt = nil
+        holdsKey = false
         panel?.orderOut(nil)
         panel?.contentView = nil
         panel = nil
@@ -233,9 +250,11 @@ final class QuickTerminalController {
 /// which would leave the terminal unable to take a keystroke.
 @MainActor
 final class QuickTerminalPanel: NSPanel {
+    private let onBecomeKey: () -> Void
     private let onResignKey: () -> Void
 
-    init(onResignKey: @escaping () -> Void) {
+    init(onBecomeKey: @escaping () -> Void, onResignKey: @escaping () -> Void) {
+        self.onBecomeKey = onBecomeKey
         self.onResignKey = onResignKey
         super.init(contentRect: .zero,
                    styleMask: [.borderless, .nonactivatingPanel],
@@ -252,12 +271,18 @@ final class QuickTerminalPanel: NSPanel {
         isReleasedWhenClosed = false
         // the panel is transient chrome, never part of the saved window set AppKit would try to bring back.
         isRestorable = false
+        NotificationCenter.default.addObserver(self, selector: #selector(handleBecomeKey),
+                                               name: NSWindow.didBecomeKeyNotification, object: self)
         NotificationCenter.default.addObserver(self, selector: #selector(handleResignKey),
                                                name: NSWindow.didResignKeyNotification, object: self)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    @objc private func handleBecomeKey() {
+        onBecomeKey()
+    }
 
     @objc private func handleResignKey() {
         onResignKey()

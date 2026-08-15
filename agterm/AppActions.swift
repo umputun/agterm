@@ -223,8 +223,8 @@ final class AppActions {
         // rungs below read state the panel is covering, and clearing a zoom the user cannot see is a silent
         // mutation of state they never touched. Stepwise like zoom: a zoomed panel un-zooms first, the next
         // ⌘W hides it. Its zoom is app-level (`isZoomed`), NOT a window's `TerminalZoomTarget`.
-        if quickTerminal.isZoomed { quickTerminal.setZoom(.off); return true }
-        if quickTerminal.isVisible { quickTerminal.hide(); return true }
+        if quickTerminal.holdsKey, quickTerminal.isZoomed { quickTerminal.setZoom(.off); return true }
+        if quickTerminal.holdsKey { quickTerminal.hide(); return true }
         // zoom is the topmost cover inside the window: ⌘W dismisses it, never mutating hidden session/window
         // state behind it. the dashboard grid is the
         // other modal cover (mutually exclusive with zoom) — close and refocus, don't close the session.
@@ -871,7 +871,7 @@ final class AppActions {
     /// overlay is NOT a term here — `searchTarget` owns that rung, in the one order that gets the
     /// scratch-above-a-pane-overlay case right; duplicating it here would block ⌘F on the searchable scratch.
     private var coverHidesActiveSession: Bool {
-        if quickTerminal.isVisible { return true }
+        if quickTerminal.holdsKey { return true }
         guard let session = store?.activeSession else { return false }
         // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
         return session.fullOverlayActive

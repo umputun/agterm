@@ -142,15 +142,21 @@ paths:
 
 ## Close and reselection
 
-- Command-W first dismisses the frontmost cover: quick terminal, then overlay, then scratch, then the
+- Command-W first dismisses the frontmost cover: the quick-terminal panel (un-zoom, then hide), then
+  overlay, then scratch, then the
   FOCUSED pane's own overlay (`focusedOverlayPane`; one on the sibling pane is not in front of the user and
   does not intercept). Only then close the active session. If no cover or session exists, the menu performs
   window close. Keep the cover check inside `closeActiveSession`, since a sessionless window can still show
   quick terminal.
+- The panel's two rungs read `holdsKey`, not `isVisible`. A PINNED panel (a control `quick show`) stays on
+  screen without owning the keyboard, and Command-W in a terminal window must then close that session
+  rather than reach past it to the panel.
 - The menu item diverts to a plain `performClose` when the key window is not an agterm terminal window —
   Settings, the About panel, an open/save panel — because `applyCloseSessionChord` takes ⌘W off the stock
   File ▸ Close item and nothing else would close them (issue #401). `WindowRegistry.contains` is the
-  predicate, as in `CustomCommandRunner`. A `nil` key window still runs the deck sequence: with every
+  predicate, as in `CustomCommandRunner`, EXCEPT for `QuickTerminalPanel`: it is unregistered too but it is
+  a cover, not an auxiliary window, and being borderless it has no close button, so `performClose` would
+  only beep and the ladder's own panel rungs would never run. A `nil` key window still runs the deck sequence: with every
   window minimized the equivalent still dispatches, and `performClose` on nothing would make ⌘W silently
   no-op. The divert is gated on `close_session` still holding ⌘W, the same condition
   `applyCloseSessionChord` splits on: rebound off it, the stock item takes the chord back and the

@@ -95,9 +95,15 @@ session drag are out of scope.
 - The frame is 90% of the focused screen capped at `maxNormalSize` (1100x700). The in-window overlay needed
   no cap because a window is already modest; 90% of a large display is a wall of terminal, not a quick
   aside.
-- While quick terminal is visible, no deck surface may be active. Gate main, split, maximized split,
-  scratch, and overlay with `deckInteractive && isActive && !quickTerminal.isVisible`. The predicate is now
-  app-level, so a visible panel makes EVERY window's deck inert, which is correct — the panel holds key.
+- While the quick terminal OWNS THE KEYBOARD, no deck surface may be active. Gate main, split, maximized
+  split, scratch, and overlay with `deckInteractive && isActive && !quickTerminal.holdsKey`. Read `holdsKey`,
+  never `isVisible`: the predicate is app-level, so it inerts EVERY window, and a PINNED panel (a control
+  `quick show`) stays on screen after agterm loses key. Gating on visibility there makes
+  `TerminalView.updateNSView` revoke first responder in every window on the next SwiftUI update, so the user
+  clicks into a terminal, types, and loses the keyboard again at the next title or status change. The same
+  distinction governs `focusActiveSession`, `focusSplitPane`, the scratch's `suppressAutoFocus`,
+  `coverHidesActiveSession` and the Command-W rungs. `holdsKey` follows the panel's own
+  didBecomeKey/didResignKey, so a resign clears it whether or not the panel also hides.
 - The panel is not a window surface, so no window's `TerminalZoomController` can hold `.quick`;
   `QuickTerminalController.isZoomed` owns it and `surface.zoom --target quick` grows the panel to fill its
   screen. `resolveTarget` never returns `.quick` and `isTargetValid` always rejects it, so a stale value
