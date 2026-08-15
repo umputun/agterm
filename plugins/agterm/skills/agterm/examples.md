@@ -614,6 +614,11 @@ agtermctl events --json --kind session.closed |
   done
 ```
 
+The stream does not say what closed a session: a closed row, another client's `session.close`, and a
+`--command` exit are identical in it. `--wait` removes the third, parking the row on the exit prompt
+rather than closing it, so a `session.closed` under `--wait` is always a person or a client. App quit
+emits no `session.closed` at all, since window teardown is skipped while terminating.
+
 For resumable consumers, save the `run` and `next` fields from raw `events.read` batch responses and
 restart with `agtermctl events --run "$run" --after "$next" --json`. The streaming JSON lines are bare
 events and do not include the run id. If the command reports `event run changed`, `event cursor
