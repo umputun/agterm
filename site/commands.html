@@ -1966,6 +1966,9 @@
                 Read the current zoom back from the tree's top-level
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomedSurface</span> (the zoomed surface's control id, or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span>; omitted when nothing is zoomed).
+                The panel's zoom is app-level and independent of any window's, and it takes precedence: while it is zoomed the
+                field reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> even if that window's own
+                session zoom is armed. Record the value before zooming the panel, not after.
               </p>
             </div>
           </section>

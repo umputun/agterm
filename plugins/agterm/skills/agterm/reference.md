@@ -207,7 +207,9 @@ every window reports the same value), `zoomedSurface`
 (the control id of the surface terminal zoom currently fills the window with —
 `surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
 write-only `surface zoom` command, so a script can check "is it already zoomed" and
-record-then-restore), and the four read sides of the write-only `dashboard` command (all omitted when
+record-then-restore. `quick` is app-level and independent of any window's zoom, and it WINS: with the
+panel zoomed this reports `quick` even while that window's own session zoom is armed and rendering, so
+record-then-restore must read it BEFORE zooming the panel, not after), and the four read sides of the write-only `dashboard` command (all omitted when
 no dashboard is open): `dashboardMembers` (the pane refs the open dashboard shows, in grid order —
 `<session-id>:left` for a primary pane, `<session-id>:right` for a split pane, so a split session appears
 as both), `dashboardHighlighted` (the highlighted cell's pane ref — the one Enter jumps into, focusing

@@ -797,10 +797,20 @@ final class AppActions {
         quickTerminal.toggle()
     }
 
-    /// Toggle the frontmost window's full-window terminal zoom. Core resolves which surface is active
-    /// (quick, overlay, scratch, split, or primary); the owning window renders it above all chrome.
+    /// Toggle terminal zoom for whatever the user is actually looking at: the quick-terminal panel when it
+    /// owns the keyboard, else the frontmost window's active surface (core resolves overlay, scratch, split
+    /// or primary; the owning window renders it above all chrome).
+    ///
+    /// The panel rung is not optional. The chord still reaches agterm while the panel is key, but the panel
+    /// is no longer a `TerminalZoomTarget` a window can hold — so without it the keystroke would arm zoom on
+    /// a window BEHIND the panel, changing nothing on screen and leaving a window the user may not even have
+    /// visible zoomed with its sidebar gone. Same rule as `closeActiveSession`: never mutate covered state.
     func toggleTerminalZoom() {
         guard !pickActive(for: library.activeWindowID) else { return }
+        if quickTerminal.holdsKey {
+            quickTerminal.setZoom(.toggle)
+            return
+        }
         frontmostTerminalZoom?.toggle()
     }
 
