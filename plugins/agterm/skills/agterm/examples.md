@@ -614,9 +614,10 @@ agtermctl events --json --kind session.closed |
   done
 ```
 
-The stream does not say what closed a session: a closed row, another client's `session.close`, and a
-`--command` exit are identical in it. `--wait` removes the third, parking the row on the exit prompt
-rather than closing it, so a `session.closed` under `--wait` is always a person or a client. App quit
+The stream does not say what closed a session: a closed row, another client's `session.close`, and the
+exit of a `session.new --command` process are identical in it. Creating that session with `--wait`
+removes the third, parking the row on the exit prompt rather than closing it, so a `session.closed`
+under `--wait` is always a person or a client. App quit
 emits no `session.closed` at all, since window teardown is skipped while terminating.
 
 For resumable consumers, save the `run` and `next` fields from raw `events.read` batch responses and
