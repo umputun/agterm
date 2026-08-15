@@ -165,6 +165,11 @@ struct WindowAccessor: NSViewRepresentable {
                         session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
                     }
                     library.closeWindow(windowID)
+                    // the quick-terminal panel belongs to no window, so nothing above tore it down. Usually
+                    // moot — an empty open set terminates the app — but a cancelled quit prompt leaves agterm
+                    // running with no window, where `canShow` refuses a NEW show while a panel already up
+                    // would linger as the only thing on screen.
+                    if library.openIDs().isEmpty { QuickTerminalController.shared.hide() }
                     // closing a window drops its (unobserved) store, so the Dock badge's observation won't
                     // fire — refresh explicitly. guarded on isTerminating: at quit willClose fires after
                     // applicationWillTerminate's clear() and closeWindow no-ops (stores stay loaded), so the
