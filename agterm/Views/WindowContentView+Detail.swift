@@ -308,9 +308,11 @@ extension WindowContentView {
 
     /// Whether a floating panel is washing the whole backdrop of this session's detail pane. Reads the same
     /// `backdrop` flag `overlayPanel` paints from, so the wash and its `paneDim` suppression cannot disagree
-    /// about a HUD, which paints none.
+    /// about a HUD, which paints none. The quick terminal is NOT a term: it is a separate window now, with no
+    /// in-window margin to wash, so counting it would suppress `paneDim` in every open window and put nothing
+    /// in its place — split focus would stop reading behind the panel.
     private func backdropWashActive(session: Session) -> Bool {
-        quickTerminal.isVisible || OverlayPanelStyle.resolve(session).backdrop
+        OverlayPanelStyle.resolve(session).backdrop
     }
 }
 

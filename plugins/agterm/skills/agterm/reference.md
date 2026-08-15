@@ -911,11 +911,14 @@ it waited for. Results age out oldest-first: the 8 most recent per open window, 
 
 ## quick
 
-`agtermctl quick [show|hide|toggle]` — the frontmost window's quick terminal (a single scratch
-terminal at 90% of the window, not in the tree; its shell stays alive across hides). Errors with
-`no open window` when none is open. Read its visibility back from the tree's top-level `quickVisible`.
-While terminal zoom is active, `show` errors with `terminal zoom active`; `hide` always succeeds (a
-zoomed quick terminal exits its zoom first), so cleanup scripts can dismiss it unconditionally.
+`agtermctl quick [show|hide|toggle]` — the app's one quick terminal (a single scratch terminal in a
+floating panel at 90% of the focused screen up to 1100x700, not in the tree and owned by no window; its
+shell stays alive across hides). Errors with `no open window` when none is open, and with `pick pending`
+while a picker is up. Read its visibility back from the tree's top-level `quickVisible`.
+A panel YOU open with `show` stays up when agterm loses focus — including when it was already visible
+because the user had summoned it by hotkey — so a following `quick type` / `quick text` /
+`surface zoom --target quick` still finds it. A window's terminal zoom is not a term either way: the panel
+floats above every window, so `show` is never refused for it.
 
 `agtermctl quick type TEXT` (or `--stdin`) — inject `TEXT` as literal keystrokes into the frontmost
 window's quick terminal, the quick-terminal twin of `session type`. There is no `--target`/`--window`
@@ -1053,7 +1056,9 @@ after the first token is the shell line): `map cmd+t|ctrl+space>s toggle_split` 
 either. A built-in's first single-chord alternative the menu can carry becomes its menu shortcut (one that
 names a reserved chord or a bare arrow is diagnosed and dropped, and the next single chord takes the slot);
 every other alternative, and every alternative of a `command`, is delivered by a key monitor and so must
-carry a modifier on its first chord. A `map` line with no single-chord alternative
+carry a modifier on its first chord. `global-hotkey` is outside all of this: the OS owns it, and it WINS —
+agterm frontmost included — so a chord it shares with a menu action fires the panel and the menu binding
+never sees it. A `map` line with no single-chord alternative
 (`map ctrl+a>s toggle_split`) leaves the action with NO menu shortcut — its shipped default is gone, not
 kept. A malformed alternative rejects the whole line; one that merely breaks a rule or collides with
 another binding drops by itself and its siblings keep working. A line left binding nothing at all leaves

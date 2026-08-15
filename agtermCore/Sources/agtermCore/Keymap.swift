@@ -219,6 +219,16 @@ private func parseGlobalHotkeyLine(_ rest: String, line: Int, hotkey: inout Chor
                                             message: "global-hotkey '\(token)' must include a modifier"))
         return
     }
+    // `parseChord` takes any single character, but the OS registers a PHYSICAL key position, so a base key
+    // no ANSI position produces cannot be registered. Diagnose here: this line has no read-back anywhere —
+    // `keymap list` does not carry it — so a silent drop at registration leaves the user no signal at all.
+    guard keyCode(forChordKey: chord.key) != nil else {
+        diagnostics.append(KeymapDiagnostic(
+            line: line,
+            message: "global-hotkey '\(token)' names no key position; write a shifted symbol as shift+<base>"
+        ))
+        return
+    }
     hotkey = chord
 }
 

@@ -376,7 +376,10 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(settled, "win-a should be marked closed and win-b open, got \(String(describing: indexOpenState()))")
     }
 
-    func testQuickTerminalIsPerWindow() throws {
+    /// One panel for the whole app, not one per window: showing it with two windows open yields a single
+    /// surface, and it stays up and addressable when the other window becomes frontmost — the contract that
+    /// replaced the per-window registry.
+    func testQuickTerminalIsOnePanelForTheApp() throws {
         try seedTwoWindows()
         launch()
 
@@ -391,8 +394,15 @@ final class MultiWindowUITests: XCTestCase {
 
         let shown = try sendCommand(#"{"cmd":"quick","args":{"mode":"show"}}"#)
         XCTAssertEqual(shown["ok"] as? Bool, true, "quick show should succeed: \(shown)")
-        XCTAssertTrue(quick.firstMatch.waitForExistence(timeout: 10), "the frontmost quick terminal should appear")
-        XCTAssertEqual(quick.count, 1, "only the frontmost window's quick terminal should show, got \(quick.count)")
+        XCTAssertTrue(quick.firstMatch.waitForExistence(timeout: 10), "the quick-terminal panel should appear")
+        XCTAssertEqual(quick.count, 1, "one panel for the whole app, got \(quick.count)")
+
+        // the panel belongs to no window, so selecting the other one neither hides it nor mints a second.
+        for id in [windowBID, windowAID] {
+            let selected = try sendCommand(#"{"cmd":"window.select","args":{"target":"\#(id.uuidString)"}}"#)
+            XCTAssertEqual(selected["ok"] as? Bool, true, "window.select should succeed: \(selected)")
+            XCTAssertEqual(quick.count, 1, "the panel should survive a frontmost change, got \(quick.count)")
+        }
 
         let hidden = try sendCommand(#"{"cmd":"quick","args":{"mode":"hide"}}"#)
         XCTAssertEqual(hidden["ok"] as? Bool, true, "quick hide should succeed: \(hidden)")

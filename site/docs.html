@@ -1939,8 +1939,9 @@
               must carry a modifier, takes no alternatives and no leader sequence, and a second
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
               first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
-              it rather than agterm, it takes no part in the collision rules below — it may share a chord with a menu item, and
-              whichever application is in front decides who receives it. It is unset unless you add the line.
+              it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
+              takes the key even while agterm is in front, so binding one a menu item already uses means that menu shortcut stops
+              firing. It is unset unless you add the line.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by

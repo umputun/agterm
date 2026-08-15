@@ -97,6 +97,25 @@ struct KeymapTests {
         #expect(diagnostics[0].message.contains("invalid global-hotkey chord"))
     }
 
+    /// The OS registers a physical key position, so a base key no ANSI position produces cannot be bound.
+    /// It has no read-back anywhere, so the diagnostic is the user's only signal.
+    @Test func globalHotkeyRejectsAChordWithNoKeyPosition() {
+        for token in ["ctrl+opt+é", "ctrl+opt+!", "cmd+ю"] {
+            let (keymap, diagnostics) = parseKeymap("global-hotkey \(token)")
+            #expect(keymap.globalHotkey == nil, "\(token) should not bind")
+            #expect(diagnostics.count == 1)
+            #expect(diagnostics[0].message.contains("names no key position"))
+        }
+    }
+
+    @Test func globalHotkeyAcceptsEveryBindableNamedKey() {
+        for key in bindableNamedKeys {
+            let (keymap, diagnostics) = parseKeymap("global-hotkey ctrl+opt+\(key)")
+            #expect(diagnostics.isEmpty, "\(key) should parse clean")
+            #expect(keymap.globalHotkey == Chord(mods: [.control, .option], key: key))
+        }
+    }
+
     @Test func globalHotkeyRejectsMissingAndExtraTokens() {
         let (missing, missingDiagnostics) = parseKeymap("global-hotkey")
         #expect(missing.globalHotkey == nil)

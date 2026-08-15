@@ -30,6 +30,10 @@ final class QuickTerminalController {
 
     @ObservationIgnored private var panel: QuickTerminalPanel?
 
+    /// The panel's content host, retained so a show can re-read the terminal color into it without
+    /// rebuilding the panel (which would remount the surface).
+    @ObservationIgnored private var hostingView: NSHostingView<QuickTerminalPanelContent>?
+
     /// Whether losing key dismisses the panel. A HUMAN summon (hotkey, ⌃`, toolbar, Dock) is
     /// dismiss-on-blur, which is what makes it summon-and-return. A control-driven show pins it instead:
     /// `show` activates agterm, so a script's very next command runs while some other application is coming
@@ -56,29 +60,52 @@ final class QuickTerminalController {
     @ObservationIgnored var focusAllowed: () -> Bool = { true }
 
     /// Whether a show may proceed at all — false with no open window, where a panel would be the only thing
-    /// on screen for an app that is about to terminate.
+    /// on screen for an app that is about to terminate, and false while a control picker is pending, which
+    /// owns the keyboard. The pick term is here rather than on each caller because the global hotkey reaches
+    /// the controller directly, with none of the `uiActionsEnabled` gating every in-app path has.
     @ObservationIgnored var canShow: () -> Bool = { true }
 
     /// The opaque backing the panel paints behind the surface, which draws transparent under
-    /// `background-opacity = 0`. Re-read on every show so a theme change lands without rebuilding the panel.
+    /// `background-opacity = 0`. Re-read on every show, so a theme change lands on the next summon.
     @ObservationIgnored var terminalColorProvider: () -> Color = { .black }
+
+    /// When a resign-driven hide last fired, and how long a show is suppressed afterwards. AppKit makes the
+    /// clicked window key BEFORE delivering the button action, so a click on the Quick Terminal toolbar
+    /// button or Dock item first blurs the panel — and without this the toggle would then see
+    /// `isVisible == false` and re-show the panel that same click just dismissed.
+    @ObservationIgnored private var autoHiddenAt: Date?
+    private static let reshowSuppression: TimeInterval = 0.3
 
     private init() {}
 
     /// Toolbar-button / hotkey / menu action: show if hidden, hide if visible. Always the human path, so the
     /// panel it shows dismisses on blur.
     func toggle() {
-        if isVisible { hide() } else { show() }
+        if isVisible {
+            hide()
+            return
+        }
+        if let autoHiddenAt, Date().timeIntervalSince(autoHiddenAt) < Self.reshowSuppression {
+            self.autoHiddenAt = nil
+            return
+        }
+        show()
     }
 
     /// Show the panel. `dismissOnFocusLoss` false is the control path — see the property of that name.
+    /// Idempotent, and deliberately still applies the pin when the panel is ALREADY up: a script running
+    /// `quick show` over a panel the user summoned by hotkey is promised a panel that survives its next
+    /// command, and returning early would leave that promise to a blur.
     func show(dismissOnFocusLoss: Bool = true) {
         guard canShow() else { return }
         // a control show over a user-summoned panel still pins it: the caller is a script either way.
         dismissesOnFocusLoss = dismissesOnFocusLoss && dismissOnFocusLoss
+        autoHiddenAt = nil
         guard !isVisible else { return }
         isVisible = true
         let panel = ensurePanel()
+        hostingView?.rootView = QuickTerminalPanelContent(controller: self,
+                                                          terminalColor: terminalColorProvider())
         panel.setFrame(Self.targetFrame(zoomed: isZoomed), display: true)
         // NEVER `NSApp.activate()` here. Activating agterm raises ITS WINDOWS too, so summoning the panel
         // from another application buries that application behind the whole terminal, and dismissing leaves
@@ -100,8 +127,9 @@ final class QuickTerminalController {
 
     /// The panel lost key. Only a human-summoned panel dismisses itself here.
     private func handleResignKey() {
-        guard dismissesOnFocusLoss else { return }
+        guard dismissesOnFocusLoss, isVisible else { return }
         hide()
+        autoHiddenAt = Date()
     }
 
     /// Apply `surface.zoom --target quick`. Returns false when the panel is not up, which is what makes the
@@ -148,9 +176,11 @@ final class QuickTerminalController {
     private func ensurePanel() -> QuickTerminalPanel {
         if let panel { return panel }
         let panel = QuickTerminalPanel(onResignKey: { [weak self] in self?.handleResignKey() })
-        panel.contentView = NSHostingView(rootView: QuickTerminalPanelContent(
+        let host = NSHostingView(rootView: QuickTerminalPanelContent(
             controller: self, terminalColor: terminalColorProvider()
         ))
+        panel.contentView = host
+        hostingView = host
         self.panel = panel
         return panel
     }
@@ -160,9 +190,14 @@ final class QuickTerminalController {
     private func handleShellExit() {
         isVisible = false
         isZoomed = false
+        // the next summon is a fresh panel and a fresh shell, so it starts from the default policy — a pin
+        // left standing here would silently outlive the control show that set it.
+        dismissesOnFocusLoss = true
+        autoHiddenAt = nil
         panel?.orderOut(nil)
         panel?.contentView = nil
         panel = nil
+        hostingView = nil
         surfaceView?.onUserInput = nil
         surfaceView?.teardown()
         surfaceView = nil

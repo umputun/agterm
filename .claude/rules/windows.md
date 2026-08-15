@@ -82,10 +82,16 @@ session drag are out of scope.
   `openIDs`.
 - Losing key hides a HUMAN-summoned panel (hotkey, ⌃`, toolbar, Dock), which is what makes it
   summon-and-dismiss rather than window chrome. A control-driven `quick show` passes
-  `dismissOnFocusLoss: false` and pins it instead: `show` calls `NSApp.activate`, so the caller's NEXT
-  command runs while the previous application is coming back to the front, and a blur-dismissing panel is
-  already gone by the time `quick.type` or `surface.zoom --target quick` arrives — measured, not theorised.
-  `hide` clears the pin. This is AppKit key-window behavior, so it is manually verified, not unit-tested.
+  `dismissOnFocusLoss: false` and pins it instead, because the caller's NEXT command runs while focus is
+  still settling and a blur-dismissing panel is already gone by the time `quick.type` or
+  `surface.zoom --target quick` arrives — measured, not theorised. `show` applies that pin even when the
+  panel is ALREADY visible, which is the case a script hits over a hotkey-summoned panel; `hide` and a shell
+  exit clear it. `NSApp.activate` is never called: activating raises agterm's own windows over the
+  application the panel was summoned from, so `.nonactivatingPanel` plus `orderFrontRegardless` is what lets
+  it take the keyboard while agterm stays inactive. A resign-driven hide records its time, and a show within
+  `reshowSuppression` is dropped — AppKit makes a clicked window key BEFORE delivering its button action, so
+  the toolbar and Dock toggles would otherwise re-show the panel the same click dismissed. This is AppKit
+  key-window behavior, so it is manually verified, not unit-tested.
 - The frame is 90% of the focused screen capped at `maxNormalSize` (1100x700). The in-window overlay needed
   no cap because a window is already modest; 90% of a large display is a wall of terminal, not a quick
   aside.

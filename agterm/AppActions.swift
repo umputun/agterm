@@ -219,12 +219,17 @@ final class AppActions {
         // a pick is an external caller waiting on an answer: the first ⌘W layer even behind a zoomed terminal,
         // and resolved rather than hidden so the caller can finish.
         if cancelPendingPick(for: library.activeWindowID) { return true }
-        // zoom is the topmost cover: ⌘W dismisses it stepwise (a zoomed quick terminal un-zooms first, the
-        // next ⌘W hides it), never mutating hidden session/window state behind it. the dashboard grid is the
+        // the quick-terminal panel floats above every window, so it outranks anything inside one — the window
+        // rungs below read state the panel is covering, and clearing a zoom the user cannot see is a silent
+        // mutation of state they never touched. Stepwise like zoom: a zoomed panel un-zooms first, the next
+        // ⌘W hides it. Its zoom is app-level (`isZoomed`), NOT a window's `TerminalZoomTarget`.
+        if quickTerminal.isZoomed { quickTerminal.setZoom(.off); return true }
+        if quickTerminal.isVisible { quickTerminal.hide(); return true }
+        // zoom is the topmost cover inside the window: ⌘W dismisses it, never mutating hidden session/window
+        // state behind it. the dashboard grid is the
         // other modal cover (mutually exclusive with zoom) — close and refocus, don't close the session.
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
         if let dashboard = frontmostDashboard, dashboard.isOpen { dashboard.close(); focusActiveSession(); return true }
-        if quickTerminal.isVisible { quickTerminal.hide(); return true }
         guard let store, let session = store.activeSession else { return false }
         if session.overlayActive { store.closeOverlay(session.id); return true }
         if session.scratchActive { store.toggleScratch(session.id); return true }

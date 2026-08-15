@@ -589,7 +589,13 @@ struct agtermApp: App {
         controller.focusAllowed = { [weak library] in
             PickRegistry.shared.controller(for: library?.activeWindowID)?.pending == nil
         }
-        controller.canShow = { [weak library] in !(library?.openIDs().isEmpty ?? true) }
+        // the global hotkey reaches the controller directly, with none of the `uiActionsEnabled` gating every
+        // in-app path has, so the pick term belongs here. Only that term: refusing a system-wide summon
+        // because some BACKGROUND window has a dashboard open would defeat the point of the chord.
+        controller.canShow = { [weak library] in
+            guard let library, !library.openIDs().isEmpty else { return false }
+            return PickRegistry.shared.controller(for: library.activeWindowID)?.pending == nil
+        }
         controller.terminalColorProvider = { WindowContentView.resolvedTerminalColor() }
     }
 }

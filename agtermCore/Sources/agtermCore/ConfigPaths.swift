@@ -83,8 +83,9 @@ public enum ConfigPaths {
         #       Exactly one chord: no `|` alternatives, no leader sequence, and it must carry a
         #       modifier. A second global-hotkey line replaces the first. macOS registers it by
         #       physical key position, so it keeps working on a non-Latin layout. Because the system
-        #       owns it rather than agterm, it takes no part in the collision rules above: it may
-        #       share a chord with a menu item, and whichever app is frontmost gets the key. Example:
+        #       owns it rather than agterm, it takes no part in the collision rules above. Note the
+        #       precedence: the system hotkey WINS, agterm frontmost included, so a chord shared with a
+        #       menu action fires this and the menu binding never sees it. Example:
         #
         #           global-hotkey ctrl+opt+space
         #
