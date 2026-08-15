@@ -601,8 +601,13 @@ final class ControlServer {
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
-            quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
-            zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } },
+            // both are app-level facts now that the quick terminal is one detached panel, so every projected
+            // window reports the same value for them rather than one of its own.
+            quickVisible: { QuickTerminalController.shared.isVisible },
+            zoomedSurface: {
+                if QuickTerminalController.shared.isZoomed { return TerminalZoomTarget.quick.controlID }
+                return windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID }
+            },
             // resolved through the projected window's registry entry on every tree build, and tree-only:
             // window.list is cache-backed, so mirroring a GUI-resolved pick there would go stale.
             pickPending: { windowID.flatMap { PickRegistry.shared.controller(for: $0)?.pending?.id } },

@@ -119,18 +119,21 @@ paths:
   `paneDim` — in `WindowContentView+Detail.swift` so `WindowContentView.swift` remains below the
   1000-line limit. `sessionDetail` owns the constant-shape statement; every other site cross-references it.
   One `deckPane` renders each pane, so the split's two arranged subviews are the same view type.
-- Window-level quick terminal, palettes, switcher, and dashboard live in `windowOverlayLayer`, inset by
-  `titlebarHeight` below `customTitlebar`. A body overlay's 0.2-opacity black scrim darkens the transparent
-  tall titlebar.
+- Palettes, switcher, and dashboard live in `windowOverlayLayer`, inset by
+  `titlebarHeight` below `customTitlebar`. The quick terminal is NOT among them: it is a detached
+  `QuickTerminalPanel` above every window, so it needs no inset and paints its own frame ([[windows]]).
+  A body overlay's 0.2-opacity black scrim darkens the transparent tall titlebar.
   The seam appears in 48px normal mode; 30px compact remains inside the native band.
   Keep the empty overlay layer free of Color/contentShape so it cannot intercept hits. Do not add an opaque
   titlebar background; it breaks translucent chrome.
 - With translucency, every surface has zero background opacity. A full overlay has no opaque SwiftUI
-  backing, so hide panes and scratch beneath it and remove their drop eligibility. Floating overlay and
-  quick terminal have opaque terminal-color panels.
-- Because those two leave a live terminal around the panel, their tap-catcher also paints the
+  backing, so hide panes and scratch beneath it and remove their drop eligibility. A floating overlay has
+  an opaque terminal-color panel; the quick terminal takes the same backing from its own panel's content,
+  through `WindowContentView.resolvedTerminalColor`.
+- Because a floating overlay leaves a live terminal around its panel, its tap-catcher also paints the
   `inactivePaneMuteStrength` wash. Fill the existing catcher; never add a sibling scrim. Suppress `paneDim`
-  while a backdrop wash is up or the covered inactive pane takes both.
+  while a backdrop wash is up or the covered inactive pane takes both. The quick terminal no longer takes
+  part: its panel is a separate window, so there is no in-window margin left to catch a tap or wash.
 - Anything that HIDES a pane in place takes the wash with it, so the cover must carry `paneDim` itself:
   `paneOverlayPanel` washes an overlay opened on the unfocused pane, or split focus stops reading.
   Wash a cover against ITS OWN background, not `washColor(for:)`. An overlay surface is sessionless and

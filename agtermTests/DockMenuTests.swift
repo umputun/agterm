@@ -19,7 +19,6 @@ final class DockMenuTests: XCTestCase {
     private struct CapturedTopLevelActions {
         let store: AppStore
         let current: Session
-        let quick: QuickTerminalController
         let dashboard: DashboardController
         let zoom: TerminalZoomController
         let menu: NSMenu
@@ -49,7 +48,6 @@ final class DockMenuTests: XCTestCase {
         await MainActor.run {
             delegate.dockMenuActionTargets.removeAll()
             for id in registeredWindowIDs {
-                QuickTerminalRegistry.shared.unregister(id)
                 DashboardControllerRegistry.shared.unregister(id)
                 TerminalZoomRegistry.shared.unregister(id)
             }
@@ -93,8 +91,8 @@ final class DockMenuTests: XCTestCase {
             "Recent Sessions", "Sessions Needing Attention",
         ])
         XCTAssertTrue(try item("New Session", in: menu).isEnabled)
-        XCTAssertFalse(try item("Quick Terminal", in: menu).isEnabled,
-                       "quick terminal requires the captured window's registered controller")
+        XCTAssertTrue(try item("Quick Terminal", in: menu).isEnabled,
+                      "the quick terminal is app-level, so it needs no registered per-window controller")
         XCTAssertFalse(try item("Dashboard", in: menu).isEnabled,
                        "dashboard requires the captured window's registered controller")
         XCTAssertEqual(try submenu("Recent Sessions", in: menu).items.map(\.title), ["No Recent Sessions"])
@@ -103,10 +101,9 @@ final class DockMenuTests: XCTestCase {
                        ["No Sessions Need Attention"])
         XCTAssertFalse(try submenu("Sessions Needing Attention", in: menu).items[0].isEnabled)
 
-        let quick = QuickTerminalController()
         let dashboard = DashboardController()
         let zoom = TerminalZoomController()
-        register(windowID, quick: quick, dashboard: dashboard, zoom: zoom)
+        register(windowID, dashboard: dashboard, zoom: zoom)
 
         menu = try dockMenu()
         XCTAssertTrue(try item("Quick Terminal", in: menu).isEnabled)
@@ -138,10 +135,9 @@ final class DockMenuTests: XCTestCase {
     // state that makes them inert. Discussion #313.
     func testNewWindowStaysEnabledUnderModalsAndOpensAWindow() throws {
         let windowID = try activeWindowID()
-        let quick = QuickTerminalController()
         let dashboard = DashboardController()
         let zoom = TerminalZoomController()
-        register(windowID, quick: quick, dashboard: dashboard, zoom: zoom)
+        register(windowID, dashboard: dashboard, zoom: zoom)
         let current = try XCTUnwrap(library.activeStore?.activeSession)
 
         zoom.set(.on, target: .session(current.id, .primary))
@@ -308,12 +304,10 @@ final class DockMenuTests: XCTestCase {
         let storeA = try activeStore()
         let windowB = library.newWindow(name: "window B").id
         let storeB = try XCTUnwrap(library.store(for: windowB))
-        let quickA = QuickTerminalController()
-        let quickB = QuickTerminalController()
         let dashboardA = DashboardController()
         let dashboardB = DashboardController()
-        register(windowA, quick: quickA, dashboard: dashboardA, zoom: TerminalZoomController())
-        register(windowB, quick: quickB, dashboard: dashboardB, zoom: TerminalZoomController())
+        register(windowA, dashboard: dashboardA, zoom: TerminalZoomController())
+        register(windowB, dashboard: dashboardB, zoom: TerminalZoomController())
 
         library.frontmostWindowID = windowA
         let capturedMenu = try dockMenu()
@@ -329,11 +323,9 @@ final class DockMenuTests: XCTestCase {
         XCTAssertEqual(storeB.workspaces.flatMap(\.sessions).count, sessionCountB)
         XCTAssertEqual(library.frontmostWindowID, windowA)
 
-        library.frontmostWindowID = windowB
-        try invokeWithNilSender(try item("Quick Terminal", in: capturedMenu))
-        XCTAssertTrue(quickA.isVisible)
-        XCTAssertFalse(quickB.isVisible)
-        XCTAssertEqual(library.frontmostWindowID, windowA)
+        // Quick Terminal is deliberately absent from this scoping check: there is one panel per app, so it
+        // has no per-window state for a captured item to hold on to. Invoking it here would summon the panel
+        // and spawn its shell; the modal-gate tests above cover that its item stays inert when it should.
 
         library.frontmostWindowID = windowB
         try invokeWithNilSender(try item("Dashboard", in: capturedMenu))
@@ -358,7 +350,7 @@ final class DockMenuTests: XCTestCase {
         }
 
         XCTAssertEqual(context.store.workspaces.flatMap(\.sessions).count, context.sessionCount)
-        XCTAssertFalse(context.quick.isVisible)
+        XCTAssertFalse(QuickTerminalController.shared.isVisible)
         XCTAssertTrue(context.dashboard.isOpen,
                       "a Dashboard item built while closed must not close a post-build dashboard")
     }
@@ -378,7 +370,7 @@ final class DockMenuTests: XCTestCase {
         }
 
         XCTAssertEqual(context.store.workspaces.flatMap(\.sessions).count, context.sessionCount)
-        XCTAssertFalse(context.quick.isVisible)
+        XCTAssertFalse(QuickTerminalController.shared.isVisible)
         XCTAssertFalse(context.dashboard.isOpen)
         XCTAssertEqual(context.zoom.target, target)
     }
@@ -595,9 +587,8 @@ final class DockMenuTests: XCTestCase {
         ))
         let windowB = library.newWindow(name: "window B").id
         let windowBSession = try XCTUnwrap(library.store(for: windowB)?.activeSession?.id)
-        let quick = QuickTerminalController()
         let dashboard = DashboardController()
-        register(windowA, quick: quick, dashboard: dashboard, zoom: TerminalZoomController())
+        register(windowA, dashboard: dashboard, zoom: TerminalZoomController())
         library.frontmostWindowID = windowA
 
         let menu = try dockMenu()
@@ -613,7 +604,7 @@ final class DockMenuTests: XCTestCase {
             try invokeWithNilSender(try item(title, in: menu))
         }
         XCTAssertEqual(retainedStore?.workspaces.flatMap(\.sessions).count, sessionCount)
-        XCTAssertFalse(quick.isVisible)
+        XCTAssertFalse(QuickTerminalController.shared.isVisible)
         XCTAssertFalse(dashboard.isOpen)
         XCTAssertEqual(library.frontmostWindowID, windowB)
 
@@ -668,10 +659,9 @@ final class DockMenuTests: XCTestCase {
         let windowID = try activeWindowID()
         let store = try activeStore()
         let current = try XCTUnwrap(store.activeSession)
-        let quick = QuickTerminalController()
         let dashboard = DashboardController()
         let zoom = TerminalZoomController()
-        register(windowID, quick: quick, dashboard: dashboard, zoom: zoom)
+        register(windowID, dashboard: dashboard, zoom: zoom)
         let menu = try dockMenu()
         for title in ["New Session", "Quick Terminal", "Dashboard"] {
             XCTAssertTrue(try item(title, in: menu).isEnabled)
@@ -679,7 +669,6 @@ final class DockMenuTests: XCTestCase {
         return CapturedTopLevelActions(
             store: store,
             current: current,
-            quick: quick,
             dashboard: dashboard,
             zoom: zoom,
             menu: menu,
@@ -712,12 +701,10 @@ final class DockMenuTests: XCTestCase {
 
     private func register(
         _ windowID: UUID,
-        quick: QuickTerminalController? = nil,
         dashboard: DashboardController? = nil,
         zoom: TerminalZoomController? = nil
     ) {
         registeredWindowIDs.insert(windowID)
-        if let quick { QuickTerminalRegistry.shared.register(windowID, controller: quick) }
         if let dashboard { DashboardControllerRegistry.shared.register(windowID, controller: dashboard) }
         if let zoom { TerminalZoomRegistry.shared.register(windowID, controller: zoom) }
     }

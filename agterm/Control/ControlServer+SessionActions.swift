@@ -650,6 +650,14 @@ extension ControlServer: ControlActions {
         if rawTarget == "active" {
             return setActiveSurfaceZoom(window: window, mode: mode)
         }
+        // `quick` names the detached panel, which no window's zoom controller can hold — it fills its own
+        // screen instead of a window. It takes no `--window` for the same reason.
+        if rawTarget == "quick" {
+            guard QuickTerminalController.shared.setZoom(mode) else {
+                return ControlResponse(ok: false, error: "surface not available: quick")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: "quick"))
+        }
         switch resolveSurfaceZoom(rawTarget, window: window) {
         case .failure(let response):
             return response
@@ -666,8 +674,7 @@ extension ControlServer: ControlActions {
             // vanished (an exited overlay auto-clears the zoom) while the end state holds; `set(.off, …)`
             // on a non-matching target is a no-op.
             if mode != .off {
-                guard TerminalZoomController.isTargetValid(resolved.target, in: resolved.store,
-                                                           quickTerminalVisible: quickVisible(in: resolved.windowID)) else {
+                guard TerminalZoomController.isTargetValid(resolved.target, in: resolved.store) else {
                     return ControlResponse(ok: false, error: "surface not available: \(resolved.controlID)")
                 }
             }
@@ -698,12 +705,10 @@ extension ControlServer: ControlActions {
                 guard mode != .off else {
                     return ControlResponse(ok: true)
                 }
-                let quickVisible = quickVisible(in: windowID)
-                guard let zoomTarget = TerminalZoomController.resolveTarget(store: store,
-                                                                            quickTerminalVisible: quickVisible) else {
+                guard let zoomTarget = TerminalZoomController.resolveTarget(store: store) else {
                     return ControlResponse(ok: false, error: "no active surface")
                 }
-                guard TerminalZoomController.isTargetValid(zoomTarget, in: store, quickTerminalVisible: quickVisible) else {
+                guard TerminalZoomController.isTargetValid(zoomTarget, in: store) else {
                     return ControlResponse(ok: false, error: "surface not available: \(zoomTarget.controlID)")
                 }
                 effectiveTarget = zoomTarget
@@ -722,17 +727,7 @@ extension ControlServer: ControlActions {
 
     private func resolveSurfaceZoom(_ target: String, window: String?)
         -> ControlTargetResolver.Resolution<SurfaceZoomResolution> {
-        // `quick` is the control id this command emits for a quick-terminal zoom, so it must be accepted
-        // back as a target; visibility is checked by the caller's shared `isTargetValid` gate.
-        if target == "quick" {
-            switch resolveOpenWindow(window) {
-            case .failure(let response):
-                return .failure(response)
-            case .success(let (windowID, store)):
-                return .success(SurfaceZoomResolution(windowID: windowID, store: store,
-                                                      target: .quick, controlID: "quick"))
-            }
-        }
+        // `quick` never arrives here — `setSurfaceZoom` routes it to the panel before resolving a window.
         guard let surfaceID = TerminalSurfaceID(rawValue: target) else {
             return .failure(ControlResponse(ok: false, error: "invalid surface: \(target)"))
         }
@@ -784,7 +779,4 @@ extension ControlServer: ControlActions {
         return .success((windowID, store))
     }
 
-    private func quickVisible(in windowID: WindowInfo.ID) -> Bool {
-        QuickTerminalRegistry.shared.controller(for: windowID)?.isVisible ?? false
-    }
 }

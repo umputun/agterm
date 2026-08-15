@@ -35,12 +35,12 @@ public enum SurfaceEnvironment {
         return env
     }
 
-    /// Environment for a window's quick terminal, which is not part of the session tree.
-    public static func quickTerminal(windowID: UUID, socketPath: String,
-                                     programVersion: String) -> [String: String] {
+    /// Environment for the quick terminal, which is neither part of the session tree nor owned by a window —
+    /// it is one detached panel per app, so it carries no window id and an untargeted `agtermctl` run from it
+    /// resolves the active window like any other caller.
+    public static func quickTerminal(socketPath: String, programVersion: String) -> [String: String] {
         terminalIdentity(programVersion: programVersion).merging([
             "AGTERM_ENABLED": "1",
-            "AGTERM_WINDOW_ID": windowID.uuidString,
             "AGTERM_SOCKET": socketPath,
         ]) { _, agtermValue in agtermValue }
     }

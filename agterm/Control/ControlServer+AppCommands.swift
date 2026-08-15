@@ -203,10 +203,15 @@ extension ControlServer {
 
     // MARK: - Quick terminal
 
-    /// Show / hide / toggle the frontmost window's quick terminal (each window owns one), flipping only when the
-    /// state differs from `isVisible`. Unknown mode and no open window are errors.
+    /// Show / hide / toggle the app's one quick terminal, flipping only when the state differs from
+    /// `isVisible`. Unknown mode and no open window are errors — the panel is not window chrome, but it is
+    /// still refused with no window open, agterm terminating on an empty open set.
+    ///
+    /// A window's terminal zoom is no longer a term: the panel floats above every window rather than being
+    /// hosted by one, so a zoom layer can neither replace nor strand it.
     func setQuickTerminal(mode: String?) -> ControlResponse {
-        guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
+        let controller = QuickTerminalController.shared
+        guard !library.openIDs().isEmpty else {
             return ControlResponse(ok: false, error: "no open window")
         }
         guard let parsedMode = ControlToggleMode.parse(mode, on: "show", off: "hide") else {
@@ -217,19 +222,11 @@ extension ControlServer {
            PickRegistry.shared.controller(for: library.activeWindowID)?.pending != nil {
             return ControlResponse(ok: false, error: "pick pending")
         }
-        if let zoom = TerminalZoomRegistry.shared.controller(for: library.activeWindowID), zoom.target != nil {
-            // a script must always be able to DISMISS the quick terminal (cleanup relies on hide being a
-            // guaranteed-ok idempotent no-op), so hiding un-zooms a zoomed one first. Only SHOWING one under the
-            // zoom layer stays blocked — that would strand an unmounted-but-visible cover.
-            guard !want else {
-                return ControlResponse(ok: false, error: "terminal zoom active")
-            }
-            if zoom.target == .quick { zoom.clear() }
-            if controller.isVisible { controller.hide() }
-            return ControlResponse(ok: true)
-        }
         if want != controller.isVisible {
-            if want { controller.show() } else { controller.hide() }
+            // pinned: a control show activates agterm, so the caller's next command runs while the previous
+            // application is coming back to the front. A blur-dismissing panel would be gone before
+            // `quick type` or `surface zoom --target quick` arrived.
+            if want { controller.show(dismissOnFocusLoss: false) } else { controller.hide() }
         }
         return ControlResponse(ok: true)
     }
@@ -239,7 +236,8 @@ extension ControlServer {
     /// so this polls briefly rather than racing a back-to-back `quick show; quick type`. Fails fast with `quick
     /// terminal not open` when never shown (no surface AND not visible), else `quick terminal not realized`.
     func typeQuick(text: String) async -> ControlResponse {
-        guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
+        let controller = QuickTerminalController.shared
+        guard !library.openIDs().isEmpty else {
             return ControlResponse(ok: false, error: "no open window")
         }
         // probe first, then sleep-then-probe up to 12 more times — a probe follows every sleep, so the full
@@ -267,7 +265,8 @@ extension ControlServer {
     /// Polls for mount + realization like `typeQuick`; a never-shown quick errors, an unrealized one gives
     /// `failed to read surface buffer`.
     func readQuickText(all: Bool, lines: Int?) async -> ControlResponse {
-        guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
+        let controller = QuickTerminalController.shared
+        guard !library.openIDs().isEmpty else {
             return ControlResponse(ok: false, error: "no open window")
         }
         // same probe-then-sleep poll shape as `typeQuick`.

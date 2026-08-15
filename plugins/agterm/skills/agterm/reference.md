@@ -201,8 +201,9 @@ visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, t
 `sidebar mode`), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
 the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
 `workspace filter`, so a script can record the filter state, restore it, or make the toggle idempotent),
-`quickVisible` (whether the window's quick terminal is currently shown — the read
-side of the write-only `quick` command, so a script can make the toggle idempotent), `zoomedSurface`
+`quickVisible` (whether the quick terminal is currently shown — the read
+side of the write-only `quick` command, so a script can make the toggle idempotent; it is app-level, so
+every window reports the same value), `zoomedSurface`
 (the control id of the surface terminal zoom currently fills the window with —
 `surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
 write-only `surface zoom` command, so a script can check "is it already zoomed" and
@@ -774,8 +775,10 @@ lights and an exit button remains). `SURFACE_ID` comes from
 `agtermctl tree --json` at `.result.tree.workspaces[].sessions[].surfaces[].id`, for example
 `surface:<session-id>:right` for the split pane or `surface:<session-id>:overlay-right` for a pane
 overlay covering it. Omit `--target` (or pass `active`) to act on the active surface in the
-frontmost or `--window` window; `quick` addresses a quick-terminal zoom (the id the command itself
-returns when the quick terminal is the zoom target). A HUD is not a zoom target: while one is up the
+frontmost or `--window` window. `quick` is the one target that is not a window surface: it grows the
+quick-terminal panel to fill its screen instead, takes no `--window`, is refused with `surface not
+available: quick` while the panel is hidden, and is never what an omitted `--target` resolves to.
+A HUD is not a zoom target: while one is up the
 session lists no overlay surface and `surface:<session-id>:overlay` is refused with `surface not
 available`, the same answer an empty slot gives.
 
@@ -786,8 +789,8 @@ back from the tree's top-level `zoomedSurface` (the zoomed surface's control id,
 is zoomed). This is NOT
 `window zoom`: it does not change the macOS window frame and it must not mutate split ratios, focus,
 sidebar state, or split/scratch visibility. Entering zoom does close the window's transient chrome —
-an open command palette, an active in-terminal search, and (for a session-surface zoom) a visible
-quick terminal. While zoomed, the hidden deck keeps running: `session.split`/`session.scratch`/overlay
+an open command palette and an active in-terminal search. The quick terminal is NOT closed: it is a panel
+above every window rather than a surface inside one. While zoomed, the hidden deck keeps running: `session.split`/`session.scratch`/overlay
 opens on the zoomed session still spawn their shells behind the zoom layer. A notification-banner
 click exits zoom before revealing its session. Use `surface zoom` when the user/agent needs a pane
 fullscreen inside agterm; use `window zoom` only to maximize the whole window on screen.
@@ -1031,13 +1034,19 @@ line can express — such an item is AppKit's own and never matches an action.
 ### keymap.conf format
 
 The file lives at `<config dir>/keymap.conf` (default `~/.config/agterm`; the dir is set in Settings ▸
-Key Mapping). Two verbs, line-based; blank lines and `#` comments ignored:
+Key Mapping). Three verbs, line-based; blank lines and `#` comments ignored:
 
 - `map <chord> <action>` — rebind a built-in menu action.
 - `command "<name>" [chord] <shell...>` — define a custom shell command, listed in the action palette
   marked `custom`. The quoted name may contain spaces. The post-name token is the chord only if it
   parses AND carries a modifier (a bare modifier-less key is rejected). A custom chord may be a leader
   sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
+- `global-hotkey <chord>` — bind ONE system-wide chord that summons the quick terminal while any
+  application is frontmost. Unset unless the line is present. Exactly one chord: no alternatives, no
+  leader sequence, and it must carry a modifier. A second line replaces the first. macOS registers it
+  by physical key position, so it survives a layout switch. It is registered with the OS rather than
+  agterm's own monitor, so it takes NO part in the collision rules below — it may share a chord with a
+  menu item, and whichever application is frontmost decides who gets the key.
 
 Either verb's chord token may hold **alternatives** joined by `|`, with no spaces around it (everything
 after the first token is the shell line): `map cmd+t|ctrl+space>s toggle_split` fires the action from

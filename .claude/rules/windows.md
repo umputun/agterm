@@ -73,12 +73,32 @@ session drag are out of scope.
 
 ## Quick terminal, notifications, and environment
 
-- `QuickTerminalController` is per-window state registered by ID, never a singleton. Providers bind to
-  that window; frontmost calls use `activeWindowID`, control reports `no open window`, and settings
-  broadcast to all controllers.
+- `QuickTerminalController` is an app-level singleton hosting one `QuickTerminalPanel`, a borderless
+  non-activating `NSPanel` on `.canJoinAllSpaces` that lands on the POINTER's screen — it is summoned from
+  another application, where agterm's own key window is no guide to where the user is looking. Providers
+  resolve through `activeStore` at call time rather than capturing a window, `agtermApp.wireQuickTerminal`
+  binding them once after the socket binds. `canShow` refuses with no open window, agterm terminating on an
+  empty open set; the panel is not a library window, so it neither keeps the app alive nor appears in
+  `openIDs`.
+- Losing key hides a HUMAN-summoned panel (hotkey, ⌃`, toolbar, Dock), which is what makes it
+  summon-and-dismiss rather than window chrome. A control-driven `quick show` passes
+  `dismissOnFocusLoss: false` and pins it instead: `show` calls `NSApp.activate`, so the caller's NEXT
+  command runs while the previous application is coming back to the front, and a blur-dismissing panel is
+  already gone by the time `quick.type` or `surface.zoom --target quick` arrives — measured, not theorised.
+  `hide` clears the pin. This is AppKit key-window behavior, so it is manually verified, not unit-tested.
+- The frame is 90% of the focused screen capped at `maxNormalSize` (1100x700). The in-window overlay needed
+  no cap because a window is already modest; 90% of a large display is a wall of terminal, not a quick
+  aside.
 - While quick terminal is visible, no deck surface may be active. Gate main, split, maximized split,
-  scratch, and overlay with `deckInteractive && isActive && !quickTerminal.isVisible`; the overlay shares
-  the containing window's first responder.
+  scratch, and overlay with `deckInteractive && isActive && !quickTerminal.isVisible`. The predicate is now
+  app-level, so a visible panel makes EVERY window's deck inert, which is correct — the panel holds key.
+- The panel is not a window surface, so no window's `TerminalZoomController` can hold `.quick`;
+  `QuickTerminalController.isZoomed` owns it and `surface.zoom --target quick` grows the panel to fill its
+  screen. `resolveTarget` never returns `.quick` and `isTargetValid` always rejects it, so a stale value
+  clears. `zoomedSurface` reports `quick` from the app-level flag ahead of the window's own target.
+- `GlobalHotkey` registers the `keymap.conf` `global-hotkey` chord through Carbon `RegisterEventHotKey`,
+  which needs no Accessibility grant and CONSUMES the key, unlike an `NSEvent` global monitor. It is
+  re-registered on `.agtermKeymapChanged`. See [[keymap]] for the verb's grammar.
 - Notification identity is `"<windowID>:<sessionID>:<paneRole>"`. Capture resolves the owning window.
   Reveal reopens a closed window through raise or enqueue/open, polls until its store loads, then selects
   and focuses the pane. Unknown window/session only activates. This internal route is keep-in-sync exempt.
@@ -86,7 +106,8 @@ session drag are out of scope.
   `[ghostty_env_var_s]` beside `configCStrings`, call `ghostty_surface_new` inside its mutable-buffer
   lifetime, and clear it with the strdup storage on destroy/deinit.
 - Tree surfaces inject `AGTERM_ENABLED`, window/workspace/session IDs, and `AGTERM_SOCKET`; split/overlay
-  inherit the session IDs. Quick terminal gets enabled, window, and socket only. Use
+  inherit the session IDs. Quick terminal gets enabled and socket only — it belongs to no window, so it
+  carries no window id and an untargeted `agtermctl` run from it resolves the active window. Use
   `ControlServer.boundSocketPath`, omitting the variable before bind, so overridden sockets match children.
 
 ## Window state controls

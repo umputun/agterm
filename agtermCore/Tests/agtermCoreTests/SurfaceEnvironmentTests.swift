@@ -15,7 +15,6 @@ struct SurfaceEnvironmentTests {
             programVersion: "0.12.0"
         )
         let quickEnv = SurfaceEnvironment.quickTerminal(
-            windowID: windowID,
             socketPath: "/tmp/agterm.sock",
             programVersion: "0.12.0"
         )
@@ -153,24 +152,23 @@ struct SurfaceEnvironmentTests {
         #expect(env["AGTERM_PANE_ID"] == nil)
     }
 
-    @Test func quickTerminalEnvironmentOmitsSessionAndWorkspaceIdentifiers() {
-        let windowID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
-
+    /// The panel is one per app and belongs to no window, so it carries no window id either — an untargeted
+    /// `agtermctl` run from it resolves the active window like any other caller.
+    @Test func quickTerminalEnvironmentOmitsSessionWorkspaceAndWindowIdentifiers() {
         let env = SurfaceEnvironment.quickTerminal(
-            windowID: windowID,
             socketPath: "/tmp/agterm.sock",
             programVersion: "0.12.0"
         )
 
         #expect(env == [
             "AGTERM_ENABLED": "1",
-            "AGTERM_WINDOW_ID": "22222222-2222-2222-2222-222222222222",
             "AGTERM_SOCKET": "/tmp/agterm.sock",
             "TERM_PROGRAM": "agterm",
             "TERM_PROGRAM_VERSION": "0.12.0",
         ])
         #expect(env["AGTERM_SESSION_ID"] == nil)
         #expect(env["AGTERM_WORKSPACE_ID"] == nil)
+        #expect(env["AGTERM_WINDOW_ID"] == nil)
     }
 
     @Test func emptySocketPathIsStillEmitted() {
@@ -202,7 +200,6 @@ struct SurfaceEnvironmentTests {
             programVersion: "0.12.0"
         )
         let quickEnv = SurfaceEnvironment.quickTerminal(
-            windowID: windowID,
             socketPath: unavailable,
             programVersion: "0.12.0"
         )

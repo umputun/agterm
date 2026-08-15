@@ -42,7 +42,7 @@ public enum ConfigPaths {
         # reload`) to apply. Blank lines and lines starting with `#` are ignored. A line that is
         # rejected or skipped is reported in Settings ▸ Key Mapping and by `agtermctl keymap list`.
         #
-        # Two verbs:
+        # Three verbs:
         #
         #   map <chord> <action>
         #       Rebind a built-in action. Chords use kitty syntax: mods joined by `+`, e.g.
@@ -77,6 +77,17 @@ public enum ConfigPaths {
         #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open 'zsh -lc lazygit' --socket "$AGT_SOCKET"
         #           command "Deploy"                    ./deploy.sh
         #
+        #   global-hotkey <chord>
+        #       Bind ONE system-wide chord that summons the quick terminal while any application is
+        #       frontmost — the only binding here that fires when agterm does not have the keyboard.
+        #       Exactly one chord: no `|` alternatives, no leader sequence, and it must carry a
+        #       modifier. A second global-hotkey line replaces the first. macOS registers it by
+        #       physical key position, so it keeps working on a non-Latin layout. Because the system
+        #       owns it rather than agterm, it takes no part in the collision rules above: it may
+        #       share a chord with a menu item, and whichever app is frontmost gets the key. Example:
+        #
+        #           global-hotkey ctrl+opt+space
+        #
         # Built-in actions (raw name → shipped default chord):
         #
         \(actionLines)
@@ -93,6 +104,7 @@ public enum ConfigPaths {
         #
         # Uncomment and edit a line below to start.
         # map cmd+shift+l toggle_split
+        # global-hotkey ctrl+opt+space
 
         """
     }

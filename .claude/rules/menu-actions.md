@@ -42,8 +42,8 @@ paths:
   and `runIfEnabled()` asks it again at the keystroke, returning whether it ran — which is the only thing
   that dismisses the palette, so an inert row cannot close it on a keystroke that did nothing.
 - `toggleQuickTerminal` gates on all `uiActionsEnabled`, including terminal zoom and dashboard.
-  Control drives `QuickTerminalRegistry` directly. The titlebar button is replaced by dashboard chrome,
-  which hides an open quick terminal before showing the grid.
+  Control drives `QuickTerminalController.shared` directly, there being one panel per app. The titlebar
+  button is replaced by dashboard chrome, which hides an open quick terminal before showing the grid.
 - Every new action must satisfy the control contract in [[control-api]]: protocol, dispatch, CLI, and
   protocol/end-to-end tests. Do not restate per-action audits here.
 

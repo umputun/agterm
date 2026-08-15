@@ -723,9 +723,13 @@
                   Quick terminal <span style="color: #6b727a">⌃`</span>
                 </div>
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  A single throwaway shell per window, not tied to any session, overlaid at 90% of the window and opening in the
-                  active session's directory. Click again or the surrounding margin to dismiss; hiding keeps its shell alive. Not
-                  restored across launches.
+                  A single throwaway shell for the whole app, not tied to any session or window. It appears in a floating panel at
+                  90% of whichever screen has focus, on the Space you are currently on, and opens in the active session's
+                  directory, sized to 90% of that screen up to a comfortable maximum. Bind a system-wide chord with
+                  <code style="color: #e6e1d7">global-hotkey</code> in <code style="color: #e6e1d7">keymap.conf</code> and it
+                  summons agterm from any application. Press the key again, or click away, to dismiss it; hiding keeps its shell
+                  alive. A panel opened by <code style="color: #e6e1d7">agtermctl quick show</code> stays put instead of closing
+                  on click-away, so a script can drive it. Not restored across launches.
                 </p>
               </div>
               <div
@@ -781,7 +785,7 @@
                   Terminal zoom <span style="color: #6b727a">⇧⌘↩</span>
                 </div>
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  Fills the whole window with one terminal surface — a pane, the scratch, an overlay, or the quick terminal —
+                  Fills the whole window with one terminal surface — a pane, the scratch, or an overlay —
                   hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights, the window title, and an exit button
                   (⌘W leaves zoom too). A view mode, not a layout change: exiting
                   restores split ratios, focus, and visibility exactly as they were, and everything else keeps running behind it.
@@ -1860,7 +1864,7 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/keymap.conf</span
               >. It rebinds built-in menu shortcuts and defines custom shell commands bound to keys (and listed in the action
               palette). The file is optional — a commented starter is written on first launch, and the directory can be changed in
-              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Two verbs; blank lines and
+              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Three verbs; blank lines and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comments are ignored.
             </p>
             <div
@@ -1894,7 +1898,10 @@
               <span style="color: #f2b45c">"Lazygit"</span
               >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl+a&gt;g&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agtermctl session overlay open 'zsh -lc lazygit'
               --socket {AGT_SOCKET}<br /><span style="color: #5ea1f2">command</span>
-              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh
+              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh<br /><br /><span
+                style="color: #6b727a"
+                ># one system-wide chord that summons the quick terminal from any application</span
+              ><br /><span style="color: #5ea1f2">global-hotkey</span> ctrl+opt+space
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A chord is modifier words (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
@@ -1924,6 +1931,16 @@
               shifted symbol. Custom commands may also use a leader sequence
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
               must include a modifier — a bare key can't shadow a plain terminal key.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> takes exactly one
+              chord and binds it <strong style="color: #e6e1d7">system-wide</strong>: it summons the quick terminal while any
+              application is frontmost, which no other binding here can do — the rest only fire while agterm has the keyboard. It
+              must carry a modifier, takes no alternatives and no leader sequence, and a second
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
+              first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
+              it rather than agterm, it takes no part in the collision rules below — it may share a chord with a menu item, and
+              whichever application is in front decides who receives it. It is unset unless you add the line.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by

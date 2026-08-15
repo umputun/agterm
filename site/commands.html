@@ -1939,13 +1939,20 @@
                 Fill the window with one terminal surface, hiding the sidebar and collapsing the title bar to a slim strip
                 (traffic lights plus an exit button). Omit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> (or pass
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) to zoom the active surface — the quick
-                terminal if shown, else the active session's overlay, scratch, the focused pane's own overlay, or that pane. An explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) to zoom the active surface — the active
+                session's overlay, scratch, the focused pane's own overlay, or that pane. An explicit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;left|right|scratch|overlay|overlay-left|overlay-right&gt;</span>
                 id (from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>'s
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].id</span>) zooms that exact surface, including a
-                hidden-but-alive split or scratch; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> addresses a
-                quick-terminal zoom.
+                hidden-but-alive split or scratch.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> is the one target that is not a window's
+                surface: it grows the quick-terminal panel to fill its screen instead. It takes no
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, is refused with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface not available: quick</span> while the panel is
+                hidden, and is never what an omitted <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>
+                resolves to.
               </p>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">show</span> is idempotent;
@@ -2162,11 +2169,17 @@
               quick
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              The frontmost window's quick terminal — a single scratch terminal at 90% of the window, not in the tree, whose shell
-              stays alive across hides. All three are frontmost-window-only: no
+              The quick terminal — one scratch terminal for the whole app, shown in a floating panel at 90% of whichever screen
+              has focus rather than inside a window, not in the tree, whose shell stays alive across hides. A panel the user
+              summoned closes when it loses keyboard focus; one opened by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick show</span> stays up until something hides it,
+              so a following <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick type</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface zoom --target quick</span> still finds it.
+              All three take no
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>: there is only one. They still need an open
+              window, agterm quitting when the last one closes.
             </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">

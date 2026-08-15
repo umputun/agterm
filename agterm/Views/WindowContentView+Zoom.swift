@@ -10,18 +10,11 @@ extension WindowContentView {
             dashboard.requestFocus()
             return
         }
-        if let target = terminalZoom.target {
-            switch target {
-            case .quick:
-                quickTerminal.focus()
-            case let .session(sessionID, surface):
-                guard let session = store.session(withID: sessionID) else { return }
-                focusZoomedSessionSurface(session: session, surface: surface)
-            }
-            return
-        }
-        if quickTerminal.isVisible {
-            quickTerminal.focus()
+        // the quick terminal is a panel of its own, so a picker in THIS window never covered it and it
+        // reclaims its own key; only this window's own covers are restored here.
+        if case let .session(sessionID, surface) = terminalZoom.target {
+            guard let session = store.session(withID: sessionID) else { return }
+            focusZoomedSessionSurface(session: session, surface: surface)
             return
         }
         actions.focusActiveSession()
@@ -70,10 +63,10 @@ extension WindowContentView {
     /// closes the window's transient chrome and focuses the zoomed surface; exiting returns focus.
     func handleZoomTargetChange(old: TerminalZoomTarget?, new: TerminalZoomTarget?) {
         if let new {
-            // zoom closes this window's transient chrome: the palette, an open ⌘F search (else libghostty
-            // stays in search mode with stale full-window highlights and no visible bar), and — for a
-            // session-surface zoom — a visible quick terminal (the zoom layer replaces its host, stranding
-            // `isVisible` true with nothing on screen); a `.quick` zoom keeps it, the zoom layer hosting it.
+            // zoom closes this window's transient chrome: the palette and an open ⌘F search (else libghostty
+            // stays in search mode with stale full-window highlights and no visible bar). The quick terminal
+            // is NOT closed — it is a panel above every window, so a zoom inside one neither hosts nor hides
+            // it; taking key back from the panel is what dismisses it.
             // The palette is app-global and renders in the FRONTMOST window, so only that window's zoom may
             // close it — a control-driven zoom of a background window must not kill the user's palette.
             if library.activeWindowID == windowID { palette.close() }
@@ -81,7 +74,6 @@ extension WindowContentView {
                 (session.searchSurface as? GhosttySurfaceView)?.endSearch()
             }
             if case let .session(sessionID, surface) = new {
-                if quickTerminal.isVisible { quickTerminal.hide() }
                 if let session = store.session(withID: sessionID) {
                     // an explicit control target can zoom a BACKGROUND session's surface without
                     // selecting it: end THAT session's search too (the active-session clear above
@@ -96,18 +88,11 @@ extension WindowContentView {
                 }
             }
         }
-        if let old, new == nil {
-            switch old {
-            case .quick:
-                // `quick hide` un-zooms then hides, so refocus only while it is still on screen — its own
-                // isVisible onChange handles the focus return otherwise.
-                if quickTerminal.isVisible { quickTerminal.focus() }
-            case .session:
-                // scoped to THIS window, like the palette close above: `focusActiveSession` targets the
-                // FRONTMOST window, so a background window's zoom exit must not grab first responder there
-                // — e.g. out of an open ⌘F search field the user is typing into.
-                if library.activeWindowID == windowID { actions.focusActiveSession() }
-            }
+        if let old, new == nil, case .session = old {
+            // scoped to THIS window, like the palette close above: `focusActiveSession` targets the
+            // FRONTMOST window, so a background window's zoom exit must not grab first responder there
+            // — e.g. out of an open ⌘F search field the user is typing into.
+            if library.activeWindowID == windowID { actions.focusActiveSession() }
         }
     }
 
@@ -123,22 +108,14 @@ extension WindowContentView {
     }
 
     @ViewBuilder func terminalZoomLayer(_ target: TerminalZoomTarget) -> some View {
-        if TerminalZoomController.isTargetValid(target, in: store, quickTerminalVisible: quickTerminal.isVisible) {
-            switch target {
-            case .quick:
-                zoomTerminalHost {
-                    QuickTerminalPane(controller: quickTerminal)
-                }
-            case let .session(sessionID, surface):
-                // focus is driven by the body's `.onChange(of: terminalZoom.target)` — see
-                // `handleZoomTargetChange` for why no `.onAppear` here.
-                if let session = store.session(withID: sessionID) {
-                    zoomTerminalHost {
-                        zoomedSessionTerminal(session: session, surface: surface)
-                    }
-                } else {
-                    Color.clear.onAppear { terminalZoom.clear() }
-                }
+        // `.quick` is never a window's target (the panel is app-level), so `isTargetValid` rejects it and the
+        // stale value clears here rather than needing a case of its own.
+        if TerminalZoomController.isTargetValid(target, in: store),
+           case let .session(sessionID, surface) = target, let session = store.session(withID: sessionID) {
+            // focus is driven by the body's `.onChange(of: terminalZoom.target)` — see
+            // `handleZoomTargetChange` for why no `.onAppear` here.
+            zoomTerminalHost {
+                zoomedSessionTerminal(session: session, surface: surface)
             }
         } else {
             Color.clear.onAppear { terminalZoom.clear() }

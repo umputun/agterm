@@ -82,15 +82,15 @@ extension AppDelegate {
             actions?.newWindow(ignoringModals: true)
         }
 
-        let quickTerminal = windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0) }
+        // the quick terminal is app-level, so unlike its neighbours here there is no per-window controller to
+        // find; the captured window still has to come forward, the panel spawning in its active session's cwd.
         addDockMenuItem(
             "Quick Terminal",
-            enabled: actionsEnabled && quickTerminal != nil,
+            enabled: actionsEnabled,
             to: menu
         ) { [weak self, weak store] in
             guard let self, let store, let windowID,
                   actions?.uiActionsEnabled(for: windowID) == true,
-                  QuickTerminalRegistry.shared.controller(for: windowID) != nil,
                   activate(windowID: windowID, store: store)
             else { return }
             actions?.toggleQuickTerminal()

@@ -30,17 +30,17 @@ struct WindowContentView: View {
     /// nil builds the session-wide overlay surface, `left`/`right` the pane-scoped one reading that pane's slot.
     let makeOverlaySurface: (Session, OverlayPane?) -> GhosttySurfaceView
     let makeScratchSurface: (Session) -> GhosttySurfaceView
-    let quickTerminalEnv: (WindowInfo.ID) -> [String: String]
     let actions: AppActions
     let palette: PaletteController
     let sessionSwitcher: SessionSwitcher
     /// Mirrors `WindowAppearance`'s other opaque-forcing condition; SwiftUI keeps it current by itself.
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    /// One quick terminal per window, registered in `QuickTerminalRegistry` on appear so the
-    /// frontmost-window call sites reach it; its `cwdProvider` binds to this window's active session.
-    @State var quickTerminal = QuickTerminalController()
-    /// Window-level zoom: rehosts the visible terminal surface above the sidebar, titlebar, quick terminal
-    /// frame, palettes and switcher until toggled off.
+    /// The app's one quick terminal, which lives in its own detached panel rather than in any window. Read
+    /// here so the deck's gates still follow its visibility — a panel with key steals it from every window,
+    /// not just this one. `agtermApp` owns its providers.
+    var quickTerminal: QuickTerminalController { .shared }
+    /// Window-level zoom: rehosts the visible terminal surface above the sidebar, titlebar,
+    /// palettes and switcher until toggled off.
     @State var terminalZoom = TerminalZoomController()
     /// View-only grid of reparented member surfaces, registered in `DashboardControllerRegistry` on appear so
     /// the socket drives it; `+Dashboard` owns the overlay branch, deck yield, font override and lifecycle.
@@ -146,11 +146,12 @@ struct WindowContentView: View {
                 dividerDragging = false
             }
         }
-        // on quick-terminal hide refocus the active session, unless this window's zoom owns focus: zoom-enter
-        // hides it, and `actions` targets the FRONTMOST window, so a background hide must not move focus.
+        // on quick-terminal hide refocus the active session, unless this window's zoom owns focus. The panel
+        // is app-level so every open window sees the change; `actions` targets the FRONTMOST window, so the
+        // frontmost check keeps a background window from moving focus on its behalf.
         .onChange(of: quickTerminal.isVisible) { _, visible in
-            if !visible, terminalZoom.target == .quick { terminalZoom.clear() }
-            if !visible, terminalZoom.target == nil { actions.focusActiveSession() }
+            guard !visible, isFrontmost, terminalZoom.target == nil else { return }
+            actions.focusActiveSession()
         }
         .onChange(of: terminalZoom.target) { old, new in
             handleZoomTargetChange(old: old, new: new)
@@ -217,25 +218,14 @@ struct WindowContentView: View {
         // un-minimized on launch. the title token re-runs the blend in updateNSView on a session switch.
         .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store))
         .onAppear {
-            quickTerminal.cwdProvider = { [store] in
-                store.activeSession?.effectiveCwd ?? FileManager.default.homeDirectoryForCurrentUser.path
-            }
-            // the quick terminal's shell sees this window's AGTERM_* env (scratch: ENABLED + WINDOW_ID + SOCKET).
-            quickTerminal.envProvider = { [quickTerminalEnv, windowID] in quickTerminalEnv(windowID) }
-            // typing counts as activity, so an idle auto-follow fire can't change this window's selected
-            // session behind the overlay while the user types (mirrors the overlay/scratch).
-            quickTerminal.onUserInput = { [store] in store.noteUserActivity() }
-            quickTerminal.focusAllowed = { [pick] in pick.pending == nil }
-            QuickTerminalRegistry.shared.register(windowID, controller: quickTerminal)
-            terminalZoom.targetResolver = { [store, quickTerminal] in
-                TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: quickTerminal.isVisible)
+            terminalZoom.targetResolver = { [store] in
+                TerminalZoomController.resolveTarget(store: store)
             }
             TerminalZoomRegistry.shared.register(windowID, controller: terminalZoom)
             registerDashboard()
             PickRegistry.shared.register(windowID, controller: pick)
         }
         .onDisappear {
-            QuickTerminalRegistry.shared.unregister(windowID)
             TerminalZoomRegistry.shared.unregister(windowID)
             tearDownDashboard()
             if pickSuppressesAutoFollow {
@@ -475,7 +465,9 @@ struct WindowContentView: View {
     }
 
     /// The terminal background color from the ghostty config, with a dark fallback if libghostty has none.
-    private static func resolvedTerminalColor() -> Color {
+    /// Not private: the quick-terminal panel paints the same backing, its surface drawing transparent under
+    /// `background-opacity = 0` exactly as a window's does.
+    static func resolvedTerminalColor() -> Color {
         Color(nsColor: GhosttyApp.shared.terminalBackgroundColor
             ?? NSColor(srgbRed: 0.157, green: 0.173, blue: 0.204, alpha: 1))
     }
@@ -523,58 +515,19 @@ struct WindowContentView: View {
         return "\(base) (\(glyph))"
     }
 
-    /// The window-level overlays (quick terminal, palettes, Ctrl-Tab switcher) as one ZStack sibling INSIDE
+    /// The window-level overlays (palettes, Ctrl-Tab switcher) as one ZStack sibling INSIDE
     /// the body's root ZStack, not body-level `.overlay`s, so it can be inset below the titlebar and ordered
     /// BELOW `customTitlebar`. Every child is conditional, so an empty layer is not hit-testable and the
-    /// terminal below stays interactive. Order here = z-order (switcher over palette over quick terminal).
+    /// terminal below stays interactive. Order here = z-order (switcher over palette). The quick terminal is
+    /// NOT here — it is a detached panel, above every window rather than inside one.
     private var windowOverlayLayer: some View {
         ZStack {
-            quickTerminalOverlay
             commandPaletteOverlay
             sessionSwitcherOverlay
             // opening the dashboard closes the three above, so ordering only settles the empty case.
             dashboardOverlay
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// The scratch terminal centered at 90% of the window, framed by a hairline border and shadow so it reads
-    /// as a distinct floating window over the content — libghostty renders only the terminal, so the frame is
-    /// drawn here. The margin is a tap-catcher that dismisses on click and carries the same backdrop mute as
-    /// a floating overlay. A dark scrim was rejected here and stays rejected: this layer is inset below the
-    /// AppKit title bar, so anything painted over the body raises its opacity against unchanged chrome. The
-    /// mute wash is neutral at full window opacity and `muteWashOpacity` scales it down under translucency,
-    /// which shrinks the seam without closing it. The controller owns the surface, so hiding keeps the shell
-    /// alive.
-    @ViewBuilder private var quickTerminalOverlay: some View {
-        if quickTerminal.isVisible {
-            GeometryReader { geo in
-                ZStack {
-                    // the tap-catcher carries the `quick-terminal` accessibility id, so tests query this
-                    // one. It spans the sidebar too, unlike the overlay's pane-scoped backdrop.
-                    // `QuickTerminalPane` is in the a11y tree as well: it takes the default
-                    // `deckVisible`/`viewOnly`, so the dictation bridge exposes its on-screen surface as a
-                    // "Terminal" text area. Do NOT set `deckVisible = false` here, that would drop it.
-                    (store.activeSession.map { washColor(for: $0) } ?? terminalColor).opacity(muteWashOpacity)
-                        .contentShape(Rectangle())
-                        .onTapGesture { quickTerminal.hide() }
-                        .accessibilityElement()
-                        .accessibilityIdentifier("quick-terminal")
-                    QuickTerminalPane(controller: quickTerminal)
-                        .frame(width: geo.size.width * 0.9, height: geo.size.height * 0.9)
-                        // solid backing so the quick terminal stays opaque even when the main window
-                        // is translucent (its ghostty surface draws transparent under background-opacity=0).
-                        .background(terminalColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-                        )
-                        .shadow(radius: 24)
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
-        }
     }
 
     /// True only for the frontmost window: the palette and switcher are app-global singles on the frontmost

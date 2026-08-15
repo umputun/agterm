@@ -2,57 +2,126 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The in-app quick terminal: a single scratch terminal shown as a centered overlay at 90% of the window,
-/// over the sidebar and terminal. A toolbar button toggles it, and clicking the dimmed margin hides it;
-/// hiding keeps the shell alive, since the surface is owned here rather than by the overlay view, so it
-/// survives the view being removed. Not persisted (fresh each launch).
+/// The quick terminal: one scratch terminal per app, hosted in a detached floating panel on whichever screen
+/// has focus rather than inside a window. A toolbar button, ⌃`, the control socket and the global hotkey all
+/// summon the same panel; losing key hides it, which is what makes it a summon-and-dismiss surface rather
+/// than window chrome. Hiding keeps the shell alive, since the surface is owned here rather than by the
+/// panel's content view, so it survives the view being removed. Not persisted (fresh each launch).
 ///
-/// Per window: each `WindowContentView` owns one and registers it in `QuickTerminalRegistry` under its window
-/// id, so the frontmost-window call sites (menu/keybind, `AppActions`, `ControlServer`) reach the controller
-/// of the window the user is looking at. The owner binds `cwdProvider`, so a freshly-spawned quick terminal
-/// opens in that window's active session's directory (home when nothing is selected).
+/// App-level, not per-window: the panel belongs to no window, so `AGTERM_WINDOW_ID` is absent from its
+/// environment and the surface carries only enabled + socket. `canShow` is what keeps it from outliving the
+/// last window, agterm terminating on an empty open set (see `AppDelegate.applicationShouldTerminate…`).
 @MainActor @Observable
 final class QuickTerminalController {
-    /// Whether the overlay is shown. Observed, so `WindowContentView` shows/hides the overlay.
+    static let shared = QuickTerminalController()
+
+    /// Whether the panel is on screen. Observed, so the deck's gates and the control read-back follow it.
     private(set) var isVisible = false
 
+    /// Whether the panel fills its screen instead of taking the inset 90% frame — the re-homed
+    /// `surface.zoom --target quick`, which used to be a per-window `TerminalZoomTarget`. Cleared on hide,
+    /// so a dismissed panel never reports a stale zoom.
+    private(set) var isZoomed = false
+
     /// The long-lived quick-terminal surface, created lazily on first show and kept across hide/show so the
-    /// shell survives. The overlay pulls it imperatively, like a session owns its surface; nothing in
+    /// shell survives. The panel's content pulls it imperatively, like a session owns its surface; nothing in
     /// SwiftUI observes the view itself.
     @ObservationIgnored private var surfaceView: GhosttySurfaceView?
+
+    @ObservationIgnored private var panel: QuickTerminalPanel?
+
+    /// Whether losing key dismisses the panel. A HUMAN summon (hotkey, ⌃`, toolbar, Dock) is
+    /// dismiss-on-blur, which is what makes it summon-and-return. A control-driven show pins it instead:
+    /// `show` activates agterm, so a script's very next command runs while some other application is coming
+    /// back to the front, and a blur-dismissing panel would be gone before `quick type` or
+    /// `surface zoom --target quick` could reach it.
+    @ObservationIgnored private var dismissesOnFocusLoss = true
 
     /// The directory a freshly-created quick terminal spawns its shell in. Read once, at surface creation,
     /// so the quick terminal keeps its own working directory afterwards.
     @ObservationIgnored var cwdProvider: () -> String = { FileManager.default.homeDirectoryForCurrentUser.path }
 
-    /// The `AGTERM_*` environment a freshly-created quick terminal exposes to its shell (ENABLED + WINDOW_ID
-    /// + SOCKET — scratch, so no workspace/session ids). Read once, at surface creation. Set by the owning
-    /// `WindowContentView`, so the var carries this window's id.
+    /// The `AGTERM_*` environment a freshly-created quick terminal exposes to its shell (ENABLED + SOCKET —
+    /// scratch and window-less, so no window/workspace/session ids). Read once, at surface creation.
     @ObservationIgnored var envProvider: () -> [String: String] = { [:] }
 
-    /// Notes a keystroke as user activity on the owning window's `AppStore`, so typing here resets that
-    /// window's auto-follow idle timer (an idle fire must NOT change the selection behind the overlay while
-    /// the user types). The controller is store-less, so `WindowContentView` supplies this; `surface()`
-    /// forwards it to the surface's `onUserInput`, as the overlay/scratch factories do, and `destroySurface`
-    /// nils it on teardown.
+    /// Notes a keystroke as user activity on the active window's `AppStore`, so typing here resets that
+    /// window's auto-follow idle timer (an idle fire must NOT change a selection while the user types).
+    /// The controller is store-less, so the app supplies this; `surface()` forwards it to the surface's
+    /// `onUserInput`, as the overlay/scratch factories do, and `handleShellExit` nils it on teardown.
     @ObservationIgnored var onUserInput: (() -> Void)?
 
-    /// Whether this cover may claim keyboard focus. The owning window disables it while a control picker
-    /// is above the quick terminal, stopping an in-flight show retry from stealing the picker's field.
+    /// Whether this cover may claim keyboard focus. The app disables it while a control picker is up,
+    /// stopping an in-flight show retry from stealing the picker's field.
     @ObservationIgnored var focusAllowed: () -> Bool = { true }
 
-    /// Toolbar-button action: show if hidden, hide if visible.
-    func toggle() { isVisible.toggle() }
+    /// Whether a show may proceed at all — false with no open window, where a panel would be the only thing
+    /// on screen for an app that is about to terminate.
+    @ObservationIgnored var canShow: () -> Bool = { true }
 
-    func show() { isVisible = true }
+    /// The opaque backing the panel paints behind the surface, which draws transparent under
+    /// `background-opacity = 0`. Re-read on every show so a theme change lands without rebuilding the panel.
+    @ObservationIgnored var terminalColorProvider: () -> Color = { .black }
 
-    func hide() { isVisible = false }
+    private init() {}
+
+    /// Toolbar-button / hotkey / menu action: show if hidden, hide if visible. Always the human path, so the
+    /// panel it shows dismisses on blur.
+    func toggle() {
+        if isVisible { hide() } else { show() }
+    }
+
+    /// Show the panel. `dismissOnFocusLoss` false is the control path — see the property of that name.
+    func show(dismissOnFocusLoss: Bool = true) {
+        guard canShow() else { return }
+        // a control show over a user-summoned panel still pins it: the caller is a script either way.
+        dismissesOnFocusLoss = dismissesOnFocusLoss && dismissOnFocusLoss
+        guard !isVisible else { return }
+        isVisible = true
+        let panel = ensurePanel()
+        panel.setFrame(Self.targetFrame(zoomed: isZoomed), display: true)
+        // NEVER `NSApp.activate()` here. Activating agterm raises ITS WINDOWS too, so summoning the panel
+        // from another application buries that application behind the whole terminal, and dismissing leaves
+        // the user in agterm instead of where they were. That round trip is the entire point of the feature.
+        // `.nonactivatingPanel` exists for exactly this: the panel takes keyboard input while agterm stays
+        // inactive, so hiding it returns the keyboard to whatever was in front, with nothing to restore.
+        panel.orderFrontRegardless()
+        panel.makeKey()
+        focus()
+    }
+
+    func hide() {
+        guard isVisible else { return }
+        isVisible = false
+        isZoomed = false
+        dismissesOnFocusLoss = true
+        panel?.orderOut(nil)
+    }
+
+    /// The panel lost key. Only a human-summoned panel dismisses itself here.
+    private func handleResignKey() {
+        guard dismissesOnFocusLoss else { return }
+        hide()
+    }
+
+    /// Apply `surface.zoom --target quick`. Returns false when the panel is not up, which is what makes the
+    /// control command answer `surface not available` rather than silently arming a zoom nothing renders.
+    @discardableResult
+    func setZoom(_ mode: ControlToggleMode) -> Bool {
+        guard isVisible else { return false }
+        let want = mode.desiredValue(current: isZoomed)
+        guard want != isZoomed else { return true }
+        isZoomed = want
+        panel?.setFrame(Self.targetFrame(zoomed: want), display: true)
+        focus()
+        return true
+    }
 
     /// The existing quick-terminal surface, or nil — does NOT create one (unlike `surface()`), so a settings
     /// broadcast can reach it without spawning a shell.
     func currentSurface() -> GhosttySurfaceView? { surfaceView }
 
-    /// The surface to render in the overlay, created on first use in the active cwd and reused afterwards.
+    /// The surface to render in the panel, created on first use in the active cwd and reused afterwards.
     /// Recreated after the shell exits.
     func surface() -> GhosttySurfaceView {
         if let surfaceView { return surfaceView }
@@ -63,8 +132,8 @@ final class QuickTerminalController {
         return view
     }
 
-    /// Re-assert first responder on the surface for a short window so focus lands once the overlay is
-    /// on-window (a one-shot would race the overlay's layout).
+    /// Re-assert first responder on the surface for a short window so focus lands once the panel is
+    /// on-screen (a one-shot would race the panel's layout).
     func focus(attempt: Int = 0) {
         guard focusAllowed() else { return }
         if let surfaceView, let window = surfaceView.window {
@@ -76,18 +145,111 @@ final class QuickTerminalController {
         }
     }
 
-    /// The quick-terminal shell exited: hide the overlay and tear down the surface so the next show spawns a
-    /// fresh shell (the surface, not the overlay, owns the shell).
+    private func ensurePanel() -> QuickTerminalPanel {
+        if let panel { return panel }
+        let panel = QuickTerminalPanel(onResignKey: { [weak self] in self?.handleResignKey() })
+        panel.contentView = NSHostingView(rootView: QuickTerminalPanelContent(
+            controller: self, terminalColor: terminalColorProvider()
+        ))
+        self.panel = panel
+        return panel
+    }
+
+    /// The quick-terminal shell exited: drop the panel with the surface it hosted so the next show spawns a
+    /// fresh shell (the surface, not the panel, owns the shell).
     private func handleShellExit() {
         isVisible = false
+        isZoomed = false
+        panel?.orderOut(nil)
+        panel?.contentView = nil
+        panel = nil
+        surfaceView?.onUserInput = nil
         surfaceView?.teardown()
         surfaceView = nil
     }
+
+    /// The panel's comfortable maximum. The in-window overlay took 90% of its host and needed no cap, a
+    /// window already being a modest size; 90% of a large display is not a quick aside but a wall of
+    /// terminal, so the share is a floor-to-ceiling that stops growing past a readable width.
+    private static let maxNormalSize = NSSize(width: 1100, height: 700)
+
+    /// Centered on the focused screen at 90% of it or `maxNormalSize`, whichever is smaller, and its whole
+    /// visible frame while zoomed. The panel follows the POINTER's screen, not the app's: it is summoned
+    /// from another application, where agterm's own key window is no guide to where the user is looking.
+    private static func targetFrame(zoomed: Bool) -> NSRect {
+        let visible = activeScreen().visibleFrame
+        guard !zoomed else { return visible }
+        let size = NSSize(width: min(visible.width * 0.9, maxNormalSize.width),
+                          height: min(visible.height * 0.9, maxNormalSize.height))
+        return NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2,
+                      width: size.width, height: size.height)
+    }
+
+    private static func activeScreen() -> NSScreen {
+        let mouse = NSEvent.mouseLocation
+        if let under = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) { return under }
+        return NSApp.keyWindow?.screen ?? NSScreen.main ?? NSScreen.screens[0]
+    }
 }
 
-/// Hosts the quick-terminal surface in the overlay. Like `TerminalView`, it pulls the long-lived surface
-/// from its owner (the per-window controller) rather than creating one, and never frees it on dismantle —
-/// hiding the overlay must keep the shell alive.
+/// The floating host. Borderless and non-activating so summoning it from another app is one deliberate
+/// `NSApp.activate`, and joining all spaces so it lands on whichever Space the user is on instead of pulling
+/// them back to agterm's. `canBecomeKey` is overridden because a borderless panel refuses key by default,
+/// which would leave the terminal unable to take a keystroke.
+@MainActor
+final class QuickTerminalPanel: NSPanel {
+    private let onResignKey: () -> Void
+
+    init(onResignKey: @escaping () -> Void) {
+        self.onResignKey = onResignKey
+        super.init(contentRect: .zero,
+                   styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered, defer: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        // above every application's normal windows, since it is summoned over whatever the user is in.
+        level = .floating
+        // a panel defaults to hiding when its app deactivates, and agterm is deliberately never activated
+        // for this, so the default would pull the panel away the moment it appeared.
+        hidesOnDeactivate = false
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        isReleasedWhenClosed = false
+        // the panel is transient chrome, never part of the saved window set AppKit would try to bring back.
+        isRestorable = false
+        NotificationCenter.default.addObserver(self, selector: #selector(handleResignKey),
+                                               name: NSWindow.didResignKeyNotification, object: self)
+    }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    @objc private func handleResignKey() {
+        onResignKey()
+    }
+}
+
+/// The panel's content: the surface plus the frame the in-window overlay used to draw, libghostty rendering
+/// only the terminal. The solid backing keeps the quick terminal opaque even where the app is translucent.
+private struct QuickTerminalPanelContent: View {
+    let controller: QuickTerminalController
+    let terminalColor: Color
+
+    var body: some View {
+        QuickTerminalPane(controller: controller)
+            .background(terminalColor)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .accessibilityIdentifier("quick-terminal")
+    }
+}
+
+/// Hosts the quick-terminal surface in the panel. Like `TerminalView`, it pulls the long-lived surface from
+/// its owner (the app-level controller) rather than creating one, and never frees it on dismantle — hiding
+/// the panel must keep the shell alive.
 struct QuickTerminalPane: NSViewRepresentable {
     let controller: QuickTerminalController
 
@@ -101,36 +263,5 @@ struct QuickTerminalPane: NSViewRepresentable {
 
     static func dismantleNSView(_: GhosttySurfaceView, coordinator _: ()) {
         // no-op: the controller owns the surface so it survives hide/show.
-    }
-}
-
-/// App-side bridge mapping a `WindowInfo.ID` to its window's `QuickTerminalController`, a per-window instance
-/// owned by `WindowContentView` (which registers/unregisters on appear/close). Frontmost-window call sites
-/// resolve the controller to act on through `controller(for: library.activeWindowID)`.
-@MainActor
-final class QuickTerminalRegistry {
-    static let shared = QuickTerminalRegistry()
-    private var controllers: [WindowInfo.ID: QuickTerminalController] = [:]
-
-    private init() {}
-
-    func register(_ id: WindowInfo.ID, controller: QuickTerminalController) {
-        controllers[id] = controller
-    }
-
-    func unregister(_ id: WindowInfo.ID) {
-        controllers[id] = nil
-    }
-
-    /// The quick-terminal controller for `id`, or nil when the window is closed/unknown.
-    func controller(for id: WindowInfo.ID?) -> QuickTerminalController? {
-        guard let id else { return nil }
-        return controllers[id]
-    }
-
-    /// Every registered (open-window) controller — used by the settings broadcast to reach each window's
-    /// quick-terminal surface.
-    func allControllers() -> [QuickTerminalController] {
-        Array(controllers.values)
     }
 }

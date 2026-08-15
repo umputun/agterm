@@ -29,6 +29,31 @@ struct KeybindTests {
         #expect(namedKey(forKeyEquivalent: "ab") == nil, "only a single scalar can be a named key")
     }
 
+    /// The reverse lookup must round-trip both tables it scans, or a chord that parses cannot be registered
+    /// as a system-wide hotkey.
+    @Test func keyCodeForChordKeyInvertsBothKeyTables() {
+        for code in UInt16(0)...127 {
+            if let named = namedKey(forKeyCode: code) {
+                #expect(keyCode(forChordKey: named) == code)
+            }
+            if let latin = latinKey(forKeyCode: code) {
+                #expect(keyCode(forChordKey: latin) == code)
+            }
+        }
+    }
+
+    @Test func keyCodeForChordKeyCoversEveryBindableNamedKey() {
+        for key in bindableNamedKeys {
+            #expect(keyCode(forChordKey: key) != nil)
+        }
+    }
+
+    @Test func keyCodeForChordKeyRejectsUnproducibleKeys() {
+        #expect(keyCode(forChordKey: "f1") == nil)
+        #expect(keyCode(forChordKey: "esc") == nil)
+        #expect(keyCode(forChordKey: "") == nil)
+    }
+
     @Test func parseSimpleChord() {
         let kb = parseKeybind("cmd+shift+e")
         #expect(kb == [Chord(mods: [.command, .shift], key: "e")])

@@ -51,8 +51,9 @@ the control channel is available:
   per-surface token; the agent-status hook forwards them as `session status --pane` / `--pane-id`. The
   token resolves the pane's LIVE slot, so a promoted-then-re-split agent still tags the right pane.
 
-The quick terminal is scratch (not in the tree), so it only gets `AGTERM_ENABLED`, `AGTERM_WINDOW_ID`,
-and `AGTERM_SOCKET` (no session/workspace ids).
+The quick terminal is scratch (not in the tree) and belongs to no window, so it only gets
+`AGTERM_ENABLED` and `AGTERM_SOCKET` (no session/workspace/window ids). An untargeted `agtermctl` run
+from it therefore resolves the active window like any other caller.
 
 These variables are inherited by every process the session's shell spawns — including long-lived
 daemons that outlive the shell. A tmux/screen server, a session manager (agent-deck and the like), or
@@ -90,8 +91,9 @@ shell, toggled like the split), and an ephemeral **overlay** (runs one program o
 An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving the
 sibling pane visible and usable. The same session-wide slot also holds a **HUD** (`session hud`), a small
 passive panel carrying a message instead of a program: the session keeps focus and stays typable under it.
-One slot, so a session shows either a HUD or a program overlay, never both. Separately, each window has one
-**quick terminal** (a scratch overlay at 90% of the window, not part of the tree).
+One slot, so a session shows either a HUD or a program overlay, never both. Separately, the app has one
+**quick terminal** (a scratch shell in a floating panel at 90% of the focused screen, not part of the tree
+and not owned by a window).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
@@ -102,8 +104,9 @@ control address for `surface zoom` (`left`, `right`, `scratch`, `overlay`, `over
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
-(`tree` or `flagged` — the read side of `sidebar mode`), and `quickVisible` (whether the window's quick
-terminal is shown — the read side of the write-only `quick` command). List windows with
+(`tree` or `flagged` — the read side of `sidebar mode`), and `quickVisible` (whether the quick terminal is
+shown — the read side of the write-only `quick` command; app-level, so every window reports the same
+value). List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
 read side, so record it then restore the exact frame), and `fullscreen`/`zoomed`/`minimized` (the read side
@@ -405,7 +408,9 @@ window; read back as `minimized` on `window list`).
 — zoom a terminal surface to fill the window (sidebar hidden; a slim title-bar strip with an exit
 button remains). Omit `--target` to use the active surface;
 copy an explicit surface id from `tree --json` to address a hidden split/scratch or a background
-session (`quick` is the id returned for a quick-terminal zoom). `hide` exits zoom; `toggle`
+session. `quick` is the one target that is not a window surface: it grows the quick-terminal panel to
+fill its screen, takes no `--window`, is refused while the panel is hidden, and is never what an omitted
+`--target` resolves to. `hide` exits zoom; `toggle`
 enters/exits only this zoom mode, not macOS window zoom.
 
 **dashboard** — `dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid
@@ -445,10 +450,12 @@ result. `--no-block` prints the picker id instead;
 Only one picker may be pending per window. It opens without raising a background target unless
 `--follow` is set. Read the live picker id from the tree's top-level `pickPending` field.
 
-**quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·
-`type TEXT` (or `--stdin`) inject keystrokes into the frontmost window's quick terminal ·
-`text [--all] [--lines N]` read its screen back — the twins of `session type`/`session text`,
-frontmost-window-only (no `--target`/`--window`/`--pane`).
+**quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`; a panel YOU open
+with `quick show` stays up when agterm loses focus, unlike one the user summoned by hotkey, so a following
+`quick type` / `quick text` / `surface zoom --target quick` still finds it) ·
+`type TEXT` (or `--stdin`) inject keystrokes into the quick terminal ·
+`text [--all] [--lines N]` read its screen back — the twins of `session type`/`session text`. There is one
+per app, so none of them take `--target`/`--window`/`--pane`; all three still need an open window.
 
 **sidebar** — `[show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
 `mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read

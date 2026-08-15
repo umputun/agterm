@@ -12,14 +12,22 @@ public struct Keymap: Equatable, Sendable {
     /// Actions whose `map` line offered no menu-bindable alternative. Distinct from ABSENT, which means
     /// "keep the shipped default": without this, `map ctrl+space>s toggle_split` would leave ⌘D live.
     public let builtinUnbound: Set<BuiltinAction>
+    /// The system-wide chord that summons the quick terminal, nil when the file binds none. Registered with
+    /// the OS rather than the app's local monitor, so it deliberately takes NO part in the conflict model:
+    /// it never reaches `KeybindMatcher`, and a chord it shares with a menu item resolves by which app is
+    /// frontmost. One chord only — no alternatives, no leader sequence, since neither is expressible to
+    /// `RegisterEventHotKey`.
+    public let globalHotkey: Chord?
 
     public init(builtinOverrides: [BuiltinAction: Chord], commands: [CustomCommand],
                 builtinSequences: [BuiltinAction: [Keybind]] = [:],
-                builtinUnbound: Set<BuiltinAction> = []) {
+                builtinUnbound: Set<BuiltinAction> = [],
+                globalHotkey: Chord? = nil) {
         self.builtinOverrides = builtinOverrides
         self.commands = commands
         self.builtinSequences = builtinSequences
         self.builtinUnbound = builtinUnbound
+        self.globalHotkey = globalHotkey
     }
 
     /// The active menu chord for a built-in: the user override, else the shipped `defaultChord` — `nil` for
@@ -104,6 +112,9 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
     var mapLines: [ParsedMapLine] = []
     var commandLines: [ParsedCommandLine] = []
     var diagnostics: [KeymapDiagnostic] = []
+    // last-wins like `map`, but with no cross-line resolution to run afterwards: an OS-registered chord
+    // collides with nothing agterm owns.
+    var globalHotkey: Chord?
 
     // normalize line endings: a CRLF leaves a trailing `\r` that .whitespaces won't strip (so
     // `toggle_split\r` reads as an unknown action) and a lone-CR file would collapse into one line.
@@ -122,6 +133,8 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
             parseMapLine(rest, line: lineNumber, mapLines: &mapLines, diagnostics: &diagnostics)
         case "command":
             parseCommandLine(rest, line: lineNumber, commandLines: &commandLines, diagnostics: &diagnostics)
+        case "global-hotkey":
+            parseGlobalHotkeyLine(rest, line: lineNumber, hotkey: &globalHotkey, diagnostics: &diagnostics)
         default:
             diagnostics.append(KeymapDiagnostic(line: lineNumber, message: "unknown verb '\(verb)'"))
         }
@@ -176,8 +189,37 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
                    builtinSequences: survivingAlternatives(survivors),
                    builtinUnbound: unboundAfterRestoringStrandedDefaults(compatibilityUnbound,
                                                                          overrides: builtinOverrides,
-                                                                         survivors: survivors)),
+                                                                         survivors: survivors),
+                   globalHotkey: globalHotkey),
             diagnostics)
+}
+
+/// Parse the remainder of a `global-hotkey` line: one chord token and nothing else. Rejects a bare key
+/// outright — a system-wide binding with no modifier would take that key from every other application —
+/// and a leader sequence, which `RegisterEventHotKey` cannot express. Repeats are last-wins.
+private func parseGlobalHotkeyLine(_ rest: String, line: Int, hotkey: inout Chord?,
+                                   diagnostics: inout [KeymapDiagnostic]) {
+    let token = String(rest.prefix(while: { !$0.isWhitespace }))
+    guard !token.isEmpty else {
+        diagnostics.append(KeymapDiagnostic(line: line, message: "global-hotkey needs a chord"))
+        return
+    }
+    let trailing = String(rest.dropFirst(token.count)).trimmingCharacters(in: .whitespaces)
+    guard trailing.isEmpty else {
+        diagnostics.append(KeymapDiagnostic(line: line,
+                                            message: "global-hotkey takes one chord, found '\(rest)'"))
+        return
+    }
+    guard let keybind = parseKeybind(token), keybind.count == 1, let chord = keybind.first else {
+        diagnostics.append(KeymapDiagnostic(line: line, message: "invalid global-hotkey chord '\(token)'"))
+        return
+    }
+    guard !chord.mods.isEmpty else {
+        diagnostics.append(KeymapDiagnostic(line: line,
+                                            message: "global-hotkey '\(token)' must include a modifier"))
+        return
+    }
+    hotkey = chord
 }
 
 /// Whether a diagnostic is about a binding as a whole or about one alternative of several. The ONLY thing

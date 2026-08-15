@@ -67,15 +67,6 @@ extension AppActions {
         return owner.selectedSessionID == session.id
     }
 
-    /// Whether the quick terminal is showing in the window OWNING this session — the session-scoped twin of
-    /// `frontmostQuickTerminal`, window-scoped like `terminalZoomActive(for:)` since each window owns its own
-    /// controller: gating on the frontmost would both drop the focus step for a background target (leaving
-    /// its `splitFocused` and real first responder disagreeing) and miss a cover actually showing there.
-    private func quickTerminalActive(for session: Session) -> Bool {
-        guard let windowID = library.windowID(forSession: session.id) else { return false }
-        return QuickTerminalRegistry.shared.controller(for: windowID)?.isVisible == true
-    }
-
     // MARK: - Reveal & focus
 
     /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
@@ -136,7 +127,7 @@ extension AppActions {
         // palette, then opens the .themes picker a tick later) keeps its field focus.
         if palette?.mode != nil { return }
         if pickActive(for: library.activeWindowID) { return }
-        if frontmostQuickTerminal?.isVisible == true { return }
+        if quickTerminal.isVisible { return }
         if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
@@ -187,8 +178,9 @@ extension AppActions {
             if renamePending { return }
             if palette?.mode != nil { return }
         }
-        // the quick terminal is a window-level cover that owns focus; its own hide restores the session.
-        if quickTerminalActive(for: session) { return }
+        // the quick-terminal panel owns focus above EVERY window, not just this session's; its own hide
+        // restores the session.
+        if quickTerminal.isVisible { return }
         if let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }

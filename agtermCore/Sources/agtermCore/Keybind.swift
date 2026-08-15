@@ -108,6 +108,19 @@ func latinKey(forKeyCode keyCode: UInt16) -> String? {
     }
 }
 
+/// The macOS virtual key code that produces a chord's base key, or nil when no ANSI position does.
+///
+/// The inverse of `namedKey(forKeyCode:)`/`latinKey(forKeyCode:)`, derived by scanning them rather than
+/// spelled as a third table, so a name or position added to either is reachable here with no second edit.
+/// `RegisterEventHotKey` is the caller: a system-wide hotkey is registered by physical position, never by
+/// produced character, so it keeps firing when the user switches to a non-Latin layout.
+public func keyCode(forChordKey key: String) -> UInt16? {
+    // named keys first: their codes are outside the ANSI table, and neither map claims the same code.
+    for code in UInt16(0)...127 where namedKey(forKeyCode: code) == key { return code }
+    for code in UInt16(0)...127 where latinKey(forKeyCode: code) == key { return code }
+    return nil
+}
+
 /// The base key for a key press. `produced` is the character the ACTIVE layout puts on that key with no
 /// modifiers applied, `layoutIsASCIICapable` whether that layout can type ASCII at all.
 ///

@@ -412,15 +412,21 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   arrives because the pty's session leader is the surviving `login`. Without it every crash, `kill -9` and
   XCUITest `terminate()` leaves a 2-10 Hz repaint loop running forever.
 - `surface.zoom show|hide|toggle` reparents exactly one surface below a slim titlebar. Explicit IDs are
-  `surface:<session-id>:<left|right|scratch|overlay|overlay-left|overlay-right>` or `quick`, including
-  hidden live panes. The active target is the single case `TerminalZoomSurface.isActive` accepts: quick,
-  then the session overlay, then scratch, then the focused pane's own overlay, then that pane. Those
+  `surface:<session-id>:<left|right|scratch|overlay|overlay-left|overlay-right>`, including hidden live
+  panes. The active target is the single case `TerminalZoomSurface.isActive` accepts: the session overlay,
+  then scratch, then the focused pane's own overlay, then that pane. Those
   predicates are mutually exclusive and total, resting on `Session.focusedPane`, so widening one without
   narrowing its neighbour silently picks the wrong surface.
+- `quick` is the one target that names no window surface: it grows the quick-terminal PANEL to fill its
+  screen. `setSurfaceZoom` routes it before resolving a window, so it takes no `--window` and never reaches
+  `resolveSurfaceZoom`; it is refused `surface not available: quick` while the panel is hidden, and an
+  omitted `--target` never resolves to it. See [[windows]].
 - Host-free `TerminalZoomController` owns mode/state. Zoom must not change ratios, focus, sidebar, or pane
-  visibility; deck slots remain constant and focus reporting is suppressed. Opening closes palette/search
-  and conflicting quick terminal; banner reveal and Command-W exit. Font remains live. Reject quick show
-  and search-open while zoomed, but keep hides idempotent even if the target vanished. Read
+  visibility; deck slots remain constant and focus reporting is suppressed. Opening closes palette/search;
+  banner reveal and Command-W exit. Font remains live. Reject search-open while zoomed, but keep hides
+  idempotent even if the target vanished. Zoom neither closes nor blocks the quick terminal any more — the
+  panel floats above every window instead of being hosted by one, so `quick show` is no longer refused with
+  `terminal zoom active`. Read
   top-level live `zoomedSurface`; surface node active/visible describes pane state, not zoom.
 - `dashboard` opens explicit IDs or `--mru`, or closes. Font-size and auto-size are exclusive; close accepts
   no IDs/MRU/font; open needs IDs or MRU; fixed size must be finite positive.
@@ -546,6 +552,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   which preempts `initialCommand` in `restorePlan` and would drop the exec path.
 - Top-level tree includes idle/auto-follow, live sidebar visibility/mode, workspace filter, quick
   visibility, zoom, dashboard, and picker state. Prefer live tree sidebar state over cached window list.
+  `quickVisible` and a `quick` `zoomedSurface` are APP-level, so every projected window reports the same
+  value for them; the rest stay per-window.
 - Window nodes include open/active, open-store sidebar/auto-follow, geometry, fullscreen, zoomed, minimized.
   Closed live fields are omitted. Geometry is top-left display-relative y-down and round-trips move/resize.
 - Window list is cached. Refresh after commands and frontmost/sidebar/attachment/move/resize/fullscreen/

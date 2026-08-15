@@ -10,7 +10,7 @@ agterm is a native macOS terminal, built on libghostty (Ghostty's engine), with 
 - Agent-status glyphs on sidebar rows: active, blocked, completed, idle — auto-wired for Claude Code, Codex, Pi, and OpenCode
 - agtermctl control CLI over a local unix-domain socket: create, rename, move, and type into sessions, run overlays, move windows, capture output, post notifications tied to a session
 - Installable agent skill that teaches Claude Code and Codex the control model and the full agtermctl command set
-- Surfaces per session: split panes (two shells), a per-session scratch terminal, a window-wide quick terminal, and floating/full overlays
+- Surfaces per session: split panes (two shells), a per-session scratch terminal, and floating/full overlays; plus one app-wide quick terminal in a floating panel, summonable by a system-wide hotkey
 - Multi-window: a library of windows (e.g. "work" and "personal"), one per screen, restored on next launch
 - 512 bundled themes with a live-preview picker, fully rebindable kitty-flavored keymap.conf, and full session persistence
 - In-terminal search, fuzzy command palettes, and a Ctrl-Tab MRU session switcher

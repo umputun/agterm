@@ -15,10 +15,9 @@ final class AppActions {
     /// closed (quitting), where callers no-op.
     var store: AppStore? { library.activeStore }
 
-    /// The frontmost window's quick-terminal controller (one per window). Nil when no window is open.
-    var frontmostQuickTerminal: QuickTerminalController? {
-        QuickTerminalRegistry.shared.controller(for: library.activeWindowID)
-    }
+    /// The app's one quick terminal, which lives in a detached panel rather than in a window — so unlike the
+    /// zoom/dashboard/pick controllers beside it there is nothing to resolve and nothing to be nil.
+    var quickTerminal: QuickTerminalController { .shared }
 
     /// The frontmost window's zoom controller; `WindowContentView` renders its target above the chrome.
     private var frontmostTerminalZoom: TerminalZoomController? {
@@ -225,7 +224,7 @@ final class AppActions {
         // other modal cover (mutually exclusive with zoom) — close and refocus, don't close the session.
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
         if let dashboard = frontmostDashboard, dashboard.isOpen { dashboard.close(); focusActiveSession(); return true }
-        if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return true }
+        if quickTerminal.isVisible { quickTerminal.hide(); return true }
         guard let store, let session = store.activeSession else { return false }
         if session.overlayActive { store.closeOverlay(session.id); return true }
         if session.scratchActive { store.toggleScratch(session.id); return true }
@@ -790,7 +789,7 @@ final class AppActions {
     /// item's own key equivalent), the palette's `runPaletteCommand`, and the Dock item's invocation check.
     func toggleQuickTerminal() {
         guard uiActionsEnabled else { return }
-        frontmostQuickTerminal?.toggle()
+        quickTerminal.toggle()
     }
 
     /// Toggle the frontmost window's full-window terminal zoom. Core resolves which surface is active
@@ -867,7 +866,7 @@ final class AppActions {
     /// overlay is NOT a term here — `searchTarget` owns that rung, in the one order that gets the
     /// scratch-above-a-pane-overlay case right; duplicating it here would block ⌘F on the searchable scratch.
     private var coverHidesActiveSession: Bool {
-        if frontmostQuickTerminal?.isVisible == true { return true }
+        if quickTerminal.isVisible { return true }
         guard let session = store?.activeSession else { return false }
         // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
         return session.fullOverlayActive
