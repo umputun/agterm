@@ -35,10 +35,9 @@ so the control read-back moves with it. Deliberately left out of the alternative
 Worth doing only if a second action ever ends up without a menu item, which would make the third state pay
 for itself, or if the gating difference is actually hit.
 
-`undo_close` shares the divergence but not the cost, noticed 2026-08-12 checking that trigger.
-`UndoCloseShortcut.handleKeyDown` matches `keymap.equivalent(for: .undoClose)` and calls `undoClose()`
-gated only on a pending close and text-field focus, while an alternative of the same line takes
-`PaletteCommand.undoClose`'s modal rule — so with a picker up, ⌘Z reopens and the alternative no-ops. It
-HAS a menu item carrying the predicate and only declines the key equivalent so native text undo survives,
-so closing that half is a modal check inside the monitor, no `Keymap` change. It does not make the third
-state pay for itself, and the two are not one fix.
+`undo_close` was recorded here on 2026-08-12 as sharing the divergence. It does not, and the claim was
+withdrawn on 2026-08-16: `UndoCloseShortcut.handleKeyDown` is gated only on a pending close and text-field
+focus, but the `AppActions.undoClose()` it calls opens with `guard uiActionsEnabled`, whose three terms are
+`PaletteContext.modalActive`'s. Both dispatch paths therefore no-op behind a cover, and the chord is
+consumed either way. `toggle_fullscreen` is alone here because it calls `keyWindow.toggleFullScreen(nil)`
+rather than an `AppActions` method carrying the gate.
