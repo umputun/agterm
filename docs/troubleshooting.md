@@ -28,7 +28,7 @@ log stream --predicate 'subsystem == "com.umputun.agterm"' --info
 log show --predicate 'subsystem == "com.umputun.agterm" && category == "CustomCommandRunner"' --info --last 30m
 ```
 
-The categories are `CustomCommandRunner`, `SettingsModel`, `GhosttyApp`, `NotificationManager`, and `ControlServer`. In Console.app, filter on the same subsystem.
+The categories are `GhosttyApp`, `GhosttySurfaceView`, `WatermarkRenderer`, `NotificationManager`, `SettingsView`, `SettingsModel`, `CustomCommandRunner`, and `ControlServer`. In Console.app, filter on the same subsystem.
 
 ## Checking the keymap
 

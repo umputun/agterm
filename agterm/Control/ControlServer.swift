@@ -2,6 +2,9 @@ import AppKit
 import agtermCore
 import Darwin
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.umputun.agterm", category: "ControlServer")
 
 /// The programmatic control channel: a POSIX unix-domain-socket listener turning newline-delimited JSON
 /// `ControlRequest`s into calls on the `AppActions`/`AppStore` seam the toolbar, menu bar and palettes
@@ -660,8 +663,9 @@ final class ControlServer {
     }
 
     /// Internal, not private: the `ControlServer+*.swift` extensions holding the command arms cannot reach a
-    /// private member declared here.
-    func log(_ message: @autoclosure () -> String) {
-        NSLog("agterm: %@", message())
+    /// private member declared here. `.public` because a redacted path or errno says nothing about why the
+    /// socket is missing, which is what these are read for.
+    func log(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
     }
 }

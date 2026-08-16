@@ -34,7 +34,8 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   ```bash
   log show --predicate 'subsystem == "com.umputun.agterm"' --info --last 30m
   ```
-  Categories: `CustomCommandRunner`, `SettingsModel`, `GhosttyApp`, `NotificationManager`, `ControlServer`.
+  Categories: `GhosttyApp`, `GhosttySurfaceView`, `WatermarkRenderer`, `NotificationManager`,
+  `SettingsView`, `SettingsModel`, `CustomCommandRunner`, `ControlServer`.
 - **Files** — keymap `~/.config/agterm/keymap.conf`; agterm-scoped ghostty config
   `~/.config/agterm/ghostty.conf`; settings `~/Library/Application Support/agterm/settings.json`;
   socket path in `$AGTERM_SOCKET`.
