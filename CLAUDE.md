@@ -150,9 +150,10 @@ C-boundary concurrency before changing the bridge.
 - `GhosttyCallbacks` is `@unchecked Sendable`, not `@MainActor`. C closures capture nothing and reach
   `GhosttyApp.shared`. Copy `char*` before hopping; every main-actor touch uses
   `DispatchQueue.main.async`.
-- Rendering is demand-driven. Wakeup coalesces through an `OSAllocatedUnfairLock` into one main-queue
-  `ghostty_app_tick`; RENDER calls `renderNow`. Never restore the rejected continuous 120Hz poll or use
-  `assumeIsolated`.
+- Wakeup coalesces through an `OSAllocatedUnfairLock` into one main-queue `ghostty_app_tick`. Painting is
+  libghostty's own render thread, not an app callback: the embedded apprt cannot emit
+  `GHOSTTY_ACTION_RENDER`, so agterm handles no draw action. Never restore the rejected continuous 120Hz
+  poll or use `assumeIsolated`. See [[libghostty]] before advancing `GHOSTTY_REV`.
 - `close_surface_cb` only recovers the view and dispatches; it never frees synchronously.
 - The session-wide overlay slot holds either a caller's program or a HUD. Raw `overlayActive` answers only
   "the slot is occupied"; every layer asking "is a program covering this session" reads

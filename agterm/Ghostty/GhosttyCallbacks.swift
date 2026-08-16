@@ -48,11 +48,6 @@ final class GhosttyCallbacks: @unchecked Sendable {
             guard let view = surfaceView(from: target) else { return true }
             DispatchQueue.main.async { view.reportFontSize() }
             return true
-        case GHOSTTY_ACTION_RENDER:
-            // a frame is ready to paint. agterm is demand-driven (no poll timer), so draw now.
-            guard let view = surfaceView(from: target) else { return true }
-            DispatchQueue.main.async { view.renderNow() }
-            return true
         case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
             // an OSC 9 / 777 desktop notification. the manager resolves the session/pane and suppresses.
             guard let view = surfaceView(from: target) else { return true }

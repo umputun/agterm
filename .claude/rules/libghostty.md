@@ -13,6 +13,17 @@ paths:
 
 ## libghostty gotchas
 
+## Rendering
+
+- Nothing in agterm paints a surface. `src/apprt/embedded.zig` declares no `must_draw_from_app_thread`, so
+  `renderer/Thread.drawFrame` draws on the render thread instead of posting `redraw_surface`, the only
+  producer of `GHOSTTY_ACTION_RENDER`. The action is therefore unreachable on the embedded apprt and the
+  `action` switch drops it to `default`. If `GHOSTTY_REV` ever advances onto a libghostty that declares
+  that constant, panes stop painting until a RENDER arm calling `ghostty_surface_draw` comes back.
+- The render thread returns early on `!self.flags.visible`, so `ghostty_surface_set_occlusion` is a real
+  lever over what hidden panes cost. `docs/backlog/hidden-panes-keep-drawing.md` owns whether agterm
+  pulls it and what that is worth.
+
 ## Theme and sidebar
 
 - Chrome reads background/foreground through `ghostty_config_get`. It cannot read optional

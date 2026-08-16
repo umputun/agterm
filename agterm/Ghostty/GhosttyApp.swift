@@ -143,8 +143,8 @@ final class GhosttyApp {
         config = cfg
         // boot: no surface yet, so the NSApp read is the only side source and nothing rendered can disagree.
         resolveThemeColors(from: cfg, inputs: configInputs, isDark: Self.currentIsDark())
-        // demand-driven, no poll timer (like Ghostty.app/conterm): ticks come from libghostty wakeups
-        // (coalesced in GhosttyCallbacks.wakeup), surfaces draw on GHOSTTY_ACTION_RENDER — idle costs nothing.
+        // no poll timer (like Ghostty.app/conterm): ticks come from libghostty wakeups, coalesced in
+        // GhosttyCallbacks.wakeup, and the renderer thread paints on its own — idle costs nothing.
     }
 
     func tick() {
