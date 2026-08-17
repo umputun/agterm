@@ -25,5 +25,11 @@ compiles from source at runtime via `newLibraryWithSource:`, and that produces G
 CPU-executable pages. So a custom shader is worth including in the pass, but neither path is a reason to
 keep an executable-memory exception.
 
-Worth considering as a standing release step rather than a one-off, since no automated gate can replace
-it. Surfaced by issue #448 and the entitlements split that answered it.
+Worth making a standing release step rather than a one-off, since no automated gate can replace it. The
+boundary that matters: a PR merges on its own CI, but publication should stop until the signed artifact
+has started and been exercised. Static analysis decides which entitlements belong in the signature; it
+says nothing about whether the signed artifact runs, and the production path changes the signing identity
+and then notarizes and publishes without ever launching. Whether that becomes a blocking step in
+`scripts/release.sh` is a call for the maintainer, not something to add on the way past.
+
+Surfaced by issue #448 and the entitlements split that answered it.
