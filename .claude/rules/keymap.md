@@ -112,8 +112,9 @@ paths:
   `text`, owned by [[control-api]]. A single pane is always `left`. Primary exit promotes the
   split into the main slot, clears `isSplitPane`, and makes it addressable only as `left`.
 - `resolveBuiltinOverrides` is order-independent: fold last-wins candidates, resolve all final chords,
-  then detect collisions. An override loses to another action's unmoved default; for two overrides, the
-  later line loses. Diagnostics name the owner and sort by line. Moving `toggle_split` off `cmd+d` lets
+  then drop every overridden owner of each collision together. A drop reverts to the shipped default, so
+  repeat to a fixpoint; distinct shipped defaults and strict candidate removal guarantee termination.
+  Diagnostics name a conflicting owner and sort by line. Moving `toggle_split` off `cmd+d` lets
   `new_session` take it in either line order, and an action in `builtinUnbound` resolves to no chord at
   all, so it stops occupying its shipped default here too.
 - Final cross-section `validateBindings` runs after parsing all lines, over every monitor-bound

@@ -661,16 +661,46 @@ struct KeymapTests {
         #expect(keymap.commands[0].shortcut == "cmd+d")
     }
 
-    @Test func parseDuplicateBuiltinChordDiagnostic() {
+    @Test func collidingBuiltinOverridesBothDrop() {
         let text = """
         map cmd+shift+e toggle_split
         map cmd+shift+e new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
-        #expect(diagnostics.count == 1)
-        #expect(diagnostics[0].line == 2)
-        #expect(diagnostics[0].message.contains("conflicts with built-in 'toggle_split'"))
+        #expect(keymap.builtinOverrides.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
+        #expect(keymap.equivalent(for: .newSession) == BuiltinAction.newSession.defaultChord)
+        #expect(diagnostics == [
+            KeymapDiagnostic(line: 1,
+                             message: "chord conflicts with built-in 'new_session'; map skipped"),
+            KeymapDiagnostic(line: 2,
+                             message: "chord conflicts with built-in 'toggle_split'; map skipped"),
+        ])
+    }
+
+    @Test func collidingBuiltinLineOrderCannotSilentlyChangeACustomShortcut() {
+        let forward = parseKeymap("""
+        map cmd+shift+x toggle_split
+        map cmd+shift+x new_session
+        command "C" cmd+d echo c
+        """)
+        let reversed = parseKeymap("""
+        map cmd+shift+x new_session
+        map cmd+shift+x toggle_split
+        command "C" cmd+d echo c
+        """)
+
+        for result in [forward, reversed] {
+            #expect(result.keymap.builtinOverrides.isEmpty)
+            #expect(result.keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
+            #expect(result.keymap.equivalent(for: .newSession) == BuiltinAction.newSession.defaultChord)
+            #expect(result.keymap.commands.map(\.shortcut) == [""])
+            #expect(result.diagnostics.count == 3)
+            #expect(result.diagnostics.last == KeymapDiagnostic(
+                line: 0,
+                message: "custom command 'C' shortcut 'cmd+d' conflicts with built-in 'toggle_split'; keybind dropped"))
+        }
+        #expect(bindingSummary(reversed.keymap) == bindingSummary(forward.keymap))
     }
 
     @Test func mapToOtherBuiltinUnmovedDefaultIsRejected() {

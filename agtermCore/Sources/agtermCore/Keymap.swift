@@ -104,8 +104,7 @@ public struct KeymapStore: Sendable {
 /// action, `resolveBuiltinOverrides` settles built-in-versus-built-in menu chord collisions, `validateBindings`
 /// settles every monitor-bound alternative of both verbs against the resulting chord set, and
 /// `unboundAfterRestoringStrandedDefaults` hands its default back to an action that ended up with nothing.
-/// Only `validateBindings` is order-independent; the first two are order-sensitive by design and by defect
-/// respectively (`docs/backlog/builtin-override-collisions-depend-on-line-order.md`).
+/// Repeating one action is intentionally last-wins; collisions between distinct actions are order-independent.
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
     // collected in file order, NOT folded into a dict yet, so the final duplicate pass resolves them
     // against the FULLY-resolved chord set and can skip the later-in-file member of a colliding pair.
@@ -177,12 +176,18 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
 
     // likewise final: a custom line parsed before a later keyless-built-in `map` must still be validated
     // against the override that `map` installs.
-    let menuChords = Set(BuiltinAction.allCases.compactMap {
-        resolvedMenuChord($0, overrides: builtinOverrides, unbound: compatibilityUnbound)
-    })
+    var menuOwners: [Chord: BuiltinAction] = [:]
+    for action in BuiltinAction.allCases {
+        guard let chord = resolvedMenuChord(action, overrides: builtinOverrides,
+                                            unbound: compatibilityUnbound) else { continue }
+        menuOwners[chord] = action
+    }
+    let rejectedOverrideActions = Set(resolved.overrides.map(\.action)).subtracting(builtinOverrides.keys)
     let survivors = validateBindings(monitorAlternatives(commandLines: commandLines,
                                                          mapAlternatives: resolved.alternatives),
-                                     menuChords: menuChords, diagnostics: &diagnostics)
+                                     menuOwners: menuOwners,
+                                     revertedDefaults: rejectedOverrideActions,
+                                     diagnostics: &diagnostics)
 
     return (Keymap(builtinOverrides: builtinOverrides,
                    commands: applySurvivingShortcuts(to: commandLines, survivors: survivors),
@@ -332,11 +337,11 @@ private func resolveMapLines(_ mapLines: [ParsedMapLine])
 /// decided against a partially-built map — so moving a built-in off a chord and another claiming it
 /// succeed in EITHER line order. Re-mapping the SAME action is last-wins and can't collide with itself.
 ///
-/// Fold last-wins per action, then iterate to a FIXPOINT, since a dropped loser REVERTS to its own default
-/// and may collide afresh. An override colliding with another action's UNMOVED default loses; two
-/// colliding OVERRIDES drop the later-in-file one; each drop is diagnosed. The shipped defaults are all
-/// distinct (pinned by `BuiltinActionTests`), so every collision involves ≥1 override and each iteration
-/// removes one — the loop terminates.
+/// Fold last-wins per action, then iterate to a FIXPOINT, since a dropped override REVERTS to its own default
+/// and may collide afresh. Every overridden owner of a colliding chord drops in the same pass: overrides
+/// lose to an unmoved default, and a collision containing only overrides drops all of them. The shipped
+/// defaults are distinct (pinned by `BuiltinActionTests`), so every collision involves ≥1 override and each
+/// iteration strictly shrinks the finite candidate set. No file-order tie-break decides which chord survives.
 ///
 /// `unbound` is the set of actions a `map` line left with no menu chord at all; they occupy nothing, so
 /// another built-in may claim the default they no longer use. `alternatives` names the lines that also carry
@@ -344,7 +349,7 @@ private func resolveMapLines(_ mapLines: [ParsedMapLine])
 private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set<BuiltinAction>,
                                      alternatives: [BuiltinAction: MapLineAlternatives],
                                      diagnostics: inout [KeymapDiagnostic]) -> [BuiltinAction: Chord] {
-    // fold last-wins, remembering each winner's file line so a two-override collision can name the later.
+    // fold last-wins, remembering each winner's file line for its diagnostic.
     var candidates: [BuiltinAction: Chord] = [:]
     var overrideLine: [BuiltinAction: Int] = [:]
     for override in overrides {
@@ -352,11 +357,16 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set
         overrideLine[override.action] = override.line
     }
 
-    // one loser per pass. drops are line-sorted at the end so diagnostics don't depend on dictionary order.
+    // Drop a whole collision batch per pass. Diagnostics remain in file order regardless of dictionary order.
     var pending: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
-    while let drop = firstBuiltinCollision(candidates: candidates, unbound: unbound, overrideLine: overrideLine) {
-        candidates.removeValue(forKey: drop.loser)
-        pending.append(drop)
+    while true {
+        let drops = builtinCollisionDrops(candidates: candidates, unbound: unbound,
+                                          overrideLine: overrideLine)
+        guard !drops.isEmpty else { break }
+        for drop in drops {
+            candidates.removeValue(forKey: drop.loser)
+            pending.append(drop)
+        }
     }
 
     for drop in pending.sorted(by: { $0.line < $1.line }) {
@@ -369,11 +379,11 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set
     return candidates
 }
 
-/// One fixpoint iteration: the first chord two distinct actions resolve to, returned as the loser to drop,
-/// the keeper, and the loser's file line. nil when the candidate set is collision-free.
-private func firstBuiltinCollision(candidates: [BuiltinAction: Chord], unbound: Set<BuiltinAction>,
+/// One fixpoint iteration: every overridden owner participating in a collision, paired with a stable peer
+/// for its diagnostic. Empty when the candidate set is collision-free.
+private func builtinCollisionDrops(candidates: [BuiltinAction: Chord], unbound: Set<BuiltinAction>,
                                    overrideLine: [BuiltinAction: Int])
-    -> (loser: BuiltinAction, keeper: BuiltinAction, line: Int)? {
+    -> [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] {
     // an unbound action holds no chord, so its shipped default stops blocking another built-in. It has no
     // candidate to drop either, which keeps the loop terminating.
     var ownersByChord: [Chord: [BuiltinAction]] = [:]
@@ -382,27 +392,18 @@ private func firstBuiltinCollision(candidates: [BuiltinAction: Chord], unbound: 
         ownersByChord[chord, default: []].append(action)
     }
 
-    // pick the colliding chord deterministically by its earliest-line loser so the loop is stable.
-    var best: (loser: BuiltinAction, keeper: BuiltinAction, line: Int)?
+    var drops: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
     for owners in ownersByChord.values where owners.count > 1 {
         let overriddenOwners = owners.filter { candidates[$0] != nil }
-        let defaultOwners = owners.filter { candidates[$0] == nil }
-        let decision: (loser: BuiltinAction, keeper: BuiltinAction)?
-        if let defaultOwner = defaultOwners.first, let loser = overriddenOwners.first {
-            decision = (loser, defaultOwner)
-        } else if overriddenOwners.count > 1 {
-            let sorted = overriddenOwners.sorted { (overrideLine[$0] ?? 0) < (overrideLine[$1] ?? 0) }
-            decision = (sorted[sorted.count - 1], sorted[0])
-        } else {
-            decision = nil
-        }
-        guard let decision else { continue }
-        let line = overrideLine[decision.loser] ?? 0
-        if best == nil || line < best!.line {
-            best = (decision.loser, decision.keeper, line)
+        guard !overriddenOwners.isEmpty else { continue }
+        let defaultOwner = owners.first { candidates[$0] == nil }
+        let stableOwners = owners.sorted { $0.rawValue < $1.rawValue }
+        for loser in overriddenOwners {
+            guard let keeper = defaultOwner ?? stableOwners.first(where: { $0 != loser }) else { continue }
+            drops.append((loser, keeper, overrideLine[loser] ?? 0))
         }
     }
-    return best
+    return drops
 }
 
 /// One monitor-bound alternative entering the cross-section passes: its owner, the raw spelling to quote back,
@@ -455,9 +456,12 @@ private func monitorAlternatives(commandLines: [ParsedCommandLine],
 /// Cross-section validation over every monitor-bound alternative of both verbs, returning the survivors. Only
 /// the offending alternative ever goes — its siblings keep firing, which is the whole point of offering
 /// alternatives — and a custom command that loses every one of them stays, palette-only.
-private func validateBindings(_ alternatives: [MonitorAlternative], menuChords: Set<Chord>,
+private func validateBindings(_ alternatives: [MonitorAlternative], menuOwners: [Chord: BuiltinAction],
+                              revertedDefaults: Set<BuiltinAction>,
                               diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
-    let unshadowed = dropShadowedAlternatives(alternatives, menuChords: menuChords, diagnostics: &diagnostics)
+    let unshadowed = dropShadowedAlternatives(alternatives, menuOwners: menuOwners,
+                                              revertedDefaults: revertedDefaults,
+                                              diagnostics: &diagnostics)
     return dropConflictingAlternatives(unshadowed, diagnostics: &diagnostics)
 }
 
@@ -467,15 +471,18 @@ private func validateBindings(_ alternatives: [MonitorAlternative], menuChords: 
 ///
 /// Built-in menu chords are single, so any bind STARTING with one, single or leader, is shadowed by the menu.
 /// Built-in alternatives face the same two tests as custom ones: `map cmd+t|cmd+t>s toggle_split` would
-/// otherwise arm the monitor on the very chord that line puts on the menu. `menuChords` already has every
-/// override applied, so a bind may freely reuse a default chord the user moved a built-in off of.
-private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative], menuChords: Set<Chord>,
+/// otherwise arm the monitor on the very chord that line puts on the menu. `menuOwners` already has every
+/// override applied, so a bind may freely reuse a default chord the user moved a built-in off of. A rejected
+/// override's revived default names its owner in the diagnostic because the conflict was not visible as written.
+private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative],
+                                      menuOwners: [Chord: BuiltinAction],
+                                      revertedDefaults: Set<BuiltinAction>,
                                       diagnostics: inout [KeymapDiagnostic]) -> [MonitorAlternative] {
     var kept: [MonitorAlternative] = []
     for alternative in alternatives {
         let conflictKind: String?
-        if let first = alternative.keybind.first, menuChords.contains(first) {
-            conflictKind = "a built-in"
+        if let first = alternative.keybind.first, let owner = menuOwners[first] {
+            conflictKind = revertedDefaults.contains(owner) ? "built-in '\(owner.rawValue)'" : "a built-in"
         } else if alternative.keybind.contains(where: isReservedMonitorChord) {
             conflictKind = "a reserved shortcut"
         } else {
