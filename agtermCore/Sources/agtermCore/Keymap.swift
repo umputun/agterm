@@ -106,8 +106,8 @@ public struct KeymapStore: Sendable {
 /// `unboundAfterRestoringStrandedDefaults` hands its default back to an action that ended up with nothing.
 /// Repeating one action is intentionally last-wins; collisions between distinct actions are order-independent.
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
-    // collected in file order, NOT folded into a dict yet, so the final duplicate pass resolves them
-    // against the FULLY-resolved chord set and can skip the later-in-file member of a colliding pair.
+    // collected in file order, NOT folded into a dict yet, so repeated actions can settle last-wins
+    // before collision checks run against the fully resolved chord set.
     var mapLines: [ParsedMapLine] = []
     var commandLines: [ParsedCommandLine] = []
     var diagnostics: [KeymapDiagnostic] = []
@@ -358,7 +358,7 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set
     }
 
     // Drop a whole collision batch per pass. Diagnostics remain in file order regardless of dictionary order.
-    var pending: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
+    var pending: [(loser: BuiltinAction, peer: BuiltinAction, line: Int)] = []
     while true {
         let drops = builtinCollisionDrops(candidates: candidates, unbound: unbound,
                                           overrideLine: overrideLine)
@@ -373,7 +373,7 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set
         let scope = DropScope(hasSiblings: alternatives[drop.loser] != nil)
         diagnostics.append(KeymapDiagnostic(
             line: drop.line,
-            message: "chord conflicts with built-in '\(drop.keeper.rawValue)'; \(scope.mapSkipped)"))
+            message: "chord conflicts with built-in '\(drop.peer.rawValue)'; \(scope.mapSkipped)"))
     }
 
     return candidates
@@ -383,7 +383,7 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride], unbound: Set
 /// for its diagnostic. Empty when the candidate set is collision-free.
 private func builtinCollisionDrops(candidates: [BuiltinAction: Chord], unbound: Set<BuiltinAction>,
                                    overrideLine: [BuiltinAction: Int])
-    -> [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] {
+    -> [(loser: BuiltinAction, peer: BuiltinAction, line: Int)] {
     // an unbound action holds no chord, so its shipped default stops blocking another built-in. It has no
     // candidate to drop either, which keeps the loop terminating.
     var ownersByChord: [Chord: [BuiltinAction]] = [:]
@@ -392,15 +392,15 @@ private func builtinCollisionDrops(candidates: [BuiltinAction: Chord], unbound: 
         ownersByChord[chord, default: []].append(action)
     }
 
-    var drops: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
+    var drops: [(loser: BuiltinAction, peer: BuiltinAction, line: Int)] = []
     for owners in ownersByChord.values where owners.count > 1 {
         let overriddenOwners = owners.filter { candidates[$0] != nil }
         guard !overriddenOwners.isEmpty else { continue }
         let defaultOwner = owners.first { candidates[$0] == nil }
         let stableOwners = owners.sorted { $0.rawValue < $1.rawValue }
         for loser in overriddenOwners {
-            guard let keeper = defaultOwner ?? stableOwners.first(where: { $0 != loser }) else { continue }
-            drops.append((loser, keeper, overrideLine[loser] ?? 0))
+            guard let peer = defaultOwner ?? stableOwners.first(where: { $0 != loser }) else { continue }
+            drops.append((loser, peer, overrideLine[loser] ?? 0))
         }
     }
     return drops
@@ -482,7 +482,8 @@ private func dropShadowedAlternatives(_ alternatives: [MonitorAlternative],
     for alternative in alternatives {
         let conflictKind: String?
         if let first = alternative.keybind.first, let owner = menuOwners[first] {
-            conflictKind = revertedDefaults.contains(owner) ? "built-in '\(owner.rawValue)'" : "a built-in"
+            let namesOwner = revertedDefaults.contains(owner) && alternative.target != .builtin(owner)
+            conflictKind = namesOwner ? "built-in '\(owner.rawValue)'" : "a built-in"
         } else if alternative.keybind.contains(where: isReservedMonitorChord) {
             conflictKind = "a reserved shortcut"
         } else {

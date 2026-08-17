@@ -650,6 +650,15 @@ struct KeymapTests {
         #expect(diagnostics[0].message.contains("conflicts with built-in 'toggle_split'"))
     }
 
+    @Test func restoredDefaultShadowingItsOwnAlternativeKeepsGenericDiagnostic() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+o|cmd+d toggle_split")
+        #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
+        #expect(keymap.sequences(for: .toggleSplit).isEmpty)
+        #expect(diagnostics.count == 2)
+        #expect(diagnostics[1].message ==
+            "built-in 'toggle_split' chord 'cmd+d' conflicts with a built-in; alternative dropped")
+    }
+
     @Test func unboundActionFreesItsDefaultChordForACustomCommand() {
         let text = """
         map ctrl+a>d toggle_split
