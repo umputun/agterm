@@ -16,10 +16,14 @@ now: the Release set dropped `allow-jit`, `allow-unsigned-executable-memory` and
 measurement. A missing hardened-runtime exception fails at dyld or on the exec page, so the failure is
 loud, but it lands on users rather than on CI.
 
-Before the next release, launch the notarized build by hand once and exercise: first surface render
-(libghostty compiles its Metal shaders at runtime), a font-size or theme change forcing a pipeline
-rebuild, window translucency (the `dlopen(nil)`/`dlsym` path in `agterm/Views/WindowAppearance.swift`), a
-session spawning and driving heavy scrollback, and `agtermctl` from inside a session.
+Before the next release, launch the notarized build by hand once and exercise: first surface render, a
+font-size or theme change forcing a pipeline rebuild, window translucency (the `dlopen(nil)`/`dlsym` path
+in `agterm/Views/WindowAppearance.swift`), a session spawning and driving heavy scrollback, and
+`agtermctl` from inside a session. First render loads the metallib compiled into libghostty at build time
+and embedded in the binary, reached through `newLibraryWithData:`; only an optional custom shader
+compiles from source at runtime via `newLibraryWithSource:`, and that produces GPU code rather than
+CPU-executable pages. So a custom shader is worth including in the pass, but neither path is a reason to
+keep an executable-memory exception.
 
 Worth considering as a standing release step rather than a one-off, since no automated gate can replace
 it. Surfaced by issue #448 and the entitlements split that answered it.
