@@ -289,11 +289,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Confirm a quit (menu Quit / ⌘Q) before the app tears down its windows — that ends every session's
-    /// shell with no undo. Reports the open-window and session counts; skips the prompt with nothing open
-    /// (the auto-quit after the last window closed) or under XCUITest, where a modal would hang terminate.
+    /// Confirm a user-initiated quit (menu Quit / ⌘Q) when windows are open. Skip system shutdown,
+    /// restart, logout, XCUITest, auto-quit after the last window closes, or an unwired library.
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
+        if let event = NSAppleEventManager.shared().currentAppleEvent,
+           let keyword = AEKeyword("why?"),
+           let reason = event.attributeDescriptor(forKeyword: keyword),
+           QuitReason.skipsConfirmation(typeCode: reason.typeCodeValue) {
+            return .terminateNow
+        }
         let counts = library.openCounts()
         guard counts.windows > 0 else { return .terminateNow }
         let alert = NSAlert()

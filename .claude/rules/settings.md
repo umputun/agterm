@@ -131,7 +131,8 @@ paths:
   Capture no hidden split.
   Strip login `-` before shell recognition; a known shell with only flags is idle and omitted, while
   scripts/payload args remain, including `/bin/sh <script>`.
-  Force quit preserves snapshots/cwd but skips capture.
+  System shutdown, restart, and logout skip quit confirmation so `applicationWillTerminate` can capture
+  commands and flush stores. Force quit preserves earlier snapshots/cwd but skips this exit path.
   Replay arms ONLY on a launch restore: `session(from:launchRestore:)` copies
   `foregroundCommand`/`splitForegroundCommand` (like the pending override) under `launchRestore` alone,
   so a mid-run window reopen or Reopen Closed Item comes back a plain shell.

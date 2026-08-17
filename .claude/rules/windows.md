@@ -66,8 +66,9 @@ session drag are out of scope.
   live cwd changes, which structural saves may not capture. Selection and font use a roughly 0.3-second
   `Debouncer`; structural mutations save synchronously and cancel pending saves.
 - Quit uses `applicationShouldTerminate` and a warning alert with host-free `openCounts` and
-  `QuitPrompt.message`. Skip it for no open windows, XCUITest, or an unwired library during the first
-  roughly four seconds. The GUI-only prompt is keep-in-sync exempt and manually verified.
+  `QuitPrompt.message`. Skip it for system shutdown/restart/logout, no open windows, XCUITest, or an
+  unwired library during the first roughly four seconds. The GUI-only prompt is keep-in-sync exempt and
+  manually verified.
 - App-side `WindowRegistry` maps IDs to `NSWindow`. Register/unregister through `TitleProbeView`;
   `raise` deminiaturizes and fronts, and `close` uses `performClose` so standard teardown runs.
 
