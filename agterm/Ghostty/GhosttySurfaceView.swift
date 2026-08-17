@@ -715,6 +715,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         focusObservers = []
         if let surface { ghostty_surface_free(surface) }
         surface = nil
+        // libghostty's own CALayer stays as this view's layer, still holding a display callback into the
+        // renderer freed above — Metal declares no `loopExit` to clear it — so the next CoreAnimation
+        // display locks a mutex in freed memory (#443). Must follow the free, which joins the render
+        // thread: dropping the layer while it still paints trades one use-after-free for another.
+        dropGhosttyLayer()
         // the other end of the `surface != nil` term: this element just left the a11y tree, and a client
         // holding it needs to re-resolve rather than keep writing into a closed session's pane.
         postAccessibilityExposureChange()
@@ -757,6 +762,20 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onSearchEnd = nil
         onSearchTotal = nil
         onSearchSelected = nil
+    }
+
+    /// Swaps libghostty's `CALayer` subclass out for a plain one, keeping the last painted frame as its
+    /// contents so a pane about to be unmounted does not blank for a frame first. The contents are an
+    /// `IOSurface` the layer retains, so carrying the reference over outlives the freed renderer.
+    private func dropGhosttyLayer() {
+        let plain = CALayer()
+        if let stale = layer {
+            plain.frame = stale.frame
+            plain.contentsScale = stale.contentsScale
+            plain.contentsGravity = stale.contentsGravity
+            plain.contents = stale.contents
+        }
+        layer = plain
     }
 
     /// `TerminalSurface` conformance: the model calls this when the owning session is closed.

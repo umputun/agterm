@@ -20,6 +20,17 @@ paths:
   producer of `GHOSTTY_ACTION_RENDER`. The action is therefore unreachable on the embedded apprt and the
   `action` switch drops it to `default`. If `GHOSTTY_REV` ever advances onto a libghostty that declares
   that constant, panes stop painting until a RENDER arm calling `ghostty_surface_draw` comes back.
+- The render thread is not the only painter: libghostty installs its own `CALayer` subclass as the surface
+  view's layer, and its `display` calls a callback holding a raw `*Renderer`, so CoreAnimation draws on the
+  main thread too. Before upstream `4b4a5b241109` nothing cleared that callback — `Metal.deinit` dropped
+  only ghostty's retain while the view kept the layer alive — so after `ghostty_surface_free` the layer
+  pointed into a freed renderer and the next display aborted on
+  `BUG IN CLIENT OF LIBPLATFORM: os_unfair_lock is corrupt` (#443). Reproduced deterministically only under
+  `MallocScribble=1`; on unrecycled memory the same sequence survives, which is why one report over 46
+  hours was the expected shape rather than a weak signal.
+- `destroySurface` swaps in a plain layer anyway, carrying the last frame's contents, and must do it AFTER
+  the free, which is what joins the render thread. The current pin carries the upstream fix, so this is
+  defence against building on a libghostty that does not — keep it even though it looks redundant.
 - The render thread returns early on `!self.flags.visible`, so `ghostty_surface_set_occlusion` is a real
   lever over what hidden panes cost. `docs/backlog/hidden-panes-keep-drawing.md` owns whether agterm
   pulls it and what that is worth.

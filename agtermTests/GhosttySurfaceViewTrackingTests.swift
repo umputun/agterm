@@ -151,4 +151,18 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
                        "a torn-down hud surface must not leave its painter a file to keep reading")
         XCTAssertNil(view.hudBodyFile)
     }
+
+    /// #443: libghostty's layer holds a display callback into the renderer `destroySurface` frees, so the
+    /// next CoreAnimation display of that layer aborts the process on a corrupt lock.
+    func testTeardownDropsTheLayerLibghosttyInstalled() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let stale = CALayer()
+        stale.contentsScale = 3
+        view.layer = stale
+
+        view.destroySurface()
+
+        XCTAssertFalse(view.layer === stale, "a torn-down surface must not keep the layer libghostty installed")
+        XCTAssertEqual(view.layer?.contentsScale, 3, "the replacement carries the last frame, so nothing blanks")
+    }
 }
