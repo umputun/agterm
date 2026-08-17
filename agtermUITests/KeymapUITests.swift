@@ -35,8 +35,14 @@ final class KeymapUITests: XCTestCase {
         openPalette("Command Palette")
         typeIntoPalette("Touch File")
 
-        let badge = app.descendants(matching: .any).matching(identifier: "palette-badge").firstMatch
-        XCTAssertTrue(badge.waitForExistence(timeout: 5), "the custom command should show the `custom` badge in the palette")
+        // #316 put `palette-item-<id>` on the row container and SwiftUI propagates a container identifier
+        // onto its descendant Texts, so the badge stopped answering to `palette-badge`; its accessibility
+        // VALUE still carries the label, which is what identifies it now.
+        let rows = app.descendants(matching: .staticText)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'palette-item-'"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "the filtered palette should show the custom command")
+        XCTAssertTrue(poll { rows.allElementsBoundByIndex.contains { ($0.value as? String) == "custom" } },
+                      "the custom command should show the `custom` badge in the palette")
 
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(poll { FileManager.default.fileExists(atPath: marker.path) },

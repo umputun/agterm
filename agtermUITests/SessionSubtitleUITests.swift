@@ -91,9 +91,15 @@ final class SessionSubtitleUITests: XCTestCase {
         let item = app.menuItems["Go to Session"]
         guard item.waitForExistence(timeout: 5) else { return "" }
         item.click()
-        let subtitle = app.staticTexts["palette-subtitle"].firstMatch
-        guard subtitle.waitForExistence(timeout: 5) else { return "" }
-        return subtitle.value as? String ?? ""
+        let rows = app.descendants(matching: .staticText)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'palette-item-'"))
+        guard rows.firstMatch.waitForExistence(timeout: 5) else { return "" }
+        // #316 put `palette-item-<id>` on the row container and SwiftUI propagates a container identifier
+        // onto its descendant Texts, so the subtitle stopped answering to `palette-subtitle`. It is still
+        // the only row text carrying the `workspace · detail` separator, which is what finds it now.
+        return rows.allElementsBoundByIndex
+            .compactMap { $0.value as? String }
+            .first { $0.contains(" · ") } ?? ""
     }
 
     private func closePalette() {
