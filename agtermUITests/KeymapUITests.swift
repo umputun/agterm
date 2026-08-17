@@ -61,7 +61,11 @@ final class KeymapUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Touch File"].waitForExistence(timeout: 5),
                       "the custom command should appear in the Custom Commands palette")
         XCTAssertFalse(app.staticTexts["New Session"].exists, "built-in actions must not appear in the Custom Commands palette")
-        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "palette-badge").firstMatch.exists,
+        // through the row identifier for the same reason as the positive lookup above: querying
+        // `palette-badge` here would find nothing whether or not a badge renders, so it could not fail.
+        let customRows = app.descendants(matching: .staticText)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'palette-item-'"))
+        XCTAssertFalse(customRows.allElementsBoundByIndex.contains { ($0.value as? String) == "custom" },
                        "the Custom Commands palette should not show the `custom` badge")
 
         typeIntoPalette("Touch File")

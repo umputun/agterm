@@ -715,10 +715,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         focusObservers = []
         if let surface { ghostty_surface_free(surface) }
         surface = nil
-        // libghostty's own CALayer stays as this view's layer, still holding a display callback into the
-        // renderer freed above — Metal declares no `loopExit` to clear it — so the next CoreAnimation
-        // display locks a mutex in freed memory (#443). Must follow the free, which joins the render
-        // thread: dropping the layer while it still paints trades one use-after-free for another.
+        // release the custom layer libghostty installed and this view still retains. The current pin clears
+        // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where
+        // the callback kept pointing at the freed renderer and the next CoreAnimation display locked a mutex
+        // in freed memory (#443). Must follow the free, which joins the render thread: dropping the layer
+        // while it still paints trades one use-after-free for another.
         dropGhosttyLayer()
         // the other end of the `surface != nil` term: this element just left the a11y tree, and a client
         // holding it needs to re-resolve rather than keep writing into a closed session's pane.

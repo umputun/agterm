@@ -40,8 +40,8 @@ need_res=true
 [[ -d "$XCFRAMEWORK_DIR" ]] && need_xc=false
 [[ -d "$RESOURCES_MARKER" ]] && need_res=false
 
-# a stale stamp restages BOTH: they come out of one build, and the artifact that carries the patch
-# cannot be told apart from the one that does not.
+# a stale stamp restages BOTH: they come out of one build, and an artifact built from another revision
+# cannot be told apart from a current one.
 if [[ ! -f "$STAMP_FILE" || "$(cat "$STAMP_FILE")" != "$GHOSTTY_REV" ]]; then
   need_xc=true
   need_res=true
