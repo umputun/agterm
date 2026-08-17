@@ -5,7 +5,11 @@
      and the hosted tests load an ad-hoc .xctest into that app, so library validation would reject both
      on a Team-ID mismatch. allow-jit and allow-unsigned-executable-memory serve Xcode's preview
      executor, which JIT-links in process. The Release bundle has no dylib and no JIT, so it carries
-     none of the three. -->
+     none of the three.
+
+     They date from the scaffold, which set hardened runtime with CODE_SIGN_IDENTITY "-", so every build
+     was ad-hoc and every build needed them. Developer ID signing arrived six days later (13afe65) and
+     narrowed that to Debug alone; the file was not revisited until issue #448. -->
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.cs.disable-library-validation</key>
