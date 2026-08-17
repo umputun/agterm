@@ -49,11 +49,10 @@ final class EventSubscriptionUITests: ControlAPITestCase {
         XCTAssertTrue(close.waitForExistence(timeout: 2))
         XCTAssertTrue(close.isEnabled)
         close.click()
-        app.menuBars.menuBarItems["File"].click()
-        let reopen = app.menuItems["Reopen Closed Item"]
-        XCTAssertTrue(reopen.waitForExistence(timeout: 2))
-        XCTAssertTrue(reopen.isEnabled)
-        reopen.click()
+        // ⌘Z, not File ▸ Reopen Closed Item: the undo record lives for
+        // `AppStore.pendingCloseGraceInterval` (3s) and a second menu round-trip costs more than that, so
+        // the record hard-finalizes before the click lands and the menu item is stale-enabled by then.
+        app.typeKey("z", modifierFlags: .command)
         let lifecycle = try pollEvents(anchor: lifecycleAnchor,
                                        kinds: ["session.created", "session.closed"], minimum: 3)
         try lifecycle.items.forEach(assertCommonEnvelope)
