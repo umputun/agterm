@@ -61,6 +61,16 @@ struct ControlProtocolTests {
         #expect(try JSONDecoder().decode(ControlResult.self, from: Data(json.utf8)).pick == nil)
     }
 
+    @Test func controlResultCursorRoundTripsAndOmitsWhenNil() throws {
+        let carried = ControlResponse(ok: true, result: ControlResult(id: "surface:s1:left",
+                                                                     cursor: ControlCursor(column: 12)))
+        #expect(try roundTrip(carried) == carried)
+
+        let json = String(decoding: try JSONEncoder().encode(ControlResult(id: "surface:s1:left")), as: UTF8.self)
+        #expect(!json.contains("\"cursor\""), "a nil cursor must be omitted from the JSON; got \(json)")
+        #expect(try JSONDecoder().decode(ControlResult.self, from: Data(json.utf8)).cursor == nil)
+    }
+
     @Test func controlTreePickPendingOmitsWhenNil() throws {
         let tree = ControlTree(workspaces: [])
         let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
@@ -140,6 +150,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionOverlayText, target: "9f3c", args: ControlArgs(lines: 20)),
             ControlRequest(cmd: .surfaceZoom, target: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right",
                            args: ControlArgs(mode: "show", window: "win")),
+            ControlRequest(cmd: .surfaceCursor, target: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:left",
+                           args: ControlArgs(window: "win")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

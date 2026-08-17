@@ -741,7 +741,7 @@ extension ControlServer: ControlActions {
         }
     }
 
-    private func resolveOpenWindow(_ window: String?) -> ControlTargetResolver.Resolution<(WindowInfo.ID, AppStore)> {
+    func resolveOpenWindow(_ window: String?) -> ControlTargetResolver.Resolution<(WindowInfo.ID, AppStore)> {
         guard let window = trimmed(window) else {
             guard let windowID = library.activeWindowID, let store = library.store(for: windowID) else {
                 return .failure(ControlResponse(ok: false, error: "no open window"))
@@ -759,7 +759,7 @@ extension ControlServer: ControlActions {
         }
     }
 
-    private func resolveSurfaceOwner(_ surfaceID: TerminalSurfaceID, window: String?)
+    func resolveSurfaceOwner(_ surfaceID: TerminalSurfaceID, window: String?)
         -> ControlTargetResolver.Resolution<(WindowInfo.ID, AppStore)> {
         if trimmed(window) != nil {
             switch resolveOpenWindow(window) {

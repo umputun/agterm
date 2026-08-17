@@ -40,6 +40,7 @@ final class MockControlActions: ControlActions {
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
+        case surfaceCursor(target: String?, window: String?)
         case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool)
         case font(target: String?, window: String?, pane: String?, String)
         case keymapReload
@@ -135,6 +136,7 @@ final class MockControlActions: ControlActions {
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
     var nextSurfaceZoomResponse = ControlResponse(ok: true)
+    var nextSurfaceCursorResponse = ControlResponse(ok: true, result: ControlResult(cursor: ControlCursor(column: 0)))
     var nextDashboardResponse = ControlResponse(ok: true)
     var nextWindowNewResponse = ControlResponse(ok: true)
     var nextWindowListResponse = ControlResponse(ok: true)
@@ -322,6 +324,11 @@ final class MockControlActions: ControlActions {
     func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse {
         calls.append(.surfaceZoom(target: target, window: window, mode))
         return nextSurfaceZoomResponse
+    }
+
+    func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.surfaceCursor(target: target, window: window))
+        return nextSurfaceCursorResponse
     }
 
     func setDashboard(targets: [String], window: String?, close: Bool,

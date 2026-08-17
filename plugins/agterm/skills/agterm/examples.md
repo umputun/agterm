@@ -693,6 +693,25 @@ agtermctl tree --json | jq -r '.result.tree.zoomedSurface'
 `surface zoom` is not `window zoom`: it does not move/resize the macOS window and must not change split
 ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from `tree --json`.
 
+## Read a surface's cursor column
+
+```bash
+# The active surface's zero-based column, as a plain number.
+col=$(agtermctl surface cursor)
+
+# Any addressable surface, including a pane that is not on screen.
+agtermctl surface cursor --target "surface:${AGTERM_SESSION_ID:?}:right"
+
+# Under --json it is nested, so a future row would not move it.
+agtermctl surface cursor --json | jq -r '.result.cursor.column'
+```
+
+Use it as a ONE-WAY signal about the line the caret is on. A column past the prompt proves the line is not
+empty. A column AT the prompt proves nothing — the caret may have been moved back over text that is still
+there — so never read it as "the input is empty". There is no row: the pinned libghostty exposes no cursor
+accessor, and the vertical metrics it does export cannot recover a row that survives a custom
+`adjust-font-baseline`. The command reports no field in `tree`, so poll it when you need it.
+
 ## Watch several sessions at once in a dashboard grid
 
 The dashboard shows several sessions' live output in one view-only grid — for watching several agents or

@@ -1584,6 +1584,34 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func surfaceCursorRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSurfaceCursorResponse = ControlResponse(
+            ok: true, result: ControlResult(id: "surface:s1:right", cursor: ControlCursor(column: 7))
+        )
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .surfaceCursor,
+            target: "surface:s1:right",
+            args: ControlArgs(window: "win")
+        ))
+
+        #expect(response == ControlResponse(
+            ok: true, result: ControlResult(id: "surface:s1:right", cursor: ControlCursor(column: 7))
+        ))
+        #expect(actions.calls == [.surfaceCursor(target: "surface:s1:right", window: "win")])
+    }
+
+    @Test func surfaceCursorDefaultsTargetAndWindowToNil() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .surfaceCursor))
+
+        #expect(actions.calls == [.surfaceCursor(target: nil, window: nil)])
+    }
+
     @Test func dashboardOpenRoutesTargetsWindowAndFixedFontMode() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

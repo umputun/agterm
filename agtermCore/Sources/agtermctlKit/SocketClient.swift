@@ -206,6 +206,11 @@ struct SocketClient {
             // keymap.reload reports its parse-diagnostic count; 0 reads as a clean reload.
             return count == 0 ? "ok" : "\(count) diagnostic(s)"
         }
+        if let cursor = response.result?.cursor {
+            // the bare column, scriptable as a command substitution. This stays one value even if the
+            // payload ever gains a row: a second field belongs under --json, not in a format callers parse.
+            return "\(cursor.column)"
+        }
         if let ratio = response.result?.ratio {
             // session.resize echoes the applied (clamped) primary-pane fraction, scriptable as a bare number.
             return String(format: "%.3f", ratio)

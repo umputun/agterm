@@ -28,6 +28,20 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
         }
     }
 
+    /// The live surface occupying this slot, nil when nothing has been created there. Availability is a
+    /// separate question — `isAvailable` answers whether the slot is ADDRESSABLE, which a session can be
+    /// while its surface has yet to come up.
+    @MainActor public func surface(in session: Session) -> (any TerminalSurface)? {
+        switch self {
+        case .primary: return session.surface
+        case .split: return session.splitSurface
+        case .scratch: return session.scratchSurface
+        case .overlay: return session.overlaySurface
+        case .overlayLeft: return session.leftOverlaySurface
+        case .overlayRight: return session.rightOverlaySurface
+        }
+    }
+
     @MainActor public func isAvailable(in session: Session) -> Bool {
         switch self {
         case .primary:

@@ -802,6 +802,19 @@ opens on the zoomed session still spawn their shells behind the zoom layer. A no
 click exits zoom before revealing its session. Use `surface zoom` when the user/agent needs a pane
 fullscreen inside agterm; use `window zoom` only to maximize the whole window on screen.
 
+`agtermctl surface cursor [--target SURFACE_ID|active|quick] [--window W]` — the surface's zero-based
+cursor column, counted from the left edge of the grid. Plain output is the bare number, so
+`col=$(agtermctl surface cursor)` works; under `--json` it is `.result.cursor.column`. The target
+vocabulary and its refusals are `surface zoom`'s, so an explicit `SURFACE_ID` reads a hidden pane or a
+background session as readily as the visible one. It is a pure read: it neither selects nor realizes the
+target, and it reports no field in `tree`, so poll it when you need it.
+
+There is no row. The pinned libghostty exposes no cursor accessor and the vertical metrics it does export
+cannot recover a row that survives a custom `adjust-font-baseline`; a `row` would join the same `cursor`
+object if that ever changes. Treat the column as a one-way signal about the line: past the prompt it
+proves the line is NOT empty, at the prompt it proves nothing, because the caret may have been moved back
+over text that is still there. Never read "column equals the prompt" as "the composer is empty".
+
 ## dashboard
 
 `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a per-window, view-only

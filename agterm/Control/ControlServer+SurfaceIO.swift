@@ -268,6 +268,74 @@ extension ControlServer {
         }
     }
 
+    /// Returns the addressed surface's zero-based cursor column. Takes `surface.zoom`'s target vocabulary —
+    /// `surface:<session-id>:<kind>` ids from `tree`, `quick`, or `active` for the frontmost (or `--window`)
+    /// window's active surface — so both `surface.*` commands address the same set. Unlike zoom it changes
+    /// nothing, so it neither selects nor realizes the target: an unrealized surface is reported, not waited
+    /// for. `GhosttySurfaceView.readCursorColumn` owns how the column is derived and when it declines.
+    func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse {
+        let rawTarget = trimmed(target) ?? "active"
+        if rawTarget == "quick" {
+            // `hide()` deliberately keeps the panel's surface alive, so visibility is the gate, not the
+            // surface existing — otherwise a panel shown once stays readable forever. Same test `setZoom` makes.
+            guard QuickTerminalController.shared.isVisible,
+                  let surface = QuickTerminalController.shared.currentSurface() else {
+                return ControlResponse(ok: false, error: "surface not available: quick")
+            }
+            return cursorResponse(surface, controlID: "quick")
+        }
+        let resolved: (store: AppStore, target: TerminalZoomTarget)
+        if rawTarget == "active" {
+            switch resolveOpenWindow(window) {
+            case .failure(let response):
+                return response
+            case .success(let (windowID, store)):
+                // a live zoom IS the active surface, and `surface.zoom active` resolves it the same way: the
+                // controller's target wins over the store's focused pane, which zooming a NONFOCUSED pane
+                // never moves.
+                guard let zoomTarget = TerminalZoomRegistry.shared.controller(for: windowID)?.target
+                        ?? TerminalZoomController.resolveTarget(store: store) else {
+                    return ControlResponse(ok: false, error: "no active surface")
+                }
+                resolved = (store, zoomTarget)
+            }
+        } else {
+            guard let surfaceID = TerminalSurfaceID(rawValue: rawTarget) else {
+                return ControlResponse(ok: false, error: "invalid surface: \(rawTarget)")
+            }
+            switch resolveSurfaceOwner(surfaceID, window: window) {
+            case .failure(let response):
+                return response
+            case .success(let (_, store)):
+                resolved = (store, .session(surfaceID.sessionID, surfaceID.surface))
+            }
+        }
+        // the same validity gate `surface.zoom` applies, so an explicit id cannot reach an occupant the tree
+        // refuses to address: a HUD fills `overlaySurface` while `.overlay` reads unavailable, and without
+        // this a guessed `surface:<id>:overlay` would report the app's own message painter's cursor.
+        guard case let .session(sessionID, kind) = resolved.target,
+              let session = resolved.store.session(withID: sessionID),
+              TerminalZoomController.isTargetValid(resolved.target, in: resolved.store) else {
+            return ControlResponse(ok: false, error: "surface not available: \(resolved.target.controlID)")
+        }
+        return cursorResponse(kind.surface(in: session) as? GhosttySurfaceView, controlID: resolved.target.controlID)
+    }
+
+    private func cursorResponse(_ surface: GhosttySurfaceView?, controlID: String) -> ControlResponse {
+        guard let surface else {
+            return ControlResponse(ok: false, error: "surface not available: \(controlID)")
+        }
+        // an occupied slot proves nothing about a running terminal — the deck parks the view before
+        // `createSurface`, which the display being asleep refuses outright (#416).
+        guard surface.isRealized else {
+            return ControlResponse(ok: false, error: "surface not realized")
+        }
+        guard let column = surface.readCursorColumn() else {
+            return ControlResponse(ok: false, error: "failed to read cursor position")
+        }
+        return ControlResponse(ok: true, result: ControlResult(id: controlID, cursor: ControlCursor(column: column)))
+    }
+
     /// Drives in-terminal search on session `id`, mirroring the GUI bar. `close` exits without selecting;
     /// open/needle/navigate select the target, open search on the focused pane if not already active, then
     /// set the needle and step on `to == next|prev` — all on the PINNED `searchSurface`, so a split focus

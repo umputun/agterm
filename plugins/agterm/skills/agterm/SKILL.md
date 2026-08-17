@@ -17,7 +17,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
@@ -99,8 +99,8 @@ Inspect the live tree any time with `agtermctl tree --json` (workspaces → sess
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
-control address for `surface zoom` (`left`, `right`, `scratch`, `overlay`, `overlay-left`, or
-`overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries five
+control address for `surface zoom` and `surface cursor` (`left`, `right`, `scratch`, `overlay`,
+`overlay-left`, or `overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries five
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
@@ -198,7 +198,7 @@ the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
 (which pane holds focus in a session that has a split: `true` = split/right/bottom, `false` = primary/left/top; omitted
 when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
-(`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
+(`id`, `kind`, `active`, `visible`) for `surface zoom` and `surface cursor`. The tree top level carries `zoomedSurface`
 (the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
 `surface zoom`, so a script can check the zoom state and record-then-restore). It also carries the read
 side of the `dashboard` command (all omitted when no dashboard is open): `dashboardMembers` (the pane refs

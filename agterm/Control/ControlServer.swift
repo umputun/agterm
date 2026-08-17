@@ -422,6 +422,7 @@ final class ControlServer {
                 .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
+                .surfaceCursor,
                 .sessionStatus, .sessionFlag, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,

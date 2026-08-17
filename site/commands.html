@@ -192,7 +192,7 @@
             <a href="#overlay" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session overlay</a>
             <a href="#hud" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session hud</a>
             <a href="#window" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">window</a>
-            <a href="#surface" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">surface zoom</a>
+            <a href="#surface" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">surface</a>
             <a href="#dashboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">dashboard</a>
             <a href="#pick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">pick</a>
             <a href="#quick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">quick</a>
@@ -1932,11 +1932,12 @@
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
               "
             >
-              surface zoom
+              surface
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A view mode that fills the window with one terminal surface. It never touches the macOS window frame —
-              distinct from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window zoom</span>.
+              Commands addressing one terminal surface rather than a session: a view mode that fills the window with a
+              single surface, and a read of that surface's cursor column. Both take the same
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> vocabulary.
             </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -1978,6 +1979,39 @@
                 The panel's zoom is app-level and independent of any window's, and it takes precedence: while it is zoomed the
                 field reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> even if that window's own
                 session zoom is armed. Record the value before zooming the panel, not after.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl surface cursor [--target surface:&lt;id&gt;:right | active | quick] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">surface.cursor</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Report the surface's zero-based cursor column, counted from the left edge of the grid. Human output is the
+                bare number, so it drops straight into a command substitution; under
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> it is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.cursor.column</span>. The target vocabulary is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface zoom</span>'s, so an explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;kind&gt;</span>
+                id reads a hidden pane or a background session just as well as the visible one. This is a pure read: it neither
+                selects nor realizes the target, so an unrealized surface is reported rather than waited for.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                There is no row. The pinned libghostty exposes no cursor accessor, and the vertical metrics it does export
+                cannot recover a row that survives a custom
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">adjust-font-baseline</span> — a wrong row is worse
+                than an absent one. If libghostty ever exports the position directly, a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">row</span> joins the same
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cursor</span> object under
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span>; the plain output stays one number.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A column is a signal, not a claim about the line's contents. Past the prompt it establishes the line is not
+                empty; at the prompt it establishes nothing, because the caret may have been moved back over text that is
+                still there. It is poll-only and reports no read-back field in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>: the read is expensive enough that
+                paying it for every live and hidden surface on every poll would be the wrong trade.
               </p>
             </div>
           </section>

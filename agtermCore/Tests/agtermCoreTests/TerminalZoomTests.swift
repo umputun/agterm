@@ -13,6 +13,29 @@ struct TerminalZoomTests {
         }
     }
 
+    @Test func surfaceInSessionReturnsEachSlotsOwnSurface() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let slots: [(TerminalZoomSurface, ReferenceWritableKeyPath<Session, (any TerminalSurface)?>)] = [
+            (.primary, \.surface), (.split, \.splitSurface), (.scratch, \.scratchSurface),
+            (.overlay, \.overlaySurface),
+            (.overlayLeft, \.leftOverlaySurface), (.overlayRight, \.rightOverlaySurface),
+        ]
+
+        for (kind, slot) in slots {
+            #expect(kind.surface(in: session) == nil)
+            let surface = SpySurface()
+            session[keyPath: slot] = surface
+            #expect(kind.surface(in: session) === surface)
+            // every other slot must stay empty, or a transposed case would still read as a hit
+            for (other, _) in slots where other != kind {
+                #expect(other.surface(in: session) == nil)
+            }
+            session[keyPath: slot] = nil
+        }
+    }
+
     @Test func resolveTargetPrioritizesSessionCoversThenFocusedPane() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

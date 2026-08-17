@@ -176,15 +176,7 @@ extension WindowContentView {
         guard pick.pending == nil else { return }
         let expectedTarget = TerminalZoomTarget.session(session.id, surface)
         guard terminalZoom.target == expectedTarget else { return }
-        let target: (any TerminalSurface)? = switch surface {
-        case .primary: session.surface
-        case .split: session.splitSurface
-        case .scratch: session.scratchSurface
-        case .overlay: session.overlaySurface
-        case .overlayLeft: session.leftOverlaySurface
-        case .overlayRight: session.rightOverlaySurface
-        }
-        if let view = target as? GhosttySurfaceView {
+        if let view = surface.surface(in: session) as? GhosttySurfaceView {
             // suppress the focus report BEFORE the first grab: this runs from the target onChange, which can
             // land before the zoom layer's TerminalView has mounted and flipped the flag, and an unsuppressed
             // makeFirstResponder on the still-deck-hosted surface fires onFocusChange(true) and mutates

@@ -192,8 +192,28 @@ struct Quick: ParsableCommand {
 struct Surface: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Terminal surface commands.",
-        subcommands: [Zoom.self]
+        subcommands: [Zoom.self, Cursor.self]
     )
+
+    struct Cursor: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Report a terminal surface's zero-based cursor column.",
+            discussion: """
+            Prints the column alone, so it drops straight into a command substitution. Row is not \
+            reported: the pinned libghostty exposes no cursor accessor and the vertical metrics it does \
+            export cannot recover a row that survives a custom `adjust-font-baseline`.
+
+            A column is a signal, not proof about the line's content. Past the prompt it establishes the \
+            line is not empty; AT the prompt it establishes nothing, since the caret may have been moved \
+            back over text that is still there.
+            """)
+        @OptionGroup var target: SurfaceTargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .surfaceCursor, target: target.target, args: options.withWindow(ControlArgs()))
+        }
+    }
 
     struct Zoom: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Zoom a terminal surface (show|hide|toggle).")

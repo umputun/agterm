@@ -126,7 +126,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
-- `surface.zoom`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
+- `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `notify`
 - `font.inc`, `font.dec`, `font.reset`
@@ -425,6 +425,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   then scratch, then the focused pane's own overlay, then that pane. Those
   predicates are mutually exclusive and total, resting on `Session.focusedPane`, so widening one without
   narrowing its neighbour silently picks the wrong surface.
+- `surface.cursor` reports a zero-based COLUMN and nothing else, nested as `result.cursor.column` so a `row`
+  could join it additively; the human form is the bare integer and must stay one value. libghostty exports no
+  cursor accessor, so the column is solved for: `ghostty_surface_ime_point` gives the cell midpoint including
+  an unknown padding term, and reading the viewport's top-left cell MEASURES that term as
+  `ghostty_text_s.tl_px_x`, which cancels. Verified exact under asymmetric `window-padding-*` with
+  `window-padding-balance`, across font sizes, on both split panes and on a hidden background session.
+  There is NO row, and the vertical twin is not a near miss to be finished later: `tl_px_y` is the text
+  BASELINE against an IME point at the cell bottom, and `adjust-font-baseline = 30` was measured reporting
+  row 5 for a caret on row 4 while the column stayed right — a silent off-by-one, so a row waits for a real
+  accessor. Use `TerminalZoomSurface.surface(in:)`, never a second inline switch over the six slots.
+- It shares `surface.zoom`'s target vocabulary AND its gates, which is not cosmetic: `active` must consult
+  the window's `TerminalZoomRegistry` target BEFORE the store's focused pane, or zooming a nonfocused pane
+  reads the hidden one; and both paths must pass `TerminalZoomController.isTargetValid`, or a guessed
+  `surface:<id>:overlay` reads a HUD the tree omits and zoom rejects. `quick` gates on
+  `QuickTerminalController.isVisible`, not on `currentSurface()`, which `hide()` deliberately keeps alive.
+  All three shipped as bugs once; `ControlSurfaceCursorUITests` pins each.
+- It is a pure read that adds NO tree field, a deliberate exception to the state-command read-back rule
+  (it sets no state) and to the temptation to project it: `ghostty_surface_read_text` allocates and takes the
+  renderer lock, so paying it per live and hidden surface on every tree poll is the wrong trade.
 - `quick` is the one target that names no window surface: it grows the quick-terminal PANEL to fill its
   screen. `setSurfaceZoom` routes it before resolving a window, so it takes no `--window` and never reaches
   `resolveSurfaceZoom`; it is refused `surface not available: quick` while the panel is hidden, and an

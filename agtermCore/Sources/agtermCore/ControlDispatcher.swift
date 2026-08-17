@@ -52,6 +52,9 @@ public protocol ControlActions {
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
     func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
+    /// The addressed surface's cursor column. Takes `surface.zoom`'s target vocabulary, `quick` included,
+    /// because it addresses the same set of surfaces; unlike zoom it is a pure read and changes nothing.
+    func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse
     func setDashboard(targets: [String], window: String?, close: Bool,
                       fontMode: DashboardFontMode, mru: Bool) -> ControlResponse
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse
@@ -214,7 +217,7 @@ public struct ControlDispatcher {
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus, .sessionRestore:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize,
-                .surfaceZoom, .sessionType,
+                .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionOverlayCopy,
                 .sessionOverlayText, .sessionBackground,
@@ -588,6 +591,8 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid surface zoom mode: \(request.args?.mode ?? "toggle")")
             }
             return actions.setSurfaceZoom(request.target, window: request.args?.window, mode: mode)
+        case .surfaceCursor:
+            return actions.readSurfaceCursor(request.target, window: request.args?.window)
         case .sessionType:
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")

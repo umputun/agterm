@@ -758,6 +758,13 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response, json: false) == "selected\nlines")
     }
 
+    @Test(arguments: [0, 42])
+    func formatResponseCursorPrintsTheBareColumn(_ column: Int) {
+        let response = ControlResponse(ok: true, result: ControlResult(id: "surface:s1:left",
+                                                                      cursor: ControlCursor(column: column)))
+        #expect(SocketClient.formatResponse(response, json: false) == "\(column)")
+    }
+
     @Test func formatResponseZeroCountIsOk() {
         // keymap.reload reports a parse-diagnostic count; 0 reads as a clean reload.
         let response = ControlResponse(ok: true, result: ControlResult(count: 0))

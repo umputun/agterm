@@ -33,6 +33,7 @@ public enum Command: String, Codable, Sendable {
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
     case surfaceZoom = "surface.zoom"
+    case surfaceCursor = "surface.cursor"
     case dashboard
     case sessionCopy = "session.copy"
     case sessionPaste = "session.paste"
@@ -858,6 +859,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var keymap: ControlKeymap?
     /// The current or terminal picker outcome for `pick.result`.
     public var pick: ControlPickResult?
+    /// The addressed surface's cursor position for `surface.cursor`.
+    public var cursor: ControlCursor?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -865,7 +868,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
                 events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
-                pick: ControlPickResult? = nil) {
+                pick: ControlPickResult? = nil, cursor: ControlCursor? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -882,6 +885,24 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.events = events
         self.keymap = keymap
         self.pick = pick
+        self.cursor = cursor
+    }
+}
+
+/// `surface.cursor`'s payload, nested so a `row` could join it additively rather than by a rename.
+///
+/// There is no row: `tl_px_y` is the text BASELINE against an IME point at the cell bottom, leaving a term
+/// no probe separates from the row, and `adjust-font-baseline = 30` was measured reporting row 5 for a caret
+/// on row 4. `GhosttySurfaceView.readCursorColumn` owns why the horizontal twin is exact.
+///
+/// A column is a signal, not an assertion about content: past the prompt it proves the line is not empty,
+/// AT the prompt it proves nothing, the caret having possibly moved back over text.
+public struct ControlCursor: Codable, Sendable, Equatable {
+    /// Zero-based, counted from the left edge of the grid.
+    public let column: Int
+
+    public init(column: Int) {
+        self.column = column
     }
 }
 

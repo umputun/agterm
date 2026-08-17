@@ -1210,6 +1210,18 @@ struct CommandsTests {
             ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "hide", window: "win")))
     }
 
+    @Test func surfaceCursorDefaultsToActive() throws {
+        #expect(try request(["surface", "cursor"]) ==
+            ControlRequest(cmd: .surfaceCursor, target: "active", args: ControlArgs()))
+    }
+
+    @Test func surfaceCursorTargetsSurfaceIDAndWindow() throws {
+        let id = "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right"
+
+        #expect(try request(["surface", "cursor", "--target", id, "--window", "win"]) ==
+            ControlRequest(cmd: .surfaceCursor, target: id, args: ControlArgs(window: "win")))
+    }
+
     // MARK: - pick
 
     @Test func pickDefaultsToOpen() throws {

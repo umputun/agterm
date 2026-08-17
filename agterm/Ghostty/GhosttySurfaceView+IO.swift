@@ -96,6 +96,57 @@ extension GhosttySurfaceView {
         return rows.suffix(n).joined(separator: "\n")
     }
 
+    /// This surface's zero-based cursor COLUMN (`surface.cursor`), nil when the surface is not created or
+    /// the geometry cannot be trusted. Row is deliberately absent: see the type comment on `ControlCursor`.
+    ///
+    /// libghostty exports no cursor accessor, so the column is solved for. `ghostty_surface_ime_point`
+    /// reports the cursor cell's horizontal MIDPOINT as
+    /// `(column * cellWidth + paddingLeft + cellWidth / 2) / contentScale`, and the padding term is the
+    /// unknown — `ghostty_surface_size` carries no padding, agterm's default comes from
+    /// `Resources/ghostty-defaults.conf`, and a user `ghostty.conf` may override it untracked (the same
+    /// hazard `Hud.swift` documents for its own column math). Reading the viewport's top-left cell MEASURES
+    /// it instead: `ghostty_text_s.tl_px_x` is `(column * cellWidth + paddingLeft) / contentScale` for the
+    /// selected cell, so at column zero it is exactly the padding term in the same units, and subtracting
+    /// leaves `column + 0.5` cells. That holds under asymmetric padding and every padding-balance mode
+    /// because neither side is derived.
+    ///
+    /// The libghostty calls each take the renderer lock separately, so geometry changing between them —
+    /// a font-size change or a resize — would mix two coordinate systems. The grid is re-read afterwards and
+    /// a change abandons the reading. Padding is not re-checked because it cannot move under a live surface:
+    /// libghostty derives it at first layout only, which is why `window-padding-*` needs a new pane. This is
+    /// still an instantaneous sample, not a lock over the three calls.
+    func readCursorColumn() -> Int? {
+        guard let surface else { return nil }
+        var sel = ghostty_selection_s()
+        let origin = ghostty_point_s(tag: GHOSTTY_POINT_VIEWPORT, coord: GHOSTTY_POINT_COORD_EXACT, x: 0, y: 0)
+        sel.top_left = origin
+        sel.bottom_right = origin
+        sel.rectangle = false
+        var probe = ghostty_text_s()
+        guard ghostty_surface_read_text(surface, sel, &probe) else { return nil }
+        let columnZeroX = probe.tl_px_x
+        ghostty_surface_free_text(surface, &probe)
+        // libghostty reports -1 for a cell it could not place; the viewport's own top-left should always
+        // resolve, so treat it as a failed calibration rather than clamping to a padding of zero.
+        guard columnZeroX >= 0 else { return nil }
+
+        let size = ghostty_surface_size(surface)
+        // both readings are pre-divided by the content scale agterm gave libghostty, which is the WINDOW's
+        // (`updateMetalLayerSize`). Never substitute a screen's for a detached view: that answers 2x for a
+        // surface last driven at 1x, an in-range wrong column.
+        guard let scale = window?.backingScaleFactor, scale > 0 else { return nil }
+        guard size.cell_width_px > 0, size.columns > 0 else { return nil }
+        let cellWidth = Double(size.cell_width_px) / Double(scale)
+
+        var x = 0.0, y = 0.0, w = 0.0, h = 0.0
+        ghostty_surface_ime_point(surface, &x, &y, &w, &h)
+        let after = ghostty_surface_size(surface)
+        guard after.cell_width_px == size.cell_width_px, after.columns == size.columns else { return nil }
+        let column = Int(((x - columnZeroX) / cellWidth).rounded(.down))
+        guard column >= 0, column < Int(size.columns) else { return nil }
+        return column
+    }
+
     /// This surface's foreground process pid (`ghostty_surface_foreground_pid`), nil when the surface is not
     /// created or the call returns 0. Read at quit by the restore-running-command capture; not focus-dependent.
     func foregroundPid() -> pid_t? {
