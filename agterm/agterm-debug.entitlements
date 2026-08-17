@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Debug only: the shipping set from agterm.entitlements plus three hardened-runtime exceptions the
+     Debug layout needs. Debug builds are ad-hoc signed and split into a stub plus agterm.debug.dylib,
+     and the hosted tests load an ad-hoc .xctest into that app, so library validation would reject both
+     on a Team-ID mismatch. allow-jit and allow-unsigned-executable-memory serve Xcode's preview
+     executor, which JIT-links in process. The Release bundle has no dylib and no JIT, so it carries
+     none of the three. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<key>com.apple.security.personal-information.location</key>
+	<true/>
+	<key>com.apple.security.personal-information.photos-library</key>
+	<true/>
+</dict>
+</plist>

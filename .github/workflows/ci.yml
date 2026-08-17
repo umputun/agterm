@@ -140,6 +140,56 @@ jobs:
             echo "agtermctl carries entitlements: the app re-seal must not pass --entitlements to a --deep sign" >&2
             exit 1
           fi
+      # the Debug-only hardened-runtime exceptions (allow-jit, allow-unsigned-executable-memory,
+      # disable-library-validation) must never reach a shipped build, and the TCC set must not shrink
+      # either — losing one silently removes the user's only path to granting that permission (#396).
+      # Pin the exact Release set; adding or dropping a key is a deliberate act that edits this list.
+      - name: Verify the app's Release entitlements
+        shell: bash
+        run: |
+          app=build/DerivedData/Build/Products/Release/agterm.app
+          [ -d "$app" ] || { echo "app not found at $app" >&2; exit 1; }
+          # values, not just names: a key present but set to <false/> is not granted, and macOS treats
+          # it exactly like a missing one, so comparing key names alone would pass that through.
+          expected=$(printf '%s=true\n' \
+            com.apple.security.automation.apple-events \
+            com.apple.security.device.audio-input \
+            com.apple.security.device.camera \
+            com.apple.security.personal-information.addressbook \
+            com.apple.security.personal-information.calendars \
+            com.apple.security.personal-information.location \
+            com.apple.security.personal-information.photos-library)
+          # get-task-allow is added by the ad-hoc "Sign to Run Locally" identity this job builds with,
+          # and never survives the Developer ID re-sign in scripts/release.sh. Drop it, then match exactly.
+          actual=$(codesign -d --entitlements - --xml "$app" 2>/dev/null \
+            | plutil -convert json -o - -- - \
+            | jq -r 'to_entries[] | select(.key != "com.apple.security.get-task-allow")
+                     | "\(.key)=\(.value)"' | sort)
+          if [ "$actual" != "$expected" ]; then
+            echo "Release entitlements changed. expected:" >&2; echo "$expected" >&2
+            echo "actual:" >&2; echo "$actual" >&2
+            exit 1
+          fi
+      # the split states the shipping set twice, and only the Release copy is pinned above. A TCC key
+      # added to the shipping file and missed here leaves Debug unable to prompt for it, with every job
+      # green — the failure surfaces only when someone verifies the new permission by hand in a Debug
+      # instance. Derive Debug's expected content from the shipping file so the two cannot drift.
+      - name: Verify the Debug entitlements are the shipping set plus the exceptions
+        shell: bash
+        run: |
+          keys() { plutil -convert json -o - -- "$1" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | sort; }
+          release=$(keys agterm/agterm.entitlements)
+          debug=$(keys agterm/agterm-debug.entitlements)
+          exceptions=$(printf '%s=true\n' \
+            com.apple.security.cs.allow-jit \
+            com.apple.security.cs.allow-unsigned-executable-memory \
+            com.apple.security.cs.disable-library-validation | sort)
+          expected=$(printf '%s\n%s\n' "$release" "$exceptions" | sort)
+          if [ "$debug" != "$expected" ]; then
+            echo "agterm-debug.entitlements is not the shipping set plus the three exceptions." >&2
+            diff <(echo "$expected") <(echo "$debug") >&2 || true
+            exit 1
+          fi
       - name: Application-hosted unit tests
         run: scripts/test-app.sh
 

@@ -48,6 +48,7 @@ targets:
         excludes:
           - "Info.plist"
           - "agterm.entitlements"
+          - "agterm-debug.entitlements"
           - "Resources/ghostty"
           - "Resources/terminfo"
           - "Resources/agent-status"
@@ -122,6 +123,8 @@ targets:
         # set AGTERM_STATE_DIR to avoid touching the real app-support state.)
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agterm.debug
+          # Debug alone needs the three hardened-runtime exceptions; see the header of the file.
+          CODE_SIGN_ENTITLEMENTS: agterm/agterm-debug.entitlements
     postBuildScripts:
       # build the agtermctl CLI and bundle it at Contents/MacOS/agtermctl so the
       # in-app "Install Command Line Tool" can symlink it into PATH. Runs before
@@ -153,7 +156,8 @@ targets:
           # SECOND pass instead: --deep applies them to every nested binary, and agtermctl is a
           # standalone CLI on the user's PATH, not a library.
           codesign --force --deep --options runtime --sign - "$CODESIGNING_FOLDER_PATH"
-          codesign --force --options runtime --entitlements "$SRCROOT/agterm/agterm.entitlements" --sign - "$CODESIGNING_FOLDER_PATH"
+          # CODE_SIGN_ENTITLEMENTS, not a literal path: Debug and Release use different files.
+          codesign --force --options runtime --entitlements "$SRCROOT/$CODE_SIGN_ENTITLEMENTS" --sign - "$CODESIGNING_FOLDER_PATH"
     dependencies:
       - framework: GhosttyKit.xcframework
         embed: false
