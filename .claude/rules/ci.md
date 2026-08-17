@@ -28,9 +28,10 @@ paths:
   Use `codesign -d --entitlements -`; the `:-` spelling is deprecated and warns.
 - The second pins the app's own Release set to the seven TCC keys, so neither a Debug-only hardened-runtime
   exception nor a dropped TCC key can ship. It ignores `com.apple.security.get-task-allow`, which the
-  ad-hoc "Sign to Run Locally" identity adds and the Developer ID re-sign drops. It compares
-  `key=value`, not key names: a key set to `<false/>` is not granted and macOS treats it as absent, so a
-  name-only match would pass that through. Changing the set means editing that list in the same commit.
+  ad-hoc "Sign to Run Locally" identity adds and the Developer ID re-sign drops. It compares `key=value`
+  through `jq ... tojson`, not key names: a key set to `<false/>` is not granted and macOS treats it as
+  absent, and codesign accepts `<string>true</string>`, which is not a Boolean and renders identically to
+  one without `tojson`. Changing the set means editing that list in the same commit.
 - The third reads the two entitlements files rather than a build, and derives Debug's expected content
   from the shipping file: Debug must be the shipping set plus exactly the three exceptions. Without it a
   TCC key added to the shipping file and missed in the Debug one leaves every job green, and Debug

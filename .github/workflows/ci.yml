@@ -149,8 +149,9 @@ jobs:
         run: |
           app=build/DerivedData/Build/Products/Release/agterm.app
           [ -d "$app" ] || { echo "app not found at $app" >&2; exit 1; }
-          # values, not just names: a key present but set to <false/> is not granted, and macOS treats
-          # it exactly like a missing one, so comparing key names alone would pass that through.
+          # values and their types, not just names. A key set to <false/> is not granted and macOS treats
+          # it exactly like a missing one, so a name-only compare would pass that through; and codesign
+          # accepts <string>true</string>, which renders as bare true without the tojson below.
           expected=$(printf '%s=true\n' \
             com.apple.security.automation.apple-events \
             com.apple.security.device.audio-input \
@@ -164,7 +165,7 @@ jobs:
           actual=$(codesign -d --entitlements - --xml "$app" 2>/dev/null \
             | plutil -convert json -o - -- - \
             | jq -r 'to_entries[] | select(.key != "com.apple.security.get-task-allow")
-                     | "\(.key)=\(.value)"' | sort)
+                     | "\(.key)=\(.value|tojson)"' | sort)
           if [ "$actual" != "$expected" ]; then
             echo "Release entitlements changed. expected:" >&2; echo "$expected" >&2
             echo "actual:" >&2; echo "$actual" >&2
@@ -177,7 +178,7 @@ jobs:
       - name: Verify the Debug entitlements are the shipping set plus the exceptions
         shell: bash
         run: |
-          keys() { plutil -convert json -o - -- "$1" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | sort; }
+          keys() { plutil -convert json -o - -- "$1" | jq -r 'to_entries[] | "\(.key)=\(.value|tojson)"' | sort; }
           release=$(keys agterm/agterm.entitlements)
           debug=$(keys agterm/agterm-debug.entitlements)
           exceptions=$(printf '%s=true\n' \
