@@ -19,7 +19,11 @@ cd "$(dirname "$0")/.."
 
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 GHOSTTY_REV="0ba6250388641f52135414b38c4259aa682c489b"  # 2026-08-16
-ZIG_FORMULA="zig"  # ghostty pins minimum_zig_version 0.16.0; resolved by prefix, so an unlinked keg works
+# ghostty pins minimum_zig_version 0.16.0. Name the MINOR LINE, not `zig`: that one rolls, so a fresh
+# build once 0.17 is current would compile a fixed GHOSTTY_REV with a compiler it never supported. Today
+# `zig@0.16` is still an alias for `zig`, so this buys nothing yet — it claims the name Homebrew uses when
+# it cuts the real versioned formula, as it already has for zig@0.15 and zig@0.14.
+ZIG_FORMULA="zig@0.16"  # resolved by prefix, so an unlinked keg works
 XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # terminfo/ is the marker: it must extract as a SIBLING of ghostty/ so libghostty's
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
