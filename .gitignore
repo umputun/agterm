@@ -3,6 +3,7 @@
 GhosttyKit.xcframework
 agterm/Resources/ghostty
 agterm/Resources/terminfo
+.ghostty-build-stamp
 *.tar.gz
 
 # build artifacts

@@ -76,9 +76,10 @@ C-boundary concurrency before changing the bridge.
 
 - Fetch `origin master` before creating a native Claude worktree so it forks the current remote tip.
   Do not manually `git worktree add`.
-- Fresh worktrees lack ignored `GhosttyKit.xcframework` and
-  `agterm/Resources/{ghostty,terminfo}`. Symlink all three from the main checkout instead of rebuilding;
-  use absolute targets for resources. They remain untracked and disappear with worktree removal.
+- Fresh worktrees lack ignored `GhosttyKit.xcframework`, `agterm/Resources/{ghostty,terminfo}` and
+  `.ghostty-build-stamp`. Symlink all four from the main checkout instead of rebuilding; use absolute
+  targets for resources. The stamp is what makes the other three count as current — without it `setup.sh`
+  rebuilds libghostty in every new worktree. They remain untracked and disappear with worktree removal.
 - After merge, verify the PR merge commit on fetched `origin/master`, then remove the worktree without
   changing the main checkout's branch. Squash/rebase makes removal report unmerged commits; after
   verification, discard the worktree safely. Native removal may leave a renamed branch, which must be
@@ -133,8 +134,14 @@ C-boundary concurrency before changing the bridge.
 
 - `scripts/setup.sh` builds upstream `ghostty-org/ghostty` at `GHOSTTY_REV` using
   `zig build -Demit-xcframework=true -Dxcframework-target=native`. No fork or disposable daily build is used.
-- The pin stays at or before `4dcb09ada` (2026-04-30) because later renderer builds blank scrollback on
-  font-size increase; decrease works and no app-side fix exists. Re-test increase before advancing.
+- `GHOSTTY_REV` is `0ba6250` (2026-08-16), a plain reproducibility pin with no workaround attached.
+  It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size
+  increase; upstream fixed that and the case was re-verified by hand before the bump. Re-test the
+  font-increase case when moving it, and check `minimum_zig_version` in `build.zig.zon` against
+  `ZIG_FORMULA` — the 0.15 to 0.16 jump came with this bump.
+- `.ghostty-build-stamp` records the rev the staged artifacts came from and is what decides a rebuild.
+  Presence alone would serve an xcframework built from a different rev silently, so a `GHOSTTY_REV`
+  change costs everyone exactly one libghostty rebuild and nobody keeps a stale core by accident.
 - Setup stages the xcframework and `zig-out/share/{ghostty,terminfo}`. All are ignored build artifacts.
 - Link the xcframework with `embed: false`; embedding breaks non-Developer-ID signatures.
 

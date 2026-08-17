@@ -30,7 +30,7 @@ paths:
   `selection-*` keys, even when set, so `resolveSelectionColors` parses the same last-wins config sources
   and named bundled theme file. Selected rows use selection background/foreground, with black/white
   luminance fallback. Tint borderless New Session through `.tint`; its label ignores foreground style.
-- Pass `theme = light:X,dark:Y` raw. Pinned libghostty `4dcb09ada` supports conditional themes, but
+- Pass `theme = light:X,dark:Y` raw. The pinned libghostty supports conditional themes, but
   `set_color_scheme` only changes conditional state and emits an unhandled soft reload. agterm must set
   app and surface schemes, then call `update_config`.
 - A dark launch must re-side the app config through `update_config` BEFORE the first surface exists;
@@ -162,7 +162,7 @@ paths:
 - Handle background `GHOSTTY_ACTION_COLOR_CHANGE` per pane. Under zero surface opacity, apply a surface
   config overlay containing only `background-opacity = windowOpacity`; never include `background`.
   Preserve and reassert the latch through reload, opacity, and dashboard font changes.
-- A live OSC 11 override masks config defaults in pinned libghostty `4dcb09ada`. No embedding API clears
+- A live OSC 11 override masks config defaults in the pinned libghostty. No embedding API clears
   it: RIS leaves colors, PTY writes bypass the parser, and COLOR_CHANGE is outbound-only.
   `session.background color` changes only the default and cannot override live OSC.
 - OSC 111 copies current default into override. Per-surface update also reseeds default from a
