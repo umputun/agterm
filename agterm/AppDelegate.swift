@@ -293,12 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// restart, logout, XCUITest, auto-quit after the last window closes, or an unwired library.
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
-        if let event = NSAppleEventManager.shared().currentAppleEvent,
-           let keyword = AEKeyword("why?"),
-           let reason = event.attributeDescriptor(forKeyword: keyword),
-           QuitReason.skipsConfirmation(typeCode: reason.typeCodeValue) {
-            return .terminateNow
-        }
+        if QuitReason.isSystemQuit(NSAppleEventManager.shared().currentAppleEvent) { return .terminateNow }
         let counts = library.openCounts()
         guard counts.windows > 0 else { return .terminateNow }
         let alert = NSAlert()

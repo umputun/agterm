@@ -67,8 +67,10 @@ session drag are out of scope.
   `Debouncer`; structural mutations save synchronously and cancel pending saves.
 - Quit uses `applicationShouldTerminate` and a warning alert with host-free `openCounts` and
   `QuitPrompt.message`. Skip it for system shutdown/restart/logout, no open windows, XCUITest, or an
-  unwired library during the first roughly four seconds. The GUI-only prompt is keep-in-sync exempt and
-  manually verified.
+  unwired library during the first roughly four seconds. The system-quit half is host-free in
+  `QuitReason.isSystemQuit`, which reads `kAEQuitReason` off the current Apple event, so the read itself
+  is under test: a keyword built as `AEKeyword("why?")` is `UInt32.init?(String)` and always nil. The
+  GUI-only prompt is keep-in-sync exempt and manually verified.
 - App-side `WindowRegistry` maps IDs to `NSWindow`. Register/unregister through `TitleProbeView`;
   `raise` deminiaturizes and fronts, and `close` uses `performClose` so standard teardown runs.
 
