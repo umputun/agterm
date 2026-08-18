@@ -20,7 +20,11 @@ paths:
   by `GlobalHotkey`, never with `KeybindMatcher`, so it is deliberately OUTSIDE the conflict model below —
   it may share a chord with a menu item — but the OS hotkey WINS and CONSUMES the key, agterm frontmost
   included, so the menu binding then never fires. Say that rather than "whichever app is in front decides",
-  which is the precise inversion. `parseGlobalHotkeyLine` diagnoses a base key no physical position produces,
+  which is the precise inversion. Ship NO default: registering takes the chord from every other application
+  on the machine, a cost nobody who never summons the panel from outside agterm should pay. Binding it to
+  `quick_terminal`'s own `ctrl+grave` is the supported way to get one chord everywhere, and both user-facing
+  surfaces (`site/docs.html`, the `ConfigPaths` keymap starter) must say so.
+  `parseGlobalHotkeyLine` diagnoses a base key no physical position produces,
   since the verb has no read-back anywhere and a silent drop at registration would be the user's only signal.
   `keyCode(forChordKey:)` resolves it
   by physical position, inverting `namedKey`/`latinKey` rather than adding a third table, so it survives a

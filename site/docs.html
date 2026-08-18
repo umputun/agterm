@@ -1943,7 +1943,13 @@
               first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
               it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
               takes the key even while agterm is in front, so binding one a menu item already uses means that menu shortcut stops
-              firing. It is unset unless you add the line.
+              firing. It is unset unless you add the line: agterm ships no default because registering a chord takes it
+              from every other application on the Mac, and that is not a cost to impose on someone who may never summon
+              the panel from outside agterm. Spending it on the chord the in-app binding already uses is allowed and is
+              the way to get one shortcut that works everywhere —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey ctrl+grave</span>
+              makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃`</span> summon the panel
+              from any application, at the price of that chord no longer reaching anything else.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by

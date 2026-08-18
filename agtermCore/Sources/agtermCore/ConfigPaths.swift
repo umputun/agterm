@@ -85,9 +85,15 @@ public enum ConfigPaths {
         #       physical key position, so it keeps working on a non-Latin layout. Because the system
         #       owns it rather than agterm, it takes no part in the collision rules above. Note the
         #       precedence: the system hotkey WINS, agterm frontmost included, so a chord shared with a
-        #       menu action fires this and the menu binding never sees it. Example:
+        #       menu action fires this and the menu binding never sees it. There is no default because
+        #       registering a chord takes it from every other application on your Mac, which is not a
+        #       cost to impose on someone who never summons the panel from outside agterm. Spending it
+        #       on the chord the in-app binding already uses is allowed, and is how to get ONE shortcut
+        #       that works everywhere — at the price of that chord no longer reaching anything else.
+        #       Examples:
         #
         #           global-hotkey ctrl+opt+space
+        #           global-hotkey ctrl+grave        # same chord as the in-app quick_terminal binding
         #
         # Built-in actions (raw name → shipped default chord):
         #
