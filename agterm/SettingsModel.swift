@@ -698,7 +698,7 @@ final class SettingsModel {
     }
 
     private func applyQuickTerminalSizePercent() {
-        GhosttyApp.shared.setQuickTerminalSizePercent(settings.quickTerminalSizePercent)
+        GhosttyApp.shared.setQuickTerminalSizePercent(settings.effectiveQuickTerminalSizePercent)
     }
 
     private func applyBaseFontSize() {

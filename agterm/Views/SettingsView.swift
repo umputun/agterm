@@ -432,7 +432,7 @@ private struct InterfaceSettingsView: View {
 
     /// The quick-terminal panel's share of the screen; nil is the built-in size, not a percentage.
     private var quickTerminalSizePercent: Binding<Int?> {
-        Binding(get: { model.settings.quickTerminalSizePercent },
+        Binding(get: { model.settings.effectiveQuickTerminalSizePercent },
                 set: { model.setQuickTerminalSizePercent($0) })
     }
 

@@ -44,10 +44,13 @@ struct QuickTerminalMetricsTests {
         #expect(choicesMatchingTheDefault(on: large).isEmpty)
     }
 
+    /// Both axes, since the claim is that the whole size matches: on a screen where one axis is share-bound
+    /// and the other cap-bound, a percentage can reproduce the default width while missing its height.
     private func choicesMatchingTheDefault(on visible: WindowGeometry.Size) -> [Int] {
-        QuickTerminalMetrics.sizePercentChoices.filter {
-            QuickTerminalMetrics.panelSize(visible: visible, sizePercent: $0).width
-                == QuickTerminalMetrics.panelSize(visible: visible, sizePercent: nil).width
+        let byDefault = QuickTerminalMetrics.panelSize(visible: visible, sizePercent: nil)
+        return QuickTerminalMetrics.sizePercentChoices.filter {
+            let sized = QuickTerminalMetrics.panelSize(visible: visible, sizePercent: $0)
+            return abs(sized.width - byDefault.width) < 0.001 && abs(sized.height - byDefault.height) < 0.001
         }
     }
 

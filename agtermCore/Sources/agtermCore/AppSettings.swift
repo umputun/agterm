@@ -413,6 +413,17 @@ public struct AppSettings: Codable, Equatable, Sendable {
         min(interfaceFontSizeRange.upperBound, max(interfaceFontSizeRange.lowerBound, size))
     }
 
+    /// The resolved quick-terminal share, or nil for the built-in size. The single read point, and the one
+    /// the Settings picker binds: a stored value outside `QuickTerminalMetrics.sizePercentChoices` — hand
+    /// edited, or written by a later version offering more of them — resolves to nil rather than being
+    /// applied, so the picker can never show blank while the panel uses a size it has no row for.
+    /// `panelSize` clamps its own argument as well; that guards a direct caller, this owns the setting.
+    public var effectiveQuickTerminalSizePercent: Int? {
+        guard let quickTerminalSizePercent,
+              QuickTerminalMetrics.sizePercentChoices.contains(quickTerminalSizePercent) else { return nil }
+        return quickTerminalSizePercent
+    }
+
     /// The resolved sidebar row-text size, clamped. The single read point.
     public var effectiveSidebarFontSize: Double {
         Self.clampSidebarFontSize(sidebarFontSize ?? Self.defaultSidebarFontSize)
