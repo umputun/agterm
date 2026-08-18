@@ -99,9 +99,13 @@ session drag are out of scope.
   `reshowSuppression` is dropped — AppKit makes a clicked window key BEFORE delivering its button action, so
   the toolbar and Dock toggles would otherwise re-show the panel the same click dismissed. This is AppKit
   key-window behavior, so it is manually verified, not unit-tested.
-- The frame is 90% of the focused screen capped at `maxNormalSize` (1100x700). The in-window overlay needed
-  no cap because a window is already modest; 90% of a large display is a wall of terminal, not a quick
-  aside.
+- `QuickTerminalMetrics.panelSize` owns the frame. Unset, it is 90% of the focused screen capped at
+  1100x700: the in-window overlay needed no cap because a window is already modest, and 90% of a large
+  display is a wall of terminal, not a quick aside. `quickTerminalSizePercent` REPLACES both terms with a
+  plain share of the screen rather than raising the cap, a cap in points being what ages badly across
+  displays. nil keeps its own path because no single percentage reproduces the pair: the cap binds above
+  roughly 1222x780 points and the share below it. The panel re-frames on every show, so a Settings change
+  lands on the next summon and needs no notification.
 - While the quick terminal OWNS THE KEYBOARD, no deck surface may be active. Gate main, split, maximized
   split, scratch, and overlay with `deckInteractive && isActive && !quickTerminal.holdsKey`. Read `holdsKey`,
   never `isVisible`: the predicate is app-level, so it inerts EVERY window, and a PINNED panel (a control

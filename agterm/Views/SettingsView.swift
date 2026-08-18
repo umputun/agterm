@@ -395,7 +395,8 @@ private struct AppearanceSettingsView: View {
 }
 
 /// Interface tab: per-element title-bar and sidebar chrome visibility, grouped by surface, two toggles per
-/// row so the tab keeps fitting the fixed 540×640 window as the element set grows. Everything shows by
+/// row so the tab keeps fitting the fixed 540×640 window as the element set grows, plus the quick terminal's
+/// panel size — that panel belongs to no window, so it is not a Window setting. Everything shows by
 /// default; a toggle off adds it to `AppSettings.hiddenInterfaceElements` and live-applies — title-bar and
 /// footer elements re-gate in open windows on `.agtermAppearanceChanged`, the add-session "+" on hover.
 private struct InterfaceSettingsView: View {
@@ -409,6 +410,15 @@ private struct InterfaceSettingsView: View {
                 Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
             }
+            Section("Quick Terminal") {
+                Picker("Size", selection: quickTerminalSizePercent) {
+                    Text("Default").tag(Int?.none)
+                    ForEach(QuickTerminalMetrics.sizePercentChoices, id: \.self) { percent in
+                        Text("\(percent)% of screen").tag(Int?.some(percent))
+                    }
+                }
+                .accessibilityIdentifier("settings-quick-terminal-size")
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -418,6 +428,12 @@ private struct InterfaceSettingsView: View {
     private var autoHideSidebarInactiveWindows: Binding<Bool> {
         Binding(get: { model.settings.autoHideSidebarInactiveWindows ?? false },
                 set: { model.setAutoHideSidebarInactiveWindows($0 ? true : nil) })
+    }
+
+    /// The quick-terminal panel's share of the screen; nil is the built-in size, not a percentage.
+    private var quickTerminalSizePercent: Binding<Int?> {
+        Binding(get: { model.settings.quickTerminalSizePercent },
+                set: { model.setQuickTerminalSizePercent($0) })
     }
 
     /// A section whose toggles lay out TWO per row, each filling half the row around a centered `Divider` so

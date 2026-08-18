@@ -88,6 +88,9 @@ final class GhosttyApp {
     /// The sizes the palette/picker and session switcher derive from the separate `interfaceFontSize`,
     /// resolved once per settings change rather than per row.
     private(set) var interfaceMetrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
+    /// The share of the focused screen the quick-terminal panel takes, as a percentage; nil = the built-in
+    /// size. `QuickTerminalController` reads it when it frames the panel; settings-mirrored like `toolbarMode`.
+    private(set) var quickTerminalSizePercent: Int?
     /// The base terminal font size in points (the Settings default; nil → the ghostty built-in). The renderer
     /// never reads it — it is the size a session with a nil `session.fontSize` reverts to, which the dashboard
     /// font-override clear needs to recognize its own async CELL_SIZE report (`pendingFontRestore`).
@@ -234,6 +237,11 @@ final class GhosttyApp {
     /// `InterfaceMetrics` clamps its own input, so a hand-edited out-of-range value lands in range here too.
     func setInterfaceFontSize(_ size: Double) {
         interfaceMetrics = InterfaceMetrics(fontSize: size)
+    }
+
+    /// `QuickTerminalMetrics.panelSize` clamps what it is given, so the raw setting is stored as-is.
+    func setQuickTerminalSizePercent(_ percent: Int?) {
+        quickTerminalSizePercent = percent
     }
 
     /// Set the agent-status glyph colors from the user's hex settings; nil or malformed → the system default.

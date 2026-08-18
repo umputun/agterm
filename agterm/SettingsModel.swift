@@ -63,6 +63,7 @@ final class SettingsModel {
         applySidebarBackgroundShift()
         applySidebarFontSize()
         applyInterfaceFontSize()
+        applyQuickTerminalSizePercent()
         applyBaseFontSize()
         applyAgentStatusColors()
         applyAgentStatusShapes()
@@ -209,6 +210,10 @@ final class SettingsModel {
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     func setSidebarFontSize(_ value: Double?) { settings.sidebarFontSize = value; persistAndApply() }
     func setInterfaceFontSize(_ value: Double?) { settings.interfaceFontSize = value; persistAndApply() }
+    func setQuickTerminalSizePercent(_ value: Int?) {
+        settings.quickTerminalSizePercent = value
+        persistAndApply()
+    }
     // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
@@ -600,6 +605,7 @@ final class SettingsModel {
         applySidebarBackgroundShift()
         applySidebarFontSize()
         applyInterfaceFontSize()
+        applyQuickTerminalSizePercent()
         applyBaseFontSize()
         applyAgentStatusColors()
         applyAgentStatusShapes()
@@ -689,6 +695,10 @@ final class SettingsModel {
 
     private func applyInterfaceFontSize() {
         GhosttyApp.shared.setInterfaceFontSize(settings.effectiveInterfaceFontSize)
+    }
+
+    private func applyQuickTerminalSizePercent() {
+        GhosttyApp.shared.setQuickTerminalSizePercent(settings.quickTerminalSizePercent)
     }
 
     private func applyBaseFontSize() {

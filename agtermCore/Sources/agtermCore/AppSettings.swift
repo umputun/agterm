@@ -257,6 +257,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The palette, picker and session-switcher text point size, nil for `defaultInterfaceFontSize`.
     /// Panel widths scale with it (`InterfaceMetrics`). Independent of `sidebarFontSize`.
     public var interfaceFontSize: Double?
+    /// The share of the focused screen the quick-terminal panel takes, as a percentage; nil keeps the
+    /// built-in size. `QuickTerminalMetrics.panelSize` resolves and clamps it.
+    public var quickTerminalSizePercent: Int?
     /// Raw names of the chrome elements the user has HIDDEN (see `InterfaceElement`); nil/empty shows
     /// everything. Unknown names are dropped by `resolvedHiddenInterfaceElements`.
     public var hiddenInterfaceElements: [String]?
@@ -286,7 +289,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
-                interfaceFontSize: Double? = nil,
+                interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
@@ -326,6 +329,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.sidebarFontSize = sidebarFontSize
         self.interfaceFontSize = interfaceFontSize
+        self.quickTerminalSizePercent = quickTerminalSizePercent
         self.hiddenInterfaceElements = hiddenInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.welcomeShown = welcomeShown

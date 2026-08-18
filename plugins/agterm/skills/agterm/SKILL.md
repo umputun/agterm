@@ -92,8 +92,8 @@ An overlay covers the whole session, or with `--pane left|right` exactly one spl
 sibling pane visible and usable. The same session-wide slot also holds a **HUD** (`session hud`), a small
 passive panel carrying a message instead of a program: the session keeps focus and stays typable under it.
 One slot, so a session shows either a HUD or a program overlay, never both. Separately, the app has one
-**quick terminal** (a scratch shell in a floating panel at 90% of the focused screen, not part of the tree
-and not owned by a window).
+**quick terminal** (a scratch shell in a floating panel at 90% of the focused screen capped at 1100x700,
+or whatever share Settings sets instead; not part of the tree and not owned by a window).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC

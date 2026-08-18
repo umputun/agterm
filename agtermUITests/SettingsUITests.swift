@@ -209,6 +209,24 @@ final class SettingsUITests: XCTestCase {
                       "selecting Normal should persist toolbarMode=normal to settings.json")
     }
 
+    func testQuickTerminalSizePickerPersists() throws {
+        let picker = settingsControl(tab: "Interface", control: "settings-quick-terminal-size")
+
+        picker.click()
+        let seventy = app.menuItems["70% of screen"]
+        XCTAssertTrue(seventy.waitForExistence(timeout: 5), "the size dropdown should offer a 70% item")
+        seventy.click()
+        XCTAssertTrue(poll { self.settingsDouble("quickTerminalSizePercent") == 70 },
+                      "selecting 70% should persist quickTerminalSizePercent=70 to settings.json")
+
+        picker.click()
+        let byDefault = app.menuItems["Default"]
+        XCTAssertTrue(byDefault.waitForExistence(timeout: 5), "the size dropdown should offer a Default item")
+        byDefault.click()
+        XCTAssertTrue(poll { self.settingsObject()?["quickTerminalSizePercent"] == nil },
+                      "selecting Default should remove the quickTerminalSizePercent key from settings.json")
+    }
+
     func testRestoreRunningCommandTogglePersists() throws {
         let toggle = settingsControl(tab: "General", control: "settings-restore-running-command")
         toggle.click() // turn it on (default off)

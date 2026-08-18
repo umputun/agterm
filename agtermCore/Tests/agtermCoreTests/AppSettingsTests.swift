@@ -385,6 +385,16 @@ struct AppSettingsTests {
         #expect(!json.contains("interfaceFontSize"))
     }
 
+    @Test func quickTerminalSizePercentRoundTripsAndDefaultsNil() throws {
+        #expect(AppSettings().quickTerminalSizePercent == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("quickTerminalSizePercent"))
+        let original = AppSettings(quickTerminalSizePercent: 70)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded.quickTerminalSizePercent == 70)
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func sidebarAndInterfaceFontSizesAreIndependent() throws {
         let sidebarOnly = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "sidebarFontSize": 17 }"#.utf8))
         #expect(sidebarOnly.effectiveSidebarFontSize == 17)

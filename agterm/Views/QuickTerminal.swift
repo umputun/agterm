@@ -220,19 +220,17 @@ final class QuickTerminalController {
         surfaceView = nil
     }
 
-    /// The panel's comfortable maximum. The in-window overlay took 90% of its host and needed no cap, a
-    /// window already being a modest size; 90% of a large display is not a quick aside but a wall of
-    /// terminal, so the share is a floor-to-ceiling that stops growing past a readable width.
-    private static let maxNormalSize = NSSize(width: 1100, height: 700)
-
-    /// Centered on the focused screen at 90% of it or `maxNormalSize`, whichever is smaller, and its whole
-    /// visible frame while zoomed. The panel follows the POINTER's screen, not the app's: it is summoned
-    /// from another application, where agterm's own key window is no guide to where the user is looking.
+    /// Centered on the focused screen at whatever `QuickTerminalMetrics` sizes it to, and its whole visible
+    /// frame while zoomed. The panel follows the POINTER's screen, not the app's: it is summoned from
+    /// another application, where agterm's own key window is no guide to where the user is looking. The
+    /// user's size is read here rather than cached because the frame is recomputed on every show, so a
+    /// Settings change lands on the next summon with nothing to notify.
     private static func targetFrame(zoomed: Bool) -> NSRect {
         let visible = activeScreen().visibleFrame
         guard !zoomed else { return visible }
-        let size = NSSize(width: min(visible.width * 0.9, maxNormalSize.width),
-                          height: min(visible.height * 0.9, maxNormalSize.height))
+        let size = QuickTerminalMetrics.panelSize(
+            visible: WindowGeometry.Size(width: visible.width, height: visible.height),
+            sizePercent: GhosttyApp.shared.quickTerminalSizePercent)
         return NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2,
                       width: size.width, height: size.height)
     }
