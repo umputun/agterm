@@ -50,6 +50,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [remote-claude-session](remote-claude-session/) | one chord runs Claude Code in a tmux session on a remote host, reconnecting and reporting status onto its own tab | 0.22.0, jq, ssh, tmux, Claude Code |
 | [session-context-nudge](session-context-nudge/) | Claude Code keeps the title bar saying what the session is working on | 0.26.0, jq, Claude Code |
 | [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
+| [truthful-agent-lights](truthful-agent-lights/) | the row reports what is still running after the turn ends, and stops claiming work that is gone | 0.17.0, jq, Claude Code |
 | [two-agent-chat](two-agent-chat/) | let Claude Code and Codex talk to each other in one split | 0.24.0, python3, Claude Code, Codex |
 
 ### Panes, pickers and input
