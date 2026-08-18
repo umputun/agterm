@@ -31,12 +31,14 @@ struct AgentHooksInstallTests {
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
-        #expect(command(evts["UserPromptSubmit"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
+        // the entries invoke the Claude adapter, which guards on ownership and forwards to the wrapper
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
         // PostToolUse re-asserts active after every tool, clearing a lingering blocked on resume
-        #expect(command(evts["PostToolUse"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
+        #expect(command(evts["PostToolUse"]![0]) == "'\(adapter)' active --blink")
         // only the Stop hook passes --auto-reset (clear-on-visit); active/blocked stay keep-state
-        #expect(command(evts["Stop"]![0])?.hasSuffix("agent-status.sh' completed --auto-reset") == true)
-        #expect(command(evts["Notification"]![0])?.hasSuffix("agent-status.sh' blocked") == true)
+        #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
+        #expect(command(evts["Notification"]![0]) == "'\(adapter)' blocked")
         #expect(command(evts["UserPromptSubmit"]![0])?.contains("--auto-reset") == false)
         #expect(command(evts["Notification"]![0])?.contains("--auto-reset") == false)
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
@@ -75,7 +77,7 @@ struct AgentHooksInstallTests {
         #expect(evts["UserPromptSubmit"]?.count == 2)
         let commands = evts["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other-hook.sh"))
-        #expect(commands.contains { $0.hasSuffix("agent-status.sh' active --blink") })
+        #expect(commands.contains { $0.hasSuffix("claude-status.sh' active --blink") })
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)

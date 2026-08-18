@@ -127,6 +127,8 @@ enum AgentHooksInstaller {
 
     // bake the bundled agtermctl's absolute path into the installed wrappers so the hooks fire even when the
     // CLI was never symlinked into PATH. The transform itself is host-free in `AgentHooksInstall`.
+    // `claudeWrapperName` is deliberately absent: the Claude adapter never calls agtermctl, it `exec`s the
+    // generic wrapper — which carries the baked path — so there is nothing to bake into it.
     private static func bakeAgtermctlPath() throws {
         guard let tool = bundledTool else { return } // no bundled CLI: leave the PATH fallback in place
         for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {

@@ -13,6 +13,12 @@ public enum AgentHooksInstall {
     /// terminal-output knowledge stays in this hook resource, outside agterm's runtime.
     public static let codexWrapperName = "agterm-codex-status.sh"
 
+    /// Claude-specific adapter the four Claude hooks invoke instead of the generic wrapper: a worker agent
+    /// spawned from inside a session inherits the spawner's `AGTERM_*` environment, so its hooks would repaint
+    /// the SPAWNER's row. The adapter answers that ownership question from process topology and delegates,
+    /// keeping the Claude-specific knowledge in the hook resource the way the Codex adapter does.
+    public static let claudeWrapperName = "agterm-claude-status.sh"
+
     /// The bundled Pi extension's path relative to the agent-status package, and its destination filename.
     public static let piExtensionRelativePath = "pi/agterm-status.ts"
     static let piExtensionName = "agterm-status.ts"
@@ -337,6 +343,10 @@ public enum AgentHooksInstall {
         scriptDir + "/" + codexWrapperName
     }
 
+    public static func claudeWrapperPath(scriptDir: String) -> String {
+        scriptDir + "/" + claudeWrapperName
+    }
+
     /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges in, wiring Codex's lifecycle
     /// events to the indicator. `site/docs.html#codex-hooks-manual` reproduces this block for the cases the
     /// merge declines, and nothing checks the two against each other.
@@ -371,9 +381,10 @@ public enum AgentHooksInstall {
         }
     }
 
-    // build the command string a Claude hook runs: the quoted wrapper path plus the state argument.
+    // build the command string a Claude hook runs: the quoted CLAUDE ADAPTER path plus the state argument. The
+    // adapter forwards the state to the generic wrapper verbatim once it decides the firing agent owns the pane.
     private static func wrapperCommand(scriptDir: String) -> String {
-        shellQuote(wrapperPath(scriptDir: scriptDir)) + " "
+        shellQuote(claudeWrapperPath(scriptDir: scriptDir)) + " "
     }
 
     // a single Claude hook entry: { (matcher?), hooks: [{ type: command, command }] }.
@@ -387,11 +398,18 @@ public enum AgentHooksInstall {
         return entry
     }
 
-    // does a hook entry already invoke our wrapper (idempotency probe, by wrapper path)?
+    // does a hook entry already invoke us (idempotency probe)? EITHER path counts: the adapter, which is what
+    // a current install writes, and the generic wrapper, which is what an entry from an earlier install names
+    // until it is rewritten. Accepting only the adapter would answer "not installed" for a customized wrapper
+    // entry and add a stock one beside it, so both would fire and the row would be posted twice. Its owner
+    // keeps the setup they edited, unguarded by their own choice — the same answer this probe has always given.
     private static func entryUsesWrapper(_ entry: [String: Any], scriptDir: String) -> Bool {
-        let probe = wrapperPath(scriptDir: scriptDir)
+        let probes = [claudeWrapperPath(scriptDir: scriptDir), wrapperPath(scriptDir: scriptDir)]
         guard let commands = entry["hooks"] as? [[String: Any]] else { return false }
-        return commands.contains { ($0["command"] as? String)?.contains(probe) == true }
+        return commands.contains { command in
+            guard let command = command["command"] as? String else { return false }
+            return probes.contains { command.contains($0) }
+        }
     }
 
     // absent/empty/whitespace-only → fresh empty object; a non-empty file that is not a valid JSON object →
