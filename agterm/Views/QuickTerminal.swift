@@ -24,7 +24,7 @@ final class QuickTerminalController {
     /// responder in every window and leave the user unable to type outside the panel's own frame.
     private(set) var holdsKey = false
 
-    /// Whether the panel fills its screen instead of taking the inset 90% frame — the re-homed
+    /// Whether the panel fills its screen instead of the inset frame `QuickTerminalMetrics` sizes — the re-homed
     /// `surface.zoom --target quick`, which used to be a per-window `TerminalZoomTarget`. Cleared on hide,
     /// so a dismissed panel never reports a stale zoom.
     private(set) var isZoomed = false

@@ -12,16 +12,16 @@ struct QuickTerminalMetricsTests {
 
     /// A 32" 4K display in points, the case from the report that motivated the setting.
     private let large = WindowGeometry.Size(width: 2560, height: 1440)
-    /// A built-in Retina panel in points, small enough that the default share still binds.
-    private let small = WindowGeometry.Size(width: 1470, height: 860)
+    /// A small external display in points, under the roughly 1222x780 where the built-in maximum takes
+    /// over, so the default share binds on both axes. Every current built-in panel is above that.
+    private let small = WindowGeometry.Size(width: 1200, height: 760)
 
     @Test func defaultCapsALargeScreenAtTheBuiltInMaximum() {
         expectSize(QuickTerminalMetrics.panelSize(visible: large, sizePercent: nil), 1100, 700)
     }
 
     @Test func defaultTakesTheShareWhenItFallsUnderTheMaximum() {
-        let visible = WindowGeometry.Size(width: 1000, height: 600)
-        expectSize(QuickTerminalMetrics.panelSize(visible: visible, sizePercent: nil), 900, 540)
+        expectSize(QuickTerminalMetrics.panelSize(visible: small, sizePercent: nil), 1080, 684)
     }
 
     @Test func defaultMixesShareAndMaximumPerAxis() {
@@ -34,20 +34,21 @@ struct QuickTerminalMetricsTests {
     }
 
     @Test func setPercentageAppliesToASmallScreenToo() {
-        expectSize(QuickTerminalMetrics.panelSize(visible: small, sizePercent: 50), 735, 430)
+        expectSize(QuickTerminalMetrics.panelSize(visible: small, sizePercent: 50), 600, 380)
     }
 
-    /// No single percentage reproduces the default on both screen sizes, which is why nil keeps its own path.
+    /// Why nil keeps its own path: the two regimes disagree. Where the share binds, 90% IS the default;
+    /// where the maximum binds, no offered percentage reproduces it, so no single choice serves both.
     @Test func noPercentageReproducesTheDefaultOnBothScreens() {
-        let matchingLarge = QuickTerminalMetrics.sizePercentChoices.filter {
-            QuickTerminalMetrics.panelSize(visible: large, sizePercent: $0).width
-                == QuickTerminalMetrics.panelSize(visible: large, sizePercent: nil).width
+        #expect(choicesMatchingTheDefault(on: small) == [90])
+        #expect(choicesMatchingTheDefault(on: large).isEmpty)
+    }
+
+    private func choicesMatchingTheDefault(on visible: WindowGeometry.Size) -> [Int] {
+        QuickTerminalMetrics.sizePercentChoices.filter {
+            QuickTerminalMetrics.panelSize(visible: visible, sizePercent: $0).width
+                == QuickTerminalMetrics.panelSize(visible: visible, sizePercent: nil).width
         }
-        let matchingSmall = QuickTerminalMetrics.sizePercentChoices.filter {
-            QuickTerminalMetrics.panelSize(visible: small, sizePercent: $0).width
-                == QuickTerminalMetrics.panelSize(visible: small, sizePercent: nil).width
-        }
-        #expect(Set(matchingLarge).isDisjoint(with: Set(matchingSmall)))
     }
 
     @Test func percentageAboveTheRangeClampsToTheCeiling() {

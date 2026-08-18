@@ -82,17 +82,20 @@ struct ConfigPathsTests {
 
     // issue #405: a shipped map example once used a chord a later built-in default took,
     // so uncommenting the starter's own suggestion silently bound nothing. A `command` example rots the
-    // same way, `validateCommands` dropping a custom shortcut a built-in has since claimed.
+    // same way, `validateCommands` dropping a custom shortcut a built-in has since claimed, and a
+    // `global-hotkey` example is rejected outright when its base key is not one `parseChord` spells.
     @Test func starterKeymapExamplesApplyWhenUncommented() {
         let examples = ConfigPaths.starterKeymapConf().split(separator: "\n").compactMap { line -> String? in
             let text = line.drop { $0 == "#" || $0.isWhitespace }
             let verb = text.prefix { !$0.isWhitespace }
             // `<` skips the two verb-syntax lines, which state a grammar rather than an example.
-            guard verb == "map" || verb == "command", !text.contains("<") else { return nil }
+            guard verb == "map" || verb == "command" || verb == "global-hotkey",
+                  !text.contains("<") else { return nil }
             return String(text)
         }
-        // an example silently dropped from the guard must fail here: three `map` lines and three `command`.
-        #expect(examples.count == 6)
+        // an example silently dropped from the guard must fail here: three `map`, three `command`, three
+        // `global-hotkey`.
+        #expect(examples.count == 9)
         var bound = 0
         for example in examples {
             let (keymap, diagnostics) = parseKeymap(example)
@@ -101,10 +104,12 @@ struct ConfigPathsTests {
             // shortcuts that survived rather than the commands that parsed.
             bound += keymap.builtinOverrides.count + keymap.commands.filter { !$0.shortcut.isEmpty }.count
                 + keymap.builtinSequences.values.reduce(0) { $0 + $1.count }
+                + (keymap.globalHotkey == nil ? 0 : 1)
         }
         // all three `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
-        // the alternatives example counts twice, its menu chord and its monitor-bound half.
-        #expect(bound == 6)
+        // the alternatives example counts twice, its menu chord and its monitor-bound half. Then the three
+        // `global-hotkey` examples, each of which must yield a chord rather than a diagnostic.
+        #expect(bound == 9)
     }
 
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {

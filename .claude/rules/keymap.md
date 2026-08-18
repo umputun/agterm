@@ -22,7 +22,7 @@ paths:
   included, so the menu binding then never fires. Say that rather than "whichever app is in front decides",
   which is the precise inversion. Ship NO default: registering takes the chord from every other application
   on the machine, a cost nobody who never summons the panel from outside agterm should pay. Binding it to
-  `quick_terminal`'s own `ctrl+grave` is the supported way to get one chord everywhere, and both user-facing
+  `quick_terminal`'s own ``ctrl+` `` is the supported way to get one chord everywhere, and both user-facing
   surfaces (`site/docs.html`, the `ConfigPaths` keymap starter) must say so.
   `parseGlobalHotkeyLine` diagnoses a base key no physical position produces,
   since the verb has no read-back anywhere and a silent drop at registration would be the user's only signal.

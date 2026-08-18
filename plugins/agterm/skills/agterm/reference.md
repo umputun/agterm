@@ -932,7 +932,8 @@ it waited for. Results age out oldest-first: the 8 most recent per open window, 
 ## quick
 
 `agtermctl quick [show|hide|toggle]` — the app's one quick terminal (a single scratch terminal in a
-floating panel at 90% of the focused screen up to 1100x700, not in the tree and owned by no window; its
+floating panel at 90% of the focused screen up to 1100x700 unless Settings > Interface sets a share of its
+own, not in the tree and owned by no window; its
 shell stays alive across hides). Errors with `no open window` when none is open, and with `pick pending`
 while a picker is up. Read its visibility back from the tree's top-level `quickVisible`.
 A panel YOU open with `show` stays up when agterm loses focus — including when it was already visible

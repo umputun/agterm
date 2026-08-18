@@ -93,7 +93,7 @@ public enum ConfigPaths {
         #       Examples:
         #
         #           global-hotkey ctrl+opt+space
-        #           global-hotkey ctrl+grave        # same chord as the in-app quick_terminal binding
+        #           global-hotkey ctrl+`            # same chord as the in-app quick_terminal binding
         #
         # Built-in actions (raw name → shipped default chord):
         #
