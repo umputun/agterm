@@ -395,6 +395,8 @@ error keeps those names for compatibility.
   surface, so `session new --no-select` followed straight away by `session type` does not race the mount.
   `--select` selects the session first, and only when its surface is not ready — a realized session is typed
   into without moving the user's selection. A surface that never comes up → `session not realized`.
+  Text carrying a NUL is rejected with `text must not contain a NUL byte`, since libghostty's key-text
+  field is NUL-terminated and could only deliver the run up to it.
   `--pane left` types into the main pane (the default when omitted), `--pane right` into the split pane
   (errors with `session has no split pane` when the session has no split), `--pane scratch` into the
   session's scratch terminal even while it is hidden (`session has no scratch terminal` when none opened);
@@ -1214,6 +1216,7 @@ CLI rejects the same value locally with `mode must be one of: on, off, toggle, a
 locally with `mode must be on, off, or toggle`),
 `no open window` (quick/sidebar/workspace filter), `quick terminal not open` / `quick terminal not realized` (quick type) /
 `failed to read surface buffer` (quick text / session text),
+`text must not contain a NUL byte` (session type / quick type),
 `invalid restore mode` / `session.restore set requires a command` / `command must not contain control characters` /
 `command too long (max 1024 bytes)` / `the scratch terminal is never restored` / `unknown pane id` /
 `failed to save the restore override, the previous value is still in effect` (session

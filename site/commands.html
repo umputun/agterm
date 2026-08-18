@@ -1011,7 +1011,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span>, including one created moments ago: the main
                 pane waits briefly for its surface, so creating and typing back to back does not race.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> selects the session first, and only when its
-                surface is not ready yet.
+                surface is not ready yet. Text carrying a NUL is rejected with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text must not contain a NUL byte</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> is the main pane (the default),
@@ -2255,7 +2256,8 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Errors: <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">quick terminal not open</span> (never shown),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">quick terminal not realized</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no open window</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no open window</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">text must not contain a NUL byte</span>.
               </p>
             </div>
 

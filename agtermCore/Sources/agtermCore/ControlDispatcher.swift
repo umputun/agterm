@@ -468,6 +468,13 @@ public struct ControlDispatcher {
         case rejected(ControlResponse)
     }
 
+    /// Non-nil when `text` carries a NUL: libghostty's key-text field is NUL-terminated and slices at the
+    /// first zero, dropping the run's tail while the Return after it still submits the shortened line (#455).
+    private func nulRejection(_ text: String) -> ControlResponse? {
+        guard text.unicodeScalars.contains(where: { $0.value == 0 }) else { return nil }
+        return ControlResponse(ok: false, error: "text must not contain a NUL byte")
+    }
+
     /// The shared `--pane` selector: nil when absent, the parsed pane when `parse` accepts it, and `error`
     /// as the pinned rejection otherwise. No live session needed either way.
     private func parsePane<Pane>(_ raw: String?, error: String,
@@ -597,6 +604,7 @@ public struct ControlDispatcher {
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")
             }
+            if let rejection = nulRejection(text) { return rejection }
             return await actions.typeSession(request.target, window: request.args?.window,
                                              options: ControlSessionTypeOptions(
                                                 text: text,
@@ -743,6 +751,7 @@ public struct ControlDispatcher {
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "quick.type requires text")
             }
+            if let rejection = nulRejection(text) { return rejection }
             return await actions.typeQuick(text: text)
         case .quickText:
             let all = request.args?.all ?? false

@@ -234,6 +234,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.type` ok means the keystrokes were queued to the pty, not that the shell read or ran them (#350).
   Nothing is lost in between: libghostty's write mailbox blocks instead of dropping, messages queued before
   the io thread starts are drained once the subprocess is up, and no code path flushes pending tty input.
+  A NUL never reaches that path: `ghostty_input_key_s.text` is NUL-terminated and libghostty slices at the
+  first zero, so `session.type`/`quick.type` reject text carrying one with `text must not contain a NUL
+  byte` rather than typing the run up to it, sending its Return, and answering ok (#455).
   A caller needing execution polls `session.text`, which is what the e2e marker idiom does.
   `ghostty_surface_key`'s bool reports consumption, not delivery, so checking it would add no readiness.
 - `inject` emits Ghostty key events and Return keycode 36 for newline/CR/CRLF. Never replace it with

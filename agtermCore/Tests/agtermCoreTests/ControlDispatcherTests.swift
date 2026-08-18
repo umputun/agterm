@@ -1236,6 +1236,20 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionTypeRejectsNulBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionType, target: "session",
+            args: ControlArgs(text: "safe\u{0}danger\n")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "text must not contain a NUL byte"))
+        // no action call is what pins #455: the pre-fix path typed "safe" and still sent the Return.
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionTypeRoutesParsedOptionsAndEchoesActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1501,6 +1515,18 @@ struct ControlDispatcherTests {
         let response = await dispatcher.dispatch(ControlRequest(cmd: .quickType))
 
         #expect(response == ControlResponse(ok: false, error: "quick.type requires text"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func quickTypeRejectsNulBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickType, args: ControlArgs(text: "safe\u{0}danger\n")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "text must not contain a NUL byte"))
         #expect(actions.calls.isEmpty)
     }
 
