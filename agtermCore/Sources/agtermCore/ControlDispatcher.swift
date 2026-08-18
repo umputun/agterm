@@ -120,6 +120,9 @@ public protocol ControlActions {
     /// Cancel a native picker. The host owns window resolution, registry lookup, and dismissal.
     func cancelPick(_ target: String, window: String?) -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
+    /// Capture every open pane's foreground command now, the same read `applicationWillTerminate` does. The
+    /// host owns the `sysctl` read, the save, and the count it reports back.
+    func captureRestoreCommands() -> ControlResponse
 }
 
 public extension ControlActions {
@@ -229,7 +232,7 @@ public struct ControlDispatcher {
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
-                .sidebarCollapse, .restoreClear, .version:
+                .sidebarCollapse, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
@@ -740,6 +743,8 @@ public struct ControlDispatcher {
             return actions.collapseSidebar(window: request.args?.window)
         case .restoreClear:
             return actions.clearRestoreCommands()
+        case .restoreCapture:
+            return actions.captureRestoreCommands()
         default:
             preconditionFailure("unexpected app command: \(request.cmd.rawValue)")
         }

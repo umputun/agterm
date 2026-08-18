@@ -87,10 +87,13 @@ extension AppStore {
         session.splitCwd = nil
         session.splitTitle = nil
         session.initialSplitCwd = nil
-        // the right pane is gone: drop both the persisted pin and any payload still armed for this launch,
-        // so a fresh split is a plain shell.
+        // the right pane is gone: drop the persisted pin, the captured command, and any payload still armed
+        // for this launch, so a fresh split is a plain shell. The capture slot matters since `restore.capture`
+        // can fill it mid-run: left behind, a re-split would arm the dead pane's command on the next launch.
         session.splitRestoreCommand = nil
         session.pendingSplitRestoreCommand = nil
+        session.splitForegroundCommand = nil
+        session.pendingSplitForegroundCommand = nil
         session.splitRatio = nil // tearing down the split clears its geometry too, so a fresh split opens even
         // the right pane is gone, so its overlay has nothing left to cover and nobody left to read its status.
         session.teardownPaneOverlay(.right)

@@ -3030,7 +3030,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 Only a single-process command restores faithfully; a command whose name or arguments carry a control character
                 starts a plain shell instead, since the restored line is typed and the line editor would read that byte as an
                 editing key rather than text, and so does one carrying bytes that were not valid UTF-8, which are captured
-                lossily and would replay a different argument; a force-quit or crash captures nothing, and a capture replays
+                lossily and would replay a different argument; a force-quit or crash captures nothing unless
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl restore capture</span> ran
+                beforehand, and a capture replays
                 exactly once, since the launch that arms it clears it from the state file; and the multiplexers in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
                 (seeded with tmux/screen/zellij) start fresh. That file is yours to edit: agterm writes a commented starter at

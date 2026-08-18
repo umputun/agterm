@@ -110,8 +110,16 @@ paths:
   may have quit. Its `stop()` returns early without unlinking, leaving the owner's socket intact.
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
   return structured errors. Mutations may return `result.id`; trees use `result.tree`.
+  A decode failure reports the `DecodingError`'s CONTEXT `debugDescription`, not `localizedDescription`, so
+  the error NAMES the rejected `cmd`. That is the only signal a caller gets that its agterm predates its
+  agtermctl, and the reason a new command needs no version handshake. Read the context, never the error:
+  `DecodingError.debugDescription` is macOS 26.4+, so at the 14.0 deployment target `String(describing:)`
+  degrades to a reflection dump that hides the sentence inside `DecodingError.Context(...)`.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses
   `result.affected` for session counts, and reserves `result.count` for diagnostics/search.
+  A command that reuses `count` for something else must carry its own `result.text`, which the shared
+  formatter prefers over every count spelling; `restore.capture` does, or its pane total would print as
+  "N diagnostic(s)".
 - Targets accept active, case-insensitive UUID, or unique prefix. Batch targets resolve within the first
   target's store, deduplicate, and fail atomically. Preserve the first target in the legacy top-level field
   so old servers degrade to it rather than active.
@@ -135,7 +143,8 @@ renumbering. Do not reintroduce a count anywhere.
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
-- `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`, `version`
+- `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
+  `restore.clear`, `version`
 
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
@@ -619,6 +628,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Restore commands
 
+- `restore.capture` fills those same captured main/split slots on demand, from every open window's live
+  panes, saves immediately, and captures no hidden split. It is app-global. It reports the slots it
+  actually WROTE in `result.count` plus its own `result.text`; counting the slots afterwards instead would
+  read a stale split capture as a fresh one. It REFUSES while `restoreRunningCommand` is off, which is the
+  one place this API does not follow `session.restore`'s note-and-succeed: see [[settings]] for why the
+  two differ and for the exits the command exists for.
 - `restore.clear` clears captured main/split foreground commands across open windows and saves immediately.
   It never clears durable `initialCommand`; it is app-global.
 - `session.restore` pins per-session, per-pane next-launch behavior for discussion #264:

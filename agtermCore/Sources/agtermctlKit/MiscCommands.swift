@@ -57,8 +57,38 @@ struct Config: ParsableCommand {
 struct Restore: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Restore-running-command commands.",
-        subcommands: [Clear.self]
+        subcommands: [Capture.self, Clear.self]
     )
+
+    struct Capture: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Capture every pane's running command now, so a forced exit restores it.",
+            discussion: """
+            agterm captures the running commands when it quits, so an exit that never gets there leaves \
+            every pane restoring a plain shell: a force quit, a crash, a hard reset, a power loss. This \
+            runs the same capture on demand, app-global across every open window, and prints how many panes \
+            had a command to capture.
+
+            Consumption is unchanged: the next launch arms each captured command once and clears it. Run it \
+            from a scheduled job every so often, or bind it, and an exit nobody was there for restores \
+            like a deliberate quit.
+
+            A capture is only as fresh as its last run, so a pager or a build that has finished since still \
+            re-runs after a crash. "restore clear" drops every captured command, and restore-denylist.conf \
+            in the config directory keeps a named program from re-running at all.
+
+            Typed at a prompt it records ITSELF: while it runs it is that pane's foreground process, so that \
+            pane comes back running the capture command. Bind it or run it from a scheduled job, or follow \
+            an interactive one with "restore clear".
+
+            Needs "Restore running commands on restart", which is what replays the capture: with the \
+            setting off this captures nothing and fails, saying so.
+            """)
+        // app-global, like `restore clear`: every open window, so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .restoreCapture) }
+    }
 
     struct Clear: RequestCommand {
         static let configuration = CommandConfiguration(

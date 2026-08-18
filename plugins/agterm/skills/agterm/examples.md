@@ -16,13 +16,20 @@ agtermctl window list --json # windows, with open/active flags
 agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | "\(.name): \(.foreground // "shell")"'
 ```
 
-## Reset the restore-on-restart commands
+## Capture or reset the restore-on-restart commands
 
 The opt-in "Restore running commands on restart" setting saves each pane's foreground command at quit.
 Clear those saved commands so the next launch restores plain shells:
 
 ```bash
 agtermctl restore clear
+```
+
+Or capture them now, so an exit that never reaches a clean quit (a force quit, a crash, a hard reset)
+restores like one. It needs the setting on, and answers with the number of panes it captured:
+
+```bash
+agtermctl restore capture
 ```
 
 ## Pin what a pane restores (per-session override)

@@ -116,9 +116,9 @@ public enum CommandRestore {
     /// - `wasRestored`: the session came from a restore (a FRESH command session always runs its command, a
     ///   RESTORED one only when the opt-in is on).
     /// - `restoreEnabled`: the `restoreRunningCommand` opt-in.
-    /// - `hadForeground`: a foreground command was CAPTURED at the last quit. It PREEMPTS `initialCommand`
-    ///   even when suppressed (denylisted/off → `foregroundInput` nil), yielding a plain shell rather than
-    ///   the stale creation command — so gate on capture, not on the input surviving.
+    /// - `hadForeground`: a foreground command was CAPTURED, at the last quit or by `restore.capture`. It
+    ///   PREEMPTS `initialCommand` even when suppressed (denylisted/off → `foregroundInput` nil), yielding a
+    ///   plain shell rather than the stale creation command — so gate on capture, not on the input surviving.
     /// - `foregroundInput`: the rendered foreground command line to type, or nil (none / suppressed).
     /// - `initialCommand`: the session's persisted `--command`.
     /// - `restoreOverride`: the pane's pinned restore command (`session.restore`), tri-state — nil = no

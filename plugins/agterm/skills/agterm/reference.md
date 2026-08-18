@@ -1183,6 +1183,22 @@ kept); over the socket `theme set` is the commit, with no preview.
 
 ## restore
 
+`agtermctl restore capture` — capture every open pane's live foreground command NOW, into the same slot the
+quit-time capture fills, and persist it. For the exit that never reaches `applicationWillTerminate`: a force
+quit, a crash, a hard reset, a power loss, all of which today leave every pane restoring a plain shell. (A
+shutdown, restart or logout is not one of them: that path quits the app normally and captures by itself.)
+Run it from a scheduled job or bind it, and an exit nobody was there for restores like a deliberate
+quit. Consumption is unchanged — the next launch arms each captured command once and clears it. App-global
+(no `--window`), prints `count`, the number of panes it captured a command for (main and shown split count
+one each). With the **Restore running commands on restart** setting off it captures nothing and returns an
+error saying so: nothing would replay the capture, and it would go stale where a `session.restore` pin
+would keep waiting for the setting. A capture is also only as fresh as its last run: a pager or a build that
+has finished since still re-runs after a crash, which `restore clear` drops wholesale and
+`restore-denylist.conf` prevents per program. Typed at a prompt the command records ITSELF, since while it
+runs it is that pane's foreground process and the pane comes back running `agtermctl restore capture` (which
+prints its count and captures itself again). Bind it or schedule it, or follow an interactive run with
+`restore clear`.
+
 `agtermctl restore clear` — clear every session's saved CAPTURED foreground command and persist, so the
 next restart restores plain shells for those panes (not whatever each pane was running). It does NOT clear
 a `session.new --command` session's own command (`initialCommand`, the durable creation identity), which

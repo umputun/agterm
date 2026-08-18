@@ -103,6 +103,22 @@ struct AppStorePaneTests {
         #expect(session.splitAxis == .topBottom)
     }
 
+    /// `restore.capture` can fill the split capture slot mid-run, so closing the split has to drop it: left
+    /// behind, a later re-split makes `isSplit` true again and the next launch arms the dead pane's command.
+    @Test func closeSplitDropsTheCapturedSplitCommand() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitForegroundCommand = ["htop"]
+        session.pendingSplitForegroundCommand = ["htop"]
+
+        store.closeSplit(session.id)
+
+        #expect(session.splitForegroundCommand == nil)
+        #expect(session.pendingSplitForegroundCommand == nil)
+    }
+
     @Test func closeSplitHidesAndTearsDownSurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

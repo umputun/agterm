@@ -665,6 +665,10 @@ struct CommandsTests {
         #expect(validationMessage(["session", "status", "blocked", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
+    @Test func restoreCaptureIsAppGlobalAndCarriesNoArgs() throws {
+        #expect(try request(["restore", "capture"]) == ControlRequest(cmd: .restoreCapture))
+    }
+
     @Test func sessionRestorePinsCommand() throws {
         let expected = ControlRequest(cmd: .sessionRestore, target: "s1",
                                       args: ControlArgs(mode: "set", command: "claude --resume abc"))

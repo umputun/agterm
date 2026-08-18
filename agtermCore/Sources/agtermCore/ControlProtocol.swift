@@ -81,6 +81,7 @@ public enum Command: String, Codable, Sendable {
     case pickCancel = "pick.cancel"
     case restoreClear = "restore.clear"
     case version = "version"
+    case restoreCapture = "restore.capture"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied, so a
     /// test can assert the flip drove the reload. Refused outside an XCUITest launch, and EXEMPT from the

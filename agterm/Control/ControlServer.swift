@@ -90,6 +90,21 @@ final class ControlServer {
         }
     }
 
+    /// The sentence inside a `DecodingError`, read off its `Context` rather than off the error: the error's
+    /// own `debugDescription` is macOS 26.4+, so at this app's 14.0 deployment target `String(describing:)`
+    /// falls back to a reflection dump that buries the same sentence inside `DecodingError.Context(...)`.
+    /// Every case carries a context, and the `@unknown default` keeps a future case readable rather than
+    /// silent.
+    nonisolated private static func decodeDetail(_ error: DecodingError) -> String {
+        switch error {
+        case .dataCorrupted(let context), .keyNotFound(_, let context),
+                .typeMismatch(_, let context), .valueNotFound(_, let context):
+            return context.debugDescription
+        @unknown default:
+            return String(describing: error)
+        }
+    }
+
     /// Cap on a request line, shared with the client via `ControlWire` so the two sides can't drift; over
     /// it the line is rejected and the connection closed, so a bad client can't grow the buffer unbounded.
     nonisolated private static let maxLineBytes = ControlWire.maxRequestLineBytes
@@ -334,7 +349,12 @@ final class ControlServer {
         do {
             request = try JSONDecoder().decode(ControlRequest.self, from: line)
         } catch {
-            writeResponse(conn, ControlResponse(ok: false, error: "invalid request: \(error.localizedDescription)"))
+            // the decode CONTEXT over `localizedDescription`: the localized string is the generic "data
+            // couldn't be read", while the context names the offending value — for an unknown `cmd` that is
+            // the difference between a mystery and "Cannot initialize Command from invalid String value
+            // restore.capture", which tells a caller its agterm is older than its agtermctl.
+            let detail = (error as? DecodingError).map(Self.decodeDetail) ?? error.localizedDescription
+            writeResponse(conn, ControlResponse(ok: false, error: "invalid request: \(detail)"))
             return
         }
 
@@ -439,7 +459,7 @@ final class ControlServer {
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
-                .restoreClear, .dashboard, .version:
+                .restoreClear, .restoreCapture, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
@@ -496,6 +516,36 @@ final class ControlServer {
         }
         library.saveAllOpen()
         return ControlResponse(ok: true)
+    }
+
+    /// Capture every open pane's live foreground command NOW, filling the same slots the quit-time capture
+    /// fills, then persist them. The point is the exit that never runs `applicationWillTerminate`: a crash, a
+    /// SIGKILL, a hard reset, or a restart that outruns the app's termination window. Run this from a
+    /// scheduled job or a keybind and such an exit restores like a ⌘Q.
+    ///
+    /// App-global like `clearRestoreCommands`, its inverse over the same slots: no `--window` selector, every
+    /// open window. Consumption stays one-shot and launch-only, so nothing here changes replay.
+    ///
+    /// Gated on the same setting as the two exit-time captures, and refuses rather than answering ok: with the
+    /// setting off a capture is write-only — the launch replay reads the setting too, so nothing would run —
+    /// and a scheduled caller needs a non-zero exit to notice. It also keeps "the setting is off" meaning
+    /// "argv never reaches the disk", which a silent capture would break for a user who opted out.
+    func captureRestoreCommands() -> ControlResponse {
+        guard settingsModel.settings.restoreRunningCommand == true else {
+            return ControlResponse(ok: false,
+                                   error: "\"Restore running commands on restart\" is off, nothing was captured")
+        }
+        let sessions = library.allOpenSessions()
+        let captured = AppDelegate.captureForegroundCommands(sessions: sessions)
+        // this command's whole claim is that the argv reached disk, so the ack waits on the write and not on
+        // the assignment: `saveAllOpen` swallows the result, `saveAllOpenChecked` reports it.
+        guard library.saveAllOpenChecked() else {
+            return ControlResponse(ok: false, error: "captured \(captured) pane\(captured == 1 ? "" : "s") "
+                + "but at least one window's save failed; the argv stays in memory and the next save writes it")
+        }
+        var result = ControlResult(count: captured)
+        result.text = "captured \(captured) pane\(captured == 1 ? "" : "s")"
+        return ControlResponse(ok: true, result: result)
     }
 
     /// Open or close the target window's dashboard overlay — the app side of the host-free `dashboard`

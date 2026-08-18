@@ -491,8 +491,11 @@ terminal theme app-wide, per slot: a NAME sets the light/single theme (a dark th
 appearance automatically; `theme set --dark none` stops tracking. The app default is the bundled
 **agterm** theme; omit the name for ghostty's built-in default ("default ghostty"); an unknown name errors.
 
-**restore** — `restore clear` — clear every session's saved foreground command (the
-restore-running-command capture) so the next restart restores plain shells.
+**restore** — `restore capture` — capture every pane's running command now, into the slot the quit-time
+capture fills, so an exit that never reaches a clean quit (a force quit, a crash, a hard reset) still
+restores; prints how many panes were captured, and refuses while **Restore running commands on restart**
+is off, since nothing would replay the capture · `restore clear` — clear every session's saved foreground
+command (the restore-running-command capture) so the next restart restores plain shells.
 
 **version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
 `commit` when the build recorded one). App-global: no target, no `--window`, no window need be open, so it

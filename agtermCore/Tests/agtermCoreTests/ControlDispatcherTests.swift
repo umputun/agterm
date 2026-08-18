@@ -1504,6 +1504,17 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.restoreClear])
     }
 
+    @Test func restoreCaptureRoutesThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextRestoreCaptureResponse = ControlResponse(ok: true, result: ControlResult(count: 3))
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .restoreCapture))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(count: 3)))
+        #expect(actions.calls == [.restoreCapture])
+    }
+
     @Test func quickRoutesRawModeAndKeepsActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
