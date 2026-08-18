@@ -152,7 +152,13 @@ paths:
   mid-run reopen, and `recoverOrphanedWindows` drops captures while the sticky override still arms
   (a corrupt index must not re-execute a closed window's last command).
 - Restore only when the toggle is on and basename is absent from user
-  `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. Feed captured argv once through
+  `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. A control character anywhere in the
+  argv also refuses, matching what `session.restore set` rejects a pin for: the line is typed, so the line
+  editor reads the byte before the shell parser and quoting cannot protect it. U+FFFD refuses with it,
+  since `parseProcArgs` decodes lossily and replaying it would run a different argument. Both refuse at
+  RENDER, keeping `hadForeground` true so a stale `initialCommand` stays preempted. A pin loaded from a
+  snapshot never passed the dispatcher's check, so `restoreInput` applies it again at the sink; both share
+  `CommandRestore.hasControlCharacter`. Feed captured argv once through
   shell-quoted `config.initial_input` so exit returns to the shell, then nil it. Only one foreground
   process from a typed pipeline/compound command can be captured.
 - `session.new --command` persists durable `initialCommand` and restores through shell-replacing

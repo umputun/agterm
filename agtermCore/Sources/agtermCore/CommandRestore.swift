@@ -78,12 +78,26 @@ public enum CommandRestore {
         return others.filter { $0.ppid == pgid }.map(\.pid).sorted()
     }
 
-    /// Whether a captured argv should be re-run on restore: false for an empty argv or one whose
-    /// `argv[0]` basename is in `denylist`, true otherwise. The denylist is the user-editable
-    /// `restore-denylist.conf` (no built-in entries) — `parseDenylist` builds it.
+    /// Whether a captured argv should be re-run on restore: false for an empty argv, one whose `argv[0]`
+    /// basename is in the user-editable `restore-denylist.conf` (`parseDenylist` builds it, no built-in
+    /// entries), or one carrying an `isUnreplayable` scalar. Refusing HERE rather than at capture keeps
+    /// `hadForeground` true, so `restorePlan` still preempts a stale `initialCommand`.
     public static func shouldRestore(argv: [String], denylist: Set<String>) -> Bool {
         guard let first = argv.first, !first.isEmpty else { return false }
+        if argv.contains(where: { $0.unicodeScalars.contains(where: isUnreplayable) }) { return false }
         return !denylist.contains(basename(first))
+    }
+
+    /// Two unrelated reasons, one predicate because both end at the same plain shell: a control character
+    /// the line editor acts on, and the U+FFFD `parseProcArgs` leaves where the bytes were not valid
+    /// UTF-8. A genuine U+FFFD is refused with it, the two being indistinguishable once decoded.
+    private static func isUnreplayable(_ scalar: Unicode.Scalar) -> Bool {
+        isControlCharacter(scalar) || scalar.value == 0xFFFD
+    }
+
+    /// C0 and DEL — what a line editor reads as an editing command rather than as text.
+    private static func isControlCharacter(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value < 0x20 || scalar.value == 0x7F
     }
 
     /// The mutually-exclusive surface seed a pane restores/creates with. `command` != nil → the exec path
@@ -135,8 +149,15 @@ public enum CommandRestore {
     public static func restoreInput(restoreEnabled: Bool, restoreOverride: String?,
                                     capturedInput: String?) -> String? {
         guard let restoreOverride else { return capturedInput }
-        guard restoreEnabled, !restoreOverride.isEmpty else { return nil }
+        guard restoreEnabled, !restoreOverride.isEmpty, !hasControlCharacter(restoreOverride) else { return nil }
         return restoreOverride + "\n"
+    }
+
+    /// Whether `value` carries a character the line editor would read as an editing command. `session.restore
+    /// set` rejects these on WRITE, but a pin reaching `restoreInput` from a snapshot never passed through
+    /// that check, so the sink the dispatcher's own reasoning names is guarded here too.
+    static func hasControlCharacter(_ value: String) -> Bool {
+        value.unicodeScalars.contains(where: isControlCharacter)
     }
 
     /// Decide a pane's seed on create/restore. Pure, so the gate + precedence is unit-tested off the C
@@ -170,8 +191,8 @@ public enum CommandRestore {
     }
 
     /// Render an argv into one POSIX shell command line, single-quoting each argument (so spaces, `$`,
-    /// globs and quotes survive intact) and space-joining. The inverse of capture; fed to a restored login
-    /// shell via `initial_input`.
+    /// globs and quotes survive intact) and space-joining; fed to a restored login shell via
+    /// `initial_input`. Quoting is a PARSER escape, so it inverts capture only for what `shouldRestore` accepted.
     public static func shellQuotedLine(_ argv: [String]) -> String {
         argv.map(shellQuote).joined(separator: " ")
     }

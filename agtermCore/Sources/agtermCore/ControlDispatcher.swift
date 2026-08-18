@@ -435,7 +435,7 @@ public struct ControlDispatcher {
             }
             // a control character would smuggle an extra line (or an escape sequence) into the shell the
             // override is typed into, so the whole class is rejected — tab included.
-            guard !command.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f }) else {
+            guard !CommandRestore.hasControlCharacter(command) else {
                 return ControlResponse(ok: false, error: "command must not contain control characters")
             }
             guard command.utf8.count <= ControlRestoreOverride.maxCommandBytes else {
