@@ -184,9 +184,11 @@ C-boundary concurrency before changing the bridge.
 - `site/docs.html` is the canonical user guide and `site/commands.html` the canonical command reference.
   `README.md` is the product synopsis: pitch, install, the model, and the control-API demo.
   `site/llms.txt` is the crawler-oriented summary and discovery index.
-  These four facts stay synchronized across every surface that states them: the command count, the install
-  commands, the minimum macOS version, and the positioning claim
+  These three facts stay synchronized across every surface that states them: the install commands, the
+  minimum macOS version, and the positioning claim
   (`a simply good terminal with a full control API`).
+  The command count is NOT one of them and must not become one: no surface states a total, which is what
+  keeps a new command off every page that merely mentions the catalog. `control-api.md` owns that rule.
   The positioning claim must stay consistent in substance, not byte-identical: `site/index.html`'s title and
   social tags insert `macOS` for search intent, and `site/llms.txt` carries a libghostty-based variant.
 - `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
