@@ -1459,4 +1459,20 @@ final class WindowLibraryTests {
         #expect(reloadedSession.initialCwd == "/changed")
         _ = ws
     }
+    /// `restore.capture` answers `ok` with a pane count, which is a claim that the argv is on disk, so the
+    /// library has to REPORT a failed flush rather than swallow it. An unwritable windows directory is the
+    /// same lever the stale-file test above uses.
+    @Test func saveAllOpenCheckedReportsAFailedWrite() throws {
+        let id = UUID()
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [])]))
+        try writeIndex(WindowsIndex(frontmost: id, windows: [WindowEntry(id: id, name: "work", isOpen: true)]))
+        let library = WindowLibrary(directory: directory)
+        #expect(library.saveAllOpenChecked())
+
+        let windowsDir = directory.appendingPathComponent("windows")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: windowsDir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: windowsDir.path) }
+        #expect(!library.saveAllOpenChecked())
+    }
+
 }

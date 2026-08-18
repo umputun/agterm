@@ -1302,6 +1302,11 @@ struct ControlProtocolTests {
         #expect(node?.background?.colorHex == "#112233")
     }
 
+    @Test func restoreCaptureRoundTrips() throws {
+        let request = ControlRequest(cmd: .restoreCapture)
+        #expect(try roundTrip(request) == request)
+    }
+
     @Test func restoreClearRoundTrips() throws {
         let request = ControlRequest(cmd: .restoreClear)
         #expect(try roundTrip(request) == request)
