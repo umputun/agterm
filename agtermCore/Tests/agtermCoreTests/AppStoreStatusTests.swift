@@ -15,6 +15,11 @@ struct AppStoreStatusTests {
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
 
         #expect(node.statusChangedAt == session.statusChangedAt?.timeIntervalSince1970)
+        // pinned against the wall clock, not only against the source: the field ships for comparison with
+        // `ControlEvent.ts`, so a monotonic stamp would satisfy the equality above and still be unusable.
+        let now = Date().timeIntervalSince1970
+        let stamp = try #require(node.statusChangedAt)
+        #expect(stamp > now - 60 && stamp <= now)
     }
 
     @Test func controlTreeNilsStatusChangedAtWhenIdle() throws {

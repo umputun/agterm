@@ -104,8 +104,10 @@ public final class Session: Identifiable {
     public var agentIndicator = AgentIndicator()
 
     /// Last time the status was set non-idle — stamped by `AppStore.setAgentIndicator` on EVERY non-idle set
-    /// (nil on idle), not just on an idle→non-idle transition. Ephemeral sort key: the attention list orders
-    /// same-status sessions newest-change-first.
+    /// (nil on idle), not just on an idle→non-idle transition. Ephemeral. Sorts the attention list
+    /// newest-change-first, and `controlTree` publishes it as the node's `statusChangedAt`. That read-back
+    /// ships epoch seconds compared against `ControlEvent.ts`, so it must stay a wall-clock `Date` — a
+    /// monotonic instant would keep the sort working and make a client's computed age meaningless.
     @ObservationIgnored public var statusChangedAt: Date?
 
     /// Whether idle auto-follow already pulled the user to THIS blocked episode; ephemeral. Set on jumping

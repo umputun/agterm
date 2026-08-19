@@ -160,7 +160,8 @@ Like `statusColor` it reports the PER-CALL override only, so a shape picked in S
 absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
 `ts` carries, so the two compare directly; omitted when idle. It is stamped on every non-idle
 `session status`, not only on a change of state, so a hook re-pushing `active` refreshes it and
-`now - statusChangedAt` reads as how long ago the agent last asserted anything — the age of the glyph.
+`now - statusChangedAt` reads as how long ago the status was last WRITTEN — the age of the glyph.
+Normally that write is the agent's own push; a pane promotion re-tags the indicator and also counts.
 Ephemeral like `unseen`: never persisted, so it is absent after a restart even for a restored session),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a

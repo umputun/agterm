@@ -560,7 +560,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// When the agent status was last SET, as epoch seconds on the `ControlEvent.ts` clock (so the two
     /// compare directly); nil/omitted when idle. Stamped on EVERY non-idle `session.status`, not only on a
     /// change of state, so a hook re-pushing `active` refreshes it and "now minus this" reads as how long ago
-    /// the agent last asserted anything. Ephemeral like `status` and `unseen` — never persisted.
+    /// the status was last WRITTEN — normally the agent's own push, though a pane promotion re-tags the
+    /// indicator and counts too. Ephemeral like `status` and `unseen` — never persisted.
     public let statusChangedAt: Double?
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
