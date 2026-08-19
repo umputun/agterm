@@ -43,6 +43,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code |
 | [kiro-agent-status](kiro-agent-status/) | Kiro CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Kiro CLI |
 | [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
+| [truthful-agent-lights](truthful-agent-lights/) | the row reports what is still running after the turn ends, and stops claiming work that is gone | 0.17.0, jq, Claude Code |
 
 ### Panes, pickers and input
 
