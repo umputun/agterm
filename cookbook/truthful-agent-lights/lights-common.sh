@@ -119,7 +119,8 @@ agt_find_agent_pid() { # walk up from $1 (default $PPID) to the agent process
   local p=${1:-$PPID} cmd
   local _
   for _ in 1 2 3 4 5 6; do
-    [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null || break
+    [ -n "$p" ] || break
+    [ "$p" -gt 1 ] 2>/dev/null || break
     cmd=$(ps -o command= -p "$p" 2>/dev/null) || break
     if agt_is_agent_name "$(agt_base_name "$cmd")"; then
       printf '%s\n' "$p"
