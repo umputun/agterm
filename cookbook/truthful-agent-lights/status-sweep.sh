@@ -155,7 +155,8 @@ transcript_stalled() { # session-id -> 0 when the transcript is known and cold
   local tf="$AGT_LIGHTS_STATE/transcript/$1" tp
   [ -f "$tf" ] || return 1
   tp=$(cat "$tf" 2>/dev/null)
-  [ -n "$tp" ] && [ -f "$tp" ] || return 1
+  [ -n "$tp" ] || return 1
+  [ -f "$tp" ] || return 1
   [ "$(file_age "$tp")" -ge "$AGT_STALL_SECS" ]
 }
 
