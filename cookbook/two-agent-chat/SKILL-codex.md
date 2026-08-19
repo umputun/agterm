@@ -30,6 +30,11 @@ Pass the message on stdin through a quoted heredoc, never as an argument. The sc
 whitespace to single spaces before typing, because typing a newline submits the fragment before it,
 so write for one paragraph.
 
+If a send refuses saying more than one session shares this checkout, stop. It means this Codex was
+started without its pane's session id injected, and the fix is a launch flag only the user can apply.
+Say so and let him decide; never pass `--session` with an id you inferred, and never try another one
+to see if it works.
+
 Before typing, the script confirms the target pane really is running Claude Code, looking for
 `claude` in what agterm reports for that pane. A wrapper script is common here, and then that name
 is what agterm sees instead: add `--target-command <name>` with the wrapper's name and the send goes

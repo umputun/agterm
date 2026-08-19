@@ -22,6 +22,7 @@ agterm 0.24.0 or later, which added `surface cursor` — the recipe refuses to t
 2. Copy `SKILL-claude.md` to `~/.claude/skills/peer-chat/SKILL.md` and `SKILL-codex.md` to `~/.codex/skills/peer-chat/SKILL.md`. Both loaders require the installed file to be named exactly `SKILL.md`, so the suffix here only says which agent the file is for. Each one tells its own agent how to send, how to recognise an incoming message, and what it may not do to the other pane.
 3. Edit both copies so the path they name for `peer-chat.py` matches where you put it.
 4. If you start either agent through a wrapper script rather than as `claude` or `codex`, put that wrapper's name in the same file, as the `--target-command` value the agent should pass when sending to it. Without this the first send refuses, saying the target pane is not running the expected command.
+5. Start Codex so it can tell which pane it is in. Codex strips `AGTERM_SESSION_ID` from tool subprocesses, so start it with `codex -c "shell_environment_policy.set.AGTERM_SESSION_ID=\"$AGTERM_SESSION_ID\""` to copy the current pane's session id into every tool command, adding your normal Codex options to the same command. Without this injection the script can still resolve one matching repository checkout, but it refuses when several sessions share that checkout. If you launch Codex through a wrapper, put the flag in the wrapper and it applies to every pane.
 
 If your `agtermctl` is not on `PATH` under that name, set `AGTERMCTL` to its full path; the script reads that variable and falls back to `agtermctl`.
 
@@ -81,7 +82,9 @@ The two directions are not symmetric. Codex is sent Tab, which queues the line w
 
 It assumes Claude Code on the left and Codex on the right. Each agent's pane is fixed in the script's profiles, so a split arranged the other way sends every message to the wrong pane. A session with no split is refused outright, before any pane is read: without that check a send to the left pane would still pass after the right one had closed, which is no longer a two-agent layout at all.
 
-Run from inside a session, it targets that session: an agent in an agterm pane has `AGTERM_SESSION_ID`, which the script uses after checking the target pane. Run from anywhere else with no `--session`, it scans every session instead and takes the single one whose target pane matches, which answers a different question from which session you meant. Pass `--session` when you are not inside the one you want.
+**Codex cannot see which pane it is in unless you tell it at launch.** It strips `AGTERM_SESSION_ID` from every tool subprocess, and nothing inside its sandbox recovers the value: reading a parent process is blocked outright. Without the launch injection in *Setup*, the script falls back to matching the git checkout, and every worktree of one repository maps to the same checkout, so two sessions open on the same repository are indistinguishable and the send refuses. That refusal is the correct outcome, not a bug, but it is why the injection is worth doing once in your Codex launcher rather than remembering per session.
+
+Session resolution never guesses. With `AGTERM_SESSION_ID` or `--session` it uses that session after checking the target pane. Without either, it matches only sessions in the same checkout as the caller, and refuses on none or several rather than picking a session elsewhere that happens to have the right shape. `--session` takes a full id or any unique prefix of one.
 
 An agent whose launcher leaves no stable name in the pane's command line cannot be targeted at all. `--target-command` matches a name that agterm can actually see, so a wrapper that execs through something anonymous stays unsupported and every send to it refuses.
 

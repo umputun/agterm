@@ -65,6 +65,25 @@ def tree() -> Any:
     return json.loads(ctl("tree", "--json"))
 
 
+def checkout_key(path: str) -> str:
+    command = [
+        "git", "-C", path, "rev-parse", "--path-format=absolute", "--git-common-dir"
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return os.path.realpath(path)
+    if result.returncode == 0 and result.stdout.strip():
+        return os.path.realpath(result.stdout.strip())
+    return os.path.realpath(path)
+
+
 def walk(value: Any) -> Iterator[dict[str, Any]]:
     if isinstance(value, dict):
         if "id" in value and ("foreground" in value or "splitForeground" in value):
@@ -105,13 +124,20 @@ def has_target(info: dict[str, Any], profile: Profile) -> bool:
 
 
 def find_node(sid: str) -> dict[str, Any]:
-    for info in walk(tree()):
-        if str(info.get("id")) == sid:
-            return info
-    raise RuntimeError(f"session {sid} is not in the agterm tree")
+    needle = sid.lower()
+    matches = [
+        info
+        for info in walk(tree())
+        if str(info.get("id", "")).lower().startswith(needle)
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise RuntimeError(f"no such session: {sid}")
+    raise RuntimeError(f"ambiguous session prefix {sid!r}")
 
 
-def require_target(sid: str, profile: Profile) -> None:
+def require_target(sid: str, profile: Profile) -> str:
     info = find_node(sid)
     if not info.get("hasSplit"):
         raise RuntimeError(f"session {sid} has no split")
@@ -120,22 +146,33 @@ def require_target(sid: str, profile: Profile) -> None:
             f"{profile.agent} target pane is not running {profile.command!r}; "
             "for a wrapper, pass --target-command NAME"
         )
+    return str(info["id"])
 
 
 def resolve_session(explicit: str | None, profile: Profile) -> str:
     sid = explicit or os.environ.get("AGTERM_SESSION_ID")
     if sid:
-        require_target(sid, profile)
-        return sid
-    matches = [str(info["id"]) for info in walk(tree()) if has_target(info, profile)]
+        return require_target(sid, profile)
+    wanted = checkout_key(os.getcwd())
+    matches = [
+        str(info["id"])
+        for info in walk(tree())
+        if has_target(info, profile)
+        and info.get("cwd")
+        and checkout_key(str(info["cwd"])) == wanted
+    ]
     if len(matches) == 1:
         return matches[0]
     if not matches:
         raise RuntimeError(
-            f"no agterm session has {profile.command!r} in the target pane; "
+            "this checkout maps to no session running the expected "
+            f"{profile.agent}-{profile.pane} layout; "
             "for a wrapper, pass --target-command NAME"
         )
-    raise RuntimeError("multiple matching sessions; pass --session explicitly")
+    raise RuntimeError(
+        "more than one session shares this checkout; pass --session ID or launch "
+        "Codex with shell_environment_policy.set.AGTERM_SESSION_ID"
+    )
 
 
 def pane_text(sid: str, profile: Profile) -> str:
