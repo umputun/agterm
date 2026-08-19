@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "hooks": {
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/agterm/agent-status/agterm-agent-status.sh active --blink",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/agterm/agent-status/agterm-agent-status.sh active --blink",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "$HOME/.config/agterm/agent-status/agterm-agent-status.sh completed --auto-reset",
+        "timeoutSec": 5
+      }
+    ],
+    "notification": [
+      {
+        "matcher": "permission_prompt",
+        "type": "command",
+        "bash": "$HOME/.config/agterm/agent-status/agterm-agent-status.sh blocked",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}
