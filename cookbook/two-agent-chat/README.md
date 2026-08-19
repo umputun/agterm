@@ -68,9 +68,11 @@ The recipe deliberately does not start agents. Deciding that a pane is safe to t
 
 ## Limits
 
-**The script types into another pane's composer, and it can submit text you did not write.** The caret check is one-way evidence: a caret at column 2 rules out a draft whose cursor sits after the text, but it cannot tell an empty composer from a draft whose cursor was moved back to the start. In that state the message is inserted in front of your draft and both are submitted together. Do not leave half-written input in a pane you are about to receive a message in.
+**The script types into another pane's composer, and it can submit text you did not write.** The caret check is one-way evidence: a caret at column 2 rules out a draft whose cursor sits after the text, but it cannot tell an empty composer from a draft whose cursor was moved back to the start. In that state the message is inserted in front of your draft and both are submitted together. The check made after typing cannot rule that out either: only the composer's first rendered row is identifiable, so once a message wraps, anything left on a continuation row is invisible to it, in both directions. Do not leave half-written input in a pane you are about to receive a message in.
 
 **In practice it does not type into dialogs, but a short window exists where it could.** A dialog already on screen stops the send: the caret must be at rest before a single character goes anywhere. The window is only the moment between that check and the typing, which are separate `agtermctl` calls, so a chooser or trust prompt appearing inside it would receive the message text. Even then the second check fails and the submit key is withheld, so nothing is answered and no choice is confirmed, though characters reaching a picker can move its selection.
+
+**The first exchange may stop and wait for you.** An agent asked to run this script may put up its own approval request before running anything, and neither skill will answer it: a permission prompt carries your authority, so both are told to leave it alone. Until you approve it in that pane, the exchange simply sits there, which looks like a hang rather than a question.
 
 **A busy composer is waited out, but only for about forty seconds.** If the other pane's composer is not confirmably empty, the script retries five times at ten-second intervals, printing each attempt to stderr, then gives up with exit 1 and types nothing. A pane left sitting on a dialog therefore costs about forty seconds before the send fails rather than blocking forever.
 
