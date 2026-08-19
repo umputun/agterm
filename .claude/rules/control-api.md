@@ -511,7 +511,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   derive validation/help from `StatusShape.allCases`. Idle accepts but does not render shape.
   AppKit and SwiftUI resolve through shared color/symbol helpers.
 - `ControlEventPayload` and `EventFormatter.human` must include every override; human status prints color
-  and shape. Tree reports state, pane, true blink, per-call color, and per-call shape only while non-idle.
+  and shape. Tree reports state, pane, true blink, per-call color, per-call shape, and `statusChangedAt`
+  only while non-idle.
+- `statusChangedAt` is `Session.statusChangedAt` as epoch seconds — a plain `Double`, since
+  `ControlProtocol.swift` imports no Foundation. It shares the `ControlEvent.ts` clock so a poller can
+  compare the two, and `setAgentIndicator` stamps it BEFORE the unchanged-indicator early return, which is
+  what makes a re-pushed `active` refresh the age instead of freezing it. Ephemeral: cleared on idle, never
+  persisted, absent after restore.
 - Pane is left/right/scratch, nil meaning left. It controls pane-scoped keystroke clearing and GUI
   blocked/completed reveal. Control attention navigation changes selection only.
 - `--pane-id` (#199) is a stable per-surface token that overrides stale baked role after promote/re-split,

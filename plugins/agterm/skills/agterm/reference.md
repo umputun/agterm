@@ -157,7 +157,11 @@ glyph-tint override — the `--color` value; omitted when idle or using the conf
 `statusShape` (the glyph silhouette override — the `--shape` value, one of
 `circle`|`square`|`triangle`|`diamond`|`capsule`|`star`; omitted when idle or using the configured shape.
 Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
-absent),
+absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
+`ts` carries, so the two compare directly; omitted when idle. It is stamped on every non-idle
+`session status`, not only on a change of state, so a hook re-pushing `active` refreshes it and
+`now - statusChangedAt` reads as how long ago the agent last asserted anything — the age of the glyph.
+Ephemeral like `unseen`: never persisted, so it is absent after a restart even for a restored session),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
@@ -472,7 +476,9 @@ error keeps those names for compatibility.
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|diamond|capsule|star] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
-  set the sidebar agent-status glyph. `--blink` requests an attention pulse; macOS Reduce Motion
+  set the sidebar agent-status glyph. Every non-idle call stamps the session node's `statusChangedAt`,
+  including one that re-pushes the status already showing, so a poller can tell a fresh glyph from a stale
+  one without keeping state of its own. `--blink` requests an attention pulse; macOS Reduce Motion
   suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
   pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
   is visited (use for a one-shot completion flash). `--sound` plays a

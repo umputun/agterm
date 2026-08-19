@@ -590,6 +590,32 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertNil(node["statusShape"], "a status set without --shape should clear the shape read-back")
     }
 
+    func testSessionStatusChangedAtRefreshesOnEveryNonIdleSetAndClearsOnIdle() throws {
+        let seeded = try activeSessionID()
+
+        let first = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active"}}"#)
+        XCTAssertEqual(first["ok"] as? Bool, true, "session.status active should succeed: \(first)")
+        var node = try sessionNode(id: seeded)
+        let stamped = try XCTUnwrap(node["statusChangedAt"] as? Double,
+                                    "a non-idle status should stamp the change time: \(node)")
+
+        // the stock hooks re-push `active` on every tool event, so an unchanged status must still move the
+        // stamp — that is what makes "now minus statusChangedAt" the agent's liveness rather than its last
+        // state change.
+        let again = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active"}}"#)
+        XCTAssertEqual(again["ok"] as? Bool, true, "re-pushing the same status should succeed: \(again)")
+        node = try sessionNode(id: seeded)
+        let refreshed = try XCTUnwrap(node["statusChangedAt"] as? Double,
+                                      "the re-push should keep reporting a stamp: \(node)")
+        XCTAssertGreaterThan(refreshed, stamped, "an unchanged status must still refresh the stamp")
+
+        let cleared = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"idle"}}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "session.status idle should succeed: \(cleared)")
+        node = try sessionNode(id: seeded)
+        XCTAssertNil(node["status"], "idle should clear the status read-back")
+        XCTAssertNil(node["statusChangedAt"], "idle draws no glyph, so it must report no change time")
+    }
+
     // there is no visibility gate: the icon shows on the selected session too.
     func testAgentStatusIconShowsRegardlessOfSelectionAndAutoResetClears() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)

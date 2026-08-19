@@ -1445,6 +1445,7 @@ struct AppStoreTests {
         b.flagged = true
         b.backgroundWatermark = BackgroundWatermark(kind: .text, text: "PROD")
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: b.id)
+        b.statusChangedAt = Date(timeIntervalSince1970: 1_700_000_000) // wall-clock stamp, pinned to compare
         store.selectSession(b.id)
 
         let tree = store.controlTree()
@@ -1467,7 +1468,7 @@ struct AppStoreTests {
                                title: "remote:~/b", active: true, split: true,
                                hasSplit: true, splitAxis: "vertical", splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
-                               status: "blocked", statusPane: "right",
+                               status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000,
                                background: BackgroundWatermark(kind: .text, text: "PROD"),
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .primary).rawValue,

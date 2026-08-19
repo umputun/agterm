@@ -742,6 +742,24 @@ struct ControlProtocolTests {
         #expect(decoded.statusShape == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithStatusChangedAt() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         status: "active", statusChangedAt: 1_700_000_000.5)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.statusChangedAt == 1_700_000_000.5)
+    }
+
+    @Test func treeSessionNodeOmitsStatusChangedAtWhenNil() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "active")
+        let json = String(decoding: try JSONEncoder().encode(session), as: UTF8.self)
+        #expect(!json.contains("statusChangedAt"), "a nil statusChangedAt must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.statusChangedAt == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithBackground() throws {
         let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",
                                             opacity: 0.2, fit: .cover, position: .topRight)

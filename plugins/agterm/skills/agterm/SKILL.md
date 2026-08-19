@@ -166,7 +166,10 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statu
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
 unset or idle), `statusBlink`/`statusColor`/`statusShape` (the status glyph's `--blink` flag, its `--color`
 `#rrggbb` tint and its `--shape` silhouette from `session status`, omitted when idle / not blinking / using
-the configured color or shape — the tint and the silhouette report the per-call override only), `background` (the background
+the configured color or shape — the tint and the silhouette report the per-call override only),
+`statusChangedAt` (when that status was last set, in epoch seconds — the same clock as an event's `ts`;
+omitted when idle, and refreshed by a re-push of the SAME status, so `now - statusChangedAt` is how long
+ago the agent last reported anything; ephemeral, so it does not survive a restart), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen` — omitted when zero), `commandWait` (whether a `--command` session was created with `--wait` to
