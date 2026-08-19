@@ -2,6 +2,8 @@
 
 Let Claude Code and Codex hold a conversation with each other in one agterm split.
 
+*A simplified version of the setup I run myself, cut down to the part worth publishing. Tested for real, with two agents talking to each other through it, but this is a first version and it will be updated as it gets used.*
+
 ## What it does
 
 Two coding agents run side by side in a split session, one per pane, and talk to each other directly. Each sends a single line into the other's composer with `peer-chat.py`, and the reply arrives in its own pane as an ordinary prompt. You watch both halves of the exchange without relaying anything by hand.
@@ -14,7 +16,7 @@ You start it, and you have to name the other agent for the skill to fire. Say "w
 
 ## Requirements
 
-agterm 0.24.0 or later, which added `surface cursor` — the recipe refuses to type anything without it. Python 3.10 or later. Claude Code and Codex, each already installed and runnable.
+agterm 0.24.0 or later, which added `surface cursor`. The recipe refuses to type anything without it. Python 3.10 or later. Claude Code and Codex, each already installed and runnable.
 
 ## Setup
 
