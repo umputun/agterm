@@ -18,6 +18,8 @@ What it does:
 - **Agent skill.** An installable skill (Help ▸ Install Agent Skill…) teaches Claude Code or Codex the control model and the `agtermctl` commands, so an agent running inside agterm can build its own layout, run overlays, manage windows, and show images inline without you explaining the API.
 - **Agent status.** A coding agent reports its state (active, blocked, or completed) onto its session's row, so you can see which of many running agents needs you. Status hooks for Claude Code, Codex, Pi, OpenCode, and other agents install from Help ▸ Install Agent Status Hooks….
 
+A lot of "does it have X?" questions have the same answer: bind X yourself. A `command` line in `keymap.conf` turns any shell line into a key chord, and an overlay gives an interactive program a real terminal over the session, so a file manager, a git UI, or a database browser is one line away. Bigger workflows become scripts, which is what the [cookbook](cookbook/) collects. [Extend agterm](https://agterm.com/docs#extend) walks through both, and an agent with the bundled skill installed will write the line for you.
+
 For the real terminal work, rendering, VT parsing, and shell I/O, `agterm` embeds [Ghostty](https://ghostty.org)'s engine (libghostty); everything above is `agterm`'s own.
 
 ![agterm](docs/screenshots/main.png)
@@ -33,7 +35,7 @@ An agent's interactive prompt mid-session, with attention glyphs on the sessions
 
 ![Agent prompt](docs/screenshots/agent-prompt.png)
 
-A file manager in a floating overlay over the active session:
+The yazi file manager in a floating overlay over the active session, from one `command` line in `keymap.conf`:
 
 ![Floating overlay](docs/screenshots/floating-overlay.png)
 

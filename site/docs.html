@@ -183,6 +183,7 @@
           >
             <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>
             <a href="#install" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Install</a>
+            <a href="#extend" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Extend agterm</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">CONCEPTS</span>
             <a href="#workspaces" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9"
@@ -553,6 +554,246 @@
             </div>
           </section>
 
+          <!-- EXTEND -->
+          <section id="extend" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Extend agterm
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              agterm ships a small set of features on purpose. A great many of the tools you might wish it shipped are one line
+              in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">keymap.conf</span>, and the line
+              stays short because three pieces do the work: a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">command</span> turns any shell line
+              into a named action on a key chord, an overlay gives an interactive program its own temporary terminal over the
+              session, and any CLI you already have fills that slot. agterm never needs to know what the program is.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
+              So &ldquo;does agterm have a file browser?&rdquo; has no yes-or-no answer. You bind the file browser you like, in
+              one line. The four steps below each add one building block; put the lines in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">keymap.conf</span> via
+              <strong style="color: #e6e1d7">File &#9656; Edit Keymap&hellip;</strong> and apply them with
+              <strong style="color: #e6e1d7">File &#9656; Reload Keymap</strong>.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              1. Act on the session you are in
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >
+<span style="color: #6b727a"># open the session's working directory in Finder</span>
+<span style="color: #5ea1f2">command</span> "Open in Finder"  ctrl+a&gt;o  open "$AGT_SESSION_PWD"</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              Read the line left to right:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> is the directive, the
+              quoted text is the name shown in the
+              <strong style="color: #e6e1d7">Navigate &#9656; Custom Commands</strong> palette,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;o</span> is the chord that
+              fires it &mdash; Ctrl-A, then O &mdash; and everything after that is an ordinary shell line. The chord is
+              optional: leave it out and the action exists in the palette only.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The building block is <strong style="color: #e6e1d7">session context</strong>. Every custom command is handed the
+              session it fired from &mdash; its directory, name, id, and current selection &mdash; as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> environment variables
+              and as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_*}</span> tokens
+              substituted into the line. That is what makes one binding work in every session instead of hard-coding a path.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              2. Run an interactive program over the session
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >
+<span style="color: #6b727a"># the yazi file manager, floating over the session at 95%</span>
+<span style="color: #5ea1f2">command</span> "Yazi"  ctrl+a&gt;y  agtermctl session overlay open 'zsh -lc yazi' --size-percent 95 --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The building block is the <strong style="color: #e6e1d7">overlay</strong>. A custom command on its own runs detached
+              with no terminal, which suits launching a GUI app but kills a TUI at once, since it has nothing to draw on. An
+              overlay is a real terminal, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">yazi</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">lazygit</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">htop</span> and the rest behave
+              normally in it. It opens in the session's own working directory, and it disappears when the program exits, leaving
+              the shell underneath untouched.
+            </p>
+            <div
+              style="
+                background: rgba(242, 180, 92, 0.07);
+                border: 1px solid rgba(242, 180, 92, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 20px 0 0;
+                font-size: 14px;
+                color: #e2c79a;
+                line-height: 1.65;
+              "
+            >
+              Note <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc</span> rather than
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -c</span>. The program an overlay runs inherits
+              agterm's own PATH, not your shell's, so a Homebrew binary needs a login shell to be found &mdash; or an absolute
+              path. Skip it and the overlay flashes open and vanishes, because the binary was never found.
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> is how the line asks
+              for that terminal: it is agterm's own command-line tool, and opening an overlay is one thing it can do. Step 3
+              opens up the rest.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target "$AGT_SESSION_ID"</span> is
+              worth understanding rather than copying.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> does not act on
+              agterm directly; it sends a request over a socket, and agterm resolves it on arrival. Without a target the request
+              means &ldquo;whichever session is selected when this lands&rdquo;, which is normally the one you pressed the chord
+              in &mdash; but not if you switched in between. The token pins it to the session that fired, so the overlay always
+              opens where you asked for it.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              3. Reach the rest of the app
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >
+<span style="color: #6b727a"># a second session in this directory, alongside this one, left in the background</span>
+<span style="color: #5ea1f2">command</span> "Session here"  ctrl+a&gt;n  agtermctl session new --cwd "$AGT_SESSION_PWD" --workspace "$AGT_WORKSPACE_ID" --window "$AGT_WINDOW_ID" --no-select --socket "$AGT_SOCKET"</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The building block is the <strong style="color: #e6e1d7">control API</strong>. Overlays are one entry in a much
+              larger catalog: the same
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> creates and renames
+              sessions, splits panes, moves windows, opens the native picker, reads a session's text back, and posts
+              notifications. Every state it sets it also reads back, which is what lets a script build a whole layout rather than
+              fire a single action.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The extra flags are the same idea as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> above, applied to
+              every axis this command can drift on. A bare
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new</span> lands in
+              whichever window is frontmost and whichever workspace is current when the request arrives, and it selects the new
+              session; the ids pin all three to where the chord was pressed, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-select</span> leaves you where
+              you were. Keymap lines never wrap, so this one is long: one directive is always one line.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              Past a certain size the line becomes a script, and that is where the
+              <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a> starts: pick a
+              project from anywhere and open it in its own workspace, park a set of workspaces and bring them back later, or have
+              each tab resume its own agent conversation after a restart. Those are not one-liners, and the recipes do not
+              pretend otherwise.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              4. Or have an agent write it for you
+            </h3>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              Install the agent skill from <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong>, then
+              ask the agent running in one of your sessions:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+              "
+            >
+              add a custom command that opens yazi in a 95% overlay, bound to ctrl+a then y
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The skill carries the keymap syntax, the full command catalog, the context tokens, and the PATH rule, so the agent
+              writes a working line instead of guessing at one. This step comes last on purpose: an agent without the skill will
+              still answer, plausibly and wrongly, and by now you can tell the difference.
+            </p>
+
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 24px 0 0">
+              From here, <a href="#keymap" style="color: #6d82f3">Custom commands &amp; keys</a> has the full keymap syntax and
+              the bindable actions, the <a href="/commands" style="color: #6d82f3">command reference</a> lists every
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command with its
+              arguments, and the <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a>
+              collects worked recipes to copy and edit.
+            </p>
+          </section>
           <!-- WORKSPACES -->
           <section id="workspaces" style="scroll-margin-top: 88px; padding-top: 56px">
             <h2
