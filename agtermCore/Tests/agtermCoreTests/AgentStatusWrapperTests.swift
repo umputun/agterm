@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import agtermCore
 
 // Tests the shipped hook wrapper `agterm/Resources/agent-status/agterm-agent-status.sh` by running it
 // with a stub `agtermctl` that records its argv. It reaches the app target's resource on purpose: the
@@ -143,5 +144,67 @@ struct AgentStatusWrapperTests {
     @Test func paneIDOmittedWhenUnset() throws {
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE": "right"])
         #expect(!r.argv.contains("--pane-id"))
+    }
+
+    // run the wrapper AS THE INSTALLER WRITES IT: `AgentHooksInstall.bakeAgtermctlPath` applied to the shipped
+    // script, a stub `agtermctl` reachable on PATH, and no AGTERMCTL in the environment unless `override` asks
+    // for one. Every stub records its own path first, so the caller can tell WHICH one ran. `bakedToolExists`
+    // false is the bundle that moved away after the install.
+    private func runBaked(bakedToolExists: Bool, override: Bool = false) throws -> [String] {
+        let fm = FileManager.default
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-baked-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        let record = dir.appendingPathComponent("argv")
+        let onPath = dir.appendingPathComponent("bin/agtermctl")
+        let baked = dir.appendingPathComponent("baked/agtermctl")
+        let explicit = dir.appendingPathComponent("explicit/agtermctl")
+        for stub in [onPath, baked, explicit] {
+            try fm.createDirectory(at: stub.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try "#!/bin/bash\nprintf '%s\\n' \"$0\" \"$@\" > '\(record.path)'\n"
+                .write(to: stub, atomically: true, encoding: .utf8)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        }
+        if !bakedToolExists { try fm.removeItem(at: baked) }
+
+        let script = dir.appendingPathComponent(AgentHooksInstall.wrapperName)
+        let shipped = try String(contentsOfFile: Self.wrapper, encoding: .utf8)
+        try AgentHooksInstall.bakeAgtermctlPath(into: shipped, toolPath: baked.path)
+            .write(to: script, atomically: true, encoding: .utf8)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = [script.path, "active"]
+        var env = ["AGTERM_SESSION_ID": "sid",
+                   "PATH": onPath.deletingLastPathComponent().path + ":/usr/bin:/bin"]
+        if override { env["AGTERMCTL"] = explicit.path }
+        proc.environment = env
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        try proc.run()
+        proc.waitUntilExit()
+
+        return (try? String(contentsOf: record, encoding: .utf8))?
+            .split(separator: "\n").map(String.init) ?? []
+    }
+
+    @Test func bakedWrapperCallsTheBundledBinary() throws {
+        let argv = try runBaked(bakedToolExists: true)
+        #expect(argv.first?.hasSuffix("/baked/agtermctl") == true)
+        #expect(Array(argv.dropFirst()) == ["session", "status", "active", "--target", "sid"])
+    }
+
+    @Test func bakedWrapperFallsBackToPathWhenTheBundleMoved() throws {
+        // installing the hooks from the mounted DMG bakes a /Volumes path that dies on eject, and the wrapper
+        // suppresses the failure and exits 0, so the status simply stops appearing with no error (#472)
+        let argv = try runBaked(bakedToolExists: false)
+        #expect(argv.first?.hasSuffix("/bin/agtermctl") == true)
+        #expect(Array(argv.dropFirst()) == ["session", "status", "active", "--target", "sid"])
+    }
+
+    @Test func explicitOverrideStillBeatsTheBakedPath() throws {
+        let argv = try runBaked(bakedToolExists: true, override: true)
+        #expect(argv.first?.hasSuffix("/explicit/agtermctl") == true)
     }
 }

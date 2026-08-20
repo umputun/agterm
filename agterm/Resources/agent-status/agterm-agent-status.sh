@@ -20,7 +20,9 @@
 #   2. the absolute bundled-binary path the installer bakes in: the installer
 #      rewrites the AGTERMCTL default below to agterm.app's Contents/MacOS/agtermctl,
 #      so the hook fires even when the CLI was never symlinked into PATH.
-#   3. `agtermctl` on PATH — the fallback when nothing above resolved.
+#   3. `agtermctl` on PATH — the fallback when no override was set and the baked
+#      path no longer exists, which is what a bundle moved since the install leaves
+#      behind (installing from the mounted DMG bakes a /Volumes path, dead on eject).
 set -u
 
 [ -n "${AGTERM_SESSION_ID:-}" ] || exit 0   # not inside agterm: nothing to do

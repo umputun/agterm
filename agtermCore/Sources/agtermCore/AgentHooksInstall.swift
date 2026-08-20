@@ -34,6 +34,9 @@ public enum AgentHooksInstall {
     public static let integrationRelativePath = "shell/integration.sh"
     public static let fishIntegrationRelativePath = "shell/integration.fish"
 
+    /// Sentinel opening the installer-baked AGTERMCTL block; a re-bake replaces it instead of duplicating it.
+    public static let agtermctlMarker = "# >>> agterm agtermctl path (installer-baked) >>>"
+
     /// Marker lines bracketing the agterm-managed block in a shell rc file; the opening marker is also the
     /// idempotency probe (present → already installed).
     public static let rcMarkerBegin = "# >>> agterm agent-status >>>"
@@ -276,6 +279,51 @@ public enum AgentHooksInstall {
             return line[..<eq].trimmingCharacters(in: .whitespaces) == "notify"
         }) else { return text }
         lines.remove(at: idx)
+        return lines.joined(separator: "\n")
+    }
+
+    /// bake `toolPath` — the bundled `agtermctl` — into an installed wrapper, replacing the block a previous
+    /// install left behind and inserting the fresh one after the shebang.
+    ///
+    /// The emitted block keeps the wrapper's documented resolution order (`$AGTERMCTL` > baked path > PATH). Its
+    /// `-x` test is what makes the PATH rung reachable at all: a bundle that MOVED since the install leaves the
+    /// baked path pointing at nothing, and the wrapper suppresses output and exits 0 by design, so every status
+    /// update then fails silently. Installing from the mounted DMG is the easy way in — that bakes a `/Volumes`
+    /// path, dead the moment the image is ejected. The test sits INSIDE the unset branch so an explicit override
+    /// is never second-guessed.
+    public static func bakeAgtermctlPath(into text: String, toolPath: String) -> String {
+        let block = agtermctlBlockLines(toolPath: toolPath)
+        return insertAfterShebang(stripBakedBlock(from: text, bodyLines: block.count - 1), lines: block)
+    }
+
+    // the baked block, marker line first.
+    private static func agtermctlBlockLines(toolPath: String) -> [String] {
+        [
+            agtermctlMarker,
+            "if [ -z \"${AGTERMCTL:-}\" ]; then",
+            "  AGTERMCTL=\(shellQuote(toolPath))",
+            "  [ -x \"$AGTERMCTL\" ] || AGTERMCTL=\"$(command -v agtermctl || true)\"",
+            "fi",
+        ]
+    }
+
+    // drop a previously baked block: the marker plus `bodyLines` lines below it. The count comes from the block
+    // being emitted rather than a literal, so growing the block cannot leave half of the old one behind.
+    private static func stripBakedBlock(from text: String, bodyLines: Int) -> String {
+        var result: [String] = []
+        var skip = 0
+        for line in text.components(separatedBy: "\n") {
+            if skip > 0 { skip -= 1; continue }
+            if line == agtermctlMarker { skip = bodyLines; continue }
+            result.append(line)
+        }
+        return result.joined(separator: "\n")
+    }
+
+    private static func insertAfterShebang(_ text: String, lines block: [String]) -> String {
+        var lines = text.components(separatedBy: "\n")
+        let insertAt = lines.first?.hasPrefix("#!") == true ? 1 : 0
+        lines.insert(contentsOf: block, at: insertAt)
         return lines.joined(separator: "\n")
     }
 
