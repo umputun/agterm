@@ -194,6 +194,9 @@
             <a href="#notifications" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Notifications</a>
             <a href="#accessibility" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Accessibility</a>
             <a href="#settings" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customization</a>
+            <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9"
+              >Custom commands &amp; keys</a
+            >
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
             <a href="#agtermctl" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">agtermctl reference</a>
@@ -204,7 +207,6 @@
               class="hv9"
               >Cookbook ↗</a
             >
-            <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customizing keys</a>
             <a href="#ghostty" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Ghostty config</a>
             <a href="#status" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Agent status</a>
             <div style="height: 16px"></div>
@@ -1228,6 +1230,346 @@
             </figure>
           </section>
 
+          <!-- KEYMAP -->
+          <section id="keymap" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Custom commands &amp; keys
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              agterm reads a user-editable, kitty-flavored keymap file at
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/keymap.conf</span
+              >. It rebinds built-in menu shortcuts and defines custom shell commands bound to keys (and listed in the action
+              palette). The file is optional — a commented starter is written on first launch, and the directory can be changed in
+              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Three verbs; blank lines and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comments are ignored.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># rebind a built-in to a chord (mods joined by +)</span><br /><span
+                style="color: #5ea1f2"
+                >map</span
+              >
+              cmd+shift+l&nbsp;&nbsp;&nbsp;toggle_split<br /><span style="color: #5ea1f2">map</span>
+              ctrl+shift+k&nbsp;&nbsp;command_palette<br /><br /><span style="color: #6b727a"
+                ># or to several alternatives, joined by | with no spaces around it</span
+              ><br /><span style="color: #5ea1f2">map</span>
+              cmd+t|ctrl+a&gt;t&nbsp;&nbsp;toggle_scratch<br /><br /><span style="color: #6b727a"
+                ># define custom commands ("name" shows in the palette; chord optional)</span
+              ><br /><span style="color: #5ea1f2">command</span>
+              <span style="color: #f2b45c">"Open in Zed"</span>&nbsp;&nbsp;cmd+shift+e&nbsp;&nbsp;open -a Zed {AGT_SESSION_PWD}<br /><span
+                style="color: #5ea1f2"
+                >command</span
+              >
+              <span style="color: #f2b45c">"Lazygit"</span
+              >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl+a&gt;g&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agtermctl session overlay open 'zsh -lc lazygit'
+              --socket {AGT_SOCKET}<br /><span style="color: #5ea1f2">command</span>
+              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh<br /><br /><span
+                style="color: #6b727a"
+                ># one system-wide chord that summons the quick terminal from any application</span
+              ><br /><span style="color: #5ea1f2">global-hotkey</span> ctrl+opt+space
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A chord is modifier words (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >ctrl</span
+              >, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opt</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift</span>) joined by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and a base key (a single
+              character or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tab</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >space</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >delete</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >right</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">up</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >down</span
+              >). A Shift-typed symbol is written
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
+              (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
+              shifted symbol. Custom commands may also use a leader sequence
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
+              must include a modifier — a bare key can't shadow a plain terminal key.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> takes exactly one
+              chord and binds it <strong style="color: #e6e1d7">system-wide</strong>: it summons the quick terminal while any
+              application is frontmost, which no other binding here can do — the rest only fire while agterm has the keyboard. It
+              must carry a modifier, takes no alternatives and no leader sequence, and a second
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
+              first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
+              it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
+              takes the key even while agterm is in front, so binding one a menu item already uses means that menu shortcut stops
+              firing. It is unset unless you add the line: agterm ships no default because registering a chord takes it
+              from every other application on the Mac, and that is not a cost to impose on someone who may never summon
+              the panel from outside agterm. Spending it on the chord the in-app binding already uses is allowed and is
+              the way to get one shortcut that works everywhere —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey ctrl+`</span>
+              makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃`</span> summon the panel
+              from any application, at the price of that chord no longer reaching anything else.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span> inside a single token with no
+              spaces around it —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+t|ctrl+a&gt;t toggle_scratch</span>
+              fires the action from either, and a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
+              takes alternatives the same way. For a built-in, the first single-chord alternative the menu can carry becomes the menu
+              shortcut; every
+              other alternative, on either verb, is delivered by a key monitor and so must carry a modifier on its first chord. This
+              is also how a built-in gets a leader sequence, because a menu item holds exactly one key equivalent:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map ctrl+a&gt;s toggle_split</span> binds
+              the sequence and leaves the action with no menu shortcut at all — its shipped ⌘D is gone rather than kept, and free for
+              another action to claim. A typo in one alternative rejects the whole line, so a mistake can't hide behind a line that
+              half worked; an alternative that merely breaks a rule or collides with an existing binding drops on its own and its
+              siblings keep firing. If a line ends up binding nothing at all, the action simply keeps the shortcut it shipped with.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that cannot type ASCII —
+              Russian, Greek, Hebrew, Arabic, Thai — resolves every chord by the physical key position, so
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> still fires on the key
+              marked O even though it types <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">щ</span>.
+              A layout that can type ASCII binds what it types, so an alternative Latin layout keeps its own letter positions: on
+              Dvorak, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> follows the O you
+              actually type.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Bindable built-in actions
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+              "
+            >
+              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;reopen_recent&nbsp;&nbsp;&nbsp;undo_close&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_horizontal_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />toggle_workspace_collapse<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_workspace&nbsp;&nbsp;&nbsp;next_workspace<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> is the one
+              action with no menu item of its own. macOS adds an "Enter Full Screen" item to the View menu whenever that menu is
+              drawn, and nothing suppresses it, so an item of agterm's own would sit beside it as a duplicate. The binding (⌃⌘F by
+              default) is handled directly instead, which is why the menu entry advertises the system's Globe+F rather than your
+              chord. Both work, and rebinding
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> changes the
+              chord as usual — it just won't show up next to that menu item.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Command tokens
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+              "
+            >
+              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Tokens expand at fire time (also exported as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> env vars on the spawned
+              process). A token is substituted <strong style="color: #e6e1d7">raw</strong> into the shell line, so for content you
+              don't control —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SELECTION}</span>, and also
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SESSION_NAME}</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >{AGT_SESSION_PWD}</span
+              >
+              (a remote host can set these via OSC) — prefer the matching quoted env var, e.g.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">"$AGT_SELECTION"</span>.
+            </p>
+            <div
+              style="
+                background: rgba(242, 180, 92, 0.07);
+                border: 1px solid rgba(242, 180, 92, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 20px 0 0;
+                font-size: 14px;
+                color: #e2c79a;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">Detached, no TTY</strong> — a
+              custom command runs as a detached
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/bin/sh -c</span> with no controlling terminal, so
+              it suits fire-and-forget launches (GUI apps, scripts) — not interactive TUIs. Run a TUI like
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lazygit</span> in an overlay
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay open</span>) or a scratch
+              terminal, which have a real TTY. A non-zero exit posts a notification banner.
+            </div>
+            <div
+              style="
+                background: rgba(242, 180, 92, 0.07);
+                border: 1px solid rgba(242, 180, 92, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 20px 0 0;
+                font-size: 14px;
+                color: #e2c79a;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">GUI PATH</strong> — a custom
+              command resolves its binaries against the app's GUI
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>: the launchd default plus the bundled
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/usr/local/bin</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>. A bare
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> or Homebrew binary works;
+              anything else your shell profile adds does not, and fails with exit 127. Give it an absolute path
+              or wrap the line in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc '…'</span> —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -ilc '…'</span> when that
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> comes from
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.zshrc</span>, which
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">-lc</span> does not read. The program an
+              overlay or scratch terminal runs gets the app's own unwidened
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> and always needs one of those.
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 20px 0 0">
+              Open the file with <strong style="color: #e6e1d7">File ▸ Edit Keymap…</strong> (or the ⌃⇧P palette): it opens in a
+              95% overlay running <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$VISUAL</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >$EDITOR</span
+              >
+              (falling back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vi</span>) and
+              reloads on quit. Apply edits made elsewhere with
+              <strong style="color: #e6e1d7">File ▸ Reload Keymap</strong> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap reload</span>. A
+              malformed line never discards the rest — it surfaces in the diagnostics list in Settings ▸ Key Mapping while the good
+              lines still apply.
+            </p>
+            <p style="font-size: 15.5px; line-height: 1.75; color: #cbc6bc; margin: 0 0 18px">
+              To check what is actually bound,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
+              built-in with the binds it resolved to (the menu shortcut first, then any alternatives, joined with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span>), the custom commands,
+              each diagnostic in full, and the key equivalents the menu
+              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
+              usually a menu problem, not a keymap one. Only the menu shortcut can appear there — an alternative never does, and
+              neither do
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z) and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F), which a
+              key monitor delivers rather than a menu item.
+            </p>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              v1 limitations
+            </h3>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px">
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >A built-in's <em>menu</em> shortcut is single-chord only: a leader sequence binds through the key monitor
+                instead, as an alternative, and so never shows next to its menu item.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map</span> line can't bind a
+                bare, modifier-less arrow — a built-in rides an always-on menu key equivalent, so a bare arrow would
+                swallow the key in the terminal, the palettes, the dashboard grid, and every text field; any modifier
+                makes it bindable. The literal
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
+                key token (they are the separators), but those keys are bindable as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+.</span>; only
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">increase_font_size</span>'s
+                default ⌘+ shows as a glyph because its stored form doesn't round-trip through the file.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >Shortcut hints are not written the same way for both verbs. A built-in shows macOS glyphs (⌘⇧E), with every
+                alternative listed space-separated and a sequence's chords joined by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> as in the file
+                (⌘T ⌃A&gt;T), in the palette and in the toolbar and sidebar tooltips alike. A
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> shows the raw kitty
+                spelling you typed instead (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >cmd+shift+e</span
+                >), alternatives still joined by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >|</span
+                >.
+              </li>
+            </ul>
+          </section>
+
           <!-- AGTERMCTL -->
           <section id="agtermctl" style="scroll-margin-top: 88px; padding-top: 56px">
             <h2
@@ -1844,346 +2186,6 @@
               shell scripts you run on your own machine against your own sessions, and several close sessions or delete
               workspaces, so read a recipe before you run it.
             </p>
-          </section>
-
-          <!-- KEYMAP -->
-          <section id="keymap" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Customizing keys
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              agterm reads a user-editable, kitty-flavored keymap file at
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/keymap.conf</span
-              >. It rebinds built-in menu shortcuts and defines custom shell commands bound to keys (and listed in the action
-              palette). The file is optional — a commented starter is written on first launch, and the directory can be changed in
-              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Three verbs; blank lines and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comments are ignored.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># rebind a built-in to a chord (mods joined by +)</span><br /><span
-                style="color: #5ea1f2"
-                >map</span
-              >
-              cmd+shift+l&nbsp;&nbsp;&nbsp;toggle_split<br /><span style="color: #5ea1f2">map</span>
-              ctrl+shift+k&nbsp;&nbsp;command_palette<br /><br /><span style="color: #6b727a"
-                ># or to several alternatives, joined by | with no spaces around it</span
-              ><br /><span style="color: #5ea1f2">map</span>
-              cmd+t|ctrl+a&gt;t&nbsp;&nbsp;toggle_scratch<br /><br /><span style="color: #6b727a"
-                ># define custom commands ("name" shows in the palette; chord optional)</span
-              ><br /><span style="color: #5ea1f2">command</span>
-              <span style="color: #f2b45c">"Open in Zed"</span>&nbsp;&nbsp;cmd+shift+e&nbsp;&nbsp;open -a Zed {AGT_SESSION_PWD}<br /><span
-                style="color: #5ea1f2"
-                >command</span
-              >
-              <span style="color: #f2b45c">"Lazygit"</span
-              >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl+a&gt;g&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agtermctl session overlay open 'zsh -lc lazygit'
-              --socket {AGT_SOCKET}<br /><span style="color: #5ea1f2">command</span>
-              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh<br /><br /><span
-                style="color: #6b727a"
-                ># one system-wide chord that summons the quick terminal from any application</span
-              ><br /><span style="color: #5ea1f2">global-hotkey</span> ctrl+opt+space
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A chord is modifier words (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >ctrl</span
-              >, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opt</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift</span>) joined by
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and a base key (a single
-              character or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tab</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >space</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >delete</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >right</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">up</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >down</span
-              >). A Shift-typed symbol is written
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
-              (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
-              shifted symbol. Custom commands may also use a leader sequence
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
-              must include a modifier — a bare key can't shadow a plain terminal key.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> takes exactly one
-              chord and binds it <strong style="color: #e6e1d7">system-wide</strong>: it summons the quick terminal while any
-              application is frontmost, which no other binding here can do — the rest only fire while agterm has the keyboard. It
-              must carry a modifier, takes no alternatives and no leader sequence, and a second
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
-              first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
-              it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
-              takes the key even while agterm is in front, so binding one a menu item already uses means that menu shortcut stops
-              firing. It is unset unless you add the line: agterm ships no default because registering a chord takes it
-              from every other application on the Mac, and that is not a cost to impose on someone who may never summon
-              the panel from outside agterm. Spending it on the chord the in-app binding already uses is allowed and is
-              the way to get one shortcut that works everywhere —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey ctrl+`</span>
-              makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃`</span> summon the panel
-              from any application, at the price of that chord no longer reaching anything else.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span> inside a single token with no
-              spaces around it —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+t|ctrl+a&gt;t toggle_scratch</span>
-              fires the action from either, and a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
-              takes alternatives the same way. For a built-in, the first single-chord alternative the menu can carry becomes the menu
-              shortcut; every
-              other alternative, on either verb, is delivered by a key monitor and so must carry a modifier on its first chord. This
-              is also how a built-in gets a leader sequence, because a menu item holds exactly one key equivalent:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map ctrl+a&gt;s toggle_split</span> binds
-              the sequence and leaves the action with no menu shortcut at all — its shipped ⌘D is gone rather than kept, and free for
-              another action to claim. A typo in one alternative rejects the whole line, so a mistake can't hide behind a line that
-              half worked; an alternative that merely breaks a rule or collides with an existing binding drops on its own and its
-              siblings keep firing. If a line ends up binding nothing at all, the action simply keeps the shortcut it shipped with.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that cannot type ASCII —
-              Russian, Greek, Hebrew, Arabic, Thai — resolves every chord by the physical key position, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> still fires on the key
-              marked O even though it types <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">щ</span>.
-              A layout that can type ASCII binds what it types, so an alternative Latin layout keeps its own letter positions: on
-              Dvorak, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> follows the O you
-              actually type.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Bindable built-in actions
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-              "
-            >
-              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;reopen_recent&nbsp;&nbsp;&nbsp;undo_close&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_horizontal_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />toggle_workspace_collapse<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_workspace&nbsp;&nbsp;&nbsp;next_workspace<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> is the one
-              action with no menu item of its own. macOS adds an "Enter Full Screen" item to the View menu whenever that menu is
-              drawn, and nothing suppresses it, so an item of agterm's own would sit beside it as a duplicate. The binding (⌃⌘F by
-              default) is handled directly instead, which is why the menu entry advertises the system's Globe+F rather than your
-              chord. Both work, and rebinding
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> changes the
-              chord as usual — it just won't show up next to that menu item.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Command tokens
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-              "
-            >
-              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Tokens expand at fire time (also exported as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> env vars on the spawned
-              process). A token is substituted <strong style="color: #e6e1d7">raw</strong> into the shell line, so for content you
-              don't control —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SELECTION}</span>, and also
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SESSION_NAME}</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >{AGT_SESSION_PWD}</span
-              >
-              (a remote host can set these via OSC) — prefer the matching quoted env var, e.g.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">"$AGT_SELECTION"</span>.
-            </p>
-            <div
-              style="
-                background: rgba(242, 180, 92, 0.07);
-                border: 1px solid rgba(242, 180, 92, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 20px 0 0;
-                font-size: 14px;
-                color: #e2c79a;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">Detached, no TTY</strong> — a
-              custom command runs as a detached
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/bin/sh -c</span> with no controlling terminal, so
-              it suits fire-and-forget launches (GUI apps, scripts) — not interactive TUIs. Run a TUI like
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lazygit</span> in an overlay
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay open</span>) or a scratch
-              terminal, which have a real TTY. A non-zero exit posts a notification banner.
-            </div>
-            <div
-              style="
-                background: rgba(242, 180, 92, 0.07);
-                border: 1px solid rgba(242, 180, 92, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 20px 0 0;
-                font-size: 14px;
-                color: #e2c79a;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">GUI PATH</strong> — a custom
-              command resolves its binaries against the app's GUI
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>: the launchd default plus the bundled
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/usr/local/bin</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>. A bare
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> or Homebrew binary works;
-              anything else your shell profile adds does not, and fails with exit 127. Give it an absolute path
-              or wrap the line in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc '…'</span> —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -ilc '…'</span> when that
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> comes from
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.zshrc</span>, which
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">-lc</span> does not read. The program an
-              overlay or scratch terminal runs gets the app's own unwidened
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> and always needs one of those.
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 20px 0 0">
-              Open the file with <strong style="color: #e6e1d7">File ▸ Edit Keymap…</strong> (or the ⌃⇧P palette): it opens in a
-              95% overlay running <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$VISUAL</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >$EDITOR</span
-              >
-              (falling back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vi</span>) and
-              reloads on quit. Apply edits made elsewhere with
-              <strong style="color: #e6e1d7">File ▸ Reload Keymap</strong> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap reload</span>. A
-              malformed line never discards the rest — it surfaces in the diagnostics list in Settings ▸ Key Mapping while the good
-              lines still apply.
-            </p>
-            <p style="font-size: 15.5px; line-height: 1.75; color: #cbc6bc; margin: 0 0 18px">
-              To check what is actually bound,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
-              built-in with the binds it resolved to (the menu shortcut first, then any alternatives, joined with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span>), the custom commands,
-              each diagnostic in full, and the key equivalents the menu
-              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
-              usually a menu problem, not a keymap one. Only the menu shortcut can appear there — an alternative never does, and
-              neither do
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z) and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F), which a
-              key monitor delivers rather than a menu item.
-            </p>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              v1 limitations
-            </h3>
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px">
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >A built-in's <em>menu</em> shortcut is single-chord only: a leader sequence binds through the key monitor
-                instead, as an alternative, and so never shows next to its menu item.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map</span> line can't bind a
-                bare, modifier-less arrow — a built-in rides an always-on menu key equivalent, so a bare arrow would
-                swallow the key in the terminal, the palettes, the dashboard grid, and every text field; any modifier
-                makes it bindable. The literal
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
-                key token (they are the separators), but those keys are bindable as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+.</span>; only
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">increase_font_size</span>'s
-                default ⌘+ shows as a glyph because its stored form doesn't round-trip through the file.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >Shortcut hints are not written the same way for both verbs. A built-in shows macOS glyphs (⌘⇧E), with every
-                alternative listed space-separated and a sequence's chords joined by
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> as in the file
-                (⌘T ⌃A&gt;T), in the palette and in the toolbar and sidebar tooltips alike. A
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> shows the raw kitty
-                spelling you typed instead (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >cmd+shift+e</span
-                >), alternatives still joined by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >|</span
-                >.
-              </li>
-            </ul>
           </section>
 
           <!-- GHOSTTY -->
