@@ -50,18 +50,28 @@
 	<string>Command-line tools you run inside agterm (for example, ffmpeg capturing video) request camera access through agterm.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Command-line tools you run inside agterm request access to your contacts through agterm.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to your Desktop folder through agterm.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to your Documents folder through agterm.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to your Downloads folder through agterm.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, connecting to a .local host) request local network access through agterm.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Command-line tools you run inside agterm request your location through agterm.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, voice dictation in Claude Code) request microphone access through agterm.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to files on network volumes through agterm.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, osxphotos) request access to your photo library through agterm.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Command-line tools you run inside agterm request access to your reminders through agterm.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Command-line tools you run inside agterm request access to your reminders through agterm.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Command-line tools you run inside agterm request access to files on removable volumes through agterm.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Command-line tools you run inside agterm request speech recognition through agterm.</string>
 	<key>NSSystemAdministrationUsageDescription</key>
