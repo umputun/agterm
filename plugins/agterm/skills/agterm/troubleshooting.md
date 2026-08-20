@@ -150,12 +150,14 @@ matching service, e.g. Automation ▸ agterm. This is macOS policy, not an agter
 ### "a command cannot read ~/Downloads, ~/Desktop or ~/Documents"
 
 macOS protects those folders, plus removable and network volumes, on its own: a separate mechanism from the
-services above, with no entitlement or usage string involved. The grant is per app and never inherited, so
+services above, gated by no entitlement. The per-folder usage-description strings are optional and agterm
+ships none, so the prompt carries Apple's generic wording. The grant is per app and never inherited, so
 another terminal listing the folder proves nothing about agterm. The user grants it in System Settings ▸
 Privacy & Security ▸ Files & Folders ▸ agterm, or gives agterm Full Disk Access, which covers all of them at
-once. A dismissed prompt is never re-offered. `/bin/ls -la` separates the two causes: `Operation not
-permitted` is the privacy denial, `Permission denied` is ordinary permission bits, and some `ls` replacements
-print the same wording for both. This is macOS policy, not an agterm bug: do not file it.
+once. A dismissed prompt is never re-offered. `/bin/ls -la <folder>`, against the failing folder itself,
+separates the two causes: `Operation not permitted` is the privacy denial, `Permission denied` is ordinary
+permission bits, and some `ls` replacements print the same wording for both. Needing the grant is macOS
+policy, not an agterm bug: do not file it.
 
 ### "The agent-status glyph does not update"
 

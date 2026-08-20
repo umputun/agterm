@@ -199,20 +199,22 @@ so if a tool keeps failing after you dismissed one, that is where to fix it.
 without complaint.
 
 Those three folders, along with removable and network volumes, are protected by macOS directly. It is a
-different mechanism from the section above: no entitlement and no `Info.plist` string takes part, so nothing
-about agterm's signature can suppress the prompt. What matters is that the grant is per application and is
-never inherited. Approving kitty or Terminal says nothing about agterm, so a Mac where every other terminal
-reads the folder can still refuse this one, and as with the services above a dismissed prompt is not
-re-offered and the command just keeps failing.
+different mechanism from the section above: no entitlement gates it, so nothing about agterm's signature can
+stop the prompt from appearing. macOS defines an optional usage-description string per folder and agterm
+ships none, so the prompt carries Apple's own generic wording rather than agterm's. What matters is that the
+grant is per application and is never inherited. Approving kitty or Terminal says nothing about agterm, so a
+Mac where every other terminal reads the folder can still refuse this one, and as with the services above a
+dismissed prompt is not re-offered and the command just keeps failing.
 
 Grant it in System Settings ▸ Privacy & Security ▸ Files & Folders, where agterm appears with a switch per
 folder once something in a session has asked. Full Disk Access covers all of them at once and accepts agterm
 from the + button without waiting for a request, at the cost of giving every program you ever run in a
 session that same reach — the section above covers what a grant gives away.
 
-To tell a privacy denial from ordinary permission bits, run `/bin/ls -la` rather than a replacement such as
-`eza`: macOS answers the first with `Operation not permitted` and the second with `Permission denied`, and
-some replacements print the same wording for both.
+To tell a privacy denial from ordinary permission bits, run `/bin/ls -la ~/Downloads` — the real `ls`,
+against the folder itself, rather than a replacement such as `eza`: macOS answers the first with `Operation
+not permitted` and the second with `Permission denied`, and some replacements print the same wording for
+both.
 
 ## Reporting a problem
 
