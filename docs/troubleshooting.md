@@ -132,6 +132,7 @@ Reload with **File ▸ Reload Config** or `agtermctl config reload`. The keybind
 
   To tell "never posted" from "posted but not shown", run `agtermctl notify "test"` and check two things: `agtermctl tree --json` — a rising `unseen` on the target session proves the command reached the notification path — and the log below, which now records every posted and every suppressed notification.
 - **A permission prompt carrying agterm's name, or a tool that cannot get one.** Command-line tools request Automation, Camera, Microphone, Contacts, Calendars, Reminders, Photos, Location, Bluetooth, local network, speech recognition, system administration and system audio recording *through* agterm, so the prompt names agterm rather than the tool. A dismissed prompt is not re-offered, the tool just keeps failing (`osascript` reports "Not authorized to send Apple events"). See [Why agterm asks for camera, microphone and the rest](#why-agterm-asks-for-camera-microphone-and-the-rest) for why, what a grant then covers, and where to change your answer.
+- **A command cannot read `~/Downloads`, `~/Desktop` or `~/Documents`.** Those folders are protected by macOS itself, separately from the services above, and the grant is per application — another terminal reading them says nothing about agterm. See [A command cannot read ~/Downloads, ~/Desktop or ~/Documents](#a-command-cannot-read-downloads-desktop-or-documents).
 - **Agent-status glyph does not update.** Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell so the `source` line added to your shell rc takes effect. For Pi, restart it or run `/reload` so it loads `~/.pi/agent/extensions/agterm-status.ts`; Pi status is only installed when `~/.pi/agent` already exists. For OpenCode, restart it so it loads `~/.config/opencode/plugins/agterm-status.js`; the plugin installs only when `~/.config/opencode` already exists. The hooks call `agtermctl session status`, so `agtermctl` must resolve first (see above).
 - **Agent-status glyph updates the wrong session.** One session's glyph blinks while the work happens in another — typically when agents run inside tmux (or a tmux-backed session manager such as agent-deck). The working process inherited another session's `AGTERM_SESSION_ID`: the status hooks target whatever id is in their environment, and a long-lived daemon started from inside an agterm session (a tmux server is the usual carrier) captures that session's `AGTERM_*` variables into its global environment and passes them to every child it ever creates. Check `tmux show-environment -g | grep AGTERM` — if present, clear them with `tmux set-environment -g -r AGTERM_SESSION_ID` (and the other `AGTERM_*` names), then restart the affected panes. To avoid it, start such daemons with the variables scrubbed (`env -u AGTERM_SESSION_ID … <command>`) or from a terminal outside agterm.
 
@@ -191,6 +192,27 @@ obtain permissions at all, and it is worth knowing before approving something yo
 **Changing your mind.** Grants and denials both live in System Settings ▸ Privacy & Security under the
 matching service, listed as agterm, for example Automation ▸ agterm. A dismissed prompt is not re-offered,
 so if a tool keeps failing after you dismissed one, that is where to fix it.
+
+## A command cannot read ~/Downloads, ~/Desktop or ~/Documents
+
+`ls ~/Downloads` fails for a directory that belongs to you, and another terminal on the same Mac lists it
+without complaint.
+
+Those three folders, along with removable and network volumes, are protected by macOS directly. It is a
+different mechanism from the section above: no entitlement and no `Info.plist` string takes part, so nothing
+about agterm's signature can suppress the prompt. What matters is that the grant is per application and is
+never inherited. Approving kitty or Terminal says nothing about agterm, so a Mac where every other terminal
+reads the folder can still refuse this one, and as with the services above a dismissed prompt is not
+re-offered and the command just keeps failing.
+
+Grant it in System Settings ▸ Privacy & Security ▸ Files & Folders, where agterm appears with a switch per
+folder once something in a session has asked. Full Disk Access covers all of them at once and accepts agterm
+from the + button without waiting for a request, at the cost of giving every program you ever run in a
+session that same reach — the section above covers what a grant gives away.
+
+To tell a privacy denial from ordinary permission bits, run `/bin/ls -la` rather than a replacement such as
+`eza`: macOS answers the first with `Operation not permitted` and the second with `Permission denied`, and
+some replacements print the same wording for both.
 
 ## Reporting a problem
 
