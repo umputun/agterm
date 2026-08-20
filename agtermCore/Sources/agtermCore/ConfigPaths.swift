@@ -74,7 +74,7 @@ public enum ConfigPaths {
         #       Examples:
         #
         #           command "Open in Zed"  cmd+shift+e  open -a Zed "$AGT_SESSION_PWD"
-        #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open 'zsh -lc lazygit' --socket "$AGT_SOCKET"
+        #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open 'zsh -lc lazygit' --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
         #           command "Deploy"                    ./deploy.sh
         #
         #   global-hotkey <chord>

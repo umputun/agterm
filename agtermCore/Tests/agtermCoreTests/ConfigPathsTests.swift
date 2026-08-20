@@ -37,7 +37,7 @@ struct ConfigPathsTests {
         #expect(starter.contains("command \"<name>\" [chord] <shell...>"))
         #expect(starter.contains("single chord OR a leader like `ctrl+a>g`"))
         #expect(starter.contains("command \"Open in Zed\"  cmd+shift+e  open -a Zed \"$AGT_SESSION_PWD\""))
-        #expect(starter.contains("command \"Lazygit\"      ctrl+a>g     agtermctl session overlay open 'zsh -lc lazygit' --socket \"$AGT_SOCKET\""))
+        #expect(starter.contains("command \"Lazygit\"      ctrl+a>g     agtermctl session overlay open 'zsh -lc lazygit' --target \"$AGT_SESSION_ID\" --socket \"$AGT_SOCKET\""))
         #expect(starter.contains("command \"Deploy\"                    ./deploy.sh"))
         #expect(starter.contains("ctrl+shift+p"))
         #expect(!starter.contains("super"))
