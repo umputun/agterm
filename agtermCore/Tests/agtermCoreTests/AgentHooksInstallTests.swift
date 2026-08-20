@@ -31,12 +31,14 @@ struct AgentHooksInstallTests {
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
-        #expect(command(evts["UserPromptSubmit"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
+        // the entries invoke the Claude adapter, which guards on ownership and forwards to the wrapper
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
         // PostToolUse re-asserts active after every tool, clearing a lingering blocked on resume
-        #expect(command(evts["PostToolUse"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
+        #expect(command(evts["PostToolUse"]![0]) == "'\(adapter)' active --blink")
         // only the Stop hook passes --auto-reset (clear-on-visit); active/blocked stay keep-state
-        #expect(command(evts["Stop"]![0])?.hasSuffix("agent-status.sh' completed --auto-reset") == true)
-        #expect(command(evts["Notification"]![0])?.hasSuffix("agent-status.sh' blocked") == true)
+        #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
+        #expect(command(evts["Notification"]![0]) == "'\(adapter)' blocked")
         #expect(command(evts["UserPromptSubmit"]![0])?.contains("--auto-reset") == false)
         #expect(command(evts["Notification"]![0])?.contains("--auto-reset") == false)
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
@@ -75,7 +77,7 @@ struct AgentHooksInstallTests {
         #expect(evts["UserPromptSubmit"]?.count == 2)
         let commands = evts["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other-hook.sh"))
-        #expect(commands.contains { $0.hasSuffix("agent-status.sh' active --blink") })
+        #expect(commands.contains { $0.hasSuffix("claude-status.sh' active --blink") })
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
@@ -90,6 +92,110 @@ struct AgentHooksInstallTests {
         #expect(!second.changed)
         let commands = events(second.json)["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other.sh"))
+    }
+
+    // settings.json exactly as an install BEFORE the Claude adapter left it: four entries invoking the
+    // generic wrapper directly.
+    private func legacySettings(extraUserHook: String? = nil) -> String {
+        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        var userHook = ""
+        if let extraUserHook {
+            userHook = """
+            ,
+                  {"hooks": [{"type": "command", "command": "\(extraUserHook)"}]}
+            """
+        }
+        return """
+        {
+          "hooks": {
+            "UserPromptSubmit": [
+              {"hooks": [{"type": "command", "command": "'\(wrapper)' active --blink"}]}\(userHook)
+            ],
+            "PostToolUse": [
+              {"hooks": [{"type": "command", "command": "'\(wrapper)' active --blink"}]}
+            ],
+            "Stop": [
+              {"hooks": [{"type": "command", "command": "'\(wrapper)' completed --auto-reset"}]}
+            ],
+            "Notification": [
+              {"matcher": "permission_prompt", "hooks": [{"type": "command", "command": "'\(wrapper)' blocked"}]}
+            ]
+          }
+        }
+        """
+    }
+
+    @Test func mergeMigratesEarlierInstallOntoTheAdapter() throws {
+        // the guard has to reach an EXISTING install: without the migration the merge would skip all four
+        // events as already-installed and leave them pointing at the unguarded wrapper forever
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: legacySettings(), scriptDir: scriptDir)
+        #expect(result.changed)
+        let evts = events(result.json)
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        #expect(evts["UserPromptSubmit"]?.count == 1)
+        #expect(evts["PostToolUse"]?.count == 1)
+        #expect(evts["Stop"]?.count == 1)
+        #expect(evts["Notification"]?.count == 1)
+        #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
+        #expect(command(evts["PostToolUse"]![0]) == "'\(adapter)' active --blink")
+        #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
+        #expect(command(evts["Notification"]![0]) == "'\(adapter)' blocked")
+        // rewritten in place: the matcher and the entry's other keys are untouched
+        #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
+        #expect((evts["Stop"]![0]["hooks"] as? [[String: Any]])?.first?["type"] as? String == "command")
+        // migrated, not appended alongside a fresh set
+        #expect(!result.json.contains(AgentHooksInstall.wrapperPath(scriptDir: scriptDir) + "'"))
+    }
+
+    @Test func mergeMigrationIsIdempotent() throws {
+        let first = try AgentHooksInstall.mergeClaudeSettings(existing: legacySettings(), scriptDir: scriptDir)
+        let second = try AgentHooksInstall.mergeClaudeSettings(existing: first.json, scriptDir: scriptDir)
+        #expect(!second.changed)
+        #expect(second.json == first.json)
+    }
+
+    @Test func mergeMigrationLeavesCustomizedEntryAlone() throws {
+        // one hand-edited entry (an appended flag) plus one entry still in generated form: byte-exactness is
+        // the whole safety property, so the edited one must come back identical
+        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        let customized = "'\(wrapper)' active --blink --pane right"
+        let existing = """
+        {
+          "hooks": {
+            "UserPromptSubmit": [
+              {"hooks": [{"type": "command", "command": "\(customized)"}]}
+            ],
+            "Stop": [
+              {"hooks": [{"type": "command", "command": "'\(wrapper)' completed --auto-reset"}]}
+            ]
+          }
+        }
+        """
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
+        #expect(result.changed)
+        let evts = events(result.json)
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        // the customized entry survives byte-identical AND still counts as installed, so no stock entry is
+        // added beside it: two entries would both fire and post the row twice
+        #expect(evts["UserPromptSubmit"]?.count == 1)
+        #expect(evts["UserPromptSubmit"]!.compactMap { command($0) } == [customized])
+        // the entry that WAS in generated form migrated in place rather than gaining a duplicate
+        #expect(evts["Stop"]?.count == 1)
+        #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
+    }
+
+    @Test func mergeMigrationLeavesUserHookNamingTheWrapperAlone() throws {
+        // a user's own hook that merely mentions the wrapper path is not something the installer wrote
+        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        let userHook = "my-notifier.sh && '\(wrapper)' active --blink"
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: legacySettings(extraUserHook: userHook),
+                                                               scriptDir: scriptDir)
+        #expect(result.changed)
+        let prompts = events(result.json)["UserPromptSubmit"]!.compactMap { command($0) }
+        #expect(prompts.contains(userHook))
+        // only the generated sibling moved onto the adapter
+        #expect(prompts.contains("'\(AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir))' active --blink"))
+        #expect(prompts.count == 2)
     }
 
     @Test func mergeRefusesMalformedExisting() {

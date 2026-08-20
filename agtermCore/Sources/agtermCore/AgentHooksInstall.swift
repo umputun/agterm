@@ -13,6 +13,12 @@ public enum AgentHooksInstall {
     /// terminal-output knowledge stays in this hook resource, outside agterm's runtime.
     public static let codexWrapperName = "agterm-codex-status.sh"
 
+    /// Claude-specific adapter the four Claude hooks invoke instead of the generic wrapper: a worker agent
+    /// spawned from inside a session inherits the spawner's `AGTERM_*` environment, so its hooks would repaint
+    /// the SPAWNER's row. The adapter answers that ownership question from process topology and delegates,
+    /// keeping the Claude-specific knowledge in the hook resource the way the Codex adapter does.
+    public static let claudeWrapperName = "agterm-claude-status.sh"
+
     /// The bundled Pi extension's path relative to the agent-status package, and its destination filename.
     public static let piExtensionRelativePath = "pi/agterm-status.ts"
     public static let piExtensionName = "agterm-status.ts"
@@ -103,14 +109,16 @@ public enum AgentHooksInstall {
     /// merge the four agent-status hooks into an existing Claude Code `settings.json`.
     ///
     /// `existing` is the current contents (nil/empty = start from a fresh object). Returns the new JSON and
-    /// whether it differs; idempotent — hooks already present (detected by the wrapper command) return the
-    /// input with `changed == false`. Unrelated hooks and keys are preserved; invalid JSON throws.
+    /// whether it differs; idempotent — hooks already present (detected by the adapter command) return the
+    /// input with `changed == false`. Unrelated hooks and keys are preserved; invalid JSON throws. Entries a
+    /// PRIOR install pointed straight at the generic wrapper are migrated onto the Claude adapter first, so
+    /// the ownership guard reaches an existing install rather than only a fresh one.
     public static func mergeClaudeSettings(existing: String?, scriptDir: String) throws -> (json: String, changed: Bool) {
         let command = wrapperCommand(scriptDir: scriptDir)
         var root = try parsedObject(existing)
 
         var hooks = root["hooks"] as? [String: Any] ?? [:]
-        var didChange = false
+        var didChange = migrateClaudeEntriesToAdapter(&hooks, scriptDir: scriptDir)
         for hook in claudeHooks {
             var entries = hooks[hook.event] as? [[String: Any]] ?? []
             if entries.contains(where: { entryUsesWrapper($0, scriptDir: scriptDir) }) {
@@ -294,6 +302,10 @@ public enum AgentHooksInstall {
         scriptDir + "/" + codexWrapperName
     }
 
+    public static func claudeWrapperPath(scriptDir: String) -> String {
+        scriptDir + "/" + claudeWrapperName
+    }
+
     /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges in, wiring Codex's lifecycle
     /// events to the indicator. `site/docs.html#codex-hooks-manual` reproduces this block for the cases the
     /// merge declines, and nothing checks the two against each other.
@@ -328,9 +340,47 @@ public enum AgentHooksInstall {
         }
     }
 
-    // build the command string a Claude hook runs: the quoted wrapper path plus the state argument.
+    // build the command string a Claude hook runs: the quoted CLAUDE ADAPTER path plus the state argument. The
+    // adapter forwards the state to the generic wrapper verbatim once it decides the firing agent owns the pane.
     private static func wrapperCommand(scriptDir: String) -> String {
-        shellQuote(wrapperPath(scriptDir: scriptDir)) + " "
+        shellQuote(claudeWrapperPath(scriptDir: scriptDir)) + " "
+    }
+
+    // repoint an EARLIER install's four entries from the generic wrapper at the Claude adapter, returning
+    // whether anything moved. Without it the guard would reach fresh installs only: the merge below skips an
+    // event whose entries already invoke us, and the Claude side has no refresh path (`refreshManagedCodexBlock`
+    // is Codex-only), so an existing settings.json would keep its unguarded entries forever.
+    //
+    // The match is BYTE-EXACT against the command this installer generates for that same event — the quoted
+    // wrapper path plus the state — which is what makes the rewrite safe: a hand-edited entry, an entry
+    // carrying extra flags, and a user's own hook that merely mentions the wrapper all fail the comparison and
+    // are left alone, and only the command string is replaced, so a matcher and any sibling keys survive.
+    // Idempotent, because a migrated entry names the adapter and no longer matches.
+    private static func migrateClaudeEntriesToAdapter(_ hooks: inout [String: Any], scriptDir: String) -> Bool {
+        let generated = shellQuote(wrapperPath(scriptDir: scriptDir)) + " "
+        let replacement = wrapperCommand(scriptDir: scriptDir)
+        var didChange = false
+        for hook in claudeHooks {
+            guard var entries = hooks[hook.event] as? [[String: Any]] else { continue }
+            var eventChanged = false
+            for index in entries.indices {
+                guard var commands = entries[index]["hooks"] as? [[String: Any]] else { continue }
+                var entryChanged = false
+                for slot in commands.indices where commands[slot]["command"] as? String == generated + hook.state {
+                    commands[slot]["command"] = replacement + hook.state
+                    entryChanged = true
+                }
+                if entryChanged {
+                    entries[index]["hooks"] = commands
+                    eventChanged = true
+                }
+            }
+            if eventChanged {
+                hooks[hook.event] = entries
+                didChange = true
+            }
+        }
+        return didChange
     }
 
     // a single Claude hook entry: { (matcher?), hooks: [{ type: command, command }] }.
@@ -344,11 +394,19 @@ public enum AgentHooksInstall {
         return entry
     }
 
-    // does a hook entry already invoke our wrapper (idempotency probe, by wrapper path)?
+    // does a hook entry already invoke us (idempotency probe)? EITHER path counts: the adapter, which is what
+    // a current install writes and what the migration leaves behind, and the generic wrapper, which is what an
+    // entry the migration declined to rewrite still names. Accepting only the adapter would answer "not
+    // installed" for a customized wrapper entry and add a stock one beside it, so both would fire and the row
+    // would be posted twice. Its owner keeps the setup they edited, unguarded by their own choice — the same
+    // answer this probe has always given.
     private static func entryUsesWrapper(_ entry: [String: Any], scriptDir: String) -> Bool {
-        let probe = wrapperPath(scriptDir: scriptDir)
+        let probes = [claudeWrapperPath(scriptDir: scriptDir), wrapperPath(scriptDir: scriptDir)]
         guard let commands = entry["hooks"] as? [[String: Any]] else { return false }
-        return commands.contains { ($0["command"] as? String)?.contains(probe) == true }
+        return commands.contains { command in
+            guard let command = command["command"] as? String else { return false }
+            return probes.contains { command.contains($0) }
+        }
     }
 
     // absent/empty/whitespace-only → fresh empty object; a non-empty file that is not a valid JSON object →
