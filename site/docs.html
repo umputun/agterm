@@ -579,9 +579,30 @@
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
               So &ldquo;does agterm have a file browser?&rdquo; has no yes-or-no answer. You bind the file browser you like, in
-              one line. The four steps below each add one building block; put the lines in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">keymap.conf</span> via
-              <strong style="color: #e6e1d7">File &#9656; Edit Keymap&hellip;</strong> and apply them with
+              one line. The four steps below each add one building block.
+            </p>
+            <div
+              style="
+                background: rgba(109, 130, 243, 0.08);
+                border: 1px solid rgba(109, 130, 243, 0.25);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 0 0 24px;
+                font-size: 15px;
+                color: #cbc6bc;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #e6e1d7">You are not expected to write these by hand.</strong> Install the agent skill from
+              <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong> and ask the agent in your session
+              for what you want; it knows the syntax, the command catalog, and the traps below.
+              <a href="#extend-agent" style="color: #6d82f3">Step 4</a> shows exactly that. The three steps before it are not the
+              long way round: they are what let you read the line the agent writes, change it later, and tell a working answer
+              from a plausible one.
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
+              To edit the file yourself, open it with
+              <strong style="color: #e6e1d7">File &#9656; Edit Keymap&hellip;</strong> and apply your changes with
               <strong style="color: #e6e1d7">File &#9656; Reload Keymap</strong>.
             </p>
 
@@ -751,19 +772,22 @@
             </p>
 
             <h3
+              id="extend-agent"
               style="
                 font-family: &quot;JetBrains Mono&quot;, monospace;
                 font-weight: 600;
                 font-size: 16px;
                 color: #5ea1f2;
                 margin: 28px 0 12px;
+                scroll-margin-top: 88px;
               "
             >
-              4. Or have an agent write it for you
+              4. Have the agent write it
             </h3>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Install the agent skill from <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong>, then
-              ask the agent running in one of your sessions:
+              This is the normal way to add things, not a shortcut for people who dislike config files. Install the agent skill
+              from <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong>, then ask the agent running
+              in one of your sessions:
             </p>
             <div
               style="
@@ -782,8 +806,9 @@
             </div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               The skill carries the keymap syntax, the full command catalog, the context tokens, and the PATH rule, so the agent
-              writes a working line instead of guessing at one. This step comes last on purpose: an agent without the skill will
-              still answer, plausibly and wrongly, and by now you can tell the difference.
+              writes a working line instead of guessing at one. The skill is what makes the difference: an agent without it will
+              still answer, plausibly and wrongly. It is shown last rather than first because the three steps above are what let
+              you tell those two apart, and what let you change the line afterwards without asking again.
             </p>
 
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 24px 0 0">
