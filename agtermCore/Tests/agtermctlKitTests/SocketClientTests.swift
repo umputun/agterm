@@ -771,6 +771,15 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response, json: false) == "ok")
     }
 
+    /// `restore.capture` carries both `count` and its own `text`; the text must win, or the shared `count`
+    /// branch below would render a pane count as "3 diagnostic(s)".
+    @Test func formatResponsePrefersTextOverCount() {
+        var result = ControlResult(count: 3)
+        result.text = "captured 3 panes"
+        let response = ControlResponse(ok: true, result: result)
+        #expect(SocketClient.formatResponse(response, json: false) == "captured 3 panes")
+    }
+
     @Test func formatResponseNonZeroCountPluralizes() {
         let response = ControlResponse(ok: true, result: ControlResult(count: 3))
         #expect(SocketClient.formatResponse(response, json: false) == "3 diagnostic(s)")

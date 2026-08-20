@@ -154,8 +154,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitRatio: Double?
     /// Whether the session is in the flagged working-set; nil = not flagged.
     public var flagged: Bool?
-    /// The main pane's foreground command (full argv) at the last clean quit, re-run on restore when
-    /// `AppSettings.restoreRunningCommand` is on. nil at a shell prompt, or with the feature off.
+    /// The main pane's foreground command (full argv) as of the last clean quit or the last
+    /// `restore.capture`, re-run on restore when `AppSettings.restoreRunningCommand` is on. nil at a shell
+    /// prompt, or with the feature off, which gates every capture site.
     public var foregroundCommand: [String]?
     /// The split (right) pane's foreground command (full argv), the split analogue of `foregroundCommand`.
     public var splitForegroundCommand: [String]?
