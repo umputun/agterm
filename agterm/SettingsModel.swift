@@ -567,6 +567,10 @@ final class SettingsModel {
         #
         # NOTE: agterm's UI-managed keys (font, theme, background opacity/blur, scroll speed) are set
         # in Settings and always win over this file — set those in Settings, everything else here.
+        #
+        # NOT SUPPORTED: the `ssh-env` and `ssh-terminfo` shell-integration features. They work by
+        # wrapping `ssh` as a call to the `ghostty` CLI absent from agterm's bundle,
+        # so agterm forces them back off. Your other shell-integration-features flags are kept.
 
         """
     }

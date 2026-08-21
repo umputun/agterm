@@ -99,7 +99,7 @@ A reload applies most keys to your open terminals right away — colors, theme, 
 - **Layout keys** — `window-padding-x`, `window-padding-y`, and other size-affecting keys — do not re-apply to an open pane. libghostty re-derives a surface's padding only when it is first laid out, so a reload (and even resizing the window) leaves existing panes on their old padding. Open a new session or new window to pick up the change; the panes that were already open need a relaunch.
 - **Spawn-time keys** — `term` and `shell-integration-features` — are read once when the shell starts, so a reload cannot change them for a shell that is already running. Open a new session, whose shell is spawned fresh, to apply them.
 
-The full ghostty key reference is at <https://ghostty.org/docs/config>.
+The full ghostty key reference is at <https://ghostty.org/docs/config>. One pair of values in it does not apply to agterm: the `ssh-env` and `ssh-terminfo` values of `shell-integration-features`. Ghostty implements both by replacing your `ssh` with a wrapper that calls the `ghostty` command-line tool absent from agterm's bundle, so in agterm the wrapper would fail on every connection. agterm forces those two values back off and keeps the rest of your `shell-integration-features` flags, so `ssh` stays the real `ssh`. If you need agterm's terminfo entry on a remote host, install it there once with `infocmp -x xterm-ghostty | ssh <host> 'tic -x -'`.
 
 ## Copy/paste and shortcuts on a non-Latin or alternative layout
 

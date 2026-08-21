@@ -517,6 +517,30 @@ final class GhosttyApp {
         return cfg
     }
 
+    /// Their ssh wrappers require a `ghostty` CLI absent from agterm's bundle.
+    private static let unsupportedShellFeatures: Set<String> = ["ssh-env", "ssh-terminfo"]
+
+    /// Applies the override after recursive includes so no user config can re-enable these features.
+    private func forceUnsupportedShellFeaturesOff(_ cfg: ghostty_config_t) {
+        let key = "shell-integration-features"
+        var bits: UInt32 = 0
+        guard key.withCString({ ghostty_config_get(cfg, &bits, $0, UInt(key.utf8.count)) }) else {
+            logger.warning("could not read \(key, privacy: .public); leaving ssh shell features as configured")
+            return
+        }
+        let value = ShellIntegrationFeatures.overrideValue(resolvedBits: bits,
+                                                          disabled: Self.unsupportedShellFeatures)
+        let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-sif-\(UUID().uuidString).conf")
+        do {
+            try "shell-integration-features = \(value)\n".write(toFile: tmp, atomically: true, encoding: .utf8)
+        } catch {
+            logger.warning("shell-integration-features override write failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        tmp.withCString { ghostty_config_load_file(cfg, $0) }
+        try? FileManager.default.removeItem(atPath: tmp)
+    }
+
     private func loadConfig(_ inputs: ConfigInputs, extraOverlayPath: String? = nil) -> ghostty_config_t? {
         guard let cfg = ghostty_config_new() else { return nil }
 
@@ -559,6 +583,7 @@ final class GhosttyApp {
         }
 
         ghostty_config_load_recursive_files(cfg)
+        forceUnsupportedShellFeaturesOff(cfg)
         ghostty_config_finalize(cfg)
 
         let diagCount = ghostty_config_diagnostics_count(cfg)

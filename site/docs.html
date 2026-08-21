@@ -2510,6 +2510,17 @@
               agterm manages from Settings (font, theme, opacity, blur, scroll speed) still win. A common use:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">macos-option-as-alt = true</span>. The
               full key reference is at <a href="https://ghostty.org/docs/config" style="color: #6d82f3">ghostty.org/docs/config</a>.
+              Two values in it do not apply here:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh-env</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh-terminfo</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shell-integration-features</span>.
+              Ghostty implements both by replacing your
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span> with a wrapper that calls
+              the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty</span> command-line tool
+              absent from agterm's bundle, so the wrapper would fail on every connection. agterm forces those two
+              back off and keeps the rest of your flags, leaving
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span> the real
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span>.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keybind</span> here follows ghostty's

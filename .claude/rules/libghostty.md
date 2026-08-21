@@ -223,6 +223,12 @@ paths:
   `shell-integration-features = no-cursor,no-title`. `no-cursor` prevents prompt DECSCUSR bar resets;
   `no-title` prevents abbreviated local cwd OSC 2 from overriding sidebar names. User/remote OSC titles
   still work, and OSC 7 is unaffected.
+- `ssh-env` and `ssh-terminfo` are forced OFF after `ghostty_config_load_recursive_files`, so no user
+  source including a `config-file` include can enable them: their wrappers call a `ghostty` CLI agterm
+  does not bundle, and enabling either broke `ssh` outright (#463). The override reads the resolved
+  packed bits back and restates all six flags, because ghostty re-parses the key from its defaults on
+  every occurrence. Setting either is a silent no-op with no diagnostic: a report that it has no effect
+  is by design, while a report that it still installs an `ssh` wrapper or breaks `ssh` is a regression.
 - A one-shot local OSC 2 is cleared by the next prompt. Hold the shell with
   `printf '\033]2;X\007'; cat` to test; SSH works because it blocks the local prompt cycle.
 - `liveFocus` is key window and first responder. The key gate is essential because AppKit retains one

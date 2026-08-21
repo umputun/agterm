@@ -29,7 +29,12 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   global Ghostty config is on. agterm's Settings (font/theme/opacity/scroll) still win. Use it for keys the UI does not expose, e.g.
   `macos-option-as-alt`. Most keys apply to open panes on reload, but layout keys (`window-padding-*`)
   and spawn-time keys (`term`, `shell-integration-features`) only take effect in a new session/window
-  or after a relaunch. Full reference: https://ghostty.org/docs/config
+  or after a relaunch. Full reference: https://ghostty.org/docs/config. Two values in it do NOT apply:
+  `ssh-env` and `ssh-terminfo` for `shell-integration-features`. Ghostty implements them by replacing
+  `ssh` with a wrapper calling a `ghostty` CLI absent from agterm's bundle, so agterm forces both off
+  after reading the config and keeps every other flag. Setting either is by design a no-op, reports no
+  diagnostic, and is NOT a bug. For remote terminfo, install the entry manually with
+  `infocmp -x xterm-ghostty | ssh <host> 'tic -x -'`.
 - **Logs** (unified logging, subsystem `com.umputun.agterm`):
   ```bash
   log show --predicate 'subsystem == "com.umputun.agterm"' --info --last 30m
