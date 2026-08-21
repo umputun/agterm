@@ -641,13 +641,10 @@ struct Version: RequestCommand {
     func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .version) }
 
     func run() throws {
-        let client = SocketClient(path: options.socketPath())
-        let response = try client.send(try makeRequest())
-        SocketClient.printResponse(response, json: options.json)
-        if !options.json, response.ok, let path = Version.clientPath() {
+        try defaultRun()
+        if !options.json, let path = Version.clientPath() {
             print("client: \(path)")
         }
-        if !response.ok { throw ExitCode.failure }
     }
 
     /// The running executable's real path. `_NSGetExecutablePath` rather than `argv[0]`, which is whatever

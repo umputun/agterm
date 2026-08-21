@@ -1535,10 +1535,8 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(reset["ok"] as? Bool, true, "font.reset on the active session should succeed: \(reset)")
     }
 
-    // MARK: - Keymap
+    // MARK: - Version
 
-    // keymap.reload re-reads keymap.conf and returns the parse-diagnostic count. With no keymap file
-    // seeded (the auto-created starter is all comments), a reload reports zero diagnostics.
     // version and the tree's app are two projections of one AppIdentity, so they must agree, and version
     // must answer without resolving a window.
     func testVersionReportsTheServingAppAndMatchesTheTree() throws {
@@ -1566,6 +1564,10 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNotNil(result["app"], "the identity should come back regardless of addressing: \(response)")
     }
 
+    // MARK: - Keymap
+
+    // keymap.reload re-reads keymap.conf and returns the parse-diagnostic count. With no keymap file
+    // seeded (the auto-created starter is all comments), a reload reports zero diagnostics.
     func testKeymapReloadReportsZeroDiagnostics() throws {
         let response = try sendCommand(#"{"cmd":"keymap.reload"}"#)
         XCTAssertEqual(response["ok"] as? Bool, true, "keymap.reload should succeed: \(response)")

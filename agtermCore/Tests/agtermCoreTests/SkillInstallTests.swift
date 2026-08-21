@@ -63,7 +63,8 @@ struct SkillInstallTests {
         #expect(codexPlugin["name"] as? String == SkillInstall.skillName)
 
         let skill = repository.appendingPathComponent("\(pluginRoot)/\(skillLeaf)")
-        for file in ["SKILL.md", "reference.md", "examples.md", "troubleshooting.md", "scripts/show-image.sh"] {
+        for file in ["SKILL.md", "reference.md", "examples.md", "cookbook.md", "troubleshooting.md",
+                     "scripts/show-image.sh"] {
             #expect(FileManager.default.fileExists(atPath: skill.appendingPathComponent(file).path),
                     "missing \(file) in \(pluginRoot)/\(skillLeaf)")
         }

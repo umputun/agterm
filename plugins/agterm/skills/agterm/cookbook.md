@@ -62,10 +62,14 @@ serving the socket — but **address the socket explicitly**, because `agtermctl
 `AGTERM_SOCKET` and a bare invocation resolves the default path, which may be a DIFFERENT app than the
 one that spawned this session:
 
-- Checking from a session shell: `agtermctl version --socket "$AGTERM_SOCKET"`.
-- Inside a recipe's own preflight, launched from the keymap or the palette:
-  `agtermctl version --socket "$AGT_SOCKET"`.
-- Fall back to a bare `agtermctl version` only when neither variable is set.
+- For an interactive check from a session shell, use
+  `agtermctl version --socket "$AGTERM_SOCKET"`.
+- Inside an automated preflight launched from the keymap or the palette, use
+  `agtermctl version --json --socket "$AGT_SOCKET"` and extract only `.result.app.version` with the
+  JSON parser the recipe already requires. Never compare the human output: it also includes the client
+  path and may include a parenthesized commit.
+- Fall back to the default socket only when neither variable is set. An automated check still uses
+  `agtermctl version --json` and extracts only `.result.app.version`.
 
 `$TERM_PROGRAM_VERSION` carries the same number in a session shell, and is the fallback on a release
 too old to have the `version` command, along with the About panel. It is ABSENT in a keymap- or
