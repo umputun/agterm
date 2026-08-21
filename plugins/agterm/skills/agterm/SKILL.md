@@ -14,8 +14,9 @@ description: >
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
   subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
   (keymap editor, custom actions, logs); and file a bug as a GitHub issue or a
-  feature request / question as a GitHub Discussion. Also report the version of the app serving the
-  socket.
+  feature request / question as a GitHub Discussion. Also list, fetch and install the repository's
+  cookbook recipes, and read one as reference for a tricky workflow; and report the version of the app
+  serving the socket.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
@@ -23,8 +24,9 @@ when_to_use: >
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
-  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: agterm version,
-  which agterm is running, agterm version check. Also troubleshoot agterm,
+  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: agterm cookbook,
+  cookbook recipe, list recipes, install a recipe, agterm recipe for X, what recipes are there, and
+  agterm version, which agterm is running, agterm version check. Also troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
   bug, report an agterm issue, open an agterm discussion / feature request.
 allowed-tools: Bash(agtermctl *)
@@ -157,8 +159,8 @@ rule.) After `--command`, confirm in `tree --json` that the new node's `foregrou
 
 ## Command summary
 
-Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
-**examples.md**.
+Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; worked
+examples in **examples.md**; installable community workflows in **cookbook.md**.
 
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
@@ -544,8 +546,10 @@ Full detail, templates, and the exact `gh` commands are in **troubleshooting.md*
   (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`/`app`), error strings, the scratch/overlay/split
   lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `|` alternatives,
   `{AGT_X}` tokens).
-- **examples.md** — copy-paste agtermctl recipes for common tasks (build a layout, run a program in a
+- **examples.md** — copy-paste agtermctl examples for common tasks (build a layout, run a program in a
   blocking overlay and read its status, type into a fresh session, notify, inspect the tree).
+- **cookbook.md** — how to list, acquire and install the repository's cookbook recipes, and how to read
+  one as reference for a tricky workflow. The recipe list lives in the repo, not here; fetch it.
 - **troubleshooting.md** — diagnosing common problems (keymap editor, custom actions, logs) and the
   bug-issue / feature-Discussion reporting workflow (draft-first, scrub, never post without approval).
 - **scripts/show-image.sh** — bundled helper that displays an image inline in an overlay (see above).

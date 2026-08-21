@@ -1,9 +1,10 @@
-# agterm control recipes
+# agterm control examples
 
 Worked `agtermctl` examples. See `reference.md` for exact flags and return shapes. All assume
 `agtermctl` is on PATH and you are inside an agterm session (`AGTERM_ENABLED=1`).
 
-Installable, human-facing versions of these workflows: https://github.com/umputun/agterm/tree/master/cookbook
+Installable, human-facing workflows live in the repository's cookbook — see `cookbook.md` for how to
+list, fetch and install one, or to read one as reference for a tricky case.
 
 ## Inspect the current state
 
@@ -205,7 +206,7 @@ program renders normally in the overlay; read its OUTPUT from the program's own 
 Pass `--target "$AGTERM_SESSION_ID"` so the overlay attaches to YOUR (the calling) session. Without
 `--target` it opens on whatever session is currently active — so if the user has moved to another
 session or workspace, an agent (e.g. running revdiff) pops a blocking full-pane overlay on the WRONG
-session. Always target your own session for these recipes.
+session. Always target your own session for these examples.
 
 ```bash
 agtermctl session overlay open "revdiff HEAD~3 --output /tmp/notes.md" --target "$AGTERM_SESSION_ID" --block   # this session
@@ -488,7 +489,7 @@ agtermctl sidebar collapse --window "$AGTERM_WINDOW_ID"  # collapse a specific w
 
 Collapse or expand ONE workspace by id (the per-workspace pair, unlike `sidebar expand`/`collapse` which
 act on all of them). Create a workspace already collapsed with `workspace new --collapsed`, then add
-sessions with `session new --no-select` so it never opens or steals the current selection — the recipe
+sessions with `session new --no-select` so it never opens or steals the current selection — the example
 for staging a batch of sessions out of the way. Read the open/closed state back from the tree workspace
 node's `collapsed` flag (`true` when collapsed, omitted when expanded).
 

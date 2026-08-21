@@ -88,7 +88,8 @@ targets:
       - path: agterm/Resources/hud
         type: folder
         buildPhase: resources
-      # Agent skill package (SKILL.md + reference.md + examples.md + troubleshooting.md + scripts).
+      # Agent skill package (SKILL.md + reference.md + examples.md + cookbook.md + troubleshooting.md
+      # + scripts).
       # It lives at plugins/agterm/skills/agterm so the SAME directory is also the skill source for
       # the Claude Code and Codex plugin manifests — one copy, three consumers. Folder reference so
       # the whole dir copies verbatim to Contents/Resources/agterm; the installer copies it from

@@ -1,7 +1,7 @@
 # agterm control reference
 
-Full detail for every `agtermctl` command. See `SKILL.md` for the model and addressing overview, and
-`examples.md` for recipes.
+Full detail for every `agtermctl` command. See `SKILL.md` for the model and addressing overview,
+`examples.md` for worked examples, and `cookbook.md` for the repository's installable recipes.
 
 ## Connection and output
 

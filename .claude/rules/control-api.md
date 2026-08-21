@@ -68,7 +68,10 @@ paths:
   merge, marker, backup, and optional-agent policy.
 - Skill installation targets every existing Claude/Codex skill root, creating Claude only when neither
   exists. Refuse an unmarked `SKILL.md`. The sole source is `plugins/agterm/skills/agterm/` with
-  `SKILL.md`, references, examples, troubleshooting, and `scripts/show-image.sh`.
+  `SKILL.md`, references, examples, cookbook, troubleshooting, and `scripts/show-image.sh`. The whole
+  directory copies verbatim, so a new file ships automatically — but the loader opens only what `SKILL.md`
+  routes to, so a file added without a `description`/`when_to_use` trigger and a body pointer is dead
+  weight.
 - `show-image.sh` opens a PTY overlay and emits chunked kitty APC/base64. Pinned Ghostty has no OSC-1337
   or sixel, agent stdout escapes controls, and tool shells lack `/dev/tty`. Resolve relative to the loaded
   skill; hardcoded install paths and `${CLAUDE_PLUGIN_ROOT}` fail across app/plugin copies.
