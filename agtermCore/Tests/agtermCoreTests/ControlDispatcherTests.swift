@@ -1148,6 +1148,30 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.keymapList])
     }
 
+    @Test func versionRoutesToActionsAndKeepsTheIdentity() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let identity = AppIdentity(version: "0.24.0", commit: "a1b2c3d")
+        actions.nextVersionResponse = ControlResponse(ok: true, result: ControlResult(app: identity))
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .version))
+
+        #expect(response?.result?.app == identity)
+        #expect(actions.calls == [.version])
+    }
+
+    // app-global like keymap.list: a target or window a caller attaches is ignored, never resolved.
+    @Test func versionIgnoresTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .version, target: "active",
+                                                                args: ControlArgs(window: "w1")))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.version])
+    }
+
     @Test func notifyRequiresBodyBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

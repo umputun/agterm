@@ -15,7 +15,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - **Response shape**: `{"ok": true, "result": {…}}` or `{"ok": false, "error": "<message>"}`.
   `result` carries one of: `id` (affected/new session/workspace/window), `text` (session copy/text),
   `exitCode` (overlay result), `count` (diagnostics/search), `affected` (sessions actually changed by a
-  batch close/move), `tree` (the tree), `windows` (window list). The process exit code is non-zero when
+  batch close/move), `tree` (the tree), `windows` (window list), `app` (the serving app's identity, for
+  `version`). The process exit code is non-zero when
   `ok` is false.
 - **Options go after the subcommand**: `agtermctl session type "ls" --target active`, never before it.
 
@@ -197,7 +198,7 @@ members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tr
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries twelve top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries thirteen top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
@@ -221,12 +222,17 @@ as both), `dashboardHighlighted` (the highlighted cell's pane ref — the one En
 that exact pane), `dashboardFontSize` (the absolute font size in points applied to the cells, omitted when
 the mode is `untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
 `untouched`), plus `pickPending` (the id of the native picker currently awaiting an answer in this
-window, omitted when none is pending). `idleMs` is live
+window, omitted when none is pending), and `app` (which agterm is serving this socket: `version`, plus
+`commit` when the build recorded one — the same value `agtermctl version` returns, so an agent already
+reading the tree gets its version floor without a second round-trip; it is not duplicated onto
+`window.list`, where a caller uses `version` instead). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
 both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, the four `dashboard*` fields, and
 `pickPending`
-are `tree`-only (a GUI/keyboard change would leave a cached copy stale).
-All twelve are read-only projections of GUI state.
+are `tree`-only (a GUI/keyboard change would leave a cached copy stale). All of those are read-only
+projections of live GUI state. `app` is the one CONSTANT among them, and is absent from `window.list`
+for a different reason: it describes the serving app rather than a window, so repeating it on every row
+buys nothing. A caller with no tree uses `version`.
 
 ## workspace
 
@@ -1196,6 +1202,30 @@ For a PER-SESSION, per-pane override that pins (or suppresses) what a pane resto
 `session restore` (in the session section above): it wins over the captured foreground, bypasses the
 denylist, and is what a `SessionStart` hook rewrites to reattach a non-idempotent command. `restore clear`
 here is app-global and touches only the captured commands, not those overrides.
+
+## version
+
+`agtermctl version` — which agterm is serving this socket. App-global: no target, no `--window`, and no
+window need be open, so it works as a preflight from a keymap-launched script. Returns `result.app`:
+
+- `version` — the app's version, the number a cookbook recipe's minimum is compared against.
+- `commit` — the build's git commit, omitted when the build recorded none. Diagnostics only; never part
+  of a version comparison.
+
+Human output is `version` alone, or `version (commit)`, followed by a `client:` line naming the resolved
+path of the `agtermctl` that ran — a diagnostic for a stale CLI earlier on `PATH` than the app's bundled
+helper. That line is human output only: `--json` stays the raw server response, and a caller that needs
+the client path resolves the binary it invoked itself.
+
+Address the socket explicitly when the answer must be about THIS session's app: `agtermctl` never reads
+`AGTERM_SOCKET`, so a bare call resolves the default path and may report a different instance. Use
+`--socket "$AGTERM_SOCKET"` from a session shell and `--socket "$AGT_SOCKET"` from a keymap- or
+palette-launched child.
+
+The same identity is on the `tree` top level as `app`, so an agent already reading the tree needs no
+second call. In a session shell `$TERM_PROGRAM_VERSION` carries the same number, but it is ABSENT in a
+process launched from the keymap or the palette, which inherits the app's launch environment rather than
+a terminal surface's.
 
 ## Errors you may see
 

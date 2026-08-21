@@ -919,6 +919,26 @@ struct SocketClientTests {
         #expect(lines.contains("  Nord"))
         #expect(lines.contains("  default ghostty"))
     }
+
+    @Test func formatsAppIdentityAndOmitsAnEmptyCommit() {
+        let withCommit = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: "a1b2c3d")))
+        #expect(SocketClient.formatResponse(withCommit, json: false) == "0.24.0 (a1b2c3d)")
+
+        for commit in [nil, ""] as [String?] {
+            let response = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: commit)))
+            #expect(SocketClient.formatResponse(response, json: false) == "0.24.0")
+        }
+    }
+
+    @Test func versionJSONCarriesTheRawResponseWithoutTheClientPath() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: "a1b2c3d")))
+        let line = SocketClient.formatResponse(response, json: true)
+        #expect(!line.contains("client"))
+        #expect(!line.contains(Version.clientPath() ?? "agtermctl"))
+
+        let decoded = try JSONDecoder().decode(ControlResponse.self, from: Data(line.utf8))
+        #expect(decoded == response)
+    }
 }
 
 private final class EventReadScript: @unchecked Sendable {
@@ -1251,4 +1271,5 @@ private final class OverlayResultScript: @unchecked Sendable {
             return ControlResponse(ok: false, error: "unexpected cmd \(request.cmd)")
         }
     }
+
 }

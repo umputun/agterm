@@ -1539,6 +1539,33 @@ final class ControlAPIUITests: ControlAPITestCase {
 
     // keymap.reload re-reads keymap.conf and returns the parse-diagnostic count. With no keymap file
     // seeded (the auto-created starter is all comments), a reload reports zero diagnostics.
+    // version and the tree's app are two projections of one AppIdentity, so they must agree, and version
+    // must answer without resolving a window.
+    func testVersionReportsTheServingAppAndMatchesTheTree() throws {
+        let response = try sendCommand(#"{"cmd":"version"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "version should succeed: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "version should carry a result")
+        let app = try XCTUnwrap(result["app"] as? [String: Any], "version should carry an app identity: \(response)")
+        let version = try XCTUnwrap(app["version"] as? String, "the identity should carry a version: \(app)")
+        XCTAssertFalse(version.isEmpty, "the version should not be empty: \(app)")
+
+        let tree = try XCTUnwrap(try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any],
+                                 "tree should carry a result")
+        let treeApp = try XCTUnwrap((tree["tree"] as? [String: Any])?["app"] as? [String: Any],
+                                    "the tree top level should carry the same app identity")
+        XCTAssertEqual(treeApp["version"] as? String, version, "the two projections must agree: \(treeApp)")
+        XCTAssertEqual(treeApp["commit"] as? String, app["commit"] as? String,
+                       "the commit must come from the same identity: \(treeApp)")
+    }
+
+    // app-global: a target and a window selector are ignored rather than resolved or rejected.
+    func testVersionIgnoresTargetAndWindow() throws {
+        let response = try sendCommand(#"{"cmd":"version","target":"active","args":{"window":"nope"}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "version should ignore addressing: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "version should carry a result")
+        XCTAssertNotNil(result["app"], "the identity should come back regardless of addressing: \(response)")
+    }
+
     func testKeymapReloadReportsZeroDiagnostics() throws {
         let response = try sendCommand(#"{"cmd":"keymap.reload"}"#)
         XCTAssertEqual(response["ok"] as? Bool, true, "keymap.reload should succeed: \(response)")

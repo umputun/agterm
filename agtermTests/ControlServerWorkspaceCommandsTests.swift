@@ -22,6 +22,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
                 library: library,
                 actions: actions,
                 settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
+                identity: AppIdentity(version: "9.9.9", commit: "testsha"),
                 socketPath: stateDir.appendingPathComponent("control.sock").path
             )
         }
@@ -39,6 +40,19 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
 
     // the workspace's first session may already be the selected one, so selecting through the store's
     // own `selectWorkspace` is what makes the command retarget rather than report a lie
+    // both projections must be the SAME injected identity, not two independent bundle reads
+    func testVersionAndTreeReportTheInjectedIdentity() throws {
+        let injected = AppIdentity(version: "9.9.9", commit: "testsha")
+
+        let version = server.appIdentity()
+        XCTAssertTrue(version.ok, version.error ?? "")
+        XCTAssertEqual(version.result?.app, injected)
+
+        let tree = server.controlTree(window: nil)
+        XCTAssertTrue(tree.ok, tree.error ?? "")
+        XCTAssertEqual(tree.result?.tree?.app, injected)
+    }
+
     func testSelectingTheWorkspaceOwningTheSelectionDropsTheFreshWorkspace() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

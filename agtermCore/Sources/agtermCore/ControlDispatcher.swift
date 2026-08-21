@@ -60,6 +60,7 @@ public protocol ControlActions {
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse
     func reloadKeymap() -> ControlResponse
     func listKeymap() -> ControlResponse
+    func appIdentity() -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
     func setTheme(args: ControlArgs?) -> ControlResponse
@@ -228,7 +229,7 @@ public struct ControlDispatcher {
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
-                .sidebarCollapse, .restoreClear:
+                .sidebarCollapse, .restoreClear, .version:
             return dispatchAppCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
@@ -709,6 +710,8 @@ public struct ControlDispatcher {
             return actions.reloadKeymap()
         case .keymapList:
             return actions.listKeymap()
+        case .version:
+            return actions.appIdentity()
         case .configReload:
             return actions.reloadGhosttyConfig()
         case .notify:

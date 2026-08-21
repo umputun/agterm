@@ -14,7 +14,8 @@ description: >
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
   subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
   (keymap editor, custom actions, logs); and file a bug as a GitHub issue or a
-  feature request / question as a GitHub Discussion.
+  feature request / question as a GitHub Discussion. Also report the version of the app serving the
+  socket.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
@@ -22,7 +23,8 @@ when_to_use: >
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
-  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
+  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: agterm version,
+  which agterm is running, agterm version check. Also troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
   bug, report an agterm issue, open an agterm discussion / feature request.
 allowed-tools: Bash(agtermctl *)
@@ -100,13 +102,15 @@ Inspect the live tree any time with `agtermctl tree --json` (workspaces → sess
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
 control address for `surface zoom` and `surface cursor` (`left`, `right`, `scratch`, `overlay`,
-`overlay-left`, or `overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries five
-read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
+`overlay-left`, or `overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries
+read-only top-level fields — `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
-(`tree` or `flagged` — the read side of `sidebar mode`), and `quickVisible` (whether the quick terminal is
-shown — the read side of the write-only `quick` command; app-level, so every window reports the same
-value). List windows with
+(`tree` or `flagged` — the read side of `sidebar mode`), `workspaceFilter`, `quickVisible` (whether the
+quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
+reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, and `app` (the
+serving app's `version`, plus `commit` when the build recorded one — the same value `agtermctl version`
+returns). reference.md lists every one with its exact shape. List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
 read side, so record it then restore the exact frame), and `fullscreen`/`zoomed`/`minimized` (the read side
@@ -488,6 +492,13 @@ appearance automatically; `theme set --dark none` stops tracking. The app defaul
 **restore** — `restore clear` — clear every session's saved foreground command (the
 restore-running-command capture) so the next restart restores plain shells.
 
+**version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
+`commit` when the build recorded one). App-global: no target, no `--window`, no window need be open, so it
+works as a preflight from a keymap-launched script, which has no `$TERM_PROGRAM_VERSION`. Address the
+socket explicitly (`--socket "$AGTERM_SOCKET"`, or `"$AGT_SOCKET"` in a keymap child): a bare call
+resolves the DEFAULT socket, which may be another app. The same identity is on the tree top level as
+`app`.
+
 ## Displaying an image inline
 
 This skill bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the
@@ -530,7 +541,7 @@ Full detail, templates, and the exact `gh` commands are in **troubleshooting.md*
 ## Reference files
 
 - **reference.md** — full per-command detail: every flag, the JSON return shapes
-  (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`), error strings, the scratch/overlay/split
+  (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`/`app`), error strings, the scratch/overlay/split
   lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `|` alternatives,
   `{AGT_X}` tokens).
 - **examples.md** — copy-paste agtermctl recipes for common tasks (build a layout, run a program in a

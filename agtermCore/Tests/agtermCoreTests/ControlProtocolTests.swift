@@ -1709,4 +1709,26 @@ struct ControlProtocolTests {
             try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
         }
     }
+
+    @Test func appIdentityRoundTripsInTreeAndResult() throws {
+        let identity = AppIdentity(version: "0.24.0", commit: "a1b2c3d")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [], app: identity),
+                                                                      app: identity))
+        let decoded = try JSONDecoder().decode(ControlResponse.self, from: JSONEncoder().encode(response))
+
+        #expect(decoded.result?.app == identity)
+        #expect(decoded.result?.tree?.app == identity)
+        #expect(decoded.result?.tree?.app == decoded.result?.app)
+    }
+
+    @Test func appIdentityIsOmittedWhenAbsentSoAnOlderPayloadStillDecodes() throws {
+        let line = String(decoding: try JSONEncoder().encode(ControlTree(workspaces: [])), as: UTF8.self)
+        #expect(!line.contains("app"))
+        #expect(try JSONDecoder().decode(ControlTree.self, from: Data(line.utf8)).app == nil)
+
+        let commitless = AppIdentity(version: "0.24.0")
+        let encoded = String(decoding: try JSONEncoder().encode(commitless), as: UTF8.self)
+        #expect(!encoded.contains("commit"))
+        #expect(try JSONDecoder().decode(AppIdentity.self, from: Data(encoded.utf8)) == commitless)
+    }
 }

@@ -203,6 +203,7 @@
             <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">keymap</a>
             <a href="#config" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">config</a>
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
+            <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
             <a href="#errors" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Errors</a>
@@ -512,8 +513,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> (the pending native picker's id,
-                omitted when none is open). All seven are read-only
-                projections of GUI state.
+                omitted when none is open),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomedSurface</span>, the four
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard*</span> fields, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> (which agterm is serving this socket —
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span>, plus
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commit</span> when the build recorded one; the same value
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl version</span> returns).
+                All are read-only, and all but
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> are projections of live GUI state.
               </p>
             </div>
           </section>
@@ -2626,6 +2634,48 @@
                 It does <em>not</em> clear a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>
                 session's own command — that is the durable creation identity and still re-runs on restore when the setting is on.
                 This is the counterpart to the opt-in <em>Restore running commands on restart</em> setting.
+              </p>
+            </div>
+          </section>
+
+          <section id="version" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              version
+            </h2>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl version
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">version</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Which agterm is serving this socket. App-global: no target, no
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, and no window need be open, so it
+                works as a preflight from a keymap-launched script. Returns
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.app</span> with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span> and, when the build recorded one,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commit</span> — diagnostics only, never part of a
+                version comparison.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Human output is the version, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version (commit)</span>,
+                followed by a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">client:</span> line naming the resolved path of
+                the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> that ran — a diagnostic for a stale CLI
+                ahead of the app's bundled helper on <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>. That line is
+                human output only; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> stays the raw response.
+                The same identity is on the tree top level as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span>, so an agent already reading the tree needs no
+                second call.
               </p>
             </div>
           </section>

@@ -111,10 +111,16 @@ final class ControlServer {
     /// progressing and parks the accept loop. A normal reader drains in milliseconds.
     nonisolated private static let writeDeadlineSeconds = 10
 
-    init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
+    /// Which agterm this is, injected rather than read from `Bundle.main` here: the identity is the app's to
+    /// know, and a hosted test would otherwise see its own host bundle.
+    let identity: AppIdentity
+
+    init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
+         socketPath: String? = nil) {
         self.library = library
         self.actions = actions
         self.settingsModel = settingsModel
+        self.identity = identity
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
         // ownership is decided HERE, not in `start()`. The launch window's surfaces are built during the
@@ -433,7 +439,7 @@ final class ControlServer {
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
-                .restoreClear, .dashboard:
+                .restoreClear, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
@@ -634,7 +640,8 @@ final class ControlServer {
                 case .fixed: return "fixed"
                 case .untouched: return "untouched"
                 }
-            }
+            },
+            app: identity
         )
     }
 

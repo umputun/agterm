@@ -627,3 +627,38 @@ struct Font: ParsableCommand {
         }
     }
 }
+
+// MARK: - version
+
+/// Which agterm is serving the socket this client reached. The app answers from its own bundle, so a
+/// stale `agtermctl` earlier on `PATH` than the bundled helper cannot misreport it. The resolved client
+/// path prints beside it as a diagnostic for exactly that case, and stays OUT of `--json`, which keeps its
+/// promise of being the raw server response: a JSON consumer ran the binary and can resolve its own path.
+struct Version: RequestCommand {
+    static let configuration = CommandConfiguration(abstract: "Print the version of the app serving the socket.")
+    @OptionGroup var options: BasicOptions
+
+    func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .version) }
+
+    func run() throws {
+        let client = SocketClient(path: options.socketPath())
+        let response = try client.send(try makeRequest())
+        SocketClient.printResponse(response, json: options.json)
+        if !options.json, response.ok, let path = Version.clientPath() {
+            print("client: \(path)")
+        }
+        if !response.ok { throw ExitCode.failure }
+    }
+
+    /// The running executable's real path. `_NSGetExecutablePath` rather than `argv[0]`, which is whatever
+    /// the caller chose to exec with, and `realpath` because the installed CLI is a symlink into the bundle.
+    static func clientPath() -> String? {
+        var size = UInt32(0)
+        _ = _NSGetExecutablePath(nil, &size)
+        var buffer = [CChar](repeating: 0, count: Int(size))
+        guard _NSGetExecutablePath(&buffer, &size) == 0 else { return nil }
+        guard let resolved = realpath(buffer, nil) else { return String(cString: buffer) }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
+}

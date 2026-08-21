@@ -1858,4 +1858,20 @@ struct CommandsTests {
         // a newline in the path would smuggle an extra ghostty key into the per-surface overlay.
         #expect(validationMessage(["session", "background", "image", "x.png\nclipboard-read = allow\ny.png"]) != nil)
     }
+
+    @Test func versionParsesWithNoArgumentsAndTakesNoTarget() throws {
+        #expect(try request(["version"]).cmd == .version)
+        #expect(try request(["version"]).target == nil)
+        #expect(try request(["version"]).args == nil)
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["version", "--target", "active"]) }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["version", "--window", "1"]) }
+    }
+
+    @Test func versionResolvesItsOwnExecutablePath() throws {
+        let path = try #require(Version.clientPath())
+        #expect(path.hasPrefix("/"))
+        #expect(FileManager.default.fileExists(atPath: path))
+        #expect(path == (path as NSString).resolvingSymlinksInPath)
+    }
+
 }

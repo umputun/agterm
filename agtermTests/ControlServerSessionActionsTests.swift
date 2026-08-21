@@ -22,6 +22,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
                 library: library,
                 actions: actions,
                 settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
+                identity: AppIdentity(version: "9.9.9", commit: "testsha"),
                 socketPath: stateDir.appendingPathComponent("control.sock").path
             )
         }

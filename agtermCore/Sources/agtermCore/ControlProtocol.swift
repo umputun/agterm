@@ -80,6 +80,7 @@ public enum Command: String, Codable, Sendable {
     case pickResult = "pick.result"
     case pickCancel = "pick.cancel"
     case restoreClear = "restore.clear"
+    case version = "version"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied, so a
     /// test can assert the flip drove the reload. Refused outside an XCUITest launch, and EXEMPT from the
@@ -740,13 +741,18 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let dashboardFontMode: String?
     /// The id of the picker currently awaiting a choice, or nil when no picker is open.
     public let pickPending: String?
+    /// The app serving this socket. Constant rather than live like every field above it, and present so an
+    /// agent already reading the tree gets its version floor without a second round-trip; `version` answers
+    /// the same question for a caller that has no tree, no window, and no JSON parser.
+    public let app: AppIdentity?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, workspaceFilter: Bool? = nil,
                 quickVisible: Bool? = nil,
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
-                dashboardFontMode: String? = nil, pickPending: String? = nil) {
+                dashboardFontMode: String? = nil, pickPending: String? = nil,
+                app: AppIdentity? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
@@ -760,6 +766,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.dashboardFontSize = dashboardFontSize
         self.dashboardFontMode = dashboardFontMode
         self.pickPending = pickPending
+        self.app = app
     }
 }
 
@@ -868,6 +875,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var pick: ControlPickResult?
     /// The addressed surface's cursor position for `surface.cursor`.
     public var cursor: ControlCursor?
+    /// The app serving this socket, for `version`. The same value `tree` carries.
+    public var app: AppIdentity?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -875,7 +884,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
                 events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
-                pick: ControlPickResult? = nil, cursor: ControlCursor? = nil) {
+                pick: ControlPickResult? = nil, cursor: ControlCursor? = nil,
+                app: AppIdentity? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -893,6 +903,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.keymap = keymap
         self.pick = pick
         self.cursor = cursor
+        self.app = app
     }
 }
 

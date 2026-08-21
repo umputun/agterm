@@ -31,6 +31,7 @@ final class ControlServerPickTests: XCTestCase {
                 library: library,
                 actions: actions,
                 settingsModel: settings,
+                identity: AppIdentity(version: "9.9.9", commit: "testsha"),
                 socketPath: stateDir.appendingPathComponent("control.sock").path
             )
         }

@@ -31,9 +31,18 @@ struct agtermApp: App {
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
 
+    /// Which agterm this is, read from the bundle ONCE and shared by every surface that reports a version:
+    /// the `TERM_PROGRAM_VERSION` of each spawned terminal, the `tree` payload, and the `version` command.
+    /// Nothing below the app target reads `Bundle.main` — a hosted test would see its own host bundle and
+    /// the projections would disagree.
+    static let appIdentity: AppIdentity = {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        return AppIdentity(version: version,
+                           recordedCommit: Bundle.main.infoDictionary?["GitCommit"] as? String)
+    }()
+
     /// The version paired with agterm's `TERM_PROGRAM` identity in every spawned terminal.
-    private static let terminalProgramVersion =
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    private static let terminalProgramVersion = appIdentity.version
 
     /// Hosted XCTest loads the real executable before `setUp`, so its scheme sets isolated state/socket paths
     /// plus this sentinel pre-`init()`; the scene then mounts a placeholder — no surfaces, no server.
@@ -58,7 +67,8 @@ struct agtermApp: App {
         _settingsModel = State(initialValue: settingsModel)
         welcomeDue = FirstRunWelcome.isDue(welcomeShown: settingsModel.settings.welcomeShown,
                                            hasPriorState: hadPriorState)
-        let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel)
+        let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel,
+                                          identity: Self.appIdentity)
         _controlServer = State(initialValue: controlServer)
         _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
         _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))

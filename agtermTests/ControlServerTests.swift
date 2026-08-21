@@ -180,6 +180,7 @@ final class ControlServerTests: XCTestCase {
             library: library,
             actions: AppActions(library: library),
             settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
+            identity: AppIdentity(version: "9.9.9"),
             socketPath: socketPath
         )
         servers.append(server)

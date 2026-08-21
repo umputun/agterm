@@ -132,7 +132,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
-- `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`
+- `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.clear`, `version`
 
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
@@ -567,6 +567,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   remains visible. Workspace adapters stay in `ControlServer+WorkspaceCommands.swift`.
 
 ## Tree and window read-back
+
+- `version` and the tree's `app` are two projections of ONE `AppIdentity`, built once in the app target
+  from `Bundle.main` and passed in. Nothing below the app target reads `Bundle.main`: a hosted test would
+  see its own host bundle and the projections would drift apart. The same value feeds
+  `SurfaceEnvironment`'s `TERM_PROGRAM_VERSION`, so the three can never disagree.
+- `app.version` is the comparable number a cookbook recipe's minimum is checked against; `app.commit` is
+  diagnostics and never part of that comparison. `app` is the only CONSTANT on the tree top level. It is
+  absent from `window.list` because it describes the app rather than a window and duplicating it there
+  buys nothing — NOT because a cache would stale it, which cannot happen to a constant. A caller with no
+  tree uses `version`.
+- `agtermctl version`'s `client:` line is HUMAN OUTPUT ONLY. `--json` stays the raw `ControlResponse` like
+  every other command; a client-reported path in the protocol would be a field the server cannot vouch
+  for. Resolve it with `_NSGetExecutablePath` + `realpath`, never `argv[0]`, and never print it after a
+  server error.
+- A keymap- or palette-launched process inherits the APP's launch environment, not a surface's, so it has
+  no `TERM_PROGRAM_VERSION` (`CustomCommandRunner` merges `ProcessInfo.processInfo.environment` with the
+  `AGT_*` context only). That is why a recipe preflight uses `agtermctl version` rather than the variable.
 
 - Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
   split axis, split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, and `realized`.

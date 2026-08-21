@@ -85,6 +85,13 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(keymap: payload))
     }
 
+    /// Which app is serving this socket. App-global: no target, no `--window`, and no window needs to be
+    /// open, which is what makes it usable as a preflight from a keymap-launched script — those inherit the
+    /// app's launchd environment and so carry no `TERM_PROGRAM_VERSION`.
+    func appIdentity() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(app: identity))
+    }
+
     /// Every menu-bar item carrying a key equivalent, in the same kitty syntax the keymap uses so a caller can
     /// compare the lists. Only the app target reads `NSApp.mainMenu`, so this is `keymap.list`'s app-side half.
     @MainActor
