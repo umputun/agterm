@@ -62,7 +62,7 @@ paths:
   alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
-  `BuiltinAction` (46 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
+  `BuiltinAction` (55 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
   `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts on the next activation, not immediately after
@@ -143,10 +143,18 @@ paths:
   disjoint without relying on dispatch order. Standard menu items such as ⌘Q/⌘C/⌘, remain AppKit's
   responsibility.
 - `BuiltinAction.defaultChord` is the sole built-in default. Every menu item resolves
-  override-or-default, including the six arrow actions. Two keyed actions are delivered by a monitor
+  override-or-default, including the six arrow actions. Three keyed families are delivered by a monitor
   rather than a menu equivalent: `undo_close` through `UndoCloseShortcut`, so native text undo still
-  works, and `toggle_fullscreen` through `CustomCommandRunner`, because agterm ships no full screen menu
-  item for it to ride — see [[windows]]. Both are absent from `keymap list`'s `menu` by design.
+  works, and `toggle_fullscreen` plus `select_session_1`…`_9` through `CustomCommandRunner` — agterm ships
+  no full screen menu item for the first to ride (see [[windows]]), and the nine slots deliberately have
+  neither a menu item nor a palette row, the fuzzy session palette being the by-name surface nine numbered
+  rows would only crowd. All are absent from `keymap list`'s `menu` by design; the slots resolve through
+  `Keymap.sessionSlotAction(forChord:)` and run via `paletteLessHandler`, so they still take the shipped
+  conflict model and `uiActionsEnabled` gate.
+- `SessionSlot.index` owns what ⌘1…⌘9 select, over `navigableSessions` like every other step: slot 9
+  overflows to the LAST session only past nine sessions, since below that there is no unreachable tail and a
+  slot must not name two different rows at one count. `session.go --to 1`…`9` is the same vocabulary, so a
+  chord and a control call cannot mean different things.
 - Write shifted symbols as `shift+<base>`: `shift+/` for `?`, `shift+=` for `+`, `shift+5` for `%`, and
   `shift+.` for `>`. `CustomCommandRunner` uses `characters(byApplyingModifiers: [])` to recover that
   base; keep `KeymapUITests.testCustomCommandShiftedSymbolFires`.
@@ -201,9 +209,11 @@ paths:
   it to parse clean, and counts the chords that survive.
   Both verbs rot: `validateBindings` clears a custom shortcut a built-in has claimed just as
   `resolveBuiltinOverrides` drops the colliding `map`.
-- New shipped defaults must not break a valid existing keymap. `parseKeymap` vacates the new horizontal
-  split default when an old file explicitly uses `cmd+shift+d`, and vacates Dashboard's new default when
-  an old file explicitly uses `cmd+shift+g`. An explicit map for the new action opts into its new chord.
+- New shipped defaults must not break a valid existing keymap. `vacatesNewDefault` gives the new action's
+  chord up to whatever an old file already spells there — a `map`, an alternative, or a custom shortcut —
+  and an explicit map for the new action, in any form, opts into it. It owns `cmd+shift+d`
+  (`toggle_horizontal_split`), `cmd+shift+g` (`dashboard`) and `cmd+1`…`cmd+9` (the slots); a later default
+  joins its list rather than adding a fourth copy of the check.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject
   visible shell metacharacters. `TerminalText.sanitized` strips control characters, not `;`,

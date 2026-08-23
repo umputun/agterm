@@ -79,8 +79,8 @@ final class CustomCommandRunner {
 
     /// Feed one key event to the matcher; returns whether it was consumed (so the caller drops it). Esc while
     /// armed resets, `.fired` runs a command, `.firedBuiltin` runs a built-in action, `.armed` arms the leader
-    /// timer, and `toggle_fullscreen`'s chord toggles full screen without reaching the matcher at all — all
-    /// consumed; `.unmatched` passes through.
+    /// timer, and the two menu-item-less built-in families — `toggle_fullscreen` and the nine session slots —
+    /// are dispatched without reaching the matcher at all; all consumed. `.unmatched` passes through.
     ///
     /// Acts when the key window's first responder is a terminal surface (context from that surface), or when
     /// the key window is an agterm terminal window whose focus is NOT on a text field — including one emptied
@@ -137,6 +137,13 @@ final class CustomCommandRunner {
         // ordinary `.firedBuiltin` route and so takes that route's modal rule.
         if !commandEngine.isArmed, chord == settings.keymap.equivalent(for: .toggleFullscreen) {
             keyWindow.toggleFullScreen(nil)
+            return true
+        }
+        // the nine ⌘1…⌘9 session slots carry no menu item either, so their menu chords are matched here too;
+        // `perform` runs them through the gate their `paletteLessHandler` entry holds. A half-typed leader
+        // still wins, as above.
+        if !commandEngine.isArmed, let slot = settings.keymap.sessionSlotAction(forChord: chord) {
+            actions.perform(slot, in: keyWindow)
             return true
         }
         switch commandEngine.advance(chord) {

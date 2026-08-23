@@ -998,8 +998,34 @@ final class ControlAPIUITests: ControlAPITestCase {
     func testSessionGoInvalidDirectionErrors() throws {
         let response = try sendCommand(#"{"cmd":"session.go","args":{"to":"sideways"}}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "an invalid direction should fail: \(response)")
-        XCTAssertEqual(response["error"] as? String, "session.go requires --to next|prev|first|last|next-attention|prev-attention",
+        XCTAssertEqual(response["error"] as? String,
+                       "session.go requires --to next|prev|first|last|next-attention|prev-attention|1-9",
                        "should return the direction guard: \(response)")
+    }
+
+    // session.go --to <digit> is the absolute ⌘1…⌘9 jump: slot 2 selects the second session, and a slot the
+    // tree cannot fill leaves the selection where it was.
+    func testSessionGoJumpsToASlot() throws {
+        let firstID = UUID(uuidString: "EEEE0000-0000-0000-0000-000000000011")!
+        let secondID = UUID(uuidString: "FFFF0000-0000-0000-0000-000000000012")!
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(firstID.uuidString)","workspaces":[\
+        {"id":"\(UUID().uuidString)","name":"workspace 1","sessions":[\
+        {"id":"\(firstID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(secondID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+
+        let second = try sendCommand(#"{"cmd":"session.go","args":{"to":"2"}}"#)
+        XCTAssertEqual(second["ok"] as? Bool, true, "session.go 2 should succeed: \(second)")
+        XCTAssertEqual(((second["result"] as? [String: Any])?["id"] as? String)?.lowercased(),
+                       secondID.uuidString.lowercased(), "slot 2 should select the second session: \(second)")
+        XCTAssertTrue(pollActiveSessionID(secondID, timeout: 10), "the second session should become active")
+
+        let empty = try sendCommand(#"{"cmd":"session.go","args":{"to":"7"}}"#)
+        XCTAssertEqual(empty["ok"] as? Bool, true, "an unfilled slot still answers ok: \(empty)")
+        XCTAssertEqual(((empty["result"] as? [String: Any])?["id"] as? String)?.lowercased(),
+                       secondID.uuidString.lowercased(), "an unfilled slot must not move the selection: \(empty)")
     }
 
     // session.go next-attention/prev-attention steps only through sessions needing attention (blocked or

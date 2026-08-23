@@ -37,6 +37,13 @@ public struct Keymap: Equatable, Sendable {
         return builtinUnbound.contains(action) ? nil : action.defaultChord
     }
 
+    /// The session-slot built-in `chord` resolves to, nil when it is none of them. The slots ship a menu
+    /// chord like any other built-in — so the conflict model still guards ⌘1…⌘9 — but no menu item carries it,
+    /// which is why the key monitor looks the chord up here instead.
+    public func sessionSlotAction(forChord chord: Chord) -> BuiltinAction? {
+        BuiltinAction.sessionSlots.first { equivalent(for: $0) == chord }
+    }
+
     /// The monitor-bound binds for a built-in, empty when it has none.
     public func sequences(for action: BuiltinAction) -> [Keybind] {
         builtinSequences[action] ?? []
@@ -141,36 +148,13 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
 
     // a final pass, not incremental: the cross-section validation below needs the same resolved chord set.
     let resolved = resolveMapLines(mapLines)
-    // Cmd-Shift-D belonged to Dashboard before horizontal split existed. Any valid old configuration that
-    // explicitly used that chord keeps it: vacate the new action's default unless the file maps that action.
     var compatibilityUnbound = resolved.unbound
-    let horizontalMapped = resolved.overrides.contains { $0.action == .toggleHorizontalSplit }
-        || resolved.alternatives[.toggleHorizontalSplit] != nil
-        || resolved.unbound.contains(.toggleHorizontalSplit)
-    let oldDashboardChord = Chord(mods: [.command, .shift], key: "d")
-    let oldConfigUsesHorizontalChord = resolved.overrides.contains {
-        $0.action != .toggleHorizontalSplit && $0.chord == oldDashboardChord
-    } || resolved.alternatives.contains { action, entry in
-        action != .toggleHorizontalSplit && entry.alternatives.contains { $0.keybind.first == oldDashboardChord }
-    } || commandLines.contains { line in
-        line.alternatives.contains { $0.keybind.first == oldDashboardChord }
+    // Cmd-Shift-D belonged to Dashboard before horizontal split existed, Cmd-Shift-G and Cmd-1…9 were free
+    // before Dashboard and the session slots claimed them.
+    for action in [.toggleHorizontalSplit, .dashboard] + BuiltinAction.sessionSlots
+    where vacatesNewDefault(action, resolved: resolved, commandLines: commandLines) {
+        compatibilityUnbound.insert(action)
     }
-    if !horizontalMapped, oldConfigUsesHorizontalChord {
-        compatibilityUnbound.insert(.toggleHorizontalSplit)
-    }
-    // Cmd-Shift-G was previously free. An existing explicit binding on it keeps working; Dashboard becomes
-    // keyless until the user maps it, instead of a new shipped default invalidating their configuration.
-    let newDashboardChord = Chord(mods: [.command, .shift], key: "g")
-    let dashboardMapped = resolved.overrides.contains { $0.action == .dashboard }
-        || resolved.alternatives[.dashboard] != nil || resolved.unbound.contains(.dashboard)
-    let oldConfigUsesNewDashboardChord = resolved.overrides.contains {
-        $0.action != .dashboard && $0.chord == newDashboardChord
-    } || resolved.alternatives.contains { action, entry in
-        action != .dashboard && entry.alternatives.contains { $0.keybind.first == newDashboardChord }
-    } || commandLines.contains { line in
-        line.alternatives.contains { $0.keybind.first == newDashboardChord }
-    }
-    if !dashboardMapped, oldConfigUsesNewDashboardChord { compatibilityUnbound.insert(.dashboard) }
     let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, unbound: compatibilityUnbound,
                                                    alternatives: resolved.alternatives, diagnostics: &diagnostics)
 
@@ -304,6 +288,26 @@ private struct ParsedOverride {
     let action: BuiltinAction
     let chord: Chord
     let line: Int
+}
+
+/// Whether `action`'s SHIPPED default has to step aside for an existing file. A default added after a keymap
+/// was written must not invalidate it, so an action that the file never maps gives its chord up to whatever
+/// the file already spells there — a `map` line, a `map` alternative, or a custom command's shortcut. Mapping
+/// the action itself, in any form, opts into the new chord.
+private func vacatesNewDefault(_ action: BuiltinAction,
+                               resolved: (overrides: [ParsedOverride],
+                                          alternatives: [BuiltinAction: MapLineAlternatives],
+                                          unbound: Set<BuiltinAction>),
+                               commandLines: [ParsedCommandLine]) -> Bool {
+    guard let chord = action.defaultChord else { return false }
+    let mapped = resolved.overrides.contains { $0.action == action }
+        || resolved.alternatives[action] != nil || resolved.unbound.contains(action)
+    guard !mapped else { return false }
+    return resolved.overrides.contains { $0.action != action && $0.chord == chord }
+        || resolved.alternatives.contains { owner, entry in
+            owner != action && entry.alternatives.contains { $0.keybind.first == chord }
+        }
+        || commandLines.contains { line in line.alternatives.contains { $0.keybind.first == chord } }
 }
 
 /// Fold the file-order `map` lines to one per action and split them by dispatch path. A `map` line declares

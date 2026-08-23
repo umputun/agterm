@@ -990,7 +990,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session go --to next|prev|first|last|next-attention|prev-attention [--window W]
+                agtermctl session go --to next|prev|first|last|next-attention|prev-attention|1-9 [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.go</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1004,6 +1004,9 @@
                 needing attention (status
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span>), also wrapping.
+                A digit <span style="font-family: &quot;JetBrains Mono&quot;, monospace">1</span>-<span style="font-family: &quot;JetBrains Mono&quot;, monospace">9</span> is the absolute jump the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">⌘1</span>-<span style="font-family: &quot;JetBrains Mono&quot;, monospace">⌘9</span> chords make: the Nth session of that same set, and
+                nothing when it holds fewer. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">9</span> means the LAST session once there are more than nine.
                 <strong style="color: #bfbab0">Returns</strong> the newly selected
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>

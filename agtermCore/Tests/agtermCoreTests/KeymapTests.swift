@@ -1282,6 +1282,39 @@ struct KeymapTests {
         #expect(keymap.equivalent(for: .dashboard) == nil)
     }
 
+    @Test func sessionSlotsShipTheirDefaultsAndResolveByChord() {
+        let keymap = parseKeymap("").keymap
+        for slot in SessionSlot.range {
+            let chord = Chord(mods: [.command], key: String(slot))
+            #expect(keymap.equivalent(for: BuiltinAction.sessionSlots[slot - 1]) == chord)
+            #expect(keymap.sessionSlotAction(forChord: chord) == BuiltinAction.sessionSlots[slot - 1])
+        }
+        #expect(keymap.sessionSlotAction(forChord: Chord(mods: [.command], key: "0")) == nil)
+    }
+
+    @Test func existingCmdDigitBindingsAreNotBrokenByTheSlotDefaults() {
+        let (keymap, diagnostics) = parseKeymap("""
+        map cmd+3 toggle_workspace_filter
+        command "Old binding" cmd+7 echo ok
+        """)
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == Chord(mods: [.command], key: "3"))
+        #expect(keymap.commands.first?.shortcut == "cmd+7")
+        #expect(keymap.equivalent(for: .selectSession3) == nil)
+        #expect(keymap.equivalent(for: .selectSession7) == nil)
+        #expect(keymap.builtinUnbound.isSuperset(of: [.selectSession3, .selectSession7]))
+        #expect(keymap.equivalent(for: .selectSession4) == Chord(mods: [.command], key: "4"),
+                "only the claimed slots step aside")
+        #expect(keymap.sessionSlotAction(forChord: Chord(mods: [.command], key: "3")) == nil)
+    }
+
+    @Test func mappingASlotItselfOptsIntoTheNewChord() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+2 select_session_2")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .selectSession2) == Chord(mods: [.command, .shift], key: "2"))
+        #expect(keymap.sessionSlotAction(forChord: Chord(mods: [.command, .shift], key: "2")) == .selectSession2)
+    }
+
     @Test func keymapStoreLoadsFileAndRecoversWhenMissing() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

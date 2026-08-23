@@ -275,7 +275,8 @@ omitted when expanded).
 - `close [--target T ...]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo.
 - `select` · `rename <name>` · `reveal` (select the focused pane's cwd in Finder).
-- `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
+- `go --to next|prev|first|last|next-attention|prev-attention|1-9` — move the selection between sessions;
+  a digit is the absolute ⌘1-⌘9 jump to the Nth visible session (9 = last when there are more than nine).
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace) or
   `move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
   workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and

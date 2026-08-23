@@ -271,6 +271,15 @@ struct SocketClientTests {
             next_attention_session      ctrl+opt+down
             first_session               -
             last_session                -
+            select_session_1            cmd+1
+            select_session_2            cmd+2
+            select_session_3            cmd+3
+            select_session_4            cmd+4
+            select_session_5            cmd+5
+            select_session_6            cmd+6
+            select_session_7            cmd+7
+            select_session_8            cmd+8
+            select_session_9            cmd+9
             quick_terminal              ctrl+`
             session_palette             ctrl+p
             command_palette             ctrl+shift+p

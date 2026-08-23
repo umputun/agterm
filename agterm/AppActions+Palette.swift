@@ -140,12 +140,15 @@ extension AppActions {
         paletteLessHandler(for: action)?()
     }
 
-    /// The entry point for a built-in that no `PaletteCommand` row owns — window management and the three
-    /// palette launchers, each already gated where it needs to be — and nil for every action the palette
+    /// The entry point for a built-in that no `PaletteCommand` row owns — window management, the three
+    /// palette launchers and the nine session slots, each already gated where it needs to be — and nil for
+    /// every action the palette
     /// covers. The SINGLE listing of those actions: `perform(_:)` dispatches through it and
     /// `AppActionsPaletteTests` partitions `BuiltinAction.allCases` across it and `PaletteCommand`, so a new
     /// action reaching neither fails a test instead of binding a key that swallows itself and does nothing.
     func paletteLessHandler(for action: BuiltinAction) -> (() -> Void)? {
+        // the nine session slots: no row, since the fuzzy session palette already lists every session by name.
+        if let slot = action.sessionSlot { return { self.selectSessionSlot(slot) } }
         switch action {
         case .newWindow: return { self.newWindow() }
         case .renameWindow: return renameActiveWindow

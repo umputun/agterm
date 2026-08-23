@@ -1,8 +1,8 @@
 import XCTest
 
 /// End-to-end test for keyboard navigation between sessions (⌥⌘↑ previous, ⌥⌘↓ next — ⌥⌘ avoids the
-/// text-field caret shadowing bare ⌘+arrows would cause; First/Last have no hotkey, covered by the
-/// agtermCore unit tests). Sessions are Metal `GhosttySurfaceView`s with no readable accessibility
+/// text-field caret shadowing bare ⌘+arrows would cause; ⌘1…⌘9 jump to a slot; First/Last have no hotkey,
+/// covered by the agtermCore unit tests). Sessions are Metal `GhosttySurfaceView`s with no readable accessibility
 /// text, so this uses the terminal itself as the oracle: each session's shell has a distinct `tty`,
 /// so typing `tty > file` in the focused session records which shell received the keystrokes. That
 /// proves keyboard focus follows the selection as prev/next step between sessions.
@@ -63,6 +63,15 @@ final class SessionNavUITests: XCTestCase {
         app.typeKey(.downArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         XCTAssertEqual(ttyAfterCommand(named: "next"), secondTTY, "Opt+Cmd+Down selects the next session")
+
+        // the slots carry no menu item, so this is the only place their monitor dispatch runs end to end.
+        app.typeKey("1", modifierFlags: [.command])
+        usleep(500_000)
+        XCTAssertEqual(ttyAfterCommand(named: "slot-one"), firstTTY, "Cmd+1 selects the first session")
+
+        app.typeKey("2", modifierFlags: [.command])
+        usleep(500_000)
+        XCTAssertEqual(ttyAfterCommand(named: "slot-two"), secondTTY, "Cmd+2 selects the second session")
     }
 
     /// Polls until a query resolves to `expected` matching elements.

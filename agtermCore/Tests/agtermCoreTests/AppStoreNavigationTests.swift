@@ -135,6 +135,67 @@ struct AppStoreNavigationTests {
         #expect(SessionNavigation(wire: "prev-attention") == .previousAttention)
         #expect(SessionNavigation(wire: "previous-attention") == .previousAttention)
         #expect(SessionNavigation(wire: "sideways") == nil)
+        #expect(SessionNavigation(wire: "1") == .slot(1))
+        #expect(SessionNavigation(wire: "9") == .slot(9))
+        #expect(SessionNavigation(wire: "0") == nil)
+        #expect(SessionNavigation(wire: "10") == nil)
+        #expect(SessionNavigation(wire: "-1") == nil)
+    }
+
+    @Test func slotSelectsTheNthNavigableSession() {
+        let (store, ids) = Self.makeNavTree()
+        store.selectSession(ids[0])
+        store.navigateSession(.slot(3))
+        #expect(store.selectedSessionID == ids[2])
+        store.navigateSession(.slot(1))
+        #expect(store.selectedSessionID == ids[0])
+    }
+
+    @Test func slotBeyondTheListLeavesSelectionAlone() {
+        let (store, ids) = Self.makeNavTree()
+        store.selectSession(ids[1])
+        store.navigateSession(.slot(5))
+        #expect(store.selectedSessionID == ids[1])
+        store.navigateSession(.slot(9))
+        #expect(store.selectedSessionID == ids[1])
+    }
+
+    @Test func lastSlotOverflowsToTheEndOnlyPastNine() {
+        // with ten sessions ⌘9 is the only keystroke reaching the tail, so it means "last"; with exactly
+        // nine it stays the plain ninth, which is the same row anyway. Fewer than nine and it means nothing.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        var ids: [UUID] = []
+        for i in 1...9 { ids.append(store.addSession(toWorkspace: ws.id, cwd: "/s\(i)")!.id) }
+        store.selectSession(ids[0])
+        store.navigateSession(.slot(9))
+        #expect(store.selectedSessionID == ids[8])
+        ids.append(store.addSession(toWorkspace: ws.id, cwd: "/s10")!.id)
+        store.selectSession(ids[0])
+        store.navigateSession(.slot(9))
+        #expect(store.selectedSessionID == ids[9])
+    }
+
+    @Test func slotIndexTableIsTheWholeRule() {
+        #expect(SessionSlot.index(1, count: 0) == nil)
+        #expect(SessionSlot.index(1, count: 1) == 0)
+        #expect(SessionSlot.index(4, count: 3) == nil)
+        #expect(SessionSlot.index(3, count: 3) == 2)
+        #expect(SessionSlot.index(9, count: 9) == 8)
+        #expect(SessionSlot.index(9, count: 40) == 39)
+        #expect(SessionSlot.index(8, count: 40) == 7)
+        #expect(SessionSlot.index(0, count: 4) == nil)
+        #expect(SessionSlot.index(10, count: 40) == nil)
+    }
+
+    @Test func slotCountsTheFILTEREDListLikeEveryOtherStep() {
+        let (store, ids) = Self.makeNavTree()
+        store.selectSession(ids[2])
+        store.setFocusedWorkspace(store.workspaces[1].id) // personal: [c, d]
+        store.navigateSession(.slot(2))
+        #expect(store.selectedSessionID == ids[3])
+        store.navigateSession(.slot(3))
+        #expect(store.selectedSessionID == ids[3], "the hidden workspace's sessions hold no slot")
     }
 
     @Test func navigateAttentionStepsThroughAttentionSessionsOnly() {

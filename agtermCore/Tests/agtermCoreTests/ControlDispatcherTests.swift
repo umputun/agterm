@@ -343,6 +343,16 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionGoRoutesASlotDigit() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let jumped = await dispatcher.dispatch(ControlRequest(cmd: .sessionGo, args: ControlArgs(to: "3")))
+
+        #expect(jumped == ControlResponse(ok: true))
+        #expect(actions.calls == [.sessionGo(window: nil, .slot(3))])
+    }
+
     @Test func sessionCloseRoutesBatchTargets() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -376,11 +386,11 @@ struct ControlDispatcherTests {
 
         #expect(missingDirection == ControlResponse(
             ok: false,
-            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
+            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention|1-9"
         ))
         #expect(badDirection == ControlResponse(
             ok: false,
-            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
+            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention|1-9"
         ))
         #expect(missingName == ControlResponse(ok: false, error: "session.rename requires a name"))
         #expect(actions.calls.isEmpty)

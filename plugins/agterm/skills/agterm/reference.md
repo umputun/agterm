@@ -375,12 +375,14 @@ buys nothing. A caller with no tree uses `version`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
   directory in Finder. Errors when that directory no longer exists.
-- `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
+- `session go --to next|prev|first|last|next-attention|prev-attention|1-9 [--window W]` — move the
   selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
   flagged sessions in flagged mode, the marked workspaces' sessions while the focus filter is applied,
   else all sessions (clearing the flag / suspending the filter restores the full set). next/prev wrap around at the ends (last→first,
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
-  sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
+  sessions needing attention (status blocked/completed), wrapping. A digit 1-9 is the absolute jump the
+  ⌘1-⌘9 chords make: the Nth session of that same set, nothing when it holds fewer, and 9 means the LAST
+  session once there are more than nine. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an
@@ -512,7 +514,7 @@ error keeps those names for compatibility.
   no longer wiped by foreground typing in the main pane, and only a keystroke in the OWNING pane clears
   it), and (2) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
   the session lands on the tagged pane — auto-follow,
-  the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last),
+  the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last, the ⌘1-⌘9 slots),
   the command palettes, a sidebar row click, and a Dock-menu session row all reveal and focus it, flipping to the split or
   showing a hidden scratch instead of the main pane. An `active` status keeps the existing pane selection.
   (The socket `session go next-attention|prev-attention`
@@ -1127,7 +1129,7 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
-`first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
+`first_session`, `last_session`, `select_session_1`…`select_session_9`, `previous_attention_session`, `next_attention_session`,
 `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
 

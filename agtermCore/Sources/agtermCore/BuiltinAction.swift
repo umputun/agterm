@@ -21,6 +21,11 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case previousSession = "previous_session", nextSession = "next_session"
     case previousAttentionSession = "previous_attention_session", nextAttentionSession = "next_attention_session"
     case firstSession = "first_session", lastSession = "last_session"
+    case selectSession1 = "select_session_1", selectSession2 = "select_session_2"
+    case selectSession3 = "select_session_3", selectSession4 = "select_session_4"
+    case selectSession5 = "select_session_5", selectSession6 = "select_session_6"
+    case selectSession7 = "select_session_7", selectSession8 = "select_session_8"
+    case selectSession9 = "select_session_9"
     case quickTerminal = "quick_terminal", sessionPalette = "session_palette", commandPalette = "command_palette"
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
     case dashboard = "dashboard"
@@ -61,10 +66,26 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .nextSession: return Chord(mods: [.command, .option], key: "down")
         case .previousAttentionSession: return Chord(mods: [.control, .option], key: "up")
         case .nextAttentionSession: return Chord(mods: [.control, .option], key: "down")
+        case .selectSession1, .selectSession2, .selectSession3, .selectSession4, .selectSession5,
+             .selectSession6, .selectSession7, .selectSession8, .selectSession9:
+            return sessionSlot.map { Chord(mods: [.command], key: String($0)) }
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
              .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse:
             return nil
         }
+    }
+
+    /// The nine absolute session jumps ⌘1…⌘9, in slot order. They carry NO menu item and no palette row —
+    /// nine numbered rows would be noise beside the fuzzy session palette — so `CustomCommandRunner` matches
+    /// their chords and `AppActions.paletteLessHandler` runs them. `SessionSlot` owns what a slot selects.
+    public static let sessionSlots: [BuiltinAction] = [
+        .selectSession1, .selectSession2, .selectSession3, .selectSession4, .selectSession5,
+        .selectSession6, .selectSession7, .selectSession8, .selectSession9
+    ]
+
+    /// Which slot this action selects, nil for every other action.
+    public var sessionSlot: Int? {
+        Self.sessionSlots.firstIndex(of: self).map { $0 + 1 }
     }
 }

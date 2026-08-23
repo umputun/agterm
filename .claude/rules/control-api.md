@@ -189,8 +189,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--grow-left|right|primary|split|top|bottom` delta, defaulting an unset ratio to 0.5. Require a split,
   clamp through store limits, persist, then post the object-scoped live-divider notification. Hidden split
   stores for next show. Return clamped ratio as `%.3f`; read `splitRatio`.
-- `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
-  the placement store, wraps within filtered scope, and returns selected ID. It has no target.
+- `session.go --to next|prev|first|last|next-attention|prev-attention|1-9` operates on current selection in
+  the placement store, wraps within filtered scope, and returns selected ID. It has no target. A digit is
+  the absolute slot the ⌘1…⌘9 chords select, one vocabulary with them ([[keymap]] owns the rule); a slot
+  naming no session leaves the selection where it was and still answers ok with it, exactly as a one-session
+  `next` does.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and
   uses click identity. When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
   requests omit text. Read through `unseen`.

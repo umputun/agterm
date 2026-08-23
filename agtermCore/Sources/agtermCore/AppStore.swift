@@ -1,50 +1,6 @@
 import Foundation
 import Observation
 
-/// A relative step through the flattened session list for keyboard navigation. `next`/`previous` step one
-/// and wrap, `first`/`last` jump to a tree end, `nextAttention`/`previousAttention` step (wrapping) through
-/// only the sessions needing attention — status `blocked` or `completed`.
-public enum SessionNavigation: Sendable { case next, previous, first, last, nextAttention, previousAttention }
-
-extension SessionNavigation {
-    /// Maps a control-channel direction string to a case, nil for an unknown one. Both `prev` (the CLI's
-    /// spelling) and `previous` are accepted.
-    public init?(wire: String) {
-        switch wire {
-        case "next": self = .next
-        case "prev", "previous": self = .previous
-        case "first": self = .first
-        case "last": self = .last
-        case "next-attention": self = .nextAttention
-        case "prev-attention", "previous-attention": self = .previousAttention
-        default: return nil
-        }
-    }
-}
-
-/// A relative step through the visible workspace list. Only `next`/`previous`: a workspace carries no
-/// attention state, and wrapping already reaches both ends.
-public enum WorkspaceNavigation: Sendable { case next, previous }
-
-/// What one workspace step landed on. The indicator is the selected session's, captured BEFORE an
-/// `autoReset` status cleared, which is what lets the GUI route pane reveal exactly as session nav does
-/// (`AppActions.revealActiveBlockedPane`); nil for an empty workspace.
-public struct WorkspaceStep: Sendable {
-    public let workspaceID: UUID
-    public let indicator: AgentIndicator?
-}
-
-extension WorkspaceNavigation {
-    /// Maps a control-channel direction string to a case, nil for unknown. Both spellings of previous.
-    public init?(wire: String) {
-        switch wire {
-        case "next": self = .next
-        case "prev", "previous": self = .previous
-        default: return nil
-        }
-    }
-}
-
 /// The whole app state: the workspace tree and the current selection. `@Observable @MainActor` so views
 /// observe mutations and all model access is main-actor isolated (implicitly `Sendable` via isolation).
 /// Selection is one `Session.ID?` — workspace rows are non-selectable headers, so the workspace is derived.
@@ -635,7 +591,8 @@ public final class AppStore {
     /// (`navigableSessions`: the flagged set in `.flagged` mode, the MARKED workspaces' sessions while the
     /// focus filter is applied, else all). `next`/`previous` move one and WRAP WITHIN that set, never leaking
     /// across the filter; `first`/`last` jump to its ends; with no/invalid selection `next`/`previous` land
-    /// on the first session. No-op on an empty list. Routes through `selectSession`, inheriting recency,
+    /// on the first session; `slot` jumps to an absolute position in it, per `SessionSlot.index`.
+    /// No-op on an empty list. Routes through `selectSession`, inheriting recency,
     /// badge clearing, persistence and workspace derivation. Targets are always in-set, so nav never triggers
     /// `disableFocusIfSelectionOutsideSet` — that stays the safety net for an explicit cross-set select.
     @discardableResult
@@ -657,6 +614,9 @@ public final class AppStore {
         case .nextAttention, .previousAttention:
             guard let found = attentionTarget(in: sessions, forward: direction == .nextAttention) else { return nil }
             target = found
+        case .slot(let slot):
+            guard let index = SessionSlot.index(slot, count: ids.count) else { return nil }
+            target = ids[index]
         }
         return selectSession(target)
     }

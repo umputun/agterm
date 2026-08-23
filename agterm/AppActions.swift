@@ -422,6 +422,11 @@ final class AppActions {
         revealActiveBlockedPane(captured: indicator)
     }
 
+    /// Jump to an absolute slot in the sidebar's flattened visual order (⌘1…⌘9, `session.go --to N`), through
+    /// the same `navigatePlain` the directional steps use, so where a jump lands and what it focuses cannot
+    /// differ from where a step does. A slot naming no session leaves the selection alone.
+    func selectSessionSlot(_ slot: Int) { navigatePlain(.slot(slot)) }
+
     func selectNextSession() { navigatePlain(.next) }
     func selectPreviousSession() { navigatePlain(.previous) }
     func selectFirstSession() { navigatePlain(.first) }

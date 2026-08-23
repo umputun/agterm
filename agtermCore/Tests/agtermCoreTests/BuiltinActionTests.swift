@@ -33,7 +33,9 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.previousWorkspace.rawValue == "previous_workspace")
         #expect(BuiltinAction.nextWorkspace.rawValue == "next_workspace")
         #expect(BuiltinAction.toggleWorkspaceCollapse.rawValue == "toggle_workspace_collapse")
-        #expect(BuiltinAction.allCases.count == 46)
+        #expect(BuiltinAction.selectSession1.rawValue == "select_session_1")
+        #expect(BuiltinAction.selectSession9.rawValue == "select_session_9")
+        #expect(BuiltinAction.allCases.count == 55)
     }
 
     @Test func rejectsUnknownName() {
@@ -123,6 +125,15 @@ struct BuiltinActionTests {
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
             .dashboard: Chord(mods: [.command, .shift], key: "g"),
+            .selectSession1: Chord(mods: [.command], key: "1"),
+            .selectSession2: Chord(mods: [.command], key: "2"),
+            .selectSession3: Chord(mods: [.command], key: "3"),
+            .selectSession4: Chord(mods: [.command], key: "4"),
+            .selectSession5: Chord(mods: [.command], key: "5"),
+            .selectSession6: Chord(mods: [.command], key: "6"),
+            .selectSession7: Chord(mods: [.command], key: "7"),
+            .selectSession8: Chord(mods: [.command], key: "8"),
+            .selectSession9: Chord(mods: [.command], key: "9"),
         ]
         #expect(expected.count == BuiltinAction.allCases.count)
         for action in BuiltinAction.allCases {
@@ -185,5 +196,17 @@ struct BuiltinActionTests {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")
         }
         #expect(BuiltinAction.allCases.filter { $0.defaultChord == nil } == BuiltinAction.allCases.filter { keyless.contains($0) })
+    }
+
+    @Test func sessionSlotsCarryTheNineCommandDigitsInOrder() {
+        #expect(BuiltinAction.sessionSlots.map(\.sessionSlot) == Array(SessionSlot.range).map { Optional($0) })
+        for slot in SessionSlot.range {
+            let action = BuiltinAction.sessionSlots[slot - 1]
+            let chord = Chord(mods: [.command], key: String(slot))
+            #expect(action.rawValue == "select_session_\(slot)")
+            #expect(action.defaultChord == chord)
+            #expect(parseKeybind("cmd+\(slot)") == [chord])
+        }
+        #expect(BuiltinAction.allCases.filter { $0.sessionSlot != nil } == BuiltinAction.sessionSlots)
     }
 }

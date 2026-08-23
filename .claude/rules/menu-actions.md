@@ -185,6 +185,9 @@ paths:
   Option-Command-Left/Right remains pane focus.
 - `navigateSession` uses `navigableSessions`, wraps previous/next, selects ends for first/last, chooses
   first on nil/invalid selection, and no-ops when empty. Menu, palette, and `session.go` share it.
+- The ⌘1…⌘9 slots are the absolute form of the same step: `navigatePlain(.slot(n))`, so gate, activity note
+  and pane reveal match the arrows exactly. They have no menu item and no palette row; [[keymap]] owns the
+  monitor dispatch and `SessionSlot`'s overflow rule.
 - Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through
   `visibleWorkspaces` and lands on the target's FIRST session, so the keybind, the palette row and
   `workspace.go` mean one thing. Keyless, tree mode only, and it reveals a landed pane off the step's

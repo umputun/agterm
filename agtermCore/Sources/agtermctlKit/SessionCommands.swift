@@ -101,8 +101,8 @@ struct Session: ParsableCommand {
 
     struct Go: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "go",
-            abstract: "Navigate sessions: next|prev|first|last|next-attention|prev-attention.")
-        @Option(name: .long, help: "Direction: next, prev, first, last, next-attention, or prev-attention (attention = blocked/completed).") var to: String
+            abstract: "Navigate sessions: next|prev|first|last|next-attention|prev-attention|1-9.")
+        @Option(name: .long, help: "Direction: next, prev, first, last, next-attention, prev-attention (attention = blocked/completed), or a slot 1-9 (the ⌘1-⌘9 jumps).") var to: String
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
