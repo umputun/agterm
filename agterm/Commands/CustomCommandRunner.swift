@@ -309,7 +309,7 @@ final class CustomCommandRunner {
         return CommandContext(
             sessionID: session.id.uuidString,
             sessionName: session.displayName,
-            sessionPWD: session.effectiveCwd,
+            sessionPWD: session.cwd(for: pane),
             workspaceID: workspace?.id.uuidString ?? "",
             workspaceName: workspace?.name ?? "",
             windowID: windowID?.uuidString ?? "",

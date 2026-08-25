@@ -241,6 +241,22 @@ struct SessionTests {
         #expect(session.effectiveCwd == "/repo/primary")
     }
 
+    @Test func cwdForPaneResolvesPaneSpecificDirectory() {
+        let session = Session(initialCwd: "/repo")
+        session.currentCwd = "/repo/primary"
+        session.splitCwd = "/var/log"
+        #expect(session.cwd(for: .left) == "/repo/primary")
+        #expect(session.cwd(for: .scratch) == "/repo/primary")
+        #expect(session.cwd(for: .right) == "/var/log")
+
+        session.splitCwd = nil
+        session.initialSplitCwd = "/var/restored"
+        #expect(session.cwd(for: .right) == "/var/restored")
+
+        session.initialSplitCwd = nil
+        #expect(session.cwd(for: .right) == "/repo/primary")
+    }
+
     @Test func agentIndicatorDefaultsToIdle() {
         let session = Session(initialCwd: "/repo")
         #expect(session.agentIndicator == AgentIndicator())

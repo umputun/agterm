@@ -356,4 +356,19 @@ final class CustomCommandRunnerTests: XCTestCase {
 
         XCTAssertEqual(written, "left \(session.id.uuidString)")
     }
+
+    func testAChordFiredInSplitPaneResolvesSplitPaneWorkingDirectory() throws {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: "/tmp/left-cwd"))
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.splitSurface = split
+        session.splitCwd = "/tmp/right-cwd"
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitFocused = true
+
+        let written = try fired(fix.runner, from: split, writing: "\"$AGT_SESSION_PWD\"")
+        XCTAssertEqual(written, "/tmp/right-cwd")
+    }
 }

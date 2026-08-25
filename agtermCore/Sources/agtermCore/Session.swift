@@ -424,6 +424,16 @@ public final class Session: Identifiable {
     /// `AGTERM_SESSION_PWD`, which must stay stable regardless of focus.
     public var effectiveCwd: String { currentCwd ?? initialCwd }
 
+    /// The working directory for a given pane role: the split pane's while targeting `.right`, else the primary's.
+    public func cwd(for pane: CommandContext.Pane) -> String {
+        switch pane {
+        case .right:
+            return splitCwd ?? initialSplitCwd ?? effectiveCwd
+        case .left, .scratch:
+            return effectiveCwd
+        }
+    }
+
     /// The focused pane's surface: the split (right) while it has focus and exists, else the primary. With the
     /// split hidden the detail pane maximizes this one and focus helpers target it, so typing always reaches
     /// the visible pane.
