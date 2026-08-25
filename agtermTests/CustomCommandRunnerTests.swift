@@ -362,6 +362,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
         let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: "/tmp/left-cwd"))
         let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        split.session = session
         session.splitSurface = split
         session.splitCwd = "/tmp/right-cwd"
         session.hasSplit = true
