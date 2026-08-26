@@ -187,18 +187,20 @@ resolution against the destination store). Task 4 keeps the XCUITest and the res
 
 ### Task 4: Wire the app-side move
 
-- [ ] handle `.window` in `ControlServer+SessionActions.moveSession` (`:509`): resolve the session with the
+- [x] handle `.window` in `ControlServer+SessionActions.moveSession` (`:509`): resolve the session with the
       existing `resolver.resolveSession(target, window:)` (so `--window` keeps meaning "search scope"),
       resolve the destination window id through `library.resolveWindow`, then call
-      `WindowLibrary.moveSession`
-- [ ] return the closed-window error verbatim as `window not open — window.select it first`, and resolve an
-      optional destination workspace against the DESTINATION store's workspaces
-- [ ] handle `.window` in `moveSessions` for batches, returning `affected` like the other batch paths
-- [ ] add an XCUITest in `agtermUITests/MultiWindowUITests.swift`: two windows, move a session across,
+      `WindowLibrary.moveSession` (landed with task 3 so the app target compiled)
+- [x] return the closed-window error verbatim as `window not open — window.select it first`, and resolve an
+      optional destination workspace against the DESTINATION store's workspaces (landed with task 3)
+- [x] handle `.window` in `moveSessions` for batches, returning `affected` like the other batch paths
+      (landed with task 3)
+- [x] add an XCUITest in `agtermUITests/MultiWindowUITests.swift`: two windows, move a session across,
       assert both windows' `tree` and that the moved session still answers `session.text`
-- [ ] write tests for the resolver paths that stay host-free (destination resolution errors) in
-      `ControlDispatcherTests`
-- [ ] run `cd agtermCore && swift test`, then the single new UI test with
+- [x] write tests for the resolver paths that stay host-free (destination resolution errors) — the
+      closed-destination resolve/refuse split and the destination-workspace scope in `WindowLibraryTests`
+      (where that seam lives), plus destination pass-through in `ControlDispatcherSessionMoveTests`
+- [x] run `cd agtermCore && swift test`, then the single new UI test with
       `-only-testing:agtermUITests/MultiWindowUITests/<test>` - must pass before task 5
 
 ### Task 5: Add --to-window to agtermctl

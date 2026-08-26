@@ -1585,6 +1585,30 @@ final class WindowLibraryTests {
         #expect(windows.source.session(withID: session.id) === session)
     }
 
+    // the app arm resolves the destination through `resolveWindow`, which keeps CLOSED windows as
+    // candidates — the refusal has to come from the missing store, not from a failed resolution.
+    @Test func closedDestinationResolvesButStillRefusesTheMove() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        library.closeWindow(windows.destinationID)
+
+        #expect(library.resolveWindow(windows.destinationID.uuidString) == .resolved(windows.destinationID))
+        #expect(library.store(for: windows.destinationID) == nil)
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID))
+    }
+
+    @Test func destinationWorkspaceIsNotResolvedAgainstTheSourceWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let sourceWorkspace = try #require(windows.source.workspaces.first)
+        let session = try #require(sourceWorkspace.sessions.first)
+
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID, workspace: sourceWorkspace.id))
+        #expect(windows.source.session(withID: session.id) === session)
+        #expect(windows.destination.session(withID: session.id) == nil)
+    }
+
     @Test func moveSessionRefusesUnknownSessionAndWindow() throws {
         let library = WindowLibrary(directory: directory)
         let windows = try makeTwoWindows(library)

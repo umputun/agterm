@@ -299,6 +299,63 @@ final class MultiWindowUITests: XCTestCase {
         return value.lowercased()
     }
 
+    /// The session ids in one window's `tree`, lowercased, in workspace/session order.
+    private func sessionIDs(inWindow id: UUID) throws -> [String] {
+        let response = try sendCommand(#"{"cmd":"tree","args":{"window":"\#(id.uuidString)"}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "tree for window \(id) should succeed: \(response)")
+        let tree = (response["result"] as? [String: Any])?["tree"] as? [String: Any]
+        let workspaces = (tree?["workspaces"] as? [[String: Any]]) ?? []
+        return workspaces.flatMap { ($0["sessions"] as? [[String: Any]]) ?? [] }
+            .compactMap { ($0["id"] as? String)?.lowercased() }
+    }
+
+    // DISCRIMINATING: the pre-move marker read back AFTER the move is what separates a real instance
+    // transfer from a recreated session — a fresh shell in window B would pass the tree assertions alone.
+    func testMovingSessionToAnotherWindowKeepsItsLiveShell() throws {
+        try seedTwoWindowsWithKnownSessions()
+        launch()
+
+        XCTAssertTrue(app.staticTexts["alpha-ws"].waitForExistence(timeout: 30)
+                      || app.staticTexts["beta-ws"].waitForExistence(timeout: 30),
+                      "a seeded window's workspace should render")
+        XCTAssertTrue(pollWindowCount(atLeast: 2, timeout: 10), "two windows should open, got \(app.windows.count)")
+        XCTAssertTrue(pollIndexOpenState([windowAID: true, windowBID: true], timeout: 10),
+                      "both seeded windows should be marked open in windows.json")
+
+        let moving = try XCTUnwrap(sessionByWindow[windowAID], "window A's seeded session id")
+        let resident = try XCTUnwrap(sessionByWindow[windowBID], "window B's seeded session id")
+
+        // realize the surface and leave a unique string in its scrollback while it still lives in window A.
+        let marker = "premove-\(UUID().uuidString.prefix(8))"
+        let beforeFile = markerDir.appendingPathComponent("premove")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(windowAID.uuidString)"}"#)["ok"] as? Bool,
+                       true, "selecting window A should succeed")
+        XCTAssertEqual(try typeUntilMarker("echo \(marker) > '\(beforeFile.path)'\n", target: moving.uuidString,
+                                           file: beforeFile, window: windowAID.uuidString), String(marker),
+                       "the session's shell should be running before the move")
+
+        let moved = try sendCommand(
+            #"{"cmd":"session.move","target":"\#(moving.uuidString)","args":{"toWindow":"\#(windowBID.uuidString)"}}"#)
+        XCTAssertEqual(moved["ok"] as? Bool, true, "moving the session to window B should succeed: \(moved)")
+
+        XCTAssertEqual(try sessionIDs(inWindow: windowAID), [],
+                       "window A's tree should no longer list the moved session")
+        XCTAssertEqual(try sessionIDs(inWindow: windowBID).sorted(),
+                       [resident, moving].map { $0.uuidString.lowercased() }.sorted(),
+                       "window B's tree should list its own session plus the moved one")
+
+        let text = try sendCommand(#"{"cmd":"session.text","target":"\#(moving.uuidString)"}"#)
+        XCTAssertEqual(text["ok"] as? Bool, true, "session.text should still reach the moved session: \(text)")
+        let buffer = ((text["result"] as? [String: Any])?["text"] as? String) ?? ""
+        XCTAssertTrue(buffer.contains(marker), "the moved session should keep its pre-move scrollback: \(buffer)")
+
+        let after = "postmove-\(UUID().uuidString.prefix(8))"
+        let afterFile = markerDir.appendingPathComponent("postmove")
+        XCTAssertEqual(try typeUntilMarker("echo \(after) > '\(afterFile.path)'\n", target: moving.uuidString,
+                                           file: afterFile, window: windowBID.uuidString), String(after),
+                       "the moved session's shell should still take input from window B")
+    }
+
     func testReopenAllAfterSimulatedQuitRestoresOpenSetAndSelection() throws {
         try seedTwoWindowsWithSelection()
         let expectedSelection = selectedByWindow
