@@ -205,17 +205,20 @@ resolution against the destination store). Task 4 keeps the XCUITest and the res
 
 ### Task 5: Add --to-window to agtermctl
 
-- [ ] add `--to-window` to `session move` in `agtermCore/Sources/agtermctlKit/SessionCommands.swift`, help
+- [x] add `--to-window` to `session move` in `agtermCore/Sources/agtermctlKit/SessionCommands.swift`, help
       text naming it a DESTINATION so it cannot be confused with the shared `--window` target scope
-- [ ] extend `validate()` (`:150-167`): `--to-window` satisfies the "provide a destination" requirement;
+- [x] extend `validate()` (`:150-167`): `--to-window` satisfies the "provide a destination" requirement;
       reject it with `--to`/`--after`/`--before`; allow it with a positional workspace (the destination
       workspace INSIDE the target window)
-- [ ] populate `ControlArgs.toWindow` in `makeRequest()`
-- [ ] write validation tests in `agtermctlKitTests/CommandsTests` for each accepted and rejected combination,
+- [x] populate `ControlArgs.toWindow` in `makeRequest()`
+- [x] write validation tests in `agtermctlKitTests/CommandsTests` for each accepted and rejected combination,
       pinning the exact error strings the way the existing move cases are pinned (`:269`, `:273`)
-- [ ] write a test that a bare `--window` still fails with the unchanged
+- [x] write a test that a bare `--window` still fails with the unchanged
       `provide a destination workspace, --to, or --after/--before` message
-- [ ] run `cd agtermCore && swift test` - must pass before task 6
+- [x] run `cd agtermCore && swift test` - must pass before task 6
+
+➕ `--select` landed here too: the dispatcher reads `args.select` only in the `.window` arm, so without the
+flag the locked "`--select` opts into selecting it in the destination" decision had no CLI surface.
 
 ### Task 6: Publish window/workspace ownership on the session node
 

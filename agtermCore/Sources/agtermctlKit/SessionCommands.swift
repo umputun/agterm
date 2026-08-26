@@ -133,20 +133,32 @@ struct Session: ParsableCommand {
 
     struct Move: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Move a session: to another workspace, reorder with --to, or place relative to an anchor with --after/--before.")
-        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
+            abstract: "Move a session: to another workspace or window, reorder with --to, or place relative to an anchor with --after/--before.")
+        @Argument(help: "Destination workspace id/prefix (relocate); with --to-window, a workspace INSIDE that window. Omit with --to or --after/--before.") var workspace: String?
+        @Option(name: .long, help: "DESTINATION window id/prefix/active to move the session to; it must be open. Unlike --window, which only scopes where --target is searched.") var toWindow: String?
+        @Flag(name: .long, help: "With --to-window, select the session in the destination window (it stays in the background otherwise).") var select = false
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
 
-        // exactly one placement intent among {workspace positional (relocate), --to (reorder), --after/--before
-        // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
-        // without a socket. the anchor carries its own workspace, so placement excludes --to and a workspace.
+        // exactly one placement intent among {--to-window (cross-window), workspace positional (relocate),
+        // --to (reorder), --after/--before (anchor-relative)}; reject empty/conflicting cases at parse time as a
+        // clean usage error, unit-testable without a socket. the anchor carries its own workspace, so placement
+        // excludes --to and a workspace. a workspace positional composes with --to-window, naming one there.
         func validate() throws {
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
+            }
+            if toWindow != nil {
+                if to != nil {
+                    throw ValidationError("session.move takes --to-window or --to, not both")
+                }
+                if after != nil || before != nil {
+                    throw ValidationError("session.move takes --to-window or --after/--before, not both")
+                }
+                return
             }
             if after != nil || before != nil {
                 if to != nil {
@@ -169,7 +181,9 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             let args: ControlArgs
-            if let after {
+            if let toWindow {
+                args = ControlArgs(workspace: workspace, select: select, toWindow: toWindow)
+            } else if let after {
                 args = ControlArgs(after: after)
             } else if let before {
                 args = ControlArgs(before: before)
