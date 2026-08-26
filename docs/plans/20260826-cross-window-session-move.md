@@ -125,20 +125,21 @@ Project-specific rules that bind this plan:
 
 ### Task 1: Add detach/adopt seam to AppStore
 
-- [ ] add `AppStore.detachSession(_ id: UUID) -> Session?` in `AppStore.swift`: removes the instance from
+- [x] add `AppStore.detachSession(_ id: UUID) -> Session?` (landed in a new `AppStore+Transfer.swift`;
+      `AppStore.swift` is already at the 1000-line limit): removes the instance from
       its workspace WITHOUT tearing down its surface, reselects through the existing close-reselection
       path when it was `selectedSessionID`, prunes `sessionRecency` and `sidebarSelectionIDs`, calls
       `scheduleTreeChanged()` and `save()`; returns nil for an unknown id
-- [ ] add `AppStore.adoptSession(_ session: Session, toWorkspace: UUID?, at index: Int?, select: Bool) -> Bool`:
+- [x] add `AppStore.adoptSession(_ session: Session, toWorkspace: UUID?, at index: Int?, select: Bool) -> Bool`:
       inserts the instance (nil workspace → `currentWorkspaceID`, then `workspaces.last`), optionally
       selects it, `scheduleTreeChanged()` + `save()`; false on an unknown workspace or a duplicate id
-- [ ] make `detachSession` tolerate emptying a workspace and emptying the whole store (a window with no
+- [x] make `detachSession` tolerate emptying a workspace and emptying the whole store (a window with no
       sessions renders "No session selected"; do not seed a replacement)
-- [ ] write tests for `detachSession` (selected vs unselected source, recency pruned, last-session-in-store,
+- [x] write tests for `detachSession` (selected vs unselected source, recency pruned, last-session-in-store,
       unknown id)
-- [ ] write tests for `adoptSession` (default workspace, explicit workspace, `select:` both ways, unknown
+- [x] write tests for `adoptSession` (default workspace, explicit workspace, `select:` both ways, unknown
       workspace, duplicate id rejected)
-- [ ] run `cd agtermCore && swift test` - must pass before task 2
+- [x] run `cd agtermCore && swift test` - must pass before task 2
 
 ### Task 2: Add WindowLibrary.moveSession across windows
 
