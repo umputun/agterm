@@ -23,8 +23,11 @@ public protocol ControlActions {
     func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
-    func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
-    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
+    /// `select` applies only to the cross-window `.window` form, whose destination is a SEPARATE store; the
+    /// in-store forms never touch selection and ignore it.
+    func moveSession(_ target: String?, window: String?, move: ControlSessionMove, select: Bool) -> ControlResponse
+    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove,
+                      select: Bool) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse
     /// Turn a window's workspace focus filter on/off WITHOUT touching the marked set. Window-scoped, so
@@ -346,45 +349,7 @@ public struct ControlDispatcher {
         case .sessionReveal:
             return actions.revealSession(request.target, window: request.args?.window)
         case .sessionMove:
-            let args = request.args
-            if args?.after != nil, args?.before != nil {
-                return ControlResponse(ok: false, error: "use either --after or --before, not both")
-            }
-            // Placement mode: the anchor sid self-identifies the destination workspace, so it's
-            // mutually exclusive with --to and with a workspace parameter.
-            if let anchor = args?.after ?? args?.before {
-                if args?.to != nil {
-                    return ControlResponse(ok: false, error: "session.move takes --after/--before or --to, not both")
-                }
-                if args?.workspace != nil {
-                    return ControlResponse(ok: false, error: "session.move takes --after/--before or a workspace, not both")
-                }
-                let move = ControlSessionMove.place(anchor: anchor, after: args?.after != nil)
-                if let targets = args?.targets {
-                    return dispatchSessionMove(targets: targets, window: args?.window, move: move)
-                }
-                return actions.moveSession(request.target, window: args?.window, move: move)
-            }
-            if args?.to != nil && args?.workspace != nil {
-                return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
-            }
-            if let to = args?.to {
-                guard let direction = ReorderDirection(rawValue: to) else {
-                    return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
-                }
-                if args?.targets != nil {
-                    return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
-                }
-                return actions.moveSession(request.target, window: args?.window, move: .reorder(direction))
-            }
-            guard let workspace = args?.workspace else {
-                return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
-            }
-            let move = ControlSessionMove.workspace(workspace)
-            if let targets = args?.targets {
-                return dispatchSessionMove(targets: targets, window: args?.window, move: move)
-            }
-            return actions.moveSession(request.target, window: args?.window, move: move)
+            return dispatchSessionMove(request)
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionSeen:
@@ -497,16 +462,6 @@ public struct ControlDispatcher {
     /// being no scratch pane to cover.
     private func parseOverlayPane(_ raw: String?) -> PaneSelection<OverlayPane> {
         parsePane(raw, error: PaneOverlayError.invalidPane) { OverlayPane(controlName: $0) }
-    }
-
-    private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
-        guard let first = targets.first else {
-            return ControlResponse(ok: false, error: "session.move requires at least one --target")
-        }
-        if targets.count == 1 {
-            return actions.moveSession(first, window: window, move: move)
-        }
-        return actions.moveSessions(targets, window: window, move: move)
     }
 
     private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {

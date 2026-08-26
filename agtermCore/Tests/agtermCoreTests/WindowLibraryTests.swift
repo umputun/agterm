@@ -1462,12 +1462,19 @@ final class WindowLibraryTests {
 
     // MARK: - Cross-window move
 
-    private func makeTwoWindows(_ library: WindowLibrary) throws -> (source: AppStore, destination: AppStore,
-                                                                     sourceID: UUID, destinationID: UUID) {
+    private struct TwoWindows {
+        let source: AppStore
+        let destination: AppStore
+        let sourceID: UUID
+        let destinationID: UUID
+    }
+
+    private func makeTwoWindows(_ library: WindowLibrary) throws -> TwoWindows {
         let sourceID = library.windows[0].id
         let destinationID = library.newWindow(name: "work").id
-        return (try #require(library.store(for: sourceID)), try #require(library.store(for: destinationID)),
-                sourceID, destinationID)
+        return TwoWindows(source: try #require(library.store(for: sourceID)),
+                          destination: try #require(library.store(for: destinationID)),
+                          sourceID: sourceID, destinationID: destinationID)
     }
 
     @Test func moveSessionAcrossWindowsKeepsTheInstanceAndSurface() throws {

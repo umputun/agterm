@@ -114,6 +114,10 @@ public enum ControlSessionMove: Equatable, Sendable {
     /// Relocate relative to an anchor session (id / prefix / `active`); `after == false` places before it.
     /// The anchor carries its own workspace, so this form never reads the workspace parameter.
     case place(anchor: String, after: Bool)
+    /// Transfer the live session to ANOTHER OPEN window, optionally naming a workspace inside it
+    /// (nil = that window's current one). The destination window is a separate store, so this form
+    /// cannot combine with the reorder/anchor ones, whose positions only resolve within one store.
+    case window(window: String, workspace: String?)
 }
 
 /// Parsed resize request for `session.resize`.

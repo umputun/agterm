@@ -166,17 +166,24 @@ Project-specific rules that bind this plan:
 
 ### Task 3: Add the wire contract for a destination window
 
-- [ ] add a `.window(window: String, workspace: String?)` case to `ControlSessionMove` in `ControlModes.swift`
-- [ ] add `toWindow: String?` to `ControlArgs` in `ControlProtocol.swift` (optional, legacy decode intact)
-- [ ] route it in `ControlDispatcher.dispatchSessionCommand`/`dispatchSessionMove`: `--to-window` is a
+- [x] add a `.window(window: String, workspace: String?)` case to `ControlSessionMove` in `ControlModes.swift`
+- [x] add `toWindow: String?` to `ControlArgs` in `ControlProtocol.swift` (optional, legacy decode intact)
+- [x] route it in `ControlDispatcher.dispatchSessionCommand`/`dispatchSessionMove`: `--to-window` is a
       placement intent, may carry an optional destination workspace, and REJECTS `--to` (reorder is
       same-workspace) and `--after`/`--before` (anchors resolve within one store)
-- [ ] extend `ControlActions.moveSession`/`moveSessions` signatures and `MockControlActions` for the new case
-- [ ] write tests in `ControlDispatcherTests` for routing the new case (single + batch, with and without a
-      destination workspace)
-- [ ] write tests for the rejection paths (`--to-window` with `--to`, with `--after`, with `--before`)
-- [ ] write round-trip tests in `ControlProtocolTests` for `toWindow` encode/decode and legacy-payload decode
-- [ ] run `cd agtermCore && swift test` - must pass before task 4
+      (the whole form parser moved to `ControlDispatcher+SessionMove.swift`: the fourth form pushed the
+      command switch past the cyclomatic-complexity limit and the file past 1000 lines)
+- [x] extend `ControlActions.moveSession`/`moveSessions` signatures and `MockControlActions` for the new case
+      (`select: Bool`, which only the `.window` form reads — the destination's selection is another store's)
+- [x] write tests in `ControlDispatcherTests` for routing the new case (single + batch, with and without a
+      destination workspace) — landed in `ControlDispatcherSessionMoveTests` (the 2000-line test-file limit)
+- [x] write tests for the rejection paths (`--to-window` with `--to`, with `--after`, with `--before`)
+- [x] write round-trip tests in `ControlProtocolTests` for `toWindow` encode/decode and legacy-payload decode
+- [x] run `cd agtermCore && swift test` - must pass before task 4
+
+➕ the app target must compile between tasks, so `ControlServer.moveSession`/`moveSessions` got their
+`.window` arms here rather than in task 4 (single + batch, closed-window error text, destination-workspace
+resolution against the destination store). Task 4 keeps the XCUITest and the resolver-path tests.
 
 ### Task 4: Wire the app-side move
 

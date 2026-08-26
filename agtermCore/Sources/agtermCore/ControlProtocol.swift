@@ -266,6 +266,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
     /// (= frontmost).
     public var window: String?
+    /// DESTINATION window for `session.move`: id / prefix / `active`. Distinct from `window`, which stays a
+    /// search scope for `target`, and must name an OPEN window.
+    public var toWindow: String?
     /// New window frame width/height in points for `window.resize`.
     public var width: Int?
     public var height: Int?
@@ -313,6 +316,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
+                toWindow: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -351,6 +355,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.query = query
         self.allowCustom = allowCustom
         self.window = window
+        self.toWindow = toWindow
         self.pane = pane
         self.paneID = paneID
         self.to = to

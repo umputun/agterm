@@ -24,8 +24,8 @@ final class MockControlActions: ControlActions {
         case workspaceGo(window: String?, WorkspaceNavigation)
         case workspaceRename(target: String?, window: String?, String)
         case workspaceDelete(target: String?, window: String?)
-        case sessionMove(target: String?, window: String?, ControlSessionMove)
-        case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
+        case sessionMove(target: String?, window: String?, ControlSessionMove, select: Bool)
+        case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove, select: Bool)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, ControlWorkspaceFocusMode)
         case workspaceFilter(window: String?, ControlToggleMode)
@@ -232,13 +232,15 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
-    func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
-        calls.append(.sessionMove(target: target, window: window, move))
+    func moveSession(_ target: String?, window: String?, move: ControlSessionMove,
+                     select: Bool) -> ControlResponse {
+        calls.append(.sessionMove(target: target, window: window, move, select: select))
         return ControlResponse(ok: true)
     }
 
-    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
-        calls.append(.sessionMoveBatch(targets: targets, window: window, move))
+    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove,
+                      select: Bool) -> ControlResponse {
+        calls.append(.sessionMoveBatch(targets: targets, window: window, move, select: select))
         return ControlResponse(ok: true)
     }
 

@@ -1393,6 +1393,32 @@ struct ControlProtocolTests {
         #expect(decoded.args?.after == nil)
     }
 
+    @Test func sessionMoveRoundTripsWithDestinationWindow() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c",
+                                     args: ControlArgs(workspace: "dest", select: true,
+                                                       window: "src", toWindow: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.toWindow == "1a2b")
+        #expect(decoded.args?.window == "src")
+        #expect(decoded.args?.workspace == "dest")
+        #expect(decoded.args?.select == true)
+    }
+
+    @Test func sessionMoveOmitsDestinationWindowWhenUnset() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "dest"))
+        let json = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        #expect(!json.contains("toWindow"))
+        #expect(try roundTrip(request).args?.toWindow == nil)
+    }
+
+    @Test func sessionMoveDecodesLegacyPayloadWithoutDestinationWindow() throws {
+        let json = #"{"cmd":"session.move","target":"9f3c","args":{"workspace":"dest"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.args?.workspace == "dest")
+        #expect(decoded.args?.toWindow == nil)
+    }
+
     @Test func sessionNewRoundTripsWithAfterAnchor() throws {
         let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(after: "active"))
         let decoded = try roundTrip(request)
