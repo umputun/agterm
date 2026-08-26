@@ -147,6 +147,12 @@ struct agtermApp: App {
                         library.rebindAdoptedSession = { [weak library] session, store in
                             guard let library else { return }
                             Self.rebindSurfaces(of: session, to: store, library: library)
+                            // banners fired before the move carry the SOURCE window's identity, so a later
+                            // click would reopen the window the session just left; retire them.
+                            if let destination = library.windowID(for: store) {
+                                NotificationManager.shared.retireBanners(forMovedSession: session.id,
+                                                                        destinationWindowID: destination)
+                            }
                         }
                         // Ctrl-Tab session-switcher key monitors (idempotent).
                         sessionSwitcher.start()

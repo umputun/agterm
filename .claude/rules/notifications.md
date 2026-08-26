@@ -14,7 +14,29 @@ paths:
   `UNUserNotificationCenterDelegate`. It resolves `Session` and `PaneRole` by surface identity, applies
   suppression, always increments `unseenCount`, and posts only when `bannersEnabled`. Authorization is
   best-effort; request `[.alert, .badge, .sound]` from the scene task. `willPresent` returns
-  `[.banner, .list, .sound]`. `clearDelivered` removes all three pane IDs on focus.
+  `[.banner, .list, .sound]`, except for one `TerminalNotification.isStale` rejects — delivered after its
+  session changed windows — which is dropped and removed instead.
+- A cross-window move retires the session's banners through `retireBanners(forMovedSession:destinationWindowID:)`:
+  they carry the source window's id, and a click on one left behind would reopen the window the session left.
+  Both that sweep and focus's `clearDelivered` match the delivered set by session id, never by rebuilding
+  identifiers from the current window, which would match none of them. The delivered set is queried
+  asynchronously, so `TerminalNotification.shouldSweep` spares what the sweep's own window still owns,
+  anything delivered after the sweep started, and any identity re-posted after it — else a move's sweep
+  overtaken by a later move, or a focus clear, takes a banner that arrived after it, or removes by
+  identifier the newer banner that replaced one its query named. `lastPostedAt` records each submission and
+  the query's result is filtered back on the main actor against it; the map clears once no sweep is in
+  flight, since only one can be spared by a record. The move also records the destination per session,
+  which is what `windowID(forSession:)` stops answering once that window closes.
+  `openWindowID(forSession:)` is where a live window contradicts a record, so every caller seeing an open
+  owner — `notify` and `send` included — drops it while a window still can, and `currentWindowID(forSession:)`
+  falls back to the record only when none does. The sweep is the records' garbage collection:
+  `TerminalNotification.retainedMoveRecords` keeps those with a delivered banner left to retarget plus the
+  `unsettledSessions` — every session whose submission or sweep is still outstanding, including concurrent
+  moves, whose banners no snapshot names yet — so moved-then-closed sessions cannot accumulate.
+  The sweep sees only what is already delivered (`add` confirms scheduling, not delivery), so three
+  gaps close elsewhere against that: `post(identity:content:sessionID:)` retires its own request when the add
+  was still in flight, `willPresent` drops one delivered after the sweep, and `didReceive` — the only hook a
+  background delivery reaches — reveals the session's current window rather than the one its identity names.
 - `send(toSession:)`, used by `notify`, shares badge, banner, bounce, sound, and identity behavior but
   deliberately skips focus suppression and attributes the request to `.main`.
 - Log every post and suppression at `.notice`, including the focus and banners-off gates (#286).
@@ -26,8 +48,8 @@ paths:
 - Suppress only when `TerminalNotification.shouldDeliver` sees both an active app and the firing surface
   as the key window's first responder. Do not use `AppActions.focusedSurface()`: its active-session
   fallback mistakes sidebar focus for viewing the pane.
-- `TerminalNotification.identity` encodes `"<sessionID>:<paneRole>"`, coalescing repeats and carrying the
-  click target without `userInfo`. `didReceive` activates the app and calls `AppActions.reveal`: select
+- `TerminalNotification.identity` encodes `"<windowID>:<sessionID>:<paneRole>"`, coalescing repeats and
+  carrying the click target without `userInfo`. `didReceive` activates the app and calls `AppActions.reveal`: select
   the session, clear its badge, derive its workspace, focus the pane, and raise its window through
   `WindowRegistry.raise`, which deminiaturizes first. Unknown sessions only activate; a missing split
   falls back to primary. Activation and first-responder changes do not order a background window front.

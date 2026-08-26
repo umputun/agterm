@@ -30,6 +30,24 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// no-op while agterm is the active app, so a bounce only fires for one arriving in the background.
     var dockBounce: DockBounce = .off
 
+    /// The window each moved session landed in, keyed by session. `windowID(forSession:)` answers only for
+    /// open windows, so this is what still tells a move from a plain window close once the destination has
+    /// closed too. Dropped once an open window other than the recorded one owns the session, and swept with
+    /// the banners it exists to retarget, so a session closed after its move leaves nothing behind.
+    private var movedSessionWindows: [UUID: UUID] = [:]
+
+    /// When each banner identity was last submitted, and how many sweeps are still waiting on their
+    /// delivered-set query. An identity is reusable, so a banner posted after a sweep's query can replace
+    /// one that query named; removing by identifier would then take the newer banner. Only an in-flight
+    /// sweep can be spared by a record, so the map holds only what was posted while one was in flight.
+    private var lastPostedAt: [String: Date] = [:]
+    private var sweepsInFlight = 0
+
+    /// Sessions with a banner submission or a sweep still outstanding, counted so concurrent ones nest. No
+    /// delivered set names their banners yet an `add` completion or a click can still ask where the session
+    /// lives, so a sweep must keep their move records however empty its own snapshot looks.
+    private var unsettledSessions: [UUID: Int] = [:]
+
     /// Name of the system sound attached to a delivered notification (the Notifications settings picker,
     /// default nil = silent, set by `SettingsModel`). Attached as `UNNotificationSound` on the banner content,
     /// NOT played directly, so it follows the banner: gated by `bannersEnabled` and the macOS notification
@@ -55,7 +73,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         guard let session = surface.session else { return }
         let pane = paneRole(of: surface, in: session)
         // the firing surface is always in an open window at fire time, so its window id is known.
-        guard let windowID = library?.windowID(forSession: session.id) else {
+        guard let windowID = openWindowID(forSession: session.id) else {
             logger.notice("notify: no open window owns session \(session.id, privacy: .public); dropping")
             return
         }
@@ -89,9 +107,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         // the request identifier is the identity (`<windowID>:<sessionID>:<pane>`): it coalesces repeats from
         // the same pane and carries the target a click decodes.
         let identity = TerminalNotification.identity(windowID: windowID, sessionID: session.id, pane: pane)
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identity, content: content, trigger: nil)) { error in
-            if let error { logger.error("add failed: \(error.localizedDescription, privacy: .public)") }
-        }
+        post(identity: identity, content: content, sessionID: session.id)
     }
 
     /// Post a desktop notification for a session via the control `notify` command rather than a terminal OSC.
@@ -100,7 +116,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// nothing sent, when no open window owns the session (no click-reveal identity to build).
     @discardableResult
     func send(toSession session: Session, title: String, body: String) -> Bool {
-        guard let windowID = library?.windowID(forSession: session.id) else { return false }
+        guard let windowID = openWindowID(forSession: session.id) else { return false }
         guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
             forSession: session.id, title: title, body: body
         ) else { return false }
@@ -119,21 +135,132 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         content.body = body
         content.sound = notificationSound
         let identity = TerminalNotification.identity(windowID: windowID, sessionID: session.id, pane: .main)
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identity, content: content, trigger: nil)) { error in
-            if let error { logger.error("send failed: \(error.localizedDescription, privacy: .public)") }
-        }
+        post(identity: identity, content: content, sessionID: session.id)
         return true
     }
 
-    /// Remove a session's delivered banners from Notification Center on focus, so one you navigated to doesn't
-    /// linger. Removes every pane's identifier. No-op when the session's window isn't open.
-    func clearDelivered(sessionID: UUID) {
-        guard let windowID = library?.windowID(forSession: sessionID) else {
-            logger.debug("clearDelivered: no open window owns session \(sessionID, privacy: .public); nothing to clear")
+    /// Submit the banner request, then retire it if the session changed windows while the add was in flight.
+    /// `retireBanners` on a move only sees what is already delivered, so a request submitted a beat earlier
+    /// would survive it and send a click to the window the session just left.
+    private func post(identity: String, content: UNNotificationContent, sessionID: UUID) {
+        // a sweep starting later has a cutoff past this post, so with none in flight no record can spare
+        // anything: drop them here rather than let notification traffic alone grow the map.
+        if sweepsInFlight == 0 { lastPostedAt.removeAll() }
+        lastPostedAt[identity] = Date()
+        beginUnsettled(sessionID)
+        let request = UNNotificationRequest(identifier: identity, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            DispatchQueue.main.async {
+                NotificationManager.shared.finishPost(identity: identity, sessionID: sessionID, error: error)
+            }
+        }
+    }
+
+    /// Release the submission's hold, then retire the banner if the session changed windows while the add
+    /// was in flight.
+    private func finishPost(identity: String, sessionID: UUID, error: (any Error)?) {
+        endUnsettled(sessionID)
+        if let error {
+            logger.error("banner add failed: \(error.localizedDescription, privacy: .public)")
             return
         }
-        let identifiers = PaneRole.allCases.map { TerminalNotification.identity(windowID: windowID, sessionID: sessionID, pane: $0) }
-        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+        let current = currentWindowID(forSession: sessionID)
+        guard TerminalNotification.isStale(identity: identity, currentWindowID: current) else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: [identity])
+        center.removePendingNotificationRequests(withIdentifiers: [identity])
+    }
+
+    private func beginUnsettled(_ sessionID: UUID) {
+        unsettledSessions[sessionID, default: 0] += 1
+    }
+
+    private func endUnsettled(_ sessionID: UUID) {
+        guard let count = unsettledSessions[sessionID] else { return }
+        if count > 1 { unsettledSessions[sessionID] = count - 1 } else { unsettledSessions.removeValue(forKey: sessionID) }
+    }
+
+    /// Retire the moved session's banners that predate the move: they carry the SOURCE window's identity, so a
+    /// click would reopen the window the session just left. Recording the destination lets an `add` still in
+    /// flight, a later delivery, and a click all retarget the session even after that destination closes.
+    func retireBanners(forMovedSession sessionID: UUID, destinationWindowID: UUID) {
+        movedSessionWindows[sessionID] = destinationWindowID
+        removeDelivered(sessionID: sessionID, staleRelativeTo: destinationWindowID)
+    }
+
+    /// The open window owning a session, and the one place a stale move record is dropped: an open owner
+    /// other than the recorded destination means the session reached it without a move (Open Recent,
+    /// restore). Every caller that observes an owner comes through here, so the record goes while a window
+    /// still contradicts it rather than once both have closed and only the record answers.
+    private func openWindowID(forSession sessionID: UUID) -> UUID? {
+        guard let open = library?.windowID(forSession: sessionID) else { return nil }
+        if movedSessionWindows[sessionID] != open { movedSessionWindows.removeValue(forKey: sessionID) }
+        return open
+    }
+
+    /// The window hosting a session now: its open owner, else the window it was last moved into. Nil when
+    /// neither answers — a session whose window merely closed, whose banner still reopens that window.
+    private func currentWindowID(forSession sessionID: UUID) -> UUID? {
+        guard let open = openWindowID(forSession: sessionID) else {
+            // the recorded destination is open yet no longer holds the session, so the session left it by a
+            // route that never records one (closed, reopened elsewhere): the record is answering for a
+            // window it no longer knows, and nil — "cannot tell" — is the honest answer.
+            if let recorded = movedSessionWindows[sessionID], library?.isOpen(recorded) == true {
+                movedSessionWindows.removeValue(forKey: sessionID)
+                return nil
+            }
+            return movedSessionWindows[sessionID]
+        }
+        return open
+    }
+
+    /// Remove a session's delivered banners from Notification Center on focus, so one you navigated to doesn't
+    /// linger.
+    func clearDelivered(sessionID: UUID) {
+        removeDelivered(sessionID: sessionID, staleRelativeTo: nil)
+    }
+
+    /// Remove a session's delivered banners, matched by session id rather than by rebuilding identifiers from
+    /// the current window: a cross-window move leaves banners keyed to the SOURCE window, which the
+    /// destination's identifiers would never match. `staleRelativeTo` spares the ones that window still owns,
+    /// and the `cutoff` everything delivered after this sweep started; `TerminalNotification.shouldSweep`
+    /// owns both rules.
+    private func removeDelivered(sessionID: UUID, staleRelativeTo windowID: UUID?) {
+        let cutoff = Date()
+        sweepsInFlight += 1
+        beginUnsettled(sessionID)
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let entries = delivered.map { (identity: $0.request.identifier, deliveredAt: $0.date) }
+            DispatchQueue.main.async {
+                let manager = NotificationManager.shared
+                let identifiers = manager.sweepable(entries, sessionID: sessionID, staleRelativeTo: windowID,
+                                                    cutoff: cutoff)
+                guard !identifiers.isEmpty else { return }
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+            }
+        }
+    }
+
+    /// The delivered banners this sweep may take, judged against `lastPostedAt` on the main actor so a
+    /// banner posted since the query cannot be removed by the identifier it reused. Also the move records'
+    /// only garbage collection — the delivered set plus the unsettled sessions is what says which are still
+    /// reachable. Ends the sweep's in-flight window: with none left, no record can spare anything again.
+    private func sweepable(_ delivered: [(identity: String, deliveredAt: Date)], sessionID: UUID,
+                           staleRelativeTo windowID: UUID?, cutoff: Date) -> [String] {
+        defer {
+            endUnsettled(sessionID)
+            sweepsInFlight -= 1
+            if sweepsInFlight == 0 { lastPostedAt.removeAll() }
+        }
+        movedSessionWindows = TerminalNotification.retainedMoveRecords(
+            movedSessionWindows, delivered: delivered.map(\.identity), unsettled: Set(unsettledSessions.keys)
+        )
+        return delivered.map {
+            TerminalNotification.DeliveredBanner(identity: $0.identity, deliveredAt: $0.deliveredAt,
+                                                 lastPostedAt: lastPostedAt[$0.identity])
+        }.filter {
+            TerminalNotification.shouldSweep($0, sessionID: sessionID, staleRelativeTo: windowID, cutoff: cutoff)
+        }.map(\.identity)
     }
 
     /// Post a failure banner for a custom command that exited non-zero or failed to spawn. Not tied to a
@@ -210,8 +337,19 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// Present banners, with their attached sound, even while agterm is active — the focused-pane case is
     /// dropped before delivery. Without `.sound` a foreground banner is silent, so a session you are NOT
     /// looking at would only ding while backgrounded.
-    func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification,
+    func userNotificationCenter(_: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // delivery lands after `add` reports success, so a banner can arrive once its session already moved:
+        // drop it here rather than send a click to the window it names.
+        let identifier = notification.request.identifier
+        let current = TerminalNotification.parseIdentity(identifier).flatMap { currentWindowID(forSession: $0.sessionID) }
+        if TerminalNotification.isStale(identity: identifier, currentWindowID: current) {
+            completionHandler([])
+            DispatchQueue.main.async {
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+            }
+            return
+        }
         completionHandler([.banner, .list, .sound])
     }
 
@@ -222,6 +360,9 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         defer { completionHandler() }
         NSApp.activate(ignoringOtherApps: true)
         guard let target = TerminalNotification.parseIdentity(response.notification.request.identifier) else { return }
-        actions?.reveal(windowID: target.windowID, sessionID: target.sessionID, pane: target.pane)
+        // a banner delivered while agterm was in the background misses `willPresent`, so it can still name the
+        // window a moved session left: click through to wherever that session lives now.
+        let windowID = currentWindowID(forSession: target.sessionID) ?? target.windowID
+        actions?.reveal(windowID: windowID, sessionID: target.sessionID, pane: target.pane)
     }
 }
