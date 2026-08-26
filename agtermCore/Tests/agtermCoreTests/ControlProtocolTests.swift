@@ -585,6 +585,40 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.flagged == true)
     }
 
+    @Test func treeRoundTripsWithOwnershipIds() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         windowId: "w-1", workspaceId: "ws-1")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "ws-1", name: "work", active: true, sessions: [session])],
+            windowId: "w-1")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.windowId == "w-1")
+        let node = try #require(decoded.result?.tree?.workspaces.first?.sessions.first)
+        #expect(node.windowId == "w-1")
+        #expect(node.workspaceId == "ws-1")
+    }
+
+    @Test func treeOmitsOwnershipIdsWhenUnset() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "ws-1", name: "work", active: true,
+                                                                 sessions: [session])])
+        let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
+        #expect(!json.contains("windowId"))
+        #expect(!json.contains("workspaceId"))
+    }
+
+    @Test func treeDecodesLegacyPayloadWithoutOwnershipIds() throws {
+        let session = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"#
+            + #""overlay":false,"scratch":false,"flagged":false}"#
+        let json = #"{"workspaces":[{"id":"ws-1","name":"work","active":true,"sessions":["# + session + "]}]}"
+        let tree = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(tree.windowId == nil)
+        let node = try #require(tree.workspaces.first?.sessions.first)
+        #expect(node.windowId == nil)
+        #expect(node.workspaceId == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithTitle() throws {
         let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", title: "user@web1: ~",
                                          active: true, split: false)

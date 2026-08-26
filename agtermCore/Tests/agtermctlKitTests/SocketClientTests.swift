@@ -814,6 +814,24 @@ struct SocketClientTests {
         #expect(lines[1] == "  * shell (split)  [s1]  /tmp")
     }
 
+    @Test func formatTreeHeadsTheListingWithTheProjectedWindow() {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         windowId: "w-1", workspaceId: "w1")
+        let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
+        let tree = ControlTree(workspaces: [workspace], windowId: "w-1")
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines == ["window [w-1]", "* work  [w1]", "  * shell  [s1]  /tmp"])
+    }
+
+    @Test func formatTreeDropsTheHeaderWithoutAWindow() {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
+        let tree = ControlTree(workspaces: [workspace])
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        #expect(out.split(separator: "\n").first == "* work  [w1]")
+    }
+
     @Test func formatTreeTagsHiddenSplit() {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
                                          hasSplit: true)

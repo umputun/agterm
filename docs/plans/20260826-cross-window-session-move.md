@@ -222,18 +222,26 @@ flag the locked "`--select` opts into selecting it in the destination" decision 
 
 ### Task 6: Publish window/workspace ownership on the session node
 
-- [ ] add optional `windowId` and `workspaceId` to `ControlSessionNode` in `ControlProtocol.swift`
-- [ ] add optional `windowId` to `ControlTree` — the tree is already a single-window projection and never
+- [x] add optional `windowId` and `workspaceId` to `ControlSessionNode` in `ControlProtocol.swift`
+- [x] add optional `windowId` to `ControlTree` — the tree is already a single-window projection and never
       said which one
-- [ ] add a `windowID: String?` parameter to `AppStore.controlTree` (`AppStore.swift:257`) and stamp it on
+- [x] add a `windowID: String?` parameter to `AppStore.controlTree` (`AppStore.swift:257`) and stamp it on
       every session node; `workspaceId` comes from the workspace already being iterated, so no new lookup
-- [ ] pass it from `ControlServer.buildTree(in:)` via `library.windowID(for: store)`
-- [ ] render both in `agtermctl tree`'s human output only where it earns the line (window id on the tree
+      (the projection moved to `AppStore+ControlTree.swift`: `AppStore.swift` was already at the 1000-line
+      limit, and the node types moved to `ControlProtocol+Nodes.swift` for the same reason)
+- [x] pass it from `ControlServer.buildTree(in:)` via `library.windowID(for: store)`
+- [x] render both in `agtermctl tree`'s human output only where it earns the line (window id on the tree
       header, not repeated per row)
-- [ ] write tests that `controlTree` stamps `windowId`/`workspaceId` on every node and that a
+- [x] write tests that `controlTree` stamps `windowId`/`workspaceId` on every node and that a
       host-produced tree with no window id omits them
-- [ ] write decode tests proving a payload without the new fields still decodes (legacy server skew)
-- [ ] run `cd agtermCore && swift test` - must pass before task 7
+- [x] write decode tests proving a payload without the new fields still decodes (legacy server skew)
+- [x] run `cd agtermCore && swift test` - must pass before task 7
+
+➕ `workspaceId` is present exactly when `windowId` is — one all-or-nothing ownership stamp, so a
+host-free projection never answers half of "who owns this session".
+
+⚠️ task 5 left `agtermctlKit/SessionCommands.swift` 7 lines over the 800-line `type_body_length` limit;
+`session overlay` moved to `SessionCommands+Overlay.swift` here so `make lint` is clean again.
 
 ### Task 7: Add tree --all-windows
 

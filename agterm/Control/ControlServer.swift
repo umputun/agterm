@@ -641,7 +641,8 @@ final class ControlServer {
                 case .untouched: return "untouched"
                 }
             },
-            app: identity
+            app: identity,
+            windowID: windowID?.uuidString
         )
     }
 
