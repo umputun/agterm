@@ -97,6 +97,19 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case custom
     }
 
+    /// The terminal cursor shape, carrying ghostty's own `cursor-style` values as raw names. There is no
+    /// case for nil, which is a state of its own: it emits nothing, leaving whatever `cursor-style` the
+    /// config chain resolves — agterm's bundled block, or the user's own `ghostty.conf` — in charge.
+    ///
+    /// ghostty's `block_hollow` is deliberately absent. An unfocused surface is already marked by drawing
+    /// its cursor hollow, so a hollow block chosen as the RESTING shape makes focused and unfocused panes
+    /// identical and costs that signal. It stays reachable from `ghostty.conf` for anyone who wants it.
+    public enum CursorStyle: String, CaseIterable, Sendable {
+        case block
+        case bar
+        case underline
+    }
+
     /// The user-idle timeout after which the window's selection auto-follows to the oldest blocked
     /// session. `off` is both the default and the nil case, so picking it clears the stored field.
     public enum AutoFollowAttention: String, CaseIterable, Sendable {
@@ -163,6 +176,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var darkTheme: String?
     /// Whether the terminal follows the macOS Light/Dark appearance; nil/false = off, emitting one `theme`.
     public var followSystemAppearance: Bool?
+    /// The cursor shape, a `CursorStyle` raw value resolved by `effectiveCursorStyle`; nil emits nothing
+    /// and leaves the config chain deciding. A picked shape wins over a `cursor-style` in the user's own
+    /// `ghostty.conf`, because the settings conf loads last — that IS the difference between nil and an
+    /// explicit `.block`, which otherwise render the same cursor.
+    public var cursorStyle: String?
+    /// Whether the cursor blinks, mirroring ghostty's own `?bool` for the key: nil emits nothing and is a
+    /// third state rather than "off" — the cursor blinks AND DEC mode 12 can still change it. Either
+    /// explicit value takes DEC mode 12 away (`DECSCUSR` still wins over both), so all three are named in
+    /// the picker instead of collapsing to a toggle that could not say "always blink".
+    public var cursorBlink: Bool?
     /// Window background opacity in 0...1, nil = opaque. Composited at the AppKit window level, NOT by the
     /// ghostty renderer, which `ghosttyConfigLines()` pins fully transparent below 1.
     public var backgroundOpacity: Double?
@@ -273,6 +296,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
+                cursorStyle: String? = nil, cursorBlink: Bool? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 toolbarMode: String? = nil, compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
@@ -297,6 +321,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.theme = theme
         self.darkTheme = darkTheme
         self.followSystemAppearance = followSystemAppearance
+        self.cursorStyle = cursorStyle
+        self.cursorBlink = cursorBlink
         self.backgroundOpacity = backgroundOpacity
         self.backgroundBlur = backgroundBlur
         self.notificationsEnabled = notificationsEnabled
@@ -355,6 +381,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// single read point.
     public var effectiveDockBounce: DockBounce {
         dockBounce.flatMap(DockBounce.init(rawValue:)) ?? .off
+    }
+
+    /// The resolved cursor shape, or nil when unset OR when the stored raw name is one this version does
+    /// not offer — a future shape, or a `block_hollow` written by hand. The single read point, so an
+    /// unoffered value falls back to the config chain rather than being emitted from here.
+    public var effectiveCursorStyle: CursorStyle? {
+        cursorStyle.flatMap(CursorStyle.init(rawValue:))
     }
 
     /// The resolved glyph silhouette for one agent status: the configured raw name when a KNOWN
@@ -466,6 +499,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
         } else if let single = light ?? dark {
             lines.append("theme = \(single)")
         }
+        // emitted only when picked, so everyone who never opens the picker keeps the bundled block — and
+        // their own ghostty.conf `cursor-style` — exactly as before.
+        if let cursorStyle = effectiveCursorStyle { lines.append("cursor-style = \(cursorStyle.rawValue)") }
+        // both explicit values are emitted; nil is the third state, which emits nothing and leaves DEC
+        // mode 12 able to drive the blink.
+        if let cursorBlink { lines.append("cursor-style-blink = \(cursorBlink)") }
         // a translucent window composites its tint at the AppKit level, so the renderer must draw fully
         // transparent or the surface and the window stack two tints. at full opacity (or unset) these are
         // omitted and ghostty paints its own background.

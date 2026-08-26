@@ -6,7 +6,7 @@ import SwiftUI
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "SettingsView")
 
 /// The Settings window (Cmd+,): six tabs — General (mouse, sessions, ghostty config), Appearance
-/// (font/theme + window translucency + mute), Interface (per-element title-bar and sidebar chrome
+/// (font/theme/cursor + window translucency + mute), Interface (per-element title-bar and sidebar chrome
 /// visibility), Notifications (banner / badge / attention toggles), Agent Status (sidebar glyph colors and
 /// shapes + blocked sound + auto-follow), and Key Mapping (config directory + keymap diagnostics + Reload).
 /// Throughout, a control's binding maps its DEFAULT value back to nil so `settings.json` stays minimal.
@@ -200,7 +200,7 @@ private struct GeneralSettingsView: View {
     }
 }
 
-/// Appearance tab: Terminal (font family, size, theme) and Window (toolbar mode, background opacity + blur,
+/// Appearance tab: Terminal (font family, size, cursor, theme) and Window (toolbar mode, background opacity + blur,
 /// sidebar tint + font size, pane/backdrop mute), each persisting and live-applying via `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
@@ -221,6 +221,26 @@ private struct AppearanceSettingsView: View {
                     Text("Default font size: \(Int(model.settings.fontSize ?? 13))")
                 }
                 .accessibilityIdentifier("settings-font-size")
+
+                // "From config" is a state, not a synonym for Block: it emits no `cursor-style`, so the
+                // config chain still picks the shape, where Block writes an override that beats it.
+                Picker("Cursor", selection: cursorStyle) {
+                    Text("From config").tag(AppSettings.CursorStyle?.none)
+                    Text("Block").tag(AppSettings.CursorStyle?.some(.block))
+                    Text("Bar").tag(AppSettings.CursorStyle?.some(.bar))
+                    Text("Underline").tag(AppSettings.CursorStyle?.some(.underline))
+                }
+                .accessibilityIdentifier("settings-cursor-style")
+                SettingHint("A picked shape overrides cursor-style in ghostty.conf; From config leaves it in charge.")
+
+                // three rows, not a toggle: Program controlled emits nothing, which is the only state that
+                // leaves DEC mode 12 able to drive the blink.
+                Picker("Cursor blink", selection: cursorBlink) {
+                    Text("Program controlled").tag(Bool?.none)
+                    Text("Blink by default").tag(Bool?.some(true))
+                    Text("Steady by default").tag(Bool?.some(false))
+                }
+                .accessibilityIdentifier("settings-cursor-blink")
 
                 // the CURRENT appearance's theme; while following, the on-screen side. The "default ghostty"
                 // row shows only when NOT following — a dual conditional needs two named themes.
@@ -317,6 +337,17 @@ private struct AppearanceSettingsView: View {
 
     private var fontSize: Binding<Double> {
         Binding(get: { model.settings.fontSize ?? 13 }, set: { model.setFontSize($0) })
+    }
+
+    /// nil is the From config row; a shape this version does not offer (a future one, or a hand-written
+    /// `block_hollow`) resolves to nil too, so the picker shows From config rather than a blank selection.
+    private var cursorStyle: Binding<AppSettings.CursorStyle?> {
+        Binding(get: { model.settings.effectiveCursorStyle }, set: { model.setCursorStyle($0) })
+    }
+
+    /// Passed through as ghostty's own three states; nil is Program controlled (see `AppSettings.cursorBlink`).
+    private var cursorBlink: Binding<Bool?> {
+        Binding(get: { model.settings.cursorBlink }, set: { model.setCursorBlink($0) })
     }
 
     /// The sidebar row-text size.

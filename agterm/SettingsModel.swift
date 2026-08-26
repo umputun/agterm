@@ -204,6 +204,11 @@ final class SettingsModel {
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
     func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
+    // ghostty keys (cursor-style / cursor-style-blink). A reload re-applies both to the panes already
+    // open, though only while a pane's cursor still follows the configured default: a program that set its
+    // own shape with DECSCUSR keeps that until it resets.
+    func setCursorStyle(_ value: AppSettings.CursorStyle?) { settings.cursorStyle = value?.rawValue; persistAndApply() }
+    func setCursorBlink(_ value: Bool?) { settings.cursorBlink = value; persistAndApply() }
     // sidebar behavior, not a ghostty key; the Coordinator reads the mirror on the next click.
     func setWorkspaceRowClickExpands(_ value: Bool?) { settings.workspaceRowClickExpands = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
