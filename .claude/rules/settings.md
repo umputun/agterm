@@ -126,14 +126,23 @@ paths:
   libghostty diagnostics across all sources, clear all session zoom, post appearance change, and notify
   non-zero diagnostics. A config-directory change reloads both co-located files. Launch also reports
   cached diagnostics.
-- **Restore running commands is opt-in, and both capture and replay are exit-scoped.**
-  `AppDelegate.captureForegroundCommands` runs at two points: `applicationWillTerminate` before
-  `saveAllOpen()`, and the LAST window's `willClose` before its surface teardown, which precedes
+- **Restore running commands is opt-in. Replay is launch-scoped; capture runs at two exits and on demand.**
+  `AppDelegate.captureForegroundCommands` runs at three points: `applicationWillTerminate` before
+  `saveAllOpen()`, the LAST window's `willClose` before its surface teardown, which precedes
   `applicationWillTerminate` and is therefore the only point where a close-the-last-window exit's
-  commands are still readable.
-  Guarded by `openIDs() == [windowID]`, skipped under `isTerminating`.
-  A NON-last close captures nothing: a launch restore can't tell that window's file from one open at
-  exit, so its argv could replay via the never-windowless reopen fallback.
+  commands are still readable, and `restore.capture` on demand, which exists for the exit that reaches
+  neither: a force quit, a crash, a hard reset, a power loss. A system shutdown/restart/logout is NOT in
+  that set — since #447 it reaches `applicationWillTerminate` like any quit — so do not re-motivate the
+  command with an OS update. The on-demand arm changes nothing else: it fills the same
+  slots, persists through the same `saveAllOpen`, and replay stays launch-only and one-shot.
+  All three arms are gated on the setting, and only the on-demand one SAYS so: it refuses while the
+  setting is off rather than capturing what nothing would replay. Deliberately unlike a `session.restore`
+  pin, which succeeds with an explanatory note in the same state, because a pin outlives the toggle and
+  a capture only goes stale.
+  The `willClose` arm alone is guarded by `openIDs() == [windowID]` and skipped under `isTerminating`.
+  A NON-last close captures nothing AND clears both persisted slots plus the pending pair: a launch
+  restore can't tell that window's file from one open at exit, so its argv could replay via the
+  never-windowless reopen fallback, and on demand a capture can now have written argv there mid-run.
   Argv comes from `ghostty_surface_foreground_pid`, `sysctl(KERN_PROCARGS2)`, and host-free parsing.
   Capture no hidden split.
   Strip login `-` before shell recognition; a known shell with only flags is idle and omitted, while

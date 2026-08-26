@@ -153,6 +153,20 @@ struct WindowAccessor: NSViewRepresentable {
                         if !library.isTerminating, library.openIDs() == [windowID],
                            GhosttyApp.shared.restoreRunningCommand {
                             AppDelegate.captureForegroundCommands(sessions: store.workspaces.flatMap(\.sessions))
+                        } else if !library.isTerminating {
+                            // a NON-last close must leave no argv in this window's file: a launch restore cannot
+                            // tell it from a file open at exit, so the never-windowless reopen fallback could
+                            // replay it. Before `restore.capture` the live field was always nil mid-run and the
+                            // invariant held by construction; now it has to be enforced here.
+                            // Termination belongs to NEITHER arm: `applicationWillTerminate` captured over live
+                            // surfaces and persisted already, then `closeWindow` no-ops under the flag so this
+                            // runs with the store still loaded. Clearing here writes nulls over that capture and
+                            // every ⌘Q comes back a plain shell, `restore.capture` callers included.
+                            for session in store.workspaces.flatMap(\.sessions) {
+                                session.foregroundCommand = nil
+                                session.splitForegroundCommand = nil
+                                session.clearPendingForegroundCommands()
+                            }
                         }
                         store.save()
                     }

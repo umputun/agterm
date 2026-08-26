@@ -333,23 +333,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Capture the given panes' foreground commands (main + split) into their `Session` fields for the
     /// snapshot save. `ForegroundProcess` returns nil for a pane at its shell prompt, so plain shells stay
-    /// plain. Two callers on different lifecycle edges: `applicationWillTerminate` passes every open
-    /// session, `WindowAccessor`'s `willClose` passes one closing window's — on a close-the-last-window
-    /// exit the quit-time capture runs after that teardown, too late to see any surface. Both sites and
-    /// the launch-only replay gate are stated in `.claude/rules/settings.md`.
+    /// plain. Three callers on different edges: `applicationWillTerminate` passes every open session,
+    /// `WindowAccessor`'s `willClose` passes one closing window's — on a close-the-last-window exit the
+    /// quit-time capture runs after that teardown, too late to see any surface — and `restore.capture`
+    /// passes every open session on demand. All three sites and the launch-only replay gate are stated in
+    /// `.claude/rules/settings.md`.
+    ///
+    /// Returns how many slots it actually WROTE a command into, which is what an on-demand caller reports.
+    /// Counting the slots afterwards instead would include a value this call never touched: the split slot
+    /// of a session whose split is hidden or gone still holds whatever an earlier capture put there.
     @MainActor
-    static func captureForegroundCommands(sessions: [Session]) {
+    @discardableResult
+    static func captureForegroundCommands(sessions: [Session]) -> Int {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
+        var captured = 0
         for session in sessions {
             if let view = session.surface as? GhosttySurfaceView {
                 session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
+                if session.foregroundCommand != nil { captured += 1 }
             }
             // only a SHOWN split is recreated on restore, so gate on isSplit — a hidden split's captured
-            // command would sit stale until the next ⌘D fires it.
+            // command would sit stale until the next ⌘D fires it. Clearing it in the else keeps that stale
+            // value out of the snapshot now that a capture can run more than once per launch.
             if session.isSplit, let split = session.splitSurface as? GhosttySurfaceView {
                 session.splitForegroundCommand = ForegroundProcess.command(for: split, shellBasename: shellBasename)
+                if session.splitForegroundCommand != nil { captured += 1 }
+            } else {
+                session.splitForegroundCommand = nil
             }
         }
+        return captured
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
