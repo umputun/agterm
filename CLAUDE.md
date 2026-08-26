@@ -178,6 +178,8 @@ C-boundary concurrency before changing the bridge.
 - A state-setting command must expose its result on `ControlSessionNode`, window node, or tree top level.
   Examples include background, unseen, status and overrides, flag, split focus/ratio, overlay size,
   sidebar state/mode, workspace focus, quick visibility, geometry, fullscreen, zoom, and minimize.
+  A deliberate exemption is recorded where the command's own contract lives, never left implicit; the
+  captured restore slots are the one today, in `control-api.md`'s Restore section.
 - Event arguments must appear in `EventFormatter.human`, not only JSON payloads.
 - Control API, keymap, and model changes also update bundled
   `plugins/agterm/skills/agterm/`, the sole source for installed Claude/Codex copies.

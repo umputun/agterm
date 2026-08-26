@@ -1196,8 +1196,8 @@ would keep waiting for the setting. A capture is also only as fresh as its last 
 has finished since still re-runs after a crash, which `restore clear` drops wholesale and
 `restore-denylist.conf` prevents per program. Typed at a prompt the command records ITSELF, since while it
 runs it is that pane's foreground process and the pane comes back running `agtermctl restore capture` (which
-prints its count and captures itself again). Bind it or schedule it, or follow an interactive run with
-`restore clear`.
+prints its count and captures itself again). Bind it or schedule it rather than running it by hand:
+`restore clear` is app-global, so it is no per-pane undo.
 
 `agtermctl restore clear` — clear every session's saved CAPTURED foreground command and persist, so the
 next restart restores plain shells for those panes (not whatever each pane was running). It does NOT clear
@@ -1205,7 +1205,9 @@ a `session.new --command` session's own command (`initialCommand`, the durable c
 still re-runs on restore when the setting is on. This is the counterpart to the
 opt-in **Restore running commands on restart** setting: that setting captures each pane's foreground
 command at a clean quit and re-runs it on relaunch; `restore clear` wipes those saved commands now
-(also closing the force-quit re-fire window). App-global (no `--window`), prints `ok`.
+(also closing the force-quit re-fire window). App-global (no `--window`), prints `ok`. Like `restore capture`
+it acknowledges only a save that landed: if any window's write fails it reports that at least one window
+failed to save, since those captures are still on disk and nothing reads those slots back.
 
 Which programs are NOT re-run is controlled by `restore-denylist.conf` in the config directory (one
 command name per line, seeded with the terminal multiplexers `tmux`/`screen`/`zellij`). It is a plain

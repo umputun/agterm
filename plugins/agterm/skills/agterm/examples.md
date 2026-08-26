@@ -32,6 +32,9 @@ restores like one. It needs the setting on, and answers with the number of panes
 agtermctl restore capture
 ```
 
+Use a keybind or a scheduled job rather than typing it at a prompt: run by hand it records ITSELF, being
+that pane's foreground process while it runs, and `restore clear` is app-global so it is no per-pane undo.
+
 ## Pin what a pane restores (per-session override)
 
 `session restore` pins a shell line that a pane re-runs on the NEXT launch, overriding the captured

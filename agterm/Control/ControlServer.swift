@@ -349,10 +349,9 @@ final class ControlServer {
         do {
             request = try JSONDecoder().decode(ControlRequest.self, from: line)
         } catch {
-            // the decode CONTEXT over `localizedDescription`: the localized string is the generic "data
-            // couldn't be read", while the context names the offending value — for an unknown `cmd` that is
-            // the difference between a mystery and "Cannot initialize Command from invalid String value
-            // restore.capture", which tells a caller its agterm is older than its agtermctl.
+            // the decode CONTEXT over `localizedDescription`, which is the generic "data couldn't be read":
+            // the context names the rejected `cmd`, telling a caller its agterm is older than its agtermctl,
+            // and only for a command added after THIS code shipped, since an older server returns the generic.
             let detail = (error as? DecodingError).map(Self.decodeDetail) ?? error.localizedDescription
             writeResponse(conn, ControlResponse(ok: false, error: "invalid request: \(detail)"))
             return
@@ -514,7 +513,12 @@ final class ControlServer {
             session.splitForegroundCommand = nil
             session.clearPendingForegroundCommands()
         }
-        library.saveAllOpen()
+        // the ack waits on the write for the same reason `restore.capture`'s does: the save IS the clear, and
+        // the slots are not readable, so an ok over a failed write leaves a stale capture nothing can detect.
+        guard library.saveAllOpenChecked() else {
+            return ControlResponse(ok: false, error: "cleared every open pane but at least one window's save "
+                + "failed; those windows keep their captured commands on disk until they save successfully")
+        }
         return ControlResponse(ok: true)
     }
 
@@ -526,10 +530,8 @@ final class ControlServer {
     /// App-global like `clearRestoreCommands`, its inverse over the same slots: no `--window` selector, every
     /// open window. Consumption stays one-shot and launch-only, so nothing here changes replay.
     ///
-    /// Gated on the same setting as the two exit-time captures, and refuses rather than answering ok: with the
-    /// setting off a capture is write-only — the launch replay reads the setting too, so nothing would run —
-    /// and a scheduled caller needs a non-zero exit to notice. It also keeps "the setting is off" meaning
-    /// "argv never reaches the disk", which a silent capture would break for a user who opted out.
+    /// Gated on the same setting as the two exit-time captures, and REFUSES rather than answering ok the way
+    /// `session.restore` does. Contract and reasoning in `.claude/rules/settings.md`.
     func captureRestoreCommands() -> ControlResponse {
         guard settingsModel.settings.restoreRunningCommand == true else {
             return ControlResponse(ok: false,
@@ -541,7 +543,8 @@ final class ControlServer {
         // the assignment: `saveAllOpen` swallows the result, `saveAllOpenChecked` reports it.
         guard library.saveAllOpenChecked() else {
             return ControlResponse(ok: false, error: "captured \(captured) pane\(captured == 1 ? "" : "s") "
-                + "but at least one window's save failed; the argv stays in memory and the next save writes it")
+                + "but at least one window's save failed; failed windows keep their argv in memory until they "
+                + "save successfully")
         }
         var result = ControlResult(count: captured)
         result.text = "captured \(captured) pane\(captured == 1 ? "" : "s")"

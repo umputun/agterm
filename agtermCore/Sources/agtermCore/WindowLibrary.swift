@@ -535,11 +535,8 @@ public final class WindowLibrary {
     }
 
     /// `saveAllOpen()` that REPORTS whether every window's write landed, for a caller whose acknowledgement
-    /// must not outrun the disk. `restore.capture` is the one today: an `ok` carrying a pane count claims the
-    /// argv is on disk, and a swallowed failure would promise a restore that cannot happen. Every store is
-    /// attempted before the verdict, so one unwritable window does not skip the others, and `saveAllOpen()`
-    /// is this with the result discarded so the two cannot drift — the same shape `AppStore.saveChecked`
-    /// keeps one layer down.
+    /// must not outrun the disk. Every store is attempted before the verdict, so one unwritable window does
+    /// not skip the others. Same shape as `AppStore.saveChecked` one layer down.
     @discardableResult
     public func saveAllOpenChecked() -> Bool {
         var allLanded = true

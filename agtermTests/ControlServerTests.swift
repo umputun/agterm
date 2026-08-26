@@ -174,6 +174,21 @@ final class ControlServerTests: XCTestCase {
         XCTAssertTrue(connects(to: socketPath))
     }
 
+    /// The defect this pins: answering with the `DecodingError`'s `localizedDescription` says only "the data
+    /// couldn't be read" and never names the `cmd`, which is what tells a caller its agterm is older than its
+    /// agtermctl.
+    func testAnUnknownCommandErrorNamesTheRejectedCmd() {
+        let server = makeServer()
+        server.start()
+        XCTAssertEqual(server.boundSocketPath, socketPath, "precondition: the server should be serving")
+
+        let response = roundTrip(#"{"cmd":"restore.bogus"}"#)
+
+        XCTAssertNotNil(response, "a malformed request should still get a response")
+        XCTAssertTrue(response?.contains("restore.bogus") ?? false,
+                      "the error should name the rejected cmd, got: \(response ?? "nil")")
+    }
+
     private func makeServer() -> ControlServer {
         let library = WindowLibrary(directory: stateDir)
         let server = ControlServer(
@@ -218,6 +233,21 @@ final class ControlServerTests: XCTestCase {
         }
         if !ok { close(fd); return -1 }
         return fd
+    }
+
+    /// One request line in, one response line out. Safe to block this main-actor test on the read: a decode
+    /// failure is answered from `acceptQueue` before `handleConnection` hops to the main actor at all.
+    private func roundTrip(_ line: String) -> String? {
+        let fd = connectFD(to: socketPath)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        let payload = Array((line + "\n").utf8)
+        let written = payload.withUnsafeBufferPointer { Darwin.write(fd, $0.baseAddress, $0.count) }
+        guard written == payload.count else { return nil }
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        let count = buffer.withUnsafeMutableBufferPointer { Darwin.read(fd, $0.baseAddress, $0.count) }
+        guard count > 0 else { return nil }
+        return String(decoding: buffer[0..<count], as: UTF8.self)
     }
 
     private func bindListener(_ fd: Int32, at path: String) -> Bool {

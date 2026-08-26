@@ -180,7 +180,8 @@ paths:
 - `session.new --command` persists durable `initialCommand` and restores through shell-replacing
   `config.command`; fresh creation always runs, restored creation honors the toggle, and captured
   foreground wins. Do not consume `initialCommand`; remove it only when primary exit promotes a split.
-  `restore.clear` and tree foreground fields are the control surface.
+  `restore.capture`, `restore.clear` and tree foreground fields are the control surface; the tree fields
+  report the live process, not the captured slot, which [[control-api]] keeps read-back-free by design.
 - `newSessionDirectory` is raw `home|currentSession|custom`, with fixed custom path. Unknown/blank/missing
   values fall back home. Resolve once from active session's `focusedCwd` for every GUI creation path,
   including a right-clicked workspace; setters save only. Control `session.new --cwd` remains explicit

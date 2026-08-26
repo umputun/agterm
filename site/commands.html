@@ -2657,6 +2657,9 @@
                 It does <em>not</em> clear a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>
                 session's own command — that is the durable creation identity and still re-runs on restore when the setting is on.
                 This is the counterpart to the opt-in <em>Restore running commands on restart</em> setting.
+                Like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">restore capture</span>, it
+                acknowledges only a save that landed: if any window fails to save it returns an error saying so, and those
+                windows keep their captured commands until a later save succeeds.
               </p>
             </div>
           </section>

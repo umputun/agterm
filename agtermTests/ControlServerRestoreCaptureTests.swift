@@ -3,9 +3,10 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for `restore.capture`: the gate on the master setting and the response shape. The argv
-/// read itself needs a live `GhosttySurfaceView`, so a hosted session captures nothing and reports zero —
-/// which is exactly what makes the gate and the reported text testable without driving the UI.
+/// Hosted coverage for `restore.capture` and for the checked save both restore commands acknowledge on: the
+/// gate on the master setting, the response shape, and the failed-write ack. The argv read itself needs a
+/// live `GhosttySurfaceView`, so a hosted session captures nothing and reports zero — which is exactly what
+/// makes the gate and the reported text testable without driving the UI.
 @MainActor
 final class ControlServerRestoreCaptureTests: XCTestCase {
     private var stateDir: URL!
@@ -80,5 +81,39 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
         // renders its own sentence instead of leaning on `count`, whose CLI branch prints "N diagnostic(s)".
         XCTAssertEqual(response.result?.count, 0)
         XCTAssertEqual(response.result?.text, "captured 0 panes")
+    }
+
+    /// The defect this pins: an unchecked save let `restore.clear` answer ok with the captured commands still
+    /// on disk, and the slots are deliberately unreadable, so nothing else could report it.
+    func testClearReportsAFailedSave() throws {
+        let windowsDir = try unwritableWindowsDirectory()
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: windowsDir.path) }
+
+        let response = server.clearRestoreCommands()
+
+        XCTAssertFalse(response.ok, "a clear whose save failed must not answer ok")
+        XCTAssertEqual(response.error?.contains("save failed"), true, "the error should name the failed save")
+    }
+
+    func testCaptureReportsAFailedSave() throws {
+        settingsModel.setRestoreRunningCommand(true)
+        let windowsDir = try unwritableWindowsDirectory()
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: windowsDir.path) }
+
+        let response = server.captureRestoreCommands()
+
+        XCTAssertFalse(response.ok, "a capture whose save failed must not answer ok")
+        XCTAssertEqual(response.error?.contains("save failed"), true, "the error should name the failed save")
+    }
+
+    /// The same lever `WindowLibraryTests.saveAllOpenCheckedReportsAFailedWrite` uses: the atomic write needs
+    /// to create a temp file in the directory, so 0o500 makes it throw.
+    private func unwritableWindowsDirectory() throws -> URL {
+        XCTAssertTrue(library.saveAllOpenChecked(), "precondition: the store should be writable to start")
+        let windowsDir = stateDir.appendingPathComponent("windows")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: windowsDir.path),
+                      "precondition: the first save should have created the windows directory")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: windowsDir.path)
+        return windowsDir
     }
 }

@@ -111,8 +111,10 @@ paths:
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
   return structured errors. Mutations may return `result.id`; trees use `result.tree`.
   A decode failure reports the `DecodingError`'s CONTEXT `debugDescription`, not `localizedDescription`, so
-  the error NAMES the rejected `cmd`. That is the only signal a caller gets that its agterm predates its
-  agtermctl, and the reason a new command needs no version handshake. Read the context, never the error:
+  the error NAMES the rejected `cmd`. A caller that cares preflights with `agtermctl version`; no command
+  adds a version handshake of its own. A server carrying this code names a LATER unknown command, so it
+  diagnoses skew forward — never the newest command against a server that predates it. Read the context,
+  never the error:
   `DecodingError.debugDescription` is macOS 26.4+, so at the 14.0 deployment target `String(describing:)`
   degrades to a reflection dump that hides the sentence inside `DecodingError.Context(...)`.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses
@@ -636,6 +638,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   two differ and for the exits the command exists for.
 - `restore.clear` clears captured main/split foreground commands across open windows and saves immediately.
   It never clears durable `initialCommand`; it is app-global.
+- The captured slots are deliberately NOT a read surface: neither command exposes what is armed, and the
+  tree's `foreground`/`splitForeground` answer from the LIVE process, never from the slot. They read nil for
+  an armed capture whose command has since exited, and nil again in the pre-mount launch gap where the
+  pending slot is armed and no surface exists yet; the opposite pairing, a live command with nothing armed,
+  is the ordinary mid-run state. `result.count` answers for the one call that wrote it and nothing else.
+  BOTH commands therefore acknowledge only a checked save, since an ok over a failed write leaves state no
+  caller can read back. Whether the slots become readable is a decision for `restore.capture` and
+  `restore.clear` together, never bolted onto one of them.
 - `session.restore` pins per-session, per-pane next-launch behavior for discussion #264:
   - nil/unpin/clear uses capture;
   - empty/pinNone/none forces plain shell and suppresses capture plus initial command;

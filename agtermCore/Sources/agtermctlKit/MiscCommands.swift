@@ -66,20 +66,17 @@ struct Restore: ParsableCommand {
             discussion: """
             agterm captures the running commands when it quits, so an exit that never gets there leaves \
             every pane restoring a plain shell: a force quit, a crash, a hard reset, a power loss. This \
-            runs the same capture on demand, app-global across every open window, and prints how many panes \
-            had a command to capture.
-
-            Consumption is unchanged: the next launch arms each captured command once and clears it. Run it \
-            from a scheduled job every so often, or bind it, and an exit nobody was there for restores \
-            like a deliberate quit.
+            runs the same capture on demand, app-global across every open window, and prints how many \
+            panes had a command to capture. Consumption is unchanged: the next launch arms each captured \
+            command once and clears it.
 
             A capture is only as fresh as its last run, so a pager or a build that has finished since still \
             re-runs after a crash. "restore clear" drops every captured command, and restore-denylist.conf \
             in the config directory keeps a named program from re-running at all.
 
             Typed at a prompt it records ITSELF: while it runs it is that pane's foreground process, so that \
-            pane comes back running the capture command. Bind it or run it from a scheduled job, or follow \
-            an interactive one with "restore clear".
+            pane comes back running the capture command. Bind it or run it from a scheduled job rather than \
+            by hand; "restore clear" is app-global, so it is no per-pane undo.
 
             Needs "Restore running commands on restart", which is what replays the capture: with the \
             setting off this captures nothing and fails, saying so.
