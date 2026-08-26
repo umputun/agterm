@@ -303,13 +303,17 @@ struct agtermApp: App {
     /// no factory re-runs in the destination window — without this every callback would keep resolving the
     /// session against the source store, find nothing, and silently no-op (shell exit, overlay teardown and
     /// exit status, unseen/status clears, search, font size).
+    /// Also drops any transient dashboard font override: the source window's sweep runs over its OWN store
+    /// after the session already left it, so nothing else would ever restore the session's real font.
     @MainActor
     static func rebindSurfaces(of session: Session, to store: AppStore, library: WindowLibrary) {
         let sessionID = session.id
         if let view = session.surface as? GhosttySurfaceView {
+            view.dashboardFontOverride = nil
             wirePane(view, store: store, sessionID: sessionID, library: library, persistsFontSize: true)
         }
         if let view = session.splitSurface as? GhosttySurfaceView {
+            view.dashboardFontOverride = nil
             wirePane(view, store: store, sessionID: sessionID, library: library, persistsFontSize: false)
         }
         if let view = session.overlaySurface as? GhosttySurfaceView {
