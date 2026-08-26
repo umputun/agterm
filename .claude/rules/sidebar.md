@@ -38,6 +38,10 @@ paths:
 - The footer provides workspace creation and New Session/Open Directory. Workspace row menus repeat the
   session actions. Hover shows `workspace-add-session` only when `InterfaceElement.workspaceAddSession`
   is enabled.
+- The session row menu carries "Move to Window" beside "Move to": one item per OTHER open window from
+  `WindowLibrary.moveDestinations`, absent entirely when there is none. It reuses `SessionBatchRequest` so a
+  multi-row selection moves as one block, and routes through `AppActions`, not the window-local store,
+  because the move spans two stores. [[windows]] owns what the move itself guarantees.
 - A workspace-row click toggles expansion through the outline action, excluding the disclosure frame.
   Defer by `NSEvent.doubleClickInterval` and cancel on double-click so rename does not flicker through a
   toggle. This click routing is keep-in-sync exempt. `GhosttyApp.workspaceRowClickExpands` (default on)

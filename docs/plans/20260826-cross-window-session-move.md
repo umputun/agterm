@@ -312,18 +312,31 @@ changed files: `AppStore+Transfer` 100%, `AppStore+ControlTree` 100%, `ControlDi
 
 ### Task 10: [Final] Update documentation
 
-- [ ] `.claude/rules/windows.md` — amend the "cross-window session drag is out of scope" line: a MOVE is
+- [x] `.claude/rules/windows.md` — amend the "cross-window session drag is out of scope" line: a MOVE is
       supported and keeps 1:1; DRAG remains out of scope
-- [ ] `.claude/rules/control-api.md` — `session.move` placement intents now include `--to-window`;
+- [x] `.claude/rules/control-api.md` — `session.move` placement intents now include `--to-window`;
       document `tree --all-windows` and the new node fields; note that `--window` stays a search scope
-- [ ] `.claude/rules/sidebar.md` — the row menu's new submenu
-- [ ] `plugins/agterm/skills/agterm/` (`SKILL.md`, `reference.md`, `examples.md`) — the sole source for
+- [x] `.claude/rules/sidebar.md` — the row menu's new submenu
+- [x] `plugins/agterm/skills/agterm/` (`SKILL.md`, `reference.md`, `examples.md`) — the sole source for
       installed Claude/Codex copies: demote `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID` to spawn-time hints
       that go stale on any move, point at `tree --all-windows` as the source of truth, and note that
       passing a stale `--window` turns a working command into `no such session`
-- [ ] `site/commands.html` — mirror the new argument, the new flag, and the new read-back fields
-- [ ] `site/docs.html` — the user-facing description of moving a session between windows
-- [ ] confirm NO surface states a command total (the rule that keeps a new command off every page)
+- [x] `site/commands.html` — mirror the new argument, the new flag, and the new read-back fields
+- [x] `site/docs.html` — the user-facing description of moving a session between windows
+- [x] confirm NO surface states a command total (the rule that keeps a new command off every page)
+
+➕ `windows.md` gained a "Cross-window session move" section rather than one amended line: the registry
+eviction, the pick guard, the open-destination refusal, and the no-AppKit-work fact each have a
+consequence a reader would otherwise have to rediscover. `control-api.md` and `sidebar.md` cross-reference
+it instead of restating it.
+
+➕ the tree's human output prints its `window <name> [<id>]` header on EVERY response, not only
+`--all-windows` — the app always stamps `windowId` — so the skill and site say that rather than tying the
+header to the flag. `reference.md`'s "thirteen top-level fields" count became fifteen.
+
+⚠️ `site/index.html` needed no change: it lists major features and `softwareVersion`, and a session move is
+a refinement of the existing multi-window story rather than a new headline. `site/llms.txt` states no
+command detail, so it stays as-is.
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 

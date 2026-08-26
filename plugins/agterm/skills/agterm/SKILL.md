@@ -49,7 +49,13 @@ the control channel is available:
 
 - `AGTERM_ENABLED=1` — this shell runs inside agterm.
 - `AGTERM_SESSION_ID` — the current session's UUID (the session this shell belongs to).
-- `AGTERM_WINDOW_ID` / `AGTERM_WORKSPACE_ID` — the owning window / workspace UUIDs.
+- `AGTERM_WINDOW_ID` / `AGTERM_WORKSPACE_ID` — the window / workspace that owned the session WHEN THE
+  SHELL WAS SPAWNED. They are a snapshot, not a live link: `session move` (to another workspace or, with
+  `--to-window`, to another window) relocates the session while the running shell keeps the old values,
+  and nothing can rewrite a live process's environment. Treat them as hints; when it matters, read the
+  truth with `agtermctl tree --json --all-windows` and match `$AGTERM_SESSION_ID` against each session
+  node's `windowId` / `workspaceId`. Passing a stale `--window "$AGTERM_WINDOW_ID"` scopes the search to
+  the wrong window and turns a working command into `no such session`.
 - `AGTERM_SOCKET` — the absolute path to the control socket this app bound.
 - `AGTERM_PANE` / `AGTERM_PANE_ID` — the surface's pane role (`left`|`right`|`scratch`) and a stable
   per-surface token; the agent-status hook forwards them as `session status --pane` / `--pane-id`. The
@@ -100,7 +106,10 @@ One slot, so a session shows either a HUD or a program overlay, never both. Sepa
 or whatever share Settings sets instead; not part of the tree and not owned by a window).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
+`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`,
+`surfaces`, and the `windowId`/`workspaceId` that own it). `agtermctl tree --all-windows` returns one tree
+per OPEN window instead of just the frontmost — the only call that locates a session in ANY window, and
+the source of truth once a session has been moved. `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
 control address for `surface zoom` and `surface cursor` (`left`, `right`, `scratch`, `overlay`,
@@ -110,7 +119,8 @@ read-only top-level fields — `idleMs` (ms since the last user input in the win
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
 (`tree` or `flagged` — the read side of `sidebar mode`), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
-reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, and `app` (the
+reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `windowId` and
+`windowName` (which window this tree projects), and `app` (the
 serving app's `version`, plus `commit` when the build recorded one — the same value `agtermctl version`
 returns). reference.md lists every one with its exact shape. List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
@@ -278,8 +288,10 @@ omitted when expanded).
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace) or
   `move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
-  workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and
-  after/before placement, repeat `--target` to move several sessions as one ordered block. Do not repeat
+  workspace, so this relocates + positions in one shot, even cross-workspace) or
+  `move --to-window W [<workspace>] [--select]` (move it to another OPEN window, carrying the live shell;
+  the optional workspace names one INSIDE that window). For workspace, after/before, and `--to-window`
+  placement, repeat `--target` to move several sessions as one ordered block. Do not repeat
   `--target` with `--to up|down|top|bottom`.
 - Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
   `split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.

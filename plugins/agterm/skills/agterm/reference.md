@@ -95,13 +95,20 @@ SIGTERM use normal process behavior.
   (both full and floating); pass `--follow` to additionally SELECT the target, switching the user to it.
 - `--window <id|prefix|active>` (on session/workspace/tree/font/notify/pick commands) picks which window's
   tree to act on; default is the frontmost. With `--window` set, that window must be open. Without it,
-  an id/prefix session target is matched across all open windows.
+  an id/prefix session target is matched across all open windows. It is always a SEARCH SCOPE, never a
+  destination — `session move --to-window` is the one flag that names where a session goes.
 - `window.*` commands take the window selector as a positional argument, default `active` (frontmost).
 - A window need not be open to be a `window.*` target (e.g. `window select` opens a closed one).
 
 ## tree
 
-`agtermctl tree [--json] [--window W]` — the workspace/session tree. Each session node:
+`agtermctl tree [--json] [--window W] [--all-windows]` — the workspace/session tree. `--all-windows`
+projects EVERY open window instead of one: the response carries `result.trees` (an array, each entry a
+tree tagged with its own `windowId`/`windowName`) and leaves `result.tree` nil, and closed windows are
+simply absent. Every tree — single or fanned out — prints a `window <name> [<id>]` header above its
+workspaces in human output, which is what separates the sections here. It is rejected together
+with `--window`, which names a single window. This is the call that answers "which window owns this
+session" for a session in any window — see the ownership recipe in examples.md. Each session node:
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split SHOWN side by side, the read side of `session split on|off`),
@@ -180,7 +187,12 @@ default/left target (the main pane, or the promoted split survivor once the prim
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
 of `{id, kind, active, visible}` where `kind` is
-`left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
+`left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`), plus
+`windowId`/`workspaceId` (the window and workspace that own this
+session RIGHT NOW — the read side of `session move`, and the only reliable answer once a session has been
+moved, since a running shell's `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID` still hold their spawn-time
+values. Both come from the app together, so a projection carrying neither is a server that predates them,
+never a half-answer).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
 so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
@@ -198,7 +210,7 @@ members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tr
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries thirteen top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries fifteen top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
@@ -222,7 +234,9 @@ as both), `dashboardHighlighted` (the highlighted cell's pane ref — the one En
 that exact pane), `dashboardFontSize` (the absolute font size in points applied to the cells, omitted when
 the mode is `untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
 `untouched`), plus `pickPending` (the id of the native picker currently awaiting an answer in this
-window, omitted when none is pending), and `app` (which agterm is serving this socket: `version`, plus
+window, omitted when none is pending), `windowId` and `windowName` (WHICH window this tree projects —
+present on every tree the app serves, and what tells the sections of a `--all-windows` response apart),
+and `app` (which agterm is serving this socket: `version`, plus
 `commit` when the build recorded one — the same value `agtermctl version` returns, so an agent already
 reading the tree gets its version floor without a second round-trip; it is not duplicated onto
 `window.list`, where a caller uses `version` instead). `idleMs` is live
@@ -230,7 +244,8 @@ and grows while the window is idle, so it is on `tree` only, never `window.list`
 both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, the four `dashboard*` fields, and
 `pickPending`
 are `tree`-only (a GUI/keyboard change would leave a cached copy stale). All of those are read-only
-projections of live GUI state. `app` is the one CONSTANT among them, and is absent from `window.list`
+projections of live GUI state, except `windowId`/`windowName`, which identify the projection itself.
+`app` is the one CONSTANT among them, and is absent from `window.list`
 for a different reason: it describes the serving app rather than a window, so repeating it on every row
 buys nothing. A caller with no tree uses `version`.
 
@@ -386,13 +401,24 @@ buys nothing. A caller with no tree uses `version`.
   `session move --after SID | --before SID [--target]` — place the session directly after / before an
   anchor session (id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved across
   all workspaces), so it relocates + positions in one shot, wherever the anchor lives — cross-workspace
-  placement falls out for free. Exactly one placement intent is required among {positional workspace,
-  `--to`, `--after`/`--before`}; `--after`/`--before` are mutually exclusive with each other, with `--to`,
-  and with a destination workspace (the anchor already names the workspace).
-  Repeat `--target` for a batch move with the workspace and after/before placement forms; the sessions
+  placement falls out for free. OR `session move --to-window W [<workspace>] [--select] [--target]` —
+  move the session into ANOTHER WINDOW, carrying its live shell, scrollback and running program; the
+  optional positional workspace names a workspace INSIDE that window, defaulting to its selected one.
+  Exactly one placement intent is required among {positional workspace,
+  `--to`, `--after`/`--before`, `--to-window`}; `--after`/`--before` are mutually exclusive with each other,
+  with `--to`, and with a destination workspace (the anchor already names the workspace).
+  Repeat `--target` for a batch move with the workspace, after/before, and `--to-window` placement forms;
+  the sessions
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
   counting only sessions whose position/workspace changed.
+- `--to-window` is a DESTINATION and `--window` is a SEARCH SCOPE — the two are unrelated and combine
+  freely (`--window` still only says where `--target` is looked up). The destination window must be OPEN
+  (`window select` it first, else `window not open — window.select it first`); `--to-window` is rejected
+  with `--to` and with `--after`/`--before`. The move does NOT raise the destination or change either
+  window's selection: the session lands in the background, and `--select` opts into selecting it there.
+  The moved shell keeps its stale `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID`; read `tree --all-windows` for
+  the session's real owner afterwards.
 
 Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
 `split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.
