@@ -425,6 +425,53 @@ public final class WindowLibrary {
         refreshRecentClosedItems()
     }
 
+    /// Moves a session into another OPEN window, keeping the **same** `Session` instance so its surface and
+    /// live shell survive the re-host. A nil `workspace` lands in the destination's `currentWorkspaceID`;
+    /// `select` makes it the destination's active session, so a plain move leaves both windows' selections
+    /// alone and a background session stays background. A same-window call delegates to
+    /// `AppStore.moveSession`, keeping single-window behavior and the wire contract identical.
+    ///
+    /// False when the session is unknown, the destination window is closed (nothing would host the surface),
+    /// the destination workspace is unknown, or the source window has a picker pending — that picker's answer
+    /// is addressed to the window, mirroring the `pick pending` guard on the other surface commands.
+    @discardableResult
+    public func moveSession(_ sessionID: UUID, toWindow destinationID: UUID, workspace: UUID? = nil,
+                            select: Bool = false) -> Bool {
+        guard let sourceID = windowID(forSession: sessionID), let source = stores[sourceID],
+              let destination = stores[destinationID] else { return false }
+        guard let targetWorkspace = workspace ?? destination.currentWorkspaceID,
+              destination.workspaces.contains(where: { $0.id == targetWorkspace }) else { return false }
+        guard PickRegistry.shared.controller(for: sourceID)?.pending == nil else { return false }
+
+        if sourceID == destinationID {
+            source.moveSession(sessionID, toWorkspace: targetWorkspace)
+            if select { source.selectSession(sessionID) }
+            return true
+        }
+        evictWindowControllers(sessionID, in: sourceID)
+        let origin = source.workspace(forSession: sessionID)?.id
+        guard let session = source.detachSession(sessionID) else { return false }
+        guard destination.adoptSession(session, toWorkspace: targetWorkspace, select: select) else {
+            // unreachable after the guards above, but a live shell must never be dropped on the floor.
+            source.adoptSession(session, toWorkspace: origin)
+            return false
+        }
+        return true
+    }
+
+    /// Drops the moving session from the SOURCE window's zoom target and dashboard grid: both point at an
+    /// NSView about to be hosted by another window.
+    private func evictWindowControllers(_ sessionID: UUID, in windowID: UUID) {
+        if let zoom = TerminalZoomRegistry.shared.controller(for: windowID),
+           case let .session(target, _)? = zoom.target, target == sessionID {
+            zoom.clear()
+        }
+        if let dashboard = DashboardControllerRegistry.shared.controller(for: windowID),
+           dashboard.members.contains(where: { $0.session == sessionID }) {
+            dashboard.close()
+        }
+    }
+
     /// Closes a window: drops its store and persists the index. The app-target caller tears down the
     /// window's surfaces first. No-op for an unknown/closed id, or while terminating (see `isTerminating`).
     public func closeWindow(_ id: UUID) {

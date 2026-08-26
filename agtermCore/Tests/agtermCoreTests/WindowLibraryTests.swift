@@ -1459,4 +1459,217 @@ final class WindowLibraryTests {
         #expect(reloadedSession.initialCwd == "/changed")
         _ = ws
     }
+
+    // MARK: - Cross-window move
+
+    private func makeTwoWindows(_ library: WindowLibrary) throws -> (source: AppStore, destination: AppStore,
+                                                                     sourceID: UUID, destinationID: UUID) {
+        let sourceID = library.windows[0].id
+        let destinationID = library.newWindow(name: "work").id
+        return (try #require(library.store(for: sourceID)), try #require(library.store(for: destinationID)),
+                sourceID, destinationID)
+    }
+
+    @Test func moveSessionAcrossWindowsKeepsTheInstanceAndSurface() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        let surface = SpySurface()
+        session.surface = surface
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.source.session(withID: session.id) == nil)
+        #expect(windows.destination.session(withID: session.id) === session)
+        #expect(session.surface === surface)
+        #expect(surface.teardownCount == 0)
+        #expect(library.windowID(forSession: session.id) == windows.destinationID)
+    }
+
+    @Test func moveSessionLandsInDestinationCurrentWorkspaceByDefault() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let later = windows.destination.addWorkspace(name: "later")
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.destination.workspace(forSession: session.id)?.id == later.id)
+    }
+
+    @Test func moveSessionHonorsAnExplicitDestinationWorkspace() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let first = try #require(windows.destination.workspaces.first)
+        _ = windows.destination.addWorkspace(name: "later")
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID, workspace: first.id))
+        #expect(windows.destination.workspace(forSession: session.id)?.id == first.id)
+    }
+
+    @Test func moveSessionSelectsOnlyWhenAsked() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let destinationWorkspace = try #require(windows.destination.workspaces.first)
+        let resident = try #require(destinationWorkspace.sessions.first)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.destination.selectedSessionID == resident.id)
+
+        let second = try #require(windows.destination.addSession(toWorkspace: destinationWorkspace.id, cwd: "/tmp"))
+        #expect(library.moveSession(second.id, toWindow: windows.sourceID, select: true))
+        #expect(windows.source.selectedSessionID == second.id)
+    }
+
+    @Test func moveSessionPersistsBothWindows() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+
+        let reloaded = WindowLibrary(directory: directory)
+        #expect(reloaded.store(for: windows.sourceID)?.session(withID: session.id) == nil)
+        #expect(reloaded.store(for: windows.destinationID)?.session(withID: session.id) != nil)
+    }
+
+    @Test func moveSessionReselectsInTheSourceWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let workspace = try #require(windows.source.workspaces.first)
+        let staying = try #require(workspace.sessions.first)
+        let leaving = try #require(windows.source.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        #expect(windows.source.selectedSessionID == leaving.id)
+
+        #expect(library.moveSession(leaving.id, toWindow: windows.destinationID))
+        #expect(windows.source.selectedSessionID == staying.id)
+    }
+
+    @Test func moveSessionEmptiesTheSourceWindowWithoutSeedingAReplacement() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.source.workspaces.count == 1)
+        #expect(windows.source.workspaces[0].sessions.isEmpty)
+        #expect(windows.source.selectedSessionID == nil)
+    }
+
+    @Test func moveSessionToTheSameWindowDelegatesToTheStore() throws {
+        let library = WindowLibrary(directory: directory)
+        let sourceID = library.windows[0].id
+        let store = try #require(library.store(for: sourceID))
+        let session = try #require(store.workspaces.first?.sessions.first)
+        let other = store.addWorkspace(name: "other")
+
+        #expect(library.moveSession(session.id, toWindow: sourceID, workspace: other.id))
+        #expect(store.session(withID: session.id) === session)
+        #expect(store.workspace(forSession: session.id)?.id == other.id)
+        #expect(store.workspaces[0].sessions.isEmpty)
+    }
+
+    @Test func moveSessionRefusesAClosedDestination() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        library.closeWindow(windows.destinationID)
+
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.source.session(withID: session.id) === session)
+    }
+
+    @Test func moveSessionRefusesUnknownSessionAndWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(!library.moveSession(UUID(), toWindow: windows.destinationID))
+        #expect(!library.moveSession(session.id, toWindow: UUID()))
+        #expect(windows.source.session(withID: session.id) === session)
+    }
+
+    @Test func moveSessionRefusesUnknownDestinationWorkspace() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID, workspace: UUID()))
+        #expect(windows.source.session(withID: session.id) === session)
+        #expect(windows.destination.session(withID: session.id) == nil)
+    }
+
+    @Test func moveSessionRefusesWhileTheSourceWindowHasAPickPending() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        let pick = PickController()
+        PickRegistry.shared.register(windows.sourceID, controller: pick)
+        defer { PickRegistry.shared.unregister(windows.sourceID) }
+        pick.open(PendingPick(id: "p1", items: [ControlPickItem(id: "one", label: "one")]))
+
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(windows.source.session(withID: session.id) === session)
+
+        pick.cancel()
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+    }
+
+    @Test func moveSessionClearsTheSourceWindowZoom() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windows.sourceID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windows.sourceID) }
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(zoom.target == nil)
+    }
+
+    @Test func moveSessionLeavesAZoomTargetingAnotherSession() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let workspace = try #require(windows.source.workspaces.first)
+        let staying = try #require(workspace.sessions.first)
+        let leaving = try #require(windows.source.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windows.sourceID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windows.sourceID) }
+        zoom.set(.on, target: .session(staying.id, .primary))
+
+        #expect(library.moveSession(leaving.id, toWindow: windows.destinationID))
+        #expect(zoom.target == .session(staying.id, .primary))
+    }
+
+    @Test func moveSessionClosesTheSourceWindowDashboardHostingIt() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let workspace = try #require(windows.source.workspaces.first)
+        let staying = try #require(workspace.sessions.first)
+        let leaving = try #require(windows.source.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windows.sourceID, controller: dashboard)
+        defer { DashboardControllerRegistry.shared.unregister(windows.sourceID) }
+        dashboard.open(members: [DashboardMember(session: staying.id, surface: .primary),
+                                 DashboardMember(session: leaving.id, surface: .primary)])
+
+        #expect(library.moveSession(leaving.id, toWindow: windows.destinationID))
+        #expect(!dashboard.isOpen)
+    }
+
+    @Test func moveSessionLeavesADashboardWithoutTheMovedSession() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let workspace = try #require(windows.source.workspaces.first)
+        let staying = try #require(workspace.sessions.first)
+        let leaving = try #require(windows.source.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windows.sourceID, controller: dashboard)
+        defer { DashboardControllerRegistry.shared.unregister(windows.sourceID) }
+        dashboard.open(members: [DashboardMember(session: staying.id, surface: .primary)])
+
+        #expect(library.moveSession(leaving.id, toWindow: windows.destinationID))
+        #expect(dashboard.isOpen)
+    }
 }

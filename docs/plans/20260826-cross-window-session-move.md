@@ -143,26 +143,26 @@ Project-specific rules that bind this plan:
 
 ### Task 2: Add WindowLibrary.moveSession across windows
 
-- [ ] add `WindowLibrary.moveSession(_ sessionID: UUID, toWindow: UUID, workspace: UUID?, select: Bool) -> Bool`
+- [x] add `WindowLibrary.moveSession(_ sessionID: UUID, toWindow: UUID, workspace: UUID?, select: Bool) -> Bool`
       in `WindowLibrary.swift`: resolve the source store via `store(forSession:)`, the destination via
       `store(for:)`; a nil destination store means not open and returns false
-- [ ] delegate a same-store call to the existing `AppStore.moveSession` so single-window behavior is
+- [x] delegate a same-store call to the existing `AppStore.moveSession` so single-window behavior is
       unchanged and the wire contract does not fork
-- [ ] before detaching, evict the session from the SOURCE window's `TerminalZoomRegistry` controller
+- [x] before detaching, evict the session from the SOURCE window's `TerminalZoomRegistry` controller
       (`clear()` when its target is this session) and `DashboardControllerRegistry` controller
       (`close()` when the session is a member) — otherwise the source window keeps a zoom target or grid
       cell pointing at an NSView now hosted by another window
-- [ ] refuse the move while the source window has a pending pick for this session (`PickRegistry`),
+- [x] refuse the move while the source window has a pending pick for this session (`PickRegistry`),
       mirroring the `pick pending` guard in `ControlServer+SurfaceIO.swift:374`
-- [ ] compose detach + adopt, then `saveIndex()` is unnecessary but BOTH stores must persist (each
+- [x] compose detach + adopt, then `saveIndex()` is unnecessary but BOTH stores must persist (each
       `save()`s its own `windows/<id>.json`)
-- [ ] write tests for the happy path in `WindowLibraryTests`: the SAME `Session` instance (identity `===`)
+- [x] write tests for the happy path in `WindowLibraryTests`: the SAME `Session` instance (identity `===`)
       and its `surface` slot survive; source no longer lists it; destination does
-- [ ] write tests for error/edge cases: closed destination, unknown session, unknown destination workspace,
+- [x] write tests for error/edge cases: closed destination, unknown session, unknown destination workspace,
       same-window delegation, moving the source's selected session (source reselects), moving the last
       session out of a window
-- [ ] write tests for zoom/dashboard eviction (source controller cleared)
-- [ ] run `cd agtermCore && swift test` - must pass before task 3
+- [x] write tests for zoom/dashboard eviction (source controller cleared)
+- [x] run `cd agtermCore && swift test` - must pass before task 3
 
 ### Task 3: Add the wire contract for a destination window
 
