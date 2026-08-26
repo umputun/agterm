@@ -1760,6 +1760,33 @@ final class WindowLibraryTests {
         #expect(dashboard.isOpen)
     }
 
+    // MARK: - Adopted-session rebind
+
+    @Test func moveSessionRebindsTheAdoptedSessionToTheDestinationStore() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        var rebound: [(UUID, ObjectIdentifier)] = []
+        library.rebindAdoptedSession = { rebound.append(($0.id, ObjectIdentifier($1))) }
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        #expect(rebound.map(\.0) == [session.id])
+        #expect(rebound.map(\.1) == [ObjectIdentifier(windows.destination)])
+    }
+
+    @Test func moveSessionSkipsTheRebindWhenItRefusesOrStaysInTheWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        let other = windows.source.addWorkspace(name: "other")
+        var rebinds = 0
+        library.rebindAdoptedSession = { _, _ in rebinds += 1 }
+
+        #expect(library.moveSession(session.id, toWindow: windows.sourceID, workspace: other.id))
+        #expect(!library.moveSession(session.id, toWindow: windows.destinationID, workspace: UUID()))
+        #expect(rebinds == 0)
+    }
+
     // MARK: - Move destinations
 
     @Test func moveDestinationsAreEmptyWithOneOpenWindow() {

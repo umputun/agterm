@@ -142,6 +142,34 @@ struct AppStoreTransferTests {
         #expect(destination.sessionRecency.items.first == moving.id)
     }
 
+    @Test func adoptWithSelectClearsUnseenAndAutoResetIndicator() {
+        let source = makeStore()
+        let sourceWork = source.addWorkspace(name: "work")
+        let session = source.addSession(toWorkspace: sourceWork.id, cwd: "/moving")!
+        session.unseenCount = 3
+        source.setAgentIndicator(AgentIndicator(status: .completed, autoReset: true), forSession: session.id)
+        let moving = source.detachSession(session.id)!
+
+        let destination = makeStore()
+        let work = destination.addWorkspace(name: "work")
+        #expect(destination.adoptSession(moving, toWorkspace: work.id, select: true))
+        #expect(moving.unseenCount == 0)
+        #expect(moving.agentIndicator.status == .idle)
+    }
+
+    @Test func adoptWithoutSelectKeepsUnseenBadge() {
+        let source = makeStore()
+        let sourceWork = source.addWorkspace(name: "work")
+        let session = source.addSession(toWorkspace: sourceWork.id, cwd: "/moving")!
+        session.unseenCount = 3
+        let moving = source.detachSession(session.id)!
+
+        let destination = makeStore()
+        let work = destination.addWorkspace(name: "work")
+        #expect(destination.adoptSession(moving, toWorkspace: work.id, select: false))
+        #expect(moving.unseenCount == 3)
+    }
+
     @Test func adoptWithoutSelectLeavesSelectionAlone() {
         let source = makeStore()
         let sourceWork = source.addWorkspace(name: "work")

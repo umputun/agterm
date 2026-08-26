@@ -30,7 +30,8 @@ extension AppStore {
 
     /// Inserts a session instance detached from another store. A nil workspace lands in `currentWorkspaceID`
     /// (which already falls back to the last workspace); `index` nil appends, else inserts at the clamped
-    /// position. `select` makes it this window's active session, matching `addSession(select:)`. False when
+    /// position. `select` goes through `selectSession`, so an adopted session that arrives carrying an unseen
+    /// badge or a `completed` flash lands cleared like any other session you switch to. False when
     /// the workspace is unknown or an equal id is already here — adopting a duplicate would fork identity
     /// across two stores.
     @discardableResult
@@ -41,12 +42,7 @@ extension AppStore {
               let wsIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return false }
         let count = workspaces[wsIndex].sessions.count
         workspaces[wsIndex].sessions.insert(session, at: max(0, min(index ?? count, count)))
-        if select {
-            selectedSessionID = session.id
-            replaceSidebarSelection(with: session.id)
-            disableFocusIfSelectionOutsideSet(session.id) // the destination workspace may sit outside the marked set
-            recordRecency()
-        }
+        if select { selectSession(session.id) }
         scheduleTreeChanged()
         save()
         return true

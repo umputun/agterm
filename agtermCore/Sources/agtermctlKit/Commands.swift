@@ -136,11 +136,6 @@ struct Tree: RequestCommand {
     var allWindows = false
 
     func makeRequest() throws -> ControlRequest {
-        var args = options.withWindow()
-        if allWindows {
-            args = args ?? ControlArgs()
-            args?.allWindows = true
-        }
-        return ControlRequest(cmd: .tree, args: args)
+        ControlRequest(cmd: .tree, args: options.withWindow(allWindows ? ControlArgs(allWindows: true) : nil))
     }
 }

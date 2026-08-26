@@ -71,6 +71,29 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertEqual(tree.result?.tree?.app, injected)
     }
 
+    // the only projection that spans windows, so a caller can locate a session it moved out of its own one
+    func testAllWindowsTreeProjectsEveryOpenWindowAndOmitsClosedOnes() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let sourceID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let other = library.newWindow(name: "work")
+
+        let response = server.controlTree(window: nil, allWindows: true)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertNil(response.result?.tree, "--all-windows answers in `trees` instead")
+        let trees = try XCTUnwrap(response.result?.trees)
+        XCTAssertEqual(trees.map(\.windowId), [sourceID.uuidString, other.id.uuidString])
+        XCTAssertEqual(trees.first?.windowName, library.windowName(for: sourceID))
+        let owning = trees.first { $0.workspaces.contains { $0.sessions.contains { $0.id == session.id.uuidString } } }
+        XCTAssertEqual(owning?.windowId, sourceID.uuidString)
+
+        library.closeWindow(other.id)
+        let afterClose = server.controlTree(window: nil, allWindows: true)
+        XCTAssertEqual(afterClose.result?.trees?.map(\.windowId), [sourceID.uuidString])
+    }
+
     func testSelectingAnEmptyWorkspaceReportsAndTargetsIt() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

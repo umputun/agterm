@@ -151,6 +151,9 @@ struct Session: ParsableCommand {
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
+            if select, toWindow == nil {
+                throw ValidationError("session.move --select requires --to-window")
+            }
             if toWindow != nil {
                 if to != nil {
                     throw ValidationError("session.move takes --to-window or --to, not both")

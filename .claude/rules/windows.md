@@ -62,6 +62,10 @@ bundle and joins another, carrying its live shell.
 - The move neither selects nor raises; `select:` opts into selecting it in the destination.
   `moveDestinations(excluding:)` is the shared "other open window" gate behind the sidebar submenu and the
   palette rows, so one window open means no entry point rather than an empty one.
+- A successful cross-window adopt MUST run `rebindAdoptedSession`, the app-set hook re-pointing the moved
+  session's surfaces at the destination store. No surface factory re-runs (the instance and its views
+  survive), so every callback still holds the SOURCE store and would resolve the session to nil there:
+  shell exit, overlay teardown and exit status, unseen/status clears, search and font size all no-op.
 - No AppKit work is involved: `dismantleNSView` is a no-op, `makeNSView` reuses `session.surface`, and
   `viewDidMoveToWindow` re-pushes scale and size, so a re-host re-rasterizes at the destination's scale.
   A blank or mis-scaled pane is a deck mount-order bug, never a reason to add teardown.

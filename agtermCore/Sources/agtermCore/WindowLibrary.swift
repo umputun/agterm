@@ -105,6 +105,11 @@ public final class WindowLibrary {
     /// next launch's reopen-all instead of being zeroed as each window tears down.
     @ObservationIgnored public var isTerminating = false
 
+    /// Re-points a moved session's live surfaces at the store that now owns it, called by `moveSession` after
+    /// a cross-window adopt. Set by the app target, which built those surfaces: their callbacks captured the
+    /// SOURCE store and resolve the session by id there, so without this every one of them silently no-ops.
+    @ObservationIgnored public var rebindAdoptedSession: ((Session, AppStore) -> Void)?
+
     private static let indexFileName = "windows.json"
     private static let windowsSubdirectory = "windows"
     private static let legacyFileName = "workspaces.json"
@@ -462,6 +467,7 @@ public final class WindowLibrary {
             source.adoptSession(session, toWorkspace: origin)
             return false
         }
+        rebindAdoptedSession?(session, destination)
         return true
     }
 

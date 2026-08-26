@@ -1011,7 +1011,9 @@
                 an optional positional <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;workspace&gt;</span> names a workspace INSIDE that
                 window, defaulting to its selected one. The move neither raises the destination nor changes
                 either window's selection — the session lands in the background, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> opts into selecting it there. It cannot be combined with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> opts into selecting it there, and is rejected
+                without it (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.move --select requires --to-window</span>).
+                It cannot be combined with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>, and it is unrelated to
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, which only scopes where

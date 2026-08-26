@@ -159,7 +159,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `--to-window` is the DESTINATION; `--window` keeps meaning "where `--target` is searched" here and on
   every other command, which is why the destination needed a second flag rather than a reused one.
   It rejects `--to` (reorder is same-workspace) and `--after`/`--before` (anchors resolve within one store),
-  and it is the only form reading `--select`, since the destination's selection belongs to another store.
+  and it is the only form accepting `--select`, since the destination's selection belongs to another
+  store — every other form rejects it with `session.move --select requires --to-window` rather than
+  silently dropping it.
   A closed destination errors with `window not open — window.select it first`; [[windows]] owns the move
   itself, whose form parsing lives in `ControlDispatcher+SessionMove`.
 - Sidebar batch Flag computes one uniform value: flag all unless all are already flagged. This is not

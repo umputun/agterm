@@ -9,7 +9,7 @@ description: >
   display the native fuzzy picker with caller-supplied choices and poll or cancel it; display
   an image inline via a bundled helper script; type
   into a session, copy its selection, or search its scrollback; post desktop notifications; manage windows (new, list,
-  select, close, resize, move); change font size; or reload and edit the keymap and the agterm-scoped
+  select, close, resize, move) and move a session with its live shell into another window; change font size; or reload and edit the keymap and the agterm-scoped
   ghostty config. Also covers the
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
   subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
@@ -21,6 +21,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
+  session.move, move a session to another window, tree --all-windows, which window owns this session,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,

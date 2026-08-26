@@ -142,6 +142,12 @@ struct agtermApp: App {
                         // bind the app-level quick terminal (idempotent); its env needs the bound socket, so
                         // this follows `start()` like the surface environment does.
                         wireQuickTerminal(library: library)
+                        // a cross-window move keeps the Session instance and its surfaces, so no factory
+                        // re-runs in the destination: hand the library the app-side rebind (idempotent).
+                        library.rebindAdoptedSession = { [weak library] session, store in
+                            guard let library else { return }
+                            Self.rebindSurfaces(of: session, to: store, library: library)
+                        }
                         // Ctrl-Tab session-switcher key monitors (idempotent).
                         sessionSwitcher.start()
                         // Ctrl-1/Ctrl-2 direct pane-focus key monitor (idempotent).
@@ -257,14 +263,25 @@ struct agtermApp: App {
                                       command: plan.command, initialInput: plan.initialInput,
                                       waitAfterCommand: session.commandWait, env: env)
         view.session = session
-        let sessionID = session.id
+        Self.wirePane(view, store: store, sessionID: session.id, library: library, persistsFontSize: true)
+        return view
+    }
+
+    /// Every store-bound callback of a main or split pane, in one place so `rebindSurfaces` can re-apply the
+    /// exact set after a cross-window move. `persistsFontSize` marks the main slot: `makeSplitSurface` omits
+    /// `onFontSizeChange` because only the primary persists its cmd +/-.
+    @MainActor
+    private static func wirePane(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                 library: WindowLibrary, persistsFontSize: Bool) {
         view.onExit = { [weak view] in
             guard let view else { return }
             Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
-        view.onFocusChange = { focused in
+        view.onFocusChange = { [weak view] focused in
             guard focused else { return }
-            store.session(withID: sessionID)?.splitFocused = false
+            // read the LIVE role: a promoted survivor keeps this closure with `isSplitPane` cleared and as the
+            // main pane must not re-raise `splitFocused`, which masks its migrated title and mis-routes focus.
+            store.session(withID: sessionID)?.splitFocused = view?.isSplitPane ?? false
             // focusing a pane means you've seen the session: clear the badge and any delivered banners.
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
@@ -277,9 +294,34 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
-        view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+        if persistsFontSize { view.onFontSizeChange = { store.setFontSize(sessionID, $0) } }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
-        return view
+    }
+
+    /// Re-points a moved session's live surfaces at the store that now owns it. `WindowLibrary.moveSession`
+    /// keeps the `Session` instance so the shells survive, and `TerminalView` reuses the cached surface, so
+    /// no factory re-runs in the destination window — without this every callback would keep resolving the
+    /// session against the source store, find nothing, and silently no-op (shell exit, overlay teardown and
+    /// exit status, unseen/status clears, search, font size).
+    @MainActor
+    static func rebindSurfaces(of session: Session, to store: AppStore, library: WindowLibrary) {
+        let sessionID = session.id
+        if let view = session.surface as? GhosttySurfaceView {
+            wirePane(view, store: store, sessionID: sessionID, library: library, persistsFontSize: true)
+        }
+        if let view = session.splitSurface as? GhosttySurfaceView {
+            wirePane(view, store: store, sessionID: sessionID, library: library, persistsFontSize: false)
+        }
+        if let view = session.overlaySurface as? GhosttySurfaceView {
+            wireOverlay(view, store: store, sessionID: sessionID, pane: nil, isHud: session.hudActive)
+        }
+        for pane in OverlayPane.allCases {
+            guard let view = session.paneOverlaySurface(pane) as? GhosttySurfaceView else { continue }
+            wireOverlay(view, store: store, sessionID: sessionID, pane: pane, isHud: false)
+        }
+        if let view = session.scratchSurface as? GhosttySurfaceView {
+            wireScratch(view, store: store, sessionID: sessionID, library: library)
+        }
     }
 
     /// Shell-exit handler for BOTH pane factories, dispatched on the surface's CURRENT role, not the factory that
@@ -409,27 +451,7 @@ struct agtermApp: App {
                                       fontSize: session.fontSize.map(Float.init), initialInput: restoreInput, env: env)
         view.session = session
         view.isSplitPane = true
-        let sessionID = session.id
-        view.onExit = { [weak view] in
-            guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
-        }
-        view.onFocusChange = { [weak view] focused in
-            guard focused else { return }
-            // a promoted survivor keeps this closure with `isSplitPane` cleared: as the main pane it must not
-            // re-raise `splitFocused`, which masks its migrated title and mis-routes focus after a re-split.
-            store.session(withID: sessionID)?.splitFocused = view?.isSplitPane ?? false
-            store.clearUnseen(sessionID)
-            NotificationManager.shared.clearDelivered(sessionID: sessionID)
-        }
-        // the focus-free half of the clear above, for the zoom-hosted case (see makeSurface).
-        view.onClearUnseen = {
-            store.clearUnseen(sessionID)
-            NotificationManager.shared.clearDelivered(sessionID: sessionID)
-        }
-        Self.wireStatusClear(view, store: store, sessionID: sessionID)
-        view.onUserInput = { store.noteUserActivity() }
-        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
+        Self.wirePane(view, store: store, sessionID: session.id, library: library, persistsFontSize: false)
         return view
     }
 
@@ -469,15 +491,25 @@ struct agtermApp: App {
         // the overlay's own background color (`session.overlay.open --background-color`), applied in
         // createSurface — the overlay is sessionless, so it can't read it off the session there.
         view.overlayBackgroundColorHex = spec.backgroundColor
-        // record the exit status on teardown (always via destroySurface), so it survives a `session.overlay.close`
-        // that bypasses onExit; a force-close removes the session first and no-ops here, where it is unqueryable.
-        //
-        // the pane arm's callbacks re-resolve their pane from the slot the surface CURRENTLY occupies, never
-        // the captured `pane`: `closePrimaryPane` MOVES a right-pane overlay into the left slot without
-        // rebuilding the view (`TerminalView.makeNSView` reuses a non-nil slot), so a captured `.right` would
-        // close nothing, record the status where `session.overlay.result --pane left` can't read it, and leave
-        // the promoted pane under a dead overlay forever. The captured value is the pre-realization fallback,
-        // for the window between the open and the slot holding this surface.
+        Self.wireOverlay(view, store: store, sessionID: sessionID, pane: pane, isHud: isHud)
+        return view
+    }
+
+    /// Every store-bound callback of an overlay surface, in one place so `rebindSurfaces` can re-apply the
+    /// exact set after a cross-window move.
+    ///
+    /// Records the exit status on teardown (always via destroySurface), so it survives a `session.overlay.close`
+    /// that bypasses onExit; a force-close removes the session first and no-ops here, where it is unqueryable.
+    ///
+    /// The pane arm's callbacks re-resolve their pane from the slot the surface CURRENTLY occupies, never
+    /// the captured `pane`: `closePrimaryPane` MOVES a right-pane overlay into the left slot without
+    /// rebuilding the view (`TerminalView.makeNSView` reuses a non-nil slot), so a captured `.right` would
+    /// close nothing, record the status where `session.overlay.result --pane left` can't read it, and leave
+    /// the promoted pane under a dead overlay forever. The captured value is the pre-realization fallback,
+    /// for the window between the open and the slot holding this surface.
+    @MainActor
+    private static func wireOverlay(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                    pane: OverlayPane?, isHud: Bool) {
         if let pane {
             let livePane: @MainActor () -> OverlayPane = { [weak view] in
                 guard let view else { return pane }
@@ -504,7 +536,6 @@ struct agtermApp: App {
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.
         view.onUserInput = { store.noteUserActivity() }
-        return view
     }
 
     /// The four fields the overlay factory reads, from the session-wide slot (`pane == nil`) or that pane's
@@ -538,7 +569,15 @@ struct agtermApp: App {
                                       command: command,
                                       autoFocus: !suppressAutoFocus, env: env)
         view.watermarkSession = session
-        let sessionID = session.id
+        Self.wireScratch(view, store: store, sessionID: session.id, library: library)
+        return view
+    }
+
+    /// Every store-bound callback of a scratch surface, in one place so `rebindSurfaces` can re-apply the
+    /// exact set after a cross-window move.
+    @MainActor
+    private static func wireScratch(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                    library: WindowLibrary) {
         view.onExit = { store.closeScratch(sessionID) }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)
         // same idle-timer reset as the overlay: an idle auto-follow fire must not hide the scratch mid-typing.
@@ -546,7 +585,6 @@ struct agtermApp: App {
         // the scratch is searchable (⌘F), pinned to the same session as the panes: unlike the overlay/quick
         // terminal it stays alive across hides, so a bar over it is safe.
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
-        return view
     }
 
     /// The environment a tree surface (main / split / overlay / scratch) exposes to its shell: the `AGTERM_*`

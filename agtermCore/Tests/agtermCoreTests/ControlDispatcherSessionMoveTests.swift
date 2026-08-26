@@ -63,6 +63,26 @@ struct ControlDispatcherSessionMoveTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionMoveRejectsSelectWithoutADestinationWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let workspaced = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(workspace: "dest", select: true)
+        ))
+        let reordered = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(select: true, to: "up")
+        ))
+
+        #expect(workspaced == ControlResponse(ok: false, error: "session.move --select requires --to-window"))
+        #expect(reordered == ControlResponse(ok: false, error: "session.move --select requires --to-window"))
+        #expect(actions.calls.isEmpty)
+    }
+
     // destination resolution belongs to the host, which alone knows the open window set: the dispatcher
     // must hand every spelling over untouched instead of pre-judging it.
     @Test func sessionMoveForwardsUnresolvedDestinationSpellings() async {

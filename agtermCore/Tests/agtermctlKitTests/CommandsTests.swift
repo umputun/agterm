@@ -338,6 +338,13 @@ struct CommandsTests {
             == "session.move takes --to-window or --after/--before, not both")
     }
 
+    @Test func sessionMoveRejectsSelectWithoutToWindow() {
+        #expect(validationMessage(["session", "move", "ws2", "--select"])
+            == "session.move --select requires --to-window")
+        #expect(validationMessage(["session", "move", "--to", "up", "--select"])
+            == "session.move --select requires --to-window")
+    }
+
     @Test func sessionMoveWindowAloneIsNotADestination() {
         #expect(validationMessage(["session", "move", "--window", "w1"])
             == "provide a destination workspace, --to, or --after/--before")

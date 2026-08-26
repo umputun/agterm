@@ -9,6 +9,10 @@ extension ControlDispatcher {
         if args?.after != nil, args?.before != nil {
             return ControlResponse(ok: false, error: "use either --after or --before, not both")
         }
+        // only the cross-window form has a foreign selection to set; accepting it elsewhere would drop it.
+        if args?.select == true, args?.toWindow == nil {
+            return ControlResponse(ok: false, error: "session.move --select requires --to-window")
+        }
         // Cross-window mode: the destination is another store, where neither a reorder direction nor an
         // anchor's index means anything. A workspace parameter DOES, naming one inside that window.
         if let toWindow = args?.toWindow {

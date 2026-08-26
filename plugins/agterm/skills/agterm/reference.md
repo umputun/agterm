@@ -417,6 +417,9 @@ buys nothing. A caller with no tree uses `version`.
   (`window select` it first, else `window not open — window.select it first`); `--to-window` is rejected
   with `--to` and with `--after`/`--before`. The move does NOT raise the destination or change either
   window's selection: the session lands in the background, and `--select` opts into selecting it there.
+  `--select` is rejected without `--to-window` (`session.move --select requires --to-window`), and a
+  destination the app cannot move into — most reachably a picker pending in the SOURCE window — errors
+  with `cannot move session to that window`; answer or `pick cancel` it first.
   The moved shell keeps its stale `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID`; read `tree --all-windows` for
   the session's real owner afterwards.
 

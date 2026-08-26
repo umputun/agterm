@@ -109,6 +109,31 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertNil(store.session(withID: second.id))
     }
 
+    // the gate reads the SOURCE window: a background sidebar's Move must not be judged by whatever modal
+    // the frontmost window happens to have up.
+    func testMoveToWindowIsGatedOnTheSourceWindowNotTheFrontmostOne() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let sourceID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let other = library.newWindow(name: "work")
+        let destination = try XCTUnwrap(library.store(for: other.id))
+        library.frontmostWindowID = other.id
+
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(other.id, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(other.id) }
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        XCTAssertTrue(actions.moveSession(session.id, toWindow: other.id),
+                      "the frontmost window's zoom is not the gate")
+        XCTAssertTrue(destination.session(withID: session.id) === session)
+
+        XCTAssertFalse(actions.moveSession(session.id, toWindow: sourceID),
+                       "the session's own window is the zoomed one now, so the move back is refused")
+        XCTAssertNil(store.session(withID: session.id))
+    }
+
     func testMoveSessionToAClosedWindowIsRefused() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
