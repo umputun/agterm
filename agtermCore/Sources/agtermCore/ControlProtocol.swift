@@ -269,6 +269,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// DESTINATION window for `session.move`: id / prefix / `active`. Distinct from `window`, which stays a
     /// search scope for `target`, and must name an OPEN window.
     public var toWindow: String?
+    /// For `tree`: project EVERY open window instead of one, answering into `result.trees`. Mutually
+    /// exclusive with `window`, which names a single one.
+    public var allWindows: Bool?
     /// New window frame width/height in points for `window.resize`.
     public var width: Int?
     public var height: Int?
@@ -316,7 +319,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
-                toWindow: String? = nil,
+                toWindow: String? = nil, allWindows: Bool? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -356,6 +359,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.allowCustom = allowCustom
         self.window = window
         self.toWindow = toWindow
+        self.allWindows = allWindows
         self.pane = pane
         self.paneID = paneID
         self.to = to
@@ -423,6 +427,9 @@ public struct ControlRequest: Codable, Sendable, Equatable {
 public struct ControlResult: Codable, Sendable, Equatable {
     public var id: String?
     public var tree: ControlTree?
+    /// One tree per OPEN window for `tree --all-windows`, each tagged with its own `windowId`; `tree` stays
+    /// nil then, so a caller reads exactly one of the two.
+    public var trees: [ControlTree]?
     public var text: String?
     public var windows: [ControlWindowNode]?
     /// The overlay program's exit status for `session.overlay.result` (nil until the program exits).
@@ -459,7 +466,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// The app serving this socket, for `version`. The same value `tree` carries.
     public var app: AppIdentity?
 
-    public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
+    public init(id: String? = nil, tree: ControlTree? = nil, trees: [ControlTree]? = nil,
+                text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
                 affected: Int? = nil,
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
@@ -469,6 +477,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 app: AppIdentity? = nil) {
         self.id = id
         self.tree = tree
+        self.trees = trees
         self.text = text
         self.windows = windows
         self.exitCode = exitCode

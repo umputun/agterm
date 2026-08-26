@@ -130,7 +130,17 @@ struct Tree: RequestCommand {
     static let configuration = CommandConfiguration(abstract: "Print the workspace/session tree.")
     @OptionGroup var options: ClientOptions
 
+    /// Rejected server-side alongside `--window`, which names a single window; the error string lives there
+    /// so both the CLI and a raw protocol caller get the same one.
+    @Flag(name: .long, help: "Print every open window's tree, each tagged with its window id.")
+    var allWindows = false
+
     func makeRequest() throws -> ControlRequest {
-        ControlRequest(cmd: .tree, args: options.withWindow())
+        var args = options.withWindow()
+        if allWindows {
+            args = args ?? ControlArgs()
+            args?.allWindows = true
+        }
+        return ControlRequest(cmd: .tree, args: args)
     }
 }

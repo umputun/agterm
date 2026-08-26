@@ -619,6 +619,42 @@ struct ControlProtocolTests {
         #expect(node.workspaceId == nil)
     }
 
+    @Test func allWindowsResultRoundTripsEveryTree() throws {
+        let trees = ["win-1": "left", "win-2": "right"].sorted { $0.key < $1.key }.map { id, name in
+            ControlTree(workspaces: [ControlWorkspaceNode(id: "ws-" + id, name: "work", active: true,
+                                                          sessions: [])],
+                        windowId: id, windowName: name)
+        }
+        let response = ControlResponse(ok: true, result: ControlResult(trees: trees))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree == nil)
+        #expect(decoded.result?.trees?.map(\.windowId) == ["win-1", "win-2"])
+        #expect(decoded.result?.trees?.map(\.windowName) == ["left", "right"])
+    }
+
+    @Test func allWindowsArgRoundTrips() throws {
+        let request = ControlRequest(cmd: .tree, args: ControlArgs(allWindows: true))
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: JSONEncoder().encode(request))
+        #expect(decoded == request)
+        #expect(decoded.args?.allWindows == true)
+    }
+
+    @Test func resultOmitsTreesAndWindowNameWhenUnset() throws {
+        let tree = ControlTree(workspaces: [], windowId: "w-1")
+        let json = String(decoding: try JSONEncoder().encode(ControlResult(tree: tree)), as: UTF8.self)
+        #expect(!json.contains("trees"))
+        #expect(!json.contains("windowName"))
+    }
+
+    @Test func resultDecodesLegacyPayloadWithoutTrees() throws {
+        let json = #"{"tree":{"workspaces":[],"windowId":"w-1"}}"#
+        let result = try JSONDecoder().decode(ControlResult.self, from: Data(json.utf8))
+        #expect(result.trees == nil)
+        #expect(result.tree?.windowId == "w-1")
+        #expect(result.tree?.windowName == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithTitle() throws {
         let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", title: "user@web1: ~",
                                          active: true, split: false)

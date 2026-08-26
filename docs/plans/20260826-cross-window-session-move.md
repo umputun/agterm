@@ -245,16 +245,22 @@ host-free projection never answers half of "who owns this session".
 
 ### Task 7: Add tree --all-windows
 
-- [ ] add `allWindows: Bool?` to `ControlArgs` and `trees: [ControlTree]?` to `ControlResult`
-- [ ] `ControlDispatcher` rejects `--all-windows` together with `--window` (one names a single window, the
+- [x] add `allWindows: Bool?` to `ControlArgs` and `trees: [ControlTree]?` to `ControlResult`
+- [x] `ControlDispatcher` rejects `--all-windows` together with `--window` (one names a single window, the
       other means every one)
-- [ ] implement it in `ControlServer.controlTree(window:)`: build one tree per OPEN window via
+- [x] implement it in `ControlServer.controlTree(window:)`: build one tree per OPEN window via
       `library.openIDs()`, each tagged with its `windowId`; populate `trees`, leaving `tree` nil
-- [ ] add `--all-windows` to the `tree` CLI command with human rendering that prints each window's name and
+- [x] add `--all-windows` to the `tree` CLI command with human rendering that prints each window's name and
       id as a section header above its workspace tree
-- [ ] write tests for the mutual-exclusion error and for the multi-window projection shape
-- [ ] write tests that each returned tree carries the right `windowId` and that closed windows are absent
-- [ ] run `cd agtermCore && swift test` - must pass before task 8
+- [x] write tests for the mutual-exclusion error and for the multi-window projection shape
+- [x] write tests that each returned tree carries the right `windowId` and that closed windows are absent
+- [x] run `cd agtermCore && swift test` - must pass before task 8
+
+➕ the fan-out itself landed host-free as `WindowLibrary.openTrees(_:)`, so the app arm is a projection map
+and the closed-window/order behavior is covered in `WindowLibraryTests` rather than only in XCUITest.
+
+➕ `ControlTree.windowName` joined `windowId` (same all-or-nothing stamp): the section header names a window
+a human picked, and the response is the CLI's only source for it.
 
 ### Task 8: Add the GUI entry points
 

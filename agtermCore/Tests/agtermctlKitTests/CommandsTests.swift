@@ -1743,6 +1743,16 @@ struct CommandsTests {
         #expect(try request(["tree"]) == ControlRequest(cmd: .tree))
     }
 
+    @Test func treeAllWindows() throws {
+        #expect(try request(["tree", "--all-windows"]) == ControlRequest(cmd: .tree,
+                                                                        args: ControlArgs(allWindows: true)))
+    }
+
+    @Test func treeAllWindowsKeepsTheWindowSelectorForTheServerToReject() throws {
+        let expected = ControlRequest(cmd: .tree, args: ControlArgs(window: "w1", allWindows: true))
+        #expect(try request(["tree", "--all-windows", "--window", "w1"]) == expected)
+    }
+
     // --window folds into the command's existing args bag rather than replacing it.
 
     @Test func sessionTypeWithWindow() throws {

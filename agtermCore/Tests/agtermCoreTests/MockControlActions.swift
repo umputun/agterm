@@ -9,7 +9,7 @@ import Testing
 @MainActor
 final class MockControlActions: ControlActions {
     enum Call: Equatable {
-        case tree(window: String?)
+        case tree(window: String?, allWindows: Bool)
         case eventsRead(ControlEventReadOptions)
         case sessionNew(ControlSessionCreateOptions)
         case sessionDuplicate(target: String?, window: String?)
@@ -157,8 +157,8 @@ final class MockControlActions: ControlActions {
     var nextRestoreClearResponse = ControlResponse(ok: true)
     var nextSessionRestoreResponse = ControlResponse(ok: true)
 
-    func controlTree(window: String?) -> ControlResponse {
-        calls.append(.tree(window: window))
+    func controlTree(window: String?, allWindows: Bool) -> ControlResponse {
+        calls.append(.tree(window: window, allWindows: allWindows))
         return nextTreeResponse
     }
 

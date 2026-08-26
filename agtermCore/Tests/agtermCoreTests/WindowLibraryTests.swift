@@ -56,6 +56,32 @@ final class WindowLibraryTests {
         #expect(library.windowName(for: UUID()) == "")
     }
 
+    @Test func openTreesProjectsEveryOpenWindowInOrder() {
+        let library = WindowLibrary(directory: directory)
+        let second = library.newWindow(name: "work")
+
+        let trees = library.openTrees { store in
+            let id = library.windowID(for: store)
+            return store.controlTree(windowID: id?.uuidString, windowName: library.windowName(for: id))
+        }
+
+        #expect(trees.map(\.windowId) == [library.windows[0].id.uuidString, second.id.uuidString])
+        #expect(trees.map(\.windowName) == ["window 1", "work"])
+        #expect(trees.allSatisfy { !$0.workspaces.isEmpty })
+    }
+
+    @Test func openTreesOmitsClosedWindows() {
+        let library = WindowLibrary(directory: directory)
+        let second = library.newWindow(name: "work")
+        library.closeWindow(second.id)
+
+        let trees = library.openTrees { store in
+            store.controlTree(windowID: library.windowID(for: store)?.uuidString)
+        }
+
+        #expect(trees.map(\.windowId) == [library.windows[0].id.uuidString])
+    }
+
     @Test func allOpenSessionsFlattensEverySessionAcrossWindows() {
         let library = WindowLibrary(directory: directory)
         #expect(library.allOpenSessions().count == 1)

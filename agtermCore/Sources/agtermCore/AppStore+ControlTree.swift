@@ -8,6 +8,7 @@ extension AppStore {
     /// command lookup is supplied by the host because live process inspection is platform-specific.
     /// `windowID` names the projected window and is stamped on the tree and on every session node; only the
     /// host knows which window owns a store, so a host-free projection leaves it nil.
+    /// `windowName` rides along for `tree --all-windows`'s section headers and is dropped without a `windowID`.
     public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
                             splitForeground: (Session) -> [String]? = { _ in nil },
                             fontSize: (Session) -> Double? = { _ in nil },
@@ -20,7 +21,7 @@ extension AppStore {
                             dashboardHighlighted: () -> String? = { nil },
                             dashboardFontSize: () -> Double? = { nil },
                             dashboardFontMode: () -> String? = { nil }, app: AppIdentity? = nil,
-                            windowID: String? = nil) -> ControlTree {
+                            windowID: String? = nil, windowName: String? = nil) -> ControlTree {
         let activeID = selectedSessionID
         // `currentWorkspaceID`, not the selected session's owner: an EMPTY destination selects nothing, so
         // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
@@ -93,7 +94,8 @@ extension AppStore {
                            dashboardHighlighted: dashboardHighlighted(),
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
-                           pickPending: pickPending(), app: app, windowId: windowID)
+                           pickPending: pickPending(), app: app, windowId: windowID,
+                           windowName: windowID == nil ? nil : windowName)
     }
 
     /// The tree's `paneOverlays`: the panes covered by their own overlay, omitted when neither is.

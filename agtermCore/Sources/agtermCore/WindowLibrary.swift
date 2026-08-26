@@ -303,6 +303,12 @@ public final class WindowLibrary {
         openIDs().first { stores[$0] === store }
     }
 
+    /// Project every OPEN window in window order through `build` — the `tree --all-windows` fan-out. A
+    /// closed window has no store and is simply absent, so no caller filters for it.
+    public func openTrees(_ build: (AppStore) -> ControlTree) -> [ControlTree] {
+        openIDs().compactMap { store(for: $0).map(build) }
+    }
+
     /// The window's display name, "" for a nil or unknown id — the name half of the
     /// `{AGT_WINDOW_NAME}`/`$AGT_WINDOW_NAME` command context.
     public func windowName(for id: UUID?) -> String {

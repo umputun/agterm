@@ -353,6 +353,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// saying which one, which `tree --all-windows` makes unreadable; nil in a host-produced tree that
     /// projects no window.
     public let windowId: String?
+    /// The projected window's name, so `tree --all-windows` can head each section with something a human
+    /// picked; nil wherever `windowId` is.
+    public let windowName: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, workspaceFilter: Bool? = nil,
@@ -360,7 +363,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil, pickPending: String? = nil,
-                app: AppIdentity? = nil, windowId: String? = nil) {
+                app: AppIdentity? = nil, windowId: String? = nil, windowName: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
@@ -376,6 +379,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.pickPending = pickPending
         self.app = app
         self.windowId = windowId
+        self.windowName = windowName
     }
 }
 

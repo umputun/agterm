@@ -183,6 +183,9 @@ struct SocketClient {
         if let tree = response.result?.tree {
             return formatTree(tree)
         }
+        if let trees = response.result?.trees {
+            return trees.map(formatTree).joined(separator: "\n")
+        }
         if let windows = response.result?.windows {
             return formatWindows(windows)
         }
@@ -295,7 +298,8 @@ struct SocketClient {
     private static func formatTree(_ tree: ControlTree) -> String {
         var lines: [String] = []
         if let windowId = tree.windowId {
-            lines.append("window [\(windowId)]")
+            let name = tree.windowName.flatMap { $0.isEmpty ? nil : "\($0)  " } ?? ""
+            lines.append("window \(name)[\(windowId)]")
         }
         for workspace in tree.workspaces {
             let mark = workspace.active ? "*" : " "

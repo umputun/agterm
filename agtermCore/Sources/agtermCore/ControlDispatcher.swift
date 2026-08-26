@@ -5,7 +5,9 @@ import Foundation
 /// platform-specific side effects.
 @MainActor
 public protocol ControlActions {
-    func controlTree(window: String?) -> ControlResponse
+    /// `allWindows` projects every OPEN window into `result.trees` instead of one into `result.tree`; the
+    /// dispatcher rejects it alongside `window`, so a host sees at most one of them set.
+    func controlTree(window: String?, allWindows: Bool) -> ControlResponse
     func readEvents(_ options: ControlEventReadOptions) -> ControlResponse
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
@@ -214,7 +216,7 @@ public struct ControlDispatcher {
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
         switch request.cmd {
         case .tree:
-            return actions.controlTree(window: request.args?.window)
+            return dispatchTree(request)
         case .eventsRead:
             return dispatchEventsRead(request)
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
@@ -249,6 +251,18 @@ public struct ControlDispatcher {
         case .sessionHudOpen, .sessionHudUpdate, .sessionHudClose:
             return dispatchHudCommand(request)
         }
+    }
+
+    /// `tree`: one window's projection, or every open one with `--all-windows`. The two selectors contradict
+    /// each other — one names a single window, the other means all of them — so a caller passing both is
+    /// rejected rather than silently served one of the two.
+    private func dispatchTree(_ request: ControlRequest) -> ControlResponse {
+        let allWindows = request.args?.allWindows ?? false
+        let window = request.args?.window
+        if allWindows, window?.isEmpty == false {
+            return ControlResponse(ok: false, error: "tree takes --all-windows or --window, not both")
+        }
+        return actions.controlTree(window: window, allWindows: allWindows)
     }
 
     private func dispatchEventsRead(_ request: ControlRequest) -> ControlResponse {

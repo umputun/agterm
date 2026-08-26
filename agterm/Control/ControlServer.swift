@@ -642,7 +642,8 @@ final class ControlServer {
                 }
             },
             app: identity,
-            windowID: windowID?.uuidString
+            windowID: windowID?.uuidString,
+            windowName: windowID.map { library.windowName(for: $0) }
         )
     }
 
