@@ -264,19 +264,30 @@ a human picked, and the response is the CLI's only source for it.
 
 ### Task 8: Add the GUI entry points
 
-- [ ] add a "Move to Window" submenu in `agterm/Views/WorkspaceSidebar+ContextMenu.swift`, built like the
+- [x] add a "Move to Window" submenu in `agterm/Views/WorkspaceSidebar+ContextMenu.swift`, built like the
       existing "Move to" workspace submenu (`:106-116`): list OTHER open windows by name, omit the submenu
       entirely when there is no other open window
-- [ ] reuse `SessionBatchRequest` so multi-selection moves as one block, and route the action through
+- [x] reuse `SessionBatchRequest` so multi-selection moves as one block, and route the action through
       `AppActions` (which owns cross-window concerns) rather than the window-local `store`
-- [ ] add `AppActions.moveSession(_:toWindow:)` and a batch form beside the existing
+- [x] add `AppActions.moveSession(_:toWindow:)` and a batch form beside the existing
       `moveSession(_:toWorkspace:)` (`AppActions.swift:515`), delegating to `WindowLibrary.moveSession`
-- [ ] add "Move Session to Window …" palette entries beside the existing "Move Session to …" items,
+- [x] add "Move Session to Window …" palette entries beside the existing "Move Session to …" items,
       gated on there being another open window
-- [ ] write host-free tests for the palette entry's visibility gate in `PaletteCatalogTests`
-- [ ] write tests for the `AppActions` delegation where it is host-free; note in the plan if the AppKit
+- [x] write host-free tests for the palette entry's visibility gate in `PaletteCatalogTests`
+- [x] write tests for the `AppActions` delegation where it is host-free; note in the plan if the AppKit
       submenu itself is manual-verification only
-- [ ] run `cd agtermCore && swift test` - must pass before task 9
+- [x] run `cd agtermCore && swift test` - must pass before task 9
+
+➕ the "other open window" gate landed host-free as `WindowLibrary.moveDestinations(excluding:)`, shared by
+the submenu and the palette, so its tests are in `WindowLibraryTests` rather than `PaletteCatalogTests`
+(the move rows are per-window items, not `PaletteCommand` cases the catalog can gate).
+
+➕ `AppActions.moveSession(_:toWindow:)` and its batch form landed in `AppActions+Batch.swift`, beside the
+other multi-session sidebar entry points; hosted coverage for both, and for the palette rows, is in
+`agtermTests/AppActionsPaletteTests`. The NSMenu submenu itself stays manual-verification only.
+
+⚠️ task 7 left `agtermTests/ControlServerWorkspaceCommandsTests.swift` calling `controlTree(window:)` without
+the new `allWindows` argument, so the app-hosted target did not compile; fixed here.
 
 ### Task 9: Verify acceptance criteria
 

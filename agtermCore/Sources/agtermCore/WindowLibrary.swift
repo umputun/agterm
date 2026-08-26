@@ -465,6 +465,13 @@ public final class WindowLibrary {
         return true
     }
 
+    /// The OPEN windows a session hosted by `sourceID` can move to, in window order. Empty when that is the
+    /// only open window, which is what drops the sidebar's "Move to Window" submenu and its palette rows
+    /// instead of offering a destination that would be a no-op.
+    public func moveDestinations(excluding sourceID: UUID?) -> [WindowInfo] {
+        windows.filter { $0.id != sourceID && stores[$0.id] != nil }
+    }
+
     /// Drops the moving session from the SOURCE window's zoom target and dashboard grid: both point at an
     /// NSView about to be hosted by another window.
     private func evictWindowControllers(_ sessionID: UUID, in windowID: UUID) {

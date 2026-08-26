@@ -66,7 +66,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertTrue(version.ok, version.error ?? "")
         XCTAssertEqual(version.result?.app, injected)
 
-        let tree = server.controlTree(window: nil)
+        let tree = server.controlTree(window: nil, allWindows: false)
         XCTAssertTrue(tree.ok, tree.error ?? "")
         XCTAssertEqual(tree.result?.tree?.app, injected)
     }

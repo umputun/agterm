@@ -114,6 +114,21 @@ extension WorkspaceSidebar.Coordinator {
                 moveTo.submenu = submenu
                 menu.addItem(moveTo)
             }
+            // "Move to Window" carries the live shell into another OPEN window; a closed one has no deck
+            // to host the surface, and with no other window open the submenu is absent rather than empty.
+            let windowTargets = actions.library.moveDestinations(excluding: actions.library.windowID(for: store))
+            if !windowTargets.isEmpty {
+                let moveToWindow = NSMenuItem(title: "Move to Window", action: nil, keyEquivalent: "")
+                let submenu = NSMenu()
+                for target in windowTargets {
+                    let item = NSMenuItem(title: target.name, action: #selector(menuMoveToWindow(_:)), keyEquivalent: "")
+                    item.target = self
+                    item.representedObject = SessionBatchRequest(sessionIDs: sessionTargets, targetID: target.id)
+                    submenu.addItem(item)
+                }
+                moveToWindow.submenu = submenu
+                menu.addItem(moveToWindow)
+            }
             // "Flag"/"Unflag" toggles flagged working-set membership; the label reflects the current state.
             let allFlagged = !sessionTargets.isEmpty && sessionTargets.allSatisfy { store.session(withID: $0)?.flagged == true }
             let flagTitle: String
@@ -212,6 +227,12 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuMove(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest, let targetID = request.targetID else { return }
         store.moveSessions(request.sessionIDs, toWorkspace: targetID)
+    }
+
+    @objc private func menuMoveToWindow(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? SessionBatchRequest, let targetID = request.targetID else { return }
+        // cross-window, so this goes through `actions` rather than this sidebar's window-local store.
+        actions.moveSessions(request.sessionIDs, toWindow: targetID)
     }
 
     @objc private func menuClose(_ sender: NSMenuItem) {

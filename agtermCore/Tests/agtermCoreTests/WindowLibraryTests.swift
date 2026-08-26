@@ -1729,4 +1729,28 @@ final class WindowLibraryTests {
         #expect(library.moveSession(leaving.id, toWindow: windows.destinationID))
         #expect(dashboard.isOpen)
     }
+
+    // MARK: - Move destinations
+
+    @Test func moveDestinationsAreEmptyWithOneOpenWindow() {
+        let library = WindowLibrary(directory: directory)
+        #expect(library.moveDestinations(excluding: library.windows[0].id).isEmpty)
+    }
+
+    @Test func moveDestinationsListEveryOtherOpenWindowInOrder() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+
+        #expect(library.moveDestinations(excluding: windows.sourceID).map(\.id) == [windows.destinationID])
+        #expect(library.moveDestinations(excluding: windows.destinationID).map(\.id) == [windows.sourceID])
+        #expect(library.moveDestinations(excluding: nil).map(\.id) == [windows.sourceID, windows.destinationID])
+    }
+
+    @Test func moveDestinationsOmitAClosedWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        library.closeWindow(windows.destinationID)
+
+        #expect(library.moveDestinations(excluding: windows.sourceID).isEmpty)
+    }
 }
