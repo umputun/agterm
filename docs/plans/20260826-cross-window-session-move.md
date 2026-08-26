@@ -291,15 +291,24 @@ the new `allWindows` argument, so the app-hosted target did not compile; fixed h
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented: cross-window move preserves the live shell,
+- [x] verify all requirements from Overview are implemented: cross-window move preserves the live shell,
       destination must be open, no raise/select without `--select`, ownership readable in one call
-- [ ] verify edge cases: last session out of a window, moving the selected session, zoomed session,
+- [x] verify edge cases: last session out of a window, moving the selected session, zoomed session,
       dashboard member, session with a shown split, session with an open overlay or scratch
-- [ ] verify `--window` semantics are UNCHANGED on every command that takes it
-- [ ] run full test suite (`cd agtermCore && swift test`)
-- [ ] run `make test-app`
-- [ ] run `make lint` - zero findings required
-- [ ] verify test coverage meets project standard
+- [x] verify `--window` semantics are UNCHANGED on every command that takes it
+- [x] run full test suite (`cd agtermCore && swift test`)
+- [x] run `make test-app`
+- [x] run `make lint` - zero findings required
+- [x] verify test coverage meets project standard
+
+➕ split/overlay/scratch survival had no direct assertion — that state rides the `Session` instance, but
+nothing pinned it — so `moveSessionCarriesSplitOverlayAndScratchState` was added to `WindowLibraryTests`.
+
+Verification notes: a session inside a pending-close record is already out of `workspaces`, so `detachSession`
+returns nil and the move is refused rather than resurrecting a closing shell. `ControlTargetResolver` is
+untouched on this branch, which is what keeps `--window` a search scope everywhere. Line coverage on the
+changed files: `AppStore+Transfer` 100%, `AppStore+ControlTree` 100%, `ControlDispatcher+SessionMove` 98.6%,
+`SessionCommands` 98.2%, `WindowLibrary` 96.7%.
 
 ### Task 10: [Final] Update documentation
 

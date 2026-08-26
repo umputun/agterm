@@ -1518,6 +1518,36 @@ final class WindowLibraryTests {
         #expect(library.windowID(forSession: session.id) == windows.destinationID)
     }
 
+    @Test func moveSessionCarriesSplitOverlayAndScratchState() throws {
+        let library = WindowLibrary(directory: directory)
+        let windows = try makeTwoWindows(library)
+        let session = try #require(windows.source.workspaces.first?.sessions.first)
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitRatio = 0.35
+        let split = SpySurface()
+        let overlay = SpySurface()
+        let scratch = SpySurface()
+        session.splitSurface = split
+        session.overlayActive = true
+        session.overlaySurface = overlay
+        session.scratchActive = true
+        session.scratchSurface = scratch
+
+        #expect(library.moveSession(session.id, toWindow: windows.destinationID))
+        let moved = try #require(windows.destination.session(withID: session.id))
+        #expect(moved.isSplit)
+        #expect(moved.splitRatio == 0.35)
+        #expect(moved.splitSurface === split)
+        #expect(moved.overlayActive)
+        #expect(moved.overlaySurface === overlay)
+        #expect(moved.scratchActive)
+        #expect(moved.scratchSurface === scratch)
+        #expect(split.teardownCount == 0)
+        #expect(overlay.teardownCount == 0)
+        #expect(scratch.teardownCount == 0)
+    }
+
     @Test func moveSessionLandsInDestinationCurrentWorkspaceByDefault() throws {
         let library = WindowLibrary(directory: directory)
         let windows = try makeTwoWindows(library)
