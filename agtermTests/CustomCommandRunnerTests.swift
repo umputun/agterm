@@ -272,7 +272,8 @@ final class CustomCommandRunnerTests: XCTestCase {
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
-            if let written = try? String(contentsOf: probe, encoding: .utf8) { return written }
+            // sh truncates the redirect target before printf writes; poll past that zero-byte window.
+            if let written = try? String(contentsOf: probe, encoding: .utf8), !written.isEmpty { return written }
         }
         return nil
     }
