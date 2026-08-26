@@ -957,8 +957,8 @@ agtermctl config reload                 # apply it; prints the diagnostic count 
 ```
 
 `ghostty.conf` is scoped to agterm and overrides the bundled defaults and your global
-`~/.config/ghostty/config`; agterm's own Settings (font, theme, opacity, scroll) still win. Full key
-reference: https://ghostty.org/docs/config
+`~/.config/ghostty/config`; the values agterm emits from Settings load last and win over matching values
+there. Current list: https://agterm.com/docs#ghostty. Full key reference: https://ghostty.org/docs/config
 
 ## Set the terminal theme
 

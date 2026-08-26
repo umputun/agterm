@@ -79,7 +79,7 @@ Reload after every edit (File ▸ Reload Keymap, or `agtermctl keymap reload`). 
 
 ## Changing ghostty settings
 
-Most terminal behavior comes from ghostty. The common knobs (font, theme, background opacity and blur, scroll speed) are in agterm's Settings, but any other ghostty key (`macos-option-as-alt`, `keybind`, `window-padding-*`, and so on) is set in a config file.
+Most terminal behavior comes from ghostty. Use agterm's Settings for its built-in controls and a config file for other ghostty keys such as `macos-option-as-alt`, `keybind`, and `window-padding-*`.
 
 agterm reads four config sources, each overriding the one before it:
 
@@ -90,7 +90,7 @@ ghostty's bundled defaults  →  ~/.config/ghostty/config  →  <config dir>/gho
 
 - `<config dir>/ghostty.conf` (default `~/.config/agterm/ghostty.conf`, next to `keymap.conf`) is scoped to agterm only; the standalone Ghostty.app never reads it. Use it for keys you want in agterm but not everywhere.
 - `~/.config/ghostty/config` is your global ghostty config, shared with Ghostty.app, and already in the chain.
-- The keys agterm sets from its Settings window load last, so the Settings picker wins for what it manages. Put everything else in `ghostty.conf`.
+- Values agterm emits from Settings load last and win over matching values in `ghostty.conf`. The [Ghostty config guide](https://agterm.com/docs#ghostty) lists the keys. Put everything else in `ghostty.conf`.
 
 Edit `ghostty.conf` with **File ▸ Edit ghostty.conf…** (or the ⌃⇧P palette), which opens it in `$EDITOR` and reloads on exit, the same as Edit Keymap. After editing it elsewhere, apply it with **File ▸ Reload Config**, the action palette, or `agtermctl config reload`. A malformed line is skipped while the good ones still apply. The diagnostic count (shown in a banner and printed by `config.reload`, where `0` means a clean reload) covers every ghostty config source, not just `ghostty.conf`, because the diagnostics do not record which file they came from. Check the Console log for the offending line.
 

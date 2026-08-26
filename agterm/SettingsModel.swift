@@ -565,8 +565,8 @@ final class SettingsModel {
         # Example — make the macOS Option key send Alt (uncomment to enable):
         # macos-option-as-alt = true
         #
-        # NOTE: agterm's UI-managed keys (font, theme, background opacity/blur, scroll speed) are set
-        # in Settings and always win over this file — set those in Settings, everything else here.
+        # NOTE: Values agterm emits from Settings load after this file and win. See the current list at
+        # https://agterm.com/docs#ghostty; put other keys here.
         #
         # NOT SUPPORTED: the `ssh-env` and `ssh-terminfo` shell-integration features. They work by
         # wrapping `ssh` as a call to the `ghostty` CLI absent from agterm's bundle,

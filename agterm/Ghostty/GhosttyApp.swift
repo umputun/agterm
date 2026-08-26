@@ -570,7 +570,7 @@ final class GhosttyApp {
             scopedPath.withCString { ghostty_config_load_file(cfg, $0) }
         }
 
-        // agterm's own appearance settings (font/size/theme), loaded last so the UI-managed keys win.
+        // agterm's own settings conf, loaded last so every key `ghosttyConfigLines()` emits wins.
         let settingsConf = Self.settingsConfigURL.path
         if FileManager.default.fileExists(atPath: settingsConf) {
             settingsConf.withCString { ghostty_config_load_file(cfg, $0) }

@@ -26,8 +26,9 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   record which file a diagnostic came from), so check the Console log for the offending line. `ghostty.conf`
   (next to `keymap.conf`, always loaded) is where agterm customizations go; it overrides the bundled
   defaults, and the global `~/.config/ghostty/config` is NOT loaded unless Settings ▸ General ▸ Use my
-  global Ghostty config is on. agterm's Settings (font/theme/opacity/scroll) still win. Use it for keys the UI does not expose, e.g.
-  `macos-option-as-alt`. Most keys apply to open panes on reload, but layout keys (`window-padding-*`)
+  global Ghostty config is on. Values agterm emits from Settings load last and win over matching values
+  here; the current list is at https://agterm.com/docs#ghostty. Use it for keys the UI does not expose,
+  e.g. `macos-option-as-alt`. Most keys apply to open panes on reload, but layout keys (`window-padding-*`)
   and spawn-time keys (`term`, `shell-integration-features`) only take effect in a new session/window
   or after a relaunch. Full reference: https://ghostty.org/docs/config. Two values in it do NOT apply:
   `ssh-env` and `ssh-terminfo` for `shell-integration-features`. Ghostty implements them by replacing
