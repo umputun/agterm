@@ -71,10 +71,12 @@ session_name() {
 badge_on() {
 	[ -n "$BADGE" ] || return 0
 	name=$(session_name "$1") || return 1
-	# an empty name means the session was not found in any open window; renaming
-	# one that is not there is not worth an error, the marker is what counts
+	# an empty name is a session in no open window - a closed window keeps its
+	# sessions and their ids, so it can come back and fire. Nothing to badge is a
+	# failure like any other, or arm leaves the unbadged marker it exists to prevent.
+	[ -n "$name" ] || return 1
 	case $name in
-	"$BADGE"* | '') return 0 ;;
+	"$BADGE"*) return 0 ;;
 	esac
 	agt session rename "$BADGE$name" --target "$1" >/dev/null
 }
