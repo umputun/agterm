@@ -97,6 +97,34 @@ struct ClaudeStatusHookTests {
         #expect(result.exit == 0)
     }
 
+    @Test func integrationDrivenSpawnerIsCounted() throws {
+        // agterm detects agents by two mechanisms — own hooks (claude, codex, …) and the shell
+        // integration's AGTERM_AGENT_RE (gemini, cursor-agent, aider, crush, goose). Both are spawners
+        // to this walk: a claude worker under gemini must not repaint the gemini pane.
+        let result = try run(chain: ["login", "gemini", "claude"], args: ["completed", "--auto-reset"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
+    @Test func workerUnderScriptStaysSilent() throws {
+        // the topology a tty test gets wrong: script/expect give the worker a fresh pty, so it would
+        // look pane-owning by terminal state. The walk reads the chain instead — the intermediate
+        // process doesn't hide the spawning agent above it.
+        let result = try run(chain: ["login", "claude", "script", "claude"], args: ["completed", "--auto-reset"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
+    @Test func exhaustedWalkFailsOpen() throws {
+        // more processes above the agent than the 8-hop bound: the walk gives up without reaching a
+        // verdict and delegates — a missed guard is the pre-adapter behavior, a false silence is a bug
+        // with no symptom
+        let deep = ["login", "claude"] + Array(repeating: "sh", count: 8) + ["claude"]
+        let result = try run(chain: deep, args: ["completed", "--auto-reset"])
+        #expect(result.calls == ["completed --auto-reset"])
+        #expect(result.exit == 0)
+    }
+
     @Test func runtimeHostedAgentIsCountedThroughArgv1() throws {
         // a node/bun-hosted CLI presents as `node …/claude`, so argv[0] alone would miss it and the worker
         // would report. Counting it makes this the same two-agent chain as above.

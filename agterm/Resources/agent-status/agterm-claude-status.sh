@@ -21,8 +21,12 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 status_wrapper=${AGTERM_STATUS_WRAPPER:-"$script_dir/agterm-agent-status.sh"}
 
 # exact names, not a glob: `claude*` also matches wrapper scripts such as claude-opus-worker.
+# The list is the union of the hook-driven agents and shell/integration.sh's AGTERM_AGENT_RE
+# default — one agent set split by detection mechanism, and the walk must count all of it: an
+# integration-driven agent (say gemini) that spawns `claude -p` is a spawner too, and missing it
+# here would let the worker's reset repaint the gemini pane. Keep the two lists in sync.
 is_agent() {
-  case "$1" in claude | codex | kimi | opencode | pi) return 0 ;; esac
+  case "$1" in claude | codex | kimi | opencode | pi | gemini | cursor-agent | aider | crush | goose) return 0 ;; esac
   return 1
 }
 
