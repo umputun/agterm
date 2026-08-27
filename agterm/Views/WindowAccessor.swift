@@ -160,9 +160,7 @@ struct WindowAccessor: NSViewRepresentable {
                             // already persisted and `closeWindow` no-ops under the flag, so clearing here
                             // writes nulls over it and every ⌘Q comes back a plain shell.
                             for session in store.workspaces.flatMap(\.sessions) {
-                                session.foregroundCommand = nil
-                                session.splitForegroundCommand = nil
-                                session.clearPendingForegroundCommands()
+                                session.clearCapturedForegroundCommands()
                             }
                         }
                         store.save()

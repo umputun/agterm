@@ -508,11 +508,7 @@ final class ControlServer {
     /// answer ok and then watch those windows run the commands anyway. The `session.restore` pins are
     /// deliberately untouched — they are sticky, and this command clears captures.
     func clearRestoreCommands() -> ControlResponse {
-        for session in library.allOpenSessions() {
-            session.foregroundCommand = nil
-            session.splitForegroundCommand = nil
-            session.clearPendingForegroundCommands()
-        }
+        for session in library.allOpenSessions() { session.clearCapturedForegroundCommands() }
         // the ack waits on the write for the same reason `restore.capture`'s does: the save IS the clear, and
         // the slots are not readable, so an ok over a failed write leaves a stale capture nothing can detect.
         guard library.saveAllOpenChecked() else {

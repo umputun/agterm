@@ -545,6 +545,27 @@ struct SessionTests {
         #expect(session.restoreCommand == "claude --resume main")
     }
 
+    @Test func clearCapturedForegroundCommandsDropsThePersistedAndPendingPairsTogether() {
+        // what `restore.clear` and a non-last window close both need: the persisted pair is what a launch
+        // reads, the pending pair is what an already-started launch is holding, so dropping one leaves the
+        // other to replay. The session.restore pins are sticky and must survive.
+        let session = Session(initialCwd: "/repo")
+        session.foregroundCommand = ["tee", "/tmp/m"]
+        session.splitForegroundCommand = ["tail", "-f", "/var/log/x"]
+        session.pendingForegroundCommand = session.foregroundCommand
+        session.pendingSplitForegroundCommand = session.splitForegroundCommand
+        session.restoreCommand = "claude --resume main"
+        session.pendingRestoreCommand = session.restoreCommand
+
+        session.clearCapturedForegroundCommands()
+        #expect(session.foregroundCommand == nil)
+        #expect(session.splitForegroundCommand == nil)
+        #expect(session.takePendingForegroundCommand(pane: .left) == nil)
+        #expect(session.takePendingForegroundCommand(pane: .right) == nil)
+        #expect(session.restoreCommand == "claude --resume main")
+        #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume main")
+    }
+
     @Test func clearPendingRestoreOverridesDropsBothPayloadsAndKeepsThePins() {
         // the same object comes back on undo, so an unconsumed payload must not survive the round trip —
         // while the persisted pins stay, to fire on the next launch.

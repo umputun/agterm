@@ -641,6 +641,16 @@ public final class Session: Identifiable {
         pendingSplitForegroundCommand = nil
     }
 
+    /// Drops the captured foreground commands whole: the persisted pair AND the unconsumed pending pair.
+    /// `restore.clear` and a non-last window close both need exactly this, over different session sets, and
+    /// clearing the persisted fields alone would leave a launch-armed replay running (see
+    /// `.claude/rules/settings.md`). Owning it here keeps the next capture slot from needing a second edit.
+    public func clearCapturedForegroundCommands() {
+        foregroundCommand = nil
+        splitForegroundCommand = nil
+        clearPendingForegroundCommands()
+    }
+
     /// Drops every unconsumed bootstrap payload — both override pins and both captured commands — leaving
     /// the persisted fields alone. Called where a live `Session` leaves the tree but may return as the SAME
     /// object (the soft-close grace window): a payload armed at bootstrap would otherwise survive the round
