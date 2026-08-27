@@ -299,6 +299,57 @@ struct CommandsTests {
             == "use either --after or --before, not both")
     }
 
+    @Test func sessionMoveToWindow() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(select: false, toWindow: "w2"))
+        #expect(try request(["session", "move", "--to-window", "w2", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveToWindowWithWorkspaceAndSelect() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(workspace: "ws2", select: true, toWindow: "w2"))
+        #expect(try request(["session", "move", "ws2", "--to-window", "w2", "--select", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveToWindowMultipleTargets() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(targets: ["s1", "s2"], select: false, toWindow: "w2"))
+        #expect(try request(["session", "move", "--to-window", "w2", "--target", "s1", "--target", "s2"]) == expected)
+    }
+
+    @Test func sessionMoveToWindowKeepsWindowAsSearchScope() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(select: false, window: "w1", toWindow: "w2"))
+        #expect(try request(["session", "move", "--to-window", "w2", "--window", "w1", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveRejectsToWindowWithTo() {
+        #expect(validationMessage(["session", "move", "--to-window", "w2", "--to", "up"])
+            == "session.move takes --to-window or --to, not both")
+    }
+
+    @Test func sessionMoveRejectsToWindowWithAfter() {
+        #expect(validationMessage(["session", "move", "--to-window", "w2", "--after", "s2"])
+            == "session.move takes --to-window or --after/--before, not both")
+    }
+
+    @Test func sessionMoveRejectsToWindowWithBefore() {
+        #expect(validationMessage(["session", "move", "--to-window", "w2", "--before", "s2"])
+            == "session.move takes --to-window or --after/--before, not both")
+    }
+
+    @Test func sessionMoveRejectsSelectWithoutToWindow() {
+        #expect(validationMessage(["session", "move", "ws2", "--select"])
+            == "session.move --select requires --to-window")
+        #expect(validationMessage(["session", "move", "--to", "up", "--select"])
+            == "session.move --select requires --to-window")
+    }
+
+    @Test func sessionMoveWindowAloneIsNotADestination() {
+        #expect(validationMessage(["session", "move", "--window", "w1"])
+            == "provide a destination workspace, --to, or --after/--before")
+    }
+
     @Test func sessionMoveRejectsAfterAndTo() {
         #expect(validationMessage(["session", "move", "--after", "a", "--to", "up"])
             == "session.move takes --after/--before or --to, not both")
@@ -1701,6 +1752,16 @@ struct CommandsTests {
 
     @Test func treeWithoutWindowOmitsArgs() throws {
         #expect(try request(["tree"]) == ControlRequest(cmd: .tree))
+    }
+
+    @Test func treeAllWindows() throws {
+        #expect(try request(["tree", "--all-windows"]) == ControlRequest(cmd: .tree,
+                                                                        args: ControlArgs(allWindows: true)))
+    }
+
+    @Test func treeAllWindowsKeepsTheWindowSelectorForTheServerToReject() throws {
+        let expected = ControlRequest(cmd: .tree, args: ControlArgs(window: "w1", allWindows: true))
+        #expect(try request(["tree", "--all-windows", "--window", "w1"]) == expected)
     }
 
     // --window folds into the command's existing args bag rather than replacing it.

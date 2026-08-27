@@ -690,7 +690,9 @@ final class ControlServer {
                 case .untouched: return "untouched"
                 }
             },
-            app: identity
+            app: identity,
+            windowID: windowID?.uuidString,
+            windowName: windowID.map { library.windowName(for: $0) }
         )
     }
 

@@ -886,7 +886,8 @@
                 select multiple sessions for batch flag, close, move, and drag. Right-clicking inside the selection keeps the whole
                 batch, so <strong style="color: #e6e1d7">Flag</strong>, <strong style="color: #e6e1d7">Close</strong>, and
                 <strong style="color: #e6e1d7">Move to</strong> act on all of it; right-clicking a row outside narrows the menu to
-                that row. Dragged sessions keep running, shell and scrollback
+                that row. <strong style="color: #e6e1d7">Move to Window</strong> sends the selection to another open window —
+                it appears only when a second window is open. Dragged and moved sessions keep running, shell and scrollback
                 intact.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
@@ -1320,6 +1321,19 @@
               scriptable — <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window</span> can
               create, raise, move, resize, and minimize them, so a few lines of shell can give every window the same frame and park
               all but the one you are on, turning several windows into what feels like one that switches contents.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              A session is not stuck in the window it was created in. <strong style="color: #e6e1d7">Move to Window</strong> in the
+              sidebar's right-click menu, the same entry in the action palette, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session move --to-window</span> hands it to another OPEN window with its shell, running
+              program and scrollback intact — an <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">htop</span> or a long build keeps going as it changes windows.
+              The destination is not raised and nothing is re-selected unless you pass
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--select</span>, so a background job can be filed away without interrupting you.
+              One caveat: a shell that is already running keeps the
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_WINDOW_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_WORKSPACE_ID</span> it was started with, since
+              nothing can rewrite a live process's environment — ask
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json --all-windows</span> where a session lives now, and read the
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">windowId</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspaceId</span> on its node.
             </p>
           </section>
 
@@ -2433,7 +2447,9 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (a stable per-surface token the
               agent-status hook forwards as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
               so a promoted-then-re-split pane still tags correctly), so a
-              script can drive its own window without hard-coding ids.
+              script can drive its own window without hard-coding ids. The window and workspace ids are a snapshot taken when
+              the shell spawned: moving the session leaves them stale, so read the current owner from
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl tree --json --all-windows</span> when it matters.
             </div>
 
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 22px 0 16px">

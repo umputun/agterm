@@ -233,7 +233,8 @@ spans intact, and format long catalogs as lists.
 
 - `sidebar.md`: outline, reorder, flagged/focus views, scoped navigation, reconciliation, persistence.
 - `menu-actions.md`: actions, menus, split panes, navigation, palettes, MRU, rename, search.
-- `windows.md`: window library, restoration, quick terminal, active-store resolution, quit, controls.
+- `windows.md`: window library, restoration, quick terminal, active-store resolution, quit, controls,
+  cross-window session move.
 - `control-api.md`: protocol layers, catalog, addressing, CLI/hooks/skill installers.
 - `settings.md`: settings model/UI, Ghostty config emission, translucency.
 - `theme-picker.md`: preview/commit/cancel and seeded default.

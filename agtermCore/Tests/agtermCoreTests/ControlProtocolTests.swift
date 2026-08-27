@@ -585,6 +585,76 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.flagged == true)
     }
 
+    @Test func treeRoundTripsWithOwnershipIds() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         windowId: "w-1", workspaceId: "ws-1")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "ws-1", name: "work", active: true, sessions: [session])],
+            windowId: "w-1")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.windowId == "w-1")
+        let node = try #require(decoded.result?.tree?.workspaces.first?.sessions.first)
+        #expect(node.windowId == "w-1")
+        #expect(node.workspaceId == "ws-1")
+    }
+
+    @Test func treeOmitsOwnershipIdsWhenUnset() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "ws-1", name: "work", active: true,
+                                                                 sessions: [session])])
+        let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
+        #expect(!json.contains("windowId"))
+        #expect(!json.contains("workspaceId"))
+    }
+
+    @Test func treeDecodesLegacyPayloadWithoutOwnershipIds() throws {
+        let session = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"#
+            + #""overlay":false,"scratch":false,"flagged":false}"#
+        let json = #"{"workspaces":[{"id":"ws-1","name":"work","active":true,"sessions":["# + session + "]}]}"
+        let tree = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(tree.windowId == nil)
+        let node = try #require(tree.workspaces.first?.sessions.first)
+        #expect(node.windowId == nil)
+        #expect(node.workspaceId == nil)
+    }
+
+    @Test func allWindowsResultRoundTripsEveryTree() throws {
+        let trees = ["win-1": "left", "win-2": "right"].sorted { $0.key < $1.key }.map { id, name in
+            ControlTree(workspaces: [ControlWorkspaceNode(id: "ws-" + id, name: "work", active: true,
+                                                          sessions: [])],
+                        windowId: id, windowName: name)
+        }
+        let response = ControlResponse(ok: true, result: ControlResult(trees: trees))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree == nil)
+        #expect(decoded.result?.trees?.map(\.windowId) == ["win-1", "win-2"])
+        #expect(decoded.result?.trees?.map(\.windowName) == ["left", "right"])
+    }
+
+    @Test func allWindowsArgRoundTrips() throws {
+        let request = ControlRequest(cmd: .tree, args: ControlArgs(allWindows: true))
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: JSONEncoder().encode(request))
+        #expect(decoded == request)
+        #expect(decoded.args?.allWindows == true)
+    }
+
+    @Test func resultOmitsTreesAndWindowNameWhenUnset() throws {
+        let tree = ControlTree(workspaces: [], windowId: "w-1")
+        let json = String(decoding: try JSONEncoder().encode(ControlResult(tree: tree)), as: UTF8.self)
+        #expect(!json.contains("trees"))
+        #expect(!json.contains("windowName"))
+    }
+
+    @Test func resultDecodesLegacyPayloadWithoutTrees() throws {
+        let json = #"{"tree":{"workspaces":[],"windowId":"w-1"}}"#
+        let result = try JSONDecoder().decode(ControlResult.self, from: Data(json.utf8))
+        #expect(result.trees == nil)
+        #expect(result.tree?.windowId == "w-1")
+        #expect(result.tree?.windowName == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithTitle() throws {
         let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", title: "user@web1: ~",
                                          active: true, split: false)
@@ -1396,6 +1466,32 @@ struct ControlProtocolTests {
         #expect(decoded == request)
         #expect(decoded.args?.before == "1a2b")
         #expect(decoded.args?.after == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithDestinationWindow() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c",
+                                     args: ControlArgs(workspace: "dest", select: true,
+                                                       window: "src", toWindow: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.toWindow == "1a2b")
+        #expect(decoded.args?.window == "src")
+        #expect(decoded.args?.workspace == "dest")
+        #expect(decoded.args?.select == true)
+    }
+
+    @Test func sessionMoveOmitsDestinationWindowWhenUnset() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "dest"))
+        let json = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        #expect(!json.contains("toWindow"))
+        #expect(try roundTrip(request).args?.toWindow == nil)
+    }
+
+    @Test func sessionMoveDecodesLegacyPayloadWithoutDestinationWindow() throws {
+        let json = #"{"cmd":"session.move","target":"9f3c","args":{"workspace":"dest"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.args?.workspace == "dest")
+        #expect(decoded.args?.toWindow == nil)
     }
 
     @Test func sessionNewRoundTripsWithAfterAnchor() throws {

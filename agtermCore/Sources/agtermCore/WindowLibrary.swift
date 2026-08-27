@@ -105,6 +105,11 @@ public final class WindowLibrary {
     /// next launch's reopen-all instead of being zeroed as each window tears down.
     @ObservationIgnored public var isTerminating = false
 
+    /// Re-points a moved session's live surfaces at the store that now owns it, called by `moveSession` after
+    /// a cross-window adopt. Set by the app target, which built those surfaces: their callbacks captured the
+    /// SOURCE store and resolve the session by id there, so without this every one of them silently no-ops.
+    @ObservationIgnored public var rebindAdoptedSession: ((Session, AppStore) -> Void)?
+
     private static let indexFileName = "windows.json"
     private static let windowsSubdirectory = "windows"
     private static let legacyFileName = "workspaces.json"
@@ -303,6 +308,12 @@ public final class WindowLibrary {
         openIDs().first { stores[$0] === store }
     }
 
+    /// Project every OPEN window in window order through `build` — the `tree --all-windows` fan-out. A
+    /// closed window has no store and is simply absent, so no caller filters for it.
+    public func openTrees(_ build: (AppStore) -> ControlTree) -> [ControlTree] {
+        openIDs().compactMap { store(for: $0).map(build) }
+    }
+
     /// The window's display name, "" for a nil or unknown id — the name half of the
     /// `{AGT_WINDOW_NAME}`/`$AGT_WINDOW_NAME` command context.
     public func windowName(for id: UUID?) -> String {
@@ -423,6 +434,61 @@ public final class WindowLibrary {
     public func clearRecentClosedItems() {
         recentClosedStore.clear()
         refreshRecentClosedItems()
+    }
+
+    /// Moves a session into another OPEN window, keeping the **same** `Session` instance so its surface and
+    /// live shell survive the re-host. A nil `workspace` lands in the destination's `currentWorkspaceID`;
+    /// `select` makes it the destination's active session, so a plain move leaves both windows' selections
+    /// alone and a background session stays background. A same-window call delegates to
+    /// `AppStore.moveSession`, keeping single-window behavior and the wire contract identical.
+    ///
+    /// False when the session is unknown, the destination window is closed (nothing would host the surface),
+    /// the destination workspace is unknown, or the source window has a picker pending — that picker's answer
+    /// is addressed to the window, mirroring the `pick pending` guard on the other surface commands.
+    @discardableResult
+    public func moveSession(_ sessionID: UUID, toWindow destinationID: UUID, workspace: UUID? = nil,
+                            select: Bool = false) -> Bool {
+        guard let sourceID = windowID(forSession: sessionID), let source = stores[sourceID],
+              let destination = stores[destinationID] else { return false }
+        guard let targetWorkspace = workspace ?? destination.currentWorkspaceID,
+              destination.workspaces.contains(where: { $0.id == targetWorkspace }) else { return false }
+        guard PickRegistry.shared.controller(for: sourceID)?.pending == nil else { return false }
+
+        if sourceID == destinationID {
+            source.moveSession(sessionID, toWorkspace: targetWorkspace)
+            if select { source.selectSession(sessionID) }
+            return true
+        }
+        evictWindowControllers(sessionID, in: sourceID)
+        let origin = source.workspace(forSession: sessionID)?.id
+        guard let session = source.detachSession(sessionID) else { return false }
+        guard destination.adoptSession(session, toWorkspace: targetWorkspace, select: select) else {
+            // unreachable after the guards above, but a live shell must never be dropped on the floor.
+            source.adoptSession(session, toWorkspace: origin)
+            return false
+        }
+        rebindAdoptedSession?(session, destination)
+        return true
+    }
+
+    /// The OPEN windows a session hosted by `sourceID` can move to, in window order. Empty when that is the
+    /// only open window, which is what drops the sidebar's "Move to Window" submenu and its palette rows
+    /// instead of offering a destination that would be a no-op.
+    public func moveDestinations(excluding sourceID: UUID?) -> [WindowInfo] {
+        windows.filter { $0.id != sourceID && stores[$0.id] != nil }
+    }
+
+    /// Drops the moving session from the SOURCE window's zoom target and dashboard grid: both point at an
+    /// NSView about to be hosted by another window.
+    private func evictWindowControllers(_ sessionID: UUID, in windowID: UUID) {
+        if let zoom = TerminalZoomRegistry.shared.controller(for: windowID),
+           case let .session(target, _)? = zoom.target, target == sessionID {
+            zoom.clear()
+        }
+        if let dashboard = DashboardControllerRegistry.shared.controller(for: windowID),
+           dashboard.members.contains(where: { $0.session == sessionID }) {
+            dashboard.close()
+        }
     }
 
     /// Closes a window: drops its store and persists the index. The app-target caller tears down the

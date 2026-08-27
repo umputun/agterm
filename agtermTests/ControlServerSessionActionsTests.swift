@@ -652,4 +652,93 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(resized.ok, resized.error ?? "")
         XCTAssertEqual(bodyText(session), body, "a resize must rewrite the header the helper reads")
     }
+
+    // MARK: - Cross-window move
+
+    private struct MoveFixture {
+        let source: AppStore
+        let destination: AppStore
+        let destinationID: UUID
+        let session: Session
+    }
+
+    private func makeMoveFixture() throws -> MoveFixture {
+        let source = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(source.currentWorkspaceID)
+        let session = try XCTUnwrap(source.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let other = library.newWindow(name: "work")
+        return MoveFixture(source: source, destination: try XCTUnwrap(library.store(for: other.id)),
+                           destinationID: other.id, session: session)
+    }
+
+    // the destination workspace names one inside the DESTINATION store, the only store that has it, while
+    // `--window` stays the search scope for the target.
+    func testMoveToWindowResolvesTheWorkspaceInTheDestinationStore() throws {
+        let fixture = try makeMoveFixture()
+        let target = fixture.destination.addWorkspace(name: "landing")
+
+        let response = server.moveSession(fixture.session.id.uuidString, window: nil,
+                                          move: .window(window: fixture.destinationID.uuidString,
+                                                        workspace: target.id.uuidString),
+                                          select: false)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(response.result?.id, fixture.session.id.uuidString)
+        XCTAssertNil(fixture.source.session(withID: fixture.session.id))
+        XCTAssertEqual(fixture.destination.workspace(forSession: fixture.session.id)?.id, target.id)
+        XCTAssertNotEqual(fixture.destination.selectedSessionID, fixture.session.id, "a plain move stays background")
+    }
+
+    func testMoveToWindowWithSelectMakesItActiveInTheDestination() throws {
+        let fixture = try makeMoveFixture()
+
+        let response = server.moveSession(fixture.session.id.uuidString, window: nil,
+                                          move: .window(window: fixture.destinationID.uuidString, workspace: nil),
+                                          select: true)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(fixture.destination.selectedSessionID, fixture.session.id)
+    }
+
+    func testMoveToWindowReportsAClosedDestinationRatherThanOpeningIt() throws {
+        let fixture = try makeMoveFixture()
+        library.closeWindow(fixture.destinationID)
+
+        let response = server.moveSession(fixture.session.id.uuidString, window: nil,
+                                          move: .window(window: fixture.destinationID.uuidString, workspace: nil),
+                                          select: false)
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "window not open — window.select it first")
+        XCTAssertTrue(fixture.source.session(withID: fixture.session.id) === fixture.session)
+    }
+
+    // a workspace of the SOURCE window must not resolve: the destination store is where it has to exist.
+    func testMoveToWindowRejectsAWorkspaceFromTheSourceWindow() throws {
+        let fixture = try makeMoveFixture()
+        let sourceOnly = fixture.source.addWorkspace(name: "source-only")
+
+        let response = server.moveSession(fixture.session.id.uuidString, window: nil,
+                                          move: .window(window: fixture.destinationID.uuidString,
+                                                        workspace: sourceOnly.id.uuidString),
+                                          select: false)
+
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(fixture.source.session(withID: fixture.session.id) === fixture.session)
+    }
+
+    func testMoveToWindowBatchMovesEveryTargetInOrder() throws {
+        let fixture = try makeMoveFixture()
+        let owner = try XCTUnwrap(fixture.source.currentWorkspaceID)
+        let second = try XCTUnwrap(fixture.source.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+
+        let response = server.moveSessions([fixture.session.id.uuidString, second.id.uuidString], window: nil,
+                                           move: .window(window: fixture.destinationID.uuidString, workspace: nil),
+                                           select: false)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(response.result?.affected, 2)
+        let landed = try XCTUnwrap(fixture.destination.workspaces.first).sessions.map(\.id)
+        XCTAssertEqual(landed.suffix(2), [fixture.session.id, second.id])
+    }
 }

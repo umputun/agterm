@@ -15,7 +15,40 @@ struct ControlDispatcherTests {
         let response = await dispatcher.dispatch(ControlRequest(cmd: .tree, args: ControlArgs(window: "abc")))
 
         #expect(response == ControlResponse(ok: true, result: ControlResult(tree: tree)))
-        #expect(actions.calls == [.tree(window: "abc")])
+        #expect(actions.calls == [.tree(window: "abc", allWindows: false)])
+    }
+
+    @Test func treeRoutesAllWindowsThrough() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let trees = [ControlTree(workspaces: [], windowId: "win-1"),
+                     ControlTree(workspaces: [], windowId: "win-2")]
+        actions.nextTreeResponse = ControlResponse(ok: true, result: ControlResult(trees: trees))
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .tree, args: ControlArgs(allWindows: true)))
+
+        #expect(response?.result?.trees == trees)
+        #expect(actions.calls == [.tree(window: nil, allWindows: true)])
+    }
+
+    @Test func treeWithoutArgsRequestsTheSingleWindowProjection() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .tree))
+
+        #expect(actions.calls == [.tree(window: nil, allWindows: false)])
+    }
+
+    @Test func treeRejectsAllWindowsWithAWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let request = ControlRequest(cmd: .tree, args: ControlArgs(window: "w1", allWindows: true))
+        let response = await dispatcher.dispatch(request)
+
+        #expect(response == ControlResponse(ok: false, error: "tree takes --all-windows or --window, not both"))
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func sidebarVisibilityParsesModesAndKeepsExactResponse() async {
@@ -271,8 +304,8 @@ struct ControlDispatcherTests {
         #expect(after == ControlResponse(ok: true))
         #expect(before == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .sessionMove(target: "session", window: "win", .place(anchor: "anchor", after: true)),
-            .sessionMove(target: "session", window: nil, .place(anchor: "anchor", after: false))
+            .sessionMove(target: "session", window: "win", .place(anchor: "anchor", after: true), select: false),
+            .sessionMove(target: "session", window: nil, .place(anchor: "anchor", after: false), select: false)
         ])
     }
 
@@ -485,8 +518,8 @@ struct ControlDispatcherTests {
         #expect(reorder == ControlResponse(ok: true))
         #expect(workspace == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .sessionMove(target: "session", window: "win", .reorder(.top)),
-            .sessionMove(target: "session", window: nil, .workspace("dest"))
+            .sessionMove(target: "session", window: "win", .reorder(.top), select: false),
+            .sessionMove(target: "session", window: nil, .workspace("dest"), select: false)
         ])
     }
 
@@ -514,8 +547,8 @@ struct ControlDispatcherTests {
             error: "session.move --target can be repeated only with a workspace or --after/--before"
         ))
         #expect(actions.calls == [
-            .sessionMoveBatch(targets: ["a", "b"], window: "win", .workspace("dest")),
-            .sessionMoveBatch(targets: ["a", "b"], window: nil, .place(anchor: "anchor", after: true))
+            .sessionMoveBatch(targets: ["a", "b"], window: "win", .workspace("dest"), select: false),
+            .sessionMoveBatch(targets: ["a", "b"], window: nil, .place(anchor: "anchor", after: true), select: false)
         ])
     }
 
@@ -535,8 +568,8 @@ struct ControlDispatcherTests {
         #expect(workspace == ControlResponse(ok: true))
         #expect(after == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .sessionMove(target: "a", window: "win", .workspace("dest")),
-            .sessionMove(target: "b", window: nil, .place(anchor: "anchor", after: true)),
+            .sessionMove(target: "a", window: "win", .workspace("dest"), select: false),
+            .sessionMove(target: "b", window: nil, .place(anchor: "anchor", after: true), select: false),
         ])
     }
 

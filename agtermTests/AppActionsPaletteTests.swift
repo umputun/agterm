@@ -34,7 +34,11 @@ final class AppActionsPaletteTests: XCTestCase {
     }
 
     private func moveDestinationIDs() -> [String] {
-        actions.paletteActions().map(\.id).filter { $0.hasPrefix("move-") }
+        actions.paletteActions().map(\.id).filter { $0.hasPrefix("move-") && !$0.hasPrefix("move-window-") }
+    }
+
+    private func moveWindowDestinationIDs() -> [String] {
+        actions.paletteActions().map(\.id).filter { $0.hasPrefix("move-window-") }
     }
 
     // a freshly created workspace is `currentWorkspaceID` while the selection still sits elsewhere, so
@@ -59,6 +63,86 @@ final class AppActionsPaletteTests: XCTestCase {
         store.selectSession(nil)
 
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
+    }
+
+    func testNoMoveToWindowDestinationsWithASingleOpenWindow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(session.id)
+
+        XCTAssertTrue(moveWindowDestinationIDs().isEmpty, "the only open window is not a destination")
+    }
+
+    func testMoveToWindowListsTheOtherOpenWindowAndMovesTheSessionThere() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(session.id)
+        let sourceID = try XCTUnwrap(library.activeWindowID)
+        let other = library.newWindow(name: "work")
+        let destination = try XCTUnwrap(library.store(for: other.id))
+        library.frontmostWindowID = sourceID // the palette is driven from the window the session is in
+
+        let row = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-window-\(other.id)" })
+        XCTAssertEqual(row.title, "Move Session to Window: work")
+        XCTAssertEqual(moveWindowDestinationIDs(), ["move-window-\(other.id)"])
+        row.run()
+
+        XCTAssertNil(store.session(withID: session.id), "the source window gave the session up")
+        XCTAssertTrue(destination.session(withID: session.id) === session, "the same instance, with its shell")
+    }
+
+    func testMoveSessionsToWindowMovesAWholeSidebarSelection() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let other = library.newWindow(name: "work")
+        let destination = try XCTUnwrap(library.store(for: other.id))
+
+        XCTAssertEqual(actions.moveSessions([first.id, second.id], toWindow: other.id), 2)
+
+        let moved = try XCTUnwrap(destination.workspaces.first).sessions.map(\.id)
+        XCTAssertEqual(moved.suffix(2), [first.id, second.id], "the selection keeps its order")
+        XCTAssertNil(store.session(withID: first.id))
+        XCTAssertNil(store.session(withID: second.id))
+    }
+
+    // the gate reads the SOURCE window: a background sidebar's Move must not be judged by whatever modal
+    // the frontmost window happens to have up.
+    func testMoveToWindowIsGatedOnTheSourceWindowNotTheFrontmostOne() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let sourceID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let other = library.newWindow(name: "work")
+        let destination = try XCTUnwrap(library.store(for: other.id))
+        library.frontmostWindowID = other.id
+
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(other.id, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(other.id) }
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        XCTAssertTrue(actions.moveSession(session.id, toWindow: other.id),
+                      "the frontmost window's zoom is not the gate")
+        XCTAssertTrue(destination.session(withID: session.id) === session)
+
+        XCTAssertFalse(actions.moveSession(session.id, toWindow: sourceID),
+                       "the session's own window is the zoomed one now, so the move back is refused")
+        XCTAssertNil(store.session(withID: session.id))
+    }
+
+    func testMoveSessionToAClosedWindowIsRefused() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let other = library.newWindow(name: "work")
+        library.closeWindow(other.id)
+
+        XCTAssertFalse(actions.moveSession(session.id, toWindow: other.id))
+        XCTAssertTrue(store.session(withID: session.id) === session)
     }
 
     private func actionRow(_ command: PaletteCommand) throws -> PaletteItem {

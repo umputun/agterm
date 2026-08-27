@@ -421,7 +421,7 @@
                   word-break: break-word;
                 "
               >
-                agtermctl tree [--json] [--window W]
+                agtermctl tree [--json] [--window W] [--all-windows]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">
                 tree
@@ -429,6 +429,15 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Print the workspace/session tree. This is the read side of most of the API — nearly every state-mutating command has
                 a matching field here, so a script can record a value, change it, and restore it.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--all-windows</span> projects EVERY open window instead of one: the response
+                carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.trees</span>, an array of trees each tagged with its own
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowId</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowName</span>, and leaves the singular
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.tree</span> nil. Closed windows are absent, and it is rejected together
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, which names a single one. It is the only call that
+                locates a session in ANY window — the answer to "who owns this session" once one has been
+                moved with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session move --to-window</span>.
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 10px 0 0">
                 <strong style="color: #bfbab0">Session node:</strong>
@@ -482,8 +491,13 @@
                 restore override, omitted when none and an empty string when pinned to nothing),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowId</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceId</span> (the window and
+                workspace that own the session right now — the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, and the reliable answer after a
+                cross-window move, since a running shell keeps its spawn-time
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Workspace node:</strong>
@@ -518,13 +532,17 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> (the pending native picker's id,
                 omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomedSurface</span>, the four
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard*</span> fields, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard*</span> fields,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowId</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowName</span> (which window this tree
+                projects — what tells the sections of an
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--all-windows</span> response apart), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> (which agterm is serving this socket —
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span>, plus
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commit</span> when the build recorded one; the same value
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl version</span> returns).
                 All are read-only, and all but
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> are projections of live GUI state.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> and the two
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window*</span> fields are projections of live GUI state.
               </p>
             </div>
           </section>
@@ -970,11 +988,11 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session move &lt;workspace&gt; | --to up|down|top|bottom | --after SID | --before SID [--target T ...] [--window W]
+                agtermctl session move &lt;workspace&gt; | --to up|down|top|bottom | --after SID | --before SID | --to-window W [&lt;workspace&gt;] [--select] [--target T ...] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.move</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Three mutually-exclusive placement intents, exactly one required. A positional
+                Four mutually-exclusive placement intents, exactly one required. A positional
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;workspace&gt;</span> relocates the session there
                 (appending). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> reorders it within its own
                 workspace. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
@@ -985,6 +1003,24 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> to move an ordered batch atomically;
                 batch relative reorder via <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> is not supported.
                 Batch output reports the number of sessions actually moved.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to-window</span> is the fourth intent: it moves the session into another
+                window, carrying its live shell, running program and scrollback. The destination window must
+                already be OPEN (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">window not open — window.select it first</span> otherwise);
+                an optional positional <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;workspace&gt;</span> names a workspace INSIDE that
+                window, defaulting to its selected one. The move neither raises the destination nor changes
+                either window's selection — the session lands in the background, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> opts into selecting it there, and is rejected
+                without it (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.move --select requires --to-window</span>).
+                It cannot be combined with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>, and it is unrelated to
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, which only scopes where
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> is searched. A moved shell keeps the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span> it was spawned with — read
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree --all-windows</span> for the session's real owner afterwards.
               </p>
             </div>
 

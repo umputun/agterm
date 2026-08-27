@@ -19,7 +19,8 @@ paths:
 
 A window is a named, persisted workspace/session bundle rendered in exactly one macOS window. One bundle
 never appears in two windows, and one window never holds two bundles. Shared live state and cross-window
-session drag are out of scope.
+session DRAG are out of scope. A cross-window MOVE is supported and keeps 1:1: the session leaves one
+bundle and joins another, carrying its live shell.
 
 - The Dock menu snapshots the last-active store and strongly retains item targets because `NSMenuItem.target`
   is weak. Invalidate previous targets on rebuild. Every item except New Window keeps its captured scope,
@@ -47,6 +48,30 @@ session drag are out of scope.
   considering legacy migration or an empty seed. Recovered files are appended before `loadStore`, named
   `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open with a
   default workspace/session. The library is never empty after launch.
+
+## Cross-window session move
+
+- `WindowLibrary.moveSession(_:toWindow:workspace:select:)` transfers one live `Session` INSTANCE between
+  two stores through `AppStore.detachSession`/`adoptSession`, so its surface and shell survive.
+  A same-window call delegates to `AppStore.moveSession`, keeping the single-window path unforked.
+- The destination must be OPEN. A closed window has no mounted deck and scene IDs come from a FIFO queue,
+  so the moved surface would land with no host; refuse with `window not open — window.select it first`.
+- Evict the SOURCE window's `TerminalZoomRegistry` and `DashboardControllerRegistry` entries for the
+  session before detaching, and refuse while its `PickRegistry` pick is pending — otherwise the source
+  window keeps a zoom target or grid cell pointing at an NSView another window now hosts.
+- The move neither selects nor raises; `select:` opts into selecting it in the destination.
+  `moveDestinations(excluding:)` is the shared "other open window" gate behind the sidebar submenu and the
+  palette rows, so one window open means no entry point rather than an empty one.
+- A successful cross-window adopt MUST run `rebindAdoptedSession`, the app-set hook re-pointing the moved
+  session's surfaces at the destination store. No surface factory re-runs (the instance and its views
+  survive), so every callback still holds the SOURCE store and would resolve the session to nil there:
+  shell exit, overlay teardown and exit status, unseen/status clears, search and font size all no-op.
+- No AppKit work is involved: `dismantleNSView` is a no-op, `makeNSView` reuses `session.surface`, and
+  `viewDidMoveToWindow` re-pushes scale and size, so a re-host re-rasterizes at the destination's scale.
+  A blank or mis-scaled pane is a deck mount-order bug, never a reason to add teardown.
+- `openTrees(_:)` projects one tree per open window, in library order, for `tree --all-windows`.
+- A moved shell keeps its spawn-time `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID`: nothing can rewrite a live
+  process's environ. Ownership is read from the tree instead; see [[control-api]].
 
 ## Scene lifecycle
 

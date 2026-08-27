@@ -183,6 +183,9 @@ struct SocketClient {
         if let tree = response.result?.tree {
             return formatTree(tree)
         }
+        if let trees = response.result?.trees {
+            return trees.map(formatTree).joined(separator: "\n")
+        }
         if let windows = response.result?.windows {
             return formatWindows(windows)
         }
@@ -289,9 +292,15 @@ struct SocketClient {
         }.joined(separator: "\n")
     }
 
-    /// Render a tree as an indented workspace → session listing (no trailing newline).
+    /// Render a tree as an indented workspace → session listing (no trailing newline), under a header naming
+    /// the projected window. Every session node repeats that window id and its workspace id, which the
+    /// indentation already shows — only `--json` reads them per row.
     private static func formatTree(_ tree: ControlTree) -> String {
         var lines: [String] = []
+        if let windowId = tree.windowId {
+            let name = tree.windowName.flatMap { $0.isEmpty ? nil : "\($0)  " } ?? ""
+            lines.append("window \(name)[\(windowId)]")
+        }
         for workspace in tree.workspaces {
             let mark = workspace.active ? "*" : " "
             lines.append("\(mark) \(workspace.name)  [\(workspace.id)]")

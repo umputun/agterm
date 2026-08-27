@@ -109,7 +109,8 @@ paths:
   `refused` clears on a later successful acquire, since `start()` re-runs per window scene and the owner
   may have quit. Its `stop()` returns early without unlinking, leaving the owner's socket intact.
 - One newline-delimited JSON request and response uses each connection, capped at 1 MiB. Unknown commands
-  return structured errors. Mutations may return `result.id`; trees use `result.tree`.
+  return structured errors. Mutations may return `result.id`; trees use `result.tree`, or `result.trees`
+  for the `--all-windows` fan-out, which leaves the singular field nil.
   A decode failure reports the `DecodingError`'s CONTEXT `debugDescription`, not `localizedDescription`, so
   the error NAMES the rejected `cmd`. A caller that cares preflights with `agtermctl version`; no command
   adds a version handshake of its own. A server carrying this code names a LATER unknown command, so it
@@ -163,8 +164,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   - `--to up|down|top|bottom` reorders one session in its workspace.
   - workspace relocates and appends.
   - `--after`/`--before` resolves an anchor across the store, carrying destination workspace.
+  - `--to-window` moves it to another OPEN window, optionally naming a workspace INSIDE that window.
   Relative placement uses host-free `SidebarDrop.resolveRelative`; batches use tree-order remove-first
   `resolveSessions`. Reject batch `--to`. Count only actual moves. A one-member batch uses singular behavior.
+- `--to-window` is the DESTINATION; `--window` keeps meaning "where `--target` is searched" here and on
+  every other command, which is why the destination needed a second flag rather than a reused one.
+  It rejects `--to` (reorder is same-workspace) and `--after`/`--before` (anchors resolve within one store),
+  and it is the only form accepting `--select`, since the destination's selection belongs to another
+  store — every other form rejects it with `session.move --select requires --to-window` rather than
+  silently dropping it.
+  A closed destination errors with `window not open — window.select it first`; [[windows]] owns the move
+  itself, whose form parsing lives in `ControlDispatcher+SessionMove`.
 - Sidebar batch Flag computes one uniform value: flag all unless all are already flagged. This is not
   equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status is equivalent to
   repeated `session.status idle` and needs no batch command.
@@ -600,7 +610,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `AGT_*` context only). That is why a recipe preflight uses `agtermctl version` rather than the variable.
 
 - Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
-  split axis, split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, and `realized`.
+  split axis, split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, `realized`,
+  and the `windowId`/`workspaceId` ownership stamp.
+- `windowId`/`workspaceId` on a session node, and `windowId`/`windowName` on the tree top level, are one
+  ALL-OR-NOTHING stamp: `AppStore.controlTree` takes the window id from the app target, and a host-free
+  projection with none omits every one rather than answering half of "who owns this session". They exist
+  because `AGTERM_WINDOW_ID`/`AGTERM_WORKSPACE_ID` are spawn-time snapshots that any move makes stale, and
+  nothing can rewrite a live process's environ.
+- `tree --all-windows` returns `result.trees`, one tree per OPEN window, and leaves `result.tree` nil;
+  it is rejected together with `--window`, which names a single one. The fan-out is host-free
+  `WindowLibrary.openTrees`. This is the one call that answers ownership for a session in ANY window,
+  which is why `window.list` — cached, refreshed on events — is the wrong home for it.
 - `realized` reports the MAIN pane's `TerminalSurface.isRealized`, populated host-free in
   `AppStore.controlTree` (no app closure — `isRealized` is on the protocol) and false for an empty slot, so
   only a server predating the field omits it. It exists because `session.new` answers `ok` for a model

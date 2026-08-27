@@ -186,6 +186,14 @@ extension AppActions {
                     self?.moveSession(sessionID, toWorkspace: target)
                 })
             }
+            // one "Move Session to Window: <name>" per OTHER open window; with a single window there is
+            // no destination and the palette lists none, matching the sidebar row's absent submenu.
+            for window in library.moveDestinations(excluding: library.windowID(for: store)) {
+                let target = window.id
+                items.append(PaletteItem(id: "move-window-\(target)", title: "Move Session to Window: \(window.name)") { [weak self] in
+                    self?.moveSession(sessionID, toWindow: target)
+                })
+            }
         }
         items.append(contentsOf: customCommandItems(badge: "custom"))
         return items

@@ -10,6 +10,7 @@ list, fetch and install one, or to read one as reference for a tricky case.
 
 ```bash
 agtermctl tree --json        # workspaces -> sessions, active/split/overlay/scratch/flagged flags, surface ids
+agtermctl tree --json --all-windows  # the same, one tree per OPEN window, each tagged with its windowId
 agtermctl window list --json # windows, with open/active flags
 
 # what is each pane RUNNING right now (foreground argv; absent at the shell prompt or for a setuid program like top/sudo)
@@ -191,6 +192,44 @@ agtermctl session close --target "$server" --target "$logs"
 `--after`/`--before` are mutually exclusive with each other, with `--to`, and with a destination
 workspace — the anchor already picks the workspace. Repeated `--target` is only for workspace and
 after/before placement, not `--to up|down|top|bottom`.
+
+## Move a session to another window
+
+`--to-window` carries the session — live shell, running program and scrollback — into another OPEN
+window. The destination is not raised and nobody's selection changes unless you ask with `--select`:
+
+```bash
+win=$(agtermctl window list --json | jq -r '.result.windows[] | select(.name == "review") | .id')
+
+# move this session there, into that window's selected workspace, leaving it in the background
+agtermctl session move --to-window "$win" --target "$AGTERM_SESSION_ID"
+
+# ...into a named workspace INSIDE that window, and switch the user to it
+ws=$(agtermctl tree --json --window "$win" | jq -r '.result.tree.workspaces[] | select(.name == "logs") | .id')
+agtermctl session move --to-window "$win" "$ws" --select --target "$AGTERM_SESSION_ID"
+
+# a whole sidebar block at once
+agtermctl session move --to-window "$win" --target "$server" --target "$logs"
+```
+
+The destination must already be open (`agtermctl window select "$win"` opens a closed one first),
+and `--to-window` cannot be combined with `--to` or `--after`/`--before`. Do not confuse it with
+`--window`, which only says where `--target` is searched.
+
+## Find out which window and workspace own a session
+
+`$AGTERM_WINDOW_ID` / `$AGTERM_WORKSPACE_ID` are baked into the shell when it spawns, so any
+`session move` leaves them stale — a running process's environment cannot be rewritten. Ask the app
+instead:
+
+```bash
+agtermctl tree --json --all-windows | jq -r --arg s "$AGTERM_SESSION_ID" '
+  .result.trees[] | . as $t | .workspaces[] | . as $w | .sessions[]
+  | select(.id == $s) | "window=\($t.windowId) workspace=\($w.id)"'
+```
+
+`--all-windows` is the only projection that spans every open window; `--window` restricts the search to
+one, so passing a stale `$AGTERM_WINDOW_ID` turns a working command into `no such session`.
 
 ## Resize the split divider from a keybinding
 

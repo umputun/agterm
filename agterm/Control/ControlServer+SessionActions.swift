@@ -505,8 +505,10 @@ extension ControlServer: ControlActions {
 
     /// Mode-bearing `session.move`: `to` (`up`|`down`|`top`|`bottom`) reorders within the session's own
     /// workspace, `workspace` relocates to another one (appending), `place` relocates + positions against an
-    /// anchor session (which carries its own workspace). Exactly one form, enforced in the dispatcher.
-    func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
+    /// anchor session (which carries its own workspace), `window` transfers the live session to another
+    /// OPEN window. Exactly one form, enforced in the dispatcher.
+    func moveSession(_ target: String?, window: String?, move: ControlSessionMove,
+                     select: Bool) -> ControlResponse {
         switch move {
         case .reorder(let dir):
             return resolver.resolveSession(target, window: window) { store, id in
@@ -524,10 +526,17 @@ extension ControlServer: ControlActions {
             }
         case .place(let anchor, let after):
             return placeSession(target, window: window, anchor: anchor, after: after)
+        case .window(let destination, let workspace):
+            return resolver.resolveSession(target, window: window) { _, sessionID in
+                moveToWindow([sessionID], destination: destination, workspace: workspace, select: select) {
+                    ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
+                }
+            }
         }
     }
 
-    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
+    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove,
+                      select: Bool) -> ControlResponse {
         switch move {
         case .reorder:
             return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
@@ -541,7 +550,43 @@ extension ControlServer: ControlActions {
             }
         case .place(let anchor, let after):
             return placeSessions(targets, window: window, anchor: anchor, after: after)
+        case .window(let destination, let workspace):
+            return resolveBatchSessions(targets, window: window) { _, ids in
+                moveToWindow(ids, destination: destination, workspace: workspace, select: select) {
+                    ControlResponse(ok: true, result: ControlResult(affected: ids.count))
+                }
+            }
         }
+    }
+
+    /// Cross-window transfer of an already-resolved block, in target order. `window` stayed the SEARCH
+    /// scope for the targets; the destination workspace resolves against the DESTINATION store, the only
+    /// one that has it. `select` follows the LAST moved session, matching the in-store selection rule.
+    private func moveToWindow(_ ids: [UUID], destination: String, workspace: String?, select: Bool,
+                              _ success: () -> ControlResponse) -> ControlResponse {
+        resolver.resolveWindowID(destination) { destinationID in
+            guard let store = library.store(for: destinationID) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            return resolveDestinationWorkspace(workspace, in: store) { workspaceID in
+                for (index, id) in ids.enumerated() {
+                    let last = index == ids.count - 1
+                    guard library.moveSession(id, toWindow: destinationID, workspace: workspaceID,
+                                              select: select && last) else {
+                        return ControlResponse(ok: false, error: "cannot move session to that window")
+                    }
+                }
+                return success()
+            }
+        }
+    }
+
+    /// The destination workspace inside the destination store, or nil for its current one.
+    private func resolveDestinationWorkspace(_ workspace: String?, in store: AppStore,
+                                             _ body: (UUID?) -> ControlResponse) -> ControlResponse {
+        guard let workspace else { return body(nil) }
+        return resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
+                                active: store.currentWorkspaceID, noun: "workspace") { body($0) }
     }
 
     /// Resolve the moved session and its anchor in one store, then relocate + position via the host-free

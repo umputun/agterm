@@ -7,8 +7,14 @@ import agtermCore
 /// reload, theme slots, the app-wide quick terminal. Split out of the session-, workspace- and surface-scoped
 /// `ControlServer+SessionActions.swift` for the file size limit.
 extension ControlServer {
-    func controlTree(window: String?) -> ControlResponse {
-        resolver.resolvePlacementStore(window) { store in
+    /// `--all-windows` projects every OPEN window into `trees` (leaving `tree` nil) instead of resolving one;
+    /// the dispatcher has already refused it alongside `--window`.
+    func controlTree(window: String?, allWindows: Bool) -> ControlResponse {
+        if allWindows {
+            return ControlResponse(ok: true,
+                                   result: ControlResult(trees: library.openTrees { buildTree(in: $0) }))
+        }
+        return resolver.resolvePlacementStore(window) { store in
             ControlResponse(ok: true, result: ControlResult(tree: buildTree(in: store)))
         }
     }
