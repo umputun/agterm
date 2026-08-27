@@ -51,6 +51,12 @@ paths:
   `3024 Night`. It always owns and emits `mouse-scroll-multiplier` (nil = 3 for wheel and trackpad) and
   `right-click-action` (nil/on = paste, off = ignore), overriding earlier config layers. Their Settings
   controls map defaults back to nil; right-click changes reload surfaces.
+  The settings conf loads last among the top-level config sources, but `ghostty_config_load_recursive_files`
+  expands `config-file` includes AFTER it, so an included value for a SCALAR key replaces what Settings
+  wrote — `cursor-style`, `font-size`, `right-click-action` and the rest.
+  `font-family` is ghostty's `RepeatableString` and ACCUMULATES instead, so the merge rule is per key and
+  not a single precedence order.
+  Never tell a user a picked value beats their `ghostty.conf`; it beats a scalar key written directly in it.
 - Non-Ghostty settings update app mirrors and `.agtermAppearanceChanged`, not surfaces. The mute wash
   fades text toward terminal color; with transparency it also tints the see-through area. Sidebar tint
   composes over opaque or blurred backgrounds; AppKit must leave the sidebar unfilled.
@@ -186,6 +192,14 @@ paths:
   values fall back home. Resolve once from active session's `focusedCwd` for every GUI creation path,
   including a right-clicked workspace; setters save only. Control `session.new --cwd` remains explicit
   and ignores this setting.
+- `cursorStyle` is a raw string that `effectiveCursorStyle` recognizes only as `block|bar|underline`, and
+  `cursorBlink` is ghostty's own `?bool`. Unlike the two keys above, neither is emitted unconditionally:
+  only a RECOGNIZED style emits `cursor-style`, and `cursorBlink` emits whenever it is non-nil.
+  nil, and any unoffered name including ghostty's real `block_hollow`, resolve to nil and emit nothing,
+  leaving the config chain to pick the shape — an unknown value is stored yet still silent.
+  `block_hollow` is excluded because an unfocused surface is already marked by drawing its cursor hollow.
+  nil `cursorBlink` is a third state rather than off: the cursor blinks AND DEC mode 12 can still change it,
+  while either explicit value takes DEC mode 12 away. `DECSCUSR` wins over all three.
 - `inheritGlobalGhosttyConfig` defaults off. It changes which files load, so its setter saves then reloads
   unconditionally; it is not a config line or live mirror. Scoped config always loads.
 - `attentionButtonEnabled` defaults off and mirrors to `GhosttyApp` for live titlebar redraw. Its three

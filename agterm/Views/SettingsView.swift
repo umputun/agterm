@@ -211,36 +211,47 @@ private struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section("Terminal") {
-                Picker("Font", selection: fontFamily) {
-                    Text("Default").tag(String?.none)
-                    ForEach(fonts, id: \.self) { Text($0).tag(String?.some($0)) }
-                }
-                .accessibilityIdentifier("settings-font-family")
+                HStack(spacing: 16) {
+                    Picker("Font name", selection: fontFamily) {
+                        Text("Default").tag(String?.none)
+                        ForEach(fonts, id: \.self) { Text($0).tag(String?.some($0)) }
+                    }
+                    .accessibilityIdentifier("settings-font-family")
+                    .frame(maxWidth: .infinity)
 
-                Stepper(value: fontSize, in: 8 ... 32, step: 1) {
-                    Text("Default font size: \(Int(model.settings.fontSize ?? 13))")
-                }
-                .accessibilityIdentifier("settings-font-size")
+                    Divider()
 
-                // "From config" is a state, not a synonym for Block: it emits no `cursor-style`, so the
-                // config chain still picks the shape, where Block writes an override that beats it.
-                Picker("Cursor", selection: cursorStyle) {
-                    Text("From config").tag(AppSettings.CursorStyle?.none)
-                    Text("Block").tag(AppSettings.CursorStyle?.some(.block))
-                    Text("Bar").tag(AppSettings.CursorStyle?.some(.bar))
-                    Text("Underline").tag(AppSettings.CursorStyle?.some(.underline))
+                    Stepper(value: fontSize, in: 8 ... 32, step: 1) {
+                        Text("Font size: \(Int(model.settings.fontSize ?? 13))")
+                    }
+                    .accessibilityIdentifier("settings-font-size")
+                    .frame(maxWidth: .infinity)
                 }
-                .accessibilityIdentifier("settings-cursor-style")
-                SettingHint("A picked shape overrides cursor-style in ghostty.conf; From config leaves it in charge.")
 
-                // three rows, not a toggle: Program controlled emits nothing, which is the only state that
-                // leaves DEC mode 12 able to drive the blink.
-                Picker("Cursor blink", selection: cursorBlink) {
-                    Text("Program controlled").tag(Bool?.none)
-                    Text("Blink by default").tag(Bool?.some(true))
-                    Text("Steady by default").tag(Bool?.some(false))
+                HStack(spacing: 16) {
+                    // "Default" is a state, not a synonym for Block: it emits no `cursor-style`, so the
+                    // config chain still picks the shape, where Block writes an override that beats it.
+                    Picker("Cursor shape", selection: cursorStyle) {
+                        Text("Default").tag(AppSettings.CursorStyle?.none)
+                        Text("Block").tag(AppSettings.CursorStyle?.some(.block))
+                        Text("Bar").tag(AppSettings.CursorStyle?.some(.bar))
+                        Text("Underline").tag(AppSettings.CursorStyle?.some(.underline))
+                    }
+                    .accessibilityIdentifier("settings-cursor-style")
+                    .frame(maxWidth: .infinity)
+
+                    Divider()
+
+                    // three rows, not a toggle: Default emits nothing, which is the only state that leaves
+                    // DEC mode 12 able to drive the blink.
+                    Picker("Cursor blink", selection: cursorBlink) {
+                        Text("Default").tag(Bool?.none)
+                        Text("Blink").tag(Bool?.some(true))
+                        Text("Steady").tag(Bool?.some(false))
+                    }
+                    .accessibilityIdentifier("settings-cursor-blink")
+                    .frame(maxWidth: .infinity)
                 }
-                .accessibilityIdentifier("settings-cursor-blink")
 
                 // the CURRENT appearance's theme; while following, the on-screen side. The "default ghostty"
                 // row shows only when NOT following — a dual conditional needs two named themes.

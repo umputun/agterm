@@ -510,6 +510,12 @@ struct AppSettingsTests {
         #expect(AppSettings().cursorStyle == nil)
         #expect(AppSettings().effectiveCursorStyle == nil)
         #expect(!AppSettings().ghosttyConfigLines().contains { $0.hasPrefix("cursor-style") })
+        // ghostty's own wire vocabulary, so the set and the emitted spelling are pinned as literals here
+        // rather than derived from the enum a typo would carry into both sides of the comparison.
+        #expect(AppSettings.CursorStyle.allCases.map(\.rawValue) == ["block", "bar", "underline"])
+        #expect(AppSettings(cursorStyle: "block").ghosttyConfigLines().contains("cursor-style = block"))
+        #expect(AppSettings(cursorStyle: "bar").ghosttyConfigLines().contains("cursor-style = bar"))
+        #expect(AppSettings(cursorStyle: "underline").ghosttyConfigLines().contains("cursor-style = underline"))
         for style in AppSettings.CursorStyle.allCases {
             let settings = AppSettings(cursorStyle: style.rawValue)
             #expect(settings.effectiveCursorStyle == style)

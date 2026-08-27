@@ -220,31 +220,26 @@ final class SettingsUITests: XCTestCase {
                       "selecting Bar should persist cursorStyle=bar to settings.json")
 
         picker.click()
-        let fromConfig = app.menuItems["From config"]
-        XCTAssertTrue(fromConfig.waitForExistence(timeout: 5), "the cursor dropdown should offer a From config item")
-        fromConfig.click()
+        let shapeDefault = app.menuItems["Default"]
+        XCTAssertTrue(shapeDefault.waitForExistence(timeout: 5), "the cursor dropdown should offer a Default item")
+        shapeDefault.click()
         XCTAssertTrue(poll { self.settingsObject()?["cursorStyle"] == nil },
-                      "selecting From config should remove the cursorStyle key from settings.json")
-
-        // block_hollow is deliberately not offered; an unfocused pane already renders its cursor hollow.
-        picker.click()
-        XCTAssertFalse(app.menuItems["Hollow block"].exists, "the cursor dropdown should not offer a hollow block")
-        app.typeKey(.escape, modifierFlags: [])
+                      "selecting Default should remove the cursorStyle key from settings.json")
 
         let blink = settingsControl(tab: "Appearance", control: "settings-cursor-blink")
         blink.click()
-        let steady = app.menuItems["Steady by default"]
-        XCTAssertTrue(steady.waitForExistence(timeout: 5), "the blink dropdown should offer a Steady by default item")
+        let steady = app.menuItems["Steady"]
+        XCTAssertTrue(steady.waitForExistence(timeout: 5), "the blink dropdown should offer a Steady item")
         steady.click()
         XCTAssertTrue(poll { self.settingsBool("cursorBlink") == false },
-                      "selecting Steady by default should persist cursorBlink=false")
+                      "selecting Steady should persist cursorBlink=false")
 
         blink.click()
-        let programControlled = app.menuItems["Program controlled"]
-        XCTAssertTrue(programControlled.waitForExistence(timeout: 5), "the blink dropdown should offer a Program controlled item")
-        programControlled.click()
+        let blinkDefault = app.menuItems["Default"]
+        XCTAssertTrue(blinkDefault.waitForExistence(timeout: 5), "the blink dropdown should offer a Default item")
+        blinkDefault.click()
         XCTAssertTrue(poll { self.settingsObject()?["cursorBlink"] == nil },
-                      "selecting Program controlled should remove the cursorBlink key from settings.json")
+                      "selecting Default should remove the cursorBlink key from settings.json")
     }
 
     func testQuickTerminalSizePickerPersists() throws {
