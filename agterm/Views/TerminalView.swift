@@ -34,6 +34,9 @@ struct TerminalView: NSViewRepresentable {
     /// so it never grabs first responder from the dashboard's key-catcher. `.allowsHitTesting(false)` alone
     /// doesn't stop AppKit routing a click to the NSView, so the surface itself refuses hits + first responder.
     var viewOnly = false
+    /// Whether this host paints on screen when that differs from `deckVisible`, as for dashboard cells and HUDs.
+    /// nil follows `deckVisible`, which is correct for every interactive pane host.
+    var onScreen: Bool?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -44,6 +47,7 @@ struct TerminalView: NSViewRepresentable {
         // session's overlay can't grab first responder during its initial createSurface.
         view.deckActive = isActive
         view.deckVisible = deckVisible
+        view.deckOnScreen = onScreen ?? deckVisible
         view.suppressFocusChange = !reportsFocusChange
         view.viewOnly = viewOnly
         return view
@@ -54,6 +58,7 @@ struct TerminalView: NSViewRepresentable {
         // auto-focus) so a background slot never starts the focus-grab retry.
         nsView.deckActive = isActive
         nsView.deckVisible = deckVisible
+        nsView.deckOnScreen = onScreen ?? deckVisible
         nsView.suppressFocusChange = !reportsFocusChange
         nsView.viewOnly = viewOnly
         // makeNSView may have run before the view had a sized window; createSurface is idempotent (guards

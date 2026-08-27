@@ -145,16 +145,19 @@ struct DashboardView: View {
     /// (`-dashboard-primary`/`-dashboard-split`), so a cell keyed to one pane never reuses the other's
     /// representable, plus `surfaceToken` so a REPLACEMENT re-mounts the cell.
     /// `isActive`/`deckVisible`/`reportsFocusChange` off and `viewOnly` on: the cell auto-focuses nothing,
-    /// is not a drop target, refuses first responder, and never mutates session focus state.
+    /// is not a drop target, refuses first responder, and never mutates session focus state. It remains on
+    /// screen because the grid still paints it.
     @ViewBuilder
     private func memberTerminal(for member: DashboardMember, session: Session) -> some View {
         if member.surface == .split {
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
+                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
+                         onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-split-\(surfaceToken(for: member, session: session))")
         } else {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
+                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
+                         onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-primary-\(surfaceToken(for: member, session: session))")
         }
     }

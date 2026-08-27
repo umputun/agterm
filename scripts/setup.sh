@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
-GHOSTTY_REV="0ba6250388641f52135414b38c4259aa682c489b"  # 2026-08-16
+GHOSTTY_REV="683d8db643b95cf229bfb5fe9fab9ae677920343"  # 2026-08-25
 # ghostty pins minimum_zig_version 0.16.0. Name the MINOR LINE, not `zig`: that one rolls, so a fresh
 # build once 0.17 is current would compile a fixed GHOSTTY_REV with a compiler it never supported. Today
 # `zig@0.16` is still an alias for `zig`, so this buys nothing yet — it claims the name Homebrew uses when

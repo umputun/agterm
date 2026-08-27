@@ -222,7 +222,8 @@ extension WindowContentView {
                     // keeps reaching the pane behind it.
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: { makeOverlaySurface($0, nil) },
-                                 isActive: live, deckVisible: live, viewOnly: !style.interactive)
+                                 isActive: live, deckVisible: live, viewOnly: !style.interactive,
+                                 onScreen: isActive)
                         .frame(width: geo.size.width * style.widthFraction,
                                height: geo.size.height * style.heightFraction)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the

@@ -134,6 +134,18 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertNil(view.hitTest(inside), "a view-only surface must let the click through instead of taking it")
     }
 
+    func testRendererVisibilityRequiresAnOnScreenHost() {
+        XCTAssertTrue(surface.showsOnScreen)
+        surface.deckOnScreen = false
+        XCTAssertFalse(surface.showsOnScreen)
+        XCTAssertNotNil(surface.rendererVisibilityTask)
+        surface.updateRendererVisibility(delayHide: false)
+        XCTAssertNil(surface.rendererVisibilityTask)
+        surface.deckOnScreen = true
+        surface.removeFromSuperview()
+        XCTAssertFalse(surface.showsOnScreen)
+    }
+
     // MARK: - teardown
 
     /// The HUD's body file has no status to read, so deleting it IS the teardown — and it is also how a

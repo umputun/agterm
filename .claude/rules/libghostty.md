@@ -31,9 +31,9 @@ paths:
 - `destroySurface` swaps in a plain layer anyway, carrying the last frame's contents, and must do it AFTER
   the free, which is what joins the render thread. The current pin carries the upstream fix, so this is
   defence against building on a libghostty that does not — keep it even though it looks redundant.
-- The render thread returns early on `!self.flags.visible`, so `ghostty_surface_set_occlusion` is a real
-  lever over what hidden panes cost. `docs/backlog/hidden-panes-keep-drawing.md` owns whether agterm
-  pulls it and what that is worth.
+- `ghostty_surface_set_occlusion(false)` stops hidden rendering and releases the Metal swap chain on the
+  current pin. Drive it from `deckOnScreen`, not `deckVisible`: dashboard cells and passive HUDs paint while
+  non-interactive. A detached quick/scratch/split host is hidden regardless of its last deck value.
 
 ## Theme and sidebar
 

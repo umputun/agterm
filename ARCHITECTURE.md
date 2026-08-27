@@ -51,7 +51,7 @@ See `CLAUDE.md` for the socket lifecycle, addressing, command catalog, and the k
 
 ## libghostty integration
 
-`agterm` links `GhosttyKit.xcframework`, which `scripts/setup.sh` builds from upstream [ghostty-org/ghostty](https://github.com/ghostty-org/ghostty) source: a shallow checkout at a pinned commit plus `zig build`, using the keg-only `zig@0.15` formula for the zig version ghostty pins. Building from source keeps the libghostty toolchain self-owned, with no third-party fork and no prunable daily-build download. The pin is a deliberately chosen known-good commit. The xcframework and the accompanying ghostty resources (themes, shell-integration scripts, compiled terminfo database) are gitignored and never committed; the build is one-time, cached by a present-check.
+`agterm` links `GhosttyKit.xcframework`, which `scripts/setup.sh` builds from upstream [ghostty-org/ghostty](https://github.com/ghostty-org/ghostty) source: a shallow checkout at a pinned commit plus `zig build`, using the Zig 0.16 line ghostty pins. Building from source keeps the libghostty toolchain self-owned, with no third-party fork and no prunable daily-build download. The xcframework and accompanying resources are gitignored; `.ghostty-build-stamp` invalidates them when the revision changes.
 
 ## Surface ownership
 
@@ -59,6 +59,7 @@ The surface lifecycle is the rule that keeps the C interop safe.
 
 - `Session` owns its `GhosttySurfaceView` through `Session.surface`, marked `@ObservationIgnored` so assigning the lazily-created view never churns observation. `customName`, `currentCwd`, and `gitStatus` are observed, so the sidebar and title bar refresh when a rename, a PWD report, or a git-status update lands.
 - The detail pane is an *eager deck*: every session's `TerminalView` stays mounted in a `ZStack` (so every shell spawns at startup), and switching flips visibility (`opacity` + `isActive`) instead of swapping by `.id`. The surface NSView is never dismantled/re-hosted on a switch, since re-hosting invalidates the Metal drawable and flickers the window. Surfaces stay owned by the `Session`, and only the active pane holds first responder.
+- Hidden hosts report occlusion to libghostty after a short reparenting grace period. The shell and terminal state stay live while Ghostty drops the hidden Metal swap chain.
 - `dismantleNSView` is a no-op. The surface is freed in exactly one place: `destroySurface()`, reached through `TerminalSurface.teardown()` when `AppStore.closeSession` removes the session. This single-owner, single-free rule is what makes passing the view as unretained `userdata` to libghostty safe.
 
 ## Git status
