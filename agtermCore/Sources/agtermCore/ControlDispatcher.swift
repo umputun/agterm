@@ -639,6 +639,9 @@ public struct ControlDispatcher {
             if pane != nil, request.args?.sizePercent != nil {
                 return ControlResponse(ok: false, error: PaneOverlayError.sizePercentConflict)
             }
+            if let percent = request.args?.sizePercent, !(1...100).contains(percent) {
+                return ControlResponse(ok: false, error: "session.overlay.open: --size-percent must be 1...100")
+            }
             return actions.openSessionOverlay(request.target, window: request.args?.window,
                                               options: ControlSessionOverlayOpenOptions(
                                                 command: command,

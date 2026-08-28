@@ -677,6 +677,7 @@ struct Session: ParsableCommand {
                 if pane != nil, sizePercent != nil {
                     throw ValidationError("--pane cannot be combined with --size-percent (pane overlays are always full)")
                 }
+                try Hud.validateSizePercent(sizePercent)
             }
 
             func makeRequest() throws -> ControlRequest {
