@@ -1,5 +1,8 @@
 import Foundation
 import GhosttyKit
+import os
+
+private let visibilityLogger = Logger(subsystem: "com.umputun.agterm", category: "renderer-visibility")
 
 extension GhosttySurfaceView {
     /// A short grace period prevents a SwiftUI reparent from tearing down and rebuilding the swap chain.
@@ -28,8 +31,31 @@ extension GhosttySurfaceView {
     private func setRendererVisible(_ visible: Bool) {
         guard let surface, rendererVisible != visible else { return }
         rendererVisible = visible
+        visibilityLogger.notice("occlusion \(visible ? "visible" : "hidden", privacy: .public) session=\(self.session?.id.uuidString ?? "-", privacy: .public) split=\(self.isSplitPane)")
         ghostty_surface_set_occlusion(surface, visible)
-        if visible { ghostty_surface_refresh(surface) }
+        if visible {
+            ghostty_surface_refresh(surface)
+        } else {
+            scheduleHiddenContentsDrop()
+        }
+    }
+
+    /// The Metal backend declares no `gpuResourcesReleased`, so after the renderer frees a hidden
+    /// surface's swap chain the CALayer `contents` still retains its last-presented IOSurface —
+    /// one full drawable per ever-viewed surface, forever. Drop that reference ourselves, AFTER the
+    /// renderer has drained the occlusion message and released (the delay covers one in-flight
+    /// present re-setting `contents` behind us). An occluded pane paints nothing, and the reveal
+    /// path refreshes before anything shows.
+    /// Two passes, not one: the delay is not synchronized with the renderer's in-flight frame
+    /// completions, and a straggler present after the first pass would re-set `contents` and
+    /// quietly re-retain the drawable. The second pass is far outside any real completion window.
+    private func scheduleHiddenContentsDrop() {
+        for delay in [0.5, 3.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, !self.rendererVisible, self.surface != nil else { return }
+                self.layer?.contents = nil
+            }
+        }
     }
 
     func cancelPendingRendererVisibility() {
