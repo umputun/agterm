@@ -565,6 +565,9 @@ error keeps those names for compatibility.
   `$AGTERM_PANE_ID`) resolves the pane's LIVE slot, so a hook in a promoted-then-re-split pane still pins
   the right one; UNLIKE `session status`, a token that does not resolve is an error unless `--pane` is also
   given as the fallback (a silent main-pane default here would overwrite the wrong pane).
+  Every success names the pane it wrote in `result.pane` (`left`/`right`), which is the read-back for
+  `--pane-id`: a token names a surface rather than a role, so without it the caller has to re-read the tree
+  and diff `restoreCommand` against `splitRestoreCommand` to find out where the pin landed.
   The pinned value is SHELL CODE: it persists in the window's state file (`windows/<id>.json`), is readable
   via `tree`, and may enter shell history when it runs — so it must not carry secrets, and only
   safely-interpolated values (a UUID-shaped session id) belong in it. It persists immediately, so a

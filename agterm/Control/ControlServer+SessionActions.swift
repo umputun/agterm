@@ -458,7 +458,7 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false,
                                        error: "failed to save the restore override, the previous value is still in effect")
             }
-            var result = ControlResult(id: id.uuidString)
+            var result = ControlResult(id: id.uuidString, pane: pane.rawValue)
             if case .pin = update.pin, self.settingsModel.settings.restoreRunningCommand != true {
                 result.text = "saved, but \"Restore running commands on restart\" is off, so the override will not run"
             }

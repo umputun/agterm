@@ -1417,7 +1417,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>) resolves the pane's live slot; unlike
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session status</span>, a token that does
                 not resolve is an error unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> is also given
-                as the fallback. The pinned value is shell code stored in the window's state file and readable via
+                as the fallback. Every success names the pane it wrote in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.pane</span>, the read-back for
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span>: a token names a surface rather than a role, so without it the caller has to re-read
+                the tree and diff <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> against
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> to find out where the pin landed.
+                The pinned value is shell code stored in the window's state file and readable via
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, so it must not carry secrets. Not to be confused
                 with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">restore clear</span>, which is
                 app-global and clears every session's <em>captured</em> command.

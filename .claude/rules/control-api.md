@@ -117,6 +117,13 @@ paths:
   never the error:
   `DecodingError.debugDescription` is macOS 26.4+, so at the 14.0 deployment target `String(describing:)`
   degrades to a reflection dump that hides the sentence inside `DecodingError.Context(...)`.
+- An unknown ARGUMENT is not symmetric with an unknown command. `ControlArgs` is synthesized `Codable` with
+  no `CodingKeys`, so a server that predates a field drops it and runs the command without it, answering ok:
+  there is no "unknown field" error and no way to ask. A new field that only narrows or decorates is fine
+  that way. One that changes WHERE a mutation lands is not: give it a read-back so a caller can see what the
+  server did, rather than leaving the two outcomes indistinguishable. Since `agtermctl` ships inside the
+  bundle, the CLI that sends a field and the app that reads it are the same build, so the exposure is a
+  stale RUNNING process across an upgrade, not a mismatched install.
 - Human output shows IDs only for created session/workspace/window, retains them in JSON, uses
   `result.affected` for session counts, and reserves `result.count` for diagnostics/search.
   A command that reuses `count` for something else must carry its own `result.text`, which the shared
@@ -536,7 +543,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   blocked/completed reveal. Control attention navigation changes selection only.
 - `--pane-id` (#199) is a stable per-surface token that overrides stale baked role after promote/re-split,
   then falls back to role when absent/unknown. Inject `AGTERM_PANE_ID`, resolve against live surface tokens,
-  and report only resolved `statusPane`. This alternative addressing adds no read-back field.
+  and report only resolved `statusPane`. For `session.status` this addressing adds no read-back field. For
+  `session.restore` it does: every success carries `result.pane`, the `StatusPane` raw value written, since a
+  token names a surface rather than a role and the caller would otherwise have to diff `restoreCommand`
+  against `splitRestoreCommand` on the tree to find out where its pin landed.
 - Auto-reset clears both session entered and session left. Status renders on selected sessions too.
 - `session.flag on|off|toggle|clear` is idempotent; clear ignores target and clears the store.
   Read `flagged`.

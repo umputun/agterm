@@ -652,4 +652,29 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(resized.ok, resized.error ?? "")
         XCTAssertEqual(bodyText(session), body, "a resize must rewrite the header the helper reads")
     }
+    // The pane is echoed on every success, not only on the interesting path: `--pane-id` addresses a surface
+    // token, so its caller has no other way to learn which pane was pinned, and the default-to-main path is
+    // covered too so a caller never has to branch on how it addressed the pane.
+    func testRestoreReportsThePaneItActuallyWrote() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.hasSplit = true
+
+        let toSplit = server.setSessionRestore(
+            session.id.uuidString, window: nil,
+            update: ControlSessionRestoreUpdate(pin: .pin("echo split"), pane: .right, paneID: "unresolvable"))
+        XCTAssertTrue(toSplit.ok, toSplit.error ?? "")
+        XCTAssertEqual(toSplit.result?.pane, "right")
+        XCTAssertEqual(session.splitRestoreCommand, "echo split")
+
+        // neither selector given: the documented main-pane default, reported like any other
+        let toMain = server.setSessionRestore(
+            session.id.uuidString, window: nil,
+            update: ControlSessionRestoreUpdate(pin: .pin("echo main"), pane: nil, paneID: nil))
+        XCTAssertTrue(toMain.ok, toMain.error ?? "")
+        XCTAssertEqual(toMain.result?.pane, "left")
+        XCTAssertEqual(session.restoreCommand, "echo main")
+    }
+
 }
