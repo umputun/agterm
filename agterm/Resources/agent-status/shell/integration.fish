@@ -25,8 +25,12 @@ if not set -q AGTERM_AGENT_BIN
 end
 
 # exported, unlike the shell-local state below: the Claude adapter reads an overridden value from
-# its process environment, and a `set -g` would keep it invisible outside this shell
-if not set -q AGTERM_AGENT_RE
+# its process environment, and a `set -g` would keep it invisible outside this shell. BOTH branches
+# export — the one carrying an override set before sourcing (the value the adapter needs, and the
+# form this file documented as `set -g` until now) as much as the default
+if set -q AGTERM_AGENT_RE
+    set -gx AGTERM_AGENT_RE $AGTERM_AGENT_RE
+else
     set -gx AGTERM_AGENT_RE '^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)'
 end
 

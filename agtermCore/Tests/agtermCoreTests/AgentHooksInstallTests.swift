@@ -458,6 +458,23 @@ struct AgentHooksInstallTests {
         #expect(!AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: true, existingContents: nil))
     }
 
+    @Test func fishIntegrationExportsAnExistingAgentRegexOverride() throws {
+        // the export must run on BOTH branches of the set -q guard: an override set before sourcing —
+        // in the `set -g` form this file itself documented until the adapter consumed the value —
+        // satisfies set -q with the export bit off, so only a re-export on that branch gets it into
+        // the adapter's environment. Exporting just the default is the inverted shape this pins
+        // against: that value duplicates the adapter's literal list and needs no export at all.
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fish = root.appendingPathComponent("agterm/Resources/agent-status/shell/integration.fish")
+        let text = try String(contentsOf: fish, encoding: .utf8)
+        #expect(text.contains("set -gx AGTERM_AGENT_RE $AGTERM_AGENT_RE"),
+                "integration.fish must re-export a pre-existing AGTERM_AGENT_RE override")
+    }
+
     @Test func shippedShellIntegrationsOmitLifecycleAgentsFromDefaultRegex() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -471,13 +488,16 @@ struct AgentHooksInstallTests {
                          "agterm/Resources/agent-status/shell/integration.fish"] {
             let text = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
             #expect(text.contains(expected), "\(relative) must embed the default agent regex")
-            // Match only the default assignment (not commented override examples).
+            // Match only the default assignment — keyed on the default's literal regex, because an
+            // assignment prefix alone also matches fish's re-export of an existing override (which
+            // carries no regex literal), and commented override examples are excluded either way.
             let defaultLines = text.split(separator: "\n").filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("#") { return false }
-                return trimmed.contains("AGTERM_AGENT_RE:=")
+                guard trimmed.contains("AGTERM_AGENT_RE:=")
                     || trimmed.hasPrefix("set -g AGTERM_AGENT_RE ")
-                    || trimmed.hasPrefix("set -gx AGTERM_AGENT_RE ")
+                    || trimmed.hasPrefix("set -gx AGTERM_AGENT_RE ") else { return false }
+                return trimmed.contains(expected)
             }
             #expect(defaultLines.count == 1, "\(relative) must have exactly one default AGTERM_AGENT_RE")
             for line in defaultLines {
