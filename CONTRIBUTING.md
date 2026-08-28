@@ -25,7 +25,7 @@ Building needs macOS 14 or later, Xcode 26 with `xcodegen` on `PATH`, and Homebr
 scripts/setup.sh
 ```
 
-It builds `GhosttyKit.xcframework` and the ghostty resources from upstream ghostty source at a pinned commit, which needs the `zig@0.15` keg and Xcode's Metal Toolchain (downloaded automatically on the first run). It takes a few minutes. Later runs skip the build once the artifacts are present, so day-to-day work pays nothing.
+It builds `GhosttyKit.xcframework` and the ghostty resources from upstream ghostty source at a pinned commit, which needs the `zig@0.16` keg and Xcode's Metal Toolchain (downloaded automatically on the first run). It takes a few minutes. Later runs skip the build once the artifacts are present, so day-to-day work pays nothing.
 
 After that:
 
