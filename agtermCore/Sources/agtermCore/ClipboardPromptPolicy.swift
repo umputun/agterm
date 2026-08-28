@@ -1,6 +1,6 @@
-/// The direction of a clipboard access a terminal program requests over OSC 52: reading the system
-/// clipboard into the terminal stream (exfiltration risk) or writing the terminal's data to it
-/// (poisoning risk).
+/// The direction of a clipboard access a terminal program requests (OSC 52 or the Kitty clipboard
+/// protocol): reading the system clipboard into the terminal stream (exfiltration risk) or writing
+/// the terminal's data to it (poisoning risk).
 public enum ClipboardAccess: Sendable, Hashable {
     case read
     case write
@@ -16,7 +16,7 @@ public enum ClipboardDecision: Sendable {
     case prompt
 }
 
-/// ClipboardPromptPolicy remembers, per direction, whether the user allowed or denied OSC 52 clipboard
+/// ClipboardPromptPolicy remembers, per direction, whether the user allowed or denied protocol clipboard
 /// access for the rest of the app session (the "don't ask again this session" choice), defaulting to
 /// `.prompt` with no remembered choice. Read and write are independent, so allowing writes never silently
 /// allows reads. Pure value logic: the app owns an instance, prompts on `.prompt`, records via `remember`.
