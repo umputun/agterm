@@ -44,15 +44,17 @@ extension GhosttySurfaceView {
     /// The fixed drop passes lose to launch congestion: with dozens of surfaces restoring at once, a
     /// first present can land later than any reasonable delay, re-retaining the drawable until the
     /// next hide edge. Sweep on a slow cadence for as long as the surface stays renderer-hidden.
+    /// `self` is bound only for the sweep itself: a strong hold across the sleep would pin a
+    /// discarded view against the `deinit` safety net for a cycle, or forever if it re-hides.
     private func startHiddenJanitor() {
         guard hiddenJanitorTask == nil else { return }
         hiddenJanitorTask = Task { @MainActor [weak self] in
-            defer { self?.hiddenJanitorTask = nil }
-            while let view = self, view.surface != nil, !view.rendererVisible {
+            while true {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
                 guard let view = self, view.surface != nil, !view.rendererVisible else { break }
                 view.layer?.contents = nil
             }
+            self?.hiddenJanitorTask = nil
         }
     }
 

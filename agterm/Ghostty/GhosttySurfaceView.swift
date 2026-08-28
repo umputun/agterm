@@ -726,6 +726,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     func destroySurface() {
         cancelPendingRendererVisibility()
+        hiddenJanitorTask?.cancel()
+        hiddenJanitorTask = nil
         isDestroyed = true
         focusObservers.forEach { NotificationCenter.default.removeObserver($0) }
         focusObservers = []
