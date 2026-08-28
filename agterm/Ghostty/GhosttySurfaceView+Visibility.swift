@@ -36,43 +36,38 @@ extension GhosttySurfaceView {
         if visible {
             ghostty_surface_refresh(surface)
         } else {
-            scheduleHiddenContentsDrop()
             startHiddenJanitor()
         }
     }
 
-    /// The fixed drop passes lose to launch congestion: with dozens of surfaces restoring at once, a
-    /// first present can land later than any reasonable delay, re-retaining the drawable until the
-    /// next hide edge. Sweep on a slow cadence for as long as the surface stays renderer-hidden.
-    /// `self` is bound only for the sweep itself: a strong hold across the sleep would pin a
-    /// discarded view against the `deinit` safety net for a cycle, or forever if it re-hides.
+    /// The hide edge alone doesn't stick, twice over. The Metal backend declares no
+    /// `gpuResourcesReleased`, so the released swap chain's last-presented IOSurface stays retained
+    /// by the CALayer `contents`. Worse, the release is edge-triggered while draws are not gated on
+    /// visibility: presents landing after the edge — a restore realizing dozens of surfaces after
+    /// launch's early hide, the CA display callback firing on resize — quietly rebuild the whole
+    /// chain, and no new edge ever re-releases it.
+    /// So sweep on a slow cadence. A non-nil `contents` is the tell that a present landed since the
+    /// last sweep: re-arm the edge with an occlusion toggle (the renderer re-releases whatever was
+    /// rebuilt; the `true` half costs one off-screen frame), give that cycle's own present time to
+    /// drain, then drop the retained frame. A settled surface reads as nil and the sweep is free.
+    /// Nothing else may clear `contents` while hidden, or a live rebuilt chain reads as settled.
+    /// An occluded pane paints nothing, and the reveal path refreshes before anything shows.
+    /// `self` is bound per step: a strong hold across the long sleep would pin a discarded view
+    /// against the `deinit` safety net for a cycle, or forever if it re-hides.
     private func startHiddenJanitor() {
         guard hiddenJanitorTask == nil else { return }
         hiddenJanitorTask = Task { @MainActor [weak self] in
             while true {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard let view = self, let surface = view.surface, !view.rendererVisible else { break }
+                guard view.layer?.contents != nil else { continue }
+                ghostty_surface_set_occlusion(surface, true)
+                ghostty_surface_set_occlusion(surface, false)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard let view = self, view.surface != nil, !view.rendererVisible else { break }
                 view.layer?.contents = nil
             }
             self?.hiddenJanitorTask = nil
-        }
-    }
-
-    /// The Metal backend declares no `gpuResourcesReleased`, so after the renderer frees a hidden
-    /// surface's swap chain the CALayer `contents` still retains its last-presented IOSurface —
-    /// one full drawable per ever-viewed surface, forever. Drop that reference ourselves, AFTER the
-    /// renderer has drained the occlusion message and released (the delay covers one in-flight
-    /// present re-setting `contents` behind us). An occluded pane paints nothing, and the reveal
-    /// path refreshes before anything shows.
-    /// Two passes, not one: the delay is not synchronized with the renderer's in-flight frame
-    /// completions, and a straggler present after the first pass would re-set `contents` and
-    /// quietly re-retain the drawable. The second pass is far outside any real completion window.
-    private func scheduleHiddenContentsDrop() {
-        for delay in [0.5, 3.0] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, !self.rendererVisible, self.surface != nil else { return }
-                self.layer?.contents = nil
-            }
         }
     }
 
