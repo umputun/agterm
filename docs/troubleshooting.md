@@ -136,6 +136,52 @@ Reload with **File ▸ Reload Config** or `agtermctl config reload`. The keybind
 - **Agent-status glyph does not update.** Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell so the `source` line added to your shell rc takes effect. For Pi, restart it or run `/reload` so it loads `~/.pi/agent/extensions/agterm-status.ts`; Pi status is only installed when `~/.pi/agent` already exists. For OpenCode, restart it so it loads `~/.config/opencode/plugins/agterm-status.js`; the plugin installs only when `~/.config/opencode` already exists. The hooks call `agtermctl session status`, so `agtermctl` must resolve first (see above).
 - **Agent-status glyph updates the wrong session.** One session's glyph blinks while the work happens in another — typically when agents run inside tmux (or a tmux-backed session manager such as agent-deck). The working process inherited another session's `AGTERM_SESSION_ID`: the status hooks target whatever id is in their environment, and a long-lived daemon started from inside an agterm session (a tmux server is the usual carrier) captures that session's `AGTERM_*` variables into its global environment and passes them to every child it ever creates. Check `tmux show-environment -g | grep AGTERM` — if present, clear them with `tmux set-environment -g -r AGTERM_SESSION_ID` (and the other `AGTERM_*` names), then restart the affected panes. To avoid it, start such daemons with the variables scrubbed (`env -u AGTERM_SESSION_ID … <command>`) or from a terminal outside agterm.
 
+## Every session restores to the directory it was created in
+
+Sessions come back in the directory they were opened in rather than the one you left them in, the directory
+shown under the session name never follows a `cd`, `session reveal` opens the wrong folder, and
+`{AGT_SESSION_PWD}` in a custom command expands to the creation directory.
+
+agterm learns a session's working directory only from OSC 7, which Ghostty's shell integration reports.
+That integration is injected into the shell agterm spawns and does not survive that shell replacing itself.
+A startup file that `exec`s another shell replaces it before it ever reaches a prompt, so the directory is
+never reported at all and every consumer falls back to the one the session started in. Shell-wrapper
+installers do exactly this: Amazon Q CLI, Kiro CLI and Fig add an `exec` block at the top of `.zshrc`.
+
+To confirm it, `cd` somewhere in the session and run `agtermctl tree --json`: if the session's `cwd` does
+not follow the `cd`, nothing is reporting it.
+
+The fix is Ghostty's own recipe — load the integration explicitly, below the block that replaced your
+shell:
+
+```zsh
+if [[ -n "$GHOSTTY_RESOURCES_DIR" ]]; then
+  builtin source "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration"
+fi
+```
+
+It is a no-op in a shell that already loaded it, so it is safe to add unconditionally. bash, fish and
+nushell have their own integration files in the same `shell-integration` directory. Removing the wrapper
+works too.
+
+Three neighbouring cases share the cause, and the block above covers all but the last:
+
+- **`exec zsh` typed at a prompt** replaces a shell that has already reported, so the directory freezes
+  where it was rather than never being set. The replacement reads `.zshrc`, so the block fixes it.
+- **`sudo -E zsh` or any other nested shell** is a child rather than a replacement: the directory stays
+  frozen while it runs, then the outer shell resumes reporting at its next prompt.
+- **A shell running inside tmux** needs the block *and* a tmux setting. tmux is a terminal emulator rather
+  than a passthrough, so the pane shell's report goes to tmux, which forwards it to agterm only with its
+  `osc7` terminal feature on — and its default `terminal-features` does not grant that to `xterm-ghostty`.
+  Add `set -as terminal-features ',xterm-ghostty:osc7'` to `~/.tmux.conf` as well, then restart the tmux
+  server.
+
+Restoring a running command has its own limit, unrelated to the block above: with **Restore running
+commands on restart** on, the captured foreground command is the wrapper's own process rather than the
+program running behind it, because that program runs on a second terminal the wrapper owns and agterm
+cannot see. Pin what such a pane should re-run with `agtermctl session restore '<command>'`, which is read
+back on `tree` and wins over the capture.
+
 ## ⌘-hover does not underline links inside tmux or vim
 
 Inside a program that has turned mouse reporting on, ⌘-hover stops underlining URLs, the pointer stays a

@@ -3079,7 +3079,16 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                   >›</span
                 ><strong style="color: #e6e1d7">The saved directory depends on OSC 7.</strong> It relies on Ghostty
                 shell-integration (auto-injected for zsh, bash, fish, and nu). If the working directory is never reported, a
-                session restores to the directory it was created in.
+                session restores to the directory it was created in. The integration does not survive a shell replacing itself,
+                so a startup file that
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">exec</span>s another shell — what
+                the Amazon Q CLI, Kiro CLI and Fig wrappers install — silently leaves it unreported;
+                <a
+                  href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#every-session-restores-to-the-directory-it-was-created-in"
+                  style="color: #6d82f3"
+                  >troubleshooting.md</a
+                >
+                has the fix.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
