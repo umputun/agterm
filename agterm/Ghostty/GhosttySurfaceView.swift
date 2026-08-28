@@ -162,6 +162,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     private var pendingSurfaceCreation = false
     var rendererVisibilityTask: Task<Void, Never>?
     var rendererVisible = true
+    /// Sweeps the hidden layer's retained frame on a slow cadence; exits itself on reveal or teardown.
+    var hiddenJanitorTask: Task<Void, Never>?
     /// After `destroySurface()` the view is retired: never recreate a surface (a stray viewDidMoveToWindow).
     private var isDestroyed = false
 
