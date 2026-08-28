@@ -181,7 +181,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var deckActive = true
 
     /// Whether this surface's deck slot is on-screen (session selected, not hidden by a full overlay/scratch).
-    /// UNLIKE `deckActive` it is NOT focus-gated, so both panes of a visible split are `deckVisible`.
+    /// Unlike `deckActive` it is not split-pane-focus-gated, so both panes of a visible split are
+    /// `deckVisible`; it still drops while the quick terminal owns focus to suppress AppKit mouse routing.
     /// Load-bearing for drag-and-drop: every surface is eagerly realized, and SwiftUI's `.opacity(0)`/
     /// `.allowsHitTesting(false)` never reach AppKit's drag machinery (the NSView keeps `alphaValue == 1`, and
     /// drag-destination resolution does NOT consult `hitTest`), so with every surface registered a file drop
