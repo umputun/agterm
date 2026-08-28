@@ -7,21 +7,39 @@ private let visibilityLogger = Logger(subsystem: "com.umputun.agterm", category:
 extension GhosttySurfaceView {
     /// A short grace period prevents a SwiftUI reparent from tearing down and rebuilding the swap chain.
     static let rendererOcclusionDelay: UInt64 = 1_000_000_000
+    /// How long a hide defers to a never-painted pane's first present; launch restores dozens of
+    /// surfaces, so first paints can land tens of seconds late. Expiry hides anyway.
+    static let firstPresentTimeout: UInt64 = 60_000_000_000
+    static let firstPresentPoll: UInt64 = 250_000_000
 
     var showsOnScreen: Bool { deckOnScreen && window != nil }
 
+    /// `delayHide: false` skips the reparent grace; every hide still lands AFTER the pane's first
+    /// present. The renderer's release is edge-triggered, so an edge sent before the restore paints
+    /// releases an empty chain and the paint then rebuilds it with no edge left to free it — the
+    /// 2 GB launch floor. Waiting adds no protocol edge: the pane spawns visible and hides once,
+    /// merely later.
     func updateRendererVisibility(delayHide: Bool = true) {
         cancelPendingRendererVisibility()
         guard !showsOnScreen else {
             setRendererVisible(true)
             return
         }
-        guard delayHide else {
+        let awaitsFirstPresent = surface != nil && layer?.contents == nil
+        guard delayHide || awaitsFirstPresent else {
             setRendererVisible(false)
             return
         }
         rendererVisibilityTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.rendererOcclusionDelay)
+            if delayHide {
+                try? await Task.sleep(nanoseconds: Self.rendererOcclusionDelay)
+            }
+            var waited: UInt64 = 0
+            while !Task.isCancelled, waited < Self.firstPresentTimeout,
+                  let view = self, view.surface != nil, view.layer?.contents == nil {
+                try? await Task.sleep(nanoseconds: Self.firstPresentPoll)
+                waited += Self.firstPresentPoll
+            }
             guard !Task.isCancelled, let self, !self.showsOnScreen else { return }
             self.rendererVisibilityTask = nil
             self.setRendererVisible(false)
