@@ -125,6 +125,7 @@ final class QuickTerminalController {
         // inactive, so hiding it returns the keyboard to whatever was in front, with nothing to restore.
         panel.orderFrontRegardless()
         panel.makeKey()
+        surfaceView?.deckOnScreen = true
         focus()
     }
 
@@ -135,6 +136,9 @@ final class QuickTerminalController {
         holdsKey = false
         dismissesOnFocusLoss = true
         panel?.orderOut(nil)
+        // `orderOut` leaves `NSView.window` set, so without this the ordered-out panel's surface — the one
+        // that spends the most time hidden — would keep its swap chain for the rest of the app's life.
+        surfaceView?.deckOnScreen = false
     }
 
     /// The panel lost key. `holdsKey` drops either way — a PINNED panel stays on screen without owning the

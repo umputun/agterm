@@ -12,8 +12,8 @@ private final class StubContentView: NSView {
 /// Pins the chrome-versus-surface split that keeps the resize cursor over the dividers (issue #324).
 /// Returning true for chrome puts the flicker back; returning false for a sibling pane silences the
 /// visible terminal's own cursor instead. Neither shows up in any other test. Also carries the surface's
-/// other two invisible contracts: the `viewOnly` refusal the dashboard and the HUD both rest on, and the
-/// temp files teardown owns.
+/// other invisible contracts: the `viewOnly` refusal the dashboard and the HUD both rest on, the renderer
+/// visibility gate, and the temp files teardown owns.
 @MainActor
 final class GhosttySurfaceViewTrackingTests: XCTestCase {
     private var window: NSWindow!

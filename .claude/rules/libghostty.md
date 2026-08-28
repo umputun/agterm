@@ -33,7 +33,10 @@ paths:
   defence against building on a libghostty that does not — keep it even though it looks redundant.
 - `ghostty_surface_set_occlusion(false)` stops hidden rendering and releases the Metal swap chain on the
   current pin. Drive it from `deckOnScreen`, not `deckVisible`: dashboard cells and passive HUDs paint while
-  non-interactive. A detached quick/scratch/split host is hidden regardless of its last deck value.
+  non-interactive, and `deckVisible`'s quick-terminal `holdsKey` term is focus ownership, not visibility —
+  the inset panel leaves panes on screen. A detached quick/scratch/split host is hidden regardless of its
+  last deck value, and the ordered-out quick panel clears `deckOnScreen` itself since `orderOut` keeps
+  `window` set.
 
 ## Theme and sidebar
 
@@ -282,12 +285,17 @@ paths:
 ## OSC 52 clipboard
 
 - Gate clipboard in host callbacks. Write carries `confirm` for `clipboard-write = ask`; read confirmation
-  identifies OSC 52 read versus paste. Prompt only OSC read, never Command-V.
+  distinguishes OSC 52 / Kitty reads and writes from paste and list. Prompt only protocol reads and writes,
+  never Command-V.
 - `ClipboardPromptController` owns app-session-wide per-direction ask/allow/deny policy. Coalesce by
   requesting surface plus direction so separate surfaces cannot inherit one decision.
 - Defer sheets to the next main turn because callbacks occur inside a libghostty tick and a modal loop
-  would reenter it. Denied reads must complete with empty text and `confirmed = true`; false causes an
-  endless re-prompt.
+  would reenter it. Deny via `ghostty_surface_deny_clipboard_request`, which writes the protocol's denial
+  reply and invalidates the request; completing with `confirmed = false` re-asks in an endless loop.
+- A text read always completes, serving a zero-length `text/plain` when the pasteboard is empty: an
+  `UNAVAILABLE` result never starts the request, so an OSC 52 reader would wait for a reply that never comes.
+- A write keeps every representation (`NSPasteboard.PasteboardType(mimeType:)` mapping): the callback is
+  void and core reports `DONE` right after it, so a dropped representation is a false success.
 - Default ungated writes are synchronous so a same-tick read sees them. Read defaults to ask; write defaults
   allow and can be changed in agterm `ghostty.conf`.
 - Deferred completion captures `GhosttySurfaceView`, then rereads its live surface. If a pane closed while

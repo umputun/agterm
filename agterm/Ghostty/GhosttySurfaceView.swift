@@ -200,8 +200,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
     }
 
-    /// Whether this surface actually paints on screen. Dashboard cells and passive HUDs are visible while
-    /// deliberately non-interactive, so this is narrower than `deckVisible`.
+    /// Whether this surface actually paints on screen. Wider than `deckVisible`: dashboard cells and
+    /// passive HUDs are visible while deliberately non-interactive, and a pane stays on screen while the
+    /// quick terminal merely holds key.
     var deckOnScreen = true {
         didSet {
             guard deckOnScreen != oldValue else { return }

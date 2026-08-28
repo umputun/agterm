@@ -51,12 +51,16 @@ extension WindowContentView {
         // mouse-cursor tracking (the `deckVisible` note in libghostty.md). Without the quick-terminal term a
         // covered pane races it for the cursor and fans mouse-motion into the covered TUI (issue #225).
         let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.holdsKey
+        // the renderer gate drops `visible`'s quick-terminal term: `holdsKey` is focus ownership, not
+        // visibility — the inset panel leaves the panes on screen (other windows and displays included),
+        // so occluding on it would freeze panes the user is looking at.
+        let onScreen = deckInteractive && isActive && !hideForOverlay
         // focus gate: a visible quick terminal OWNS first responder, so no deck surface may be `isActive`
         // behind it — `updateNSView` would grab focus and send keystrokes to a covered session. Every
         // automatic reselection (`reselectIfSelectionHidden`, auto-follow) reaches this, not just a click.
         let focusable = deckInteractive && isActive && !quickTerminal.holdsKey
         let gates = DeckPaneGates(focusable: focusable, overlaid: DeckPaneGates.coverActive(session),
-                                  visible: visible)
+                                  visible: visible, onScreen: onScreen)
         ZStack {
             // the pane(s) stay MOUNTED while an overlay is up so their shells stay alive; a FULL overlay
             // hides them (opacity 0) so its translucency reveals the window backing, not the session.
@@ -84,7 +88,8 @@ extension WindowContentView {
                 // makeScratchSurface's autoFocus suppression); `deckVisible` keeps drops to an on-screen one.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                              isActive: focusable && !session.programOverlayActive,
-                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey)
+                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey,
+                             onScreen: deckInteractive && isActive && !fullOverlay)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch")
@@ -92,7 +97,7 @@ extension WindowContentView {
             }
             // renders IN-DECK per session, so its program runs even when the session isn't active;
             // `overlayPanel` owns the constant-shape rule.
-            overlayPanel(session: session, isActive: focusable)
+            overlayPanel(session: session, isActive: focusable, onScreen: deckInteractive && isActive)
                 .zIndex(3)
         }
         // on PROGRAM overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane
@@ -180,7 +185,8 @@ extension WindowContentView {
                 TerminalView(session: session, surfaceKeyPath: slot,
                              makeSurface: pane == .left ? makeSurface : makeSplitSurface,
                              isActive: gates.focusable && focused && !gates.overlaid && !covered,
-                             deckVisible: gates.visible && !covered)
+                             deckVisible: gates.visible && !covered,
+                             onScreen: gates.onScreen && !covered)
                     .overlay { paneDim(!focused, session: session) }
                     .modifier(PaneOverlayCover(covered: covered))
                     .id(pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split")
@@ -188,8 +194,7 @@ extension WindowContentView {
                 Color.clear
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
             }
-            paneOverlayPanel(session: session, pane: pane, focused: focused,
-                             isActive: gates.focusable && !gates.overlaid && focused, deckVisible: gates.visible)
+            paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
         }
     }
 
@@ -199,7 +204,7 @@ extension WindowContentView {
     /// switching full<->% only re-flows the frame and never re-parents the NSView (which would blank its
     /// Metal drawable). `OverlayPanelStyle` supplies every per-occupant parameter, so the chain below is the
     /// same chain whichever one is up.
-    @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
+    @ViewBuilder private func overlayPanel(session: Session, isActive: Bool, onScreen: Bool) -> some View {
         let style = OverlayPanelStyle.resolve(session)
         // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
         // stays inert as a whole and the session underneath keeps both.
@@ -223,7 +228,7 @@ extension WindowContentView {
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: { makeOverlaySurface($0, nil) },
                                  isActive: live, deckVisible: live, viewOnly: !style.interactive,
-                                 onScreen: isActive)
+                                 onScreen: onScreen)
                         .frame(width: geo.size.width * style.widthFraction,
                                height: geo.size.height * style.heightFraction)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
@@ -257,13 +262,14 @@ extension WindowContentView {
     /// exists only at session scope). An ALWAYS-PRESENT sibling INSIDE that pane's ZStack, content gated in
     /// the GeometryReader, under the constant-shape rule `sessionDetail` states.
     ///
-    /// `isActive` is the FOCUSED-pane gate (auto-focus, first responder), `deckVisible` the on-screen one
-    /// (drag types, mouse cursor, clicks): an overlay on the unfocused pane stays visible and clickable —
-    /// clicking it moves focus through the surface's own `onFocusChange` — without grabbing focus on open.
-    /// It therefore carries `focused`'s `paneDim` too: the overlay replaces the pane the wash would have
-    /// marked, so without it the unfocused side of a split reads as live.
-    @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, focused: Bool, isActive: Bool,
-                                               deckVisible: Bool) -> some View {
+    /// The focus/visibility split comes from `gates` plus `focused`: an overlay on the unfocused pane stays
+    /// visible and clickable — clicking it moves focus through the surface's own `onFocusChange` — without
+    /// grabbing focus on open. It therefore carries `focused`'s `paneDim` too: the overlay replaces the pane
+    /// the wash would have marked, so without it the unfocused side of a split reads as live.
+    @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, focused: Bool,
+                                               gates: DeckPaneGates) -> some View {
+        let isActive = gates.focusable && !gates.overlaid && focused
+        let deckVisible = gates.visible
         let active = session.paneOverlay(pane) != nil
             && deckHostsSurface(session: session, surface: pane.zoomSurface)
         GeometryReader { geo in
@@ -273,7 +279,7 @@ extension WindowContentView {
                     // terminal, and the pane below is hidden so the window backing shows through.
                     TerminalView(session: session, surfaceKeyPath: pane.surfaceSlot,
                                  makeSurface: { makeOverlaySurface($0, pane) },
-                                 isActive: isActive, deckVisible: deckVisible)
+                                 isActive: isActive, deckVisible: deckVisible, onScreen: gates.onScreen)
                         .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
                         .id("\(session.id.uuidString)-overlay-\(pane.rawValue)")
                 }
@@ -324,6 +330,8 @@ struct DeckPaneGates {
     let focusable: Bool
     let overlaid: Bool
     let visible: Bool
+    /// `visible` without the quick-terminal focus term: what actually paints, for `deckOnScreen`.
+    let onScreen: Bool
 
     /// Whether a session-wide cover is up: a caller's PROGRAM in the overlay slot, or the scratch. A HUD is
     /// exempt — it is a message, not a program, and the session under it must keep first responder and stay

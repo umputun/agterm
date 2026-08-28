@@ -34,8 +34,9 @@ struct TerminalView: NSViewRepresentable {
     /// so it never grabs first responder from the dashboard's key-catcher. `.allowsHitTesting(false)` alone
     /// doesn't stop AppKit routing a click to the NSView, so the surface itself refuses hits + first responder.
     var viewOnly = false
-    /// Whether this host paints on screen when that differs from `deckVisible`, as for dashboard cells and HUDs.
-    /// nil follows `deckVisible`, which is correct for every interactive pane host.
+    /// Whether this host paints on screen when that differs from `deckVisible` — wider for dashboard cells
+    /// and HUDs (visible while non-interactive) and for panes under the quick terminal, whose `holdsKey`
+    /// term is focus ownership, not visibility. nil follows `deckVisible` (the zoom host, where they agree).
     var onScreen: Bool?
 
     func makeCoordinator() -> Coordinator { Coordinator() }

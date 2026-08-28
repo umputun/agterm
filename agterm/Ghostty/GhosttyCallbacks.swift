@@ -4,6 +4,7 @@ import agtermCore
 import AppKit
 import GhosttyKit
 import os
+import UniformTypeIdentifiers
 
 /// Routes libghostty runtime callbacks to the appropriate terminal views.
 ///
@@ -177,7 +178,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
         let requestsText = (0..<Int(read.mimesLen)).contains { index in
             read.mimes?[index].map { String(cString: $0) == "text/plain" } ?? false
         }
-        let contents = requestsText ? text.map { [ClipboardContent(mime: "text/plain", data: Data($0.utf8))] } ?? [] : []
+        // an empty pasteboard still answers a text request with a ZERO-LENGTH representation: an OSC 52
+        // reader is waiting for the reply, and `UNAVAILABLE` means the request never started, so nothing
+        // would reach the pty and the client would hang until its own timeout.
+        let contents = requestsText ? [ClipboardContent(mime: "text/plain", data: Data((text ?? "").utf8))] : []
         guard !contents.isEmpty || read.list else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
         Self.completeClipboardRequest(
             surface, contents: contents, available: read.list && text != nil ? ["text/plain"] : [], state: read.state)
@@ -261,18 +265,19 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func writeClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt, confirm: Bool) {
         guard let content, len > 0 else { return }
-        var text: String?
-        for item in UnsafeBufferPointer(start: content, count: Int(len)) {
-            guard let mime = item.mime, String(cString: mime).hasPrefix("text/plain") else { continue }
+        // keep EVERY representation, not just text: a Kitty write can carry images, the callback is void,
+        // and core reports `DONE` to the program right after it — dropping a representation here silently
+        // lies to a client that was just told its write succeeded.
+        let items: [ClipboardContent] = UnsafeBufferPointer(start: content, count: Int(len)).compactMap { item in
+            guard let mime = item.mime else { return nil }
             let bytes = UnsafeRawBufferPointer(start: item.data, count: item.len)
-            text = String(decoding: bytes, as: UTF8.self)
-            break
+            return ClipboardContent(mime: String(cString: mime), data: Data(bytes))
         }
-        guard let text else { return }
+        guard !items.isEmpty else { return }
         // confirm == false: ghostty's `allow` clipboard-write policy already permitted it. This callback runs
         // on the main actor (verified), so write SYNCHRONOUSLY — a same-tick OSC 52 read would see stale data.
         guard confirm else {
-            Self.setClipboard(text)
+            Self.setClipboard(items)
             return
         }
         // confirm == true: clipboard-write = ask. Gate behind the user, scoping coalescing to this surface
@@ -281,14 +286,21 @@ final class GhosttyCallbacks: @unchecked Sendable {
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
         DispatchQueue.main.async {
             ClipboardPromptController.shared.request(.write, requester: view) { allowed in
-                if allowed { Self.setClipboard(text) }
+                if allowed { Self.setClipboard(items) }
             }
         }
     }
 
-    private static func setClipboard(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+    private static func setClipboard(_ items: [ClipboardContent]) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.declareTypes(items.compactMap { NSPasteboard.PasteboardType(mimeType: $0.mime) }, owner: nil)
+        for item in items {
+            guard let type = NSPasteboard.PasteboardType(mimeType: item.mime) else { continue }
+            // setData for text too: the contract is binary-safe, and a String round-trip would silently
+            // replace invalid UTF-8 in a representation core just reported as written.
+            pb.setData(item.data, forType: type)
+        }
     }
 
     private struct ClipboardContent: Sendable {
@@ -378,5 +390,21 @@ final class GhosttyCallbacks: @unchecked Sendable {
     private func surface(from ud: UnsafeMutableRawPointer?) -> ghostty_surface_t? {
         guard let ud else { return nil }
         return Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue().surface
+    }
+}
+
+extension NSPasteboard.PasteboardType {
+    /// A pasteboard type for a MIME string: `text/plain` is `.string`, else the UTType's identifier, else
+    /// the raw MIME as identifier (Ghostty.app's mapping, so both sides of a write round-trip agree).
+    init?(mimeType: String) {
+        if mimeType == "text/plain" {
+            self = .string
+            return
+        }
+        guard let utType = UTType(mimeType: mimeType) else {
+            self.init(mimeType)
+            return
+        }
+        self.init(utType.identifier)
     }
 }

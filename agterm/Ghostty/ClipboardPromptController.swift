@@ -1,7 +1,8 @@
 import AppKit
 import agtermCore
 
-/// ClipboardPromptController gates the OSC 52 clipboard access a terminal program requests. One shared
+/// ClipboardPromptController gates the clipboard access a terminal program requests (OSC 52 or the Kitty
+/// clipboard protocol). One shared
 /// instance holds an app-session-scoped `ClipboardPromptPolicy` (the remembered allow/deny spans every
 /// window and terminal session until agterm quits): a remembered choice resolves immediately, else a
 /// warning sheet is shown. Requests from the SAME (surface, direction) coalesce behind that one prompt so
@@ -61,8 +62,8 @@ final class ClipboardPromptController {
         alert.alertStyle = .warning
         alert.messageText = access == .read ? "Allow a program to read the clipboard?" : "Allow a program to set the clipboard?"
         alert.informativeText = access == .read
-            ? "A program running in the terminal is trying to read your clipboard contents (OSC 52), which could expose passwords or other copied data."
-            : "A program running in the terminal is trying to replace your clipboard contents (OSC 52)."
+            ? "A program running in the terminal is trying to read your clipboard contents, which could expose passwords or other copied data."
+            : "A program running in the terminal is trying to replace your clipboard contents."
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Deny")
         alert.showsSuppressionButton = true
