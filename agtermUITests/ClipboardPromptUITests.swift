@@ -34,6 +34,10 @@ final class ClipboardPromptUITests: ControlAPITestCase {
 
     private func base64(_ value: String) -> String { Data(value.utf8).base64EncodedString() }
 
+    private func occurrences(of needle: String, in text: String) -> Int {
+        text.components(separatedBy: needle).count - 1
+    }
+
     /// Type a `printf '<body>'` line into `target` and wait for the named clipboard sheet to appear,
     /// retrying the injection (a freshly realized shell can drop the first keystrokes; a re-emitted OSC 52
     /// from the same surface just coalesces into the one prompt). Returns the Allow/Deny sheet buttons.
@@ -82,9 +86,14 @@ final class ClipboardPromptUITests: ControlAPITestCase {
         let secret = "SECRETREADXYZ"
         setSystemClipboard(secret)
         let deny = try emitOSC52(printfBody: "\\033]52;c;?\\007", sheetButton: "Deny", target: id)
+        // The shell has already echoed the typed `printf` command, which itself contains `52;c;`. Count that
+        // baseline before clicking so only the terminal's later empty OSC 52 response can satisfy the poll.
+        let responseCountBefore = occurrences(of: "52;c;", in: try sessionText(target: id))
         deny.click()
         // deny delivers an EMPTY OSC 52 response, so the shell echoes "52;c;" with no clipboard base64.
-        let buffer = pollSessionText(target: id, timeout: 6) { $0.contains("52;c;") && !$0.contains(self.base64(secret)) }
+        let buffer = pollSessionText(target: id, timeout: 6) {
+            self.occurrences(of: "52;c;", in: $0) > responseCountBefore && !$0.contains(self.base64(secret))
+        }
         XCTAssertNotNil(buffer, "a denied read must not deliver the clipboard base64 (\(base64(secret)))")
     }
 
