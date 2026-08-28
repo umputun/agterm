@@ -177,9 +177,9 @@ Three neighbouring cases share the cause, and the block above covers all but the
   server.
 
 Restoring a running command has its own limit, unrelated to the block above: with **Restore running
-commands on restart** on, the captured foreground command is the wrapper's own process rather than the
-program running behind it, because that program runs on a second terminal the wrapper owns and agterm
-cannot see. Pin what such a pane should re-run with `agtermctl session restore '<command>'`, which is read
+commands on restart** on, a pane behind a wrapper does not come back running what it was running. The
+program is on a second terminal the wrapper owns, which agterm cannot see into, so the capture never
+reaches it. Pin what such a pane should re-run with `agtermctl session restore '<command>'`, which is read
 back on `tree` and wins over the capture.
 
 ## ⌘-hover does not underline links inside tmux or vim

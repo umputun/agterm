@@ -229,8 +229,8 @@ report reaches tmux, which forwards it on only with its `osc7` terminal feature 
 `terminal-features` does not grant that to `xterm-ghostty`: add
 `set -as terminal-features ',xterm-ghostty:osc7'` to `~/.tmux.conf` and restart the tmux server.
 
-Separate limit, unrelated to the block: the captured foreground is the wrapper's own process, not the
-program behind it on the wrapper's inner pty, so restore cannot bring that program back — pin it with
+Separate limit, unrelated to the block: the program runs on the wrapper's inner pty, which agterm cannot
+see into, so the capture never reaches it and restore cannot bring that program back — pin it with
 `session restore '<command>'` instead.
 
 ### "⌘-hover does not underline links inside tmux or vim"
