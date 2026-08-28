@@ -25,8 +25,18 @@ status_wrapper=${AGTERM_STATUS_WRAPPER:-"$script_dir/agterm-agent-status.sh"}
 # default — one agent set split by detection mechanism, and the walk must count all of it: an
 # integration-driven agent (say gemini) that spawns `claude -p` is a spawner too, and missing it
 # here would let the worker's reset repaint the gemini pane. Keep the two lists in sync.
+#
+# An overridden AGTERM_AGENT_RE (integration.sh documents the export) extends the set beyond the
+# literals, matched against the same argv[0] basename the literal list sees — not the typed command
+# line the shell integration matched, so an override that inspects arguments won't extend the walk.
+# The expression is evaluated as ERE; zsh under RE_MATCH_PCRE and fish read the same value as PCRE,
+# so an override can be valid there and invalid here. `[[` then returns 2, which lands on "not an
+# agent" and keeps the walk fail-open; the redirect swallows bash's complaint about the expression.
 is_agent() {
   case "$1" in claude | codex | kimi | opencode | pi | gemini | cursor-agent | aider | crush | goose) return 0 ;; esac
+  if [ -n "${AGTERM_AGENT_RE:-}" ]; then
+    [[ $1 =~ $AGTERM_AGENT_RE ]] 2>/dev/null && return 0
+  fi
   return 1
 }
 

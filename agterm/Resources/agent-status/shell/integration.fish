@@ -4,7 +4,7 @@
 # Source this from your ~/.config/fish/config.fish.
 #
 # Which commands count as agents is a regex, override before sourcing to taste:
-#   set -g AGTERM_AGENT_RE '^(gemini|cursor-agent|my-agent)([[:space:]]|$)'
+#   set -gx AGTERM_AGENT_RE '^(gemini|cursor-agent|my-agent)([[:space:]]|$)'
 #
 # Claude Code, Codex, Pi, and OpenCode are intentionally NOT in the default list —
 # their own hooks/extensions/plugins drive finer per-turn state, which the coarse
@@ -24,8 +24,10 @@ if not set -q AGTERM_AGENT_BIN
     set -g AGTERM_AGENT_BIN "$_ags_dir/agterm-agent-status.sh"
 end
 
+# exported, unlike the shell-local state below: the Claude adapter reads an overridden value from
+# its process environment, and a `set -g` would keep it invisible outside this shell
 if not set -q AGTERM_AGENT_RE
-    set -g AGTERM_AGENT_RE '^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)'
+    set -gx AGTERM_AGENT_RE '^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)'
 end
 
 function _ags_preexec --on-event fish_preexec

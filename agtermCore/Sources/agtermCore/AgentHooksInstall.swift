@@ -405,11 +405,16 @@ public enum AgentHooksInstall {
         var didChange = false
         for hook in claudeHooks {
             guard var entries = hooks[hook.event] as? [[String: Any]] else { continue }
+            // the states this installer EVER generated for the event, current form first. UserPromptSubmit
+            // predates the --blink promotion (a9e678d9) and an install from that window — source builds only,
+            // no tag carries the bare form — still holds `active`; every other event has a single historical
+            // form. A stale state migrates onto the adapter AND the current state in one rewrite.
+            let generatedStates = hook.event == "UserPromptSubmit" ? [hook.state, "active"] : [hook.state]
             var eventChanged = false
             for index in entries.indices {
                 guard var commands = entries[index]["hooks"] as? [[String: Any]] else { continue }
                 var entryChanged = false
-                for slot in commands.indices where commands[slot]["command"] as? String == generated + hook.state {
+                for slot in commands.indices where generatedStates.contains(where: { commands[slot]["command"] as? String == generated + $0 }) {
                     commands[slot]["command"] = replacement + hook.state
                     entryChanged = true
                 }

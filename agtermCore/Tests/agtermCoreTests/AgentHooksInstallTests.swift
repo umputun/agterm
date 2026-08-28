@@ -147,6 +147,30 @@ struct AgentHooksInstallTests {
         #expect(!result.json.contains(AgentHooksInstall.wrapperPath(scriptDir: scriptDir) + "'"))
     }
 
+    @Test func mergeMigratesPreBlinkPromptEntry() throws {
+        // installs between 17c8a914 and a9e678d9 wrote `active` for UserPromptSubmit — source builds only,
+        // no tag carries the bare form. A byte-exact match against only the current `active --blink` left
+        // that entry on the unguarded wrapper while entryUsesWrapper reported the event installed, so
+        // nothing ever said the hook was unguarded. The historical form migrates like the current one:
+        // onto the adapter AND the current state.
+        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        let existing = """
+        {
+          "hooks": {
+            "UserPromptSubmit": [
+              {"hooks": [{"type": "command", "command": "'\(wrapper)' active"}]}
+            ]
+          }
+        }
+        """
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
+        #expect(result.changed)
+        let evts = events(result.json)
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        #expect(evts["UserPromptSubmit"]?.count == 1)
+        #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
+    }
+
     @Test func mergeMigrationIsIdempotent() throws {
         let first = try AgentHooksInstall.mergeClaudeSettings(existing: legacySettings(), scriptDir: scriptDir)
         let second = try AgentHooksInstall.mergeClaudeSettings(existing: first.json, scriptDir: scriptDir)
@@ -453,6 +477,7 @@ struct AgentHooksInstallTests {
                 if trimmed.hasPrefix("#") { return false }
                 return trimmed.contains("AGTERM_AGENT_RE:=")
                     || trimmed.hasPrefix("set -g AGTERM_AGENT_RE ")
+                    || trimmed.hasPrefix("set -gx AGTERM_AGENT_RE ")
             }
             #expect(defaultLines.count == 1, "\(relative) must have exactly one default AGTERM_AGENT_RE")
             for line in defaultLines {

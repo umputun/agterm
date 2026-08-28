@@ -22,7 +22,8 @@ struct ClaudeStatusHookTests {
     // would inherit whatever ancestry the runner happens to have, and `swift test` run from inside a Claude
     // session — the very thing this adapter exists for — would put a real `claude` above the fixture and turn
     // the owner cases silent. The boundary makes each case depend only on the processes it builds.
-    private func run(chain: [String], args: [String], sessionID: String? = "sid") throws -> (calls: [String], exit: Int32) {
+    private func run(chain: [String], args: [String], sessionID: String? = "sid",
+                     extraEnv: [String: String] = [:]) throws -> (calls: [String], exit: Int32) {
         let fm = FileManager.default
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-claude-hook-\(UUID().uuidString)")
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -70,6 +71,7 @@ struct ClaudeStatusHookTests {
             "PATH": "/usr/bin:/bin",
         ]
         environment["AGTERM_SESSION_ID"] = sessionID
+        environment.merge(extraEnv) { _, new in new }
         proc.environment = environment
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
@@ -103,6 +105,25 @@ struct ClaudeStatusHookTests {
         // to this walk: a claude worker under gemini must not repaint the gemini pane.
         let result = try run(chain: ["login", "gemini", "claude"], args: ["completed", "--auto-reset"])
         #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
+    @Test func overriddenAgentRegexExtendsTheSet() throws {
+        // integration.sh documents overriding AGTERM_AGENT_RE, and on the bash/zsh path an exported
+        // override reaches this process — an agent only the override names is a spawner all the same
+        let result = try run(chain: ["login", "my-agent", "claude"], args: ["completed", "--auto-reset"],
+                             extraEnv: ["AGTERM_AGENT_RE": "^(my-agent)([[:space:]]|$)"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
+    @Test func invalidOverrideRegexFailsOpen() throws {
+        // fish and RE_MATCH_PCRE zsh accept PCRE, so an override can be valid in the shell that set it
+        // and invalid as the ERE this script matches with — that case must degrade to the literal list
+        // (the pane's own agent keeps reporting), never to an error or a false silence
+        let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],
+                             extraEnv: ["AGTERM_AGENT_RE": "^(?i)(my-agent)$"])
+        #expect(result.calls == ["completed --auto-reset"])
         #expect(result.exit == 0)
     }
 
