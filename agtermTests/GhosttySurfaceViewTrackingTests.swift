@@ -146,6 +146,37 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertFalse(surface.showsOnScreen)
     }
 
+    func testHiddenJanitorSweepsWhileHiddenAndRetiresOnReveal() async throws {
+        let saved = GhosttySurfaceView.hiddenJanitorInterval
+        GhosttySurfaceView.hiddenJanitorInterval = 20_000_000
+        defer { GhosttySurfaceView.hiddenJanitorInterval = saved }
+        surface.wantsLayer = true
+        surface.layer?.contents = NSColor.red.cgColor
+        surface.rendererVisible = false
+        surface.startHiddenJanitor()
+        XCTAssertNotNil(surface.hiddenJanitorTask)
+        try await waitUntil("retained frame swept") { self.surface.layer?.contents == nil }
+        surface.rendererVisible = true
+        try await waitUntil("janitor retires after reveal") { self.surface.hiddenJanitorTask == nil }
+    }
+
+    func testDestroySurfaceCancelsTheHiddenJanitor() {
+        surface.rendererVisible = false
+        surface.startHiddenJanitor()
+        XCTAssertNotNil(surface.hiddenJanitorTask)
+        surface.destroySurface()
+        XCTAssertNil(surface.hiddenJanitorTask)
+    }
+
+    private func waitUntil(_ what: String, timeout: TimeInterval = 2, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for \(what)")
+    }
+
     // MARK: - teardown
 
     /// The HUD's body file has no status to read, so deleting it IS the teardown — and it is also how a

@@ -37,6 +37,12 @@ paths:
   the inset panel leaves panes on screen. A detached quick/scratch/split host is hidden regardless of its
   last deck value, and the ordered-out quick panel clears `deckOnScreen` itself since `orderOut` keeps
   `window` set.
+- Occlusion is TERMINAL visibility, not a renderer lever: every edge flips `terminal.flags.visible` and,
+  under mode 2033, emits a visibility report, so never toggle it to force a GPU re-release for a pane
+  that stayed hidden. The release is edge-triggered while the CA display callback draws unguarded, so a
+  present after the hide edge rebuilds the swap chain and only an upstream fix can re-release it; the
+  hidden janitor sweeps only the layer's retained frame. Reveal draws synchronously
+  (`ghostty_surface_draw`) because that sweep cleared `contents` and `refresh` merely queues a render.
 
 ## Theme and sidebar
 

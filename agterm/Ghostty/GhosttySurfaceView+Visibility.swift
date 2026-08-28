@@ -28,43 +28,42 @@ extension GhosttySurfaceView {
         }
     }
 
+    /// Sweep cadence for `startHiddenJanitor`; tests shorten it.
+    static var hiddenJanitorInterval: UInt64 = 30_000_000_000
+
     private func setRendererVisible(_ visible: Bool) {
         guard let surface, rendererVisible != visible else { return }
         rendererVisible = visible
-        visibilityLogger.notice("occlusion \(visible ? "visible" : "hidden", privacy: .public) session=\(self.session?.id.uuidString ?? "-", privacy: .public) split=\(self.isSplitPane)")
+        visibilityLogger.debug("occlusion \(visible ? "visible" : "hidden", privacy: .public) session=\(self.session?.id.uuidString ?? "-", privacy: .public) split=\(self.isSplitPane)")
         ghostty_surface_set_occlusion(surface, visible)
         if visible {
             ghostty_surface_refresh(surface)
+            // The janitor dropped the retained frame and refresh only QUEUES a render, so SwiftUI
+            // can expose the pane before anything presents. Draw synchronously (supported from the
+            // main thread; it also rebuilds a released swap chain) so a cleared layer never shows.
+            if layer?.contents == nil {
+                ghostty_surface_draw(surface)
+            }
         } else {
             startHiddenJanitor()
         }
     }
 
-    /// The hide edge alone doesn't stick, twice over. The Metal backend declares no
-    /// `gpuResourcesReleased`, so the released swap chain's last-presented IOSurface stays retained
-    /// by the CALayer `contents`. Worse, the release is edge-triggered while draws are not gated on
-    /// visibility: presents landing after the edge — a restore realizing dozens of surfaces after
-    /// launch's early hide, the CA display callback firing on resize — quietly rebuild the whole
-    /// chain, and no new edge ever re-releases it.
-    /// So sweep on a slow cadence. A non-nil `contents` is the tell that a present landed since the
-    /// last sweep: re-arm the edge with an occlusion toggle (the renderer re-releases whatever was
-    /// rebuilt; the `true` half costs one off-screen frame), give that cycle's own present time to
-    /// drain, then drop the retained frame. A settled surface reads as nil and the sweep is free.
-    /// Nothing else may clear `contents` while hidden, or a live rebuilt chain reads as settled.
-    /// An occluded pane paints nothing, and the reveal path refreshes before anything shows.
-    /// `self` is bound per step: a strong hold across the long sleep would pin a discarded view
-    /// against the `deinit` safety net for a cycle, or forever if it re-hides.
-    private func startHiddenJanitor() {
+    /// The Metal backend declares no `gpuResourcesReleased`, so a released swap chain's
+    /// last-presented IOSurface stays retained by the CALayer `contents`, and presents landing after
+    /// the hide edge (launch restore, the CA display callback on resize) re-set it. Sweep the
+    /// retained frame on a slow cadence while renderer-hidden. The CA path also rebuilds the chain
+    /// itself, which only upstream can stop: never re-arm the release with an occlusion toggle here,
+    /// `ghostty_surface_set_occlusion` is terminal visibility and leaks mode 2033 visibility reports
+    /// to a program that stayed hidden throughout.
+    /// `self` is bound per wake: a strong hold across the sleep would pin a discarded view against
+    /// the `deinit` safety net. `destroySurface` cancels the task; a reveal retires it on wake.
+    func startHiddenJanitor() {
         guard hiddenJanitorTask == nil else { return }
         hiddenJanitorTask = Task { @MainActor [weak self] in
             while true {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                guard let view = self, let surface = view.surface, !view.rendererVisible else { break }
-                guard view.layer?.contents != nil else { continue }
-                ghostty_surface_set_occlusion(surface, true)
-                ghostty_surface_set_occlusion(surface, false)
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                guard let view = self, view.surface != nil, !view.rendererVisible else { break }
+                try? await Task.sleep(nanoseconds: Self.hiddenJanitorInterval)
+                guard let view = self, !Task.isCancelled, !view.rendererVisible else { break }
                 view.layer?.contents = nil
             }
             self?.hiddenJanitorTask = nil
