@@ -14,7 +14,7 @@ Name scripts by their language, because the extension decides what CI does with 
 
 - `.sh` is POSIX or bash. CI runs `shellcheck` over every one, and it has to be clean.
 - `.zsh` is zsh. CI parses every one with `zsh -n`, so a syntax error is caught, but shellcheck cannot read zsh and nothing lints these. A parse is not a lint, so run `zsh -n` yourself and read the script over before sending.
-- `.py` is Python 3. CI runs `ruff check` over every one, and it has to be clean. Say which Python version the recipe needs in *Requirements*, the same as any other external tool, and depend on the standard library unless the recipe genuinely cannot.
+- `.py` is Python 3. CI runs `ruff check` over every one, and it has to be clean. A regression script named `test_*.py` is also executed directly by CI. Say which Python version the recipe needs in *Requirements*, the same as any other external tool, and depend on the standard library unless the recipe genuinely cannot.
 
 A recipe in another language is welcome, but say so in the pull request: nothing lints an extension CI does not know, and a recipe that arrives ungated is one the reader has to trust entirely on review.
 

@@ -21,7 +21,8 @@ RETRY_DELAY = 10.0
 BOX_LINES = 40
 EMPTY_CURSOR_COLUMN = 2
 MIN_WRAPPED_PROBE = 40
-RULE_RE = re.compile(r"^\s*[─—-]{10,}\s*$")
+# Claude can put a short context label inside the top composer rule, for example `e2e`.
+RULE_RE = re.compile(r"^\s*[─\u2014-]{10,}(?:\s+[^─\u2014-].*?\s+[─\u2014-]+)?\s*$")
 CODEX_PROMPT_RE = re.compile(r"^\s*›[\s ]*(.*?)\s*$")
 CLAUDE_PROMPT_RE = re.compile(r"^\s*❯[\s ]*(.*?)\s*$")
 PASTED_RE = re.compile(r"\[Pasted Content \d+ chars?\]")

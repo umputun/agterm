@@ -50,9 +50,10 @@ paths:
 - The cookbook job builds nothing. It compares the `cookbook/README.md` table and recipe directories in
   both directions; requires kebab-case directories, a `README.md` with all six exact
   (`grep -qxF`) headings, and shebangs for `.sh`/`.zsh`/`.py`; runs `shellcheck` on `.sh`; parses `.zsh`
-  with `zsh -n`; and runs `ruff check` on `.py`. `shellcheck` is preinstalled. Install absent `zsh` and
-  `ruff` in separate steps immediately before their own; shellcheck cannot lint zsh, and `ruff` needs
-  `pipx` because the runner's python is externally managed.
+  with `zsh -n`; runs `ruff check` on `.py`; and executes every `test_*.py` regression script directly.
+  `shellcheck` is preinstalled. Install absent `zsh` and `ruff` in separate steps immediately before
+  their own; shellcheck cannot lint zsh, and `ruff` needs `pipx` because the runner's python is externally
+  managed.
 - Recipes are not shell-only. A language gains a gate by adding its extension to the shebang glob plus a
   lint or parse step; until then it merges unchecked, which is why `cookbook/CONTRIBUTING.md` tells a
   contributor to flag any other language in the pull request. Keep that file, `cookbook/README.md` and
