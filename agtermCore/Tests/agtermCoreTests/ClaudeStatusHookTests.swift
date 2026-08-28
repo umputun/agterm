@@ -162,6 +162,35 @@ struct ClaudeStatusHookTests {
         #expect(result.exit == 0)
     }
 
+    @Test func isAgentCoversTheShippedDefaultRegexNames() throws {
+        // the script's own comment states this invariant in prose and round 1 of #461 shipped it broken:
+        // a name added to the default regex and forgotten here stops counting that agent as a spawner
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let integration = try String(contentsOf: root
+            .appendingPathComponent("agterm/Resources/agent-status/shell/integration.sh"), encoding: .utf8)
+        guard let alternation = integration
+            .components(separatedBy: "AGTERM_AGENT_RE:=^(").dropFirst().first?
+            .components(separatedBy: ")").first, !alternation.isEmpty else {
+            Issue.record("integration.sh must define the default AGTERM_AGENT_RE as an anchored alternation")
+            return
+        }
+        let hookText = try String(contentsOf: URL(fileURLWithPath: Self.hook), encoding: .utf8)
+        guard let arm = hookText.components(separatedBy: "case \"$1\" in ").dropFirst().first?
+            .components(separatedBy: ")").first else {
+            Issue.record("agterm-claude-status.sh must classify agents with a `case \"$1\" in ... )` arm")
+            return
+        }
+        let literals = Set(arm.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) })
+        // subset, never equality: the arm also carries the hook-driven agents, which the regex must not
+        for name in alternation.components(separatedBy: "|") {
+            #expect(literals.contains(name), "is_agent must count \(name) from integration.sh's default regex")
+        }
+    }
+
     @Test func outsideAgtermExitsSilently() throws {
         // no session id: nothing to address, and a hook must never fail the turn it fired from
         let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"], sessionID: nil)

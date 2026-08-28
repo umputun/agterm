@@ -2840,6 +2840,8 @@
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
               the default set is gemini, cursor-agent, aider, crush, goose), four Claude Code hooks (prompt → active,
               tool run → active, Stop → completed, permission prompt → blocked), and an OpenCode lifecycle plugin.
+              When Claude Code runs as a worker under another agent, its hooks stay silent, so the status of the pane
+              that spawned it is not overwritten.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               The scripts go to

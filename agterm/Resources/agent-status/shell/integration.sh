@@ -30,7 +30,9 @@ fi
 
 if [ -n "${ZSH_VERSION:-}" ]; then
   autoload -Uz add-zsh-hook
-  _ags_preexec() { [[ "$1" =~ $AGTERM_AGENT_RE ]] && { "$AGTERM_AGENT_BIN" active --blink; _ags_active=1; }; }
+  # the redirect stays on the match, not the whole hook: an override valid as the PCRE fish and
+  # RE_MATCH_PCRE zsh accept can be invalid here, and zsh prints the compile error once per prompt
+  _ags_preexec() { [[ "$1" =~ $AGTERM_AGENT_RE ]] 2>/dev/null && { "$AGTERM_AGENT_BIN" active --blink; _ags_active=1; }; }
   _ags_precmd()  { [[ -n "${_ags_active:-}" ]] && { "$AGTERM_AGENT_BIN" idle; unset _ags_active; }; }
   add-zsh-hook preexec _ags_preexec
   add-zsh-hook precmd  _ags_precmd
@@ -40,7 +42,7 @@ elif [ -n "${BASH_VERSION:-}" ]; then
     local cmd="${1:-$BASH_COMMAND}"               # bash-preexec passes the command as $1; a raw DEBUG trap uses $BASH_COMMAND
     [ -n "${COMP_LINE:-}" ] && return             # ignore tab-completion
     case "$cmd" in _ags_*) return ;; esac
-    if [[ "$cmd" =~ $AGTERM_AGENT_RE ]]; then
+    if [[ "$cmd" =~ $AGTERM_AGENT_RE ]] 2>/dev/null; then
       "$AGTERM_AGENT_BIN" active --blink
       _ags_active=1
     fi

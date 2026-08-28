@@ -232,6 +232,27 @@ struct AgentHooksInstallTests {
         }
     }
 
+    @Test func mergeRefusesWrongShapedHooksValue() {
+        // `as? ... ?? [:]` treated a wrong-typed value as absent and wrote over it, so the merge deleted the
+        // very key it could not read; the .bak made that recoverable, not safe
+        #expect(throws: AgentHooksInstall.MergeError.self) {
+            try AgentHooksInstall.mergeClaudeSettings(existing: #"{"hooks": "nope"}"#, scriptDir: scriptDir)
+        }
+        #expect(throws: AgentHooksInstall.MergeError.self) {
+            try AgentHooksInstall.mergeClaudeSettings(existing: #"{"hooks": [1, 2]}"#, scriptDir: scriptDir)
+        }
+    }
+
+    @Test func mergeRefusesWrongShapedEventValue() {
+        for malformed in [#"{"hooks": {"Stop": "nope"}}"#,
+                          #"{"hooks": {"Stop": [1, 2]}}"#,
+                          #"{"hooks": {"Stop": {"command": "x"}}}"#] {
+            #expect(throws: AgentHooksInstall.MergeError.self) {
+                try AgentHooksInstall.mergeClaudeSettings(existing: malformed, scriptDir: scriptDir)
+            }
+        }
+    }
+
     @Test func mergeWhitespaceOnlyStartsFresh() throws {
         // a whitespace-only file has no content to lose, so it starts fresh like an empty file
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "   \n\t\n", scriptDir: scriptDir)
@@ -459,11 +480,8 @@ struct AgentHooksInstallTests {
     }
 
     @Test func fishIntegrationExportsAnExistingAgentRegexOverride() throws {
-        // the export must run on BOTH branches of the set -q guard: an override set before sourcing —
-        // in the `set -g` form this file itself documented until the adapter consumed the value —
-        // satisfies set -q with the export bit off, so only a re-export on that branch gets it into
-        // the adapter's environment. Exporting just the default is the inverted shape this pins
-        // against: that value duplicates the adapter's literal list and needs no export at all.
+        // asserting the re-export line alone passes with the guard inverted, which silently swaps the two
+        // branches and replaces a user's override with the default, so pin the polarity and the order too
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -471,8 +489,21 @@ struct AgentHooksInstallTests {
             .deletingLastPathComponent()
         let fish = root.appendingPathComponent("agterm/Resources/agent-status/shell/integration.fish")
         let text = try String(contentsOf: fish, encoding: .utf8)
-        #expect(text.contains("set -gx AGTERM_AGENT_RE $AGTERM_AGENT_RE"),
-                "integration.fish must re-export a pre-existing AGTERM_AGENT_RE override")
+        let code = text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+        guard let guardIndex = code.firstIndex(of: "if set -q AGTERM_AGENT_RE") else {
+            Issue.record("integration.fish must guard the regex block with `if set -q AGTERM_AGENT_RE`")
+            return
+        }
+        let block = Array(code[guardIndex...].prefix(5))
+        #expect(block.count == 5)
+        #expect(block[1] == "set -gx AGTERM_AGENT_RE $AGTERM_AGENT_RE",
+                "the set branch must re-export the override the user set before sourcing")
+        #expect(block[2] == "else")
+        #expect(block[3].hasPrefix("set -gx AGTERM_AGENT_RE '^("),
+                "the else branch must export the default")
+        #expect(block[4] == "end")
     }
 
     @Test func shippedShellIntegrationsOmitLifecycleAgentsFromDefaultRegex() throws {

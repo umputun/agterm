@@ -339,8 +339,9 @@ enum AgentHooksInstaller {
     // the success-alert text, calling out anything an integration could not safely update and left alone.
     private static func successText(_ outcome: InstallOutcome) -> String {
         let claudeLine = outcome.settingsSkipped
-            ? "Your ~/.claude/settings.json isn't valid JSON (or couldn't be read), so the Claude Code hooks were NOT added "
-              + "(the file was left untouched). Fix it and run this again, or add the hooks manually."
+            ? "Your ~/.claude/settings.json couldn't be safely read or merged, so the Claude Code hooks were NOT added "
+              + "(the file was left untouched). It is unreadable, not valid JSON, or has a hooks entry in a shape we "
+              + "don't recognize. Fix it and run this again, or add the hooks manually."
             : "Claude Code hooks merged into ~/.claude/settings.json."
         return """
         Scripts installed to \(destinationFolder.path).

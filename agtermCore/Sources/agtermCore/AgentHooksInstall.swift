@@ -17,7 +17,7 @@ public enum AgentHooksInstall {
     /// spawned from inside a session inherits the spawner's `AGTERM_*` environment, so its hooks would repaint
     /// the SPAWNER's row. The adapter answers that ownership question from process topology and delegates,
     /// keeping the Claude-specific knowledge in the hook resource the way the Codex adapter does.
-    public static let claudeWrapperName = "agterm-claude-status.sh"
+    static let claudeWrapperName = "agterm-claude-status.sh"
 
     /// The bundled Pi extension's path relative to the agent-status package, and its destination filename.
     public static let piExtensionRelativePath = "pi/agterm-status.ts"
@@ -113,17 +113,18 @@ public enum AgentHooksInstall {
     ///
     /// `existing` is the current contents (nil/empty = start from a fresh object). Returns the new JSON and
     /// whether it differs; idempotent — hooks already present (detected by the adapter command) return the
-    /// input with `changed == false`. Unrelated hooks and keys are preserved; invalid JSON throws. Entries a
+    /// input with `changed == false`. Unrelated hooks and keys are preserved; invalid JSON, and a `hooks` or
+    /// written-event value of the wrong shape, throw rather than overwrite what could not be read. Entries a
     /// PRIOR install pointed straight at the generic wrapper are migrated onto the Claude adapter first, so
     /// the ownership guard reaches an existing install rather than only a fresh one.
     public static func mergeClaudeSettings(existing: String?, scriptDir: String) throws -> (json: String, changed: Bool) {
         let command = wrapperCommand(scriptDir: scriptDir)
         var root = try parsedObject(existing)
 
-        var hooks = root["hooks"] as? [String: Any] ?? [:]
+        var hooks = try claudeHooksObject(root)
         var didChange = migrateClaudeEntriesToAdapter(&hooks, scriptDir: scriptDir)
         for hook in claudeHooks {
-            var entries = hooks[hook.event] as? [[String: Any]] ?? []
+            var entries = hooks[hook.event] as? [[String: Any]] ?? [] // shape already checked above
             if entries.contains(where: { entryUsesWrapper($0, scriptDir: scriptDir) }) {
                 continue
             }
@@ -345,7 +346,7 @@ public enum AgentHooksInstall {
         scriptDir + "/" + codexWrapperName
     }
 
-    public static func claudeWrapperPath(scriptDir: String) -> String {
+    static func claudeWrapperPath(scriptDir: String) -> String {
         scriptDir + "/" + claudeWrapperName
     }
 
@@ -395,9 +396,11 @@ public enum AgentHooksInstall {
     // is Codex-only), so an existing settings.json would keep its unguarded entries forever.
     //
     // The match is BYTE-EXACT against the command this installer generates for that same event — the quoted
-    // wrapper path plus the state — which is what makes the rewrite safe: a hand-edited entry, an entry
-    // carrying extra flags, and a user's own hook that merely mentions the wrapper all fail the comparison and
-    // are left alone, and only the command string is replaced, so a matcher and any sibling keys survive.
+    // wrapper path plus the state — which is what makes the rewrite safe: an entry carrying extra flags and a
+    // user's own hook that merely mentions the wrapper both fail the comparison and are left alone, and only
+    // the command string is replaced, so a matcher and any sibling keys survive. One hand edit is NOT left
+    // alone: deleting `--blink` from UserPromptSubmit reproduces the pre-`a9e678d9` form byte for byte, so it
+    // migrates and the flag returns; the installer's `.bak` is the recovery.
     // Idempotent, because a migrated entry names the adapter and no longer matches.
     private static func migrateClaudeEntriesToAdapter(_ hooks: inout [String: Any], scriptDir: String) -> Bool {
         let generated = shellQuote(wrapperPath(scriptDir: scriptDir)) + " "
@@ -459,6 +462,18 @@ public enum AgentHooksInstall {
 
     // absent/empty/whitespace-only → fresh empty object; a non-empty file that is not a valid JSON object →
     // throw rather than silently discard the user's file.
+    // a wrong-TYPED value is not an absent one: `as?` plus an empty default would read it as missing and then
+    // write over it, deleting the key the merge could not understand. Only the four events this merge writes
+    // are checked; an unrelated event of any shape is never read and round-trips.
+    private static func claudeHooksObject(_ root: [String: Any]) throws -> [String: Any] {
+        guard let value = root["hooks"] else { return [:] }
+        guard let hooks = value as? [String: Any] else { throw MergeError.malformedExistingSettings }
+        for hook in claudeHooks where hooks[hook.event] != nil {
+            guard hooks[hook.event] is [[String: Any]] else { throw MergeError.malformedExistingSettings }
+        }
+        return hooks
+    }
+
     private static func parsedObject(_ text: String?) throws -> [String: Any] {
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [:] }
         guard let data = text.data(using: .utf8),
