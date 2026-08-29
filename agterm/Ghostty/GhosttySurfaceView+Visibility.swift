@@ -61,12 +61,11 @@ extension GhosttySurfaceView {
         layer?.needsDisplayOnBoundsChange = visible
         if visible {
             ghostty_surface_refresh(surface)
-            // The janitor dropped the retained frame and refresh only QUEUES a render, so SwiftUI
-            // can expose the pane before anything presents. Draw synchronously (supported from the
-            // main thread; it also rebuilds a released swap chain) so a cleared layer never shows.
-            if layer?.contents == nil {
-                ghostty_surface_draw(surface)
-            }
+            // Refresh only QUEUES a render, so SwiftUI can expose the pane before anything presents —
+            // blank where the janitor dropped the retained frame, or a stale-geometry frame when the
+            // window resized while this pane was hidden. Draw synchronously (supported from the main
+            // thread; it also rebuilds a released swap chain) so the first shown frame is current.
+            ghostty_surface_draw(surface)
         } else {
             startHiddenJanitor()
         }
