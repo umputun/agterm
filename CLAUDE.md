@@ -139,7 +139,7 @@ C-boundary concurrency before changing the bridge.
   It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size
   increase; upstream fixed that and the case was re-verified by hand before the bump. Re-test the
   font-increase case when moving it, and check `minimum_zig_version` in `build.zig.zon` against
-  `ZIG_FORMULA` — the 0.15 to 0.16 jump came with this bump.
+  `ZIG_FORMULA`. The 0.15 to 0.16 jump came with the `0ba6250` bump, not this one.
 - `.ghostty-build-stamp` records the rev the staged artifacts came from and is what decides a rebuild.
   Presence alone would serve an xcframework built from a different rev silently, so a `GHOSTTY_REV`
   change costs everyone exactly one libghostty rebuild and nobody keeps a stale core by accident.
