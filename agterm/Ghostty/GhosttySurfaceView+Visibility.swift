@@ -11,6 +11,7 @@ extension GhosttySurfaceView {
     /// surfaces, so first paints can land tens of seconds late. Expiry hides anyway.
     static let firstPresentTimeout: UInt64 = 60_000_000_000
     static let firstPresentPoll: UInt64 = 250_000_000
+    static let hiddenJanitorInterval: UInt64 = 30_000_000_000
 
     var showsOnScreen: Bool { deckOnScreen && window != nil }
 
@@ -18,27 +19,30 @@ extension GhosttySurfaceView {
     /// present. The renderer's release is edge-triggered, so an edge sent before the restore paints
     /// releases an empty chain and the paint then rebuilds it with no edge left to free it — the
     /// 2 GB launch floor. Waiting adds no protocol edge: the pane spawns visible and hides once,
-    /// merely later.
-    func updateRendererVisibility(delayHide: Bool = true) {
+    /// merely later. The intervals are parameters only so tests can shorten them.
+    func updateRendererVisibility(
+        delayHide: Bool = true,
+        grace: UInt64 = GhosttySurfaceView.rendererOcclusionDelay,
+        presentPoll: UInt64 = GhosttySurfaceView.firstPresentPoll,
+        presentTimeout: UInt64 = GhosttySurfaceView.firstPresentTimeout
+    ) {
         cancelPendingRendererVisibility()
         guard !showsOnScreen else {
             setRendererVisible(true)
             return
         }
-        let awaitsFirstPresent = surface != nil && layer?.contents == nil
-        guard delayHide || awaitsFirstPresent else {
+        guard delayHide || layer?.contents == nil else {
             setRendererVisible(false)
             return
         }
         rendererVisibilityTask = Task { @MainActor [weak self] in
             if delayHide {
-                try? await Task.sleep(nanoseconds: Self.rendererOcclusionDelay)
+                try? await Task.sleep(nanoseconds: grace)
             }
             var waited: UInt64 = 0
-            while !Task.isCancelled, waited < Self.firstPresentTimeout,
-                  let view = self, view.surface != nil, view.layer?.contents == nil {
-                try? await Task.sleep(nanoseconds: Self.firstPresentPoll)
-                waited += Self.firstPresentPoll
+            while !Task.isCancelled, waited < presentTimeout, self?.layer?.contents == nil {
+                try? await Task.sleep(nanoseconds: presentPoll)
+                waited += presentPoll
             }
             guard !Task.isCancelled, let self, !self.showsOnScreen else { return }
             self.rendererVisibilityTask = nil
@@ -46,25 +50,23 @@ extension GhosttySurfaceView {
         }
     }
 
-    /// Sweep cadence for `startHiddenJanitor`; tests shorten it.
-    static var hiddenJanitorInterval: UInt64 = 30_000_000_000
-
     private func setRendererVisible(_ visible: Bool) {
+        // libghostty's layer sets `needsDisplayOnBoundsChange` (Metal.zig), so a window resize makes
+        // CA display every mounted hidden pane, rebuilding the swap chain the release just freed —
+        // with no edge left to free it again. Drop the flag while renderer-hidden; ahead of the
+        // surface guard so a hide settled before realization still gates CA.
+        layer?.needsDisplayOnBoundsChange = visible
         guard let surface, rendererVisible != visible else { return }
         rendererVisible = visible
         visibilityLogger.debug("occlusion \(visible ? "visible" : "hidden", privacy: .public) session=\(self.session?.id.uuidString ?? "-", privacy: .public) split=\(self.isSplitPane)")
         ghostty_surface_set_occlusion(surface, visible)
-        // libghostty's layer sets `needsDisplayOnBoundsChange` (Metal.zig), so a window resize makes
-        // CA display every mounted hidden pane, rebuilding the swap chain the release just freed —
-        // with no edge left to free it again. Drop the flag while renderer-hidden; the pane paints
-        // nothing anyway, and the reveal below repaints at current bounds.
-        layer?.needsDisplayOnBoundsChange = visible
         if visible {
             ghostty_surface_refresh(surface)
             // Refresh only QUEUES a render, so SwiftUI can expose the pane before anything presents —
-            // blank where the janitor dropped the retained frame, or a stale-geometry frame when the
-            // window resized while this pane was hidden. Draw synchronously (supported from the main
-            // thread; it also rebuilds a released swap chain) so the first shown frame is current.
+            // blank where the janitor dropped the retained frame, or stale geometry after a hidden
+            // resize. Draw synchronously (the API's sanctioned main-thread path; it also rebuilds a
+            // released swap chain) for a nonblank frame at current bounds; output produced while
+            // hidden arrives with the queued render.
             ghostty_surface_draw(surface)
         } else {
             startHiddenJanitor()
@@ -80,11 +82,11 @@ extension GhosttySurfaceView {
     /// to a program that stayed hidden throughout.
     /// `self` is bound per wake: a strong hold across the sleep would pin a discarded view against
     /// the `deinit` safety net. `destroySurface` cancels the task; a reveal retires it on wake.
-    func startHiddenJanitor() {
+    func startHiddenJanitor(interval: UInt64 = GhosttySurfaceView.hiddenJanitorInterval) {
         guard hiddenJanitorTask == nil else { return }
         hiddenJanitorTask = Task { @MainActor [weak self] in
             while true {
-                try? await Task.sleep(nanoseconds: Self.hiddenJanitorInterval)
+                try? await Task.sleep(nanoseconds: interval)
                 guard let view = self, !Task.isCancelled, !view.rendererVisible else { break }
                 view.layer?.contents = nil
             }

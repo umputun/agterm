@@ -135,6 +135,8 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
     }
 
     func testRendererVisibilityRequiresAnOnScreenHost() {
+        surface.wantsLayer = true
+        surface.layer?.contents = NSColor.red.cgColor
         XCTAssertTrue(surface.showsOnScreen)
         surface.deckOnScreen = false
         XCTAssertFalse(surface.showsOnScreen)
@@ -147,13 +149,10 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
     }
 
     func testHiddenJanitorSweepsWhileHiddenAndRetiresOnReveal() async throws {
-        let saved = GhosttySurfaceView.hiddenJanitorInterval
-        GhosttySurfaceView.hiddenJanitorInterval = 20_000_000
-        defer { GhosttySurfaceView.hiddenJanitorInterval = saved }
         surface.wantsLayer = true
         surface.layer?.contents = NSColor.red.cgColor
         surface.rendererVisible = false
-        surface.startHiddenJanitor()
+        surface.startHiddenJanitor(interval: 20_000_000)
         XCTAssertNotNil(surface.hiddenJanitorTask)
         try await waitUntil("retained frame swept") { self.surface.layer?.contents == nil }
         surface.rendererVisible = true
@@ -166,6 +165,48 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertNotNil(surface.hiddenJanitorTask)
         surface.destroySurface()
         XCTAssertNil(surface.hiddenJanitorTask)
+    }
+
+    func testDeferredHideLandsAfterTheFirstPresent() async throws {
+        surface.wantsLayer = true
+        surface.deckOnScreen = false
+        surface.updateRendererVisibility(
+            delayHide: false, grace: 10_000_000_000, presentPoll: 10_000_000, presentTimeout: 5_000_000_000
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertNotNil(surface.rendererVisibilityTask)
+        surface.layer?.contents = NSColor.red.cgColor
+        try await waitUntil("hide lands after first present") { self.surface.rendererVisibilityTask == nil }
+        XCTAssertEqual(surface.layer?.needsDisplayOnBoundsChange, false)
+    }
+
+    func testDeferredHideExpiresForANeverPaintedPane() async throws {
+        surface.wantsLayer = true
+        surface.deckOnScreen = false
+        surface.updateRendererVisibility(delayHide: false, presentPoll: 10_000_000, presentTimeout: 50_000_000)
+        XCTAssertNotNil(surface.rendererVisibilityTask)
+        try await waitUntil("expiry hides the pane") { self.surface.rendererVisibilityTask == nil }
+        XCTAssertEqual(surface.layer?.needsDisplayOnBoundsChange, false)
+    }
+
+    func testRevealCancelsTheDeferredHideAndRestoresBoundsRedraw() {
+        surface.wantsLayer = true
+        surface.deckOnScreen = false
+        surface.updateRendererVisibility(delayHide: false, presentPoll: 10_000_000, presentTimeout: 5_000_000_000)
+        XCTAssertNotNil(surface.rendererVisibilityTask)
+        surface.deckOnScreen = true
+        XCTAssertNil(surface.rendererVisibilityTask)
+        XCTAssertEqual(surface.layer?.needsDisplayOnBoundsChange, true)
+    }
+
+    func testAlreadyPaintedPaneHidesWithoutDeferral() {
+        surface.wantsLayer = true
+        surface.layer?.needsDisplayOnBoundsChange = true
+        surface.layer?.contents = NSColor.red.cgColor
+        surface.deckOnScreen = false
+        surface.updateRendererVisibility(delayHide: false)
+        XCTAssertNil(surface.rendererVisibilityTask)
+        XCTAssertEqual(surface.layer?.needsDisplayOnBoundsChange, false)
     }
 
     private func waitUntil(_ what: String, timeout: TimeInterval = 2, _ condition: () -> Bool) async throws {
