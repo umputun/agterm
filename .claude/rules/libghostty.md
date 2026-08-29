@@ -9,6 +9,7 @@ paths:
   - "agterm/Views/SplitRatioAccessor.swift"
   - "agterm/Views/TerminalView.swift"
   - "agterm/Views/TerminalSearchBar.swift"
+  - "scripts/setup.sh"
 ---
 
 ## libghostty gotchas
@@ -43,6 +44,12 @@ paths:
   present after the hide edge rebuilds the swap chain and only an upstream fix can re-release it; the
   hidden janitor sweeps only the layer's retained frame. Reveal draws synchronously
   (`ghostty_surface_draw`) because that sweep cleared `contents` and `refresh` merely queues a render.
+- A hidden pane also clears `needsDisplayOnBoundsChange` on libghostty's layer and restores it on
+  reveal. Without that, a window resize makes CoreAnimation display every mounted hidden pane and
+  rebuild the chain the release just freed. At `683d8db`, `Metal.init` installs one `IOSurfaceLayer`
+  for the surface renderer and sets the flag once; no later Ghostty path replaces the layer or
+  rewrites the flag. A `GHOSTTY_REV` bump has to recheck both, and that the synchronous reveal draw
+  still restores the intended visible-resize path.
 
 ## Theme and sidebar
 
