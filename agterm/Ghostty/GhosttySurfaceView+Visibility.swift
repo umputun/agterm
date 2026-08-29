@@ -54,6 +54,11 @@ extension GhosttySurfaceView {
         rendererVisible = visible
         visibilityLogger.debug("occlusion \(visible ? "visible" : "hidden", privacy: .public) session=\(self.session?.id.uuidString ?? "-", privacy: .public) split=\(self.isSplitPane)")
         ghostty_surface_set_occlusion(surface, visible)
+        // libghostty's layer sets `needsDisplayOnBoundsChange` (Metal.zig), so a window resize makes
+        // CA display every mounted hidden pane, rebuilding the swap chain the release just freed —
+        // with no edge left to free it again. Drop the flag while renderer-hidden; the pane paints
+        // nothing anyway, and the reveal below repaints at current bounds.
+        layer?.needsDisplayOnBoundsChange = visible
         if visible {
             ghostty_surface_refresh(surface)
             // The janitor dropped the retained frame and refresh only QUEUES a render, so SwiftUI
