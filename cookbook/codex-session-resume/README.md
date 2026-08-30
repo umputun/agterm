@@ -45,6 +45,8 @@ To remove it, delete the function block, or the `source` line, from `~/.zshrc`, 
 
 Run `codex` the way you always do. Start codex, run a command, then restart agterm: the tab resumes that session.
 
+Launch options remain explicit. `codex --yolo` resumes the mapped conversation with `--yolo`, and agterm preserves that invocation across an app restart. A later plain `codex` resumes the same conversation without `--yolo`; the mapping stores only the conversation id, never permission flags.
+
 Mappings live one file per tab under `~/.codex/agterm/`, each holding a single codex session id. Deleting one unbinds that tab, and the next `codex` in it starts fresh.
 
 ## How it works
@@ -53,7 +55,7 @@ agterm can remember the command running in a tab and re-run it on restart. It re
 
 Every agterm tab has a stable identifier, `AGTERM_SESSION_ID`, that survives a restart. Claude Code can be handed a session id at launch and so needs no state at all, but codex cannot, so this function keeps the one piece of state that difference forces: a file named after the tab, holding the codex session id that tab owns.
 
-On each `codex` the function reads `~/.codex/agterm/<tab-id>`. If it holds an id and the matching `rollout-*-<id>.jsonl` is still under `~/.codex/sessions/`, it runs `codex resume <id>` and is done. Otherwise it records a timestamp, runs codex plainly, and afterwards takes the newest rollout file. If that file is newer than the timestamp it is the conversation this run created, so the function pulls the uuid off the end of the filename, checks the shape, and writes it to the mapping file for next time.
+On each `codex` the function reads `~/.codex/agterm/<tab-id>`. If it holds an id and the matching `rollout-*-<id>.jsonl` is still under `~/.codex/sessions/`, it reads the first line's `session_meta.payload.session_id` and resumes that root conversation. Root rollouts carry their own id there, while multi-agent child rollouts carry the resumable root id; older rollouts without the field fall back to the UUID at the end of the filename. The function also repairs an existing child mapping when it finds one. Otherwise it records a timestamp, runs codex plainly, and afterwards takes the newest rollout file. If that file is newer than the timestamp it is the conversation this run created, so the same lookup writes its root id to the mapping file for next time.
 
 On the agterm side the replay is a foreground-process capture. At quit agterm records the argv of whatever the pane was running, and on relaunch it types that line back into the tab's fresh login shell with each argument single-quoted. Quoting suppresses alias expansion but not function lookup, which is why a shell function named `codex` still catches the replayed line and an alias would not.
 
@@ -63,7 +65,7 @@ On the agterm side the replay is a foreground-process capture. At quit agterm re
 - **Rests on restore behavior that is verified empirically, not documented.** It could change between agterm versions.
 - **One conversation per tab.** A split pane, a scratch pane and any overlay all run under the same `AGTERM_SESSION_ID` as the main pane, so a second codex started in one of them reads and overwrites the same mapping file as the first.
 - **It shadows the `codex` command** with a shell function. Passthrough is handled, but the list of subcommands and flags that must not be touched has to be kept current if the CLI grows new ones.
-- **It knows codex's on-disk layout** (`~/.codex/sessions/**/rollout-*.jsonl`). If that storage location or the filename shape changes, the mapping stops being written and every tab starts fresh.
+- **It knows codex's on-disk layout** (`~/.codex/sessions/**/rollout-*.jsonl`) and the first-line `session_meta.payload.session_id` field. If that layout changes, it falls back to the filename UUID when possible; otherwise the mapping stops being written and every tab starts fresh.
 - **zsh only** (`${:l}`, the `(N)` and `(om)` glob qualifiers, `emulate`, `setopt local_options`). Bash needs a rewrite.
 
 Two observations from reading the function rather than claims by its author:
