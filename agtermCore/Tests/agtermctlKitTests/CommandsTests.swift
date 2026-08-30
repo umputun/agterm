@@ -387,6 +387,11 @@ struct CommandsTests {
         #expect(try request(["session", "split", "close", "--target", "s1", "--window", "w1"]) == expected)
     }
 
+    @Test func sessionSwapWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionSwap, target: "s1", args: ControlArgs(window: "w1"))
+        #expect(try request(["session", "swap", "--target", "s1", "--window", "w1"]) == expected)
+    }
+
     @Test func sessionScratchDefaultsToggle() throws {
         let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle"))
         #expect(try request(["session", "scratch"]) == expected)
