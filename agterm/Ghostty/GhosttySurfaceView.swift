@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "GhosttyS
 ///
 /// `surface` and the `configCStrings` strdup buffers are `nonisolated(unsafe)`: mutated only on the main
 /// actor (create/destroy), and the C callbacks reading them are serialized by libghostty's tick model.
-final class GhosttySurfaceView: NSView, TerminalSurface {
+final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
 
     private let workingDirectory: String
@@ -115,8 +115,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var onUserInput: (() -> Void)?
 
     /// Called on the main actor with the current font size (points) when it changes (cmd +/-), so the app
-    /// can persist it. Set on the primary surface only. libghostty has no font-size getter or change event,
-    /// so it rides the CELL_SIZE action and reads via `ghostty_surface_inherited_config`.
+    /// can persist it. Pane surfaces share a live-role-aware callback; scratch and overlays leave it unset.
+    /// libghostty has no font-size getter or change event, so this rides CELL_SIZE and reads the inherited config.
     var onFontSizeChange: ((Double) -> Void)?
 
     /// Called when libghostty enters search mode (START_SEARCH) with the current needle (nil when none). The

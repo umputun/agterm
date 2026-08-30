@@ -28,8 +28,7 @@ extension ControlServer {
     /// is settable while hidden, its surface kept alive. An unknown value is rejected here as well as in the
     /// CLI `validate()`, so a raw socket client can't bypass it, and a resolved-but-unrealized pane returns
     /// `session not realized` rather than silently no-opping in the layout beat after the pane is shown.
-    /// Only the main pane's size persists — the split/scratch `onFontSizeChange` is deliberately unwired,
-    /// matching a GUI font change on them.
+    /// Only the surface currently in the main role persists its size; split-role and scratch changes stay live-only.
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.

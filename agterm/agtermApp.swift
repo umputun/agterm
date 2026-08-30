@@ -234,6 +234,18 @@ struct agtermApp: App {
     /// Surface factory: a libghostty-backed view for the session, spawning a login shell in its initial working
     /// directory. On shell exit the view calls back to close the owning session in the store.
     @MainActor
+    static func focusedSplitState(_ focused: Bool, surface: GhosttySurfaceView?) -> Bool? {
+        guard focused else { return nil }
+        return surface?.isSplitPane ?? false
+    }
+
+    @MainActor
+    static func persistFontSize(_ size: Double, from surface: GhosttySurfaceView?, store: AppStore, sessionID: UUID) {
+        guard surface?.isSplitPane == false else { return }
+        store.setFontSize(sessionID, size)
+    }
+
+    @MainActor
     private static func makeSurface(for session: Session, store: AppStore, env: [String: String],
                                     library: WindowLibrary) -> GhosttySurfaceView {
         // `initialCommand` (`session.new --command`) replaces the login shell and closes the session on its exit
@@ -263,9 +275,9 @@ struct agtermApp: App {
             guard let view else { return }
             Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
-        view.onFocusChange = { focused in
-            guard focused else { return }
-            store.session(withID: sessionID)?.splitFocused = false
+        view.onFocusChange = { [weak view] focused in
+            guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
+            store.session(withID: sessionID)?.splitFocused = splitFocused
             // focusing a pane means you've seen the session: clear the badge and any delivered banners.
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
@@ -278,7 +290,9 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
-        view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+        view.onFontSizeChange = { [weak view] size in
+            Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
+        }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
@@ -294,10 +308,7 @@ struct agtermApp: App {
             store.closeSplitPane(sessionID)
         } else {
             store.closePrimaryPane(sessionID)
-            // makeSplitSurface omits onFontSizeChange, but a promoted survivor is the sole pane and must persist
-            // its own cmd +/-. no-op when the session closed instead (`surface` nil).
-            if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
-                promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+            if store.session(withID: sessionID)?.surface is GhosttySurfaceView {
                 // the same "session survived ⇒ its split was promoted" test, for a dashboard holding this
                 // session by `<id>:right`. synchronous, so it lands before the reconcile onChange prunes the
                 // cell; this is the only place that can tell promotion from the split's own shell exiting.
@@ -418,10 +429,8 @@ struct agtermApp: App {
             Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
         view.onFocusChange = { [weak view] focused in
-            guard focused else { return }
-            // a promoted survivor keeps this closure with `isSplitPane` cleared: as the main pane it must not
-            // re-raise `splitFocused`, which masks its migrated title and mis-routes focus after a re-split.
-            store.session(withID: sessionID)?.splitFocused = view?.isSplitPane ?? false
+            guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
+            store.session(withID: sessionID)?.splitFocused = splitFocused
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
@@ -432,6 +441,9 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
+        view.onFontSizeChange = { [weak view] size in
+            Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
+        }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }

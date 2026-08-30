@@ -1,3 +1,5 @@
+import agtermCore
+
 extension GhosttySurfaceView {
     // MARK: - Pane role
 
@@ -5,7 +7,12 @@ extension GhosttySurfaceView {
     /// pane is promoted to the session's sole pane. Clearing `isSplitPane` routes subsequent
     /// `applyPwd`/`applyTitle` reports to the main `session.currentCwd`/`oscTitle`, not `splitCwd`/`splitTitle`.
     func promoteToPrimaryPane() {
-        isSplitPane = false
+        setPaneRole(.primary)
+    }
+
+    /// `PaneRoleMutableSurface`: changes live routing only; the stable token and child environment stay baked.
+    func setPaneRole(_ role: SwappablePaneRole) {
+        isSplitPane = role == .split
     }
 
     /// `TerminalSurface.paneToken`: this surface's stable spawn identity, read straight back from the baked

@@ -1,5 +1,6 @@
 import XCTest
 @testable import agterm
+@testable import agtermCore
 
 /// Content view whose hit resolution the test supplies directly, standing in for the real window
 /// hierarchy: `ownsPointer` only asks who owns a point, so the geometry that would produce the answer is
@@ -112,6 +113,42 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         let detached = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         XCTAssertTrue(detached.ownsPointer(at: NSPoint(x: 10, y: 100)))
         XCTAssertTrue(detached.ownsPointer())
+    }
+
+    func testPaneRoleMutationUpdatesLiveRoleWithoutChangingToken() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                     env: ["AGTERM_PANE_ID": "stable-token"])
+        view.setPaneRole(.split)
+        view.setPaneRole(.split)
+        XCTAssertTrue(view.isSplitPane)
+        XCTAssertEqual(view.paneToken, "stable-token")
+        view.setPaneRole(.primary)
+        view.setPaneRole(.primary)
+        XCTAssertFalse(view.isSplitPane)
+        XCTAssertEqual(view.paneToken, "stable-token")
+    }
+
+    func testPaneFocusDecisionUsesTheSurfaceLiveRole() {
+        surface.setPaneRole(.split)
+        XCTAssertEqual(agtermApp.focusedSplitState(true, surface: surface), true)
+        XCTAssertNil(agtermApp.focusedSplitState(false, surface: surface))
+        surface.setPaneRole(.primary)
+        XCTAssertEqual(agtermApp.focusedSplitState(true, surface: surface), false)
+    }
+
+    func testFontPersistenceUsesTheSurfaceLiveRole() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = AppStore(persistence: PersistenceStore(directory: directory))
+        let workspace = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: workspace.id, cwd: "/tmp")!
+
+        surface.setPaneRole(.split)
+        agtermApp.persistFontSize(17, from: surface, store: store, sessionID: session.id)
+        XCTAssertNil(session.fontSize)
+
+        surface.setPaneRole(.primary)
+        agtermApp.persistFontSize(17, from: surface, store: store, sessionID: session.id)
+        XCTAssertEqual(session.fontSize, 17)
     }
 
     // MARK: - view-only

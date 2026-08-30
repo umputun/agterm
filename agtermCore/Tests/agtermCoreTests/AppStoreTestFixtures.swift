@@ -18,9 +18,10 @@ import Foundation
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
 }
 
-final class SpySurface: TerminalSurface {
+final class SpySurface: PaneRoleMutableSurface {
     var teardownCount = 0
     var promotedCount = 0
+    var assignedRoles: [SwappablePaneRole] = []
     var paneToken: String
     /// Defaults to a live terminal, the state a surface parked in a session slot reaches a beat later; the
     /// stranded-slot cases set it false.
@@ -28,4 +29,5 @@ final class SpySurface: TerminalSurface {
     init(paneToken: String = "") { self.paneToken = paneToken }
     func teardown() { teardownCount += 1 }
     func promoteToPrimaryPane() { promotedCount += 1 }
+    func setPaneRole(_ role: SwappablePaneRole) { assignedRoles.append(role) }
 }

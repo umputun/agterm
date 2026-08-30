@@ -71,8 +71,8 @@ extension AppStore {
         return applied
     }
 
-    /// Exchanges the two live pane slots and every pane-owned field. Layout stays fixed; focus follows the
-    /// terminal. Role mutation is added by the app-facing capability after the host-free exchange is in place.
+    /// Exchanges two role-mutable pane slots and every pane-owned field. Layout stays fixed; focus follows the
+    /// terminal.
     @discardableResult
     public func swapPanes(_ sessionID: UUID) -> SwapRefusal? {
         guard let session = session(withID: sessionID) else { return .noSession }
@@ -80,9 +80,15 @@ extension AppStore {
         guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
             return .slotNotRealized
         }
+        guard let primaryRole = primarySurface as? any PaneRoleMutableSurface,
+              let splitRole = splitSurface as? any PaneRoleMutableSurface else {
+            return .roleNotMutable
+        }
 
         let primaryCwd = session.currentCwd ?? session.initialCwd
         let splitCwd = session.splitCwd ?? session.initialSplitCwd ?? primaryCwd
+        primaryRole.setPaneRole(.split)
+        splitRole.setPaneRole(.primary)
         session.surface = splitSurface
         session.splitSurface = primarySurface
         session.currentCwd = splitCwd

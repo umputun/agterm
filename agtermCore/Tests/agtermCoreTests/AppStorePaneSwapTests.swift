@@ -4,6 +4,13 @@ import Testing
 
 @MainActor
 struct AppStorePaneSwapTests {
+    private final class RigidSurface: TerminalSurface {
+        var isRealized = true
+        var paneToken = "rigid"
+        func teardown() {}
+        func promoteToPrimaryPane() {}
+    }
+
     private struct Fixture {
         let store: AppStore
         let session: Session
@@ -167,6 +174,14 @@ struct AppStorePaneSwapTests {
         #expect(session.splitFocused)
     }
 
+    @Test func swapAssignsEachSurfaceItsNewRole() {
+        let fixture = makeSeededSession()
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+        #expect(fixture.primary.assignedRoles == [.split])
+        #expect(fixture.split.assignedRoles == [.primary])
+    }
+
     @Test func swapUsesCwdFallbacks() {
         let fixture = makeSeededSession()
         fixture.session.currentCwd = nil
@@ -229,5 +244,19 @@ struct AppStorePaneSwapTests {
         let sessionBefore = State(session)
         #expect(store.swapPanes(session.id) == .noSplit)
         #expect(State(session) == sessionBefore)
+    }
+
+    @Test(arguments: [true, false])
+    func swapRefusesRigidSurfaceWithoutMutation(rigidPrimary: Bool) {
+        let fixture = makeSeededSession()
+        if rigidPrimary {
+            fixture.session.surface = RigidSurface()
+        } else {
+            fixture.session.splitSurface = RigidSurface()
+        }
+        let before = State(fixture.session)
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == .roleNotMutable)
+        #expect(State(fixture.session) == before)
     }
 }
