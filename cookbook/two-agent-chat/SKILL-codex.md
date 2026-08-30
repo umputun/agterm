@@ -18,17 +18,29 @@ The session needs both panes running, with Claude Code on the left, started by t
 never starts an agent and never opens a pane. If the left pane is not running Claude Code, say so
 and stop.
 
+File-backed sends avoid per-call approvals only when the two `peer-chat.py` command-prefix rules from
+the recipe's *Setup* section are in `~/.codex/rules/default.rules`. If they are absent, leave any
+approval to the user.
+
 ## Sending
 
 ```bash
-peer-chat.py --to claude --stdin <<'CHAT'
-the message goes here, as one paragraph
-CHAT
+peer-chat.py --prepare-message peer-chat-codex-a91f.txt
 ```
 
-Pass the message on stdin through a quoted heredoc, never as an argument. The script collapses all
-whitespace to single spaces before typing, because typing a newline submits the fragment before it,
-so write for one paragraph.
+The command creates a private one-shot file and prints its absolute `messageFile` path. Use
+`apply_patch` to fill that exact file without replacing the file or its mode, using one paragraph and
+omitting the `Chat from Codex:` label, then send the reserved name:
+
+```bash
+peer-chat.py --to claude --message-file peer-chat-codex-a91f.txt
+```
+
+Choose a fresh literal suffix for every send. Do not use stdin, a heredoc, shell redirection,
+variables or substitutions in either invocation: Codex then evaluates the request as a `zsh -lc`
+wrapper, so the two command-prefix rules from *Setup* cannot match it. Never put the message text
+directly in an argument. The send consumes the file, and the script collapses whitespace before
+typing.
 
 If a send refuses saying more than one session shares this checkout, stop. It means this Codex was
 started without its pane's session id injected, and the fix is a launch flag only the user can apply.
