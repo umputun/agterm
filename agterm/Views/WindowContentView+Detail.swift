@@ -2,6 +2,17 @@ import agtermCore
 import AppKit
 import SwiftUI
 
+@MainActor
+enum PaneHostIdentity {
+    /// Surface slots are observation-ignored, so this tracked read invalidates hosts on pane swap. It does
+    /// not cover every replacement; primary promotion is invalidated by its own split lifecycle changes.
+    static func token(for slot: TerminalZoomSurface, in session: Session) -> String {
+        _ = session.splitFocused
+        guard let surface = slot.surface(in: session) else { return "none" }
+        return "\(ObjectIdentifier(surface as AnyObject))"
+    }
+}
+
 /// `WindowContentView`'s detail deck: every session's terminal content — panes, split, scratch, and both
 /// overlay kinds — plus the inactive-pane mute.
 extension WindowContentView {
@@ -180,6 +191,7 @@ extension WindowContentView {
         let covered = session.paneOverlay(pane) != nil
         let slot: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> =
             pane == .left ? \.surface : \.splitSurface
+        let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
         ZStack {
             if deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
                 TerminalView(session: session, surfaceKeyPath: slot,
@@ -189,7 +201,7 @@ extension WindowContentView {
                              onScreen: gates.onScreen && !covered)
                     .overlay { paneDim(!focused, session: session) }
                     .modifier(PaneOverlayCover(covered: covered))
-                    .id(pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split")
+                    .id("\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
             } else {
                 Color.clear
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
@@ -281,7 +293,7 @@ extension WindowContentView {
                                  makeSurface: { makeOverlaySurface($0, pane) },
                                  isActive: isActive, deckVisible: deckVisible, onScreen: gates.onScreen)
                         .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
-                        .id("\(session.id.uuidString)-overlay-\(pane.rawValue)")
+                        .id("\(session.id.uuidString)-overlay-\(pane.rawValue)-\(PaneHostIdentity.token(for: pane.zoomSurface, in: session))")
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

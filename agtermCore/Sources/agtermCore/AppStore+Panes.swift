@@ -123,6 +123,8 @@ extension AppStore {
             }
         }
         session.agentIndicator = indicator
+        // PaneHostIdentity observes this because surface slots are ignored; keep the swap toggle unconditional
+        // so a zoom host re-evaluates and sees its new occupant token.
         session.splitFocused.toggle()
         save()
         return nil
