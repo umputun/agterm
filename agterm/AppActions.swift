@@ -791,6 +791,16 @@ final class AppActions {
         return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
     }
 
+    /// Synchronous GUI entry point for the menu and palette, launching the same readiness poll and side
+    /// effects the control command awaits.
+    func swapActiveSessionPanes() {
+        guard PaletteCommand.swapPanes.isEnabled(in: paletteContext),
+              let store, let session = store.activeSession else { return }
+        Task { @MainActor in
+            _ = await swapSessionPanes(session.id, in: store)
+        }
+    }
+
     /// Show/hide the active session's scratch terminal, a third full-overlay login shell. Focus rides the
     /// surface's `autoFocus` and the detail pane's hide reclaim, so this only flips the flag; control drives
     /// `AppStore.toggleScratch` directly.

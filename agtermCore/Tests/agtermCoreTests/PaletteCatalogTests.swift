@@ -26,6 +26,7 @@ struct PaletteCatalogTests {
             "Toggle Vertical Split",
             "Toggle Horizontal Split",
             "Close Split",
+            "Swap Panes",
             "Toggle Scratch",
             "Toggle Terminal Zoom",
             "Toggle Sidebar",
@@ -58,7 +59,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 50)
+        #expect(PaletteCommand.allCases.count == 51)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -123,6 +124,11 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.focusRightPane.isVisible(in: PaletteContext(activeSessionHasSplit: true)))
         #expect(!PaletteCommand.closeSplit.isVisible(in: PaletteContext(activeSessionHasSplit: false)))
         #expect(PaletteCommand.closeSplit.isVisible(in: PaletteContext(activeSessionHasSplit: true)))
+        #expect(PaletteCommand.swapPanes.isVisible(in: PaletteContext()))
+        #expect(!PaletteCommand.swapPanes.isEnabled(
+            in: PaletteContext(activeSessionHasSplit: false, hasActiveSession: true)))
+        #expect(PaletteCommand.swapPanes.isEnabled(
+            in: PaletteContext(activeSessionHasSplit: true, hasActiveSession: true)))
         #expect(!PaletteCommand.undoClose.isVisible(in: PaletteContext(hasPendingClose: false)))
         #expect(PaletteCommand.undoClose.isVisible(in: PaletteContext(hasPendingClose: true)))
         #expect(!PaletteCommand.reopenRecent.isVisible(in: PaletteContext(hasRecentClosed: false)))
@@ -166,7 +172,7 @@ struct PaletteCatalogTests {
 
     private static let needSession: Set<PaletteCommand> = [
         .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
-        .toggleScratch, .find,
+        .swapPanes, .toggleScratch, .find,
         .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
         .firstSession, .lastSession,
     ]
@@ -211,7 +217,8 @@ struct PaletteCatalogTests {
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, terminalZoomActive: true)
         for command in PaletteCommand.allCases {
-            #expect(command.isEnabled(in: context) == Self.coverProof.contains(command), "\(command)")
+            let expected = Self.coverProof.contains(command) || command == .swapPanes
+            #expect(command.isEnabled(in: context) == expected, "\(command)")
         }
     }
 
@@ -236,7 +243,7 @@ struct PaletteCatalogTests {
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, dashboardOpen: true)
         for command in PaletteCommand.allCases {
-            let expected = Self.coverProof.contains(command) || command == .dashboard
+            let expected = Self.coverProof.contains(command) || command == .dashboard || command == .swapPanes
             #expect(command.isEnabled(in: context) == expected, "\(command)")
         }
         #expect(!PaletteCommand.dashboard.isEnabled(
@@ -262,6 +269,7 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.reopenRecent.builtinAction == .reopenRecent)
         #expect(PaletteCommand.undoClose.builtinAction == .undoClose)
         #expect(PaletteCommand.toggleWorkspaceFilter.builtinAction == .toggleWorkspaceFilter)
+        #expect(PaletteCommand.swapPanes.builtinAction == nil)
         #expect(PaletteCommand.clearFlagged.builtinAction == nil)
         #expect(PaletteCommand.addWorkspaceToFocus.builtinAction == nil)
         #expect(PaletteCommand.expandWorkspaces.builtinAction == nil)

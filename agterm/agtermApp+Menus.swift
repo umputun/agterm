@@ -290,6 +290,10 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .toggleHorizontalSplit))
                 .disabled(!PaletteCommand.toggleHorizontalSplit.isEnabled(in: context))
+                Button { actions.swapActiveSessionPanes() } label: {
+                    Label("Swap Panes", systemImage: "arrow.left.arrow.right")
+                }
+                .disabled(!PaletteCommand.swapPanes.isEnabled(in: context))
                 let scratchShown = library.activeStore?.activeSession?.scratchActive == true
                 Button { actions.toggleScratch() } label: {
                     // static neutral icon like the Split menu item above; state is shown by the label text.

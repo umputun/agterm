@@ -84,7 +84,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
     case firstSession, lastSession, showAttention
-    case toggleSplit, toggleHorizontalSplit, closeSplit, toggleScratch, toggleTerminalZoom
+    case toggleSplit, toggleHorizontalSplit, closeSplit, swapPanes, toggleScratch, toggleTerminalZoom
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
@@ -105,6 +105,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
              .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
              .firstSession, .lastSession:
             return context.hasActiveSession
+        case .swapPanes:
+            return context.hasActiveSession && context.activeSessionHasSplit
         case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse:
             return context.hasCurrentWorkspace
         case .previousWorkspace, .nextWorkspace:
@@ -125,6 +127,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return false
         case .dashboard:
             return context.terminalZoomActive || context.pickerActive
+        case .swapPanes:
+            return context.pickerActive
         default:
             return context.modalActive
         }
@@ -200,6 +204,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleSplit: return "Toggle Vertical Split"
         case .toggleHorizontalSplit: return "Toggle Horizontal Split"
         case .closeSplit: return "Close Split"
+        case .swapPanes: return "Swap Panes"
         case .toggleScratch: return "Toggle Scratch"
         case .toggleTerminalZoom: return "Toggle Terminal Zoom"
         case .toggleSidebar: return "Toggle Sidebar"
@@ -275,7 +280,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .focusRightPane: return .focusRightPane
         case .editKeymap, .reloadKeymap, .editGhosttyConfig, .reloadConfig,
              .clearFlagged, .clearFocus, .addWorkspaceToFocus, .expandWorkspaces, .collapseWorkspaces,
-             .closeSplit:
+             .closeSplit, .swapPanes:
             return nil
         }
     }
