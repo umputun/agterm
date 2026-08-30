@@ -94,10 +94,10 @@ public final class AppStore {
     /// `BuiltinAction.toggleWorkspaceFilter`, and `workspace.filter`.
     public internal(set) var focusEnabled = false
 
-    /// This window's sidebar width in points, persisted in `Snapshot`; drag-driven, clamped to the bounds below.
+    /// This window's sidebar width in points, persisted in `Snapshot`; clamped to the bounds below. Two writers: the drag, and `setSidebarWidth` behind `sidebar.width`.
     public var sidebarWidth: Double = AppStore.sidebarWidthDefault
 
-    /// Default + drag/restore bounds, shared by the divider drag and the `restore()` clamp so they can't drift.
+    /// Default + bounds, shared by the drag, `setSidebarWidth` and the `restore()` clamp through `clampSidebarWidth` so they can't drift.
     public static let sidebarWidthDefault: Double = 220
     public static let sidebarWidthMin: Double = 160
     public static let sidebarWidthMax: Double = 560
@@ -895,7 +895,7 @@ public final class AppStore {
                                       isExpanded: !(workspaceSnapshot.collapsed ?? false)))
         }
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
-        // out-of-range frame width; the drag path clamps to the same bounds.
+        // out-of-range frame width; the drag and `sidebar.width` clamp to the same bounds.
         sidebarWidth = AppStore.clampSidebarWidth(snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault)
         sidebarVisible = snapshot.sidebarVisible ?? true
         sidebarMode = snapshot.sidebarMode ?? .tree

@@ -2397,7 +2397,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">160...560</span> range the drag enforces and persisted through the window
                 snapshot. Prints the <em>stored</em> width, so an out-of-range request reads back as the bound
                 it landed on; that is the stored value, not a measured on-screen width. Fractional points are
-                accepted and printed exactly. Same
+                accepted and preserved without rounding. Compare request against echo numerically rather than as
+                strings — the echo is a double, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace">300</span> comes back
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">300.0</span>. Same
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> selector and defaults as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Read back from the tree's top-level
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarWidth</span>.

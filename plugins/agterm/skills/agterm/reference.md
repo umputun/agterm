@@ -229,8 +229,8 @@ window, omitted when none is pending), and `app` (which agterm is serving this s
 reading the tree gets its version floor without a second round-trip; it is not duplicated onto
 `window.list`, where a caller uses `version` instead). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, the four `dashboard*` fields, and
-`pickPending`
+both; `sidebarMode`, `sidebarWidth`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, the four
+`dashboard*` fields, and `pickPending`
 are `tree`-only (a GUI/keyboard change would leave a cached copy stale). All of those are read-only
 projections of live GUI state. `app` is the one CONSTANT among them, and is absent from `window.list`
 for a different reason: it describes the serving app rather than a window, so repeating it on every row
@@ -1012,8 +1012,9 @@ thing the divider drag does that had no command. Clamped server-side to the same
 drag enforces, persisted through the window snapshot, and ECHOED: the command prints the STORED width,
 so an out-of-range request reads back as the bound it landed on rather than as what was asked for. The
 echo is the stored value, not a measured on-screen width. Same `--window` selector and defaults as
-`expand`. Fractional points are accepted and printed exactly, which is why the value is not an integer:
-the drag itself writes a fractional cursor x. Read back from the tree's top-level `sidebarWidth`;
+`expand`. Fractional points are accepted and preserved without rounding, which is why the value is not an
+integer: the drag itself writes a fractional cursor x. Compare request against echo NUMERICALLY rather than
+as strings - the echo is a Double, so `300` comes back `300.0`. Read back from the tree's top-level `sidebarWidth`;
 `window list` does NOT carry it. There is no GUI half beyond dragging the divider.
 
 Terminal width is the window width minus the sidebar width minus a 1pt divider, so widening the sidebar

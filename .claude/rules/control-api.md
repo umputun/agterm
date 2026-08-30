@@ -584,8 +584,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   clamp, and ECHOES the stored width as `result.sidebarWidth`, following `session.resize`, without which a
   clamped request and an honored one both read as bare ok. The echo is the STORED, clamped value, never a
   measured realized width, which a host laying the divider out under its own rounding can differ from. The
-  CLI prints it exactly rather than rounding, so a caller comparing request against echo cannot read a
-  rounding as a clamp. Non-finite points are refused CLI-side and dispatcher-side. Read live `sidebarWidth`
+  CLI preserves it without fixed-decimal rounding, so a caller comparing request against echo cannot read a
+  rounding as a clamp. That comparison is NUMERIC: the echo is the Double's own description, so `300` comes
+  back `300.0` and equivalent spellings are not string-equal. Non-finite points are refused CLI-side and dispatcher-side. Read live `sidebarWidth`
   on the tree top level only. `ControlActions` DEFAULTS this arm in a public extension rather than requiring
   it, so a shared-dispatcher host outside this repo owes no conformance change; that does NOT make such a
   host build unchanged, since adding a `Command` case breaks any exhaustive switch over it first.
