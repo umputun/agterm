@@ -10,6 +10,14 @@ public enum PaneOverlayOpenFailure: Equatable, Sendable {
     case paneNotVisible
 }
 
+/// Why `swapPanes` could not exchange a session's two pane roles.
+public enum SwapRefusal: Equatable, Sendable {
+    case noSession
+    case noSplit
+    case slotNotRealized
+    case roleNotMutable
+}
+
 extension AppStore {
     /// Toggles the one-level split. With no axis this is the legacy preserve-axis hide/show operation. With
     /// an axis it is the axis-specific UI command: the same shown axis hides, another shown axis transposes,
@@ -61,6 +69,57 @@ extension AppStore {
         session.splitRatio = applied
         save()
         return applied
+    }
+
+    /// Exchanges the two live pane slots and every pane-owned field. Layout stays fixed; focus follows the
+    /// terminal. Role mutation is added by the app-facing capability after the host-free exchange is in place.
+    @discardableResult
+    public func swapPanes(_ sessionID: UUID) -> SwapRefusal? {
+        guard let session = session(withID: sessionID) else { return .noSession }
+        guard session.hasSplit else { return .noSplit }
+        guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
+            return .slotNotRealized
+        }
+
+        let primaryCwd = session.currentCwd ?? session.initialCwd
+        let splitCwd = session.splitCwd ?? session.initialSplitCwd ?? primaryCwd
+        session.surface = splitSurface
+        session.splitSurface = primarySurface
+        session.currentCwd = splitCwd
+        session.splitCwd = primaryCwd
+        session.initialSplitCwd = primaryCwd
+        (session.oscTitle, session.splitTitle) = (session.splitTitle, session.oscTitle)
+        (session.foregroundCommand, session.splitForegroundCommand) =
+            (session.splitForegroundCommand, session.foregroundCommand)
+        (session.restoreCommand, session.splitRestoreCommand) =
+            (session.splitRestoreCommand, session.restoreCommand)
+        (session.pendingRestoreCommand, session.pendingSplitRestoreCommand) =
+            (session.pendingSplitRestoreCommand, session.pendingRestoreCommand)
+        (session.pendingForegroundCommand, session.pendingSplitForegroundCommand) =
+            (session.pendingSplitForegroundCommand, session.pendingForegroundCommand)
+        (session.initialCommand, session.splitInitialCommand) =
+            (session.splitInitialCommand, session.initialCommand)
+        (session.commandWait, session.splitCommandWait) = (session.splitCommandWait, session.commandWait)
+        (session.leftOverlay, session.rightOverlay) = (session.rightOverlay, session.leftOverlay)
+        (session.leftOverlaySurface, session.rightOverlaySurface) =
+            (session.rightOverlaySurface, session.leftOverlaySurface)
+        (session.leftOverlayExitCode, session.rightOverlayExitCode) =
+            (session.rightOverlayExitCode, session.leftOverlayExitCode)
+
+        var indicator = session.agentIndicator
+        if indicator.status == .idle {
+            indicator.statusPane = nil
+        } else {
+            switch indicator.statusPane {
+            case nil, .left: indicator.statusPane = .right
+            case .right: indicator.statusPane = .left
+            case .scratch: break
+            }
+        }
+        session.agentIndicator = indicator
+        session.splitFocused.toggle()
+        save()
+        return nil
     }
 
     /// Clear the agent-status indicator when the pane that OWNED it is torn down, so a pane-tagged block
