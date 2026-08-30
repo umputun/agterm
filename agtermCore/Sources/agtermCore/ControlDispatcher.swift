@@ -176,11 +176,13 @@ public struct ControlSessionBackgroundOptions: Equatable, Sendable {
 
 public struct ControlSessionTextOptions: Equatable, Sendable {
     public let pane: String?
+    public let paneID: String?
     public let all: Bool
     public let lines: Int?
 
-    public init(pane: String?, all: Bool, lines: Int?) {
+    public init(pane: String?, paneID: String? = nil, all: Bool, lines: Int?) {
         self.pane = pane
+        self.paneID = paneID
         self.all = all
         self.lines = lines
     }
@@ -865,6 +867,7 @@ public struct ControlDispatcher {
         case .extent(let all, let lines):
             return actions.readSessionText(request.target, window: request.args?.window,
                                            options: ControlSessionTextOptions(pane: request.args?.pane,
+                                                                              paneID: request.args?.paneID,
                                                                               all: all,
                                                                               lines: lines))
         }

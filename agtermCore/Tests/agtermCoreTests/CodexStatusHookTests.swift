@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -60,6 +61,7 @@ struct CodexStatusHookTests {
             "AGTERM_SESSION_ID": "sid",
             "AGTERM_SOCKET": "/tmp/agterm.sock",
             "AGTERM_PANE": "right",
+            "AGTERM_PANE_ID": "stable-token",
             "AGTERM_CODEX_WATCH_FILE": tokenFile.path,
             "AGTERM_CODEX_WATCH_MAX_CHECKS": worker ? String(frames.count) : "0",
             "AGTERM_CODEX_WATCH_INTERVAL": "0",
@@ -140,8 +142,41 @@ struct CodexStatusHookTests {
 
     @Test func watcherIgnoresAutoReviewProgress() throws {
         let result = try run("", screen: "Reviewing approval request (12s · esc to interrupt)\n", worker: true)
-        #expect(result.controlCalls == ["session text --target sid --socket /tmp/agterm.sock --pane right"])
+        #expect(result.controlCalls == [
+            "session text --target sid --socket /tmp/agterm.sock --pane-id stable-token --pane right",
+        ])
         #expect(result.statusCalls.isEmpty)
+    }
+
+    @Test func watcherFileKeyUsesTheStablePaneToken() throws {
+        let fm = FileManager.default
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("agterm-codex-watch-key-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let prefix = "agterm-codex-watch-\(getuid())-sid-"
+        let stable = dir.appendingPathComponent(prefix + "stable-token")
+        let staleRole = dir.appendingPathComponent(prefix + "right")
+        try "watch\n".write(to: stable, atomically: true, encoding: .utf8)
+        try "watch\n".write(to: staleRole, atomically: true, encoding: .utf8)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = [Self.hook, "session-start"]
+        proc.environment = [
+            "AGTERM_SESSION_ID": "sid",
+            "AGTERM_PANE": "right",
+            "AGTERM_PANE_ID": "stable-token",
+            "AGTERM_STATUS_WRAPPER": "/usr/bin/true",
+            "TMPDIR": dir.path,
+            "PATH": "/usr/bin:/bin",
+        ]
+        try proc.run()
+        proc.waitUntilExit()
+
+        #expect(proc.terminationStatus == 0)
+        #expect(!fm.fileExists(atPath: stable.path))
+        #expect(fm.fileExists(atPath: staleRole.path))
     }
 
     @Test func watcherReportsVisibleApprovalPrompt() throws {

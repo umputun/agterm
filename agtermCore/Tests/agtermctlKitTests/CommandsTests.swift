@@ -522,6 +522,12 @@ struct CommandsTests {
         #expect(try request(["session", "text", "--pane", "right", "--target", "9f3c"]) == expected)
     }
 
+    @Test func sessionTextWithPaneIDAndPane() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "active",
+                                      args: ControlArgs(pane: "right", paneID: "stable-token"))
+        #expect(try request(["session", "text", "--pane-id", "stable-token", "--pane", "right"]) == expected)
+    }
+
     @Test func sessionTextWithPaneScratch() throws {
         let expected = ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs(pane: "scratch"))
         #expect(try request(["session", "text", "--pane", "scratch"]) == expected)

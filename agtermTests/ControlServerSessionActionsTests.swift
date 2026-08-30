@@ -131,6 +131,38 @@ final class ControlServerSessionActionsTests: XCTestCase {
                        "an empty slot and a parked-but-unrealized view are one state to a caller")
     }
 
+    func testTextPaneIDResolvesTheLiveSlotAndOverridesPane() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                             env: ["AGTERM_PANE_ID": "left-token"])
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                                  env: ["AGTERM_PANE_ID": "right-token"])
+        session.hasSplit = true
+
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "right-token"),
+                       "right")
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "scratch", paneID: "unknown"),
+                       "scratch", "an unknown token falls back to the explicit role")
+    }
+
+    func testTextPaneIDFollowsItsSurfaceAfterSwap() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                             env: ["AGTERM_PANE_ID": "moving-token"])
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                                  env: ["AGTERM_PANE_ID": "other-token"])
+        session.hasSplit = true
+
+        XCTAssertNil(store.swapPanes(session.id))
+
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "moving-token"),
+                       "right")
+    }
+
     // the same parked pane, one command over: `surfaceBindingAction`'s cast proves only that the SLOT is
     // filled, so both used to discard `performBindingAction`'s false and answer ok with nothing pasted or
     // selected, while their neighbours called that state `session not realized`.

@@ -182,10 +182,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// unaffected. A pane overlay is always full-pane, so
     /// `--pane` conflicts with `session.overlay.open --size-percent` and `session.overlay.resize` refuses it.
     public var pane: String?
-    /// A surface's STABLE spawn token for `session.status --pane-id`/`session.restore --pane-id` (the shell's
-    /// baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's live
-    /// surfaces OVERRIDES the stale role `pane`, so a status from a promoted-then-re-split pane lands on the
-    /// CURRENT slot; empty/unknown falls back to `pane`. Opaque — validated only by resolving.
+    /// A surface's STABLE spawn token for `session.status`/`session.restore`/`session.text --pane-id` (the
+    /// shell's baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's
+    /// live surfaces OVERRIDES the stale role `pane`, so a call from a moved pane reaches the CURRENT slot;
+    /// empty/unknown falls back to `pane`. Opaque — validated only by resolving.
     /// `session.restore` diverges: an unresolvable token with NO explicit `pane` errors there rather than
     /// silently using `left`, since a wrong restore pin persists. See `Session.paneRole(forToken:)`, #199.
     public var paneID: String?

@@ -250,13 +250,14 @@ struct ControlProtocolTests {
 
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
         let request = ControlRequest(cmd: .sessionText, target: "9f3c",
-                                     args: ControlArgs(pane: "left", all: true, lines: 50))
+                                     args: ControlArgs(pane: "left", paneID: "stable-token", all: true, lines: 50))
         let decoded = try roundTrip(request)
         #expect(decoded == request)
         #expect(decoded.cmd == .sessionText)
         #expect(decoded.args?.all == true)
         #expect(decoded.args?.lines == 50)
         #expect(decoded.args?.pane == "left")
+        #expect(decoded.args?.paneID == "stable-token")
     }
 
     @Test func sessionTextBareRoundTrips() throws {

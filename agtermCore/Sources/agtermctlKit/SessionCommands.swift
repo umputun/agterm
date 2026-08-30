@@ -362,6 +362,8 @@ struct Session: ParsableCommand {
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
         @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
         @Option(name: .long, help: "Which pane to read: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to the on-screen pane.") var pane: String?
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves.")
+        var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -377,7 +379,8 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionText, target: target.target,
-                           args: options.withWindow(ControlArgs(pane: pane, all: all ? true : nil, lines: lines)))
+                           args: options.withWindow(ControlArgs(pane: pane, paneID: paneID,
+                                                               all: all ? true : nil, lines: lines)))
         }
     }
 
