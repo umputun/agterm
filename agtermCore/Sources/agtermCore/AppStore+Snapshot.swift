@@ -36,6 +36,8 @@ extension AppStore {
                         foregroundCommand: session.foregroundCommand,
                         splitForegroundCommand: session.splitForegroundCommand,
                         initialCommand: session.initialCommand, commandWait: session.commandWait ? true : nil,
+                        splitInitialCommand: session.splitInitialCommand,
+                        splitCommandWait: session.splitCommandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark,
                         restoreCommand: session.restoreCommand,
                         splitRestoreCommand: session.splitRestoreCommand)
@@ -71,6 +73,8 @@ extension AppStore {
         session.flagged = snapshot.flagged ?? false
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
+        session.splitInitialCommand = session.isSplit ? snapshot.splitInitialCommand : nil
+        session.splitCommandWait = session.isSplit ? (snapshot.splitCommandWait ?? false) : false
         session.wasRestored = true
         session.backgroundWatermark = snapshot.backgroundWatermark
         session.restoreCommand = snapshot.restoreCommand

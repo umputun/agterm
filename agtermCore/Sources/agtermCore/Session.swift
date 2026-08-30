@@ -184,6 +184,13 @@ public final class Session: Identifiable {
     /// only with `initialCommand`. Persisted, so a restored session that re-runs its command holds again.
     @ObservationIgnored public var commandWait: Bool = false
 
+    /// The split pane's creation command, the split analogue of `initialCommand`. Persisted so a pane moved
+    /// into the split role by a swap keeps its exec lifecycle across restore.
+    @ObservationIgnored public var splitInitialCommand: String?
+
+    /// The split pane's hold-after-exit policy, meaningful only with `splitInitialCommand`.
+    @ObservationIgnored public var splitCommandWait: Bool = false
+
     /// True when the session was rebuilt by `AppStore.restore(from:)` rather than freshly created; gates the
     /// `initialCommand` re-run on `restoreRunningCommand` (a fresh session always runs it, a restored one gets
     /// a plain shell when off). Never persisted.

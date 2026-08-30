@@ -168,6 +168,10 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// Whether a `--command` session holds its surface after the command exits (`--wait`), so a restored
     /// command session holds again instead of vanishing. nil (missing key) decodes as false.
     public var commandWait: Bool?
+    /// The split pane's creation command, the split analogue of `initialCommand`.
+    public var splitInitialCommand: String?
+    /// Whether the split pane's creation command holds after exit. nil (missing key) decodes as false.
+    public var splitCommandWait: Bool?
     /// The session's background watermark (image or rasterized text); nil = none. `.text` re-renders its PNG.
     public var backgroundWatermark: BackgroundWatermark?
     /// The main pane's restore-command override (`session.restore`), winning over `foregroundCommand` and
@@ -182,6 +186,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
                 initialCommand: String? = nil, commandWait: Bool? = nil,
+                splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil) {
         self.id = id
@@ -197,6 +202,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.splitForegroundCommand = splitForegroundCommand
         self.initialCommand = initialCommand
         self.commandWait = commandWait
+        self.splitInitialCommand = splitInitialCommand
+        self.splitCommandWait = splitCommandWait
         self.backgroundWatermark = backgroundWatermark
         self.restoreCommand = restoreCommand
         self.splitRestoreCommand = splitRestoreCommand
@@ -204,7 +211,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, customName, cwd, isSplit, splitAxis, fontSize, splitCwd, splitRatio, flagged
-        case foregroundCommand, splitForegroundCommand, initialCommand, commandWait, backgroundWatermark
+        case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
+        case splitInitialCommand, splitCommandWait, backgroundWatermark
         case restoreCommand, splitRestoreCommand
     }
 
@@ -230,6 +238,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         splitForegroundCommand = (try? c.decodeIfPresent([String].self, forKey: .splitForegroundCommand)) ?? nil
         initialCommand = (try? c.decodeIfPresent(String.self, forKey: .initialCommand)) ?? nil
         commandWait = (try? c.decodeIfPresent(Bool.self, forKey: .commandWait)) ?? nil
+        splitInitialCommand = (try? c.decodeIfPresent(String.self, forKey: .splitInitialCommand)) ?? nil
+        splitCommandWait = (try? c.decodeIfPresent(Bool.self, forKey: .splitCommandWait)) ?? nil
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil

@@ -119,6 +119,20 @@ struct AppStorePaneTests {
         #expect(session.pendingSplitForegroundCommand == nil)
     }
 
+    @Test func closeSplitDropsSplitCreationIdentity() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitInitialCommand = "ssh split-host"
+        session.splitCommandWait = true
+
+        store.closeSplit(session.id)
+
+        #expect(session.splitInitialCommand == nil)
+        #expect(!session.splitCommandWait)
+    }
+
     @Test func closeSplitHidesAndTearsDownSurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -200,6 +214,26 @@ struct AppStorePaneTests {
         #expect(session.splitForegroundCommand == nil)
         // the `?? splitSurface` fallback is for a shown split pre-collapse, not for a promoted survivor.
         #expect(session.addressableSurface === split)
+    }
+
+    @Test func closePrimaryPanePromotesSplitCreationIdentity() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.initialCommand = "ssh primary-host"
+        session.splitInitialCommand = "ssh split-host"
+        session.splitCommandWait = true
+
+        store.closePrimaryPane(session.id)
+
+        #expect(session.initialCommand == "ssh split-host")
+        #expect(session.commandWait)
+        #expect(session.splitInitialCommand == nil)
+        #expect(!session.splitCommandWait)
     }
 
     // #416: `session.new` answers ok for a model insert, and libghostty refuses to build a surface while
@@ -629,6 +663,27 @@ struct AppStorePaneTests {
         shell.commandWait = true
         node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == shell.id.uuidString })
         #expect(node.commandWait == nil)
+    }
+
+    @Test func controlTreeReportsSplitCommandWaitOnlyForHoldingCommand() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitInitialCommand = "make test"
+        session.splitCommandWait = true
+
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == true)
+
+        session.splitCommandWait = false
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == nil)
+
+        session.splitInitialCommand = nil
+        session.splitCommandWait = true
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == nil)
     }
 
     @Test func controlTreeReportsOverlaySizePercent() throws {

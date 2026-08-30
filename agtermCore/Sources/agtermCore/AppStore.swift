@@ -293,12 +293,12 @@ public final class AppStore {
                                           overlay: session.programOverlayActive,
                                           overlaySizePercent: session.programOverlayActive
                                               ? session.overlaySizePercent : nil,
-                                          paneOverlays: paneOverlays(session),
-                                          hud: hudNode(session),
+                                          paneOverlays: paneOverlays(session), hud: hudNode(session),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
-                                          foreground: foreground(session),
-                                          splitForeground: splitForeground(session),
+                                          splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
+                                              ? true : nil,
+                                          foreground: foreground(session), splitForeground: splitForeground(session),
                                           // the PERSISTED overrides, not the transient pending payloads, so
                                           // a read after one fired still reports what stays pinned.
                                           restoreCommand: session.restoreCommand,

@@ -101,11 +101,44 @@ struct SnapshotRoundTripTests {
         #expect(restored.workspaces[0].sessions[0].commandWait == false)
     }
 
+    @Test func splitCreationIdentityRoundTripsOnlyForShownSplit() {
+        let shownStore = makeStore()
+        let shownWorkspace = shownStore.addWorkspace(name: "shown")
+        let shown = shownStore.addSession(toWorkspace: shownWorkspace.id, cwd: "/shown")!
+        shown.isSplit = true
+        shown.hasSplit = true
+        shown.splitInitialCommand = "ssh split-host"
+        shown.splitCommandWait = true
+
+        let shownSnapshot = shownStore.snapshot()
+        #expect(shownSnapshot.workspaces[0].sessions[0].splitInitialCommand == "ssh split-host")
+        #expect(shownSnapshot.workspaces[0].sessions[0].splitCommandWait == true)
+
+        let restoredShown = makeStore()
+        restoredShown.restore(from: shownSnapshot)
+        #expect(restoredShown.workspaces[0].sessions[0].splitInitialCommand == "ssh split-host")
+        #expect(restoredShown.workspaces[0].sessions[0].splitCommandWait)
+
+        let hiddenStore = makeStore()
+        let hiddenWorkspace = hiddenStore.addWorkspace(name: "hidden")
+        let hidden = hiddenStore.addSession(toWorkspace: hiddenWorkspace.id, cwd: "/hidden")!
+        hidden.hasSplit = true
+        hidden.splitInitialCommand = "ssh hidden-host"
+        hidden.splitCommandWait = true
+
+        let restoredHidden = makeStore()
+        restoredHidden.restore(from: hiddenStore.snapshot())
+        #expect(restoredHidden.workspaces[0].sessions[0].splitInitialCommand == nil)
+        #expect(!restoredHidden.workspaces[0].sessions[0].splitCommandWait)
+    }
+
     @Test func legacySnapshotWithoutCommandWaitDecodesNil() throws {
         // the missing key must decode as nil rather than failing the whole load, like every post-v1 field.
         let json = #"{"id":"\#(UUID().uuidString)","customName":null,"cwd":"/a","initialCommand":"make test"}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.commandWait == nil)
+        #expect(snap.splitInitialCommand == nil)
+        #expect(snap.splitCommandWait == nil)
     }
 
     @Test func sidebarWidthAndVisibilityRoundTripThroughSnapshot() {
