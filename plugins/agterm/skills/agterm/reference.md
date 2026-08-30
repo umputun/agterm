@@ -81,7 +81,7 @@ SIGTERM use normal process behavior.
   session or to none at all, as when you close the last one — or `workspace select` names another, it is
   deleted, or the workspace filter hides it. Hiding drops it for good, so turning the filter off does not
   restore it. Reselecting the already-selected session does not count: `session select`,
-  `overlay open --follow` and single-session `session go` leave it in place. `workspace select` on an EMPTY
+  `session overlay open --follow` and single-session `session go` leave it in place. `workspace select` on an EMPTY
   workspace has no session to select, so it takes the target instead (and is revealed if the filter was
   hiding it). Else the selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
   `session new --create-workspace --no-select`) never takes it. The tree workspace node's `active` flag
@@ -89,9 +89,10 @@ SIGTERM use normal process behavior.
   different workspace than `--target active` resolves to; address by id when the two must agree.
 - **For an agent, `active` is the USER's GUI-selected session, not yours.** Your shell is
   `$AGTERM_SESSION_ID`; the user is usually on a different session while you work. Pass
-  `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`overlay open`, `scratch`, `type`,
-  `text`, `background`, `status`, `copy`, …) that must act on the session you run in — otherwise it hits
-  whatever the user has selected. `overlay open` opens in the background without switching the user
+  `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`session overlay open`, `session scratch`,
+  `session type`, `session text`, `session background`, `session status`, `session copy`, …) that must act
+  on the session you run in — otherwise it hits
+  whatever the user has selected. `session overlay open` opens in the background without switching the user
   (both full and floating); pass `--follow` to additionally SELECT the target, switching the user to it.
 - `--window <id|prefix|active>` (on session/workspace/tree/font/notify/pick commands) picks which window's
   tree to act on; default is the frontmost. With `--window` set, that window must be open. Without it,
@@ -606,7 +607,7 @@ error keeps those names for compatibility.
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
-  flashes open then vanishes and `overlay result` reports 127; give an absolute path or wrap in
+  flashes open then vanishes and `session overlay result` reports 127; give an absolute path or wrap in
   `"zsh -lc '…'"`.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
   with the session visible behind, and a percent outside that range is an error. **By default the
@@ -680,7 +681,7 @@ error keeps those names for compatibility.
   Meant for the seconds before an agent can show anything — computing the items for `pick`, waiting on a
   slow command — so the user reads what is happening in the session he is about to be pulled into.
   `open` is the group's default subcommand (`session hud "gathering options…"`); a message that is
-  literally `update` or `close` needs the explicit `hud open` verb. `--detail` adds a dim second line,
+  literally `update` or `close` needs the explicit `session hud open` verb. `--detail` adds a dim second line,
   `--spinner` animates a glyph beside the message in the default `bar` style, `--spinner-style` picks
   another from `bar|braille|circle|blocks|dot` and turns the spinner on by itself — `dot` blinks rather than
   animating, for a panel that sits up for minutes. `--spinner-style none` is accepted too and leaves the

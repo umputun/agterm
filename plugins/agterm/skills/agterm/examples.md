@@ -865,7 +865,7 @@ choice=$(printf '%s\n' "$branches" | agtermctl pick --prompt "Check out which br
 agtermctl session hud close --target "$me"
 ```
 
-`hud update` repaints in place, no re-spawn and no blink, and it replaces the whole spec: `--detail`,
+`session hud update` repaints in place, no re-spawn and no blink, and it replaces the whole spec: `--detail`,
 the spinner and `--text-color` are dropped unless repeated. `--spinner-style bar|braille|circle|blocks|dot` picks the look and
 turns the spinner on by itself (`dot` blinks instead of animating, for a panel up for minutes), and an
 update may switch style mid-flight; `--spinner-style none` stops it, which is also what a read-back's
@@ -886,8 +886,9 @@ agtermctl tree --json | jq -r --arg s "$me" '
 ```
 
 Nothing announces a HUD as an event, so poll `tree` when another process owns the lifecycle. The slot is
-shared with `session overlay open`, which means a second `hud` replaces the first, an `overlay open`
-replaces a HUD, and `overlay result` over one errors `no overlay result: the slot holds a hud`. A HUD over
+shared with `session overlay open`, which means a second `session hud` replaces the first, a
+`session overlay open` replaces a HUD, and `session overlay result` over one errors
+`no overlay result: the slot holds a hud`. A HUD over
 a RUNNING program is refused instead: a message is replaceable, a program is not.
 
 ## Navigate and manage windows
