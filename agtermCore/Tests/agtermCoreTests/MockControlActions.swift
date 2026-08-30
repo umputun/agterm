@@ -36,6 +36,7 @@ final class MockControlActions: ControlActions {
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
         case sessionSplit(target: String?, window: String?, String?, SplitAxis?)
         case sessionSplitClose(target: String?, window: String?)
+        case sessionSwap(target: String?, window: String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
@@ -158,6 +159,7 @@ final class MockControlActions: ControlActions {
     var nextRestoreClearResponse = ControlResponse(ok: true)
     var nextRestoreCaptureResponse = ControlResponse(ok: true)
     var nextSessionRestoreResponse = ControlResponse(ok: true)
+    var nextSessionSwapResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
@@ -307,6 +309,11 @@ final class MockControlActions: ControlActions {
     func closeSessionSplit(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.sessionSplitClose(target: target, window: window))
         return ControlResponse(ok: true)
+    }
+
+    func swapSessionPanes(_ target: String?, window: String?) async -> ControlResponse {
+        calls.append(.sessionSwap(target: target, window: window))
+        return nextSessionSwapResponse
     }
 
     func scratchSession(_ target: String?, window: String?, mode: String?,

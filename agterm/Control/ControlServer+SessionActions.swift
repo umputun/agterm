@@ -296,6 +296,15 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Resolve the control target, then delegate every swap side effect to the AppActions operation the GUI
+    /// twin also uses.
+    func swapSessionPanes(_ target: String?, window: String?) async -> ControlResponse {
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let (store, id)): return await actions.swapSessionPanes(id, in: store)
+        }
+    }
+
     /// Show/hide the target's scratch terminal, a third full-overlay shell. `on|off|toggle` is computed
     /// against `scratchActive`, so both are idempotent; hiding keeps the shell alive, the `closeScratch`
     /// teardown being reserved for the shell's own `exit`. `command` (only when showing) runs that program
