@@ -26,6 +26,11 @@ RULE_RE = re.compile(r"^\s*[─\u2014-]{10,}(?:\s+[^─\u2014-].*?\s+[─\u2014-
 CODEX_PROMPT_RE = re.compile(r"^\s*›[\s ]*(.*?)\s*$")
 CLAUDE_PROMPT_RE = re.compile(r"^\s*❯[\s ]*(.*?)\s*$")
 PASTED_RE = re.compile(r"\[Pasted Content \d+ chars?\]")
+# loose on purpose: Claude draws "[Pasted text #16]" and "[Pasted text #1 +12 lines]", and a
+# precise pattern would refuse an unseen variant. The body fragment below is what proves
+# whose content the box holds.
+PASTED_TEXT_RE = re.compile(r"^\[Pasted text #\d+[^\]]*\]")
+MESSAGE_FRAGMENT = 20
 
 
 @dataclass(frozen=True)
@@ -226,12 +231,16 @@ def codex_prompt_text(text: str) -> str | None:
 
 def claude_prompt_text(text: str) -> str | None:
     lines = text.splitlines()[-BOX_LINES:]
-    for index in range(len(lines) - 1, 0, -1):
+    for index in range(len(lines) - 1, -1, -1):
         match = CLAUDE_PROMPT_RE.match(lines[index])
-        if not match or not RULE_RE.match(lines[index - 1]):
+        if not match:
             continue
-        if any(RULE_RE.match(line) for line in lines[index + 1 :]):
-            return match.group(1)
+        content = [match.group(1)]
+        for line in lines[index + 1 :]:
+            if RULE_RE.match(line):
+                break
+            content.append(line.strip())
+        return " ".join(part for part in content if part)
     return None
 
 
@@ -253,7 +262,25 @@ def normalize(profile: Profile, message: str) -> str:
 
 def composer_has_message(profile: Profile, content: str, typed: str) -> bool:
     if profile.agent == "claude":
-        return content.startswith(profile.label)
+        shown = " ".join(content.split())
+        sent = " ".join(typed.split())
+        label = profile.label.strip()
+        if not sent.startswith(label):
+            return False
+        if not (shown.startswith(label) or PASTED_TEXT_RE.match(shown)):
+            return False
+
+        body = sent[len(label) :].lstrip()
+        if not body:
+            return False
+        if shown.startswith(label):
+            return body[:MESSAGE_FRAGMENT] in shown
+
+        fragment_len = min(MESSAGE_FRAGMENT, len(body))
+        return any(
+            body[start : start + fragment_len] in shown
+            for start in range(len(body) - fragment_len + 1)
+        )
     required = min(len(typed), MIN_WRAPPED_PROBE)
     literal = typed.startswith(content) and len(content) >= required
     return literal or bool(PASTED_RE.fullmatch(content))
