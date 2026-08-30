@@ -251,11 +251,12 @@ struct agtermApp: App {
                                                   restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
                                                   hadForeground: hadForeground, foregroundInput: restoreInput,
                                                   initialCommand: session.initialCommand,
-                                                  restoreOverride: session.takePendingRestoreOverride(pane: .left))
+                                                  restoreOverride: session.takePendingRestoreOverride(pane: .left),
+                                                  requestedWait: session.commandWait)
         let plan = CommandRestore.restorePlan(inputs)
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
                                       command: plan.command, initialInput: plan.initialInput,
-                                      waitAfterCommand: session.commandWait, env: env)
+                                      waitAfterCommand: plan.waitAfterCommand, env: env)
         view.session = session
         let sessionID = session.id
         view.onExit = { [weak view] in
@@ -396,17 +397,19 @@ struct agtermApp: App {
                                          library: WindowLibrary) -> GhosttySurfaceView {
         // cwd is the persisted `initialSplitCwd` (a restored split keeps its own directory), else the session's
         // effectiveCwd. Font size matches the primary; the split's own cmd +/- is not persisted. Env inherits the
-        // parent's window/workspace/session ids. The captured foreground command re-runs via initial_input
-        // (run-once); splits never carry an `initialCommand`, so there is no mutual-exclusion guard and no
-        // `restorePlan` — `restoreInput` alone decides. A `session.restore` override wins over the capture, from
-        // the TRANSIENT pending slot (seeded only by an app-bootstrap restore whose split was shown) not the
-        // sticky persisted field; taking it clears it, so a fresh ⌘D split after a split shell exits is a shell.
-        let capturedInput = Self.restoreInitialInput(session.takePendingForegroundCommand(pane: .right))
-        let restoreInput = CommandRestore.restoreInput(restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
-                                                       restoreOverride: session.takePendingRestoreOverride(pane: .right),
-                                                       capturedInput: capturedInput)
+        // parent's window/workspace/session ids. Creation, capture and override precedence matches the primary.
+        let pendingForeground = session.takePendingForegroundCommand(pane: .right)
+        let inputs = CommandRestore.RestoreInputs(
+            wasRestored: session.wasRestored, restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
+            hadForeground: pendingForeground != nil, foregroundInput: Self.restoreInitialInput(pendingForeground),
+            initialCommand: session.splitInitialCommand,
+            restoreOverride: session.takePendingRestoreOverride(pane: .right),
+            requestedWait: session.splitCommandWait
+        )
+        let plan = CommandRestore.restorePlan(inputs)
         let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
-                                      fontSize: session.fontSize.map(Float.init), initialInput: restoreInput, env: env)
+                                      fontSize: session.fontSize.map(Float.init), command: plan.command,
+                                      initialInput: plan.initialInput, waitAfterCommand: plan.waitAfterCommand, env: env)
         view.session = session
         view.isSplitPane = true
         let sessionID = session.id
