@@ -199,13 +199,14 @@ members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tr
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries thirteen top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries fourteen top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
+`sidebar mode`), `sidebarWidth` (the sidebar divider position in points, the read side of
+`sidebar width`, reported here and nowhere else), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
 the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
 `workspace filter`, so a script can record the filter state, restore it, or make the toggle idempotent),
 `quickVisible` (whether the quick terminal is currently shown — the read
@@ -1005,6 +1006,20 @@ resolution as `--target active`), which stays expanded and is scrolled into view
 selector and defaults as `expand`. Idempotent; a graceful no-op in `flagged` mode; a named-but-closed
 window errors, and `no open window` when none is open. The GUI half (frontmost only) is View ▸ Collapse
 Workspaces and the ⌃⇧P palette "Collapse Workspaces".
+
+`agtermctl sidebar width <points> [--window W]` sets the sidebar divider position in points, the one
+thing the divider drag does that had no command. Clamped server-side to the same 160...560pt range the
+drag enforces, persisted through the window snapshot, and ECHOED: the command prints the STORED width,
+so an out-of-range request reads back as the bound it landed on rather than as what was asked for. The
+echo is the stored value, not a measured on-screen width. Same `--window` selector and defaults as
+`expand`. Fractional points are accepted and printed exactly, which is why the value is not an integer:
+the drag itself writes a fractional cursor x. Read back from the tree's top-level `sidebarWidth`;
+`window list` does NOT carry it. There is no GUI half beyond dragging the divider.
+
+Terminal width is the window width minus the sidebar width minus a 1pt divider, so widening the sidebar
+is how a caller shrinks the terminal below what the window's own minimum width allows. agterm reports no
+column count, so a caller fitting an exact number of columns measures its own grid and corrects; do not
+expect points to convert to columns without one.
 
 ## notify
 

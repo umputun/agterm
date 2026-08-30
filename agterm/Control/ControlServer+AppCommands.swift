@@ -65,6 +65,16 @@ extension ControlServer {
         }
     }
 
+    /// Set a window's sidebar divider position in points, clamped to the drag bounds; `--window` picks the
+    /// OPEN target, default frontmost. Echoes the STORED width, which is what tells a caller its
+    /// out-of-range value was clamped, the request answering ok either way. Read back on the tree.
+    func setSidebarWidth(_ points: Double, window: String?) -> ControlResponse {
+        resolver.resolveOpenPlacementStore(window) { store in
+            store.setSidebarWidth(points)
+            return ControlResponse(ok: true, result: ControlResult(sidebarWidth: store.sidebarWidth))
+        }
+    }
+
     // MARK: - Keymap
 
     /// Re-read and re-parse `keymap.conf`, returning the parse-diagnostic count. The SAME `reloadKeymap()` path

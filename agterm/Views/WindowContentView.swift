@@ -361,7 +361,7 @@ struct WindowContentView: View {
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in
                                 dividerDragging = true
-                                store.sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, Double(value.location.x)))
+                                store.sidebarWidth = AppStore.clampSidebarWidth(Double(value.location.x))
                                 // past the clamp the divider stops following the pointer, which ends up over
                                 // live terminal with no hover event left to repaint ↔.
                                 setDividerCursor()

@@ -800,6 +800,17 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response, json: false) == "0.850")
     }
 
+    @Test func formatResponseSidebarWidth() {
+        let response = ControlResponse(ok: true, result: ControlResult(sidebarWidth: 271.3))
+        #expect(SocketClient.formatResponse(response, json: false) == "271.3")
+    }
+
+    // rounding here would report a clamp that never happened: the caller compares its request to the echo
+    @Test func formatResponseSidebarWidthKeepsSubTenthPrecision() {
+        let response = ControlResponse(ok: true, result: ControlResult(sidebarWidth: 271.34))
+        #expect(SocketClient.formatResponse(response, json: false) == "271.34")
+    }
+
     @Test func formatResponseErrorFallback() {
         #expect(SocketClient.formatResponse(ControlResponse(ok: false), json: false) == "error: unknown error")
     }

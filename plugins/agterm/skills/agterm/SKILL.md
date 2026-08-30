@@ -22,7 +22,7 @@ when_to_use: >
   session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
-  window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
+  window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, sidebar.width, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: agterm cookbook,
   cookbook recipe, list recipes, install a recipe, agterm recipe for X, what recipes are there, and
@@ -478,8 +478,10 @@ per app, so none of them take `--target`/`--window`/`--pane`; all three still ne
 **sidebar** — `sidebar [show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
 `sidebar mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read
 back from the tree's top-level `sidebarMode`) · `sidebar expand [--window W]` (expand every workspace) ·
-`sidebar collapse [--window W]` (collapse all workspaces except the active one, which stays expanded).
-Visibility/mode act on the frontmost window; `sidebar expand`/`sidebar collapse` default to the frontmost but take a
+`sidebar collapse [--window W]` (collapse all workspaces except the active one, which stays expanded) ·
+`sidebar width <points> [--window W]` (move the divider, clamped to 160...560pt; prints the stored width
+and reads back from the tree's top-level `sidebarWidth`).
+Visibility/mode act on the frontmost window; `sidebar expand`/`collapse`/`width` default to the frontmost but take a
 `--window` selector to target any open window.
 
 **notify** — `notify <body> [--title T]` — post a desktop notification attributed to a session. To signal that you need the user, prefer `session status` (`blocked`/`completed`), a persistent typed attention state rather than a one-shot banner; keep `notify` for a one-off nudge.

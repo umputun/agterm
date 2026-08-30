@@ -1179,6 +1179,29 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.sidebarMode == "flagged")
     }
 
+    @Test func treeRoundTripsWithSidebarWidthAndOmitsWhenNil() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], sidebarWidth: 271.3)))
+        #expect(try roundTrip(response) == response)
+
+        let json = String(decoding: try JSONEncoder().encode(ControlTree(workspaces: [])), as: UTF8.self)
+        #expect(!json.contains("sidebarWidth"), "a nil sidebar width must be omitted from the JSON; got \(json)")
+        #expect(try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8)).sidebarWidth == nil)
+    }
+
+    @Test func sidebarWidthRequestAndEchoRoundTrip() throws {
+        let request = ControlRequest(cmd: .sidebarWidth, args: ControlArgs(window: "win", sidebarWidth: 271.3))
+        let decodedRequest = try roundTrip(request)
+        #expect(decodedRequest.cmd == .sidebarWidth)
+        #expect(decodedRequest.args?.sidebarWidth == 271.3)
+
+        let echo = ControlResponse(ok: true, result: ControlResult(sidebarWidth: 560))
+        #expect(try roundTrip(echo) == echo)
+
+        let json = String(decoding: try JSONEncoder().encode(ControlArgs(window: "win")), as: UTF8.self)
+        #expect(!json.contains("sidebarWidth"), "a nil sidebar width must be omitted from the JSON; got \(json)")
+    }
+
     @Test func treeRoundTripsWithWorkspaceFilter() throws {
         // a workspace row is visible only when sidebarVisible && tree mode && (filter off || focused).
         let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])

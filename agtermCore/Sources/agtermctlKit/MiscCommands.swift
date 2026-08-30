@@ -538,7 +538,7 @@ struct Pick: ParsableCommand {
 struct Sidebar: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Sidebar visibility and view mode.",
-        subcommands: [Visibility.self, Mode.self, Expand.self, Collapse.self],
+        subcommands: [Visibility.self, Mode.self, Expand.self, Collapse.self, Width.self],
         defaultSubcommand: Visibility.self
     )
 
@@ -586,6 +586,23 @@ struct Sidebar: ParsableCommand {
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .sidebarCollapse, args: options.withWindow()) }
+    }
+
+    /// `agtermctl sidebar width <points> [--window W]` — move the divider a drag would move. Prints the
+    /// APPLIED width, so a value outside the bounds reads back as the clamped one rather than as what was
+    /// asked for. Range validation stays server-side, against the same bounds the drag clamps to.
+    struct Width: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Set the sidebar width in points.")
+        @Argument(help: "Sidebar width in points, clamped to the drag range.") var points: Double
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            guard points.isFinite else { throw ValidationError("points must be a number") }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sidebarWidth, args: options.withWindow(ControlArgs(sidebarWidth: points)))
+        }
     }
 }
 

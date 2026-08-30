@@ -54,6 +54,7 @@ final class MockControlActions: ControlActions {
         case sidebarViewMode(ControlSidebarViewMode)
         case expand(window: String?)
         case collapse(window: String?)
+        case sidebarWidth(points: Double, window: String?)
         case quick(String?)
         case quickType(text: String)
         case quickText(all: Bool, lines: Int?)
@@ -111,6 +112,7 @@ final class MockControlActions: ControlActions {
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
     var nextCollapseResponse = ControlResponse(ok: true)
+    var nextSidebarWidthResponse = ControlResponse(ok: true)
     var nextFontResponse = ControlResponse(ok: true)
     var nextNotifyResponse = ControlResponse(ok: true)
     var nextKeymapListResponse = ControlResponse(ok: true)
@@ -400,6 +402,11 @@ final class MockControlActions: ControlActions {
     func collapseSidebar(window: String?) -> ControlResponse {
         calls.append(.collapse(window: window))
         return nextCollapseResponse
+    }
+
+    func setSidebarWidth(_ points: Double, window: String?) -> ControlResponse {
+        calls.append(.sidebarWidth(points: points, window: window))
+        return nextSidebarWidthResponse
     }
 
     func setQuickTerminal(mode: String?) -> ControlResponse {

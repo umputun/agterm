@@ -69,6 +69,7 @@ public protocol ControlActions {
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
+    func setSidebarWidth(_ points: Double, window: String?) -> ControlResponse
     func setQuickTerminal(mode: String?) -> ControlResponse
     func typeQuick(text: String) async -> ControlResponse
     func readQuickText(all: Bool, lines: Int?) async -> ControlResponse
@@ -128,6 +129,14 @@ public protocol ControlActions {
 public extension ControlActions {
     func splitSession(_ target: String?, window: String?, mode: String?, axis _: SplitAxis?) -> ControlResponse {
         splitSession(target, window: window, mode: mode)
+    }
+
+    /// Defaulted so a shared-dispatcher host outside this repo owes no conformance change when core is
+    /// synced: `agtermCore` is a library product and `ControlActions` is public, so a bare new REQUIREMENT
+    /// is a source break there. It does NOT make such a host build unchanged — adding a `Command` case
+    /// breaks any exhaustive switch over it first, which is true of every new command.
+    func setSidebarWidth(_: Double, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: "sidebar.width is not supported by this control host")
     }
 }
 
@@ -232,7 +241,7 @@ public struct ControlDispatcher {
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
-                .sidebarCollapse, .restoreClear, .restoreCapture, .version:
+                .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
@@ -744,6 +753,11 @@ public struct ControlDispatcher {
             return actions.expandSidebar(window: request.args?.window)
         case .sidebarCollapse:
             return actions.collapseSidebar(window: request.args?.window)
+        case .sidebarWidth:
+            guard let points = request.args?.sidebarWidth, points.isFinite else {
+                return ControlResponse(ok: false, error: "sidebar.width requires a width in points")
+            }
+            return actions.setSidebarWidth(points, window: request.args?.window)
         case .restoreClear:
             return actions.clearRestoreCommands()
         case .restoreCapture:

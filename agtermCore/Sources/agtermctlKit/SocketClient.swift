@@ -219,6 +219,12 @@ struct SocketClient {
             // session.resize echoes the applied (clamped) primary-pane fraction, scriptable as a bare number.
             return String(format: "%.3f", ratio)
         }
+        if let sidebarWidth = response.result?.sidebarWidth {
+            // sidebar.width echoes the STORED (clamped) points. Printed exactly, not rounded: a caller
+            // comparing its request against the echo reads any difference as a clamp, so rounding an
+            // honored 271.34 to 271.3 would report a clamp that never happened.
+            return String(sidebarWidth)
+        }
         if echoID, let id = response.result?.id {
             return id
         }

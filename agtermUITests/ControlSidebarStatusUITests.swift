@@ -373,6 +373,29 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                      "a background create must NOT widen the set — that reveal is the foreground path's job")
     }
 
+    func testSidebarWidthSetsEchoesAndReadsBackOnTree() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+
+        let set = try sendCommand(#"{"cmd":"sidebar.width","args":{"sidebarWidth":312.5}}"#)
+        XCTAssertEqual(set["ok"] as? Bool, true, "sidebar.width should succeed: \(set)")
+        let setResult = try XCTUnwrap(set["result"] as? [String: Any], "sidebar.width should carry a result")
+        XCTAssertEqual(setResult["sidebarWidth"] as? Double, 312.5, "the echo should report the stored width")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        XCTAssertEqual(t["sidebarWidth"] as? Double, 312.5, "the tree should read back the width the command wrote")
+
+        // an out-of-range request answers ok, so the echo is the only thing that reports the clamp
+        let clamped = try sendCommand(#"{"cmd":"sidebar.width","args":{"sidebarWidth":9000}}"#)
+        XCTAssertEqual(clamped["ok"] as? Bool, true, "an out-of-range width should still succeed: \(clamped)")
+        let clampedResult = try XCTUnwrap(clamped["result"] as? [String: Any], "the clamped call should carry a result")
+        XCTAssertEqual(clampedResult["sidebarWidth"] as? Double, 560, "the echo should report the clamped bound")
+
+        let missing = try sendCommand(#"{"cmd":"sidebar.width"}"#)
+        XCTAssertEqual(missing["ok"] as? Bool, false, "a width-less sidebar.width should be refused: \(missing)")
+    }
+
     func testSidebarExpandCollapse() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
 

@@ -149,7 +149,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
 - `quick`, `quick.type`, `quick.text`
-- `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `notify`
+- `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`, `notify`
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
@@ -578,6 +578,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `sidebar.mode tree|flagged|toggle` is frontmost and reads live `sidebarMode`.
 - `sidebar.expand` and `.collapse` target optional open window, post object-scoped store notifications, and
   no-op in flagged mode. Collapse preserves/scrolls active workspace. GUI forms are frontmost only.
+- `sidebar.width <points>` targets an optional open window, unlike frontmost-only `sidebar`/`sidebar.mode`:
+  it is per-window state and new commands do not inherit that limitation. Clamps to
+  `AppStore.sidebarWidthMin...Max` through `clampSidebarWidth`, shared with the drag and the `restore()`
+  clamp, and ECHOES the stored width as `result.sidebarWidth`, following `session.resize`, without which a
+  clamped request and an honored one both read as bare ok. The echo is the STORED, clamped value, never a
+  measured realized width, which a host laying the divider out under its own rounding can differ from. The
+  CLI prints it exactly rather than rounding, so a caller comparing request against echo cannot read a
+  rounding as a clamp. Non-finite points are refused CLI-side and dispatcher-side. Read live `sidebarWidth`
+  on the tree top level only. `ControlActions` DEFAULTS this arm in a public extension rather than requiring
+  it, so a shared-dispatcher host outside this repo owes no conformance change; that does NOT make such a
+  host build unchanged, since adding a `Command` case breaks any exhaustive switch over it first.
 - `workspace.focus on` replaces/enables; off removes and disables on empty; toggle clears sole applied
   target or replaces/enables; add inserts without changing enabled state. There is no membership toggle.
   Clear Focus loops off over members; `workspace.filter off` only suspends.
@@ -629,8 +640,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   grandchild stay out; a group whose leader already exited has no parentage to test, so every survivor
   qualifies. The capture (`.command`) stays leader-only, because a non-nil capture sets `hadForeground`,
   which preempts `initialCommand` in `restorePlan` and would drop the exec path.
-- Top-level tree includes idle/auto-follow, live sidebar visibility/mode, workspace filter, quick
+- Top-level tree includes idle/auto-follow, live sidebar visibility/mode/width, workspace filter, quick
   visibility, zoom, dashboard, and picker state. Prefer live tree sidebar state over cached window list.
+  `sidebarWidth` is tree-only: nothing needs width discovery across windows, which is all the cached
+  `window.list` copy would add.
   `quickVisible` and a `quick` `zoomedSurface` are APP-level, so every projected window reports the same
   value for them; the rest stay per-window.
 - Window nodes include open/active, open-store sidebar/auto-follow, geometry, fullscreen, zoomed, minimized.

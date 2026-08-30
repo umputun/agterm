@@ -511,6 +511,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">autoFollowMs</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarWidth</span> (the sidebar divider position in points, the read side
+                of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar width</span>, reported here and not on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceFilter</span> (whether the workspace focus
                 filter is applied — the flag half of the focus set, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter</span>),
@@ -2380,6 +2383,30 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> selector and defaults as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Idempotent; a graceful no-op in flagged
                 mode.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl sidebar width &lt;points&gt; [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">sidebar.width</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Set the sidebar divider position in points, the one thing the divider drag does that had no
+                command. Clamped to the same
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">160...560</span> range the drag enforces and persisted through the window
+                snapshot. Prints the <em>stored</em> width, so an out-of-range request reads back as the bound
+                it landed on; that is the stored value, not a measured on-screen width. Fractional points are
+                accepted and printed exactly. Same
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> selector and defaults as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Read back from the tree's top-level
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarWidth</span>.
+              </p>
+              <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
+                Terminal width is the window width minus the sidebar width minus a 1pt divider, so widening the
+                sidebar is how a caller shrinks the terminal below what the window's own minimum width allows.
+                agterm reports no column count, so fitting an exact number of columns means measuring the grid
+                and correcting.
               </p>
             </div>
           </section>

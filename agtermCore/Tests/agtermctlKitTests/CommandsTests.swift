@@ -1456,6 +1456,24 @@ struct CommandsTests {
             ControlRequest(cmd: .sidebarCollapse, args: ControlArgs(window: "abc")))
     }
 
+    @Test func sidebarWidth() throws {
+        #expect(try request(["sidebar", "width", "271.3"]) ==
+            ControlRequest(cmd: .sidebarWidth, args: ControlArgs(sidebarWidth: 271.3)))
+    }
+
+    @Test func sidebarWidthWithWindow() throws {
+        #expect(try request(["sidebar", "width", "300", "--window", "abc"]) ==
+            ControlRequest(cmd: .sidebarWidth, args: ControlArgs(window: "abc", sidebarWidth: 300)))
+    }
+
+    @Test func sidebarWidthRejectsNonNumericPoints() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "width", "wide"]) }
+    }
+
+    @Test func sidebarWidthRejectsNonFinitePoints() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "width", "nan"]) }
+    }
+
     @Test func sessionFlagDefaultsToggle() throws {
         #expect(try request(["session", "flag"]) == ControlRequest(cmd: .sessionFlag, target: "active", args: ControlArgs(mode: "toggle")))
     }
