@@ -26,8 +26,9 @@ paths:
   writing a mode clears the legacy field.
 - Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
   `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
-  Default-off nil fields include attention button, Dock bounce, restore commands, global config
-  inheritance, close confirmation, auto-follow, hidden inactive sidebars, and interface hiding.
+  Default-off nil fields include attention button, Dock bounce, global config inheritance, close
+  confirmation, auto-follow, hidden inactive sidebars, and interface hiding. `restoreMode` defaults to
+  `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
 - `sidebarFontSize` and `interfaceFontSize` are separate settings, both 9...20 default 13, read through
   `effectiveSidebarFontSize`/`effectiveInterfaceFontSize`. Neither falls back to the other: the sidebar
   is a density knob, the palette a readability one.
@@ -132,7 +133,13 @@ paths:
   libghostty diagnostics across all sources, clear all session zoom, post appearance change, and notify
   non-zero diagnostics. A config-directory change reloads both co-located files. Launch also reports
   cached diagnostics.
-- **Restore running commands is opt-in. Replay is launch-scoped; capture runs at two exits and on demand.**
+- **Process restore mode is frozen at launch; capture follows the configured next mode.** `none` restores fresh shells, `rerun` uses the captured-command path
+  below, and `live` is zmx-backed. Settings changes apply after restart. A live request falls back to
+  `none` when the bundled executable, zsh integration, or password-database login shell is unsupported, and
+  Settings reports the reason. The requested-live latch still claims persisted daemons during fallback; only
+  a deliberate `none` or `rerun` launch reaps them. Factories, control status, and reap read the immutable
+  requested or active mode. Exit capture and `restore.capture` read the configured next-launch mode.
+- **Command replay is launch-scoped; capture runs at two exits and on demand.**
   `AppDelegate.captureForegroundCommands` runs at three points: `applicationWillTerminate` before
   `saveAllOpen()`, the LAST window's `willClose` before its surface teardown, which precedes
   `applicationWillTerminate` and is therefore the only point where a close-the-last-window exit's
@@ -141,16 +148,19 @@ paths:
   that set — since #447 it reaches `applicationWillTerminate` like any quit — so do not re-motivate the
   command with an OS update. The on-demand arm changes nothing else: it fills the same
   slots, persists through the same `saveAllOpen`, and replay stays launch-only and one-shot.
-  All three arms are gated on the setting, and only the on-demand one SAYS so: it refuses while the
-  setting is off rather than capturing what nothing would replay. Deliberately unlike a `session.restore`
-  pin, which succeeds with an explanatory note in the same state, because a pin outlives the toggle and
-  a capture only goes stale.
+  The two automatic exit arms run when the configured mode is `rerun` or `live`. The on-demand arm remains
+  rerun-only: it refuses when `none` or `live` is configured and names that mode. Deliberately unlike a
+  `session.restore` pin, which saves future rerun policy with an explanatory note, because a pin outlives
+  the mode and a capture only goes stale.
   The `willClose` arm alone is guarded by `openIDs() == [windowID]` and skipped under `isTerminating`.
   A NON-last close captures nothing AND clears both persisted slots plus the pending pair: a launch
   restore can't tell that window's file from one open at exit, so its argv could replay via the
   never-windowless reopen fallback, and on demand a capture can now have written argv there mid-run.
-  Argv comes from `ghostty_surface_foreground_pid`, `sysctl(KERN_PROCARGS2)`, and host-free parsing.
-  Capture no hidden split.
+  Ordinary and rerun argv comes from `ghostty_surface_foreground_pid`, `sysctl(KERN_PROCARGS2)`, and
+  host-free parsing. Live panes use one fresh zmx leader snapshot, then the same sysctl parsing against the
+  daemon-side leaders. A live hidden split is captured while its backing surface exists; an ordinary or
+  rerun hidden split remains nil. Refresh failure or deadline expiry clears the affected slots rather than
+  reading the resolver's retained map.
   Strip login `-` before shell recognition; a known shell with only flags is idle and omitted, while
   scripts/payload args remain, including `/bin/sh <script>`.
   System shutdown, restart, and logout skip quit confirmation so `applicationWillTerminate` can capture
@@ -173,7 +183,7 @@ paths:
   Against STALE files from older builds, `loadStore` also rewrites a snapshot that carried captures on a
   mid-run reopen, and `recoverOrphanedWindows` drops captures while the sticky override still arms
   (a corrupt index must not re-execute a closed window's last command).
-- Restore only when the toggle is on and basename is absent from user
+- Restore captured argv only in `rerun` or a wrapped `live` pane, and only when basename is absent from user
   `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. A control character anywhere in the
   argv also refuses, matching what `session.restore set` rejects a pin for: the line is typed, so the line
   editor reads the byte before the shell parser and quoting cannot protect it. U+FFFD refuses with it,
@@ -181,10 +191,12 @@ paths:
   RENDER, keeping `hadForeground` true so a stale `initialCommand` stays preempted. A pin loaded from a
   snapshot never passed the dispatcher's check, so `restoreInput` applies it again at the sink; both share
   `CommandRestore.hasControlCharacter`. Feed captured argv once through
-  shell-quoted `config.initial_input` so exit returns to the shell, then nil it. Only one foreground
-  process from a typed pipeline/compound command can be captured.
+  shell-quoted `config.initial_input` in rerun mode, then nil it. A wrapped live pane consumes the pending
+  argv only after configuration succeeds and passes it as a create-only zmx attach payload. An existing
+  daemon ignores the payload; a missing daemon runs it, then starts the final integrated login shell.
+  Fallback never consumes. Only one foreground process from a typed pipeline/compound command can be captured.
 - `session.new --command` persists durable `initialCommand` and restores through shell-replacing
-  `config.command`; fresh creation always runs, restored creation honors the toggle, and captured
+  `config.command`; fresh creation always runs, restored creation honors `rerun`, and captured
   foreground wins. Do not consume `initialCommand`; remove it only when primary exit promotes a split.
   `restore.capture`, `restore.clear` and tree foreground fields are the control surface; the tree fields
   report the live process, not the captured slot, which [[control-api]] keeps read-back-free by design.

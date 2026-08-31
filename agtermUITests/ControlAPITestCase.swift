@@ -49,6 +49,7 @@ class ControlAPITestCase: XCTestCase {
         // the host's Desktop & Dock setting; launch args can't carry it — FB11763863.
         app.launchEnvironment["AGTERM_UITEST_DOUBLECLICK_ACTION"] =
             name.contains("testDoubleClickHeaderHonorsNoneSetting") ? "None" : "Maximize"
+        if enablesZmxForUITest { app.launchEnvironment["AGTERM_UITEST_ENABLE_ZMX"] = "1" }
         try seedSettingsIfNeeded()
         app.launchForUITest()
         // the seeded session row proves the window (and thus the control server's scene .task) is up.
@@ -67,6 +68,9 @@ class ControlAPITestCase: XCTestCase {
     /// channel has no `settings.*` command, so pre-seeding the file is the only way to exercise one
     /// without driving the Settings window.
     var seededSettings: [String: Any]? { nil }
+
+    /// Opt one focused persistence test into the real bundled zmx path. Every other UI test bypasses it.
+    var enablesZmxForUITest: Bool { false }
 
     /// Write `seededSettings` into the state dir before launch, so `SettingsModel.init` picks it up.
     private func seedSettingsIfNeeded() throws {

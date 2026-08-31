@@ -8,6 +8,16 @@ struct DashboardControllerTests {
     private func primary(_ id: UUID) -> DashboardMember { DashboardMember(session: id, surface: .primary) }
     private func split(_ id: UUID) -> DashboardMember { DashboardMember(session: id, surface: .split) }
 
+    private func makeSwappableSession() -> (AppStore, Session) {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: workspace.id, cwd: "/left")!
+        session.surface = SpySurface(paneToken: "primary")
+        session.splitSurface = SpySurface(paneToken: "split")
+        session.hasSplit = true
+        return (store, session)
+    }
+
     @Test func openSetsMembersHighlightAndModeThenCloseResets() {
         let controller = DashboardController()
         #expect(controller.isOpen == false)
@@ -40,6 +50,29 @@ struct DashboardControllerTests {
         #expect(controller.highlighted == primary(a), "the highlight starts on the first cell (the primary pane)")
         controller.move(.right)
         #expect(controller.highlighted == split(a), "moving right lands on the same session's split pane cell")
+    }
+
+    @Test func loneDashboardMemberKeepsItsSlotAcrossPaneSwap() {
+        let (store, session) = makeSwappableSession()
+        let controller = DashboardController()
+        controller.open(members: [split(session.id)])
+
+        #expect(store.swapPanes(session.id) == nil)
+
+        #expect(controller.members == [split(session.id)])
+        #expect(controller.highlighted == split(session.id))
+    }
+
+    @Test func bothDashboardMembersKeepOrderAndHighlightAcrossPaneSwap() {
+        let (store, session) = makeSwappableSession()
+        let controller = DashboardController()
+        let members = [primary(session.id), split(session.id)]
+        controller.open(members: members, highlighted: split(session.id))
+
+        #expect(store.swapPanes(session.id) == nil)
+
+        #expect(controller.members == members)
+        #expect(controller.highlighted == split(session.id))
     }
 
     @Test func highlightInitPrefersSuppliedMemberElseFirst() {

@@ -752,6 +752,55 @@ final class AppActions {
         focusSplitPane(session, wantSplit: false)
     }
 
+    /// Exchange a session's two pane roles and every pane-owned field. Shared by control and the GUI twin;
+    /// waits only while a newly requested split has not occupied both slots yet.
+    func swapSessionPanes(_ sessionID: UUID, in store: AppStore) async -> ControlResponse {
+        var refusal = store.swapPanes(sessionID)
+        if refusal == .slotNotRealized {
+            for _ in 0..<12 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                refusal = store.swapPanes(sessionID)
+                if refusal != .slotNotRealized { break }
+            }
+        }
+        if let refusal {
+            let error: String
+            switch refusal {
+            case .noSession: error = "session closed during swap"
+            case .noSplit: error = "session has no split pane"
+            case .slotNotRealized: error = "session not realized"
+            case .roleNotMutable: error = "session panes do not support swapping"
+            }
+            return ControlResponse(ok: false, error: error)
+        }
+        guard let session = store.session(withID: sessionID) else {
+            return ControlResponse(ok: false, error: "session closed during swap")
+        }
+
+        if let windowID = library.windowID(forSession: sessionID),
+           let zoom = TerminalZoomRegistry.shared.controller(for: windowID),
+           let target = zoom.target,
+           case .session(let zoomedSessionID, _) = target,
+           zoomedSessionID == sessionID,
+           !TerminalZoomController.isTargetValid(target, in: store) {
+            zoom.clear()
+        }
+        NotificationManager.shared.clearDelivered(sessionID: sessionID)
+        // Starts its own superseding 12x30ms retry; success here does not promise focus is established yet.
+        focusSplitPane(session, wantSplit: session.splitFocused)
+        return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
+    }
+
+    /// Synchronous GUI entry point for the menu and palette, launching the same readiness poll and side
+    /// effects the control command awaits.
+    func swapActiveSessionPanes() {
+        guard PaletteCommand.swapPanes.isEnabled(in: paletteContext),
+              let store, let session = store.activeSession else { return }
+        Task { @MainActor in
+            _ = await swapSessionPanes(session.id, in: store)
+        }
+    }
+
     /// Show/hide the active session's scratch terminal, a third full-overlay login shell. Focus rides the
     /// surface's `autoFocus` and the detail pane's hide reclaim, so this only flips the flag; control drives
     /// `AppStore.toggleScratch` directly.

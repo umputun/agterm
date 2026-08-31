@@ -21,6 +21,8 @@ final class ControlServer {
     let library: WindowLibrary
     let actions: AppActions
     let settingsModel: SettingsModel
+    let launchRestoreMode: RestoreMode
+    let zmxForegroundResolver: ZmxForegroundResolver?
     private let socketPath: String
 
     /// The target-resolution query layer: owns the `emptyStore`/`store` frontmost-fallback and wraps the
@@ -129,12 +131,22 @@ final class ControlServer {
     /// Which agterm this is, injected rather than read from `Bundle.main` here: the identity is the app's to
     /// know, and a hosted test would otherwise see its own host bundle.
     let identity: AppIdentity
+    /// Talks to the daemons behind the zmx commands. Present in every real launch, live mode or not —
+    /// `list` and `prune` must still work after a launch in `none` or `rerun`, which is exactly when
+    /// detached daemons are left over. Nil only in hosted tests, where the commands answer that the
+    /// backend is unavailable rather than pretending an empty listing.
+    let zmxClient: ZmxClient?
 
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
+         launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
+         zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
          socketPath: String? = nil) {
         self.library = library
         self.actions = actions
         self.settingsModel = settingsModel
+        self.launchRestoreMode = launchRestoreMode
+        self.zmxForegroundResolver = zmxForegroundResolver
+        self.zmxClient = zmxClient
         self.identity = identity
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
@@ -446,7 +458,8 @@ final class ControlServer {
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand,
-                .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
+                .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionScratch, .sessionFocus, .sessionResize,
+                .surfaceZoom,
                 .surfaceCursor,
                 .sessionStatus, .sessionFlag, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .configReload, .themeSet, .themeList,
@@ -458,7 +471,7 @@ final class ControlServer {
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
-                .restoreClear, .restoreCapture, .dashboard, .version:
+                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
@@ -518,6 +531,28 @@ final class ControlServer {
         return ControlResponse(ok: true)
     }
 
+    /// The restore-mode policy: settings, this launch's request, and what it got.
+    func readRestoreMode() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(restore: restoreStatus()))
+    }
+
+    /// Persist the mode for the NEXT launch; a pane is wrapped or not at creation, so this process keeps
+    /// the mode it started with.
+    func setRestoreMode(_ mode: RestoreMode) -> ControlResponse {
+        guard settingsModel.setRestoreMode(mode) else {
+            return ControlResponse(ok: false, error: "could not save the restore mode; settings keep "
+                + settingsModel.settings.effectiveRestoreMode.rawValue)
+        }
+        return ControlResponse(ok: true, result: ControlResult(restore: restoreStatus()))
+    }
+
+    func restoreStatus() -> ControlRestoreStatus {
+        let decision = GhosttyApp.shared.restoreLaunchDecision
+        return ControlRestoreStatus(configured: settingsModel.settings.effectiveRestoreMode,
+                                    requestedAtLaunch: decision.requested, active: decision.active,
+                                    unavailableReason: decision.liveUnavailableReason)
+    }
+
     /// Capture every open pane's live foreground command NOW, filling the same slots the quit-time capture
     /// fills, then persist them. The point is the exit that never runs `applicationWillTerminate`: a crash, a
     /// SIGKILL, a hard reset, or a restart that outruns the app's termination window. Run this from a
@@ -526,15 +561,17 @@ final class ControlServer {
     /// App-global like `clearRestoreCommands`, its inverse over the same slots: no `--window` selector, every
     /// open window. Consumption stays one-shot and launch-only, so nothing here changes replay.
     ///
-    /// Gated on the same setting as the two exit-time captures, and REFUSES rather than answering ok the way
-    /// `session.restore` does. Contract and reasoning in `.claude/rules/settings.md`.
+    /// Available only when rerun is configured for the next launch. It refuses in the other two modes,
+    /// unlike `session.restore`, which saves future rerun policy with a note.
     func captureRestoreCommands() -> ControlResponse {
-        guard settingsModel.settings.restoreRunningCommand == true else {
-            return ControlResponse(ok: false,
-                                   error: "\"Restore running commands on restart\" is off, nothing was captured")
+        let configuredMode = settingsModel.settings.effectiveRestoreMode
+        guard configuredMode == .rerun else {
+            return ControlResponse(ok: false, error: "restore.capture requires rerun mode; configured restore mode is "
+                + configuredMode.rawValue)
         }
         let sessions = library.allOpenSessions()
-        let captured = AppDelegate.captureForegroundCommands(sessions: sessions)
+        let captured = AppDelegate.captureForegroundCommands(
+            sessions: sessions, zmxResolver: zmxForegroundResolver)
         // this command's whole claim is that the argv reached disk, so the ack waits on the write and not on
         // the assignment: `saveAllOpen` swallows the result, `saveAllOpenChecked` reports it.
         guard library.saveAllOpenChecked() else {
@@ -640,6 +677,10 @@ final class ControlServer {
     /// selected session's owner, since an empty or foreground-created workspace becomes current on its own).
     func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
+        let sessions = store.workspaces.flatMap(\.sessions)
+        if ZmxForegroundRefreshPolicy.hasWrappedPane(in: sessions) {
+            zmxForegroundResolver?.refreshIfNeeded()
+        }
         // the projected window owns its quick terminal; find its id by store identity to read the live
         // QuickTerminalController.isVisible (a nil controller — never opened, or tearing down — reads false).
         let windowID = library.windowID(for: store)
@@ -649,12 +690,14 @@ final class ControlServer {
         return store.controlTree(
             foreground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
-                    ForegroundProcess.running(for: $0, shellBasename: shellBasename)
+                    ForegroundProcess.running(for: $0, shellBasename: shellBasename,
+                                              zmxResolver: zmxForegroundResolver)
                 }
             },
             splitForeground: { session in
                 (session.splitSurface as? GhosttySurfaceView).flatMap {
-                    ForegroundProcess.running(for: $0, shellBasename: shellBasename)
+                    ForegroundProcess.running(for: $0, shellBasename: shellBasename,
+                                              zmxResolver: zmxForegroundResolver)
                 }
             },
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },

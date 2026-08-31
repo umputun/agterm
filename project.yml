@@ -51,6 +51,7 @@ targets:
           - "agterm-debug.entitlements"
           - "Resources/ghostty"
           - "Resources/terminfo"
+          - "Resources/zmx"
           - "Resources/agent-status"
           - "Resources/hud"
           # committed SOURCE for agterm's own bundled theme(s); setup.sh stages it
@@ -127,11 +128,9 @@ targets:
           # Debug alone needs the three hardened-runtime exceptions; see the header of the file.
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-debug.entitlements
     postBuildScripts:
-      # build the agtermctl CLI and bundle it at Contents/MacOS/agtermctl so the
-      # in-app "Install Command Line Tool" can symlink it into PATH. Runs before
-      # Xcode's automatic code-sign, and signs the helper ad-hoc (matching the
-      # app) so the app's signature seals an already-signed nested binary.
-      - name: Bundle agtermctl CLI
+      # Bundle both helper executables before Xcode's final app seal. agtermctl is built here; setup.sh
+      # stages the pinned zmx binary and license from source.
+      - name: Bundle helper executables
         basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
@@ -144,18 +143,27 @@ targets:
           core="$SRCROOT/agtermCore"
           swift build --package-path "$core" -c release --product agtermctl
           src="$(swift build --package-path "$core" -c release --product agtermctl --show-bin-path)/agtermctl"
-          dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
-          mkdir -p "$(dirname "$dest")"
-          cp -f "$src" "$dest"
-          # ad-hoc sign the helper + re-seal the app (Debug/normal builds). Developer ID signing for
+          cli_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
+          zmx_src="$SRCROOT/agterm/Resources/zmx/zmx"
+          zmx_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/zmx"
+          license_src="$SRCROOT/agterm/Resources/zmx/LICENSE"
+          license_dest="$CODESIGNING_FOLDER_PATH/Contents/Resources/zmx/LICENSE"
+          [ -x "$zmx_src" ] || { echo "staged zmx not found at $zmx_src" >&2; exit 1; }
+          [ -f "$license_src" ] || { echo "zmx license not found at $license_src" >&2; exit 1; }
+          mkdir -p "$(dirname "$cli_dest")" "$(dirname "$license_dest")"
+          cp -f "$src" "$cli_dest"
+          cp -f "$zmx_src" "$zmx_dest"
+          cp -f "$license_src" "$license_dest"
+          # ad-hoc sign the helpers + re-seal the app (Debug/normal builds). Developer ID signing for
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
-          codesign --force --options runtime --sign - "$dest"
+          codesign --force --options runtime --sign - "$cli_dest"
+          codesign --force --options runtime --sign - "$zmx_dest"
           # re-seal the whole app: this phase can run AFTER Xcode's own code-sign on incremental
           # builds, so adding the helper would otherwise break the seal. --deep because a clean
           # build can reach here before Xcode has signed agterm.debug.dylib. Entitlements come in a
-          # SECOND pass instead: --deep applies them to every nested binary, and agtermctl is a
-          # standalone CLI on the user's PATH, not a library.
+          # SECOND pass instead: --deep applies them to every nested binary, and helpers carry no app
+          # TCC entitlements.
           codesign --force --deep --options runtime --sign - "$CODESIGNING_FOLDER_PATH"
           # CODE_SIGN_ENTITLEMENTS, not a literal path: Debug and Release use different files.
           codesign --force --options runtime --entitlements "$SRCROOT/$CODE_SIGN_ENTITLEMENTS" --sign - "$CODESIGNING_FOLDER_PATH"
@@ -182,6 +190,7 @@ targets:
       - agtermUITests
     dependencies:
       - target: agterm
+      - package: agtermCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agtermUITests

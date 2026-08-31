@@ -21,13 +21,8 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
                 .appendingPathComponent("agterm-restore-capture-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
             settingsModel = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
-            server = ControlServer(
-                library: library,
-                actions: AppActions(library: library),
-                settingsModel: settingsModel,
-                identity: AppIdentity(version: "9.9.9", commit: "testsha"),
-                socketPath: stateDir.appendingPathComponent("control.sock").path
-            )
+            XCTAssertTrue(settingsModel.setRestoreMode(.rerun))
+            server = makeServer(launchMode: .rerun)
         }
     }
 
@@ -41,25 +36,24 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testRefusesWithTheSettingOff() {
-        settingsModel.setRestoreRunningCommand(nil)
-
-        let response = server.captureRestoreCommands()
-
-        XCTAssertFalse(response.ok, "a capture that can never replay must refuse, not answer ok")
-        XCTAssertEqual(response.error,
-                       "\"Restore running commands on restart\" is off, nothing was captured")
-        XCTAssertNil(response.result)
+    func testRefusesOutsideRerunAndNamesTheConfiguredMode() {
+        for mode in [RestoreMode.none, .live] {
+            XCTAssertTrue(settingsModel.setRestoreMode(mode))
+            let response = makeServer(launchMode: .rerun).captureRestoreCommands()
+            XCTAssertFalse(response.ok, "a capture that cannot replay must refuse")
+            XCTAssertEqual(response.error, "restore.capture requires rerun mode; configured restore mode is \(mode.rawValue)")
+            XCTAssertNil(response.result)
+        }
     }
 
     func testTheRefusalLeavesAnEarlierCaptureAlone() {
-        settingsModel.setRestoreRunningCommand(nil)
         for session in library.allOpenSessions() {
             session.foregroundCommand = ["sleep", "12345"]
             session.splitForegroundCommand = ["sleep", "12345"]
         }
 
-        _ = server.captureRestoreCommands()
+        XCTAssertTrue(settingsModel.setRestoreMode(.live))
+        _ = makeServer(launchMode: .rerun).captureRestoreCommands()
 
         // the SPLIT slot is what pins the gate. A hosted session has no `GhosttySurfaceView`, so the main
         // slot is never assigned and survives with the guard deleted too; the split slot is nil'd
@@ -72,8 +66,6 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
     }
 
     func testReportsPaneCountInItsOwnText() {
-        settingsModel.setRestoreRunningCommand(true)
-
         let response = server.captureRestoreCommands()
 
         XCTAssertTrue(response.ok)
@@ -96,7 +88,6 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
     }
 
     func testCaptureReportsAFailedSave() throws {
-        settingsModel.setRestoreRunningCommand(true)
         let windowsDir = try unwritableWindowsDirectory()
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: windowsDir.path) }
 
@@ -104,6 +95,79 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
 
         XCTAssertFalse(response.ok, "a capture whose save failed must not answer ok")
         XCTAssertEqual(response.error?.contains("save failed"), true, "the error should name the failed save")
+    }
+
+    func testConfiguredRerunEnablesCaptureWithoutChangingTheLaunchLatch() {
+        let server = makeServer(launchMode: .none)
+        XCTAssertTrue(settingsModel.setRestoreMode(.rerun))
+
+        let response = server.captureRestoreCommands()
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(server.launchRestoreMode, .none)
+    }
+
+    func testLiveLaunchConfiguredForRerunCapturesThroughTheZmxResolver() throws {
+        let worker = try startWorker()
+        defer { stopWorker(worker) }
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        session.surface = GhosttySurfaceView(
+            workingDirectory: "/tmp", env: ["AGTERM_PANE_ID": session.paneIdentity.uuidString], backedByZmx: true)
+        var snapshotTimeout: TimeInterval?
+        let resolver = ZmxForegroundResolver(
+            leaderProvider: {
+                snapshotTimeout = $0
+                return [ZmxSupport.daemonName(for: session.paneIdentity): worker.processIdentifier]
+            },
+            leaderProbe: { _ in .foreground(worker.processIdentifier) })
+        let server = makeServer(launchMode: .live, zmxForegroundResolver: resolver)
+
+        let response = server.captureRestoreCommands()
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(response.result?.count, 1)
+        XCTAssertEqual(snapshotTimeout, ZmxClient.captureInvocationTimeout)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let persisted = PersistenceStore(
+            directory: stateDir.appendingPathComponent("windows"), fileName: "\(windowID.uuidString).json").load()
+        XCTAssertEqual(persisted.workspaces.first?.sessions.first?.foregroundCommand?.last, "30")
+    }
+
+    func testClearRemainsAvailableInLiveMode() {
+        for session in library.allOpenSessions() {
+            session.foregroundCommand = ["sleep", "12345"]
+        }
+
+        let response = makeServer(launchMode: .live).clearRestoreCommands()
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertTrue(library.allOpenSessions().allSatisfy { $0.foregroundCommand == nil })
+    }
+
+    private func makeServer(launchMode: RestoreMode,
+                            zmxForegroundResolver: ZmxForegroundResolver? = nil) -> ControlServer {
+        ControlServer(
+            library: library,
+            actions: AppActions(library: library),
+            settingsModel: settingsModel,
+            identity: AppIdentity(version: "9.9.9", commit: "testsha"),
+            launchRestoreMode: launchMode,
+            zmxForegroundResolver: zmxForegroundResolver,
+            socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path
+        )
+    }
+
+    private func startWorker() throws -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        return process
+    }
+
+    private func stopWorker(_ process: Process) {
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
     }
 
     /// The same lever `WindowLibraryTests.saveAllOpenCheckedReportsAFailedWrite` uses: the atomic write needs

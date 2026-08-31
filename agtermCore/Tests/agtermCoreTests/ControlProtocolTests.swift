@@ -250,13 +250,14 @@ struct ControlProtocolTests {
 
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
         let request = ControlRequest(cmd: .sessionText, target: "9f3c",
-                                     args: ControlArgs(pane: "left", all: true, lines: 50))
+                                     args: ControlArgs(pane: "left", paneID: "stable-token", all: true, lines: 50))
         let decoded = try roundTrip(request)
         #expect(decoded == request)
         #expect(decoded.cmd == .sessionText)
         #expect(decoded.args?.all == true)
         #expect(decoded.args?.lines == 50)
         #expect(decoded.args?.pane == "left")
+        #expect(decoded.args?.paneID == "stable-token")
     }
 
     @Test func sessionTextBareRoundTrips() throws {
@@ -1000,11 +1001,13 @@ struct ControlProtocolTests {
 
     @Test func treeSessionNodeRoundTripsWithSurfaces() throws {
         let surfaces = [
-            ControlSurfaceNode(id: "surface:s1:left", kind: "left", active: true, visible: true),
-            ControlSurfaceNode(id: "surface:s1:right", kind: "right", active: false, visible: false),
+            ControlSurfaceNode(id: "surface:s1:left", kind: "left", active: true, visible: true,
+                               backedByZmx: true),
+            ControlSurfaceNode(id: "surface:s1:right", kind: "right", active: false, visible: false,
+                               backedByZmx: false),
         ]
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true,
-                                         split: true, surfaces: surfaces)
+                                         split: true, backedByZmx: false, surfaces: surfaces)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
 
@@ -1012,6 +1015,14 @@ struct ControlProtocolTests {
 
         #expect(decoded == response)
         #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.surfaces == surfaces)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.backedByZmx == false)
+    }
+
+    @Test func treeSessionNodeToleratesMissingZmxBacking() throws {
+        let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +
+            #""overlay":false,"scratch":false,"flagged":false}"#
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(raw.utf8))
+        #expect(decoded.backedByZmx == nil)
     }
 
     @Test func treeSessionNodeToleratesMissingSurfaces() throws {

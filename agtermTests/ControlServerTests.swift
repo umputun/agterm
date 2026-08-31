@@ -135,14 +135,18 @@ final class ControlServerTests: XCTestCase {
     }
 
     /// A live owner whose backlog is saturated answers `connect` with the same ECONNREFUSED a dead socket
-    /// node returns, so ownership cannot rest on a connect probe. Fill the backlog and quit accepting.
+    /// node returns, so ownership cannot rest on a connect probe. The saturated path is a raw listener with
+    /// nothing accepting behind it: a real server's accept loop frees a slot the moment its queue thread
+    /// first runs, which makes a refusal a sample rather than a fact.
     func testStartRefusesAnOwnerWhoseBacklogIsSaturated() {
-        let first = makeServer()
-        first.start()
-        XCTAssertNotNil(first.boundSocketPath)
+        let owner = makeServer()
+        XCTAssertEqual(owner.resolvedSocketPath, socketPath, "precondition: the owner holds the path from init")
 
-        // the first connection is accepted and parks the serial loop in a read that only times out after
-        // ControlServer.readTimeoutSeconds, so everything after it queues until the backlog is full.
+        let listener = socket(AF_UNIX, SOCK_STREAM, 0)
+        XCTAssertGreaterThanOrEqual(listener, 0)
+        defer { close(listener) }
+        XCTAssertTrue(bindListener(listener, at: socketPath), "the fixture should be listening on the path")
+
         var clients: [Int32] = []
         defer { for fd in clients { close(fd) } }
         for _ in 0..<24 {
@@ -156,7 +160,9 @@ final class ControlServerTests: XCTestCase {
         second.start()
 
         XCTAssertNil(second.boundSocketPath, "a saturated owner is still an owner")
-        XCTAssertEqual(first.boundSocketPath, socketPath)
+        XCTAssertEqual(second.resolvedSocketPath, socketPath + ControlServer.unavailableSuffix,
+                       "and the refused instance must advertise the unavailable path")
+        XCTAssertEqual(owner.resolvedSocketPath, socketPath, "the owner should still hold the path")
     }
 
     func testStartBindsOverAForceQuitLeftover() {

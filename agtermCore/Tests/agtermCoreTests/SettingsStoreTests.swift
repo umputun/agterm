@@ -23,7 +23,9 @@ final class SettingsStoreTests {
     @Test func saveLoadRoundTrip() throws {
         let settings = AppSettings(fontFamily: "Menlo", fontSize: 15, theme: "Adwaita Dark")
         try store.save(settings)
-        #expect(store.load() == settings)
+        var expected = settings
+        expected.migrateRestoreMode()
+        #expect(store.load() == expected)
     }
 
     @Test func missingFileSeedsDefaultTheme() {
@@ -51,6 +53,29 @@ final class SettingsStoreTests {
         let nestedStore = SettingsStore(directory: nested)
         let settings = AppSettings(theme: "Alabaster")
         try nestedStore.save(settings)
-        #expect(nestedStore.load() == settings)
+        var expected = settings
+        expected.migrateRestoreMode()
+        #expect(nestedStore.load() == expected)
+    }
+
+    @Test(arguments: [
+        (#"{"restoreRunningCommand":true}"#, RestoreMode.rerun),
+        (#"{"restoreRunningCommand":false}"#, RestoreMode.none),
+        (#"{}"#, RestoreMode.none),
+        (#"{"restoreMode":"future"}"#, RestoreMode.none),
+    ])
+    func loadMigratesRestoreMode(json: String, expected: RestoreMode) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: fileURL)
+        let settings = store.load()
+        #expect(settings.restoreMode == expected)
+        #expect(settings.restoreRunningCommand == nil)
+    }
+
+    @Test func saveWritesOnlyRestoreMode() throws {
+        try store.save(AppSettings(restoreRunningCommand: true))
+        let json = try String(contentsOf: fileURL, encoding: .utf8)
+        #expect(json.contains(#""restoreMode" : "rerun""#))
+        #expect(!json.contains("restoreRunningCommand"))
     }
 }

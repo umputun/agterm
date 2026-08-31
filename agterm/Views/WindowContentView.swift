@@ -30,6 +30,7 @@ struct WindowContentView: View {
     /// nil builds the session-wide overlay surface, `left`/`right` the pane-scoped one reading that pane's slot.
     let makeOverlaySurface: (Session, OverlayPane?) -> GhosttySurfaceView
     let makeScratchSurface: (Session) -> GhosttySurfaceView
+    let captureOnExit: AppDelegate.ExitCapture?
     let actions: AppActions
     let palette: PaletteController
     let sessionSwitcher: SessionSwitcher
@@ -220,7 +221,8 @@ struct WindowContentView: View {
         })
         // blend the title bar with the terminal; report frontmost/close to the library; surface the window
         // un-minimized on launch. the title token re-runs the blend in updateNSView on a session switch.
-        .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store))
+        .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store,
+                                   captureOnExit: captureOnExit))
         .onAppear {
             terminalZoom.targetResolver = { [store] in
                 TerminalZoomController.resolveTarget(store: store)

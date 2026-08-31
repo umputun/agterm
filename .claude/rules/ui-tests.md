@@ -36,6 +36,9 @@ These run inside the app, so a mistake can kill the host instead of failing an a
 
 - `agtermUITests/` launches the real app and drives UI behavior unavailable to host-free tests.
   Run with `xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'`.
+- Default UI-test launches bypass live-session wrapping through the existing UI-test sentinel. Only the
+  focused zmx persistence test sets `AGTERM_UITEST_ENABLE_ZMX=1`; it must kill its exact test daemons in
+  teardown so they cannot leak into later tests.
 - Pass a temporary `AGTERM_STATE_DIR` in the launch environment; `agtermApp.restoredStore()` honors it.
   Verify the native `Open Directory...` panel manually.
 - **Use `app.launchForUITest()`, never `app.launch()`.** FB11763863 on macOS 15+/Xcode 16+, including

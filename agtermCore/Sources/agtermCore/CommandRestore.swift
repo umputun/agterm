@@ -102,20 +102,22 @@ public enum CommandRestore {
 
     /// The mutually-exclusive surface seed a pane restores/creates with. `command` != nil → the exec path
     /// (replaces the shell, closes on exit); else `initialInput` is typed into a login shell, or both nil =
-    /// a plain shell.
+    /// a plain shell. `waitAfterCommand` is effective only on the exec path.
     public struct RestorePlan: Equatable, Sendable {
         public let command: String?
         public let initialInput: String?
-        public init(command: String?, initialInput: String?) {
+        public let waitAfterCommand: Bool
+        public init(command: String?, initialInput: String?, waitAfterCommand: Bool = false) {
             self.command = command
             self.initialInput = initialInput
+            self.waitAfterCommand = waitAfterCommand
         }
     }
 
     /// The inputs `restorePlan` decides from.
     /// - `wasRestored`: the session came from a restore (a FRESH command session always runs its command, a
-    ///   RESTORED one only when the opt-in is on).
-    /// - `restoreEnabled`: the `restoreRunningCommand` opt-in.
+    ///   RESTORED one only in rerun mode).
+    /// - `restoreEnabled`: whether the immutable launch mode is `rerun`.
     /// - `hadForeground`: a foreground command was CAPTURED, at the last quit or by `restore.capture`. It
     ///   PREEMPTS `initialCommand` even when suppressed (denylisted/off → `foregroundInput` nil), yielding a
     ///   plain shell rather than the stale creation command — so gate on capture, not on the input surviving.
@@ -123,6 +125,7 @@ public enum CommandRestore {
     /// - `initialCommand`: the session's persisted `--command`.
     /// - `restoreOverride`: the pane's pinned restore command (`session.restore`), tri-state — nil = no
     ///   override, `""` = pinned to nothing, `"cmd"` = run this shell line.
+    /// - `requestedWait`: whether a creation command should hold after exit; ignored without an effective command.
     public struct RestoreInputs: Equatable, Sendable {
         public let wasRestored: Bool
         public let restoreEnabled: Bool
@@ -130,20 +133,23 @@ public enum CommandRestore {
         public let foregroundInput: String?
         public let initialCommand: String?
         public let restoreOverride: String?
+        public let requestedWait: Bool
         public init(wasRestored: Bool, restoreEnabled: Bool, hadForeground: Bool,
-                    foregroundInput: String?, initialCommand: String?, restoreOverride: String?) {
+                    foregroundInput: String?, initialCommand: String?, restoreOverride: String?,
+                    requestedWait: Bool = false) {
             self.wasRestored = wasRestored
             self.restoreEnabled = restoreEnabled
             self.hadForeground = hadForeground
             self.foregroundInput = foregroundInput
             self.initialCommand = initialCommand
             self.restoreOverride = restoreOverride
+            self.requestedWait = requestedWait
         }
     }
 
     /// The `initial_input` for a pane: a pinned override (empty → nil, a plain shell) when one exists, else
-    /// the captured foreground input. The override is gated on `restoreEnabled`, keeping the toggle the
-    /// single master switch (like `initialCommand`, the other explicit user-set seed), and is typed
+    /// the captured foreground input. The override is gated on `restoreEnabled`, keeping rerun mode the
+    /// single switch (like `initialCommand`, the other explicit user-set seed), and is typed
     /// VERBATIM — never through `shellQuotedLine` — so `cd x && claude --resume y` works as written; the
     /// captured input arrives already gated + denylist-filtered from the app side.
     public static func restoreInput(restoreEnabled: Bool, restoreOverride: String?,
@@ -164,7 +170,7 @@ public enum CommandRestore {
     /// boundary; the app target owns only the libghostty seeding. A present `restoreOverride`
     /// short-circuits everything: it wins over the captured foreground and `initialCommand`, `command` is
     /// always nil (an override never takes the exec path), and the input comes from `restoreInput` — so it
-    /// obeys the `restoreEnabled` toggle while bypassing the denylist, which guards BLIND capture, not a
+    /// obeys the `restoreEnabled` launch mode while bypassing the denylist, which guards BLIND capture, not a
     /// deliberately named command. With no override the capture/`initialCommand` precedence applies.
     public static func restorePlan(_ inputs: RestoreInputs) -> RestorePlan {
         if inputs.restoreOverride != nil {
@@ -174,7 +180,8 @@ public enum CommandRestore {
         }
         let mayRunInitial = !inputs.wasRestored || inputs.restoreEnabled
         let command = (!inputs.hadForeground && mayRunInitial) ? inputs.initialCommand : nil
-        return RestorePlan(command: command, initialInput: command == nil ? inputs.foregroundInput : nil)
+        return RestorePlan(command: command, initialInput: command == nil ? inputs.foregroundInput : nil,
+                           waitAfterCommand: command != nil && inputs.requestedWait)
     }
 
     /// Parse `restore-denylist.conf` into a set of program basenames NOT to re-run on restore: one entry

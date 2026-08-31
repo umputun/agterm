@@ -59,10 +59,15 @@ final class GhosttyApp {
     /// Coordinator reads it in `handleSingleClick`, and the disclosure triangle ignores it because AppKit
     /// toggles that natively. Settings-mirrored like `toolbarMode`.
     private(set) var workspaceRowClickExpands: Bool = true
-    /// Whether a restored pane re-runs its last clean-quit foreground command; the surface factories read it to
-    /// decide whether to feed that command as `initial_input`. Affects only the next restore — no live
-    /// re-render notification.
-    private(set) var restoreRunningCommand: Bool = false
+    /// The persisted choice and effective mode frozen before the first surface. An ineligible live request
+    /// falls back to fresh shells without releasing its daemon claims. Settings changes never mutate either
+    /// latch, so later sessions, reap, and reopened windows use the same launch policy.
+    let restoreLaunchDecision: RestoreLaunchDecision
+    var requestedRestoreMode: RestoreMode { restoreLaunchDecision.requested }
+    var launchRestoreMode: RestoreMode { restoreLaunchDecision.active }
+    var liveRestoreUnavailableReason: String? { restoreLaunchDecision.liveUnavailableReason }
+    var restoreRunningCommand: Bool { launchRestoreMode == .rerun }
+    static func capturesForegroundOnExit(mode: RestoreMode) -> Bool { mode == .rerun || mode == .live }
     /// Whether the window title bar shows the attention bell icon; off by default. The title bar reads it via
     /// `WindowContentView`'s mirrored chrome state; settings-mirrored like `toolbarMode`.
     private(set) var attentionButtonEnabled: Bool = false
@@ -112,12 +117,17 @@ final class GhosttyApp {
     private var resourcesDir: String?
 
     private init() {
-        resolveResources()
+        let resolvedResources = Self.resolveResources()
+        let initialSettings = Self.settingsStore().load()
+        let restoreDecision = initialSettings.effectiveRestoreMode.launchDecision(
+            liveUnavailableReason: ZmxLaunch.liveUnavailableReason())
+        restoreLaunchDecision = restoreDecision
+        resourcesDir = resolvedResources
         guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
             logger.error("ghostty_init failed")
             return
         }
-        let configInputs = Self.resolveConfigInputs()
+        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
             return
@@ -197,10 +207,6 @@ final class GhosttyApp {
 
     func setWorkspaceRowClickExpands(_ enabled: Bool) {
         workspaceRowClickExpands = enabled
-    }
-
-    func setRestoreRunningCommand(_ enabled: Bool) {
-        restoreRunningCommand = enabled
     }
 
     func setAttentionButtonEnabled(_ enabled: Bool) {
@@ -317,7 +323,10 @@ final class GhosttyApp {
     }
 
     static func resolveConfigInputs() -> ConfigInputs {
-        let settings = settingsStore().load()
+        resolveConfigInputs(settings: settingsStore().load())
+    }
+
+    private static func resolveConfigInputs(settings: AppSettings) -> ConfigInputs {
         let configDir = ConfigPaths.configDirectory(
             setting: settings.configDirectory,
             stateDir: ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"],
@@ -628,7 +637,7 @@ final class GhosttyApp {
         return paths
     }()
 
-    private func resolveResources() {
+    private static func resolveResources() -> String? {
         // resolve from our own candidates (bundle first), ignoring any inherited GHOSTTY_RESOURCES_DIR: a stale
         // one shadows our complete bundle and leaves libghostty deriving a broken TERMINFO. TERMINFO itself is
         // never set here — libghostty overwrites it at shell spawn with dirname(GHOSTTY_RESOURCES_DIR)/terminfo,
@@ -639,10 +648,10 @@ final class GhosttyApp {
         )
         guard let dir = resolver.resolve() else {
             unsetenv("GHOSTTY_RESOURCES_DIR")
-            return
+            return nil
         }
-        resourcesDir = dir
         setenv("GHOSTTY_RESOURCES_DIR", dir, 1)
+        return dir
     }
 }
 

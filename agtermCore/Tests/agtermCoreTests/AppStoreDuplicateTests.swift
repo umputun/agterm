@@ -55,6 +55,7 @@ struct AppStoreDuplicateTests {
         source.flagged = true
         source.isSplit = true
         source.hasSplit = true
+        source.splitPaneIdentity = UUID()
         source.fontSize = 18
 
         let dupe = try! #require(store.duplicateSession(source.id))
@@ -67,6 +68,8 @@ struct AppStoreDuplicateTests {
         #expect(dupe.hasSplit == false)
         #expect(dupe.fontSize == nil)
         #expect(dupe.id != source.id)
+        #expect(dupe.paneIdentity != source.paneIdentity)
+        #expect(dupe.splitPaneIdentity == nil)
     }
 
     @Test func duplicateSessionCopiesNoRestoreOverride() {

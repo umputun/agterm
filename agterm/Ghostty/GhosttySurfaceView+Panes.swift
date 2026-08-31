@@ -1,3 +1,6 @@
+import agtermCore
+import Foundation
+
 extension GhosttySurfaceView {
     // MARK: - Pane role
 
@@ -5,7 +8,12 @@ extension GhosttySurfaceView {
     /// pane is promoted to the session's sole pane. Clearing `isSplitPane` routes subsequent
     /// `applyPwd`/`applyTitle` reports to the main `session.currentCwd`/`oscTitle`, not `splitCwd`/`splitTitle`.
     func promoteToPrimaryPane() {
-        isSplitPane = false
+        setPaneRole(.primary)
+    }
+
+    /// `PaneRoleMutableSurface`: changes live routing only; the stable token and child environment stay baked.
+    func setPaneRole(_ role: SwappablePaneRole) {
+        isSplitPane = role == .split
     }
 
     /// `TerminalSurface.paneToken`: this surface's stable spawn identity, read straight back from the baked
@@ -14,4 +22,9 @@ extension GhosttySurfaceView {
     /// token never changes, so `Session.paneRole(forToken:)` maps a status hook's `--pane-id` to the
     /// surface's CURRENT slot even after a promote + re-split (#199).
     var paneToken: String { env["AGTERM_PANE_ID"] ?? "" }
+
+    var zmxSessionName: String? {
+        guard backedByZmx, let paneIdentity = UUID(uuidString: paneToken) else { return nil }
+        return ZmxSupport.daemonName(for: paneIdentity)
+    }
 }

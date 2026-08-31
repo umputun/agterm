@@ -137,34 +137,35 @@ extension WindowContentView {
     }
 
     @ViewBuilder func zoomedSessionTerminal(session: Session, surface: TerminalZoomSurface) -> some View {
+        let hostToken = PaneHostIdentity.token(for: surface, in: session)
         switch surface {
         case .primary:
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(primarySurfaceID(session))-zoom")
+                .id("\(primarySurfaceID(session))-zoom-\(hostToken)")
         case .split:
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-split")
+                .id("\(session.id.uuidString)-zoom-split-\(hostToken)")
         case .scratch:
             TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-scratch")
+                .id("\(session.id.uuidString)-zoom-scratch-\(hostToken)")
         case .overlay:
             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                          makeSurface: { makeOverlaySurface($0, nil) },
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-overlay")
+                .id("\(session.id.uuidString)-zoom-overlay-\(hostToken)")
         case .overlayLeft:
             TerminalView(session: session, surfaceKeyPath: \.leftOverlaySurface,
                          makeSurface: { makeOverlaySurface($0, .left) },
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-overlay-left")
+                .id("\(session.id.uuidString)-zoom-overlay-left-\(hostToken)")
         case .overlayRight:
             TerminalView(session: session, surfaceKeyPath: \.rightOverlaySurface,
                          makeSurface: { makeOverlaySurface($0, .right) },
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-overlay-right")
+                .id("\(session.id.uuidString)-zoom-overlay-right-\(hostToken)")
         }
     }
 

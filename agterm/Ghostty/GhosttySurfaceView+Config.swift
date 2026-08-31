@@ -168,9 +168,9 @@ extension GhosttySurfaceView {
 
     /// The font size every per-surface config re-apply must restate so it doesn't reset the pane's zoom:
     /// the dashboard's transient override, else the session's zoom, else a sessionless surface's live
-    /// cmd-+/- size, else its creation size. A split or scratch pane has its `onFontSizeChange` unwired
-    /// (see `ControlServer+SurfaceIO.font`), so its zoom is never persisted and is readable only from the
-    /// surface — restating `session.fontSize` or an overlay's creation size snaps such a pane back on
+    /// cmd-+/- size, else its creation size. A split-role or scratch pane's zoom is never persisted and is
+    /// readable only from the surface (see `ControlServer+SurfaceIO.font`), so restating `session.fontSize` or an
+    /// overlay's creation size snaps such a pane back on
     /// every re-apply (a `session.background` set/clear, an OSC reset).
     private func currentEffectiveFontSize() -> Double? {
         dashboardFontOverride ?? session?.fontSize ?? currentFontSize() ?? initialFontSize.map(Double.init)

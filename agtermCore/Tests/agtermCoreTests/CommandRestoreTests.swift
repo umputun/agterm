@@ -243,6 +243,59 @@ struct CommandRestoreTests {
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
     }
 
+    @Test func waitAfterCommandRequiresAnEffectiveExecCommand() {
+        let holding = CommandRestore.restorePlan(.init(
+            wasRestored: true, restoreEnabled: true, hadForeground: false,
+            foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil, requestedWait: true
+        ))
+        #expect(holding.waitAfterCommand)
+
+        let notRequested = CommandRestore.restorePlan(.init(
+            wasRestored: true, restoreEnabled: true, hadForeground: false,
+            foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil, requestedWait: false
+        ))
+        #expect(!notRequested.waitAfterCommand)
+
+        let captured = CommandRestore.restorePlan(.init(
+            wasRestored: true, restoreEnabled: true, hadForeground: true,
+            foregroundInput: "top\n", initialCommand: "ssh host", restoreOverride: nil, requestedWait: true
+        ))
+        #expect(captured.command == nil)
+        #expect(!captured.waitAfterCommand)
+
+        let overridden = CommandRestore.restorePlan(.init(
+            wasRestored: true, restoreEnabled: true, hadForeground: false,
+            foregroundInput: nil, initialCommand: "ssh host", restoreOverride: "claude", requestedWait: true
+        ))
+        #expect(overridden.command == nil)
+        #expect(!overridden.waitAfterCommand)
+    }
+
+    @MainActor @Test func splitCreationCommandUsesExecPathUnlessOverrideWins() {
+        let session = Session(initialCwd: "/tmp")
+        session.wasRestored = true
+        session.splitInitialCommand = "ssh split-host"
+        session.splitCommandWait = true
+
+        let exec = CommandRestore.restorePlan(.init(
+            wasRestored: session.wasRestored, restoreEnabled: true, hadForeground: false,
+            foregroundInput: nil, initialCommand: session.splitInitialCommand,
+            restoreOverride: nil, requestedWait: session.splitCommandWait
+        ))
+        #expect(exec.command == "ssh split-host")
+        #expect(exec.initialInput == nil)
+        #expect(exec.waitAfterCommand)
+
+        let overridden = CommandRestore.restorePlan(.init(
+            wasRestored: session.wasRestored, restoreEnabled: true, hadForeground: false,
+            foregroundInput: nil, initialCommand: session.splitInitialCommand,
+            restoreOverride: "claude --resume split", requestedWait: session.splitCommandWait
+        ))
+        #expect(overridden.command == nil)
+        #expect(overridden.initialInput == "claude --resume split\n")
+        #expect(!overridden.waitAfterCommand)
+    }
+
     // MARK: - restoreInput (the pinned-override precedence)
 
     @Test func restoreInputFallsThroughWithoutOverride() {

@@ -33,6 +33,26 @@ public protocol TerminalSurface: AnyObject {
     /// surface spawned with no pane identity (overlay / quick terminal, or a test stub), which
     /// `paneRole(forToken:)` never matches.
     var paneToken: String { get }
+
+    /// Whether this primary/split surface is attached through zmx. Ephemeral surfaces keep the default false.
+    var backedByZmx: Bool { get }
+}
+
+public extension TerminalSurface {
+    var backedByZmx: Bool { false }
+}
+
+/// A live terminal surface's current role in a two-pane session.
+public enum SwappablePaneRole: Equatable, Sendable {
+    case primary
+    case split
+}
+
+/// Optional capability for surfaces whose live callback routing can follow a pane-role exchange.
+@MainActor
+public protocol PaneRoleMutableSurface: TerminalSurface {
+    /// Updates callback routing in place without recreating the terminal or changing its stable token.
+    func setPaneRole(_ role: SwappablePaneRole)
 }
 
 /// The direction the search selection steps, in agterm's natural convention: `next` = forward = visually DOWN

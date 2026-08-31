@@ -15,6 +15,7 @@ What it does:
 - **Workspaces.** Sessions are grouped under named workspaces like "work" and "personal", which keeps a screen of concurrent sessions organized. You reach a session by name, by recency, or from the keyboard.
 - **Control API and CLI.** A bundled tool, `agtermctl`, drives almost everything over a local socket: create sessions, type into them, run a program in an overlay and read its exit status, move and resize windows, or post a notification tied to a specific session. A script or an agent can set up and drive its own layout, and send you a notification from the session it was working in.
 - **Splits, scratch, and overlays.** Split a session into two shells side by side or top and bottom, open a scratch terminal over it, or run a program in a full or floating overlay without disturbing the shell underneath.
+- **Three restore modes.** Restore the saved layout with fresh shells, start the commands that were captured at quit, or keep the actual primary and split processes alive with zmx. Live sessions are global, require zsh as the macOS login shell, and take effect after restarting agterm.
 - **Agent skill.** An installable skill (Help ▸ Install Agent Skill…) teaches Claude Code or Codex the control model and the `agtermctl` commands, so an agent running inside agterm can build its own layout, run overlays, manage windows, and show images inline without you explaining the API.
 - **Agent status.** A coding agent reports its state (active, blocked, or completed) onto its session's row, so you can see which of many running agents needs you. Status hooks for Claude Code, Codex, Pi, OpenCode, and other agents install from Help ▸ Install Agent Status Hooks….
 
@@ -114,7 +115,11 @@ The same interface covers windows, splits, overlays, dashboards, HUDs, notificat
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers building from source.
 - [ARCHITECTURE.md](ARCHITECTURE.md) describes the internals: the module split, surface ownership, and the libghostty C boundary.
 
-Sessions come back on the next launch with their directory, font size, and split state. Restore reconstructs that structure, not the running processes.
+Sessions come back on the next launch with their directory, font size, and split state. **Settings ▸ General ▸ Restore sessions** chooses fresh shells, re-run commands, or live sessions. Live mode wraps every primary and split pane; scratch, overlay, and quick terminals remain temporary. A clean quit leaves each live process running and captures the foreground command as a fallback. The next launch reattaches when the daemon survived. If the daemon is missing after an orderly machine restart, zmx creates it with the captured command; the pane remains live and later launches reattach normally.
+
+The fallback has three exclusions. A pane in a window closed before quit has no capture and starts a fresh shell if its daemon is missing. A hard power loss or force quit never reaches capture. A command refused by `restore-denylist.conf`, carrying a control character, or captured with invalid UTF-8 also starts a fresh shell. SIGTERM leaves live daemons running but skips the clean-quit capture path. `agtermctl zmx list` shows every daemon and the pane that claims it, `agtermctl zmx prune` clears the detached ones no pane claims, and `agtermctl restore mode` reads or sets the policy without opening Settings. Switching away from Live sessions and restarting ends the detached live processes. A launch that still requests Live sessions but cannot use it preserves them for a later eligible launch.
+
+Live restore keeps the running process, usable text and TUI state, and normal terminal colors. The reconstructed screen does not retain inline images, earlier OSC 133 prompt markers, program-changed palette entries, or hyperlink metadata already attached to cells. New output after reattach behaves normally.
 
 Log locations and the common problems are in [docs/troubleshooting.md](docs/troubleshooting.md). Report bugs in [Issues](https://github.com/umputun/agterm/issues), ask questions in [Discussions](https://github.com/umputun/agterm/discussions).
 

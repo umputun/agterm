@@ -296,6 +296,15 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Resolve the control target, then delegate every swap side effect to the AppActions operation the GUI
+    /// twin also uses.
+    func swapSessionPanes(_ target: String?, window: String?) async -> ControlResponse {
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let (store, id)): return await actions.swapSessionPanes(id, in: store)
+        }
+    }
+
     /// Show/hide the target's scratch terminal, a third full-overlay shell. `on|off|toggle` is computed
     /// against `scratchActive`, so both are idempotent; hiding keeps the shell alive, the `closeScratch`
     /// teardown being reserved for the shell's own `exit`. `command` (only when showing) runs that program
@@ -423,8 +432,8 @@ extension ControlServer: ControlActions {
     /// baked role `update.pane`, defaulting to main) with ONE divergence: an unresolvable `--pane-id`
     /// WITHOUT an explicit `--pane` is an ERROR here, since a bad fallback would overwrite the MAIN pane's
     /// persisted command when a hook meant the split (a status only puts a glyph on the wrong row).
-    /// `.scratch` and a `.right` without a split are rejected too. A `set` while restore-running-command is
-    /// off still succeeds with a note in `result.text`; `none`/`clear` get none — their outcome lands anyway.
+    /// `.scratch` and a `.right` without a split are rejected too. `set` and `none` outside rerun mode still
+    /// save policy and return a note naming the active mode; either clear form remains mode-independent.
     func setSessionRestore(_ target: String?, window: String?,
                            update: ControlSessionRestoreUpdate) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
@@ -459,8 +468,8 @@ extension ControlServer: ControlActions {
                                        error: "failed to save the restore override, the previous value is still in effect")
             }
             var result = ControlResult(id: id.uuidString, pane: pane.rawValue)
-            if case .pin = update.pin, self.settingsModel.settings.restoreRunningCommand != true {
-                result.text = "saved, but \"Restore running commands on restart\" is off, so the override will not run"
+            if update.pin != .unpin, self.launchRestoreMode != .rerun {
+                result.text = "saved for rerun mode; active restore mode is \(self.launchRestoreMode.rawValue)"
             }
             return ControlResponse(ok: true, result: result)
         }

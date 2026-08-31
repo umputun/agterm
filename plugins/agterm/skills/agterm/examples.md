@@ -18,15 +18,15 @@ agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | "\(.name):
 
 ## Capture or reset the restore-on-restart commands
 
-The opt-in "Restore running commands on restart" setting saves each pane's foreground command at quit.
-Clear those saved commands so the next launch restores plain shells:
+The `rerun` restore mode saves each pane's foreground command at quit. Clear those saved commands in any
+mode so a future rerun launch restores plain shells:
 
 ```bash
 agtermctl restore clear
 ```
 
 Or capture them now, so an exit that never reaches a clean quit (a force quit, a crash, a hard reset)
-restores like one. It needs the setting on, and answers with the number of panes it captured:
+restores like one. It requires this launch to be in `rerun` mode and answers with the number of panes it captured:
 
 ```bash
 agtermctl restore capture
@@ -35,12 +35,47 @@ agtermctl restore capture
 Use a keybind or a scheduled job rather than typing it at a prompt: run by hand it records ITSELF, being
 that pane's foreground process while it runs, and `restore clear` is app-global so it is no per-pane undo.
 
+## See and clean up the daemons behind live sessions
+
+In `live` mode each primary and split pane runs inside a zmx daemon that outlives the app. List them with
+the pane that claims each one:
+
+```bash
+agtermctl zmx list
+```
+
+A `claimed` row with zero clients is a CLOSED window's pane, which is its resting state, not a leak. Only
+`orphan` rows are eligible for cleanup, and prune refuses entirely if the pane inventory is incomplete:
+
+```bash
+agtermctl zmx prune
+```
+
+To destroy one pane's daemon and the process in it, name the session and the pane and confirm. All three
+are required because this kills a backend process, reaching a pane no window is showing and every client
+attached to it:
+
+```bash
+agtermctl zmx kill --target 3f2a --pane left --force
+```
+
+Read or change the restore policy without opening Settings. A mode you set applies to the NEXT launch,
+because a pane is wrapped in a daemon or not at the moment it is created:
+
+```bash
+agtermctl restore mode          # what settings hold, what this launch asked for, what it got
+agtermctl restore mode live     # for the next launch
+```
+
 ## Pin what a pane restores (per-session override)
 
 `session restore` pins a shell line that a pane re-runs on the NEXT launch, overriding the captured
 foreground. It is written now and consumed at the next launch (it never touches the running session), and
 it is sticky — it fires again on every restart until cleared. Read it back on `tree` as the node's
 `restoreCommand` / `splitRestoreCommand`.
+
+In fresh-shell or live mode, a command or `--none` is saved for a future rerun launch and the response
+names the active mode. `--clear` works in every mode. A pin never opts one session out of live mode.
 
 ```bash
 agtermctl session restore "claude --resume abc123" --target "$AGTERM_SESSION_ID"  # pin a shell line
@@ -276,19 +311,20 @@ script that needs the selection some time after the fact.
 
 ## Cover only your own pane, leaving the user's other pane usable
 
-`--pane left|right` scopes the overlay to ONE split pane instead of the whole session. Your shell
-already knows which pane it runs in, so pass `$AGTERM_PANE` and the overlay lands over YOUR pane while
-the user keeps working in the sibling one:
+`--pane left|right` scopes the overlay to ONE split pane instead of the whole session. A newly spawned
+shell can pass `$AGTERM_PANE` so the overlay appears over its pane while the user keeps working in the
+sibling one:
 
 ```bash
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PANE"
 ```
 
-This works unchanged on a NON-split session, which reports `AGTERM_PANE=left`, so there is no need to
-check the split state first. Two cases still need care: `$AGTERM_PANE` is `scratch` in the scratch
-terminal, which `--pane` rejects as a usage error, and a shell in the LEFT pane of a session whose split
-is hidden with the RIGHT pane focused reports `left` while only the right pane is on screen, so the open
-is refused with `pane not visible`. Handle both by falling back to a session-wide overlay on error.
+This works on a fresh non-split session, which reports `AGTERM_PANE=left`, so there is no need to check the
+split state first. Three cases still need care: `AGTERM_PANE` is a spawn role and may be stale after a pane
+promotion or `session swap`; it is `scratch` in the scratch terminal, which `--pane` rejects as a usage
+error; and a shell in the left pane of a session whose split is hidden with the right pane focused reports
+`left` while only the right pane is on screen, so the open is refused with `pane not visible`. Fall back to
+a session-wide overlay when the current role is uncertain or the pane-specific open fails.
 Left and right are independent — both may be open at once, each with its
 own `--background-color` — and a pane overlay is always full-pane, so `--size-percent` is rejected with
 it. `--wait`, `--block`, `--cwd` and `--follow` behave exactly as they do for a session-wide overlay;
@@ -549,6 +585,7 @@ default, the whole scrollback with `--all`, or the last N lines with `--lines N`
 agtermctl session text                         # the visible screen of the focused pane
 agtermctl session text --lines 50              # the last 50 lines of the buffer
 agtermctl session text --pane right            # the split pane (errors if there is no split)
+agtermctl session text --pane-id "$AGTERM_PANE_ID" # this shell's terminal, even after a swap
 agtermctl session text --pane scratch --all    # the scratch terminal's full buffer, even while it's hidden
 # extract every URL from the full scrollback:
 agtermctl session text --all --json | jq -r '.result.text' | grep -oE 'https?://[^ ]+'

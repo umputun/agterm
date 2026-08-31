@@ -144,20 +144,23 @@ xcodebuild -project agterm.xcodeproj -scheme agterm -configuration Release \
 
 # authoritative Developer ID signing — AFTER xcodebuild so nothing clobbers it,
 # with a secure --timestamp on every Mach-O (notarization requires it). Sign the
-# nested helper first (inside-out), then re-sign + seal the app bundle. The helper is signed
-# without --entitlements on purpose, and --deep must never be added to the app sign below:
-# --deep would stamp the app's TCC entitlements onto agtermctl, a standalone CLI on the user's
-# PATH. Same constraint as the build-phase re-seal in project.yml.
+# nested helpers first (inside-out), then re-sign + seal the app bundle. Helpers are signed without
+# entitlements, and --deep must never be added to the app sign below because it would stamp the app's
+# TCC grants onto standalone executables. Same constraint as the build-phase re-seal in project.yml.
 if [ "$SIGNED" = "1" ]; then
   echo "==> signing Developer ID (timestamped)"
-  codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP/Contents/MacOS/agtermctl"
+  for helper in agtermctl zmx; do
+    codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP/Contents/MacOS/$helper"
+  done
   codesign --force --options runtime --timestamp \
     --entitlements "$ROOT/agterm/agterm.entitlements" --sign "$SIGN_ID" "$APP"
   codesign --verify --deep --strict "$APP"
-  if codesign -d --entitlements - "$APP/Contents/MacOS/agtermctl" 2>/dev/null | grep -q 'com.apple.security'; then
-    echo "agtermctl carries entitlements: --deep must not be used on the app sign above" >&2
-    exit 1
-  fi
+  for helper in agtermctl zmx; do
+    if codesign -d --entitlements - "$APP/Contents/MacOS/$helper" 2>/dev/null | grep -q 'com.apple.security'; then
+      echo "$helper carries entitlements: --deep must not be used on the app sign above" >&2
+      exit 1
+    fi
+  done
 fi
 
 # ── notarize + staple the app ─────────────────────────────────────────────────

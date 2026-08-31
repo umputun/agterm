@@ -981,7 +981,11 @@
                   a shown split; using its current shortcut hides it without closing the second shell. The divider follows the
                   current axis and remembers its position; drag it to resize the panes or double-click it to return to an even
                   split. <strong style="color: #bfbab0">Close Split</strong> in the action palette tears the pane down whatever
-                  it is running.
+                  it is running. <strong style="color: #bfbab0">Swap Panes</strong> in View or the action palette exchanges the
+                  two live terminals without restarting them. Their primary/split roles move with their physical positions, focus
+                  follows its terminal, and the divider stays put. The same operation is available as
+                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session swap</span>, including while a split
+                  is hidden.
                 </p>
               </div>
               <div
@@ -1405,7 +1409,7 @@
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               A live-preview theme picker (View ▸ Select Theme…, or the action palette) applies each of the 512 bundled themes to
               the open terminals as you move through the list — Enter commits and syncs it to Settings, Esc reverts to the one you
-              started on. Settings (⌘,) has six tabs, and changes apply live:
+              started on. Settings (⌘,) has six tabs. Most changes apply live; the restore mode says when a restart is required:
             </p>
             <div style="display: flex; flex-direction: column; gap: 10px; margin: 0 0 8px">
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
@@ -1414,8 +1418,8 @@
                   >›</span
                 ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste, whether clicking a workspace
                 row expands or collapses it (on by default; the disclosure triangle always does), where a new session opens (your home
-                directory by default, the current session's directory, or a fixed folder you pick), an
-                opt-in re-run of each pane's foreground command on restart, an opt-in confirm before closing a session, and
+                directory by default, the current session's directory, or a fixed folder you pick), a restore mode for fresh shells,
+                re-run commands, or live sessions, an opt-in confirm before closing a session, and
                 whether to load your global Ghostty config.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
@@ -2213,10 +2217,11 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> takes no
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> — and everything else
               matches the session-wide overlay. A non-split session accepts
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left</span>, since its shell
-              reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE=left</span>, so a
-              script can pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span>
-              without checking whether the session is split. A pane that is not on screen is refused with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left</span>. A newly spawned
+              shell reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE=left</span>, but
+              that value is its spawn role and is not rewritten after a pane promotion or swap. A long-running shell must not
+              assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> still
+              names its current slot. A pane that is not on screen is refused with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane not visible</span>; hiding the
               split after opening is fine, the program keeps running and reappears when the split comes back.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span>,
@@ -2426,13 +2431,15 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (which pane the shell runs in —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (main),
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (split), or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; unset in an overlay), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (a stable per-surface token the
-              agent-status hook forwards as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
-              so a promoted-then-re-split pane still tags correctly), so a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (the surface's spawn role,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; it is not rewritten after a promotion or
+              swap and is unset in an overlay), and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (the stable per-surface token used by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session restore --pane-id</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text --pane-id</span> to resolve the current slot), so a
               script can drive its own window without hard-coding ids.
             </div>
 
@@ -3024,18 +3031,65 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
               Restore &amp; persistence
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              Sessions come back on the next launch with their directory, font size, and split state restored. Restore
-              reconstructs the structure, not the running processes — three limitations follow from that design:
+              Sessions come back on the next launch with their directory, font size, and split state restored. General settings
+              offers <strong style="color: #e6e1d7">Fresh shells</strong>, <strong style="color: #e6e1d7">Re-run commands</strong>,
+              or <strong style="color: #e6e1d7">Live sessions</strong>. The choice is frozen for the process, so changing it takes
+              effect after restarting agterm. Live mode requires zsh as the macOS login shell; an unsupported shell or missing zmx
+              resource falls back to fresh shells, with the reason shown in Settings.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: -8px 0 20px">
+              Saving settings with this version removes the legacy
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restoreRunningCommand</span> key. If an
+              older agterm later opens the same state directory, it sees no restore setting and defaults to fresh shells.
             </p>
             <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px">
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
                   style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Live processes are not reattached.</strong> By default a restored session
-                re-spawns a fresh login shell in its saved directory. The optional
-                <strong style="color: #e6e1d7">Restore running commands on restart</strong> toggle (General settings, off by
-                default) re-runs the command each pane had in the foreground at the last clean quit — a re-run, not a reattach.
+                ><strong style="color: #e6e1d7">Live mode reattaches the running process.</strong> Every primary and split pane
+                starts through zmx. Scratch, overlay, and quick terminals stay temporary. A clean quit ends the attach client while
+                the daemon and its process continue, and captures each open pane's foreground command as a fallback. The next launch
+                attaches to the same name. A surviving daemon ignores the fallback payload; if an orderly machine restart removed the
+                daemon, zmx creates it with the captured command and later launches reattach normally. A pane starts a fresh shell
+                instead when its window was closed before quit, a hard power loss or force quit skipped capture, or the captured
+                command is denylisted or carries a control character. SIGTERM leaves the daemon running but skips capture.
+                Deleting a session, workspace, split, or window kills the corresponding daemon after any undo grace expires.
+                Switching to Fresh shells or Re-run commands and restarting ends every detached live process in this state directory.
+                A launch that still requests Live sessions but cannot use it preserves those processes for a later eligible launch.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx list</span> shows every daemon and the pane that claims it,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx prune</span> clears the ones nothing claims, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx kill</span> destroys a single pane's daemon. A closed window's panes stay
+                claimed with no clients attached, which is their resting state rather than something to clean up. Every one of
+                these needs agterm running: only the app can tell a leaked daemon from a pane that is merely closed.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx prune</span> re-checks immediately before it kills, but the check is not atomic — zmx offers no
+                kill-if-detached — so a client that attaches from outside agterm in that last moment can still be terminated.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx kill</span> requires the session, the pane and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--force</span> because it destroys a backend process rather than a model object: it reaches a pane no
+                window is showing and takes down every client attached to that daemon. Killing a shown split closes that split;
+                killing a primary promotes its split survivor, or closes the session when there is none. None of these gets the
+                undo grace, and Reopen Closed Item brings the session back with a fresh shell.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl restore mode</span> reads or sets the restore policy without opening Settings, and
+                the mode it sets applies to the next launch for the same reason the picker does.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree --json</span> reports the actual
+                state as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">surfaces[].backedByZmx</span>
+                and a session-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">backedByZmx</span>,
+                which is true only when every existing primary or split pane is backed. The sidebar adds no separate indicator.
+                Reattach restores usable text, TUI state, and normal colors, but its synthesized screen does not retain inline images,
+                earlier OSC 133 prompt markers, program-changed palette entries, or hyperlink metadata already attached to cells.
+                New output after reattach behaves normally. In live mode,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --command</span> types the
+                command into the persistent shell only when the pane is first created. The session stays open when that command exits,
+                so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> adds no hold prompt. After
+                a clean quit, a missing daemon replays the captured running command inside a new persistent shell; the exclusions above
+                start a fresh shell.
+              </li>
+              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Re-run mode starts commands again.</strong> Fresh shells is the default. Re-run
+                commands starts the command each pane had in the foreground at the last clean quit; it does not reattach that process.
                 Only a single-process command restores faithfully; a command whose name or arguments carry a control character
                 starts a plain shell instead, since the restored line is typed and the line editor would read that byte as an
                 editing key rather than text, and so does one carrying bytes that were not valid UTF-8, which are captured
@@ -3065,8 +3119,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 shell, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--clear</span> to drop it) —
                 consumed on the next launch, sticky across restarts, winning over both the captured command and the session's own
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span>, and reading back on
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>. It obeys the same setting
-                but bypasses the denylist, since it names its command deliberately. The pinned value is shell code stored in the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>. It runs only in re-run mode
+                but still saves policy in the other modes, and it bypasses the denylist because it names its command deliberately.
+                The pinned value is shell code stored in the
                 window's state file and readable via
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>, so it must not carry
                 secrets. A

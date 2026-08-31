@@ -21,7 +21,8 @@ public struct SettingsStore {
     /// user is never silently re-themed.
     public func load() -> AppSettings {
         guard let data = try? Data(contentsOf: fileURL) else { return Self.seededDefault }
-        guard let settings = try? JSONDecoder().decode(AppSettings.self, from: data) else { return Self.seededDefault }
+        guard var settings = try? JSONDecoder().decode(AppSettings.self, from: data) else { return Self.seededDefault }
+        settings.migrateRestoreMode()
         return settings
     }
 
@@ -31,6 +32,8 @@ public struct SettingsStore {
     /// Writes the settings atomically, creating the directory if needed.
     public func save(_ settings: AppSettings) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var settings = settings
+        settings.migrateRestoreMode()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(settings)

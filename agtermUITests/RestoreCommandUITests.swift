@@ -140,6 +140,25 @@ final class RestoreCommandUITests: XCTestCase {
                       "restore should re-run the persisted --command (via the exec path) and recreate the marker")
     }
 
+    func testSwappedCommandSplitClosesOnExitAfterRelaunch() throws {
+        let id = try relaunchSwappedCommand(wait: false)
+
+        XCTAssertTrue(poll({
+            guard let node = self.sessionNodeIfPresent(id: id) else { return false }
+            return node["splitFocused"] == nil
+        }), "the restored command must retain close-on-exit after moving to the split role")
+    }
+
+    func testSwappedWaitCommandSplitHoldsAfterExitAfterRelaunch() throws {
+        let id = try relaunchSwappedCommand(wait: true)
+
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        let node = try XCTUnwrap(sessionNodeIfPresent(id: id), "the restored held command session should remain")
+        XCTAssertNotNil(node["splitFocused"], "--wait must keep the exited split pane open")
+        XCTAssertEqual(node["splitCommandWait"] as? Bool, true,
+                       "the persisted wait policy must remain attached to the split command")
+    }
+
     func testRestoreOffLeavesCommandSessionAPlainShell() throws {
         seedRestoreFlag(false)
         app.launchForUITest()
@@ -619,6 +638,51 @@ final class RestoreCommandUITests: XCTestCase {
         let tree = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
         let workspaces = try XCTUnwrap(tree["workspaces"] as? [[String: Any]], "tree should list workspaces")
         return try XCTUnwrap((workspaces.first?["sessions"] as? [[String: Any]])?.first, "one seeded session")
+    }
+
+    private func sessionNodeIfPresent(id: String) -> [String: Any]? {
+        guard let response = try? sendCommand(#"{"cmd":"tree"}"#),
+              let result = response["result"] as? [String: Any],
+              let tree = result["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]] else { return nil }
+        return workspaces.lazy
+            .compactMap { $0["sessions"] as? [[String: Any]] }
+            .joined()
+            .first { ($0["id"] as? String)?.lowercased() == id.lowercased() }
+    }
+
+    private func relaunchSwappedCommand(wait: Bool) throws -> String {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "control server up")
+        let command = "tee \(marker.path)"
+        let waitArg = wait ? #", "wait": true"# : ""
+        let created = try sendCommand(
+            #"{"cmd":"session.new","args":{"command":"\#(command)"\#(waitArg)}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "the command session should be created: \(created)")
+        let id = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "created session id")
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "the initial tee command should start and block on terminal input")
+        let split = try sendCommand(
+            #"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "the command session should split: \(split)")
+        let swapped = try sendCommand(#"{"cmd":"session.swap","target":"\#(id)"}"#)
+        XCTAssertEqual(swapped["ok"] as? Bool, true, "the running command should swap into the split role: \(swapped)")
+
+        try FileManager.default.removeItem(at: marker)
+        gracefulQuit()
+        app.launchForUITest()
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "the swapped command should run again on relaunch")
+        let exitRequest: [String: Any] = [
+            "cmd": "session.type", "target": id,
+            "args": ["text": "\u{4}", "pane": "right"],
+        ]
+        let exited = try sendCommand(String(
+            decoding: JSONSerialization.data(withJSONObject: exitRequest), as: UTF8.self
+        ))
+        XCTAssertEqual(exited["ok"] as? Bool, true, "terminal EOF should reach the restored command: \(exited)")
+        return id
     }
 
     /// Every persisted `foregroundCommand` across the window snapshots written at quit (the capture oracle).

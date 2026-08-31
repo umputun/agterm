@@ -387,6 +387,11 @@ struct CommandsTests {
         #expect(try request(["session", "split", "close", "--target", "s1", "--window", "w1"]) == expected)
     }
 
+    @Test func sessionSwapWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionSwap, target: "s1", args: ControlArgs(window: "w1"))
+        #expect(try request(["session", "swap", "--target", "s1", "--window", "w1"]) == expected)
+    }
+
     @Test func sessionScratchDefaultsToggle() throws {
         let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle"))
         #expect(try request(["session", "scratch"]) == expected)
@@ -520,6 +525,12 @@ struct CommandsTests {
     @Test func sessionTextWithPaneAndTarget() throws {
         let expected = ControlRequest(cmd: .sessionText, target: "9f3c", args: ControlArgs(pane: "right"))
         #expect(try request(["session", "text", "--pane", "right", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionTextWithPaneIDAndPane() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "active",
+                                      args: ControlArgs(pane: "right", paneID: "stable-token"))
+        #expect(try request(["session", "text", "--pane-id", "stable-token", "--pane", "right"]) == expected)
     }
 
     @Test func sessionTextWithPaneScratch() throws {

@@ -103,14 +103,53 @@ To remap a shortcut ghostty still owns: a physical key name (`key_c`, `key_v`, �
 any layout; a bare letter (`c`, `v`) matches the produced character. Edit `~/.config/agterm/ghostty.conf`,
 then `agtermctl config reload`.
 
+### "My live session came back as a fresh shell"
+
+Check these in order:
+
+- **Restart after selecting Live sessions.** The restore mode is fixed when agterm starts. Changing
+  **Settings ▸ General ▸ Restore sessions** affects the next process, not sessions already open.
+- **Read the eligibility reason in Settings.** Live mode requires zsh as the macOS login shell and the
+  bundled zmx and zsh-integration resources. If the launch cannot use live mode, every pane starts as an
+  ordinary shell.
+- **Inspect actual backing with `tree --json`.** Primary and split surfaces report `backedByZmx`; the session
+  field is true only when every existing primary or split is backed. The sidebar deliberately has no zmx
+  indicator.
+- **Confirm the pane is in scope.** Primary and split panes can survive. Scratch, overlay, and quick terminals
+  are temporary by design.
+- **Start from `agtermctl zmx list`.** It reports every daemon and the pane claiming it, with the
+  restore mode as a header. `claimed` with zero clients is a CLOSED window's resting state, not a leak;
+  `orphan` is what `zmx prune` takes. `unknown` means the pane inventory was incomplete, so nothing
+  can be pruned until that is resolved.
+- **A missing daemon is recreated, running the captured command.** A reboot or a stale daemon leaves nothing
+  to attach, so agterm creates one under the saved name and replays the command that pane was running at the
+  last clean quit. A fresh shell instead means no capture applied: the window was closed before the quit, the
+  machine lost power or was force-quit, the process exited before quitting, SIGTERM was used, or the command
+  is refused by `restore-denylist.conf`. `agtermctl zmx kill` is not one of these — it closes a shown split
+  or promotes a primary rather than leaving a daemon to recreate. To check what was captured, read
+  `foregroundCommand` in `windows/<id>.json` while agterm is STOPPED: the next launch moves it into memory
+  and rewrites the file with nil, so a running app always shows null there.
+- **Switching modes ends detached live processes.** Selecting Fresh shells or Re-run commands and restarting
+  reaps the live daemons in this state directory. An unavailable launch that still requests Live sessions
+  preserves its claimed daemons for a later eligible launch.
+
+SIGTERM to agterm should leave a backed pane's daemon and process alive for the next launch. Explicitly
+deleting its session, workspace, split, or window kills it after any undo grace period.
+
+A reattached screen can look slightly different without being a fresh shell. Usable text, TUI state, and
+normal colors survive, but inline images, earlier OSC 133 prompt markers, program-changed palette entries,
+and hyperlink metadata already attached to cells do not. New output behaves normally.
+
+Saving settings with this version removes the legacy `restoreRunningCommand` key. If an older agterm opens
+the same state directory later, it sees no restore setting and defaults to fresh shells.
+
 ### "My session restore override didn't fire"
 
 You set `session restore` but the pane came back as a plain shell (or re-ran the old captured command).
 Check, in order:
 
-- **The "Restore running commands on restart" setting is off.** The override obeys the same master switch
-  as the rest of restore; a `set`/`--none` while it is off succeeds but nothing runs on relaunch (the
-  response says so in `result.text`). Turn it on in General settings.
+- **The launch is not in `rerun` mode.** A `set`/`--none` still saves policy, and `result.text` names the
+  active mode. Select Re-run commands in General settings and restart agterm.
 - **The pane resolved to the scratch, or you pinned `--pane right` on a session with no split.** Both are
   rejected at set time (`the scratch terminal is never restored` / `session has no split`), so nothing was
   pinned — re-read the command's output.
@@ -119,10 +158,8 @@ Check, in order:
 - **It already fired once this launch.** The override is consumed once per launch: after it runs, a second
   surface for the same pane in the SAME session (e.g. opening a fresh split with ⌘D) gets a plain shell. It
   is still pinned — `tree` reports `restoreCommand` — and fires again on the NEXT restart.
-- **The split was hidden at quit.** A hidden split is not restored at all, so its override describes a pane
-  that no longer exists: the pin is DROPPED on that launch (`tree` stops reporting `splitRestoreCommand`)
-  rather than left to fire into a later manual ⌘D split. Show the split before quitting, and re-pin after a
-  launch that dropped it.
+- **The split is still hidden.** Its identity and pin survive restart, but the surface is created only when
+  the split is shown; the saved rerun policy applies then.
 - **You reopened a closed session or a closed window, not relaunched the app.** The override fires only on
   an app-launch restore — Reopen Closed Item and reopening a closed window deliberately do NOT arm it. Quit
   and relaunch agterm to see it fire.

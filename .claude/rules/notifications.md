@@ -42,6 +42,9 @@ paths:
 - Selection and pane focus clear unseen state and delivered banners. App activation does not transition
   the retained first responder, which caused #155; the `didBecomeKey` observer therefore calls
   `clearUnseenOnRefocus` only when `liveFocus` says this pane is the key window's first responder.
+- A pane swap clears delivered banners for that session. Notification identifiers encode the pane role and
+  cannot be retagged in place, so leaving them delivered would make a later click reveal the wrong terminal.
+  The unseen count is unchanged.
 - `notificationBadgeEnabled` gates session, workspace, and Dock counts through `effectiveUnseen`, including
   `RowContent.unseen` so toggles reload rows. It never gates the agent-status glyph.
 - `DockBadgeController` shows host-free `WindowLibrary.totalUnseenCount`. Use

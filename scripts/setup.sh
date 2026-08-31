@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build libghostty (GhosttyKit.xcframework) and ghostty resources from upstream ghostty source.
+# Build pinned libghostty and zmx artifacts from upstream source.
 #
 # We build from source rather than downloading a prebuilt artifact so the toolchain is fully
-# self-owned: the only inputs are upstream ghostty-org/ghostty at a pinned SHA, zig, and Xcode's
-# Metal Toolchain. No third-party fork, no daily-build release that can be pruned.
+# self-owned: the inputs are pinned upstream revisions, zig, and Xcode's Metal Toolchain. No fork or
+# daily-build release is involved.
 #
 # GHOSTTY_REV is a plain pin for reproducibility, not a workaround. It was held at a 2026-04-30
 # pre-regression commit while later builds blanked the scrollback on a font-size increase; that is
@@ -19,6 +19,8 @@ cd "$(dirname "$0")/.."
 
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 GHOSTTY_REV="683d8db643b95cf229bfb5fe9fab9ae677920343"  # 2026-08-25
+ZMX_REPO="https://github.com/neurosnap/zmx"
+ZMX_REV="fb1b6b66476fc83c1453b0cde8fe2a50166eb395"  # 2026-08-28
 # ghostty pins minimum_zig_version 0.16.0. Name the MINOR LINE, not `zig`: that one rolls, so a fresh
 # build once 0.17 is current would compile a fixed GHOSTTY_REV with a compiler it never supported. Today
 # `zig@0.16` is still an alias for `zig`, so this buys nothing yet — it claims the name Homebrew uses when
@@ -29,6 +31,8 @@ XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
 RESOURCES_MARKER="agterm/Resources/terminfo"
 STAMP_FILE=".ghostty-build-stamp"
+ZMX_STAGE_DIR="agterm/Resources/zmx"
+ZMX_STAMP_FILE=".zmx-build-stamp"
 
 # stage agterm's own bundled theme(s) from the committed source into the (gitignored,
 # setup-regenerated) ghostty themes dir. idempotent and called on both the cached and the
@@ -41,8 +45,13 @@ stage_custom_themes() {
 
 need_xc=true
 need_res=true
+need_zmx=true
 [[ -d "$XCFRAMEWORK_DIR" ]] && need_xc=false
 [[ -d "$RESOURCES_MARKER" ]] && need_res=false
+if [[ -x "$ZMX_STAGE_DIR/zmx" && -f "$ZMX_STAGE_DIR/LICENSE" && -f "$ZMX_STAMP_FILE" ]] &&
+   [[ "$(cat "$ZMX_STAMP_FILE")" == "$ZMX_REV" ]]; then
+  need_zmx=false
+fi
 
 # a stale stamp restages BOTH: they come out of one build, and an artifact built from another revision
 # cannot be told apart from a current one.
@@ -51,8 +60,8 @@ if [[ ! -f "$STAMP_FILE" || "$(cat "$STAMP_FILE")" != "$GHOSTTY_REV" ]]; then
   need_res=true
 fi
 
-if ! $need_xc && ! $need_res; then
-  echo "GhosttyKit and resources already present"
+if ! $need_xc && ! $need_res && ! $need_zmx; then
+  echo "GhosttyKit, resources and zmx already present"
   stage_custom_themes
   exit 0
 fi
@@ -66,39 +75,60 @@ if [[ ! -x "$ZIG" ]]; then
   ZIG="$(brew --prefix "$ZIG_FORMULA")/bin/zig"
 fi
 
-# Metal Toolchain — the xcframework build compiles ghostty's Metal shaders
-if ! xcrun metal --version >/dev/null 2>&1; then
+# Metal Toolchain is needed only when the xcframework build runs.
+if { $need_xc || $need_res; } && ! xcrun metal --version >/dev/null 2>&1; then
   echo "downloading Xcode Metal Toolchain (one-time)..."
   xcodebuild -downloadComponent MetalToolchain
 fi
 
-# fetch ghostty at the pinned commit (shallow, single commit, no submodules — not needed here)
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
-echo "fetching ghostty $GHOSTTY_REV..."
-git init -q "$BUILD_DIR"
-git -C "$BUILD_DIR" remote add origin "$GHOSTTY_REPO"
-git -C "$BUILD_DIR" fetch -q --depth 1 origin "$GHOSTTY_REV"
-git -C "$BUILD_DIR" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
-echo "building GhosttyKit.xcframework with zig (a few minutes)..."
-( cd "$BUILD_DIR" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false )
+if $need_xc || $need_res; then
+  ghostty_build="$BUILD_DIR/ghostty"
+  echo "fetching ghostty $GHOSTTY_REV..."
+  git init -q "$ghostty_build"
+  git -C "$ghostty_build" remote add origin "$GHOSTTY_REPO"
+  git -C "$ghostty_build" fetch -q --depth 1 origin "$GHOSTTY_REV"
+  git -C "$ghostty_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
-if $need_xc; then
-  echo "staging GhosttyKit.xcframework..."
-  rm -rf "$XCFRAMEWORK_DIR"
-  cp -R "$BUILD_DIR/macos/GhosttyKit.xcframework" "$XCFRAMEWORK_DIR"
+  echo "building GhosttyKit.xcframework with zig (a few minutes)..."
+  ( cd "$ghostty_build" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
+      -Dxcframework-target=native -Demit-macos-app=false )
+
+  if $need_xc; then
+    echo "staging GhosttyKit.xcframework..."
+    rm -rf "$XCFRAMEWORK_DIR"
+    cp -R "$ghostty_build/macos/GhosttyKit.xcframework" "$XCFRAMEWORK_DIR"
+  fi
+
+  if $need_res; then
+    echo "staging ghostty resources..."
+    rm -rf agterm/Resources/ghostty agterm/Resources/terminfo
+    mkdir -p agterm/Resources/ghostty
+    cp -R "$ghostty_build/zig-out/share/ghostty/shell-integration" agterm/Resources/ghostty/
+    cp -R "$ghostty_build/zig-out/share/ghostty/themes" agterm/Resources/ghostty/
+    cp -R "$ghostty_build/zig-out/share/terminfo" agterm/Resources/terminfo
+  fi
+  printf '%s\n' "$GHOSTTY_REV" > "$STAMP_FILE"
 fi
 
-if $need_res; then
-  echo "staging ghostty resources..."
-  rm -rf agterm/Resources/ghostty agterm/Resources/terminfo
-  mkdir -p agterm/Resources/ghostty
-  cp -R "$BUILD_DIR/zig-out/share/ghostty/shell-integration" agterm/Resources/ghostty/
-  cp -R "$BUILD_DIR/zig-out/share/ghostty/themes" agterm/Resources/ghostty/
-  cp -R "$BUILD_DIR/zig-out/share/terminfo" agterm/Resources/terminfo
+if $need_zmx; then
+  zmx_build="$BUILD_DIR/zmx"
+  echo "fetching zmx $ZMX_REV..."
+  git init -q "$zmx_build"
+  git -C "$zmx_build" remote add origin "$ZMX_REPO"
+  git -C "$zmx_build" fetch -q --depth 1 origin "$ZMX_REV"
+  git -C "$zmx_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
+
+  echo "building zmx with zig..."
+  ( cd "$zmx_build" && "$ZIG" build -Doptimize=ReleaseSafe )
+  rm -rf "$ZMX_STAGE_DIR"
+  mkdir -p "$ZMX_STAGE_DIR"
+  install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"
+  cp "$zmx_build/LICENSE" "$ZMX_STAGE_DIR/LICENSE"
+  printf '%s\n' "$ZMX_REV" > "$ZMX_STAMP_FILE"
 fi
 
 stage_custom_themes
-printf '%s\n' "$GHOSTTY_REV" > "$STAMP_FILE"
 echo "setup complete"

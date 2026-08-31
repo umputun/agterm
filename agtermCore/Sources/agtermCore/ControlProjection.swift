@@ -1,5 +1,6 @@
 /// The read-back PROJECTIONS: the immutable snapshots `tree` and `window.list` return, distinct from the
-/// request and response envelopes in `ControlProtocol.swift`. Split out for the file size limit.
+/// request envelope in `ControlProtocol.swift` and the response envelope in `ControlResponse.swift`.
+/// Split out for the file size limit.
 
 /// A terminal surface as projected into the `tree` response. `id` is the stable control address for
 /// `surface.zoom`; `kind` the user-facing name (`left`, `right`, `scratch`, `overlay`). `active`/`visible`
@@ -11,12 +12,19 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     public let kind: String
     public let active: Bool
     public let visible: Bool
+    /// Actual zmx backing for primary/split surfaces; nil for ephemeral surfaces or older servers.
+    public let backedByZmx: Bool?
 
     public init(id: String, kind: String, active: Bool, visible: Bool) {
+        self.init(id: id, kind: kind, active: active, visible: visible, backedByZmx: nil)
+    }
+
+    public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?) {
         self.id = id
         self.kind = kind
         self.active = active
         self.visible = visible
+        self.backedByZmx = backedByZmx
     }
 }
 
@@ -87,6 +95,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// second-guessing `split`. The sidebar icon, the dashboard's second cell and Focus Left/Right Pane all
     /// follow this, not `split`.
     public let hasSplit: Bool?
+    /// True only when every existing primary/split pane is currently zmx-backed; nil on older servers.
+    public let backedByZmx: Bool?
     /// Divider direction for a live split (`vertical`=left/right, `horizontal`=top/bottom); nil without one.
     public let splitAxis: String?
     /// The primary-pane fraction (0.05...0.95) of a session that HAS a split (shown or hidden); nil with no
@@ -117,6 +127,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// --command … --wait`) instead of closing; nil/omitted for a plain or non-holding session. The read
     /// side of `session.new --wait`; it persists across restart, unlike an overlay's live-only wait.
     public let commandWait: Bool?
+    /// The split pane's hold-after-exit policy; nil/omitted without a holding split creation command.
+    public let splitCommandWait: Bool?
     /// The LIVE foreground process command (full argv) in the main pane; nil/omitted at the shell prompt —
     /// the same capture restore-running-command uses.
     public let foreground: [String]?
@@ -186,11 +198,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let realized: Bool?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
-                hasSplit: Bool? = nil, splitAxis: String? = nil,
+                hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, paneOverlays: [String]? = nil,
                 hud: ControlHudNode? = nil, scratch: Bool = false, flagged: Bool = false,
-                commandWait: Bool? = nil,
+                commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
@@ -205,6 +217,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.active = active
         self.split = split
         self.hasSplit = hasSplit
+        self.backedByZmx = backedByZmx
         self.splitAxis = splitAxis
         self.splitRatio = splitRatio
         self.splitFocused = splitFocused
@@ -215,6 +228,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.scratch = scratch
         self.flagged = flagged
         self.commandWait = commandWait
+        self.splitCommandWait = splitCommandWait
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.restoreCommand = restoreCommand
@@ -295,7 +309,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// write-only `sidebar.mode`. `tree`-only, as every field below is: a GUI toggle bypasses the command
     /// path, so a cached `window.list` copy would go stale.
     public let sidebarMode: String?
-    /// The projected window's sidebar divider position in points — the read side of `sidebar.width`, and the
+    /// The projected window's sidebar divider position in points - the read side of `sidebar.width`, and the
     /// only place it is reported. LIVE and `tree`-only, like every field below and like `sidebarMode`: the
     /// tree is the live per-window read surface, and nothing needs width discovery ACROSS windows, which is
     /// the only thing the cached `window.list` copy would add.

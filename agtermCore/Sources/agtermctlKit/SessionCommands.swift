@@ -16,19 +16,11 @@ struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
-                      Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
+                      Split.self, Swap.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
+                      SelectAll.self,
                       Text.self, Status.self, Restore.self, FlagCommand.self,
                       Seen.self, Search.self, Background.self, Overlay.self, Hud.self]
     )
-
-    /// The overlay and HUD arms share one accepted range for `--size-percent`, so the gate belongs to
-    /// neither. `1...100` is the input domain both document; the narrower bound for rendering a HUD is a
-    /// presentation limit applied app-side, not a rejection.
-    static func validateSizePercent(_ sizePercent: Int?) throws {
-        if let sizePercent, !(1...100).contains(sizePercent) {
-            throw ValidationError("--size-percent must be between 1 and 100")
-        }
-    }
 
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create a session.")
@@ -362,6 +354,8 @@ struct Session: ParsableCommand {
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
         @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
         @Option(name: .long, help: "Which pane to read: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to the on-screen pane.") var pane: String?
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves.")
+        var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -377,7 +371,8 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionText, target: target.target,
-                           args: options.withWindow(ControlArgs(pane: pane, all: all ? true : nil, lines: lines)))
+                           args: options.withWindow(ControlArgs(pane: pane, paneID: paneID,
+                                                               all: all ? true : nil, lines: lines)))
         }
     }
 
@@ -444,9 +439,13 @@ struct Session: ParsableCommand {
             session restore --clear                drop the override, back to auto-capture
 
             The override is written now and consumed on the NEXT launch — it never touches the running \
-            session. It wins over the pane's captured foreground command, is gated on the \
-            restore-running-command setting, and reads back on `tree` as restoreCommand (main pane) or \
+            session. It wins over the pane's captured foreground command in rerun mode and reads back on \
+            `tree` as restoreCommand (main pane) or \
             splitRestoreCommand (split pane). It is STICKY: it fires again on every launch until cleared.
+
+            Set and --none still save policy while this launch is in fresh-shell or live mode; the response \
+            names the active mode and says the policy is saved for rerun mode. --clear works in every mode. \
+            A pin never opts one session out of live mode.
 
             COMMAND is shell code, stored verbatim in the window's state file and readable via `tree`, so \
             it must not carry secrets.
@@ -982,6 +981,17 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionHudClose, target: target.target, args: options.withWindow())
             }
+        }
+    }
+}
+
+extension Session {
+    /// The overlay and HUD arms share one accepted range for `--size-percent`, so the gate belongs to
+    /// neither. `1...100` is the input domain both document; the narrower bound for rendering a HUD is a
+    /// presentation limit applied app-side, not a rejection.
+    static func validateSizePercent(_ sizePercent: Int?) throws {
+        if let sizePercent, !(1...100).contains(sizePercent) {
+            throw ValidationError("--size-percent must be between 1 and 100")
         }
     }
 }

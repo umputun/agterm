@@ -115,6 +115,15 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
+      - name: Read pinned helper revisions
+        id: revisions
+        shell: bash
+        run: |
+          ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          zmx=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          [ -n "$ghostty" ] && [ -n "$zmx" ]
+          echo "ghostty=$ghostty" >> "$GITHUB_OUTPUT"
+          echo "zmx=$zmx" >> "$GITHUB_OUTPUT"
       - name: Cache libghostty (GhosttyKit + resources)
         uses: actions/cache@v6
         with:
@@ -122,24 +131,34 @@ jobs:
             GhosttyKit.xcframework
             agterm/Resources/ghostty
             agterm/Resources/terminfo
-          key: ghosttykit-${{ hashFiles('scripts/setup.sh') }}
+            .ghostty-build-stamp
+          key: ghosttykit-v1-${{ steps.revisions.outputs.ghostty }}
+      - name: Cache zmx
+        uses: actions/cache@v6
+        with:
+          path: |
+            agterm/Resources/zmx
+            .zmx-build-stamp
+          key: zmx-v1-${{ steps.revisions.outputs.zmx }}
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Build libghostty + app (Release)
         run: scripts/build.sh
-      # agtermctl is a standalone CLI on the user's PATH. Passing --entitlements to the --deep
-      # re-seal in project.yml stamps the app's TCC entitlements onto it, with a fully green build
-      # (issue #396). Nothing else notices, so assert it here.
-      - name: Verify agtermctl carries no entitlements
+      # Nested helpers are standalone executables. A deep app re-seal with entitlements can stamp the
+      # app's TCC grants onto them while leaving the build green (issue #396).
+      - name: Verify helper signatures and entitlements
         shell: bash
         run: |
-          helper=build/DerivedData/Build/Products/Release/agterm.app/Contents/MacOS/agtermctl
-          # without this the check passes silently if the build path ever moves
-          [ -f "$helper" ] || { echo "agtermctl not found at $helper" >&2; exit 1; }
-          if codesign -d --entitlements - "$helper" 2>/dev/null | grep -q 'com.apple.security'; then
-            echo "agtermctl carries entitlements: the app re-seal must not pass --entitlements to a --deep sign" >&2
-            exit 1
-          fi
+          app=build/DerivedData/Build/Products/Release/agterm.app
+          for name in agtermctl zmx; do
+            helper="$app/Contents/MacOS/$name"
+            [ -f "$helper" ] || { echo "$name not found at $helper" >&2; exit 1; }
+            codesign --verify --strict "$helper"
+            if codesign -d --entitlements - "$helper" 2>/dev/null | grep -q 'com.apple.security'; then
+              echo "$name carries app entitlements" >&2
+              exit 1
+            fi
+          done
       # the Debug-only hardened-runtime exceptions (allow-jit, allow-unsigned-executable-memory,
       # disable-library-validation) must never reach a shipped build, and the TCC set must not shrink
       # either — losing one silently removes the user's only path to granting that permission (#396).
@@ -250,9 +269,9 @@ jobs:
         # without it a failed find would leave the step green having checked nothing
         shell: bash
         run: find cookbook -type f -name '*.sh' -print0 | xargs -0 -r shellcheck
-      - name: Install zsh
-        # not on the ubuntu-latest image, unlike shellcheck
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install recipe shells
+        # neither is on the ubuntu-latest image; fish runs a recipe regression test
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
       - name: zsh syntax check
         # shellcheck cannot parse zsh, so a parse is the only gate .zsh recipes get.
         # -n1 because zsh -n reads one script and treats the rest as its arguments;

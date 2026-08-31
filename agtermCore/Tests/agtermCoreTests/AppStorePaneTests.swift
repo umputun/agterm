@@ -12,14 +12,18 @@ struct AppStorePaneTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
+        #expect(session.splitPaneIdentity == nil)
         store.toggleSplit(session.id)
         #expect(session.isSplit == true)
         #expect(session.hasSplit == true)
         #expect(session.splitFocused == true)  // opening focuses the new (right) pane
+        let identity = session.splitPaneIdentity
+        #expect(identity != nil)
         store.toggleSplit(session.id)
         #expect(session.isSplit == false)
         #expect(session.hasSplit == true)
         #expect(session.splitFocused == true)
+        #expect(session.splitPaneIdentity == identity)
     }
 
     @Test func controlTreeReportsHasSplitAcrossHide() throws {
@@ -119,6 +123,20 @@ struct AppStorePaneTests {
         #expect(session.pendingSplitForegroundCommand == nil)
     }
 
+    @Test func closeSplitDropsSplitCreationIdentity() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitInitialCommand = "ssh split-host"
+        session.splitCommandWait = true
+
+        store.closeSplit(session.id)
+
+        #expect(session.splitInitialCommand == nil)
+        #expect(!session.splitCommandWait)
+    }
+
     @Test func closeSplitHidesAndTearsDownSurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -131,6 +149,7 @@ struct AppStorePaneTests {
         session.splitCwd = "/var/log"
         session.splitRatio = 0.7
         session.splitAxis = .topBottom
+        session.splitPaneIdentity = UUID()
         store.closeSplit(session.id)
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
@@ -140,6 +159,7 @@ struct AppStorePaneTests {
         #expect(session.initialSplitCwd == nil)
         #expect(session.splitRatio == nil) // teardown clears geometry too, so a fresh re-split opens even
         #expect(session.splitAxis == .leftRight)
+        #expect(session.splitPaneIdentity == nil)
         #expect(split.teardownCount == 1)
     }
 
@@ -180,6 +200,9 @@ struct AppStorePaneTests {
         session.splitForegroundCommand = ["ssh", "host"]
         session.splitRatio = 0.3
         session.initialCommand = "ssh host" // a --command primary whose command has now exited
+        let primaryIdentity = session.paneIdentity
+        let splitIdentity = UUID()
+        session.splitPaneIdentity = splitIdentity
         store.closePrimaryPane(session.id)
         #expect(store.session(withID: session.id) != nil)
         #expect(primary.teardownCount == 1)
@@ -198,8 +221,31 @@ struct AppStorePaneTests {
         #expect(session.splitCwd == nil)
         #expect(session.splitTitle == nil)
         #expect(session.splitForegroundCommand == nil)
+        #expect(session.paneIdentity == splitIdentity)
+        #expect(session.paneIdentity != primaryIdentity)
+        #expect(session.splitPaneIdentity == nil)
         // the `?? splitSurface` fallback is for a shown split pre-collapse, not for a promoted survivor.
         #expect(session.addressableSurface === split)
+    }
+
+    @Test func closePrimaryPanePromotesSplitCreationIdentity() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.initialCommand = "ssh primary-host"
+        session.splitInitialCommand = "ssh split-host"
+        session.splitCommandWait = true
+
+        store.closePrimaryPane(session.id)
+
+        #expect(session.initialCommand == "ssh split-host")
+        #expect(session.commandWait)
+        #expect(session.splitInitialCommand == nil)
+        #expect(!session.splitCommandWait)
     }
 
     // #416: `session.new` answers ok for a model insert, and libghostty refuses to build a surface while
@@ -220,6 +266,26 @@ struct AppStorePaneTests {
 
         parked.isRealized = true
         #expect(realized() == true)
+    }
+
+    @Test func controlTreeReportsPerPaneAndAggregateZmxBacking() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface(backedByZmx: true)
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitSurface = SpySurface(backedByZmx: false)
+
+        var node = store.controlTree().workspaces[0].sessions[0]
+        #expect(node.backedByZmx == false)
+        #expect(node.surfaces?.first(where: { $0.kind == "left" })?.backedByZmx == true)
+        #expect(node.surfaces?.first(where: { $0.kind == "right" })?.backedByZmx == false)
+        #expect(node.surfaces?.first(where: { $0.kind == "scratch" })?.backedByZmx == nil)
+
+        session.splitSurface = SpySurface(backedByZmx: true)
+        node = store.controlTree().workspaces[0].sessions[0]
+        #expect(node.backedByZmx == true)
     }
 
     @Test func addressableSurfaceIsTheMainPaneUntilThePrimaryExits() {
@@ -629,6 +695,27 @@ struct AppStorePaneTests {
         shell.commandWait = true
         node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == shell.id.uuidString })
         #expect(node.commandWait == nil)
+    }
+
+    @Test func controlTreeReportsSplitCommandWaitOnlyForHoldingCommand() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitInitialCommand = "make test"
+        session.splitCommandWait = true
+
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == true)
+
+        session.splitCommandWait = false
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == nil)
+
+        session.splitInitialCommand = nil
+        session.splitCommandWait = true
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitCommandWait == nil)
     }
 
     @Test func controlTreeReportsOverlaySizePercent() throws {

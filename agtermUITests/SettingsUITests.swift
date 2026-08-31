@@ -260,12 +260,18 @@ final class SettingsUITests: XCTestCase {
                       "selecting Default should remove the quickTerminalSizePercent key from settings.json")
     }
 
-    func testRestoreRunningCommandTogglePersists() throws {
-        let toggle = settingsControl(tab: "General", control: "settings-restore-running-command")
-        toggle.click() // turn it on (default off)
+    func testRestoreModePickerPersists() throws {
+        let picker = settingsControl(tab: "General", control: "settings-restore-mode")
+        picker.click()
+        let live = app.menuItems["Live sessions"]
+        XCTAssertTrue(live.waitForExistence(timeout: 5), "the restore-mode picker should offer live sessions")
+        live.click()
 
-        XCTAssertTrue(poll { self.settingsBool("restoreRunningCommand") == true },
-                      "turning restore-running-commands on should persist restoreRunningCommand=true")
+        XCTAssertTrue(poll { self.settingsValue("restoreMode") == "live" },
+                      "selecting live sessions should persist restoreMode=live")
+        XCTAssertNil(settingsObject()?["restoreRunningCommand"], "the legacy boolean must stay absent")
+        XCTAssertTrue(app.staticTexts["settings-restore-restart-hint"].exists,
+                      "the setting should say that a restart is required")
     }
 
     func testConfirmCloseSessionTogglePersists() throws {

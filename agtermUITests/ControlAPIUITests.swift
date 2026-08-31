@@ -8,6 +8,11 @@ import XCTest
 /// assert against the response and the `workspaces.json` file-polling oracle the sidebar tests use.
 @MainActor
 final class ControlAPIUITests: ControlAPITestCase {
+    override func setUp() async throws {
+        if name.contains("testSessionSwap") { executionTimeAllowance = 35 }
+        try await super.setUp()
+    }
+
     func testTreeReturnsSeededWorkspaceAndSession() throws {
         let response = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertEqual(response["ok"] as? Bool, true, "tree should succeed: \(response)")
@@ -138,6 +143,125 @@ final class ControlAPIUITests: ControlAPITestCase {
             }
         }
         return nil
+    }
+
+    private func pollSessionNode(_ id: String, timeout: TimeInterval,
+                                 matching predicate: ([String: Any]) -> Bool) throws -> [String: Any]? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let response = try sendCommand(#"{"cmd":"tree"}"#)
+            if let node = sessionNode(response, id: id), predicate(node) { return node }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        let response = try sendCommand(#"{"cmd":"tree"}"#)
+        guard let node = sessionNode(response, id: id), predicate(node) else { return nil }
+        return node
+    }
+
+    func testSessionSwapExchangesTreeState() throws {
+        let id = try activeSessionID()
+        let split = try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "session.split should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 4), "the split should be shown")
+
+        let leftDir = markerDir.appendingPathComponent("swap-left", isDirectory: true)
+        let rightDir = markerDir.appendingPathComponent("swap-right", isDirectory: true)
+        try FileManager.default.createDirectory(at: leftDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: rightDir, withIntermediateDirectories: true)
+        let leftReady = markerDir.appendingPathComponent("swap-left-ready")
+        let rightReady = markerDir.appendingPathComponent("swap-right-ready")
+        let leftForeground = markerDir.appendingPathComponent("swap-left-foreground")
+        let rightForeground = markerDir.appendingPathComponent("swap-right-foreground")
+        let leftCommand = "printf READY > '\(leftReady.path)'; cd '\(leftDir.path)'; "
+            + "printf '\\033]2;SWAP-LEFT-TITLE\\007'; exec tee '\(leftForeground.path)'\n"
+        let rightCommand = "printf READY > '\(rightReady.path)'; cd '\(rightDir.path)'; "
+            + "printf '\\033]2;SWAP-RIGHT-TITLE\\007'; exec tee '\(rightForeground.path)'\n"
+        XCTAssertEqual(try typeUntilMarker(
+            leftCommand, target: id, file: leftReady, select: false, pane: "left", attempts: 2, perAttempt: 2),
+                       "READY", "the left pane should enter its distinct cwd/title/foreground")
+        XCTAssertEqual(try typeUntilMarker(
+            rightCommand, target: id, file: rightReady, select: false, pane: "right", attempts: 2, perAttempt: 2),
+                       "READY", "the right pane should enter its distinct cwd/title/foreground")
+
+        let before = try XCTUnwrap(pollSessionNode(id, timeout: 4) { node in
+            URL(fileURLWithPath: node["cwd"] as? String ?? "").lastPathComponent == leftDir.lastPathComponent
+                && node["title"] as? String == "SWAP-LEFT-TITLE"
+                && node["foreground"] as? [String] == ["tee", leftForeground.path]
+                && node["splitForeground"] as? [String] == ["tee", rightForeground.path]
+        }, "tree should settle both panes before swap")
+        XCTAssertEqual(before["split"] as? Bool, true)
+
+        let swapped = try sendCommand(#"{"cmd":"session.swap","target":"\#(id)"}"#)
+        XCTAssertEqual(swapped["ok"] as? Bool, true, "session.swap should succeed: \(swapped)")
+
+        let after = try XCTUnwrap(pollSessionNode(id, timeout: 3) { node in
+            URL(fileURLWithPath: node["cwd"] as? String ?? "").lastPathComponent == rightDir.lastPathComponent
+                && node["title"] as? String == "SWAP-RIGHT-TITLE"
+                && node["foreground"] as? [String] == ["tee", rightForeground.path]
+                && node["splitForeground"] as? [String] == ["tee", leftForeground.path]
+        }, "tree should expose the former right pane as the session primary")
+        XCTAssertEqual(after["split"] as? Bool, true, "swap must not hide or close the split")
+    }
+
+    func testSessionSwapHiddenSplitReshowsInExchangedPositions() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+            true, "session.split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 4), "the split should be shown")
+
+        let originalLeftFile = markerDir.appendingPathComponent("swap-original-left-tty")
+        let originalRightFile = markerDir.appendingPathComponent("swap-original-right-tty")
+        let originalLeft = try XCTUnwrap(typeUntilMarker(
+            "tty > '\(originalLeftFile.path)'\n", target: id, file: originalLeftFile, select: false, pane: "left",
+            attempts: 2, perAttempt: 2),
+            "the original left pane should report its PTY")
+        let originalRight = try XCTUnwrap(typeUntilMarker(
+            "tty > '\(originalRightFile.path)'\n", target: id, file: originalRightFile, select: false, pane: "right",
+            attempts: 2, perAttempt: 2),
+            "the original right pane should report its PTY")
+        XCTAssertNotEqual(originalLeft, originalRight, "the two pane identities must be distinct")
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+            true, "the original left pane should focus before hiding")
+        XCTAssertTrue(try pollSplitFocused(id, expected: false, timeout: 3),
+                      "the asynchronous left focus request should settle before hiding")
+
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.split","target":"\#(id)","args":{"mode":"off"}}"#)["ok"] as? Bool,
+            true, "session.split off should hide the split")
+        XCTAssertTrue(pollActiveSessionSplit(false, timeout: 3), "the split should be hidden before swap")
+        let swapped = try sendCommand(#"{"cmd":"session.swap","target":"\#(id)"}"#)
+        XCTAssertEqual(swapped["ok"] as? Bool, true, "a hidden split should still swap: \(swapped)")
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+            true, "session.split on should re-show the exchanged panes")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 3), "the exchanged split should be shown again")
+        XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 3),
+                      "focus should follow the original left terminal into the right slot")
+
+        app.activate()
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+            true, "the re-shown left pane should focus")
+        XCTAssertTrue(try pollSplitFocused(id, expected: false, timeout: 3),
+                      "the asynchronous left focus request should settle before keyboard input")
+        let afterLeftFile = markerDir.appendingPathComponent("swap-after-left-tty")
+        let afterLeft = try XCTUnwrap(keyboardTypeUntilMarker(
+            "tty > '\(afterLeftFile.path)'", file: afterLeftFile, attempts: 2, perAttempt: 2),
+            "the re-shown left pane should accept keyboard input")
+        XCTAssertEqual(afterLeft, originalRight, "the original right terminal must now occupy the left position")
+
+        XCTAssertEqual(try sendCommand(
+            #"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"right"}}"#)["ok"] as? Bool,
+            true, "the re-shown right pane should focus")
+        XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 3),
+                      "the asynchronous right focus request should settle before keyboard input")
+        let afterRightFile = markerDir.appendingPathComponent("swap-after-right-tty")
+        let afterRight = try XCTUnwrap(keyboardTypeUntilMarker(
+            "tty > '\(afterRightFile.path)'", file: afterRightFile, attempts: 2, perAttempt: 2),
+            "the re-shown right pane should accept keyboard input")
+        XCTAssertEqual(afterRight, originalLeft, "the original left terminal must now occupy the right position")
     }
 
     // the WIPE itself is only observable across a quit, so this covers the arm, not the wipe.

@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "GhosttyS
 ///
 /// `surface` and the `configCStrings` strdup buffers are `nonisolated(unsafe)`: mutated only on the main
 /// actor (create/destroy), and the C callbacks reading them are serialized by libghostty's tick model.
-final class GhosttySurfaceView: NSView, TerminalSurface {
+final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
 
     private let workingDirectory: String
@@ -45,6 +45,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// The owning model session, `weak` to break the cycle with `Session.surface`. Set by the factory.
     weak var session: Session?
+
+    /// Whether this primary/split pane launched through zmx. Fixed before `createSurface` reads its config.
+    let backedByZmx: Bool
 
     /// The session whose visual config this surface inherits when it deliberately has no `session`: the scratch
     /// renders the owner's watermark without its OSC title/PWD reports mutating the session model. Nil for
@@ -115,8 +118,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var onUserInput: (() -> Void)?
 
     /// Called on the main actor with the current font size (points) when it changes (cmd +/-), so the app
-    /// can persist it. Set on the primary surface only. libghostty has no font-size getter or change event,
-    /// so it rides the CELL_SIZE action and reads via `ghostty_surface_inherited_config`.
+    /// can persist it. Pane surfaces share a live-role-aware callback; scratch and overlays leave it unset.
+    /// libghostty has no font-size getter or change event, so this rides CELL_SIZE and reads the inherited config.
     var onFontSizeChange: ((Double) -> Void)?
 
     /// Called when libghostty enters search mode (START_SEARCH) with the current needle (nil when none). The
@@ -164,6 +167,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var rendererVisible = true
     /// Sweeps the hidden layer's retained frame on a slow cadence; exits itself on reveal or teardown.
     var hiddenJanitorTask: Task<Void, Never>?
+    /// Sanitized OSC 7 value expected back as libghostty's synthetic title while this pane has no real title.
+    private var pendingPwdFallbackTitle: String?
     /// After `destroySurface()` the view is retired: never recreate a surface (a stray viewDidMoveToWindow).
     private var isDestroyed = false
 
@@ -323,7 +328,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var lastReportedMousePoint: NSPoint?
 
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
-         waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
+         waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:],
+         backedByZmx: Bool = false) {
         self.workingDirectory = workingDirectory
         self.initialFontSize = fontSize
         self.command = command
@@ -331,6 +337,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         self.waitAfterCommand = waitAfterCommand
         self.autoFocus = autoFocus
         self.env = env
+        self.backedByZmx = backedByZmx
         super.init(frame: .zero)
         wantsLayer = true
         setupTrackingArea()
@@ -481,6 +488,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // no save(): OSC 7 fires on every cd/prompt redraw and would thrash the disk. live cwd is persisted on
         // quit and on structural mutations, so a crash loses only cwd changes since the last save. the
         // equality guard matters likewise: an equal write still notifies observers and churns the reconcile.
+        if let session {
+            let modelTitle = isSplitPane ? session.splitTitle : session.oscTitle
+            let titleIsBlank = modelTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+            pendingPwdFallbackTitle = titleIsBlank ? pwd : nil
+        } else {
+            pendingPwdFallbackTitle = nil
+        }
         if isSplitPane {
             if session?.splitCwd != pwd { session?.splitCwd = pwd }
         } else {
@@ -492,7 +506,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // already on the main actor; `oscTitle`/`splitTitle` are observed, so the sidebar row and window
         // title refresh live. like applyPwd this does NOT save() — OSC set-title re-fires on every prompt
         // redraw — and sanitizes: the title flows unquoted into a /bin/sh -c line via {AGT_SESSION_NAME}.
+        logger.debug("terminal title pane=\(self.paneToken, privacy: .public) split=\(self.isSplitPane) cwd=\(self.workingDirectory, privacy: .public) title=\(rawTitle, privacy: .public)")
         let title = TerminalText.sanitized(rawTitle)
+        if pendingPwdFallbackTitle == title {
+            pendingPwdFallbackTitle = nil
+            return
+        }
+        pendingPwdFallbackTitle = nil
 
         if isSplitPane {
             if session?.splitTitle != title { session?.splitTitle = title }
@@ -501,11 +521,25 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
     }
 
+    /// Marks this surface's exit as handled WITHOUT running `onExit`, so a queued callback for a process
+    /// the caller has already destroyed becomes a no-op. Returns false when the exit had already been
+    /// handled, which is the caller's signal that the pane's own teardown has run and it must not drive a
+    /// second one. Reuses `didHandleProcessExit` rather than adding a parallel flag that could drift.
+    @discardableResult
+    func claimProcessExit() -> Bool {
+        guard !didHandleProcessExit else { return false }
+        didHandleProcessExit = true
+        return true
+    }
+
     func handleProcessExit() {
         // already on the main actor (the close callbacks hop via DispatchQueue.main.async). idempotent: the
         // SHOW_CHILD_EXITED action and close_surface_cb can both fire for one exit.
         guard !didHandleProcessExit else { return }
         didHandleProcessExit = true
+        if backedByZmx {
+            logger.error("zmx attach process exited for pane \(self.paneToken, privacy: .public)")
+        }
         onExit?()
     }
 
@@ -570,9 +604,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             config.command = nil // login shell
         }
         // restore-running-command: feed the captured command line to the login shell as if typed, so it re-runs
-        // and exits back to a prompt. same buffer lifetime; mutually exclusive with `command` (which REPLACES
-        // the shell), enforced here rather than by caller discipline alone.
-        if command == nil, let initialInput, let p = strdup(initialInput) {
+        // and exits back to a prompt. Ordinary command surfaces keep the fields mutually exclusive because a
+        // command REPLACES the shell. A zmx-backed surface is the exception: its command is the attach client, and
+        // libghostty's initial input is what that client forwards into the daemon-side shell.
+        if command == nil || backedByZmx, let initialInput, let p = strdup(initialInput) {
             configCStrings.append(p)
             config.initial_input = UnsafePointer(p)
         }

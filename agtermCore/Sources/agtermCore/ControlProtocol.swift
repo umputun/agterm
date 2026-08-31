@@ -29,6 +29,7 @@ public enum Command: String, Codable, Sendable {
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionSplitClose = "session.split.close"
+    case sessionSwap = "session.swap"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
@@ -83,6 +84,10 @@ public enum Command: String, Codable, Sendable {
     case restoreClear = "restore.clear"
     case version = "version"
     case restoreCapture = "restore.capture"
+    case restoreMode = "restore.mode"
+    case zmxList = "zmx.list"
+    case zmxPrune = "zmx.prune"
+    case zmxKill = "zmx.kill"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied, so a
     /// test can assert the flip drove the reload. Refused outside an XCUITest launch, and EXEMPT from the
@@ -120,6 +125,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// presents it. Read back as the `window.list` node's `minimized`. The new window also hands frontmost
     /// to a still-visible one, so untargeted commands do not route into the Dock.
     public var minimized: Bool?
+    /// `zmx kill`'s explicit confirmation. The command destroys a backend process that can reach detached
+    /// claims and every client attached to it, so it has no useful default for who is affected.
+    public var force: Bool?
     /// For `session.new`: create in the background without selecting or focusing (the CLI's `--no-select`);
     /// omitted/`false` keeps select-and-focus. Read back via the `tree` `active` flag — the new node is not it.
     public var noSelect: Bool?
@@ -183,10 +191,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// unaffected. A pane overlay is always full-pane, so
     /// `--pane` conflicts with `session.overlay.open --size-percent` and `session.overlay.resize` refuses it.
     public var pane: String?
-    /// A surface's STABLE spawn token for `session.status --pane-id`/`session.restore --pane-id` (the shell's
-    /// baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's live
-    /// surfaces OVERRIDES the stale role `pane`, so a status from a promoted-then-re-split pane lands on the
-    /// CURRENT slot; empty/unknown falls back to `pane`. Opaque — validated only by resolving.
+    /// A surface's STABLE spawn token for `session.status`/`session.restore`/`session.text --pane-id` (the
+    /// shell's baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's
+    /// live surfaces OVERRIDES the stale role `pane`, so a call from a moved pane reaches the CURRENT slot;
+    /// empty/unknown falls back to `pane`. Opaque — validated only by resolving.
     /// `session.restore` diverges: an unresolvable token with NO explicit `pane` errors there rather than
     /// silently using `left`, since a wrong restore pin persists. See `Session.paneRole(forToken:)`, #199.
     public var paneID: String?
@@ -313,6 +321,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, collapsed: Bool? = nil, minimized: Bool? = nil,
+                force: Bool? = nil,
                 noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil, axis: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
@@ -339,6 +348,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.createWorkspace = createWorkspace
         self.collapsed = collapsed
         self.minimized = minimized
+        self.force = force
         self.noSelect = noSelect
         self.text = text
         self.select = select
@@ -434,8 +444,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// not just the agterm-scoped `ghostty.conf` — libghostty diagnostics carry no source-file attribution);
     /// and `session.search`'s total match count (whose "N of M" display string rides in `text`).
     public var count: Int?
-    /// Number of sessions actually changed by a batch mutation (`session.close` or `session.move`); separate
-    /// from `count`, whose CLI rendering is specific to diagnostics/search results.
+    /// Number of things actually changed: sessions for a batch mutation (`session.close`/`session.move`),
+    /// daemons killed for `zmx.prune`. Separate from `count`, whose CLI rendering is specific to
+    /// diagnostics/search results.
     public var affected: Int?
     /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil =
     /// ghostty's built-in colors ("default ghostty"), distinct from the seeded `agterm` app default.
@@ -444,10 +455,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var themes: [String]?
     /// The applied primary-pane split fraction echoed by `session.resize`, after clamping / a relative nudge.
     public var ratio: Double?
-    /// The STORED sidebar divider position echoed by `sidebar.width`, after clamping — not a measured
-    /// realized width, which a platform laying the divider out under its own rounding and minimum can
-    /// differ from. Without the echo a caller cannot tell an out-of-range request from an honored one,
-    /// both answering ok.
+    /// The STORED sidebar divider position echoed by `sidebar.width`, after clamping - not a measured
+    /// realized width, which a host laying the divider out under its own rounding and minimum can differ
+    /// from. Without the echo a caller cannot tell an out-of-range request from an honored one, both
+    /// answering ok.
     public var sidebarWidth: Double?
     /// The pane `session.restore` wrote, as a `StatusPane` raw value.
     /// Present on every success, including the `--pane` and default-to-main paths.
@@ -468,15 +479,24 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var cursor: ControlCursor?
     /// The app serving this socket, for `version`. The same value `tree` carries.
     public var app: AppIdentity?
+    /// The restore-mode policy for `restore.mode`, and the header `zmx list` repeats so its rows can be
+    /// read without a second call.
+    public var restore: ControlRestoreStatus?
+    /// The daemon inventory for `zmx list`.
+    public var zmx: ControlZmxInventory?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
                 affected: Int? = nil,
-                theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil, sidebarWidth: Double? = nil, pane: String? = nil,
+                theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
+                sidebarWidth: Double? = nil, pane: String? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
                 events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
                 pick: ControlPickResult? = nil, cursor: ControlCursor? = nil,
-                app: AppIdentity? = nil) {
+                app: AppIdentity? = nil, restore: ControlRestoreStatus? = nil,
+                zmx: ControlZmxInventory? = nil) {
+        self.restore = restore
+        self.zmx = zmx
         self.id = id
         self.tree = tree
         self.text = text
@@ -497,23 +517,6 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.pick = pick
         self.cursor = cursor
         self.app = app
-    }
-}
-
-/// `surface.cursor`'s payload, nested so a `row` could join it additively rather than by a rename.
-///
-/// There is no row: `tl_px_y` is the text BASELINE against an IME point at the cell bottom, leaving a term
-/// no probe separates from the row, and `adjust-font-baseline = 30` was measured reporting row 5 for a caret
-/// on row 4. `GhosttySurfaceView.readCursorColumn` owns why the horizontal twin is exact.
-///
-/// A column is a signal, not an assertion about content: past the prompt it proves the line is not empty,
-/// AT the prompt it proves nothing, the caret having possibly moved back over text.
-public struct ControlCursor: Codable, Sendable, Equatable {
-    /// Zero-based, counted from the left edge of the grid.
-    public let column: Int
-
-    public init(column: Int) {
-        self.column = column
     }
 }
 
@@ -561,17 +564,4 @@ public enum PaneOverlayError {
 /// broken notification path (issue #286). Shared so wording and matchers cannot drift.
 public enum ControlNotify {
     public static let bannersOffNote = "badge updated, but \"Show notification banners\" is off, so no banner was posted"
-}
-
-/// The single response written back per connection. `ok` gates `result` (on success) vs `error`.
-public struct ControlResponse: Codable, Sendable, Equatable {
-    public let ok: Bool
-    public var result: ControlResult?
-    public var error: String?
-
-    public init(ok: Bool, result: ControlResult? = nil, error: String? = nil) {
-        self.ok = ok
-        self.result = result
-        self.error = error
-    }
 }

@@ -57,7 +57,7 @@ struct Config: ParsableCommand {
 struct Restore: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Restore-running-command commands.",
-        subcommands: [Capture.self, Clear.self]
+        subcommands: [Capture.self, Clear.self, Mode.self]
     )
 
     struct Capture: RequestCommand {
@@ -78,13 +78,49 @@ struct Restore: ParsableCommand {
             pane comes back running the capture command. Bind it or run it from a scheduled job rather than \
             by hand; "restore clear" is app-global, so it is no per-pane undo.
 
-            Needs "Restore running commands on restart", which is what replays the capture: with the \
-            setting off this captures nothing and fails, saying so.
+            This command is available only when this launch is in rerun mode. In fresh-shell or live mode \
+            it fails and names the active mode.
             """)
         // app-global, like `restore clear`: every open window, so no `--window` selector.
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .restoreCapture) }
+    }
+
+    struct Mode: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Read or set what a restart does with your sessions.",
+            discussion: """
+            With no argument this reports the policy: what settings hold for the next launch, what THIS \
+            launch asked for, and what it actually got. The two requested values differ once the mode has \
+            been changed since this instance started, which is exactly when a caller is confused about why \
+            nothing happened.
+
+            Setting one writes it for the NEXT launch. This process keeps the mode it started with, and \
+            that is not a shortcut: a pane is wrapped in a zmx daemon or not at the moment it is created, \
+            so no setting can retrofit a shell that is already running.
+
+            fresh shells (none) re-spawns each pane in its saved directory. re-run (rerun) starts the \
+            command each pane had at the last clean quit. live keeps the actual processes alive.
+
+            Switching away from live and restarting ends every detached live process in this state \
+            directory. If live was requested but could not be used, the reason is reported here.
+            """)
+        @Argument(help: "none|rerun|live. Omit to read the current policy.")
+        var mode: String?
+
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            guard let mode else { return }
+            guard RestoreMode(rawValue: mode) != nil else {
+                throw ValidationError("mode must be none, rerun, or live")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .restoreMode, args: mode.map { ControlArgs(mode: $0) })
+        }
     }
 
     struct Clear: RequestCommand {

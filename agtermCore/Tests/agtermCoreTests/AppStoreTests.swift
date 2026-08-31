@@ -1456,9 +1456,11 @@ struct AppStoreTests {
         #expect(tree.workspaces[0].sessions == [
             ControlSessionNode(id: a.id.uuidString, name: "alpha", cwd: "/repo/a",
                                active: false, split: false,
+                               backedByZmx: false,
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: a.id, surface: .primary).rawValue,
-                                                   kind: "left", active: true, visible: true),
+                                                   kind: "left", active: true, visible: true,
+                                                   backedByZmx: false),
                                ],
                                // store-only session: a surface slot with nothing in it has no terminal
                                realized: false)
@@ -1466,15 +1468,18 @@ struct AppStoreTests {
         #expect(tree.workspaces[1].sessions == [
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
                                title: "remote:~/b", active: true, split: true,
-                               hasSplit: true, splitAxis: "vertical", splitFocused: false,
+                               hasSplit: true, backedByZmx: false,
+                               splitAxis: "vertical", splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
                                status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000,
                                background: BackgroundWatermark(kind: .text, text: "PROD"),
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .primary).rawValue,
-                                                   kind: "left", active: false, visible: false),
+                                                   kind: "left", active: false, visible: false,
+                                                   backedByZmx: false),
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .split).rawValue,
-                                                   kind: "right", active: false, visible: false),
+                                                   kind: "right", active: false, visible: false,
+                                                   backedByZmx: false),
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .scratch).rawValue,
                                                    kind: "scratch", active: false, visible: false),
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .overlay).rawValue,

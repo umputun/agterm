@@ -66,6 +66,31 @@ final class AppActionsPaletteTests: XCTestCase {
         return try XCTUnwrap(actions.paletteActions().first { $0.title == title })
     }
 
+    func testSwapPanesGuiTwinWaitsForBothSurfaceSlots() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        store.selectSession(session.id)
+        store.setSplitVisibility(session.id, shown: true)
+        let primary = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        split.setPaneRole(.split)
+        let realize = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            session.surface = primary
+            session.splitSurface = split
+        }
+
+        actions.swapActiveSessionPanes()
+        for _ in 0..<20 where session.surface !== split {
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        await realize.value
+
+        XCTAssertTrue(session.surface === split)
+        XCTAssertTrue(session.splitSurface === primary)
+    }
+
     // the palette deliberately LISTS rows the menu disables, so a user can still look the action up. It must
     // render them inert instead of running an action the same keystroke would be refused for.
     func testARowTheMenuDisablesIsListedButInert() throws {

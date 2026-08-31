@@ -116,6 +116,13 @@ paths:
 - Pane focus actions, menu/palette, and `session.focus` gate on `hasSplit`, not `isSplit`, so they also swap
   the maximized hidden pane. Ctrl-1/Ctrl-2 use an app-wide event monitor and always consume these reserved
   keys, even when no split exists.
+- Swap Panes is a role-and-view exchange, exposed through View, the action palette, and `session.swap` with
+  no default shortcut. It gates on `hasSplit`, including a hidden split, and stays available under terminal
+  zoom and the dashboard. Focus follows the terminal; axis and ratio stay with the layout.
+- The store exchange keeps each terminal's pane-owned state together: surface role, cwd/title, live and
+  pending foreground command, restore pin and pending restore command, creation command and wait policy,
+  pane overlay model/surface/exit code, and status ownership. Host identity must resolve from the current
+  surface occupant before any public swap entry point is added.
 - Persist each pane cwd and the 0...1 primary-pane `splitRatio`. `SplitRatioAccessor` is an unconditional
   background representable on primary, introspects `NSSplitView`, retries until its axis extent exists, observes
   `didResizeSubviews`, and debounces save by about 0.4 seconds. Regular saves and quit flush also persist it.

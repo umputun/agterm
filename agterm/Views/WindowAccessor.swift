@@ -14,9 +14,10 @@ struct WindowAccessor: NSViewRepresentable {
     let windowID: WindowInfo.ID
     let library: WindowLibrary
     let store: AppStore
+    let captureOnExit: AppDelegate.ExitCapture?
 
     func makeNSView(context _: Context) -> TitleProbeView {
-        TitleProbeView(windowID: windowID, library: library, store: store)
+        TitleProbeView(windowID: windowID, library: library, store: store, captureOnExit: captureOnExit)
     }
 
     func updateNSView(_ nsView: TitleProbeView, context _: Context) {
@@ -27,6 +28,7 @@ struct WindowAccessor: NSViewRepresentable {
         private let windowID: WindowInfo.ID
         private let library: WindowLibrary
         private let store: AppStore
+        private let captureOnExit: AppDelegate.ExitCapture?
 
         /// Observer tokens: AppKit rebuilds the titlebar subviews on key/fullscreen, so the blend re-applies.
         nonisolated(unsafe) private var titlebarObservers: [NSObjectProtocol] = []
@@ -37,10 +39,12 @@ struct WindowAccessor: NSViewRepresentable {
         /// The confirm-before-close delegate proxy, owned here (NSWindow.delegate is weak).
         private var closeProxy: WindowCloseDelegateProxy?
 
-        init(windowID: WindowInfo.ID, library: WindowLibrary, store: AppStore) {
+        init(windowID: WindowInfo.ID, library: WindowLibrary, store: AppStore,
+             captureOnExit: AppDelegate.ExitCapture? = nil) {
             self.windowID = windowID
             self.library = library
             self.store = store
+            self.captureOnExit = captureOnExit
             super.init(frame: .zero)
         }
 
@@ -129,7 +133,9 @@ struct WindowAccessor: NSViewRepresentable {
             }
             // report close: tear down surfaces, then mark closed. captures library/store/id directly, NOT
             // `self` — the view deallocates as the window closes, so a `[weak self]` hop would no-op.
-            let closeToken = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [library, store, windowID, weak window] _ in
+            let closeToken = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { [library, store, windowID, captureOnExit, weak window] _ in
                 MainActor.assumeIsolated {
                     // persist the final frame (keyed by its id) so an in-session reopen or a restart restores
                     // size/position; SwiftUI's own index-based autosave can't.
@@ -145,14 +151,13 @@ struct WindowAccessor: NSViewRepresentable {
                     // reopened window would load a stale snapshot. skipped once the window is no longer open:
                     // a delete already dropped the store and removed the per-window file, so this resurrects it.
                     if library.isOpen(windowID) {
-                        // restore-running-command: capture while the surfaces below are still alive. Skipped
+                        // Exit capture runs while the surfaces below are still alive. Skipped
                         // under termination — the quit-time capture already ran, and a re-read assigns
                         // unconditionally, so a foreground that exited since would overwrite it with nil.
                         // `openIDs()` is read before `closeWindow` runs, so it scopes this to the app-exit
                         // close. Contract in `.claude/rules/settings.md`.
-                        if !library.isTerminating, library.openIDs() == [windowID],
-                           GhosttyApp.shared.restoreRunningCommand {
-                            AppDelegate.captureForegroundCommands(sessions: store.workspaces.flatMap(\.sessions))
+                        if !library.isTerminating, library.openIDs() == [windowID], let captureOnExit {
+                            _ = captureOnExit(store.workspaces.flatMap(\.sessions))
                         } else if !library.isTerminating {
                             // a NON-last close must leave no argv in this window's file: a launch restore
                             // cannot tell it from a file open at exit, so the never-windowless reopen fallback

@@ -48,6 +48,9 @@ public protocol ControlActions {
     /// Tear the split pane down rather than hide it, the write side `splitSession`'s `on|off|toggle` cannot
     /// express: the surface dies and `hasSplit`/`splitRatio`/`splitFocused` go nil in `tree`.
     func closeSessionSplit(_ target: String?, window: String?) -> ControlResponse
+    /// Exchange the two live pane roles. The default below keeps existing hosts source-compatible and
+    /// reports that the optional operation is unsupported.
+    func swapSessionPanes(_ target: String?, window: String?) async -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
@@ -124,90 +127,18 @@ public protocol ControlActions {
     /// Capture every open pane's foreground command now, the same read `applicationWillTerminate` does. The
     /// host owns the `sysctl` read, the save, and the count it reports back.
     func captureRestoreCommands() -> ControlResponse
-}
-
-public extension ControlActions {
-    func splitSession(_ target: String?, window: String?, mode: String?, axis _: SplitAxis?) -> ControlResponse {
-        splitSession(target, window: window, mode: mode)
-    }
-
-    /// Defaulted so a shared-dispatcher host outside this repo owes no conformance change when core is
-    /// synced: `agtermCore` is a library product and `ControlActions` is public, so a bare new REQUIREMENT
-    /// is a source break there. It does NOT make such a host build unchanged — adding a `Command` case
-    /// breaks any exhaustive switch over it first, which is true of every new command.
-    func setSidebarWidth(_: Double, window _: String?) -> ControlResponse {
-        ControlResponse(ok: false, error: "sidebar.width is not supported by this control host")
-    }
-}
-
-public struct ControlSessionTypeOptions: Equatable, Sendable {
-    public let text: String
-    public let select: Bool
-    public let pane: String?
-
-    public init(text: String, select: Bool, pane: String?) {
-        self.text = text
-        self.select = select
-        self.pane = pane
-    }
-}
-
-public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
-    public let command: String
-    public let cwd: String?
-    public let wait: Bool
-    public let sizePercent: Int?
-    public let backgroundColor: String?
-    public let follow: Bool
-    /// The pane to cover, nil for the session-wide overlay. A pane overlay is always full, so this and
-    /// `sizePercent` are mutually exclusive (rejected in the dispatcher).
-    public let pane: OverlayPane?
-
-    public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
-                follow: Bool = false, pane: OverlayPane? = nil) {
-        self.command = command
-        self.cwd = cwd
-        self.wait = wait
-        self.sizePercent = sizePercent
-        self.backgroundColor = backgroundColor
-        self.follow = follow
-        self.pane = pane
-    }
-}
-
-public struct ControlSessionBackgroundOptions: Equatable, Sendable {
-    public let watermark: BackgroundWatermark?
-
-    public init(watermark: BackgroundWatermark?) {
-        self.watermark = watermark
-    }
-}
-
-public struct ControlSessionTextOptions: Equatable, Sendable {
-    public let pane: String?
-    public let all: Bool
-    public let lines: Int?
-
-    public init(pane: String?, all: Bool, lines: Int?) {
-        self.pane = pane
-        self.all = all
-        self.lines = lines
-    }
-}
-
-/// `session.overlay.text`'s inputs. `pane` is the parsed `OverlayPane` rather than
-/// `ControlSessionTextOptions`' raw string: the overlay family takes only `left`/`right`, so the dispatcher
-/// resolves it and the host never re-parses a vocabulary it could widen by accident.
-public struct ControlSessionOverlayTextOptions: Equatable, Sendable {
-    public let pane: OverlayPane?
-    public let all: Bool
-    public let lines: Int?
-
-    public init(pane: OverlayPane?, all: Bool, lines: Int?) {
-        self.pane = pane
-        self.all = all
-        self.lines = lines
-    }
+    /// The restore-mode policy: what settings hold, what this launch requested, and what it got.
+    func readRestoreMode() -> ControlResponse
+    /// Persist the mode for the NEXT launch. The host owns the save and must report a failed write rather
+    /// than leaving memory claiming a value the disk rejected.
+    func setRestoreMode(_ mode: RestoreMode) -> ControlResponse
+    /// The daemon inventory: observed daemons joined against the panes that claim them.
+    func listZmxDaemons() -> ControlResponse
+    /// Kill the daemons no pane claims and nothing is attached to.
+    func pruneZmxDaemons() -> ControlResponse
+    /// Destroy ONE pane's daemon. The host resolves the owner against the inventory rather than the open
+    /// stores, since this reaches closed and unindexed claims the target resolver cannot see.
+    func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse
 }
 
 /// Routes control commands through a host-provided action seam. The dispatcher owns command parsing and
@@ -229,7 +160,7 @@ public struct ControlDispatcher {
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus, .sessionRestore:
             return dispatchSessionCommand(request)
-        case .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionFocus, .sessionResize,
+        case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionScratch, .sessionFocus, .sessionResize,
                 .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionOverlayCopy,
@@ -241,7 +172,7 @@ public struct ControlDispatcher {
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
-                .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
+                .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .version:
             return dispatchAppCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
@@ -590,6 +521,8 @@ public struct ControlDispatcher {
                                         mode: request.args?.mode, axis: axis)
         case .sessionSplitClose:
             return actions.closeSessionSplit(request.target, window: request.args?.window)
+        case .sessionSwap:
+            return await actions.swapSessionPanes(request.target, window: request.args?.window)
         case .sessionScratch:
             return actions.scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
                                           command: request.args?.command)
@@ -762,6 +695,8 @@ public struct ControlDispatcher {
             return actions.clearRestoreCommands()
         case .restoreCapture:
             return actions.captureRestoreCommands()
+        case .restoreMode, .zmxList, .zmxPrune, .zmxKill:
+            return dispatchZmxCommand(request)
         default:
             preconditionFailure("unexpected app command: \(request.cmd.rawValue)")
         }
@@ -879,6 +814,7 @@ public struct ControlDispatcher {
         case .extent(let all, let lines):
             return actions.readSessionText(request.target, window: request.args?.window,
                                            options: ControlSessionTextOptions(pane: request.args?.pane,
+                                                                              paneID: request.args?.paneID,
                                                                               all: all,
                                                                               lines: lines))
         }

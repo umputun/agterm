@@ -7,8 +7,16 @@ import agtermCore
 /// resolution and the store registry.
 @MainActor
 final class ControlServerSessionActionsTests: XCTestCase {
+    private final class RigidSurface: TerminalSurface {
+        var isRealized = true
+        var paneToken = "rigid"
+        func teardown() {}
+        func promoteToPrimaryPane() {}
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
+    private var actions: AppActions!
     private var server: ControlServer!
 
     override func setUp() async throws {
@@ -17,7 +25,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
             stateDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("agterm-control-session-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
-            let actions = AppActions(library: library)
+            actions = AppActions(library: library)
             server = ControlServer(
                 library: library,
                 actions: actions,
@@ -31,6 +39,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             server = nil
+            actions = nil
             library = nil
             try? FileManager.default.removeItem(at: stateDir)
             stateDir = nil
@@ -41,6 +50,128 @@ final class ControlServerSessionActionsTests: XCTestCase {
     private func overlayOptions(follow: Bool, pane: OverlayPane? = nil) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
                                          backgroundColor: nil, follow: follow, pane: pane)
+    }
+
+    private func addSession() throws -> (AppStore, Session) {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        return (store, try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory())))
+    }
+
+    private func parkSwappablePanes(on session: Session) -> (GhosttySurfaceView, GhosttySurfaceView) {
+        let primary = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                         env: ["AGTERM_PANE_ID": "primary"])
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                       env: ["AGTERM_PANE_ID": "split"])
+        split.setPaneRole(.split)
+        session.surface = primary
+        session.splitSurface = split
+        session.hasSplit = true
+        return (primary, split)
+    }
+
+    func testSwapReportsEachImmediatePrimitiveRefusal() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let missingID = UUID()
+        let missing = await actions.swapSessionPanes(missingID, in: store)
+
+        let (_, noSplitSession) = try addSession()
+        let noSplit = await actions.swapSessionPanes(noSplitSession.id, in: store)
+
+        let (_, rigidSession) = try addSession()
+        rigidSession.surface = RigidSurface()
+        rigidSession.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        rigidSession.hasSplit = true
+        let rigid = await actions.swapSessionPanes(rigidSession.id, in: store)
+
+        XCTAssertEqual(missing.error, "session closed during swap")
+        XCTAssertEqual(noSplit.error, "session has no split pane")
+        XCTAssertEqual(rigid.error, "session panes do not support swapping")
+        XCTAssertEqual(Set([missing.error, noSplit.error, rigid.error]).count, 3)
+    }
+
+    func testSwapWaitsForSlotsThenReportsNotRealized() async throws {
+        let (_, session) = try addSession()
+        session.hasSplit = true
+        let started = Date()
+
+        let response = await server.swapSessionPanes(session.id.uuidString, window: nil)
+
+        XCTAssertEqual(response.error, "session not realized")
+        XCTAssertGreaterThan(Date().timeIntervalSince(started), 0.3)
+    }
+
+    func testSwapImmediatelyAfterSplitOnWaitsForBothSlots() async throws {
+        let (_, session) = try addSession()
+        XCTAssertTrue(server.splitSession(session.id.uuidString, window: nil, mode: "on").ok)
+        let primary = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        split.setPaneRole(.split)
+        let realize = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            session.surface = primary
+            session.splitSurface = split
+        }
+
+        let response = await server.swapSessionPanes(session.id.uuidString, window: nil)
+        await realize.value
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertTrue(session.surface === split)
+        XCTAssertTrue(session.splitSurface === primary)
+    }
+
+    func testSwapClearsAnInvalidZoomBeforeAcknowledging() async throws {
+        let (store, session) = try addSession()
+        _ = parkSwappablePanes(on: session)
+        session.setPaneOverlay(PaneOverlay(command: "true"), pane: .left)
+        let windowID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        zoom.set(.on, target: .session(session.id, .overlayLeft))
+        XCTAssertNotNil(zoom.target)
+
+        let response = await server.swapSessionPanes(session.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertNil(zoom.target)
+        XCTAssertNil(session.leftOverlay)
+        XCTAssertNotNil(session.rightOverlay)
+    }
+
+    func testSwapKeepsAValidZoomTarget() async throws {
+        let (_, session) = try addSession()
+        _ = parkSwappablePanes(on: session)
+        let windowID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        let target = TerminalZoomTarget.session(session.id, .primary)
+        zoom.set(.on, target: target)
+
+        let response = await server.swapSessionPanes(session.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(zoom.target, target)
+    }
+
+    func testSwapDoesNotClearAnotherSessionsInvalidZoom() async throws {
+        let (_, swapped) = try addSession()
+        _ = parkSwappablePanes(on: swapped)
+        let (_, other) = try addSession()
+        let windowID = try XCTUnwrap(library.windowID(forSession: swapped.id))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        let foreignTarget = TerminalZoomTarget.session(other.id, .split)
+        zoom.set(.on, target: foreignTarget)
+        XCTAssertFalse(TerminalZoomController.isTargetValid(foreignTarget, in: try XCTUnwrap(library.activeStore)))
+
+        let response = await server.swapSessionPanes(swapped.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(zoom.target, foreignTarget)
     }
 
     func testFollowSelectsTheTargetWhenNothingIsSelected() throws {
@@ -129,6 +260,38 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertFalse(response.ok)
         XCTAssertEqual(response.error, "session not realized",
                        "an empty slot and a parked-but-unrealized view are one state to a caller")
+    }
+
+    func testTextPaneIDResolvesTheLiveSlotAndOverridesPane() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                             env: ["AGTERM_PANE_ID": "left-token"])
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                                  env: ["AGTERM_PANE_ID": "right-token"])
+        session.hasSplit = true
+
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "right-token"),
+                       "right")
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "scratch", paneID: "unknown"),
+                       "scratch", "an unknown token falls back to the explicit role")
+    }
+
+    func testTextPaneIDFollowsItsSurfaceAfterSwap() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                             env: ["AGTERM_PANE_ID": "moving-token"])
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                                  env: ["AGTERM_PANE_ID": "other-token"])
+        session.hasSplit = true
+
+        XCTAssertNil(store.swapPanes(session.id))
+
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "moving-token"),
+                       "right")
     }
 
     // the same parked pane, one command over: `surfaceBindingAction`'s cast proves only that the SLOT is
@@ -674,6 +837,45 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(toMain.ok, toMain.error ?? "")
         XCTAssertEqual(toMain.result?.pane, "left")
         XCTAssertEqual(session.restoreCommand, "echo main")
+    }
+
+    func testRestoreSetAndNoneSavePolicyWithANoteOutsideRerun() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let liveServer = makeServer(launchMode: .live)
+
+        let set = liveServer.setSessionRestore(
+            session.id.uuidString, window: nil,
+            update: ControlSessionRestoreUpdate(pin: .pin("echo later")))
+        XCTAssertTrue(set.ok, set.error ?? "")
+        XCTAssertEqual(set.result?.text, "saved for rerun mode; active restore mode is live")
+        XCTAssertEqual(session.restoreCommand, "echo later")
+
+        let none = liveServer.setSessionRestore(
+            session.id.uuidString, window: nil,
+            update: ControlSessionRestoreUpdate(pin: .pinNone))
+        XCTAssertTrue(none.ok, none.error ?? "")
+        XCTAssertEqual(none.result?.text, "saved for rerun mode; active restore mode is live")
+        XCTAssertEqual(session.restoreCommand, "")
+
+        let clear = liveServer.setSessionRestore(
+            session.id.uuidString, window: nil,
+            update: ControlSessionRestoreUpdate(pin: .unpin))
+        XCTAssertTrue(clear.ok, clear.error ?? "")
+        XCTAssertNil(clear.result?.text)
+        XCTAssertNil(session.restoreCommand)
+    }
+
+    private func makeServer(launchMode: RestoreMode) -> ControlServer {
+        ControlServer(
+            library: library,
+            actions: AppActions(library: library),
+            settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
+            identity: AppIdentity(version: "9.9.9", commit: "testsha"),
+            launchRestoreMode: launchMode,
+            socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path
+        )
     }
 
 }

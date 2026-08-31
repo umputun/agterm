@@ -203,6 +203,7 @@
             <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">keymap</a>
             <a href="#config" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">config</a>
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
+            <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
             <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
@@ -292,6 +293,10 @@
               (overlay result), <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">count</span>
               (search matches, keymap/config diagnostics),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ratio</span> (session resize),
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">affected</span> (things changed: sessions for a batch close or move, daemons killed
+              for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx prune</span>),
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore</span> (the restore-mode policy),
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx</span> (the daemon inventory),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">windows</span>, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">app</span>
@@ -444,6 +449,9 @@
                 answer <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session not realized</span>. A surface cannot be
                 created while the display is asleep, so a session made by a scheduled job overnight stays unrealized until the
                 displays wake, then recovers on its own — poll this after an unattended create),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">backedByZmx</span> (true only when every existing
+                primary/split pane is currently zmx-backed; each primary/split object in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (a second pane exists at all, shown or
                 hidden, omitted when there is none — read this rather than
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> to tell whether a session has a split),
@@ -480,9 +488,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (each pane's pinned
                 restore override, omitted when none and an empty string when pinned to nothing),
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span> (whether either pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> was created with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; each omitted otherwise), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
@@ -878,7 +887,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>), so a bare Homebrew binary
                 fails with exit 127. Use an absolute path, or wrap it:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">--command "zsh -lc 'htop'"</span>. The
-                command is persisted and re-runs on restore when <em>Restore running commands on restart</em> is enabled.
+                command is persisted and runs again when a restored session launches in rerun mode.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-select</span> creates the session in the
@@ -1103,7 +1112,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session text [--all] [--lines N] [--pane left|right|scratch] [--target T] [--window W]
+                agtermctl session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.text</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1115,6 +1124,13 @@
                 The two are mutually exclusive and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">N</span> must be greater than 0 (enforced server-side
                 too).
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> accepts the shell's stable
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>. It resolves the surface's
+                current slot and overrides <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> when found,
+                so a long-running watcher keeps reading the same terminal after a pane swap or promotion. An absent or unknown
+                token falls back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, then to the visible pane.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A genuinely blank screen is <em>not</em> an error — it returns
@@ -1179,6 +1195,33 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type --pane right</span> cannot once the pane is
                 past a prompt — a nested shell, ssh, an agent. Idempotent: a session with no split answers ok.
                 The command palette's <strong style="color: #bfbab0">Close Split</strong> is the same action.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session swap [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.swap</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Exchange the two terminals' physical positions and primary/split roles without restarting either process.
+                Focus follows its terminal; the split axis and divider ratio stay fixed. A hidden split swaps too and shows the
+                new order when restored. The command also works while the session is zoomed or shown in the dashboard. It errors
+                when no split exists or either terminal is not ready.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The primary terminal becomes the session's public identity, so its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">title</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> change sides in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>; the split-side read-back is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span>. The GUI twin is
+                <strong style="color: #bfbab0">View ▸ Swap Panes</strong> and the matching action-palette row. Neither has a
+                default shortcut.
               </p>
             </div>
 
@@ -1400,13 +1443,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span> as well
                 as the captured foreground — a pinned line (or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span>)
                 suppresses it, so a restored command session no longer takes the exec path or its
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> close-on-exit behavior. It is gated on the
-                <em>Restore running commands on restart</em> setting (a pinned command while the setting is off succeeds with a note
-                that nothing will run; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span>
-                get no note, since their outcome is delivered either way) but bypasses
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> close-on-exit behavior. The pin runs only in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rerun</span> mode. In fresh-shell or live mode,
+                a command or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span> still saves policy for a future
+                rerun launch and returns a note naming the active mode;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> works in every mode. A pin never opts one
+                session out of live mode. Deliberate pins bypass
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restore-denylist.conf</span>,
-                since it names its command deliberately. A split hidden at quit is not restored, so its pin is dropped on that
-                launch rather than left to fire into a later manual split. It exists for non-idempotent commands like
+                since it names its command deliberately. A split hidden at quit keeps its identity and pin; showing it after
+                restart creates the pane and applies the saved rerun policy. It exists for non-idempotent commands like
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">claude --resume … --fork-session</span>:
                 a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">SessionStart</span> hook can rewrite it to the live
                 session id on every start so the next restart reattaches instead of forking.
@@ -1501,10 +1546,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> cannot combine with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent</span>; everything
                 else matches the session-wide overlay. A non-split session accepts
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> (its shell reports
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE=left</span>), so a caller can pass
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane "$AGTERM_PANE"</span> without
-                checking the split state. Errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span>. A shell starts
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE=left</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, but that spawn role is not rewritten after
+                promotion or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session swap</span>. A long-running shell
+                must not assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane "$AGTERM_PANE"</span>
+                still names its current slot. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane overlay already open</span> on a
                 second open, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane not visible</span>
                 when that pane is not currently rendered — hiding the split AFTER opening is fine. Read the covered panes back from
@@ -2673,8 +2720,11 @@
                 For the exit that never reaches a clean quit: a force quit, a crash, a hard reset, a power loss. (A shutdown,
                 restart or logout quits the app normally and captures by itself.) Run it from a scheduled job or bind it, and an
                 exit nobody was there for restores like a deliberate quit. Consumption is unchanged, the next launch arms each
-                captured command once and clears it. With <em>Restore running commands on restart</em> off it captures nothing and
-                returns an error saying so, since nothing would replay the capture. Typed at a prompt it records ITSELF, being that
+                captured command once and clears it. It runs only when
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rerun</span> is configured for the next launch;
+                configured fresh-shell and live modes refuse with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restore.capture requires rerun mode; configured restore mode is MODE</span>.
+                Typed at a prompt it records ITSELF, being that
                 pane's foreground process while it runs, so bind it or schedule it rather than running it by hand.
               </p>
             </div>
@@ -2691,11 +2741,85 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 It does <em>not</em> clear a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>
-                session's own command — that is the durable creation identity and still re-runs on restore when the setting is on.
-                This is the counterpart to the opt-in <em>Restore running commands on restart</em> setting.
+                session's own command. That is the durable creation identity and still re-runs in rerun mode.
+                This command works in fresh-shell, rerun, and live modes.
                 Like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">restore capture</span>, it
                 acknowledges only a save that landed: if any window fails to save it returns an error saying so, and those
                 windows keep their captured commands until a later save succeeds.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl restore mode [none|rerun|live]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">restore.mode</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Read the restore policy, or write it for the <em>next</em> launch. Bare, it reports what settings hold, what this launch requested, what it actually got, whether a restart is needed, and why live was refused when it was.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Setting it changes nothing in the running app, and no flag makes it: a pane is wrapped in a zmx daemon or not at the moment it is created, so a running shell cannot be retrofitted. A failed write is reported as a failure rather than acknowledged.
+              </p>
+            </div>
+          </section>
+
+          <section id="zmx" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              zmx
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Every zmx command needs a running agterm: only the app can join its live windows, its pending
+              closes and its persisted snapshots against what zmx reports.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx list
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.list</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Every daemon behind a live session and every pane expecting one, joined, under the restore status as a header. Shows who owns each daemon, how many clients are attached, and which are left over.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A <em>closed</em> window's panes are claimed with zero clients: that is the resting state after you close a window, not a leak, which is why the owner's window state is its own column. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> means the pane inventory was incomplete, so no row can be called an orphan and nothing can be pruned.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx prune
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.prune</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Kill the daemons no pane claims and nothing is attached to. Refuses outright when the pane inventory is incomplete or two panes claim one daemon.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The check is not atomic. zmx has no kill-if-detached, so this re-lists immediately before killing and drops anything that gained a client; a client attaching from outside agterm in the remaining gap can still be terminated. Each daemon is reported separately, and a stale-socket cleanup is not a kill.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx kill --target ID --pane left|right --force [--window ID]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.kill</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Destroy one pane's daemon and the process running in it. Target, pane and force are all required.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                This kills a backend process. It reaches a pane no window is showing and takes down every client attached to that daemon, so there is no sensible default for who is affected. Killing a shown split closes that split; killing a primary promotes its split survivor, or closes the session when there is none. None of these gets the three-second undo. It refuses a daemon already gone, one zmx could not read, and a session inside its undo window.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> scopes the search to one window's claims, for a session prefix claimed in more than one. Omit it to search every window, closed and unindexed ones included. Neither it nor <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> accepts <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
               </p>
             </div>
           </section>

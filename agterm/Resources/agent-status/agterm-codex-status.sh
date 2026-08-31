@@ -17,7 +17,8 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 status_wrapper=${AGTERM_STATUS_WRAPPER:-"$script_dir/agterm-agent-status.sh"}
 
 pane_args=()
-[ -n "${AGTERM_PANE:-}" ] && pane_args=(--pane "$AGTERM_PANE")
+[ -n "${AGTERM_PANE_ID:-}" ] && pane_args+=(--pane-id "$AGTERM_PANE_ID")
+[ -n "${AGTERM_PANE:-}" ] && pane_args+=(--pane "$AGTERM_PANE")
 socket_args=()
 [ -n "${AGTERM_SOCKET:-}" ] && socket_args=(--socket "$AGTERM_SOCKET")
 
@@ -43,8 +44,9 @@ watch_file_path() {
     printf '%s' "$AGTERM_CODEX_WATCH_FILE"
     return
   fi
-  local key
-  key=$(printf '%s-%s' "$AGTERM_SESSION_ID" "${AGTERM_PANE:-left}" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')
+  local key pane_key
+  pane_key=${AGTERM_PANE_ID:-${AGTERM_PANE:-left}}
+  key=$(printf '%s-%s' "$AGTERM_SESSION_ID" "$pane_key" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')
   printf '%s/agterm-codex-watch-%s-%s' "${TMPDIR:-/tmp}" "${UID:-0}" "$key"
 }
 

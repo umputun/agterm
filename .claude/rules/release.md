@@ -12,6 +12,8 @@ paths:
   `umputun/homebrew-apps` using the maintainer's `gh` auth. It needs no `HOMEBREW_TAP_PAT`. The DMG
   container must be codesigned before notarization or `spctl` rejects `hdiutil`'s unsigned image.
   Without `--publish`, the full build/sign/notarize/staple/`spctl` dry-run stops before upload.
+- Developer ID signing is inside-out: `agtermctl` and zmx are signed first with no entitlements, then the
+  app is sealed with its TCC entitlements. The script rejects either helper if app entitlements leak into it.
 - Before writing or committing a release section, put the exact `CHANGELOG.md` text in a temp file and
   pass it through the `draft-approval` skill's `draft-review.sh`; address annotations and get explicit
   chat approval. `release.sh:70-85` publishes that text as the GitHub release body.

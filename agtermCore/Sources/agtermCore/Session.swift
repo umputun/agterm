@@ -81,6 +81,10 @@ public struct PaneOverlay: Equatable, Sendable {
 @MainActor
 public final class Session: Identifiable {
     public let id: UUID
+    /// Stable process identity for the primary pane. It follows a promoted split survivor.
+    public var paneIdentity: UUID
+    /// Stable process identity for an existing split pane, including a hidden split.
+    public var splitPaneIdentity: UUID?
     public var customName: String?
     /// Live cwd from the latest OSC 7 / PWD report; the sidebar row refreshes. Persisted by `snapshot()` on
     /// quit + structural mutations only (OSC 7 fires constantly), so a crash loses cwd since the last save.
@@ -157,6 +161,18 @@ public final class Session: Identifiable {
     /// hiding the split keeps the shell alive. Freed only on `closeSplit`/`closeSession`.
     @ObservationIgnored public var splitSurface: (any TerminalSurface)?
 
+    public func zmxBacking(for surface: TerminalZoomSurface) -> Bool? {
+        switch surface {
+        case .primary: self.surface?.backedByZmx ?? false
+        case .split: splitSurface?.backedByZmx ?? false
+        default: nil
+        }
+    }
+
+    public var allPanesBackedByZmx: Bool {
+        (surface?.backedByZmx ?? false) && (!hasSplit || (splitSurface?.backedByZmx ?? false))
+    }
+
     /// Where the split (right) pane re-spawns on restore (the split factory reads it), from the persisted
     /// `SessionSnapshot.splitCwd`, so each pane keeps its own cwd across a relaunch; nil for a fresh split,
     /// which seeds from `effectiveCwd`.
@@ -175,7 +191,7 @@ public final class Session: Identifiable {
     /// `command`), set via `session.new --command`. The surface factory reads it once; the session closes when
     /// the command exits. Persisted, so a command session — e.g. an `ssh …` shortcut, which escapes the
     /// foreground-pid capture because that pane's group is led by unreadable setuid-root `login` — re-runs it
-    /// on restore when `restoreRunningCommand` is on (via `wasRestored`); a fresh session always runs it.
+    /// on restore in `rerun` launch mode (via `wasRestored`); a fresh session always runs it.
     @ObservationIgnored public var initialCommand: String?
 
     /// Whether a `--command` session HOLDS its surface after the command exits — libghostty's "press any key
@@ -184,9 +200,16 @@ public final class Session: Identifiable {
     /// only with `initialCommand`. Persisted, so a restored session that re-runs its command holds again.
     @ObservationIgnored public var commandWait: Bool = false
 
+    /// The split pane's creation command, the split analogue of `initialCommand`. Persisted so a pane moved
+    /// into the split role by a swap keeps its exec lifecycle across restore.
+    @ObservationIgnored public var splitInitialCommand: String?
+
+    /// The split pane's hold-after-exit policy, meaningful only with `splitInitialCommand`.
+    @ObservationIgnored public var splitCommandWait: Bool = false
+
     /// True when the session was rebuilt by `AppStore.restore(from:)` rather than freshly created; gates the
-    /// `initialCommand` re-run on `restoreRunningCommand` (a fresh session always runs it, a restored one gets
-    /// a plain shell when off). Never persisted.
+    /// `initialCommand` re-run on `rerun` launch mode (a fresh session always runs it, a restored one gets
+    /// a plain shell in any other mode). Never persisted.
     @ObservationIgnored public var wasRestored = false
 
     /// The main pane's foreground command (full argv) for restore-running-command, read once by the surface
@@ -222,8 +245,9 @@ public final class Session: Identifiable {
     /// goes nil the moment the replay is armed, so no save landing before the surface spawns can write the
     /// argv back over the file the strip just cleaned.
     @ObservationIgnored public var pendingForegroundCommand: [String]?
-    /// The split analogue of `pendingForegroundCommand`, seeded only when the restored split was SHOWN
-    /// (`isSplit`) — a hidden split builds no right surface at bootstrap.
+    /// The split analogue of `pendingForegroundCommand`, seeded for every surviving split (`hasSplit`),
+    /// hidden included: a hidden split builds no right surface at bootstrap, so it consumes this only if it
+    /// is later shown, and the exit capture writes it back untouched until then.
     @ObservationIgnored public var pendingSplitForegroundCommand: [String]?
 
     /// Whether the session-wide overlay slot is OCCUPIED, by either of its two occupants: a caller's PROGRAM
@@ -373,8 +397,11 @@ public final class Session: Identifiable {
     /// START callback, cleared on close; weak, since the session strongly owns its panes. Ephemeral.
     @ObservationIgnored public weak var searchSurface: (any TerminalSurface)?
 
-    public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil) {
+    public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil,
+                paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil) {
         self.id = id
+        self.paneIdentity = paneIdentity
+        self.splitPaneIdentity = splitPaneIdentity
         self.initialCwd = initialCwd
         self.customName = customName
     }

@@ -27,6 +27,8 @@ struct agtermApp: App {
     /// launch writes its own window snapshot moments after the scene appears and that write would read back
     /// as prior state.
     private let welcomeDue: Bool
+    private let zmxForegroundResolver: ZmxForegroundResolver?
+    private let captureOnExit: AppDelegate.ExitCapture?
 
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
@@ -56,7 +58,9 @@ struct agtermApp: App {
         // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
         // window and saves it, which a later read would see as evidence of an earlier launch.
         let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)
-        let library = agtermApp.restoredLibrary()
+        let restored = agtermApp.restoredRuntime(stateDirectory: stateDirectory)
+        let library = restored.library
+        zmxForegroundResolver = restored.foregroundResolver
         _library = State(initialValue: library)
         let actions = AppActions(library: library)
         _actions = State(initialValue: actions)
@@ -65,10 +69,14 @@ struct agtermApp: App {
         let settingsStore = SettingsStore(directory: stateDirectory)
         let settingsModel = SettingsModel(library: library, settingsStore: settingsStore)
         _settingsModel = State(initialValue: settingsModel)
+        captureOnExit = AppDelegate.makeExitCapture(
+            settingsModel: settingsModel, zmxResolver: restored.foregroundResolver)
         welcomeDue = FirstRunWelcome.isDue(welcomeShown: settingsModel.settings.welcomeShown,
                                            hasPriorState: hadPriorState)
         let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel,
-                                          identity: Self.appIdentity)
+                                          identity: Self.appIdentity,
+                                          zmxForegroundResolver: restored.foregroundResolver,
+                                          zmxClient: restored.zmxClient)
         _controlServer = State(initialValue: controlServer)
         _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
         _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
@@ -101,11 +109,13 @@ struct agtermApp: App {
                     library: library,
                     makeSurface: {
                         Self.makeSurface(for: $0, store: $1,
-                                         env: surfaceEnv(for: $0, pane: .left), library: library)
+                                         env: surfaceEnv(for: $0, pane: .left), library: library,
+                                         zmxForegroundResolver: zmxForegroundResolver)
                     },
                     makeSplitSurface: {
                         Self.makeSplitSurface(for: $0, store: $1,
-                                              env: surfaceEnv(for: $0, pane: .right), library: library)
+                                              env: surfaceEnv(for: $0, pane: .right), library: library,
+                                              zmxForegroundResolver: zmxForegroundResolver)
                     },
                     makeOverlaySurface: {
                         Self.makeOverlaySurface(for: $0, store: $1, pane: $2, env: surfaceEnv(for: $0))
@@ -120,6 +130,7 @@ struct agtermApp: App {
                                                        suppressAutoFocus: session.programOverlayActive || qtVisible,
                                                        library: library)
                     },
+                    captureOnExit: captureOnExit,
                     actions: actions,
                     palette: palette,
                     sessionSwitcher: sessionSwitcher
@@ -127,6 +138,7 @@ struct agtermApp: App {
                     .frame(minWidth: 640, minHeight: 400)
                     .task {
                         appDelegate.library = library
+                        appDelegate.captureOnExit = captureOnExit
                         // `openWindow` lives only in the scene: hand it to the action hub for cross-window
                         // reveal and `window.new`/`window.select` (raise if on-screen, else claim + spawn).
                         // MUST precede `controlServer.start()`, or an early command finds it nil: ok, no window.
@@ -214,13 +226,40 @@ struct agtermApp: App {
         }
     }
 
-    /// Builds the app-global window library at the state directory — `AGTERM_STATE_DIR`, a temp dir under UI test.
-    /// Bootstrap migrates/recovers (legacy `workspaces.json` → one window, else seed): always valid, non-empty.
     @MainActor
-    private static func restoredLibrary() -> WindowLibrary {
-        ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
-            .map { WindowLibrary(directory: URL(fileURLWithPath: $0, isDirectory: true)) }
-            ?? WindowLibrary()
+    private struct RestoredRuntime {
+        let library: WindowLibrary
+        let foregroundResolver: ZmxForegroundResolver?
+        /// Handed to `ControlServer` so the zmx commands can list and kill. It used to live only inside the
+        /// finalizer/reap closures, where nothing else could reach it.
+        let zmxClient: ZmxClient?
+    }
+
+    /// Builds the window library and zmx foreground resolver for the state directory. Bootstrap
+    /// migrates/recovers persisted windows and inventories claimed pane identities before surfaces mount.
+    private static func restoredRuntime(stateDirectory: URL) -> RestoredRuntime {
+        guard !isHostedUnitTest else {
+            return RestoredRuntime(library: WindowLibrary(directory: stateDirectory),
+                                   foregroundResolver: nil, zmxClient: nil)
+        }
+        let ghostty = GhosttyApp.shared
+        let environment = ProcessInfo.processInfo.environment
+        let executable = ZmxLaunch.executablePath(bundleURL: Bundle.main.bundleURL, environment: environment,
+                                                  allowDebugOverride: ZmxLaunch.allowDebugOverride)
+        let client = ZmxClient(executablePath: executable,
+                              socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: stateDirectory.path))
+        let foregroundResolver = ZmxForegroundResolver(leaderProvider: { client.sessionLeaderPIDs(timeout: $0) })
+        let library = WindowLibrary(
+            directory: stateDirectory,
+            paneFinalizer: {
+                _ = client.kill(paneIdentities: $0)
+                foregroundResolver.noteLifecycleChange()
+            },
+            launchInventorySink: {
+                _ = client.reap(knownPaneIdentities: $0, launchDecision: ghostty.restoreLaunchDecision)
+                foregroundResolver.noteLifecycleChange()
+            })
+        return RestoredRuntime(library: library, foregroundResolver: foregroundResolver, zmxClient: client)
     }
 
     /// Opens the windows open at quit beyond the one SwiftUI auto-opened at launch (which claimed the launch
@@ -231,40 +270,102 @@ struct agtermApp: App {
         for _ in 0..<extra { openWindow(id: Self.windowGroupID) }
     }
 
+    /// Which pane a focus report should record, read from the surface's LIVE role so a swapped terminal
+    /// updates the slot it now occupies. nil when the report is a focus LOSS, which records nothing.
+    @MainActor
+    static func focusedSplitState(_ focused: Bool, surface: GhosttySurfaceView?) -> Bool? {
+        guard focused else { return nil }
+        return surface?.isSplitPane ?? false
+    }
+
+    /// Persist a font-size change only from the surface currently in the PRIMARY role; a split-role or
+    /// unresolved surface changes size live without writing the session's persisted value.
+    @MainActor
+    static func persistFontSize(_ size: Double, from surface: GhosttySurfaceView?, store: AppStore, sessionID: UUID) {
+        guard surface?.isSplitPane == false else { return }
+        store.setFontSize(sessionID, size)
+    }
+
     /// Surface factory: a libghostty-backed view for the session, spawning a login shell in its initial working
     /// directory. On shell exit the view calls back to close the owning session in the store.
     @MainActor
     private static func makeSurface(for session: Session, store: AppStore, env: [String: String],
-                                    library: WindowLibrary) -> GhosttySurfaceView {
+                                    library: WindowLibrary,
+                                    zmxForegroundResolver: ZmxForegroundResolver?) -> GhosttySurfaceView {
+        // GhosttyApp resolved resources and latched restore mode before WindowLibrary assembled the launch
+        // inventory, so every later factory reads the same process policy and GHOSTTY_RESOURCES_DIR.
+        let ghostty = GhosttyApp.shared
         // `initialCommand` (`session.new --command`) replaces the login shell and closes the session on its exit
         // (like kitty); it is the durable creation identity, re-emitted by every `snapshot()`. `foregroundCommand`,
         // a distinct child captured at quit, is consumed run-once; an exec-replacing command has a nil libghostty
         // foreground pid, so it is never captured and restores via the exec `command` path, keeping close-on-exit.
-        // Precedence is host-free `CommandRestore.restorePlan`: fresh always runs, restored honors the toggle, a
-        // captured foreground preempts `initialCommand` even when denylist-suppressed. A `session.restore` override
-        // beats both, from the TRANSIENT pending slot (only an app-bootstrap restore seeds it) not the sticky
-        // persisted field; taking it clears it, so this pane's next surface is a plain shell.
-        let pendingForeground = session.takePendingForegroundCommand(pane: .left)
-        let hadForeground = pendingForeground != nil
-        let restoreInput = Self.restoreInitialInput(pendingForeground)
-        let inputs = CommandRestore.RestoreInputs(wasRestored: session.wasRestored,
-                                                  restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
-                                                  hadForeground: hadForeground, foregroundInput: restoreInput,
-                                                  initialCommand: session.initialCommand,
-                                                  restoreOverride: session.takePendingRestoreOverride(pane: .left))
-        let plan = CommandRestore.restorePlan(inputs)
+        // On the ordinary path, precedence is host-free `CommandRestore.restorePlan`: fresh always runs, restored
+        // honors rerun mode, and a captured foreground preempts `initialCommand` even when denylist-suppressed. A
+        // `session.restore` override beats both from the TRANSIENT pending slot. A wrapped live pane consumes only
+        // its captured foreground argv; zmx ignores that create-only payload when the daemon survived.
+        let zmx = ghostty.launchRestoreMode == .live
+            ? ZmxLaunch.configuration(paneIdentity: session.paneIdentity, pane: "primary", environment: env)
+            : nil
+        let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
+                                                active: ghostty.launchRestoreMode, configuration: zmx)
+        if disposition.backedByZmx { zmxForegroundResolver?.noteLifecycleChange() }
+        let command: String?
+        let initialInput: String?
+        let waitAfterCommand: Bool
+        let surfaceEnv: [String: String]
+        switch disposition {
+        case .wrapped(let zmx):
+            guard let seed = ZmxLaunch.surfaceSeed(
+                disposition: disposition, session: session, pane: .left, denylist: ghostty.restoreDenylist
+            ) else { preconditionFailure("wrapped zmx disposition has no surface seed") }
+            command = seed.command
+            initialInput = seed.initialInput
+            waitAfterCommand = false
+            surfaceEnv = zmx.environment
+        case .ordinary:
+            let pendingForeground = session.takePendingForegroundCommand(pane: .left)
+            let restoreInput = Self.restoreInitialInput(pendingForeground)
+            let inputs = CommandRestore.RestoreInputs(
+                wasRestored: session.wasRestored,
+                restoreEnabled: ghostty.restoreRunningCommand,
+                hadForeground: pendingForeground != nil,
+                foregroundInput: restoreInput,
+                initialCommand: session.initialCommand,
+                restoreOverride: session.takePendingRestoreOverride(pane: .left),
+                requestedWait: session.commandWait
+            )
+            let plan = CommandRestore.restorePlan(inputs)
+            command = plan.command
+            initialInput = plan.initialInput
+            waitAfterCommand = plan.waitAfterCommand
+            surfaceEnv = env
+        case .fallback:
+            let plan = CommandRestore.restorePlan(.init(
+                wasRestored: session.wasRestored,
+                restoreEnabled: false,
+                hadForeground: false,
+                foregroundInput: nil,
+                initialCommand: session.initialCommand,
+                restoreOverride: nil,
+                requestedWait: session.commandWait))
+            command = plan.command
+            initialInput = plan.initialInput
+            waitAfterCommand = plan.waitAfterCommand
+            surfaceEnv = env
+        }
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
-                                      command: plan.command, initialInput: plan.initialInput,
-                                      waitAfterCommand: session.commandWait, env: env)
+                                      command: command, initialInput: initialInput,
+                                      waitAfterCommand: waitAfterCommand, env: surfaceEnv,
+                                      backedByZmx: disposition.backedByZmx)
         view.session = session
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
             Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
-        view.onFocusChange = { focused in
-            guard focused else { return }
-            store.session(withID: sessionID)?.splitFocused = false
+        view.onFocusChange = { [weak view] focused in
+            guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
+            store.session(withID: sessionID)?.splitFocused = splitFocused
             // focusing a pane means you've seen the session: clear the badge and any delivered banners.
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
@@ -277,7 +378,9 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
-        view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+        view.onFontSizeChange = { [weak view] size in
+            Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
+        }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
@@ -287,12 +390,12 @@ struct agtermApp: App {
     /// run `closePrimaryPane`, or a re-split then a main-pane exit fires the stale `closeSplitPane` — its guard now
     /// passes with both slots live — tearing down the fresh right pane, stranding the session on the dead left.
     @MainActor
-    private static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
-                                       library: WindowLibrary) {
+    static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                               library: WindowLibrary, alreadyFinalized: UUID? = nil) {
         if view.isSplitPane {
-            store.closeSplitPane(sessionID)
+            store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {
-            store.closePrimaryPane(sessionID)
+            store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized)
             // makeSplitSurface omits onFontSizeChange, but a promoted survivor is the sole pane and must persist
             // its own cmd +/-. no-op when the session closed instead (`surface` nil).
             if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
@@ -312,7 +415,7 @@ struct agtermApp: App {
     }
 
     /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell command
-    /// line + newline, or nil when the restore-running-command flag is off or `shouldRestore` refuses the
+    /// line + newline, or nil outside rerun mode or when `shouldRestore` refuses the
     /// argv — a denylisted basename, a control character, or a lossily-decoded byte (→ plain shell). The
     /// denylist is the user's `restore-denylist.conf`, parsed at launch into `GhosttyApp.shared.restoreDenylist`.
     @MainActor
@@ -393,20 +496,64 @@ struct agtermApp: App {
     /// just the split (hide + teardown), not the session.
     @MainActor
     private static func makeSplitSurface(for session: Session, store: AppStore, env: [String: String],
-                                         library: WindowLibrary) -> GhosttySurfaceView {
+                                         library: WindowLibrary,
+                                         zmxForegroundResolver: ZmxForegroundResolver?) -> GhosttySurfaceView {
         // cwd is the persisted `initialSplitCwd` (a restored split keeps its own directory), else the session's
-        // effectiveCwd. Font size matches the primary; the split's own cmd +/- is not persisted. Env inherits the
-        // parent's window/workspace/session ids. The captured foreground command re-runs via initial_input
-        // (run-once); splits never carry an `initialCommand`, so there is no mutual-exclusion guard and no
-        // `restorePlan` — `restoreInput` alone decides. A `session.restore` override wins over the capture, from
-        // the TRANSIENT pending slot (seeded only by an app-bootstrap restore whose split was shown) not the
-        // sticky persisted field; taking it clears it, so a fresh ⌘D split after a split shell exits is a shell.
-        let capturedInput = Self.restoreInitialInput(session.takePendingForegroundCommand(pane: .right))
-        let restoreInput = CommandRestore.restoreInput(restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
-                                                       restoreOverride: session.takePendingRestoreOverride(pane: .right),
-                                                       capturedInput: capturedInput)
+        // effectiveCwd. Font size matches the primary; env inherits the parent's window/workspace/session ids.
+        // Creation, capture and override precedence matches the primary. A wrapped live pane passes its captured
+        // command as a create-only payload, so an existing daemon wins without replaying it.
+        let ghostty = GhosttyApp.shared
+        let zmx = ghostty.launchRestoreMode == .live
+            ? ZmxLaunch.configuration(paneIdentity: session.splitPaneIdentity, pane: "split", environment: env)
+            : nil
+        let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
+                                                active: ghostty.launchRestoreMode, configuration: zmx)
+        if disposition.backedByZmx { zmxForegroundResolver?.noteLifecycleChange() }
+        let command: String?
+        let initialInput: String?
+        let waitAfterCommand: Bool
+        let surfaceEnv: [String: String]
+        switch disposition {
+        case .wrapped(let zmx):
+            guard let seed = ZmxLaunch.surfaceSeed(
+                disposition: disposition, session: session, pane: .right, denylist: ghostty.restoreDenylist
+            ) else { preconditionFailure("wrapped zmx disposition has no surface seed") }
+            command = seed.command
+            initialInput = seed.initialInput
+            waitAfterCommand = false
+            surfaceEnv = zmx.environment
+        case .ordinary:
+            let pendingForeground = session.takePendingForegroundCommand(pane: .right)
+            let plan = CommandRestore.restorePlan(.init(
+                wasRestored: session.wasRestored,
+                restoreEnabled: ghostty.restoreRunningCommand,
+                hadForeground: pendingForeground != nil,
+                foregroundInput: Self.restoreInitialInput(pendingForeground),
+                initialCommand: session.splitInitialCommand,
+                restoreOverride: session.takePendingRestoreOverride(pane: .right),
+                requestedWait: session.splitCommandWait))
+            command = plan.command
+            initialInput = plan.initialInput
+            waitAfterCommand = plan.waitAfterCommand
+            surfaceEnv = env
+        case .fallback:
+            let plan = CommandRestore.restorePlan(.init(
+                wasRestored: session.wasRestored,
+                restoreEnabled: false,
+                hadForeground: false,
+                foregroundInput: nil,
+                initialCommand: session.splitInitialCommand,
+                restoreOverride: nil,
+                requestedWait: session.splitCommandWait))
+            command = plan.command
+            initialInput = plan.initialInput
+            waitAfterCommand = plan.waitAfterCommand
+            surfaceEnv = env
+        }
         let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
-                                      fontSize: session.fontSize.map(Float.init), initialInput: restoreInput, env: env)
+                                      fontSize: session.fontSize.map(Float.init), command: command,
+                                      initialInput: initialInput, waitAfterCommand: waitAfterCommand, env: surfaceEnv,
+                                      backedByZmx: disposition.backedByZmx)
         view.session = session
         view.isSplitPane = true
         let sessionID = session.id
@@ -415,10 +562,8 @@ struct agtermApp: App {
             Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
         view.onFocusChange = { [weak view] focused in
-            guard focused else { return }
-            // a promoted survivor keeps this closure with `isSplitPane` cleared: as the main pane it must not
-            // re-raise `splitFocused`, which masks its migrated title and mis-routes focus after a re-split.
-            store.session(withID: sessionID)?.splitFocused = view?.isSplitPane ?? false
+            guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
+            store.session(withID: sessionID)?.splitFocused = splitFocused
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
@@ -429,6 +574,9 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
+        view.onFontSizeChange = { [weak view] size in
+            Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
+        }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
@@ -567,12 +715,18 @@ struct agtermApp: App {
                 workspaceID = workspace.id
             }
         }
-        // a session-owned pane bakes a fresh stable AGTERM_PANE_ID, so the hook forwards --pane-id and the
-        // status handler resolves the surface's LIVE slot, not the baked role (#199); the overlay needs none.
+        let paneIdentity: UUID? = switch pane {
+        case .left: session.paneIdentity
+        case .right: session.splitPaneIdentity
+        case .scratch: UUID()
+        case nil: nil
+        }
+        // a session-owned pane bakes its stable identity, so the hook resolves the surface's live slot after
+        // promotion; scratch is ephemeral and gets one identity for the lifetime of its surface.
         return SurfaceEnvironment.session(sessionID: session.id, windowID: windowID,
                                           workspaceID: workspaceID, socketPath: controlServer.resolvedSocketPath,
                                           programVersion: Self.terminalProgramVersion,
-                                          pane: pane, paneToken: pane == nil ? nil : UUID().uuidString)
+                                          pane: pane, paneToken: paneIdentity?.uuidString)
     }
 
     /// The environment the quick terminal exposes — scratch, not in the tree and owned by no window, so its

@@ -6,6 +6,9 @@ import Foundation
 /// Recovery contract: a missing file, corrupt JSON, or a version mismatch all resolve to a default empty
 /// `Snapshot` — `load()` never throws out to the caller. `save(_:)` writes atomically (temp then replace).
 public struct PersistenceStore {
+    public enum LoadError: Error, Equatable {
+        case versionMismatch
+    }
     private let directory: URL
     private let fileName: String
 
@@ -27,9 +30,15 @@ public struct PersistenceStore {
     /// Loads the snapshot, recovering a default empty one on any failure (missing file, unreadable data,
     /// corrupt JSON, or version mismatch).
     public func load() -> Snapshot {
-        guard let data = try? Data(contentsOf: fileURL) else { return Snapshot() }
-        guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return Snapshot() }
-        guard snapshot.version == Snapshot.currentVersion else { return Snapshot() }
+        (try? loadChecked()) ?? Snapshot()
+    }
+
+    /// Strict launch-inventory read. Unlike `load()`, every read/decode/version failure reaches the caller,
+    /// which must not reap daemons against a partial persisted-name set.
+    public func loadChecked() throws -> Snapshot {
+        let data = try Data(contentsOf: fileURL)
+        let snapshot = try JSONDecoder().decode(Snapshot.self, from: data)
+        guard snapshot.version == Snapshot.currentVersion else { throw LoadError.versionMismatch }
         return snapshot
     }
 

@@ -19,6 +19,7 @@ struct ContentView: View {
     /// `left`/`right` the pane-scoped one covering that split pane.
     let makeOverlaySurface: (Session, AppStore, OverlayPane?) -> GhosttySurfaceView
     let makeScratchSurface: (Session, AppStore) -> GhosttySurfaceView
+    let captureOnExit: AppDelegate.ExitCapture?
     let actions: AppActions
     let palette: PaletteController
     let sessionSwitcher: SessionSwitcher
@@ -63,6 +64,7 @@ struct ContentView: View {
                     makeSplitSurface: { makeSplitSurface($0, store) },
                     makeOverlaySurface: { makeOverlaySurface($0, store, $1) },
                     makeScratchSurface: { makeScratchSurface($0, store) },
+                    captureOnExit: captureOnExit,
                     actions: actions,
                     palette: palette,
                     sessionSwitcher: sessionSwitcher

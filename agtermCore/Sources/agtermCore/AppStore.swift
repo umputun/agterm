@@ -110,11 +110,6 @@ public final class AppStore {
     /// `session.resize` while `Session.splitRatio` is nil.
     public static let splitRatioDefault: Double = 0.5
 
-    /// Clamp a primary-pane split fraction to `splitRatioMin...splitRatioMax`.
-    public static func clampSplitRatio(_ ratio: Double) -> Double {
-        min(splitRatioMax, max(splitRatioMin, ratio))
-    }
-
     /// Most-recently-selected session ids, front = current; drives the Ctrl-Tab switcher (`items[1]` is the
     /// previous). `@ObservationIgnored`, read imperatively; persisted so the order survives a relaunch.
     @ObservationIgnored public private(set) var sessionRecency = RecencyStack<UUID>()
@@ -131,6 +126,7 @@ public final class AppStore {
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
+    @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
     /// Coalesces the high-frequency selection/font saves: a click-storm or a font ramp writes once after the
     /// burst settles instead of hitting disk per event.
     @ObservationIgnored private let saveDebouncer = Debouncer()
@@ -173,13 +169,15 @@ public final class AppStore {
                 persistence: PersistenceStore = PersistenceStore(),
                 recentClosedStore: RecentClosedStore? = nil,
                 recentClosedDidChange: (() -> Void)? = nil,
-                controlEventSink: ((ControlEventDraft) -> Void)? = nil) {
+                controlEventSink: ((ControlEventDraft) -> Void)? = nil,
+                paneFinalizer: (([UUID]) -> Void)?) {
         self.workspaces = workspaces
         self.selectedSessionID = selectedSessionID
         self.persistence = persistence
         self.recentClosedStore = recentClosedStore
         self.recentClosedDidChange = recentClosedDidChange
         self.controlEventSink = controlEventSink
+        self.paneFinalizer = paneFinalizer
     }
 
     /// The currently selected session, derived from `selectedSessionID`.
@@ -278,27 +276,27 @@ public final class AppStore {
                 let surfaces = TerminalZoomSurface.allCases.compactMap { surface -> ControlSurfaceNode? in
                     guard surface.isAvailable(in: session) else { return nil }
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
-                    return ControlSurfaceNode(id: id, kind: surface.rawValue,
-                                              active: surface.isActive(in: session),
-                                              visible: surface.isVisible(in: session))
+                    return ControlSurfaceNode(id: id, kind: surface.rawValue, active: surface.isActive(in: session),
+                                              visible: surface.isVisible(in: session),
+                                              backedByZmx: session.zmxBacking(for: surface))
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
-                                          split: session.isSplit,
-                                          hasSplit: session.hasSplit ? true : nil,
+                                          split: session.isSplit, hasSplit: session.hasSplit ? true : nil,
+                                          backedByZmx: session.allPanesBackedByZmx,
                                           splitAxis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                           splitRatio: session.hasSplit ? session.splitRatio : nil,
                                           splitFocused: session.hasSplit ? session.splitFocused : nil,
                                           overlay: session.programOverlayActive,
                                           overlaySizePercent: session.programOverlayActive
                                               ? session.overlaySizePercent : nil,
-                                          paneOverlays: paneOverlays(session),
-                                          hud: hudNode(session),
+                                          paneOverlays: paneOverlays(session), hud: hudNode(session),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
-                                          foreground: foreground(session),
-                                          splitForeground: splitForeground(session),
+                                          splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
+                                              ? true : nil,
+                                          foreground: foreground(session), splitForeground: splitForeground(session),
                                           // the PERSISTED overrides, not the transient pending payloads, so
                                           // a read after one fired still reports what stays pinned.
                                           restoreCommand: session.restoreCommand,
@@ -472,7 +470,7 @@ public final class AppStore {
 
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
     /// surviving session in scope (`closeReselectionTarget(after:)`), falling back to the positional neighbor.
-    public func closeSession(_ sessionID: UUID) {
+    public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
@@ -480,6 +478,7 @@ public final class AppStore {
         emitSessionClosed(removed, workspace: workspace.id)
         recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
                                   workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex)
+        finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
         removed.overlaySurface?.teardown()
@@ -515,6 +514,7 @@ public final class AppStore {
                                     focusMember: focusedWorkspaceIDs.contains(workspaceID))
         for session in workspace.sessions { emitSessionClosed(session, workspace: workspace.id) }
         if workspace.sessions.isEmpty { scheduleTreeChanged() }
+        finalizePaneIdentities(workspace.sessions)
         for session in workspace.sessions {
             session.surface?.teardown()
             session.splitSurface?.teardown()
