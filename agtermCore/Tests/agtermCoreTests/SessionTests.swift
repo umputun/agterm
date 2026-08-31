@@ -574,12 +574,20 @@ struct SessionTests {
         session.splitRestoreCommand = "tail -f /var/log/x"
         session.pendingRestoreCommand = session.restoreCommand
         session.pendingSplitRestoreCommand = session.splitRestoreCommand
+        session.foregroundCommand = ["tee", "/tmp/m"]
+        session.splitForegroundCommand = ["tail", "-f", "/var/log/x"]
+        session.pendingForegroundCommand = session.foregroundCommand
+        session.pendingSplitForegroundCommand = session.splitForegroundCommand
 
         session.clearPendingRestoreOverrides()
         #expect(session.takePendingRestoreOverride(pane: .left) == nil)
         #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+        #expect(session.takePendingForegroundCommand(pane: .left) == nil)
+        #expect(session.takePendingForegroundCommand(pane: .right) == nil)
         #expect(session.restoreCommand == "claude --resume main")
         #expect(session.splitRestoreCommand == "tail -f /var/log/x")
+        #expect(session.foregroundCommand == ["tee", "/tmp/m"])
+        #expect(session.splitForegroundCommand == ["tail", "-f", "/var/log/x"])
     }
 
     @Test func takePendingRestoreOverrideLeavesThePersistedValueIntact() {

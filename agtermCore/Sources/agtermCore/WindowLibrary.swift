@@ -377,8 +377,7 @@ public final class WindowLibrary {
             // re-running the user's command unasked.
             if carriedCaptures, !stripCaptures(from: snapshot, into: persistence) {
                 for session in store.workspaces.flatMap(\.sessions) {
-                    session.pendingForegroundCommand = nil
-                    session.pendingSplitForegroundCommand = nil
+                    session.clearPendingForegroundCommands()
                 }
             }
         } else {
@@ -653,8 +652,7 @@ public final class WindowLibrary {
             var stripped = false
             for session in store.workspaces.flatMap(\.sessions)
             where session.pendingForegroundCommand != nil || session.pendingSplitForegroundCommand != nil {
-                session.pendingForegroundCommand = nil
-                session.pendingSplitForegroundCommand = nil
+                session.clearPendingForegroundCommands()
                 stripped = true
             }
             if stripped { store.save() }

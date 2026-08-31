@@ -683,8 +683,7 @@ public final class Session: Identifiable {
     public func clearPendingRestoreOverrides() {
         pendingRestoreCommand = nil
         pendingSplitRestoreCommand = nil
-        pendingForegroundCommand = nil
-        pendingSplitForegroundCommand = nil
+        clearPendingForegroundCommands()
     }
 
     /// The surface on top and owning keyboard focus: an active PROGRAM overlay (full OR floating), else the
