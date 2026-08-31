@@ -14,6 +14,7 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       swift: ${{ steps.filter.outputs.swift }}
       cookbook: ${{ steps.filter.outputs.cookbook }}
@@ -47,6 +48,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: swift test (with coverage)
@@ -80,6 +82,7 @@ jobs:
     # the coveralls action installs its reporter via a brew tap on macOS (now blocked
     # by homebrew's tap-trust gate); on linux it downloads a binary, so upload here
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
@@ -101,6 +104,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install swiftlint
@@ -113,6 +117,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: Read pinned helper revisions
@@ -218,6 +223,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.cookbook == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: recipe layout, index and headings

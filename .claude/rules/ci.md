@@ -7,6 +7,9 @@ paths:
 
 - `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same ref. All
   macOS jobs use `macos-26`. Releases are local; see `.claude/rules/release.md`.
+- Every job carries its own `timeout-minutes`, with generous headroom over observed runtime. A job without
+  one inherits GitHub's 360-minute default, so a wedge can hold its check pending for six hours. Give a new
+  job a cap in the commit that adds it.
 - The `dorny/paths-filter` Swift set includes `**/*.swift`, `agtermCore/**`, `agterm/**`, `plugins/**`,
   `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, both SwiftLint configs, and `ci.yml`.
   Keep all three plugin paths: `SkillInstallTests` checks the bundled `SKILL.md` command count, every
