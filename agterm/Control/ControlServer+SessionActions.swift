@@ -502,6 +502,18 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Set or clear a session's title-bar context. The value is already trimmed and validated by the
+    /// dispatcher, so nil here means clear rather than "nothing supplied".
+    func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard store.session(withID: id) != nil else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            store.setContext(context, forSession: id) // no-op, no save and no event when unchanged
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Clear a session's unseen-notification badge without touching selection, focus, or agent status — the
     /// counterpart to `notify`, whose badge nothing else lowers without visiting. Idempotent, and the count
     /// is ephemeral so it triggers no save.

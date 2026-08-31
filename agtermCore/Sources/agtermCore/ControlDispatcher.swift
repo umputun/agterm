@@ -32,6 +32,9 @@ public protocol ControlActions {
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    /// Sets or clears the session's title-bar context; `context` is already trimmed and validated, and nil
+    /// means clear.
+    func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
     /// Write a pane's PERSISTED restore-command override (consumed on the NEXT launch, never this run).
@@ -158,7 +161,8 @@ public struct ControlDispatcher {
         case .eventsRead:
             return dispatchEventsRead(request)
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus, .sessionRestore:
+                .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionSeen, .sessionStatus,
+                .sessionRestore:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionScratch, .sessionFocus, .sessionResize,
                 .surfaceZoom, .surfaceCursor, .sessionType,
@@ -330,6 +334,8 @@ public struct ControlDispatcher {
             return actions.moveSession(request.target, window: args?.window, move: move)
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionContext:
+            return dispatchSessionContext(request)
         case .sessionSeen:
             return actions.markSessionSeen(request.target, window: request.args?.window)
         case .sessionStatus:
@@ -402,6 +408,33 @@ public struct ControlDispatcher {
         }
         let update = ControlSessionRestoreUpdate(pin: pin, pane: pane, paneID: args?.paneID)
         return actions.setSessionRestore(request.target, window: args?.window, update: update)
+    }
+
+    /// `session.context`: `set` takes `text`, `clear` takes none. An invalid value is REJECTED, never
+    /// normalized, so `clear` stays the only route to nil and a refused call leaves the previous context
+    /// standing. The mode is required rather than inferred from `text`, which is what makes "both" and
+    /// "neither" reachable errors for a raw socket client that never sees the CLI's own exclusivity check.
+    private func dispatchSessionContext(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        let context: String?
+        switch args?.mode ?? "" {
+        case "set":
+            guard let text = args?.text else {
+                return ControlResponse(ok: false, error: "session.context set requires text")
+            }
+            switch Session.validateContext(text) {
+            case .valid(let value): context = value
+            case .invalid(let message): return ControlResponse(ok: false, error: message)
+            }
+        case "clear":
+            guard args?.text == nil else {
+                return ControlResponse(ok: false, error: "session.context clear takes no text")
+            }
+            context = nil
+        default:
+            return ControlResponse(ok: false, error: "invalid context mode: \(args?.mode ?? "") (set|clear)")
+        }
+        return actions.setSessionContext(request.target, window: args?.window, context: context)
     }
 
     /// The outcome of parsing a `--pane` selector: the pane (nil when the selector was absent), or the

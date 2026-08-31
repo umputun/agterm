@@ -174,6 +174,27 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(zoom.target, foreignTarget)
     }
 
+    func testSetSessionContextReachesTheStoreAndClears() throws {
+        let (store, session) = try addSession()
+
+        let set = server.setSessionContext(session.id.uuidString, window: nil, context: "PR #517")
+        XCTAssertTrue(set.ok, set.error ?? "")
+        XCTAssertEqual(set.result?.id, session.id.uuidString)
+        XCTAssertEqual(store.session(withID: session.id)?.context, "PR #517")
+
+        let cleared = server.setSessionContext(session.id.uuidString, window: nil, context: nil)
+        XCTAssertTrue(cleared.ok, cleared.error ?? "")
+        XCTAssertNil(store.session(withID: session.id)?.context)
+    }
+
+    func testSetSessionContextReportsAnUnknownTarget() throws {
+        _ = try addSession()
+
+        let response = server.setSessionContext(UUID().uuidString, window: nil, context: "PR #517")
+
+        XCTAssertFalse(response.ok)
+    }
+
     func testFollowSelectsTheTargetWhenNothingIsSelected() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

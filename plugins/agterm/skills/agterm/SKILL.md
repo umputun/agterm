@@ -20,7 +20,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.swap, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, pane-id, session.search, session.status,
-  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
+  session.flag, session.context, what this session is about, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, sidebar.width, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -360,6 +360,12 @@ omitted when expanded).
   aliases for growing the primary or split pane. Prints the applied fraction.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape SHAPE] [--pane left|right|scratch] [--pane-id TOKEN]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it; `--shape` (`circle`, `square`, `triangle`, `diamond`, `capsule`, `star`) picks its silhouette for this call only and reverts the same way, read back as the tree `statusShape` field; `--pane` records which pane set it — `left`=main, `right`=split, `scratch` — so foreground typing in another pane won't clear it and any user-initiated GUI selection (auto-follow, attention-nav ⌃⌥↑/↓, plain session nav, the command palettes, a Dock-menu session, a sidebar row click) reveals that pane when the status needs attention (`blocked`/`completed`); `active` preserves the existing pane selection; the pane reads back as the tree `statusPane` field; the socket `session go next-attention` only steps the selection, it does not itself reveal the pane; `--pane-id` is the hook-forwarded stable surface token (`$AGTERM_PANE_ID`) that resolves the pane's live slot and overrides a stale `--pane` after a promote + re-split — scripts set `--pane` directly and leave `--pane-id` to the hook).
 - `session flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
+- `session context <TEXT|--clear> [--target] [--window W]` — set what the session is ABOUT, shown in the
+  title bar where the sidebar row has no room: a PR number, an issue, the task in hand. Use it when you
+  start work a session's name cannot describe. Exactly one of TEXT or `--clear`; a blank TEXT is an error,
+  not a second way to clear. Trimmed; max 256 UTF-8 bytes; no control characters (tabs included) or line
+  breaks. Persists
+  across a relaunch until cleared. Read it back from the tree node's `context` field.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge WITHOUT changing the
   selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
   no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an

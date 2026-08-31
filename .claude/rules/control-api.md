@@ -566,6 +566,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.flag on|off|toggle|clear` is idempotent; clear ignores target and clears the store.
   Read `flagged`.
 - `session.seen` clears unseen without selection/focus/status or persistence. Read nonzero `unseen`.
+- `session.context set TEXT|clear` sets what a session is FOR, shown in the title bar. Read `context`.
+  `set` requires `text`, `clear` forbids it, and the mode is required, so a raw client sending both or
+  neither is refused. The server trims outer spaces and rejects a blank result, over 256 UTF-8 bytes, or
+  any control character or line/paragraph separator (U+2028/U+2029 included); a rejected call leaves the
+  previous value standing, so `clear` is the ONLY route to unset. Persisted, surviving relaunch and
+  restore, and never inherited by `session.duplicate`. A set or clear that CHANGES the value saves and
+  emits `tree.changed`; re-setting the same value does neither.
 
 ## Keymap, config, theme, and sidebar
 

@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-// Dispatcher coverage for the session commands carrying per-session METADATA — flag, seen, status and
-// restore — mirroring the `SessionMetadataCommands` split on the CLI side. Split out of
+// Dispatcher coverage for the session commands carrying per-session METADATA — flag, context, seen, status
+// and restore — mirroring the `SessionMetadataCommands` split on the CLI side. Split out of
 // `ControlDispatcherTests.swift` for the file size limit.
 @MainActor
 struct ControlDispatcherSessionMetadataTests {
@@ -24,6 +24,56 @@ struct ControlDispatcherSessionMetadataTests {
             .sessionFlag(target: "session", window: "win", "on"),
             .sessionFlag(target: nil, window: nil, "clear")
         ])
+    }
+
+    @Test func sessionContextRoutesSetAndClear() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionContext,
+            target: "session",
+            args: ControlArgs(text: "  PR #517  ", mode: "set", window: "win")
+        ))
+        let cleared = await dispatcher.dispatch(ControlRequest(cmd: .sessionContext, args: ControlArgs(mode: "clear")))
+
+        #expect(set == ControlResponse(ok: true))
+        #expect(cleared == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionContext(target: "session", window: "win", context: "PR #517"),
+            .sessionContext(target: nil, window: nil, context: nil)
+        ])
+    }
+
+    @Test(arguments: [
+        ControlArgs(mode: "set"),
+        ControlArgs(text: "PR #517", mode: "clear"),
+        ControlArgs(text: "PR #517"),
+        ControlArgs(text: "PR #517", mode: "toggle"),
+        ControlArgs(text: "   ", mode: "set"),
+        ControlArgs(text: "PR\n517", mode: "set"),
+    ])
+    func sessionContextRejectionNeverReachesTheHost(args: ControlArgs) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionContext, args: args))
+
+        #expect(response?.ok == false)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionContextRejectsAValueOverTheByteLimit() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let oversized = String(repeating: "a", count: Session.contextByteLimit + 1)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionContext, args: ControlArgs(text: oversized, mode: "set")
+        ))
+
+        #expect(response?.ok == false)
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func sessionSeenRoutesTargetAndWindow() async {

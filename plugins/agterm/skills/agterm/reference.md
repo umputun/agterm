@@ -44,7 +44,8 @@ The five event kinds and payloads are:
   visible window tree. Undo emits a new `session.created`; grace-period finalization does not emit a
   second close.
 - `tree.changed`: an empty payload and the affected window id. Name, membership, and ordering changes
-  are coalesced for 100 ms per window. Read `tree --json` for the current snapshot.
+  are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value.
+  Read `tree --json` for the current snapshot.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -153,7 +154,8 @@ tracks the latest update. `spinner` names the STYLE, a string, so a static panel
 FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
 a message for one. No event announces a HUD; poll `tree` for it),
 `scratch` (scratch shown), `flagged` (in the
-flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
+flagged working-set), `context` (what the session is about — the `session context` value, persisted and
+omitted when unset), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
 as `status`, so it is never reported without a `status`), `statusBlink` (`true` when the status glyph is
@@ -548,6 +550,19 @@ error keeps those names for compatibility.
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
   Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
   list. Unknown mode errors. The tree's `flagged` flag tracks membership.
+- `session context <TEXT|--clear> [--target] [--window W]` — set or clear what the session is ABOUT, shown
+  in the title bar. It carries what the sidebar row has no room for — a PR number, an issue, the task in
+  hand — and is set from OUTSIDE the session, so a hook or an orchestrator can say what a session it just
+  created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank
+  TEXT is rejected, not treated as a second clear, so `--clear` is the only route to unset. The value is
+  trimmed of outer spaces and rejected if empty, over 256 UTF-8 bytes, or carrying any control character or
+  line/paragraph separator; a rejected call leaves the previous context standing. It states durable purpose,
+  not current activity: it persists across quit, relaunch and restore, and nothing expires it. A duplicated
+  session starts without one. A set or clear that CHANGES the value emits `tree.changed`; re-setting the
+  same value emits nothing. The tree's `context` field is the read side, omitted when unset. In the title
+  bar it takes line two in normal mode (replacing the cwd/terminal-title detail) and follows the session and
+  window names on line one in compact mode, where a long value tail-truncates before the names do. Settings
+  ▸ Interface ▸ Title Bar ▸ "Session context" hides it without clearing it.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge without changing
   the selection, focus, or agent status. It is the focus-free counterpart to `notify`: `notify` (and a
   terminal's own OSC 9/777) raise the red badge, and until now the only way to clear it was visiting the

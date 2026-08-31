@@ -303,6 +303,59 @@ final class AppStoreEventTests {
         #expect(batch.items.map(\.window) == [window.id.uuidString])
     }
 
+    @Test func settingSessionContextEmitsTreeChangedOnlyWhenItActuallyChanges() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let window = library.newWindow(name: "open")
+        let store = try #require(library.store(for: window.id))
+        let session = try #require(store.activeSession)
+        library.flushTreeEvents()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.setContext("PR #517", forSession: session.id) == true)
+        library.flushTreeEvents()
+        let afterSet = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSet.items.count == 1)
+
+        #expect(store.setContext("PR #517", forSession: session.id) == false)
+        library.flushTreeEvents()
+        let afterResetToSameValue = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSet.run, after: afterSet.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterResetToSameValue.items.isEmpty)
+
+        #expect(store.setContext(nil, forSession: session.id) == true)
+        library.flushTreeEvents()
+        let afterClear = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSet.run, after: afterResetToSameValue.next), kinds: [.treeChanged],
+            limit: 100
+        )))
+        #expect(afterClear.items.count == 1)
+
+        #expect(store.setContext(nil, forSession: session.id) == false)
+        library.flushTreeEvents()
+        let afterSecondClear = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterClear.run, after: afterClear.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSecondClear.items.isEmpty)
+        #expect(session.context == nil)
+    }
+
+    @Test func settingSessionContextWritesItToTheSavedSnapshot() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let window = library.newWindow(name: "open")
+        let store = try #require(library.store(for: window.id))
+        let session = try #require(store.activeSession)
+
+        store.setContext("PR #517", forSession: session.id)
+
+        let reloaded = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let reloadedStore = try #require(reloaded.store(for: window.id))
+        let restored = try #require(reloadedStore.session(withID: session.id))
+        #expect(restored.context == "PR #517")
+    }
+
     @Test func deletingOpenWindowEmitsClosedEdgeAndStructuralInvalidation() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let window = library.newWindow(name: "open")

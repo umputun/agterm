@@ -123,6 +123,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let hud: ControlHudNode?
     public let scratch: Bool
     public let flagged: Bool
+    /// What the session is FOR, the read side of `session.context`; nil/omitted when none is set. Durable
+    /// purpose, so it survives a relaunch and only an explicit `session.context clear` removes it.
+    public let context: String?
     /// For a `--command` session, whether it HOLDS its surface after the command exits (`session.new
     /// --command … --wait`) instead of closing; nil/omitted for a plain or non-holding session. The read
     /// side of `session.new --wait`; it persists across restart, unlike an overlay's live-only wait.
@@ -209,7 +212,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 statusShape: String? = nil, statusChangedAt: Double? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
-                surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil) {
+                surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
+                context: String? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -227,6 +231,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.hud = hud
         self.scratch = scratch
         self.flagged = flagged
+        self.context = context
         self.commandWait = commandWait
         self.splitCommandWait = splitCommandWait
         self.foreground = foreground

@@ -695,6 +695,29 @@ struct CommandsTests {
         #expect(try request(["restore", "capture"]) == ControlRequest(cmd: .restoreCapture))
     }
 
+    @Test func sessionContextSetsText() throws {
+        let expected = ControlRequest(cmd: .sessionContext, target: "s1",
+                                      args: ControlArgs(text: "PR #517", mode: "set"))
+        #expect(try request(["session", "context", "PR #517", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionContextClears() throws {
+        let expected = ControlRequest(cmd: .sessionContext, target: "active", args: ControlArgs(mode: "clear"))
+        let req = try request(["session", "context", "--clear"])
+        #expect(req == expected)
+        #expect(req.args?.text == nil)
+    }
+
+    @Test func sessionContextCarriesTextVerbatimForTheServerToValidate() throws {
+        let padded = "  PR #517: reap ordering  "
+        #expect(try request(["session", "context", padded]).args?.text == padded)
+    }
+
+    @Test(arguments: [["session", "context"], ["session", "context", "PR #517", "--clear"]])
+    func sessionContextRejectsNeitherAndBothFormsAtParseTime(argv: [String]) {
+        #expect(validationMessage(argv) == "provide exactly one of a TEXT or --clear")
+    }
+
     @Test func sessionRestorePinsCommand() throws {
         let expected = ControlRequest(cmd: .sessionRestore, target: "s1",
                                       args: ControlArgs(mode: "set", command: "claude --resume abc"))

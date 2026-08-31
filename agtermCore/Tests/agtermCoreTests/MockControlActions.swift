@@ -31,6 +31,7 @@ final class MockControlActions: ControlActions {
         case workspaceFilter(window: String?, ControlToggleMode)
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionFlag(target: String?, window: String?, String?)
+        case sessionContext(target: String?, window: String?, context: String?)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
@@ -288,6 +289,11 @@ final class MockControlActions: ControlActions {
 
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         calls.append(.sessionFlag(target: target, window: window, mode))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {
+        calls.append(.sessionContext(target: target, window: window, context: context))
         return ControlResponse(ok: true)
     }
 

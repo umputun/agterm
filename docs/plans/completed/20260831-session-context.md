@@ -90,12 +90,12 @@ needs hit testing and would cost those gestures.
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 
-- [ ] add `public var context: String?` to `Session` with a short godoc naming the durable-purpose contract
-- [ ] add `SessionContextValidation` and `Session.validateContext(_:)` per Technical Details
-- [ ] write tests: trims outer whitespace; rejects empty-after-trim, >256 UTF-8 bytes, newline, control chars
-- [ ] write tests: rejects U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR (a `\n`-only check misses both)
-- [ ] write tests: a multi-byte value near the boundary is measured in BYTES, not characters
-- [ ] run `swift test --filter SessionTests` — must pass before task 2
+- [x] add `public var context: String?` to `Session` with a short godoc naming the durable-purpose contract
+- [x] add `SessionContextValidation` and `Session.validateContext(_:)` per Technical Details
+- [x] write tests: trims outer whitespace; rejects empty-after-trim, >256 UTF-8 bytes, newline, control chars
+- [x] write tests: rejects U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR (a `\n`-only check misses both)
+- [x] write tests: a multi-byte value near the boundary is measured in BYTES, not characters
+- [x] run `swift test --filter SessionTests` — must pass before task 2
 
 ### Task 2: Persist context across restart and restore
 
@@ -104,12 +104,12 @@ needs hit testing and would cost those gestures.
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Snapshot.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SnapshotRoundTripTests.swift`
 
-- [ ] add optional `context` to `SessionSnapshot`, written in `sessionSnapshot` and read back alongside `flagged`
-- [ ] drop an invalid context on decode (run it through `validateContext`) rather than failing the restore,
+- [x] add optional `context` to `SessionSnapshot`, written in `sessionSnapshot` and read back alongside `flagged`
+- [x] drop an invalid context on decode (run it through `validateContext`) rather than failing the restore,
       matching the existing optional-field policy for a hand-edited snapshot
-- [ ] write tests: round-trip; a snapshot with no `context` key decodes to nil; an invalid stored value drops
-- [ ] write test: a duplicated session has no context (pins `AppStore+Duplicate` behavior)
-- [ ] run `swift test --filter SnapshotRoundTripTests` — must pass before task 3
+- [x] write tests: round-trip; a snapshot with no `context` key decodes to nil; an invalid stored value drops
+- [x] write test: a duplicated session has no context (pins `AppStore+Duplicate` behavior)
+- [x] run `swift test --filter SnapshotRoundTripTests` — must pass before task 3
 
 ### Task 3: session.context protocol, dispatcher and read-back
 
@@ -124,19 +124,19 @@ needs hit testing and would cost those gestures.
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] add `case sessionContext = "session.context"` and its `text`/`clear` args
-- [ ] dispatch it: `--clear` sets nil; otherwise run `validateContext` and return `ok: false` with the
+- [x] add `case sessionContext = "session.context"` and its `text`/`clear` args
+- [x] dispatch it: `--clear` sets nil; otherwise run `validateContext` and return `ok: false` with the
       message on failure, leaving the previous value untouched
-- [ ] reject BOTH `text` and `clear` together, and NEITHER, in the dispatcher — a raw socket client never
+- [x] reject BOTH `text` and `clear` together, and NEITHER, in the dispatcher — a raw socket client never
       goes through the CLI, so parse-time exclusivity in task 7 is not enough on its own
-- [ ] add `setSessionContext` to `ControlActions` with the default returning the unimplemented response
-- [ ] add optional `context` to `ControlSessionNode`, a default in the compatibility initializer
+- [x] add `setSessionContext` to `ControlActions` with the default returning the unimplemented response
+- [x] add optional `context` to `ControlSessionNode`, a default in the compatibility initializer
       (agtermCore is a `.library` consumed by the agterm-linux fork), and populate it at `AppStore.swift:283`
       — `ControlProjection` owns only the DTO
-- [ ] write dispatcher tests in `ControlDispatcherTests` against `MockControlActions`: set, clear, and every
+- [x] write dispatcher tests in `ControlDispatcherTests` against `MockControlActions`: set, clear, and every
       rejection path calling NO action at all
-- [ ] write tests: the encoded protocol shape, and the node projection through `AppStoreTests`
-- [ ] run `swift test --filter "ControlProtocolTests|ControlDispatcherTests|AppStoreTests"` — must pass
+- [x] write tests: the encoded protocol shape, and the node projection through `AppStoreTests`
+- [x] run `swift test --filter "ControlProtocolTests|ControlDispatcherTests|AppStoreTests"` — must pass
       before task 4
 
 ### Task 4: App-side effect, event and save
@@ -146,14 +146,14 @@ needs hit testing and would cost those gestures.
 - Modify: `agterm/Control/ControlServer.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
 
-- [ ] implement `setSessionContext` against the resolved target session
-- [ ] emit `tree.changed` and save immediately on a successful mutation
-- [ ] skip both when the value is unchanged, matching `setFlag`'s `session.flagged != on` guard
-- [ ] register the command in the `ControlServer` command list alongside `.sessionFlag`
-- [ ] write tests: mutation reaches the store, event fires, setting the SAME value again fires no event
-- [ ] write test: the saved snapshot on disk holds the new context after a mutation
-- [ ] rejection is asserted in task 3, not here — an invalid value never reaches this layer
-- [ ] run the scoped hosted test — must pass before task 5
+- [x] implement `setSessionContext` against the resolved target session
+- [x] emit `tree.changed` and save immediately on a successful mutation
+- [x] skip both when the value is unchanged, matching `setFlag`'s `session.flagged != on` guard
+- [x] register the command in the `ControlServer` command list alongside `.sessionFlag`
+- [x] write tests: mutation reaches the store, event fires, setting the SAME value again fires no event
+- [x] write test: the saved snapshot on disk holds the new context after a mutation
+- [x] rejection is asserted in task 3, not here — an invalid value never reaches this layer
+- [x] run the scoped hosted test — must pass before task 5
 
 ### Task 5: Host-free title composition
 
@@ -188,9 +188,9 @@ public struct TitlebarComposition: Sendable, Equatable {
 }
 ```
 
-- [ ] add `TitlebarComposition` per the contract, reproducing today's behavior exactly when `context` is nil
-- [ ] write tests for every row of the composition matrix
-- [ ] run `swift test --filter TitlebarCompositionTests` — must pass before task 6
+- [x] add `TitlebarComposition` per the contract, reproducing today's behavior exactly when `context` is nil
+- [x] write tests for every row of the composition matrix
+- [x] run `swift test --filter TitlebarCompositionTests` — must pass before task 6
 
 ### Task 6: Title bar rendering and the Interface toggle
 
@@ -202,15 +202,15 @@ public struct TitlebarComposition: Sendable, Equatable {
 No Settings UI change: `SettingsView.swift:458` builds the Title Bar section from
 `InterfaceElement.allCases.filter { $0.section == .titleBar }`, so the new toggle appears on its own.
 
-- [ ] add `case sessionContext` to `InterfaceElement` (title-bar section) with its display name; it gates
+- [x] add `case sessionContext` to `InterfaceElement` (title-bar section) with its display name; it gates
       only itself — `sessionName`/`windowName` keep gating identity alone
-- [ ] rewrite `titleText` and `windowSubtitle` to build `Parts` and read `TitlebarComposition.compose`
-- [ ] apply `lineLimit(1)` and tail truncation to the title label
-- [ ] confirm `windowTitle` (the OS window title) still bypasses the Interface toggles entirely
-- [ ] write tests for the new `InterfaceElement` case (section, display name, hidden-set round trip)
-- [ ] run `swift test --filter AppSettingsTests` AND a scoped `make test-app` run — the agtermCore filter
+- [x] rewrite `titleText` and `windowSubtitle` to build `Parts` and read `TitlebarComposition.compose`
+- [x] apply `lineLimit(1)` and tail truncation to the title label
+- [x] confirm `windowTitle` (the OS window title) still bypasses the Interface toggles entirely
+- [x] write tests for the new `InterfaceElement` case (section, display name, hidden-set round trip)
+- [x] run `swift test --filter AppSettingsTests` AND a scoped `make test-app` run — the agtermCore filter
       never compiles `WindowContentView`, so it cannot catch a break in the rewiring
-- [ ] both must pass before task 7
+- [x] both must pass before task 7
 
 ### Task 7: agtermctl session context
 
@@ -218,12 +218,12 @@ No Settings UI change: `SettingsView.swift:458` builds the Title Bar section fro
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add `session context [TEXT] [--clear]` mirroring `session flag`, with target/window options
-- [ ] reject `TEXT` and `--clear` together, and neither, at parse time with a clean usage error
-- [ ] write tests: argument parsing, both rejection cases, request shape sent to the socket
-- [ ] ⚠️ `CommandsTests.swift` is at ~1940 lines against the 2000-line test cap. If the new cases cross it,
+- [x] add `session context [TEXT] [--clear]` mirroring `session flag`, with target/window options
+- [x] reject `TEXT` and `--clear` together, and neither, at parse time with a clean usage error
+- [x] write tests: argument parsing, both rejection cases, request shape sent to the socket
+- [x] ⚠️ `CommandsTests.swift` is at ~1940 lines against the 2000-line test cap. If the new cases cross it,
       STOP and ask the maintainer before splitting the file — do not raise the limit
-- [ ] run `swift test --filter CommandsTests` — must pass before task 8
+- [x] run `swift test --filter CommandsTests` — must pass before task 8
 
 ### Task 8: Cross-surface documentation
 
@@ -234,25 +234,25 @@ No Settings UI change: `SettingsView.swift:458` builds the Title Bar section fro
 - Modify: `site/commands.html`
 - Modify: `site/docs.html`
 
-- [ ] document the command, its arguments and the `context` read-back field in `control-api.md`
-- [ ] add it to the bundled skill's `SKILL.md` trigger list AND to `reference.md`, which owns the full
+- [x] document the command, its arguments and the `context` read-back field in `control-api.md`
+- [x] add it to the bundled skill's `SKILL.md` trigger list AND to `reference.md`, which owns the full
       command and JSON contract (the sole source for the installed Claude/Codex copies)
-- [ ] mirror the command, arguments and read-back field in `site/commands.html`
-- [ ] describe the feature and the Interface toggle in `site/docs.html`
-- [ ] state no command total anywhere (per the `control-api.md` rule)
+- [x] mirror the command, arguments and read-back field in `site/commands.html`
+- [x] describe the feature and the Interface toggle in `site/docs.html`
+- [x] state no command total anywhere (per the `control-api.md` rule)
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] every row of the composition matrix behaves as pinned
-- [ ] a rejected set leaves the previous context untouched, and `--clear` is the only clearing form
-- [ ] context survives quit and relaunch, and a restored session shows it
-- [ ] `agtermctl tree` reports the context; a node without one omits the field
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint` — all clean
+- [x] every row of the composition matrix behaves as pinned
+- [x] a rejected set leaves the previous context untouched, and `--clear` is the only clearing form
+- [x] context survives quit and relaunch, and a restored session shows it
+- [x] `agtermctl tree` reports the context; a node without one omits the field
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint` — all clean
 
 ### Task 10: [Final] Wrap up
 
-- [ ] update `ARCHITECTURE.md` if the surface split changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `ARCHITECTURE.md` if the surface split changed
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

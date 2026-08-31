@@ -292,6 +292,57 @@ struct SnapshotRoundTripTests {
         #expect(r.splitRestoreCommand == "tail -f /var/log/x")
     }
 
+    @Test func contextRoundTripsThroughSnapshot() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.context = "PR #517: restore reap ordering"
+        let snap = store.snapshot()
+        #expect(snap.workspaces[0].sessions[0].context == "PR #517: restore reap ordering")
+        let restored = makeStore()
+        restored.restore(from: snap)
+        #expect(restored.workspaces[0].sessions[0].context == "PR #517: restore reap ordering")
+    }
+
+    @Test func snapshotWithoutContextDecodesNil() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.context == nil)
+    }
+
+    // `stored` is the JSON-ESCAPED body: an unescaped control byte is invalid JSON, so embedding one would
+    // test the parser's leniency instead of the context rule.
+    @Test(arguments: [#""#, #"   "#, #"PR\n517"#, #"PR\u2028517"#, #"PR\t517"#, #"PR517\n"#])
+    func handEditedInvalidContextDropsWithoutFailingTheDecode(stored: String) throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","context":"\#(stored)","customName":"keep"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.context == nil)
+        #expect(snap.customName == "keep")
+    }
+
+    @Test func handEditedOversizedContextDropsWithoutFailingTheDecode() throws {
+        let oversized = String(repeating: "a", count: Session.contextByteLimit + 1)
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","context":"\#(oversized)","customName":"keep"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.context == nil)
+        #expect(snap.customName == "keep")
+    }
+
+    @Test func handEditedContextIsTrimmedOnDecode() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","context":"  PR #517  "}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.context == "PR #517")
+    }
+
+    @Test func duplicatedSessionDoesNotInheritContext() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.context = "PR #517"
+        let copy = store.duplicateSession(session.id)
+        #expect(copy?.context == nil)
+    }
+
     @Test func emptyRestoreCommandRoundTripsAsEmptyNotNil() throws {
         // "" is the tri-state's "pinned to nothing"; collapsing it to nil turns the opt-out back into
         // auto-capture.

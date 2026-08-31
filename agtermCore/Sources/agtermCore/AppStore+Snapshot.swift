@@ -43,7 +43,8 @@ extension AppStore {
                         splitCommandWait: session.splitCommandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark,
                         restoreCommand: session.restoreCommand,
-                        splitRestoreCommand: session.splitRestoreCommand)
+                        splitRestoreCommand: session.splitRestoreCommand,
+                        context: session.context)
     }
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
@@ -75,6 +76,7 @@ extension AppStore {
         session.initialSplitCwd = snapshot.splitCwd
         session.splitRatio = snapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
         session.flagged = snapshot.flagged ?? false
+        session.context = snapshot.context
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
         session.splitInitialCommand = hasSplit ? snapshot.splitInitialCommand : nil

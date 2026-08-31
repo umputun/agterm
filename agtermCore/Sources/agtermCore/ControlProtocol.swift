@@ -24,6 +24,7 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
+    case sessionContext = "session.context"
     case sessionSeen = "session.seen"
     case sessionRestore = "session.restore"
     case sessionBackground = "session.background"
@@ -131,7 +132,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.new`: create in the background without selecting or focusing (the CLI's `--no-select`);
     /// omitted/`false` keeps select-and-focus. Read back via the `tree` `active` flag — the new node is not it.
     public var noSelect: Bool?
-    /// Text to inject for `session.type` / `quick.type`; the search needle for `session.search`.
+    /// Text to inject for `session.type` / `quick.type`; the search needle for `session.search`; the value
+    /// for `session.context` mode `set`.
     public var text: String?
     /// Whether `session.type` may select the session first when its surface is not ready (main pane only).
     /// Realization itself no longer depends on it: the main pane polls with or without `select`.
@@ -139,8 +141,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Mode for `session.split` (`on|off|toggle`), `quick`/`surface.zoom` (`show|hide|toggle`),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
     /// `workspace.focus` (`on|off|toggle|add`), `workspace.filter`/`window.minimize` (`on|off|toggle`),
-    /// `session.background` (`image|text|color|clear`), and `session.restore` (`set|none|clear` — pin
-    /// `command`, pin nothing, or drop the pin).
+    /// `session.background` (`image|text|color|clear`), `session.restore` (`set|none|clear` — pin
+    /// `command`, pin nothing, or drop the pin), and `session.context` (`set|clear`).
     public var mode: String?
     /// Optional divider direction for `session.split`: `vertical` (left/right) or `horizontal` (top/bottom).
     /// Omitted preserves the original axis-agnostic show/hide behavior.

@@ -2,8 +2,8 @@ import ArgumentParser
 import agtermCore
 
 // The `session` subcommands carrying per-session METADATA rather than driving a surface: the agent status
-// glyph, the restore-command pin, and flagged membership. Split out of `SessionCommands.swift` for the
-// file and type size limits.
+// glyph, the restore-command pin, flagged membership, and the title-bar context. Split out of
+// `SessionCommands.swift` for the file and type size limits.
 extension Session {
     struct Status: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Set a session's agent status indicator.")
@@ -129,6 +129,36 @@ extension Session {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
+
+    struct Context: RequestCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "context",
+            abstract: "Set or clear what a session is about, shown in the title bar.",
+            discussion: """
+                The text says what the session is FOR — a PR, an issue, a task — where the sidebar row has \
+                no space for it. It persists across a relaunch and stays until --clear; nothing expires it.
+                """)
+        @Argument(help: """
+            The context text (omit with --clear). Trimmed; max 256 UTF-8 bytes; no control characters or \
+            line breaks.
+            """)
+        var text: String?
+        @Flag(name: .long, help: "Remove the context.") var clear = false
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        // exactly one form; a blank TEXT is rejected server-side rather than treated as a second clear.
+        func validate() throws {
+            guard [text != nil, clear].filter({ $0 }).count == 1 else {
+                throw ValidationError("provide exactly one of a TEXT or --clear")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionContext, target: target.target,
+                           args: options.withWindow(ControlArgs(text: text, mode: clear ? "clear" : "set")))
         }
     }
 }

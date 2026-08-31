@@ -40,4 +40,8 @@ public extension ControlActions {
     func setSidebarWidth(_: Double, window _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: "sidebar.width is not supported by this control host")
     }
+
+    func setSessionContext(_: String?, window _: String?, context _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
+    }
 }

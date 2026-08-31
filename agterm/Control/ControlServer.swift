@@ -461,7 +461,7 @@ final class ControlServer {
                 .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionScratch, .sessionFocus, .sessionResize,
                 .surfaceZoom,
                 .surfaceCursor,
-                .sessionStatus, .sessionFlag, .sessionSeen, .sessionRestore, .notify,
+                .sessionStatus, .sessionFlag, .sessionContext, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sidebarWidth, .sessionType, .sessionCopy,
                 .sessionPaste, .sessionSelectAll,

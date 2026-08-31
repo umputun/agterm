@@ -158,6 +158,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitRatio: Double?
     /// Whether the session is in the flagged working-set; nil = not flagged.
     public var flagged: Bool?
+    /// What the session is FOR (`session.context`), shown in the title bar; nil = none set. Survives a
+    /// relaunch by design — it states durable purpose, so nothing expires it but an explicit clear.
+    public var context: String?
     /// The main pane's foreground command (full argv) as of the last clean quit or the last
     /// `restore.capture`, re-run on restore in `rerun` launch mode. nil at a shell prompt, or in another
     /// mode, which gates every capture site.
@@ -193,7 +196,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 initialCommand: String? = nil, commandWait: Bool? = nil,
                 splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil,
-                restoreCommand: String? = nil, splitRestoreCommand: String? = nil) {
+                restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
+                context: String? = nil) {
         self.id = id
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
@@ -215,6 +219,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.backgroundWatermark = backgroundWatermark
         self.restoreCommand = restoreCommand
         self.splitRestoreCommand = splitRestoreCommand
+        self.context = context
     }
 
     enum CodingKeys: String, CodingKey {
@@ -222,7 +227,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark
-        case restoreCommand, splitRestoreCommand
+        case restoreCommand, splitRestoreCommand, context
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -255,5 +260,13 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
+        // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
+        // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
+        let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil
+        if let storedContext, case let .valid(value) = Session.validateContext(storedContext) {
+            context = value
+        } else {
+            context = nil
+        }
     }
 }

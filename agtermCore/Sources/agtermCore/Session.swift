@@ -124,6 +124,11 @@ public final class Session: Identifiable {
     /// flagged view with a filled row icon. Persisted, surviving a relaunch and a workspace move.
     public var flagged: Bool = false
 
+    /// What the session is FOR, set only over `session.context` and shown in the title bar. Durable purpose
+    /// held until an explicit clear, never a claim about current activity — nothing expires it and no command
+    /// exit drops it. Persisted; validated by `validateContext` before it lands here.
+    public var context: String?
+
     /// Changes only when one live primary-slot surface replaces another; SwiftUI hosts fold it into their
     /// identity, so lazy nil→first creation stays at zero while split-survivor promotion remounts the view.
     @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0
@@ -744,6 +749,51 @@ public final class Session: Identifiable {
         searchTotal = nil
         searchSelected = nil
         searchSurface = nil
+    }
+}
+
+/// The outcome of checking a `session.context` value, carrying the message the control response reports
+/// on rejection so the caller learns which rule it broke.
+public enum SessionContextValidation: Sendable, Equatable {
+    case valid(String)
+    case invalid(String)
+}
+
+extension Session {
+    /// Largest accepted `context`, in UTF-8 BYTES. It bounds the snapshot and the JSON read-back, not the
+    /// rendered width — the title bar truncates for pixels on its own. A character count is not a byte
+    /// bound, so anything non-ASCII would slip past one.
+    public nonisolated static let contextByteLimit = 256
+
+    /// Checks a `session.context` value, trimming outer spaces and returning the trimmed string. Rejects an
+    /// empty result, one over `contextByteLimit`, and any control character or line/paragraph separator.
+    /// A blank set is a rejection rather than a clear: `--clear` is the only clearing form, so there is no
+    /// second undocumented path to nil.
+    ///
+    /// The scan reads `raw`, NOT `trimmed`: trimming first would silently repair `"PR #517\n"` into a valid
+    /// value, which both accepts input the contract rejects and lets the snapshot decoder rewrite a
+    /// hand-edited value instead of dropping it.
+    ///
+    /// `nonisolated` so `SessionSnapshot`'s decoder can drop an invalid stored value; it only reads a String.
+    public nonisolated static func validateContext(_ raw: String) -> SessionContextValidation {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return .invalid("context must not be empty (use --clear to remove it)") }
+        if trimmed.utf8.count > contextByteLimit {
+            return .invalid("context must be at most \(contextByteLimit) UTF-8 bytes")
+        }
+        if raw.unicodeScalars.contains(where: breaksContextLine) {
+            return .invalid("context must not contain control characters or line breaks")
+        }
+        return .valid(trimmed)
+    }
+
+    /// Whether a scalar would break the single-line title-bar label. `lineSeparator` and
+    /// `paragraphSeparator` (U+2028/U+2029) are NOT control characters, so a `Cc`-only check misses both.
+    private nonisolated static func breaksContextLine(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .control, .lineSeparator, .paragraphSeparator: return true
+        default: return false
+        }
     }
 }
 

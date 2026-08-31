@@ -16,10 +16,23 @@ extension WindowContentView {
         return "\(session) — \(name)"
     }
 
-    /// The titlebar subtitle (second line): the focused pane's `subtitleDetail` — the terminal title for a
-    /// remote (SSH) session whose local cwd is stale, else its cwd. Normal mode only; compact/hidden drop it.
-    private var windowSubtitle: String {
-        toolbarMode == .normal ? (store.activeSession?.subtitleDetail ?? "") : ""
+    /// The titlebar subtitle (second line): the session's `context` when one is set and shown, else the
+    /// focused pane's `subtitleDetail` — the terminal title for a remote (SSH) session whose local cwd is
+    /// stale, else its cwd. Normal mode only; compact/hidden drop it.
+    private var windowSubtitle: String { composition.subtitle }
+
+    /// Both title-bar lines, laid out host-free. The toggles are resolved into `Parts` here, so
+    /// `TitlebarComposition` never sees the settings.
+    private var composition: TitlebarComposition {
+        TitlebarComposition.compose(
+            TitlebarComposition.Parts(
+                sessionName: shows(.sessionName) ? (store.activeSession?.displayName ?? "Agterm") : nil,
+                windowName: shows(.windowName) ? customWindowName : nil,
+                context: shows(.sessionContext) ? store.activeSession?.context : nil,
+                detail: store.activeSession?.subtitleDetail ?? ""
+            ),
+            mode: toolbarMode
+        )
     }
 
     /// The window's user-set name, or nil when it has none (an auto "window N" name). Feeds the optional
@@ -29,19 +42,9 @@ extension WindowContentView {
         return info.name
     }
 
-    /// The VISIBLE title-bar label, honoring the Interface toggles: the session name (hidden by `.sessionName`),
-    /// the custom window name (hidden by `.windowName`), or both as "session — window"; empty when both are
-    /// hidden or absent. `windowTitle` still feeds the OS title, so Mission Control / Window stay labelled.
-    private var titleText: String {
-        let sessionPart = shows(.sessionName) ? (store.activeSession?.displayName ?? "Agterm") : nil
-        let windowPart = shows(.windowName) ? customWindowName : nil
-        switch (sessionPart, windowPart) {
-        case let (session?, window?): return "\(session) — \(window)"
-        case let (session?, nil): return session
-        case let (nil, window?): return window
-        case (nil, nil): return ""
-        }
-    }
+    /// The VISIBLE title-bar label. `windowTitle` above still feeds the OS title, so Mission Control and the
+    /// Window menu stay labelled whatever the Interface toggles hide here.
+    private var titleText: String { composition.title }
 
     /// The window title at the terminal's leading edge: the gated session/window name, plus the cwd subtitle
     /// on a second line in normal mode only (compact drops it for one short row). Non-private so the zoom
@@ -57,6 +60,10 @@ extension WindowContentView {
                     .foregroundStyle(chromeText.opacity(0.6))
             }
         }
+        // a caller-set context can run to 256 bytes, far past the row; tail truncation drops its end rather
+        // than letting the label push the trailing button cluster off the bar.
+        .lineLimit(1)
+        .truncationMode(.tail)
     }
 
     /// The window chrome above the terminal: the full custom titlebar row, or in hidden mode an invisible ~3px

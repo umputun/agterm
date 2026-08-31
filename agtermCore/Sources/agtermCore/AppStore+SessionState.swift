@@ -1,7 +1,7 @@
 import Foundation
 
-// Per-session durable state the sidebar and title bar project: flagged working-set membership and the
-// background watermark. Split out of `AppStore.swift` for the file size limit.
+// Per-session durable state the sidebar and title bar project: flagged working-set membership, the
+// title-bar context, and the background watermark. Split out of `AppStore.swift` for the file size limit.
 extension AppStore {
     /// Sets (or clears) a session's flag — the durable flagged working-set membership the flat sidebar view
     /// projects — and persists. Clean no-op for an unknown id or a matching flag, so delta-computed callers
@@ -13,6 +13,19 @@ extension AppStore {
         pruneSidebarSelection()
         reselectIfSelectionHidden()
         save()
+    }
+
+    /// Sets (or clears) a session's title-bar context — what the session is FOR — and persists it. Clean
+    /// no-op for an unknown id or an unchanged value, so a re-set of the same string neither saves nor
+    /// emits and a scripted loop stays quiet. Returns whether it CHANGED. `context` arrives already
+    /// trimmed and validated by `Session.validateContext`; nil clears.
+    @discardableResult
+    public func setContext(_ context: String?, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), session.context != context else { return false }
+        session.context = context
+        save()
+        scheduleTreeChanged()
+        return true
     }
 
     /// Sets (or clears) multiple sessions' flags in one save. Unknown ids are ignored.

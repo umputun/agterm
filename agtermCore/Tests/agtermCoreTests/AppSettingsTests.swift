@@ -652,6 +652,17 @@ struct AppSettingsTests {
         #expect(!hidden.isInterfaceElementHidden(.newSession))
     }
 
+    @Test func sessionContextIsATitleBarInterfaceElementGatingOnlyItself() {
+        #expect(InterfaceElement.sessionContext.section == .titleBar)
+        #expect(InterfaceElement.sessionContext.displayName == "Session context")
+        let hidden = AppSettings(hiddenInterfaceElements: ["sessionContext"])
+        #expect(hidden.isInterfaceElementHidden(.sessionContext))
+        #expect(!hidden.isInterfaceElementHidden(.sessionName))
+        #expect(!hidden.isInterfaceElementHidden(.windowName))
+        let names = AppSettings(hiddenInterfaceElements: ["sessionName", "windowName"])
+        #expect(!names.isInterfaceElementHidden(.sessionContext))
+    }
+
     @Test func focusFilterIsASidebarInterfaceElement() {
         // the bottom-bar workspace-filter toggle, hidden independently of the flagged-view toggle beside it.
         #expect(InterfaceElement.focusFilter.section == .sidebar)

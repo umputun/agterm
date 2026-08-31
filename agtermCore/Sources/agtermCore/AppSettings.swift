@@ -28,6 +28,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case sidebarToggle
     case sessionName
     case windowName
+    case sessionContext
     case recentSessions
     case scratch
     case split
@@ -57,6 +58,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .sidebarToggle: return "Sidebar toggle"
         case .sessionName: return "Session name"
         case .windowName: return "Window name"
+        case .sessionContext: return "Session context"
         case .recentSessions: return "Recent sessions"
         case .scratch: return "Scratch terminal"
         case .split: return "Split view"

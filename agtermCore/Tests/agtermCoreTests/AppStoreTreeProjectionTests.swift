@@ -66,6 +66,33 @@ struct AppStoreTreeProjectionTests {
         ])
     }
 
+    @Test func controlTreeProjectsSessionContext() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let withContext = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a"))
+        let without = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/b"))
+        withContext.context = "PR #517: restore reap ordering"
+
+        let sessions = store.controlTree().workspaces[0].sessions
+
+        #expect(sessions[0].context == "PR #517: restore reap ordering")
+        #expect(sessions[1].context == nil)
+        #expect(without.context == nil)
+    }
+
+    @Test func sessionContextIsOmittedFromJSONWhenUnset() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a"))
+
+        let bare = try String(decoding: JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+        #expect(!bare.contains("\"context\""))
+
+        session.context = "PR #517"
+        let set = try String(decoding: JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+        #expect(set.contains("\"context\":\"PR #517\""))
+    }
+
     @Test func controlTreeReportsSidebarVisibility() {
         let store = makeStore()
         #expect(store.controlTree().sidebarVisible == true)

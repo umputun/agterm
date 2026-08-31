@@ -522,6 +522,27 @@ struct ControlProtocolTests {
         #expect(decoded.args?.mode == "on")
     }
 
+    @Test func sessionContextRawStringMapsToCommandModeAndText() throws {
+        let raw = #"{"cmd":"session.context","target":"active","args":{"mode":"set","text":"PR #517"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))
+        #expect(decoded.cmd == .sessionContext)
+        #expect(decoded.args?.mode == "set")
+        #expect(decoded.args?.text == "PR #517")
+    }
+
+    @Test func sessionContextNodeRoundTripsAndOmitsAnUnsetValue() throws {
+        let set = ControlSessionNode(id: "s1", name: "alpha", cwd: "/repo", active: true, split: false,
+                                     backedByZmx: nil, context: "PR #517")
+        let encoded = try JSONEncoder().encode(set)
+        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: encoded).context == "PR #517")
+
+        let unset = ControlSessionNode(id: "s2", name: "beta", cwd: "/repo", active: false, split: false,
+                                       backedByZmx: nil)
+        let bare = try String(decoding: JSONEncoder().encode(unset), as: UTF8.self)
+        #expect(!bare.contains("context"))
+        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: Data(bare.utf8)).context == nil)
+    }
+
     @Test func sidebarModeRawStringMapsToCommand() throws {
         let raw = #"{"cmd":"sidebar.mode","args":{"mode":"flagged"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))
