@@ -1,6 +1,6 @@
-/// The read-back PROJECTIONS: the immutable snapshots `tree` and `window.list` return, distinct from the
-/// request envelope in `ControlProtocol.swift` and the response envelope in `ControlResponse.swift`.
-/// Split out for the file size limit.
+// The read-back PROJECTIONS: the immutable snapshots `tree` and `window.list` return, distinct from the
+// request envelope in `ControlProtocol.swift` and the response envelope in `ControlResponse.swift`.
+// Split out for the file size limit.
 
 /// A terminal surface as projected into the `tree` response. `id` is the stable control address for
 /// `surface.zoom`; `kind` the user-facing name (`left`, `right`, `scratch`, `overlay`). `active`/`visible`

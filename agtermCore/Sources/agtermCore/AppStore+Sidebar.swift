@@ -3,8 +3,8 @@ import Foundation
 /// Sidebar divider geometry: the shared width clamp and the persisting setter behind `sidebar.width`.
 /// Visibility and view mode stay in `AppStore.swift` beside the rest of the per-window sidebar state.
 extension AppStore {
-    /// Clamp a sidebar width to `sidebarWidthMin...sidebarWidthMax`. Callers pass finite values only —
-    /// `sidebar.width` rejects a non-finite argument at the dispatcher, and the drag passes a cursor x.
+    /// Clamp a finite width to `sidebarWidthMin...sidebarWidthMax`. The dispatcher rejects non-finite
+    /// requests; drag and `restore()` supply finite values.
     public static func clampSidebarWidth(_ width: Double) -> Double {
         min(sidebarWidthMax, max(sidebarWidthMin, width))
     }

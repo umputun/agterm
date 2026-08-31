@@ -94,10 +94,10 @@ public final class AppStore {
     /// `BuiltinAction.toggleWorkspaceFilter`, and `workspace.filter`.
     public internal(set) var focusEnabled = false
 
-    /// This window's sidebar width in points, persisted in `Snapshot`; clamped to the bounds below. Two writers: the drag, and `setSidebarWidth` behind `sidebar.width`.
+    /// Sidebar width in points, persisted per window; drag and `sidebar.width` write it.
     public var sidebarWidth: Double = AppStore.sidebarWidthDefault
 
-    /// Default + bounds, shared by the drag, `setSidebarWidth` and the `restore()` clamp through `clampSidebarWidth` so they can't drift.
+    /// Bounds shared by drag, `sidebar.width`, and `restore()` through `clampSidebarWidth`.
     public static let sidebarWidthDefault: Double = 220
     public static let sidebarWidthMin: Double = 160
     public static let sidebarWidthMax: Double = 560
