@@ -24,6 +24,15 @@ struct CommandsTests {
         }
     }
 
+    private func requestErrorMessage(_ build: () throws -> ControlRequest) -> String? {
+        do {
+            _ = try build()
+            return nil
+        } catch {
+            return Agtermctl.message(for: error)
+        }
+    }
+
     @Test func tree() throws {
         #expect(try request(["tree"]) == ControlRequest(cmd: .tree))
     }
@@ -325,6 +334,12 @@ struct CommandsTests {
         #expect(command.stdin)
         #expect(command.text == nil)
         #expect(command.target.target == "s1")
+    }
+
+    @Test func sessionTypeStdinRejectsInvalidUTF8() throws {
+        let command = try Session.TypeText.parse(["--stdin", "--target", "s1"])
+        #expect(requestErrorMessage { try command.makeRequest(input: Data([0xFF])) }
+            == "stdin must be valid UTF-8")
     }
 
     @Test func sessionTypeWithPane() throws {
@@ -1190,6 +1205,12 @@ struct CommandsTests {
         let command = try Quick.TypeText.parse(["--stdin"])
         #expect(command.stdin)
         #expect(command.text == nil)
+    }
+
+    @Test func quickTypeStdinRejectsInvalidUTF8() throws {
+        let command = try Quick.TypeText.parse(["--stdin"])
+        #expect(requestErrorMessage { try command.makeRequest(input: Data([0xFF])) }
+            == "stdin must be valid UTF-8")
     }
 
     @Test func quickTypeWithoutTextOrStdinThrows() {

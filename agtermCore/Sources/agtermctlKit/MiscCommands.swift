@@ -213,16 +213,16 @@ struct Quick: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest {
-            let payload: String
             if stdin {
-                // non-UTF8 stdin decodes to nil and injects nothing — terminal input is UTF-8 text.
-                let data = FileHandle.standardInput.readDataToEndOfFile()
-                payload = String(data: data, encoding: .utf8) ?? ""
-            } else if let text {
-                payload = text
-            } else {
-                throw ValidationError("provide TEXT or --stdin")
+                return try makeRequest(input: FileHandle.standardInput.readDataToEndOfFile())
             }
+            guard let text else { throw ValidationError("provide TEXT or --stdin") }
+            return makeRequest(payload: text)
+        }
+
+        func makeRequest(input: Data) throws -> ControlRequest { makeRequest(payload: try decodeTypedStdin(input)) }
+
+        private func makeRequest(payload: String) -> ControlRequest {
             return ControlRequest(cmd: .quickType, args: ControlArgs(text: payload))
         }
     }

@@ -124,6 +124,14 @@ extension RequestCommand {
     }
 }
 
+/// Decodes a `type` command's stdin payload, whose contract is text; an invalid byte empties it entirely.
+func decodeTypedStdin(_ input: Data) throws -> String {
+    guard let text = String(data: input, encoding: .utf8) else {
+        throw ValidationError("stdin must be valid UTF-8")
+    }
+    return text
+}
+
 // MARK: - tree
 
 struct Tree: RequestCommand {
