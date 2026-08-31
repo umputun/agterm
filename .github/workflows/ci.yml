@@ -250,9 +250,9 @@ jobs:
         # without it a failed find would leave the step green having checked nothing
         shell: bash
         run: find cookbook -type f -name '*.sh' -print0 | xargs -0 -r shellcheck
-      - name: Install zsh
-        # not on the ubuntu-latest image, unlike shellcheck
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install recipe shells
+        # neither is on the ubuntu-latest image; fish runs a recipe regression test
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
       - name: zsh syntax check
         # shellcheck cannot parse zsh, so a parse is the only gate .zsh recipes get.
         # -n1 because zsh -n reads one script and treats the rest as its arguments;

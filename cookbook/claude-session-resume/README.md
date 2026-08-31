@@ -9,8 +9,9 @@ Contributed by [@ssgreg](https://github.com/ssgreg), from [discussion #71](https
 Keep several Claude Code sessions open at once, and after the terminal restarts each tab resumes its own conversation instead of a shared "most recent" one.
 
 - Solves a concrete pain: multiple parallel Claude Code sessions survive a restart, each reopening exactly its own conversation.
-- Zero state: the conversation id **is** the tab's uuid (`AGTERM_SESSION_ID`). No mapping file to keep in sync or let go stale.
-- Idempotent: the first launch pins the conversation to the tab (`--session-id`); later launches continue it (`--resume`), and it flips automatically.
+- Zero mapping state: the first conversation id **is** the tab's uuid (`AGTERM_SESSION_ID`), and any recovery id is derived from it.
+- Idempotent: the first launch pins the conversation to the tab (`--session-id`); later launches continue it (`--resume`).
+- Non-destructive recovery: a metadata-only transcript is left in place and the tab advances to its next deterministic conversation id.
 - Stays out of the way: `claude mcp`, `-p`, an explicit `claude --resume <other-id>`, and any launch outside agterm pass through untouched.
 - Small, dependency-free, pure shell; options are function-local (zsh's `emulate -L`, fish's implicit function scoping), so nothing leaks into your interactive shell.
 
@@ -19,6 +20,7 @@ Keep several Claude Code sessions open at once, and after the terminal restarts 
 - agterm 0.3.1 or later, with **Restore running commands on restart** turned on under Settings ▸ General ▸ Sessions. Both `AGTERM_SESSION_ID` and that setting predate the repository's earliest tagged release, so 0.3.1 is the first version that can be named, not the version the behavior arrived in.
 - `zsh`, or `fish`
 - Claude Code, with its conversations in the default `~/.claude/projects/`
+- Python 3.8 or later, plus both `zsh` and `fish`, only to run the bundled `test_claude_resume.py`. Using the recipe needs no Python.
 
 ## Setup
 
@@ -68,15 +70,17 @@ To remove it, delete `~/.config/fish/functions/claude.fish`.
 
 Run `claude` the way you always do. The first launch in a tab starts a conversation pinned to that tab, and every later launch in the same tab continues it.
 
-To check it: open a tab, run `claude`, say a few words, then restart the terminal. The tab should come back to the same conversation, and `ps` shows `claude --resume <tab-id>`.
+To check it: open a tab, run `claude`, say a few words, then restart the terminal. The tab should come back to the same conversation, and `ps` shows `claude --resume <tab-owned-id>`.
 
 ## How it works
 
 agterm can remember the command running in a tab and re-run it on restart. The catch: it re-runs the command verbatim, and `claude` with no arguments is a *new* conversation, not a continuation.
 
-The trick rests on two facts. Every agterm tab has a stable identifier (`AGTERM_SESSION_ID`) that survives a restart. And Claude Code lets you supply a session id from the outside (`--session-id`). So you can use the tab's id as the conversation id, and the tab permanently "owns" one conversation.
+The trick rests on two facts. Every agterm tab has a stable identifier (`AGTERM_SESSION_ID`) that survives a restart. And Claude Code lets you supply a session id from the outside (`--session-id`). The tab id can therefore identify its conversation and any deterministic recovery ids.
 
-The function then wraps `claude`: on the first launch in a tab it pins the conversation to the tab id (`--session-id`); if that conversation's file already exists on disk it continues it (`--resume`). The whole decision is one check: is `<tab-id>.jsonl` present under `~/.claude/projects/`?
+The function then wraps `claude`: on the first launch in a tab it pins the conversation to the tab id (`--session-id`). Later launches find that id under Claude's project directories and continue it with `--resume`. Looking up the id directly means the wrapper does not need to reproduce Claude's private project-path encoding.
+
+Claude can leave a `bridge-session`-only file after switching conversations through `/resume`. Such a file is not resumable and also prevents reusing the id. The wrapper leaves the file untouched and derives another UUID by incrementing the final 32 bits of the tab id. It applies the same rule again if that id also has a metadata-only transcript. A conversation created by an older version of the recipe is still resumed because its id remains the tab id.
 
 On restart agterm replays the remembered command, the function recognizes "its own" id, sees the conversation already exists, and reopens exactly that one. Each tab, its own.
 
@@ -86,8 +90,10 @@ On the agterm side that replay is a foreground-process capture. At quit agterm r
 
 - **agterm-specific.** It needs a stable per-tab identifier and relies on agterm feeding the restored command back *through the login shell*, which is how the function intercepts it. It will not work as-is in another terminal; you would adapt it to that terminal's equivalent.
 - **Rests on restore behavior its author verified empirically rather than from documentation.** It could change between agterm versions.
-- **One conversation per tab.** Since conversation id equals tab id, two live `claude` processes in the same tab collide with `Session ID ... is already in use`. A split pane, a scratch pane and any overlay all run under the same `AGTERM_SESSION_ID` as the main pane, so a second `claude` in any of them hits this.
+- **One tab-owned conversation id at a time.** Simultaneous launches in the same tab can choose the same id and collide with Claude's transcript check. A process that has switched elsewhere through `/resume` can leave a metadata-only id, which the next launch skips.
 - **It shadows the `claude` command** with a shell function. Passthrough is handled, but the list of subcommands and flags that must not be touched has to be kept current if the CLI grows new ones.
-- **It knows Claude Code's on-disk layout** (`~/.claude/projects/*/<id>.jsonl`). If that storage location changes, the "does this conversation exist" check breaks: it would always create, then hit "already in use" on restart. A one-line fix, but worth knowing.
+- **It knows Claude Code's on-disk layout** (`~/.claude/projects/*/<id>.jsonl`). A Claude Code storage change can require a recipe update.
 - **zsh or fish only** (the zsh version uses `${:l}`, the `(N)` glob qualifier, and `emulate`; the fish version uses fish-only syntax throughout). Bash needs a rewrite.
-- **Existing conversations are not bound to tabs.** After you install this, the first launch in a tab starts a new conversation pinned to that tab; it does not adopt an arbitrary earlier one.
+- **Existing conversations are not bound to tabs.** After installation, the first launch starts a conversation pinned to that tab. Conversations created by an older copy of this recipe are adopted by their matching tab id, but arbitrary earlier conversations are not.
+- **Claude's `/resume` picker does not rebind the tab.** It switches the running process, but the next launch returns to the conversation owned by the tab id. To make agterm capture another conversation, exit and run `claude --resume <id>` from the shell.
+- **Metadata-only transcripts remain on disk.** They are small, remain available for inspection and are skipped on later launches.
