@@ -556,6 +556,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   persisted, absent after restore.
 - Pane is left/right/scratch, nil meaning left. It controls pane-scoped keystroke clearing and GUI
   blocked/completed reveal. Control attention navigation changes selection only.
+- Pane also decides PRECEDENCE while a session is blocked: a write from another pane that is neither
+  `blocked` nor `idle` is refused whole with `blocked status owned by pane <pane>`, changing nothing and
+  playing no sound. A hook's `active` must not erase the other pane's block. `blocked` from a second pane
+  replaces (it is a real second request), `idle` always clears, and same-pane writes are unrestricted, so a
+  single-pane session behaves exactly as before. `session.type` into the owning pane clears the block like a
+  keystroke, an empty payload excepted. Two simultaneous blocks still collapse to one; see [[notifications]].
 - `--pane-id` (#199) is a stable per-surface token that overrides stale baked role after promote/re-split,
   then falls back to role when absent/unknown. Inject `AGTERM_PANE_ID`, resolve against live surface tokens,
   and report only resolved `statusPane`. For `session.status` this addressing adds no read-back field. For

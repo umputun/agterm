@@ -129,4 +129,11 @@ public struct AgentIndicator: Equatable, Sendable {
     public func clearedBy(pane: StatusPane, isInterrupt: Bool) -> Bool {
         (statusPane ?? .left) == pane && status.clearedByKeystroke(isInterrupt: isInterrupt)
     }
+
+    /// normalizedPane: the tag as the store keeps it — a `.right` tag on a splitless session folds to `.left`,
+    /// since a promoted survivor's shell keeps its baked `AGTERM_PANE=right` and the sole (`.left`-role-aware)
+    /// pane could never keystroke-clear a `.right` tag. nil is preserved so the read-back omits the field.
+    func normalizedPane(hasSplit: Bool) -> StatusPane? {
+        statusPane == .right && !hasSplit ? .left : statusPane
+    }
 }

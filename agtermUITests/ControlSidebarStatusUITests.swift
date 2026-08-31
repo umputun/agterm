@@ -676,8 +676,8 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                       "visiting a completed --auto-reset session should clear its icon")
     }
 
-    // wired off GhosttySurfaceView.keyDown, so it MUST be a real keystroke: `session.type` calls
-    // ghostty_surface_key directly and bypasses keyDown.
+    // the keyboard path is wired off GhosttySurfaceView.keyDown, so this MUST be a real keystroke;
+    // `session.type` reaches the same clear through injectAsUserInput and is covered in PaneAwareStatusUITests.
     func testTypingClearsBlockedOrCompletedStatus() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")

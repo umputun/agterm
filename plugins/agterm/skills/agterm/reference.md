@@ -165,8 +165,9 @@ glyph-tint override — the `--color` value; omitted when idle or using the conf
 `circle`|`square`|`triangle`|`diamond`|`capsule`|`star`; omitted when idle or using the configured shape.
 Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
 absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
-`ts` carries, so the two compare directly; omitted when idle. It is stamped on every non-idle
-`session status`, not only on a change of state, so a hook re-pushing `active` refreshes it and
+`ts` carries, so the two compare directly; omitted when idle. It is stamped on every ACCEPTED non-idle
+`session status` — a call refused by the pane-precedence rule below stamps nothing — not only on a
+change of state, so a hook re-pushing `active` refreshes it and
 `now - statusChangedAt` reads as how long ago the status was last WRITTEN — the age of the glyph.
 Normally that write is the agent's own push; a pane promotion re-tags the indicator and also counts.
 Ephemeral like `unseen`: never persisted, so it is absent after a restart even for a restored session),
@@ -502,9 +503,10 @@ error keeps those names for compatibility.
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|diamond|capsule|star] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
-  set the sidebar agent-status glyph. Every non-idle call stamps the session node's `statusChangedAt`,
-  including one that re-pushes the status already showing, so a poller can tell a fresh glyph from a stale
-  one without keeping state of its own. `--blink` requests an attention pulse; macOS Reduce Motion
+  set the sidebar agent-status glyph. Every ACCEPTED non-idle call stamps the session node's
+  `statusChangedAt`, including one that re-pushes the status already showing, so a poller can tell a fresh
+  glyph from a stale one without keeping state of its own; a call refused by the pane-precedence rule
+  changes nothing, the stamp included. `--blink` requests an attention pulse; macOS Reduce Motion
   suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
   pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
   is visited (use for a one-shot completion flash). `--sound` plays a
@@ -526,10 +528,14 @@ error keeps those names for compatibility.
   explain a shape-only change.
   A `--shape` on `idle` is accepted and ignored, since an idle session draws no glyph.
   `--pane` (canonical `left`|`right`|`scratch`; role and position aliases above are also accepted) records
-  which pane set the status. It has two effects: (1) keystroke-clear becomes pane-scoped — a status set
+  which pane set the status. It has three effects: (1) keystroke-clear becomes pane-scoped — a status set
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
-  no longer wiped by foreground typing in the main pane, and only a keystroke in the OWNING pane clears
-  it), and (2) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
+  no longer wiped by foreground typing in the main pane, and only input in the OWNING pane clears it,
+  whether typed by hand or sent with `session type`), (2) while the session is `blocked`, a status from
+  another pane that is neither `blocked` nor `idle` is REFUSED with `blocked status owned by pane <pane>` —
+  it changes nothing and plays no sound, so an agent working in one pane cannot erase the other pane's
+  request for input; a second pane may still report its own `blocked`, `idle` always clears, and the owning
+  pane writes freely, and (3) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
   the session lands on the tagged pane — auto-follow,
   the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last),
   the command palettes, a sidebar row click, and a Dock-menu session row all reveal and focus it, flipping to the split or

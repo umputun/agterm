@@ -2768,7 +2768,7 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusColor</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusShape</span>, each reporting
-              the per-call override only. Every non-idle status set also stamps the session's
+              the per-call override only. Every accepted non-idle status set also stamps the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusChangedAt</span> (epoch seconds,
               omitted when idle), including a call that re-pushes the status already showing — so a script polling
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> can tell how long ago the
@@ -2792,6 +2792,15 @@
               only steps the selection, it does not itself move focus into the pane). It reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              The tag also protects the block itself. While a session is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>, a status written from a
+              different pane is refused unless it is another
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span> or an explicit
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> — so with an agent working in
+              each pane, one reporting its ordinary progress cannot erase the other's request for input. The pane that set the block
+              changes it freely, and typing into that pane clears it.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Typing into a

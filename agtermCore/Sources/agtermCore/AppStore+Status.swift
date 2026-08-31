@@ -2,10 +2,37 @@ import Foundation
 
 // MARK: - Agent status & attention
 
+/// The outcome of a control-channel status write, which `AppStore.applyControlStatus` may refuse.
+public enum StatusWriteResult: Equatable, Sendable {
+    case applied
+    /// The write was dropped whole — no status change, no `statusChangedAt` restamp, no control event — because
+    /// `owner` holds a blocked status this pane may not replace.
+    case refused(owner: StatusPane)
+}
+
 /// The per-session agent-status indicator (the sidebar glyph driven by the control channel's `session.status`)
 /// and the window-wide attention list derived from it. Split out of the main `AppStore` body for the file-size
 /// budget, like `AppStore+AutoFollow`/`+Recency`/`+PendingClose`; the stored state lives on that main body.
 extension AppStore {
+    /// Applies a control-channel `session.status` write under the pane-precedence rule: while a session is
+    /// blocked, a write from a DIFFERENT pane is refused unless it is itself `blocked` (a second pane really
+    /// needing input) or `idle` (an explicit clear, which no installed hook emits). Without it one pane's
+    /// ordinary `active`/`completed` erases the other's block and the session drops out of the attention list,
+    /// which is the whole failure with an agent per pane. Same-pane writes are unrestricted, so a single pane
+    /// behaves exactly as before. Panes are compared AFTER `normalizedPane`, so a promoted survivor's stale
+    /// `.right` matches the `.left` it is stored as.
+    @discardableResult
+    public func applyControlStatus(_ indicator: AgentIndicator, forSession id: UUID) -> StatusWriteResult {
+        if let session = session(withID: id), session.agentIndicator.status == .blocked,
+           indicator.status != .blocked, indicator.status != .idle {
+            let owner = session.agentIndicator.normalizedPane(hasSplit: session.hasSplit) ?? .left
+            let writer = indicator.normalizedPane(hasSplit: session.hasSplit) ?? .left
+            if owner != writer { return .refused(owner: owner) }
+        }
+        setAgentIndicator(indicator, forSession: id)
+        return .applied
+    }
+
     /// Sets a session's agent status indicator (the sidebar status glyph) — the single mutation point for the
     /// control channel's `session.status`. Stamps `statusChangedAt` on any non-idle status (the attention
     /// list's newest-first sort key) and clears it on idle. Clears the session's `autoFollowConsumed` on a
@@ -16,20 +43,13 @@ extension AppStore {
         let previous = session.agentIndicator
         let wasBlocked = session.agentIndicator.status == .blocked
         var indicator = indicator
-        // normalize a `.right` tag to `.left` when the session has NO split. A promoted survivor's shell keeps
-        // its baked `AGTERM_PANE=right`, so the agent-status hook re-emits `--pane right` after promotion with
-        // no right pane — unnormalized that yields a `split:false` + `statusPane:"right"` contradiction the
-        // sole (`.left`-role-aware) pane could never keystroke-clear. A hidden-but-LIVE split keeps `hasSplit`,
-        // so `.right` stays valid there; `.left`/`.scratch` are untouched.
-        // gated on `hasSplit`, NOT `splitSurface == nil`: `toggleSplit`/restore set `hasSplit` synchronously
-        // while the deck creates `splitSurface` a render pass later, so a scripted `session.split` + immediate
-        // `session.status --pane right` lands in that realization window, where `.right` is the correct forward
-        // tag and must NOT be rewritten. `splitSurface != nil` implies `hasSplit` (only
-        // `closeSplit`/`closePrimaryPane` clear it, tearing the surface down with it), so `!hasSplit` still
-        // covers every genuinely splitless session.
-        if indicator.statusPane == .right, !session.hasSplit {
-            indicator.statusPane = .left
-        }
+        // the fold itself is `AgentIndicator.normalizedPane`; gated on `hasSplit`, NOT `splitSurface == nil`:
+        // `toggleSplit`/restore set `hasSplit` synchronously while the deck creates `splitSurface` a render
+        // pass later, so a scripted `session.split` + immediate `session.status --pane right` lands in that
+        // realization window, where `.right` is the correct forward tag and must NOT be rewritten.
+        // `splitSurface != nil` implies `hasSplit` (only `closeSplit`/`closePrimaryPane` clear it, tearing the
+        // surface down with it), so `!hasSplit` still covers every genuinely splitless session.
+        indicator.statusPane = indicator.normalizedPane(hasSplit: session.hasSplit)
         session.agentIndicator = indicator
         session.statusChangedAt = indicator.status == .idle ? nil : Date()
         // a re-asserted blocked-over-blocked is not a new episode and stays muted (Session.autoFollowConsumed).

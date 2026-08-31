@@ -394,6 +394,9 @@ extension ControlServer: ControlActions {
     /// ride the EPHEMERAL indicator, lasting only until the next `session.status` without them.
     /// `update.pane` (`StatusPane`, dispatcher-validated, nil = `left`/main) records the pane that set the
     /// status, driving the pane-scoped keystroke-clear and pane-aware reveal. Renders on every non-idle one.
+    /// While a session is blocked, a write from ANOTHER pane that is neither `blocked` nor `idle` is refused
+    /// whole (`AppStore.applyControlStatus`) with a `blocked status owned by pane` error and no sound — one
+    /// pane's `active`/`completed` must not erase the other's block.
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse {
         // validated before any mutation; an empty value counts as none, matching `AgentStatus.effectiveSound`.
         if let sound = update.sound, !sound.isEmpty, StatusSoundPlayer.shared.action(for: sound) == nil {
@@ -407,10 +410,14 @@ extension ControlServer: ControlActions {
             // `--pane-id` resolves against the LIVE surfaces and overrides the stale role `--pane`, so a
             // promoted-then-re-split pane lands on its CURRENT slot (#199); absent/unknown falls back to it.
             let resolvedPane = update.paneID.flatMap { session?.paneRole(forToken: $0) } ?? update.pane
-            store.setAgentIndicator(AgentIndicator(status: update.status, blink: update.blink ?? false,
-                                                   autoReset: update.autoReset ?? false,
-                                                   color: update.color, shape: update.shape,
-                                                   statusPane: resolvedPane), forSession: id)
+            let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false,
+                                           autoReset: update.autoReset ?? false,
+                                           color: update.color, shape: update.shape, statusPane: resolvedPane)
+            // a refusal returns BEFORE the sound: the write did not happen, so it must make no noise either.
+            if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
+                return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
+                    "(write from that pane, or send idle, to change it)")
+            }
             // per-call sound wins on any status; the Settings default plays only on a NEW entry into `blocked`.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
             if let name = update.status.effectiveSound(perCall: update.sound, blockedDefault: blockedDefault) {

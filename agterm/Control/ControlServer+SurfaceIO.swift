@@ -488,7 +488,7 @@ extension ControlServer {
             }
             // inject returns false when the view exists but its libghostty surface isn't realized yet (there
             // is no realize/select path for the split pane) — report that instead of a false ok.
-            guard let surface = split as? GhosttySurfaceView, surface.inject(text: text) else {
+            guard let surface = split as? GhosttySurfaceView, surface.injectAsUserInput(text: text) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -498,7 +498,7 @@ extension ControlServer {
             guard let scratch = store.session(withID: id)?.scratchSurface else {
                 return ControlResponse(ok: false, error: "session has no scratch terminal")
             }
-            guard let surface = scratch as? GhosttySurfaceView, surface.inject(text: text) else {
+            guard let surface = scratch as? GhosttySurfaceView, surface.injectAsUserInput(text: text) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -509,7 +509,7 @@ extension ControlServer {
         // main pane: inject if realized; a false return (view exists, libghostty surface not up yet) falls
         // through to the poll rather than returning a silent-drop false ok. This probe precedes the select
         // below, so `--select` on a realized session leaves the user's selection alone.
-        if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
+        if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.injectAsUserInput(text: text) {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
         if select { store.selectSession(id) }
@@ -517,7 +517,7 @@ extension ControlServer {
             try? await Task.sleep(nanoseconds: 30_000_000)
             // poll for the surface AND its realization (a false inject keeps polling), so a just-created or
             // just-selected session isn't reported ok before its libghostty surface is up.
-            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
+            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.injectAsUserInput(text: text) {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
         }

@@ -1041,7 +1041,12 @@
                 pane waits briefly for its surface, so creating and typing back to back does not race.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> selects the session first, and only when its
                 surface is not ready yet. Text carrying a NUL is rejected with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text must not contain a NUL byte</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text must not contain a NUL byte</span>. Typing counts as the
+                input a waiting agent asked for, so it clears that pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span> glyph exactly as a keystroke does — another
+                pane's glyph and an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> one are left alone, and empty
+                text clears nothing.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> is the main pane (the default),
@@ -1328,13 +1333,22 @@
                 makes any user-initiated GUI selection of a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>
                 or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span> session reveal and focus the tagged
                 pane. An <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> status preserves the current pane
-                selection. An agent running in a split or scratch should set its own pane. Read back as the session node's
+                selection. An agent running in a split or scratch should set its own pane. While a session is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>, a status from a DIFFERENT pane that is
+                neither <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> nor
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> is refused with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked status owned by pane …</span>, changing nothing
+                and playing no sound, so one pane's agent cannot erase the other's request for input. A second pane may still report
+                its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> always clears, and the owning pane writes
+                freely — including through <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type</span>, whose
+                keystrokes clear the block like typed ones. Read back as the session node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (the last two reporting the
                 per-call override only), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusChangedAt</span> — every non-idle call stamps it,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusChangedAt</span> — every accepted non-idle call stamps it,
                 including one that re-pushes the status already showing, so a poller reads the glyph's age
                 without keeping state of its own.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> is the surface's stable spawn token

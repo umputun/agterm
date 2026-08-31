@@ -11,9 +11,10 @@ import XCTest
 /// distinct echo marker, so the no-pane read tells the panes apart. The control `session.go
 /// next-attention` is reveal-free, so only a menu key-equivalent / click / palette pick exercises it.
 ///
-/// Clear oracle: the pane-scoped keystroke-clear is wired off the real `keyDown`, so it MUST be driven by
-/// the synthesized keyboard — `session.type` injects via `ghostty_surface_key` and bypasses `keyDown`.
-/// The sidebar glyph (`agent-status`) is the observable.
+/// Clear oracle: the keyboard-driven clear is wired off the real `keyDown`, so it MUST be driven by the
+/// synthesized keyboard. `session.type` reaches the same pane-scoped clear through `injectAsUserInput`
+/// rather than `keyDown`, so it clears its own pane too — but never on an empty payload, which queues no
+/// keystrokes. The sidebar glyph (`agent-status`) is the observable.
 @MainActor
 final class PaneAwareStatusUITests: ControlAPITestCase {
     func testAttentionNavRevealsBlockedSplitPane() throws {
@@ -391,7 +392,64 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
                        "an unknown --pane-id falls back to the baked --pane right")
     }
 
+    func testStatusFromTheOtherPaneCannotReplaceABlock() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(try pollSplit(sessionA, timeout: 10), "the split should be live before tagging the right pane")
+
+        try blockPane("blocked", pane: "right", target: sessionA)
+
+        let refused = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"left"}}"#)
+        XCTAssertEqual(refused["ok"] as? Bool, false, "a left-pane active must not replace the right pane's block: \(refused)")
+        XCTAssertEqual(refused["error"] as? String,
+                       "blocked status owned by pane right (write from that pane, or send idle, to change it)")
+        let node = try sessionNode(id: sessionA)
+        XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the refused write")
+        XCTAssertEqual(node["statusPane"] as? String, "right", "the refused write must not retag the status")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"right"}}"#)["ok"] as? Bool,
+                       true, "the owning pane's own active should still apply")
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "active",
+                       "the owning pane's write should land")
+    }
+
+    func testControlTypingClearsOnlyItsOwnPanesStatus() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(try pollSplit(sessionA, timeout: 10), "the split should be live before tagging the right pane")
+
+        try blockPane("blocked", pane: "left", target: sessionA)
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12), "a left-tagged block should show the glyph")
+        try typeInto(pane: "left", target: sessionA, text: "\n")
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForNonExistence(timeout: 12),
+                      "typing into the left pane SHOULD clear its own block")
+
+        try blockPane("blocked", pane: "right", target: sessionA)
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12), "a right-tagged block should show the glyph")
+        try typeInto(pane: "left", target: sessionA, text: "\n")
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
+                       "typing into the left pane must NOT clear the right pane's block")
+
+        try blockPane("blocked", pane: "right", target: sessionA)
+        try typeInto(pane: "right", target: sessionA, text: "")
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
+                       "an empty payload queues no keystrokes, so it must clear nothing")
+
+        try blockPane("active", pane: "right", target: sessionA)
+        try typeInto(pane: "right", target: sessionA, text: "\n")
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "active",
+                       "injected text is not an interrupt, so it must leave an active glyph alone")
+    }
+
     // MARK: - Helpers
+
+    /// `session.type` into one pane, asserting ok.
+    private func typeInto(pane: String, target: String, text: String) throws {
+        XCTAssertEqual(try sendCommand(typeRequest(text: text, target: target, select: false, pane: pane))["ok"] as? Bool,
+                       true, "session.type into the \(pane) pane should succeed")
+    }
 
     /// Type Escape into the focused surface until the agent-status glyph clears (retrying rides out a
     /// still-settling keyboard focus). Mirrors `ControlSidebarStatusUITests`'s typeUntilGlyphCleared idiom.
