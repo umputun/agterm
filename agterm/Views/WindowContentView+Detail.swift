@@ -191,6 +191,10 @@ extension WindowContentView {
         let covered = session.paneOverlay(pane) != nil
         let slot: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> =
             pane == .left ? \.surface : \.splitSurface
+        // the primary carries `primarySurfaceHostRevision`, which a swap bumps and lazy creation deliberately
+        // does not, so appending the occupant token there would remount every pane on first realization for
+        // nothing (`SessionTests.lazy creation must not force a second mount`). The split slot has no such
+        // revision, so its id needs the token to change when the occupants exchange.
         let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
         ZStack {
             if deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
@@ -201,7 +205,8 @@ extension WindowContentView {
                              onScreen: gates.onScreen && !covered)
                     .overlay { paneDim(!focused, session: session) }
                     .modifier(PaneOverlayCover(covered: covered))
-                    .id("\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
+                    .id(pane == .left ? hostPrefix
+                        : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
             } else {
                 Color.clear
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")

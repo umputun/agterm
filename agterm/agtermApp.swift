@@ -231,20 +231,24 @@ struct agtermApp: App {
         for _ in 0..<extra { openWindow(id: Self.windowGroupID) }
     }
 
-    /// Surface factory: a libghostty-backed view for the session, spawning a login shell in its initial working
-    /// directory. On shell exit the view calls back to close the owning session in the store.
+    /// Which pane a focus report should record, read from the surface's LIVE role so a swapped terminal
+    /// updates the slot it now occupies. nil when the report is a focus LOSS, which records nothing.
     @MainActor
     static func focusedSplitState(_ focused: Bool, surface: GhosttySurfaceView?) -> Bool? {
         guard focused else { return nil }
         return surface?.isSplitPane ?? false
     }
 
+    /// Persist a font-size change only from the surface currently in the PRIMARY role; a split-role or
+    /// unresolved surface changes size live without writing the session's persisted value.
     @MainActor
     static func persistFontSize(_ size: Double, from surface: GhosttySurfaceView?, store: AppStore, sessionID: UUID) {
         guard surface?.isSplitPane == false else { return }
         store.setFontSize(sessionID, size)
     }
 
+    /// Surface factory: a libghostty-backed view for the session, spawning a login shell in its initial working
+    /// directory. On shell exit the view calls back to close the owning session in the store.
     @MainActor
     private static func makeSurface(for session: Session, store: AppStore, env: [String: String],
                                     library: WindowLibrary) -> GhosttySurfaceView {
