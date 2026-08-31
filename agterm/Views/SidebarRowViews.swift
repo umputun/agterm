@@ -31,6 +31,21 @@ final class SidebarCellView: NSTableCellView {
         addButtonWidthConstraint.constant = visible ? Self.addButtonWidth : 0
     }
 
+    override func layout() {
+        super.layout()
+        updateNameTooltip()
+    }
+
+    /// Reveals the full name on hover, but only while the row is too narrow to show it: the label truncates by
+    /// tail and nothing else exposes what was cut. A tooltip repeating already-visible text would be noise, so
+    /// the width decides. Runs from `layout`, so dragging the sidebar divider re-evaluates it. Skipped mid-rename
+    /// — the field editor holds the text then, and `stringValue` is whatever has been typed so far.
+    private func updateNameTooltip() {
+        guard let field = textField, field.currentEditor() == nil else { return }
+        let available = field.cell?.titleRect(forBounds: field.bounds).width ?? field.bounds.width
+        field.toolTip = field.attributedStringValue.size().width > available ? field.stringValue : nil
+    }
+
     // hover tracking for the "+" reveal, workspace cells only (session cells have no button to show)
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
