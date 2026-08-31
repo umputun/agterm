@@ -197,10 +197,39 @@ struct AppStorePaneSwapTests {
     @Test func swappingTwiceRestoresPaneStateIncludingNilPin() {
         let fixture = makeSeededSession()
         let before = State(fixture.session)
+        let snapshotBefore = fixture.store.snapshot()
 
         #expect(fixture.store.swapPanes(fixture.session.id) == nil)
         #expect(fixture.store.swapPanes(fixture.session.id) == nil)
         #expect(State(fixture.session) == before)
+        #expect(fixture.store.snapshot() == snapshotBefore)
+    }
+
+    @Test func closeSplitAfterSwapDropsOnlyTheDepartedCreationIdentity() {
+        let fixture = makeSeededSession()
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+        fixture.store.closeSplit(fixture.session.id)
+
+        #expect(fixture.session.initialCommand == "right command")
+        #expect(fixture.session.commandWait)
+        #expect(fixture.session.splitInitialCommand == nil)
+        #expect(!fixture.session.splitCommandWait)
+        #expect(!fixture.session.hasSplit)
+    }
+
+    @Test func primaryExitAfterSwapPromotesTheSurvivingCreationIdentity() {
+        let fixture = makeSeededSession()
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+        fixture.store.closePrimaryPane(fixture.session.id)
+
+        #expect(fixture.session.surface === fixture.primary)
+        #expect(fixture.session.initialCommand == "left command")
+        #expect(!fixture.session.commandWait)
+        #expect(fixture.session.splitInitialCommand == nil)
+        #expect(!fixture.session.splitCommandWait)
+        #expect(!fixture.session.hasSplit)
     }
 
     @Test func swapRetagsEveryStatusOwnerWithoutChangingStatusTime() {
