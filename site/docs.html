@@ -2797,10 +2797,11 @@
               The tag also protects the block itself. While a session is
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>, a status written from a
               different pane is refused unless it is another
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span> or an explicit
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> — so with an agent working in
-              each pane, one reporting its ordinary progress cannot erase the other's request for input. The pane that set the block
-              changes it freely, and typing into that pane clears it.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span> — so with an agent working in
+              each pane, one reporting its ordinary progress cannot erase the other's request for input. That holds for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> too, which the bundled agent
+              hooks send unprompted when an agent starts or finishes. The pane that set the block changes it freely, typing into that
+              pane clears it, and Clear Status in the sidebar row menu clears it from anywhere.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Typing into a

@@ -673,7 +673,8 @@ final class ControlAPIUITests: ControlAPITestCase {
     }
 
     // the promoted survivor is the MAIN pane now, so its keystrokes must not clear the fresh split's
-    // `.right` block. Real keystrokes are load-bearing: a session.type inject skips onUserInputClearsStatus.
+    // `.right` block. Real keystrokes pin the keyDown path itself, which resolves the pane from the LIVE
+    // `isSplitPane` at press time; `session.type` reaches the same clear through `injectAsUserInput`.
     func testPromotedMainPaneDoesNotClearSplitRightStatus() throws {
         let sid = try activeSessionID()
 

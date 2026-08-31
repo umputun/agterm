@@ -1335,12 +1335,12 @@
                 pane. An <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> status preserves the current pane
                 selection. An agent running in a split or scratch should set its own pane. While a session is
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>, a status from a DIFFERENT pane that is
-                neither <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> nor
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> is refused with
+                not itself <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> is refused with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked status owned by pane …</span>, changing nothing
                 and playing no sound, so one pane's agent cannot erase the other's request for input. A second pane may still report
-                its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> always clears, and the owning pane writes
+                its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> is not exempt, since the bundled agent hooks
+                send it unprompted from their own pane. The owning pane writes
                 freely — including through <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type</span>, whose
                 keystrokes clear the block like typed ones. Read back as the session node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,

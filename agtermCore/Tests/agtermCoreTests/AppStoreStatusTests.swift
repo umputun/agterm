@@ -2,13 +2,14 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-/// The `tree` projection of the agent-status change time. The stamping itself is covered by
-/// `AppStoreTests`' `setAgentIndicator` cases; these cover what a control client reads back.
 @MainActor
 private final class DraftCollector {
     var kinds: [ControlEventKind] = []
 }
 
+/// The `tree` projection of the agent-status change time, and the pane-precedence rule over a blocked
+/// status. The stamping itself is covered by `AppStoreTests`' `setAgentIndicator` cases; these cover what
+/// a control client reads back.
 @MainActor
 struct AppStoreStatusTests {
     @Test func controlTreeReportsStatusChangedAtAsEpochSeconds() throws {
@@ -68,7 +69,7 @@ struct AppStoreStatusTests {
         return (store, session)
     }
 
-    @Test(arguments: [AgentStatus.active, .completed])
+    @Test(arguments: [AgentStatus.active, .completed, .idle])
     func rightPaneCannotReplaceTheLeftPanesBlock(_ status: AgentStatus) {
         let (store, session) = blockedLeftSplitSession()
         let stamp = session.statusChangedAt
@@ -110,10 +111,12 @@ struct AppStoreStatusTests {
         #expect(session.agentIndicator.statusPane == .right)
     }
 
-    @Test func idleFromTheOtherPaneClearsTheBlock() {
+    // the bundled hooks emit `idle` unprompted from their own pane — Codex's `session-start` and the shell
+    // integration's `precmd` — so an exempt cross-pane idle would let starting an agent wipe the sibling's block.
+    @Test func theOwningPaneStillClearsItsBlockWithIdle() {
         let (store, session) = blockedLeftSplitSession()
 
-        let result = store.applyControlStatus(AgentIndicator(status: .idle, statusPane: .right),
+        let result = store.applyControlStatus(AgentIndicator(status: .idle, statusPane: .left),
                                               forSession: session.id)
 
         #expect(result == .applied)
@@ -145,6 +148,8 @@ struct AppStoreStatusTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/repo")!
         store.toggleSplit(session.id)
         store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+        // an accepted write must reach this sink, or the refusal below proves nothing about the refusal.
+        #expect(drafts.kinds.contains(.status))
         drafts.kinds.removeAll()
 
         store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)

@@ -114,7 +114,7 @@ paths:
   a background pane must not do. `quick.type` keeps plain `inject`; the quick terminal is no session and
   carries no glyph.
 - While a session is blocked, `AppStore.applyControlStatus` REFUSES a `session.status` write from another
-  pane that is neither `blocked` nor `idle`, returning `.refused(owner:)` — no status change, no
+  pane that is not itself `blocked`, returning `.refused(owner:)` — no status change, no
   `statusChangedAt` restamp, no control event, and `ControlServer.setSessionStatus` returns before the
   sound. Otherwise one pane's `PostToolUse`-driven `active` erases the other's block seconds after it is
   set, which is `cookbook/two-agent-chat`. `blocked` passes so a second pane can report its own, and `idle`

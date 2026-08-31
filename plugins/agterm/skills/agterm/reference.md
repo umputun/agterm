@@ -532,9 +532,11 @@ error keeps those names for compatibility.
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
   no longer wiped by foreground typing in the main pane, and only input in the OWNING pane clears it,
   whether typed by hand or sent with `session type`), (2) while the session is `blocked`, a status from
-  another pane that is neither `blocked` nor `idle` is REFUSED with `blocked status owned by pane <pane>` —
+  another pane that is not itself `blocked` is REFUSED with `blocked status owned by pane <pane>` —
   it changes nothing and plays no sound, so an agent working in one pane cannot erase the other pane's
-  request for input; a second pane may still report its own `blocked`, `idle` always clears, and the owning
+  request for input; a second pane may still report its own `blocked`, `idle` is NOT exempt (Codex's
+  `session-start` hook and the shell integration's post-command hook both send it from their own pane),
+  and the owning
   pane writes freely, and (3) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
   the session lands on the tagged pane — auto-follow,
   the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last),
@@ -1420,4 +1422,7 @@ raw socket; the `agtermctl` CLI rejects the same value locally with
 canonical read-back names while the role and position aliases documented above are accepted. The
 `agtermctl` CLI rejects a bad pane with this for session status/type/text, and over the raw socket
 `session.status` returns this same string;
-`session.type`/`session.text` over the raw socket instead return `invalid pane: <value>`). Unknown commands fail to decode and return a structured error, never a crash.
+`session.type`/`session.text` over the raw socket instead return `invalid pane: <value>`),
+`blocked status owned by pane <pane> (write from that pane, or send idle, to change it)` (session status,
+the pane-precedence refusal — the one `session status` error a well-formed call can hit, so retry from the
+owning pane rather than treating it as a bad argument). Unknown commands fail to decode and return a structured error, never a crash.

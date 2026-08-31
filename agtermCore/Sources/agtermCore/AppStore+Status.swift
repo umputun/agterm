@@ -15,16 +15,20 @@ public enum StatusWriteResult: Equatable, Sendable {
 /// budget, like `AppStore+AutoFollow`/`+Recency`/`+PendingClose`; the stored state lives on that main body.
 extension AppStore {
     /// Applies a control-channel `session.status` write under the pane-precedence rule: while a session is
-    /// blocked, a write from a DIFFERENT pane is refused unless it is itself `blocked` (a second pane really
-    /// needing input) or `idle` (an explicit clear, which no installed hook emits). Without it one pane's
-    /// ordinary `active`/`completed` erases the other's block and the session drops out of the attention list,
-    /// which is the whole failure with an agent per pane. Same-pane writes are unrestricted, so a single pane
-    /// behaves exactly as before. Panes are compared AFTER `normalizedPane`, so a promoted survivor's stale
-    /// `.right` matches the `.left` it is stored as.
+    /// blocked, a write from a DIFFERENT pane is refused unless it is itself `blocked` — a second pane really
+    /// needing input. Without it one pane's ordinary `active`/`completed` erases the other's block and the
+    /// session drops out of the attention list, which is the whole failure with an agent per pane. `idle` is
+    /// NOT exempt: the bundled hooks emit it unprompted — Codex's `session-start`
+    /// (`agterm-codex-status.sh`) and the shell integration's `precmd` after any matched agent exits — each
+    /// tagged with its own pane, so exempting it would let starting an agent in one pane wipe the other's
+    /// block. The owning pane clears its own status through any of them, and the GUI Clear Status paths
+    /// bypass this rule entirely. Same-pane writes are unrestricted, so a single pane behaves exactly as
+    /// before. Panes are compared AFTER `normalizedPane`, so a promoted survivor's stale `.right` matches the
+    /// `.left` it is stored as.
     @discardableResult
     public func applyControlStatus(_ indicator: AgentIndicator, forSession id: UUID) -> StatusWriteResult {
         if let session = session(withID: id), session.agentIndicator.status == .blocked,
-           indicator.status != .blocked, indicator.status != .idle {
+           indicator.status != .blocked {
             let owner = session.agentIndicator.normalizedPane(hasSplit: session.hasSplit) ?? .left
             let writer = indicator.normalizedPane(hasSplit: session.hasSplit) ?? .left
             if owner != writer { return .refused(owner: owner) }

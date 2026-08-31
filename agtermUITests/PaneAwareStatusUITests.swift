@@ -245,8 +245,9 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
                           "typing in the main pane must NOT clear a \(tag)-tagged block")
             XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
                            "the \(tag)-tagged block should still read blocked after main-pane typing")
-            XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"idle"}}"#)["ok"] as? Bool,
-                           true, "clearing to idle should succeed")
+            // the idle carries the owning pane: an untagged one reads as `left` and the precedence rule
+            // refuses it, exactly as it refuses the sibling agent's hook-sent idle.
+            try blockPane("idle", pane: tag, target: sessionA)
             XCTAssertTrue(app.staticTexts["agent-status"].waitForNonExistence(timeout: 12), "idle should hide the glyph")
         }
 
@@ -407,6 +408,13 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         let node = try sessionNode(id: sessionA)
         XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the refused write")
         XCTAssertEqual(node["statusPane"] as? String, "right", "the refused write must not retag the status")
+
+        // the shape the bundled hooks produce: Codex's session-start and the shell integration's
+        // post-command hook both send `idle` from their own pane, which must not clear the sibling's block.
+        let refusedIdle = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"idle","pane":"left"}}"#)
+        XCTAssertEqual(refusedIdle["ok"] as? Bool, false, "a left-pane idle must not clear the right pane's block: \(refusedIdle)")
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
+                       "the block should stand after the refused idle")
 
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"right"}}"#)["ok"] as? Bool,
                        true, "the owning pane's own active should still apply")
