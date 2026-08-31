@@ -404,7 +404,7 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         let refused = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"left"}}"#)
         XCTAssertEqual(refused["ok"] as? Bool, false, "a left-pane active must not replace the right pane's block: \(refused)")
         XCTAssertEqual(refused["error"] as? String,
-                       "blocked status owned by pane right (write from that pane, or send idle, to change it)")
+                       "blocked status owned by pane right (write from that pane to change it)")
         let node = try sessionNode(id: sessionA)
         XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the refused write")
         XCTAssertEqual(node["statusPane"] as? String, "right", "the refused write must not retag the status")

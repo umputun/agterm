@@ -117,8 +117,9 @@ paths:
   pane that is not itself `blocked`, returning `.refused(owner:)` — no status change, no
   `statusChangedAt` restamp, no control event, and `ControlServer.setSessionStatus` returns before the
   sound. Otherwise one pane's `PostToolUse`-driven `active` erases the other's block seconds after it is
-  set, which is `cookbook/two-agent-chat`. `blocked` passes so a second pane can report its own, and `idle`
-  passes as the explicit clear no installed hook emits. Panes compare AFTER `AgentIndicator.normalizedPane`,
+  set, which is `cookbook/two-agent-chat`. `blocked` passes so a second pane can report its own; `idle` does
+  NOT, because two bundled hooks emit it unprompted from their own pane — Codex's `session-start` and the
+  shell integration's `_ags_precmd`. Panes compare AFTER `AgentIndicator.normalizedPane`,
   or a promoted survivor's baked `.right` fails to match the `.left` its own block is stored as. Every
   internal clear and retag keeps using `setAgentIndicator` and bypasses the rule.
 - Two blocks in one session still collapse: the second pane's `blocked` replaces the first, and clearing it

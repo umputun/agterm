@@ -416,7 +416,7 @@ extension ControlServer: ControlActions {
             // a refusal returns BEFORE the sound: the write did not happen, so it must make no noise either.
             if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
                 return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
-                    "(write from that pane, or send idle, to change it)")
+                    "(write from that pane to change it)")
             }
             // per-call sound wins on any status; the Settings default plays only on a NEW entry into `blocked`.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
