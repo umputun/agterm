@@ -480,9 +480,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (each pane's pinned
                 restore override, omitted when none and an empty string when pinned to nothing),
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span> (whether either pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> was created with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; each omitted otherwise), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
@@ -1100,7 +1101,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session text [--all] [--lines N] [--pane left|right|scratch] [--target T] [--window W]
+                agtermctl session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.text</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1112,6 +1113,13 @@
                 The two are mutually exclusive and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">N</span> must be greater than 0 (enforced server-side
                 too).
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> accepts the shell's stable
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>. It resolves the surface's
+                current slot and overrides <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> when found,
+                so a long-running watcher keeps reading the same terminal after a pane swap or promotion. An absent or unknown
+                token falls back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, then to the visible pane.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A genuinely blank screen is <em>not</em> an error — it returns
@@ -1176,6 +1184,33 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type --pane right</span> cannot once the pane is
                 past a prompt — a nested shell, ssh, an agent. Idempotent: a session with no split answers ok.
                 The command palette's <strong style="color: #bfbab0">Close Split</strong> is the same action.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session swap [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.swap</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Exchange the two terminals' physical positions and primary/split roles without restarting either process.
+                Focus follows its terminal; the split axis and divider ratio stay fixed. A hidden split swaps too and shows the
+                new order when restored. The command also works while the session is zoomed or shown in the dashboard. It errors
+                when no split exists or either terminal is not ready.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The primary terminal becomes the session's public identity, so its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">title</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> change sides in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>; the split-side read-back is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span>. The GUI twin is
+                <strong style="color: #bfbab0">View ▸ Swap Panes</strong> and the matching action-palette row. Neither has a
+                default shortcut.
               </p>
             </div>
 
@@ -1498,10 +1533,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> cannot combine with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent</span>; everything
                 else matches the session-wide overlay. A non-split session accepts
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> (its shell reports
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE=left</span>), so a caller can pass
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane "$AGTERM_PANE"</span> without
-                checking the split state. Errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span>. A shell starts
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE=left</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, but that spawn role is not rewritten after
+                promotion or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session swap</span>. A long-running shell
+                must not assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane "$AGTERM_PANE"</span>
+                still names its current slot. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane overlay already open</span> on a
                 second open, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane not visible</span>
                 when that pane is not currently rendered — hiding the split AFTER opening is fine. Read the covered panes back from

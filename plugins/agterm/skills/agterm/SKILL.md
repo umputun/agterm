@@ -19,7 +19,7 @@ description: >
   serving the socket.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.split.close, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.split.close, session.swap, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, pane-id, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
@@ -51,9 +51,10 @@ the control channel is available:
 - `AGTERM_SESSION_ID` — the current session's UUID (the session this shell belongs to).
 - `AGTERM_WINDOW_ID` / `AGTERM_WORKSPACE_ID` — the owning window / workspace UUIDs.
 - `AGTERM_SOCKET` — the absolute path to the control socket this app bound.
-- `AGTERM_PANE` / `AGTERM_PANE_ID` — the surface's pane role (`left`|`right`|`scratch`) and a stable
-  per-surface token; the agent-status hook forwards them as `session status --pane` / `--pane-id`. The
-  token resolves the pane's LIVE slot, so a promoted-then-re-split agent still tags the right pane.
+- `AGTERM_PANE` / `AGTERM_PANE_ID`: the surface's spawn role (`left`|`right`|`scratch`) and stable
+  per-surface token. The role is not rewritten after promotion or swap; the token resolves the LIVE slot.
+  Prefer `--pane-id "$AGTERM_PANE_ID"` where supported, including `session status`, `session restore` and
+  `session text`. The agent-status hook forwards both values for compatibility.
 
 The quick terminal is scratch (not in the tree) and belongs to no window, so it only gets
 `AGTERM_ENABLED` and `AGTERM_SOCKET` (no session/workspace/window ids). An untargeted `agtermctl` run
@@ -180,9 +181,9 @@ ago the status was last written — normally the agent's own push, though a pane
 indicator and counts too; ephemeral, so it does not survive a restart), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
-seen` — omitted when zero), `commandWait` (whether a `--command` session was created with `--wait` to
-hold open after the command exits — the read side of `session new --wait`, omitted for a plain or
-non-holding session), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
+seen` (omitted when zero), `commandWait`/`splitCommandWait` (whether either pane's `--command` was
+created with `--wait` to hold open after exit, the read side of `session new --wait`; each omitted for a
+plain or non-holding pane), `overlaySizePercent` (an open overlay's floating-panel percent 1-100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `session
 overlay resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by their own overlay —
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `session overlay
@@ -299,15 +300,20 @@ omitted when expanded).
   `session text`).
 - `session select-all` — select the session's entire terminal buffer (the socket analogue of ⌘A; read the
   selection back with `session copy`).
-- `session text [--all] [--lines N] [--pane left|right|scratch]` — print the session buffer as plain text. Default
-  is the visible screen of the focused pane; `--pane scratch` reads the scratch terminal even while hidden;
-  `--all` adds scrollback; `--lines N` keeps the last N lines.
+- `session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN]`: print the session buffer
+  as plain text. Default is the visible screen of the focused pane; `--pane scratch` reads the scratch
+  terminal even while hidden; `--pane-id "$AGTERM_PANE_ID"` follows the same terminal after a role change
+  and overrides `--pane` when it resolves; `--all` adds scrollback; `--lines N` keeps the last N lines.
 - `session search [needle] [--next|--prev|--close]` — search the terminal scrollback; prints the "N of M" counter.
 - `session split [on|off|toggle] [--axis vertical|horizontal]` · `session split close` - second shell, left/right by
   default or top/bottom with `--axis horizontal`. Omitting `--axis` preserves the current axis and the
   legacy left/right behavior. The GUI actions are ⌘D for vertical and ⌘⇧D for horizontal; either
   transposes a shown split of the other orientation. Hide keeps it alive; `close` destroys the pane and
   whatever runs in it.
+- `session swap`: exchange the two terminals' physical positions and primary/split roles without restarting
+  them. Focus follows the terminal; axis and divider ratio stay fixed. Works on shown or hidden splits and
+  under zoom/dashboard; errors when there is no split or either surface is not ready. Read the new primary
+  from `tree`'s `cwd`/`title`/`foreground` and the other side from `splitForeground`.
 - `session scratch [on|off|toggle] [--command CMD]` — full-coverage third shell (hide keeps it alive; `exit`
   recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
   --command` (respawns the scratch if one is open). Target your own session with
@@ -366,8 +372,9 @@ omitted when expanded).
   sibling pane live and interactive; left and right are independent and may both be open at once. A pane
   overlay is ALWAYS full-pane, so `--pane` cannot combine with `--size-percent` and `session overlay resize`
   takes no `--pane`. Everything else is identical to the session-wide overlay. A non-split session
-  accepts `--pane left` (it reports `AGTERM_PANE=left`), so you can pass `--pane "$AGTERM_PANE"` without checking
-  the split state; a pane that is not currently rendered is refused with `pane not visible` — a SHOWN
+  accepts `--pane left`. `AGTERM_PANE` is only the shell's spawn role and may be stale after promotion or
+  `session swap`, so a long-running shell must not assume `--pane "$AGTERM_PANE"` still names its slot.
+  A pane that is not currently rendered is refused with `pane not visible`. A SHOWN
   split renders both panes, a HIDDEN one renders only the FOCUSED pane, so the refused one is the pane
   that does not have focus.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).

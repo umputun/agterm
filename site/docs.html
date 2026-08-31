@@ -981,7 +981,11 @@
                   a shown split; using its current shortcut hides it without closing the second shell. The divider follows the
                   current axis and remembers its position; drag it to resize the panes or double-click it to return to an even
                   split. <strong style="color: #bfbab0">Close Split</strong> in the action palette tears the pane down whatever
-                  it is running.
+                  it is running. <strong style="color: #bfbab0">Swap Panes</strong> in View or the action palette exchanges the
+                  two live terminals without restarting them. Their primary/split roles move with their physical positions, focus
+                  follows its terminal, and the divider stays put. The same operation is available as
+                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session swap</span>, including while a split
+                  is hidden.
                 </p>
               </div>
               <div
@@ -2213,10 +2217,11 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> takes no
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> — and everything else
               matches the session-wide overlay. A non-split session accepts
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left</span>, since its shell
-              reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE=left</span>, so a
-              script can pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span>
-              without checking whether the session is split. A pane that is not on screen is refused with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left</span>. A newly spawned
+              shell reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE=left</span>, but
+              that value is its spawn role and is not rewritten after a pane promotion or swap. A long-running shell must not
+              assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> still
+              names its current slot. A pane that is not on screen is refused with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane not visible</span>; hiding the
               split after opening is fine, the program keeps running and reappears when the split comes back.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span>,
@@ -2426,13 +2431,15 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (which pane the shell runs in —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (main),
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (split), or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; unset in an overlay), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (a stable per-surface token the
-              agent-status hook forwards as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
-              so a promoted-then-re-split pane still tags correctly), so a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (the surface's spawn role,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; it is not rewritten after a promotion or
+              swap and is unset in an overlay), and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (the stable per-surface token used by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session restore --pane-id</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text --pane-id</span> to resolve the current slot), so a
               script can drive its own window without hard-coding ids.
             </div>
 

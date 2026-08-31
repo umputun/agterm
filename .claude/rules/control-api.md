@@ -143,7 +143,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
-  `.split.close`,
+  `.split.close`, `.swap`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
@@ -199,6 +199,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   value, which is shared with `session.scratch`/`sidebar` and cannot express close (a hidden split is
   already `off`). Idempotent: a session with no right pane answers ok. The palette's Close Split is the
   GUI twin, a row gated on `hasSplit` with no `BuiltinAction`.
+- `session.swap` exchanges the two terminals' physical positions and primary/split roles. Require
+  `hasSplit`, not `isSplit`, so hidden splits work; briefly poll a missing surface slot, then return
+  `session not realized`. Focus follows the terminal, while axis and ratio stay with the layout. Pane
+  metadata, overlays, status ownership, creation identity and wait policy move with their terminal.
+  This command is deliberately not idempotent: every successful call reverses the order, and two calls
+  restore the prior model and snapshot. It remains valid under zoom and dashboard. Read the new primary
+  through `cwd`/`title`/`foreground`/`restoreCommand`/`commandWait`, and the other side through
+  `splitForeground`/`splitRestoreCommand`/`splitCommandWait`; tree has no split cwd/title fields.
 - `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
   PWD/title link but a weak watermark link. GUI surfaces are Command-J, titlebar, View, and palette.
@@ -292,6 +300,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   never happened. `failed to read surface buffer` is left to a real read failure on a realized surface.
   `quick.text` keeps its own vocabulary and still reports that string for an unrealized quick surface.
   Output is plain text because pinned Ghostty exposes no styled-cell read.
+  `--pane-id` accepts a stable surface token and resolves it against live slots before `--pane`; an absent
+  or unknown token falls back to the role, then to the on-screen default. This is the read path for a
+  long-running watcher whose baked `AGTERM_PANE` spawn role may be stale after promotion or swap.
   `onScreenSurface` is pane-vs-scratch only, so every `--pane` and the default alike read the surface
   UNDER an overlay; the covering program is `session.overlay.text`.
 - `session.search` selects and realizes the target, then searches its focused surface. Text opens/updates;

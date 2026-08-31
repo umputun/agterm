@@ -276,19 +276,20 @@ script that needs the selection some time after the fact.
 
 ## Cover only your own pane, leaving the user's other pane usable
 
-`--pane left|right` scopes the overlay to ONE split pane instead of the whole session. Your shell
-already knows which pane it runs in, so pass `$AGTERM_PANE` and the overlay lands over YOUR pane while
-the user keeps working in the sibling one:
+`--pane left|right` scopes the overlay to ONE split pane instead of the whole session. A newly spawned
+shell can pass `$AGTERM_PANE` so the overlay appears over its pane while the user keeps working in the
+sibling one:
 
 ```bash
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PANE"
 ```
 
-This works unchanged on a NON-split session, which reports `AGTERM_PANE=left`, so there is no need to
-check the split state first. Two cases still need care: `$AGTERM_PANE` is `scratch` in the scratch
-terminal, which `--pane` rejects as a usage error, and a shell in the LEFT pane of a session whose split
-is hidden with the RIGHT pane focused reports `left` while only the right pane is on screen, so the open
-is refused with `pane not visible`. Handle both by falling back to a session-wide overlay on error.
+This works on a fresh non-split session, which reports `AGTERM_PANE=left`, so there is no need to check the
+split state first. Three cases still need care: `AGTERM_PANE` is a spawn role and may be stale after a pane
+promotion or `session swap`; it is `scratch` in the scratch terminal, which `--pane` rejects as a usage
+error; and a shell in the left pane of a session whose split is hidden with the right pane focused reports
+`left` while only the right pane is on screen, so the open is refused with `pane not visible`. Fall back to
+a session-wide overlay when the current role is uncertain or the pane-specific open fails.
 Left and right are independent — both may be open at once, each with its
 own `--background-color` — and a pane overlay is always full-pane, so `--size-percent` is rejected with
 it. `--wait`, `--block`, `--cwd` and `--follow` behave exactly as they do for a session-wide overlay;
@@ -549,6 +550,7 @@ default, the whole scrollback with `--all`, or the last N lines with `--lines N`
 agtermctl session text                         # the visible screen of the focused pane
 agtermctl session text --lines 50              # the last 50 lines of the buffer
 agtermctl session text --pane right            # the split pane (errors if there is no split)
+agtermctl session text --pane-id "$AGTERM_PANE_ID" # this shell's terminal, even after a swap
 agtermctl session text --pane scratch --all    # the scratch terminal's full buffer, even while it's hidden
 # extract every URL from the full scrollback:
 agtermctl session text --all --json | jq -r '.result.text' | grep -oE 'https?://[^ ]+'

@@ -123,8 +123,8 @@ of `session resize`, record it to restore the exact divider position),
 `splitFocused` (which pane holds focus in a session that HAS a split: `true` = the split/right/bottom pane,
 `false` = the primary/left/top pane; omitted when there's no split; the read side of `session focus`, record it
 to restore focus via `session focus left|right`),
-`commandWait` (whether a `--command` session was created with `--wait` to hold open after the command
-exits — the read side of `session new --wait`; omitted for a plain or non-holding session),
+`commandWait`/`splitCommandWait` (whether either pane's `--command` was created with `--wait` to hold open
+after exit, the read side of `session new --wait`; each omitted for a plain or non-holding pane),
 `overlay` (overlay shown),
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
@@ -431,7 +431,7 @@ error keeps those names for compatibility.
 - `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),
   the socket analogue of ⌘A / Edit ▸ Select All (libghostty `select_all`). Read the resulting selection
   back with `session copy`. A never-shown session → `session not realized`.
-- `session text [--all] [--lines N] [--pane left|right|scratch] [--target] [--window W]` — returns `result.text`
+- `session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]`: returns `result.text`
   with the session's terminal buffer as PLAIN TEXT (no ANSI/color). By default it reads the VISIBLE
   SCREEN of the on-screen pane. `--all` reads the whole buffer including scrollback; `--lines N` reads the
   full buffer and keeps only the last N CONTENT lines (trailing blank rows trimmed; `--all` and `--lines`
@@ -439,7 +439,10 @@ error keeps those names for compatibility.
   main pane, `--pane right` the split pane (errors if the session has no split), `--pane scratch` the
   session's scratch terminal even while it is hidden (its buffer is kept alive; `session has no scratch
   terminal` when none opened); omit `--pane` for the visible pane (the scratch terminal when it covers the
-  session, else the focused pane). NOTE: unlike
+  session, else the focused pane). `--pane-id` accepts the shell's stable `$AGTERM_PANE_ID`, resolves its
+  current live slot and overrides `--pane` when found. An absent or unknown token falls back to `--pane`,
+  then to the visible pane. Use it for a long-running watcher because `$AGTERM_PANE` is a spawn role and can
+  become stale after promotion or `session swap`. NOTE: unlike
   `session focus`, `--pane` here has NO `other` value — only `left`/`right`/`scratch`, and no overlay value:
   every one of them reads the surface UNDER a covering overlay, whose buffer is `session overlay text`'s.
   A genuinely BLANK screen is
@@ -462,6 +465,11 @@ error keeps those names for compatibility.
   runs dies with it, and `hasSplit`/`splitRatio`/`splitFocused` drop out of `tree`. Reaches a HIDDEN pane
   too, which is what `session type --pane right $'exit\n'` cannot do once the pane is past a prompt
   (nested shell, ssh, an agent). Answers ok on a session with no split.
+- `session swap [--target] [--window W]`: exchange both terminals' physical positions and primary/split
+  roles without restarting either process. Focus follows its terminal; split axis and ratio stay fixed.
+  Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a
+  surface is not ready. The new primary supplies `tree`'s `cwd`/`title`/`foreground`/`restoreCommand`/
+  `commandWait`; the other side supplies `splitForeground`/`splitRestoreCommand`/`splitCommandWait`.
 - `session scratch [on|off|toggle] [--command CMD] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
   `exit` in it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the
@@ -629,8 +637,9 @@ error keeps those names for compatibility.
   usage error and `session overlay resize` takes no `--pane`. Everything else matches the session-wide
   overlay: it closes when the program exits, `--wait` holds it open on the press-any-key prompt,
   `--block` blocks and exits with the program's status, and `--follow` selects the target. A NON-SPLIT
-  session accepts `--pane left`, because such a session reports `AGTERM_PANE=left` — so an agent can
-  pass `--pane "$AGTERM_PANE"` without first checking whether the session is split. A pane that is not
+  session accepts `--pane left`. `AGTERM_PANE` is the shell's spawn role and may be stale after promotion
+  or `session swap`, so a long-running shell must not assume `--pane "$AGTERM_PANE"` still names its slot.
+  A pane that is not
   currently rendered is refused with `pane not visible`: a SHOWN split renders both panes, a HIDDEN one
   renders only the FOCUSED pane, so the refused one is the pane without focus — `--pane left` on a
   session whose hidden split holds it, `--pane right` when the main pane does; hiding the split AFTER
