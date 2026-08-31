@@ -551,9 +551,8 @@ error keeps those names for compatibility.
   Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
   list. Unknown mode errors. The tree's `flagged` flag tracks membership.
 - `session context <TEXT|--clear> [--target] [--window W]` — set or clear what the session is ABOUT, shown
-  in the title bar. It carries what the sidebar row has no room for — a PR number, an issue, the task in
-  hand — and is set from OUTSIDE the session, so a hook or an orchestrator can say what a session it just
-  created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank
+  in the title bar — a PR number, an issue, the task in hand. It is set from OUTSIDE the session, so a
+  hook or an orchestrator can say what a session it just created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank
   TEXT is rejected, not treated as a second clear, so `--clear` is the only route to unset. The value is
   trimmed of outer spaces and rejected if empty, over 256 UTF-8 bytes, or carrying any control character or
   line/paragraph separator; a rejected call leaves the previous context standing. It states durable purpose,

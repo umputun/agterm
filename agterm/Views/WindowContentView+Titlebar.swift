@@ -46,9 +46,8 @@ extension WindowContentView {
     /// Window menu stay labelled whatever the Interface toggles hide here.
     private var titleText: String { composition.title }
 
-    /// The window title at the terminal's leading edge: the gated session/window name, plus the cwd subtitle
-    /// on a second line in normal mode only (compact drops it for one short row). Non-private so the zoom
-    /// titlebar reuses it — a zoomed terminal shows the same title as the normal window.
+    /// The window title at the terminal's leading edge, laid out by `composition` above. Non-private so the
+    /// zoom titlebar reuses it — a zoomed terminal shows the same title as the normal window.
     var titleLabel: some View {
         VStack(alignment: .leading, spacing: 1) {
             if !titleText.isEmpty {

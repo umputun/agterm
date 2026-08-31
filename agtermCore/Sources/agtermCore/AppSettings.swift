@@ -1,7 +1,8 @@
 import Foundation
 
-/// The window's custom titlebar row state: `normal` stacks the session name over the cwd subtitle,
+/// The window's custom titlebar row state: `normal` stacks the session name over a second line,
 /// `compact` is one short row, `hidden` drops the row and the traffic lights for a full-bleed terminal.
+/// `TitlebarComposition` owns what each mode puts on those lines.
 /// Raw-stored, resolved by `effectiveToolbarMode`. Top-level, unlike the nested sibling mode enums,
 /// because the app target uses a bare `ToolbarMode`.
 public enum ToolbarMode: String, Codable, Sendable, CaseIterable {

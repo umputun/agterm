@@ -137,8 +137,8 @@ extension Session {
             commandName: "context",
             abstract: "Set or clear what a session is about, shown in the title bar.",
             discussion: """
-                The text says what the session is FOR — a PR, an issue, a task — where the sidebar row has \
-                no space for it. It persists across a relaunch and stays until --clear; nothing expires it.
+                The text says what the session is FOR — a PR, an issue, a task. It persists across a \
+                relaunch and stays until --clear; nothing expires it.
                 """)
         @Argument(help: """
             The context text (omit with --clear). Trimmed; max 256 UTF-8 bytes; no control characters or \
