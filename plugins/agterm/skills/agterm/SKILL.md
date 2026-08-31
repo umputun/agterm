@@ -181,7 +181,7 @@ ago the status was last written — normally the agent's own push, though a pane
 indicator and counts too; ephemeral, so it does not survive a restart), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
-seen` — omitted when zero), `commandWait`/`splitCommandWait` (whether either pane's `--command` was
+seen`; omitted when zero), `commandWait`/`splitCommandWait` (whether either pane's `--command` was
 created with `--wait` to hold open after exit, the read side of `session new --wait`; each omitted for a
 plain or non-holding pane), `overlaySizePercent` (an open overlay's floating-panel percent 1-100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `session
