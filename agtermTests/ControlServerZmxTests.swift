@@ -331,6 +331,34 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(killed, [daemon], "the identity this command killed must not be finalized again")
     }
 
+    /// A claimed pane still waiting its turn has no client yet. The kill runs the transition now, and the
+    /// teardown cancels its key, so no later grant can spawn a client that would recreate the daemon.
+    func testKillingAClaimedUnspawnedPaneRunsTheTransitionAndCancelsItsTurn() throws {
+        let store = try XCTUnwrap(library.store(for: library.windows[0].id))
+        let session = try XCTUnwrap(store.workspaces.first?.sessions.first)
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let view = attachSurface(to: session, pane: .left)
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        let key = UUID()
+        registry.pacer.arm(order: [key], burst: [])
+        registry.enqueue(view, key: key, provider: LaunchSeedProvider(shouldPace: true) { _ in
+            LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        })
+        XCTAssertFalse(view.requestSpawnPermit())
+        let server = makeServer(runner: { invocation in
+            guard invocation.arguments.first == "list" else { return "killed session \(invocation.arguments[1])\n" }
+            return "name=\(daemon)\tpid=1\tclients=0\tcreated=1"
+        })
+
+        let response = server.killZmxDaemon(target: session.id.uuidString, window: nil, pane: .left)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertTrue(store.workspaces.first?.sessions.isEmpty ?? false, "the session closes with its pane")
+        XCTAssertTrue(registry.pacer.isPassthrough, "the teardown must cancel the pane's turn")
+        registry.pacer.expedite(key)
+        XCTAssertFalse(view.isRealized, "a cancelled key cannot be granted into a spawn")
+    }
+
     func testAFallbackPaneIsNeverClosedByKillingThePreservedDaemon() throws {
         let store = try XCTUnwrap(library.store(for: library.windows[0].id))
         let session = try XCTUnwrap(store.workspaces.first?.sessions.first)

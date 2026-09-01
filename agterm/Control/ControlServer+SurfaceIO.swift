@@ -13,6 +13,7 @@ extension ControlServer {
             guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            surface.expediteSpawn()
             // the cast alone only proves the SLOT is filled; a false return is the view without a surface.
             guard surface.performBindingAction(action) else {
                 return ControlResponse(ok: false, error: "session not realized")
@@ -55,6 +56,7 @@ extension ControlServer {
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            surface.expediteSpawn()
             // a false return = surface not realized yet; report it, not a false ok (session.type's contract).
             guard surface.performBindingAction(action) else {
                 return ControlResponse(ok: false, error: "session not realized")
@@ -406,6 +408,7 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "session not realized")
         }
 
+        openSurface.expediteSpawn()
         // `searchActive` here means a prior open settled (set by the async START callback); two rapid
         // scripted opens could mis-toggle, but the GUI's single-⌘F path is the common case.
         if !session.searchActive { openSurface.startSearch() }
@@ -488,7 +491,13 @@ extension ControlServer {
             }
             // inject returns false when the view exists but its libghostty surface isn't realized yet (there
             // is no realize/select path for the split pane) — report that instead of a false ok.
-            guard let surface = split as? GhosttySurfaceView, surface.injectAsUserInput(text: text) else {
+            guard let surface = split as? GhosttySurfaceView else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            // a queued split is granted here, so the inject lands; an unmounted one still fails fast, there
+            // being no poll for the split pane.
+            surface.expediteSpawn()
+            guard surface.injectAsUserInput(text: text) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -513,6 +522,8 @@ extension ControlServer {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
         if select { store.selectSession(id) }
+        // a queued pane is granted now, so the poll waits only for libghostty, never for the pane's turn.
+        (store.session(withID: id)?.surface as? GhosttySurfaceView)?.expediteSpawn()
         for _ in 0..<12 {
             try? await Task.sleep(nanoseconds: 30_000_000)
             // poll for the surface AND its realization (a false inject keeps polling), so a just-created or

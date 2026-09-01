@@ -205,7 +205,11 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// first responder on attach, so without this gate one opened in a BACKGROUND session would steal the
     /// keyboard from the visible one; `TerminalView` sets it before `createSurface`, and going inactive
     /// mid-retry bails the loop. Inert for main/split panes, which take focus via `focusIfNeeded`.
-    var deckActive = true
+    var deckActive = true {
+        // the user is looking at this pane, so it goes to the front of a paced launch. a no-op when
+        // unpaced, granted or already expedited, so the per-update rewrites mint nothing.
+        didSet { if deckActive { expediteSpawn() } }
+    }
 
     /// Whether this surface's deck slot is on-screen (session selected, not hidden by a full overlay/scratch).
     /// Unlike `deckActive` it is not split-pane-focus-gated, so both panes of a visible split are
@@ -715,6 +719,20 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     func useSpawnPacer(_ pacer: SpawnPacer, key: UUID) {
         spawnPacer = pacer
         spawnKey = key
+    }
+
+    /// Moves this pane to the front of a paced launch and grants it now. A no-op for an unpaced pane and
+    /// for a key already granted or expedited, so a caller may repeat it freely.
+    func expediteSpawn() {
+        guard let spawnPacer, let spawnKey else { return }
+        spawnPacer.expedite(spawnKey)
+    }
+
+    /// Moves the queued panes among `views` to the front, in that order, releasing none: a dashboard
+    /// opening on many queued members fills its cells at the paced rate rather than in one burst.
+    static func prioritizeSpawn(_ views: [GhosttySurfaceView]) {
+        guard let pacer = views.lazy.compactMap(\.spawnPacer).first else { return }
+        pacer.prioritize(views.compactMap { $0.spawnPacer === pacer ? $0.spawnKey : nil })
     }
 
     /// Whether the surface may spawn now. False leaves the pane queued and the caller returns: the pacer

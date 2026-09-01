@@ -283,6 +283,104 @@ final class ControlServerSessionActionsTests: XCTestCase {
                        "an empty slot and a parked-but-unrealized view are one state to a caller")
     }
 
+    // MARK: - launch queue preemption
+
+    /// A pane parked in the launch queue: registered with an armed pacer behind a head that never asks, and
+    /// already denied once. Only an expedite can grant it, so a granted key proves the command promoted it.
+    /// The host never realizes a surface, so every command still answers `session not realized`; what is
+    /// under test is whether the pane's turn was spent before that answer.
+    @MainActor private struct QueuedPane {
+        let view: GhosttySurfaceView
+        let registry: SpawnRegistry
+        let key: UUID
+        var granted: Bool { registry.view(for: key) == nil }
+    }
+
+    private func queuePane(in session: Session, split: Bool = false) -> QueuedPane {
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        let key = UUID()
+        registry.pacer.arm(order: [UUID(), key], burst: [])
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        registry.enqueue(view, key: key, provider: LaunchSeedProvider(shouldPace: true) { _ in
+            LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        })
+        XCTAssertFalse(view.requestSpawnPermit(), "the fixture must start queued")
+        if split { session.splitSurface = view } else { session.surface = view }
+        return QueuedPane(view: view, registry: registry, key: key)
+    }
+
+    func testTypeExpeditesAQueuedPaneBeforeItsPoll() async throws {
+        let (store, target) = try addSession()
+        let queued = queuePane(in: target)
+
+        let response = await server.injectText("ls\n", into: target.id, store: store, select: true, pane: nil)
+
+        XCTAssertEqual(response.error, "session not realized")
+        XCTAssertTrue(queued.granted, "the pane must be granted before the poll runs, not after it")
+    }
+
+    func testTypeOnAQueuedShownSplitExpeditesItAndAnAbsentSplitFailsFast() async throws {
+        let (store, target) = try addSession()
+        store.setSplitVisibility(target.id, shown: true)
+        let queued = queuePane(in: target, split: true)
+        let (_, bare) = try addSession()
+
+        let shown = await server.injectText("ls\n", into: target.id, store: store, select: false, pane: "right")
+        let started = Date()
+        let absent = await server.injectText("ls\n", into: bare.id, store: store, select: false, pane: "right")
+
+        XCTAssertEqual(shown.error, "session not realized")
+        XCTAssertTrue(queued.granted)
+        XCTAssertEqual(absent.error, "session has no split pane")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 0.1, "an absent split has nothing to wait for")
+    }
+
+    func testSearchOpenExpeditesAQueuedPane() async throws {
+        let (store, target) = try addSession()
+        let queued = queuePane(in: target)
+
+        let response = await server.searchSession(target.id, store: store, text: nil, to: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertTrue(queued.granted)
+    }
+
+    func testSynchronousMutatorsExpediteAQueuedPane() throws {
+        let cases: [(name: String, split: Bool, run: (Session) -> ControlResponse)] = [
+            ("session.paste", false, { self.server.pasteSession($0.id.uuidString, window: nil) }),
+            ("session.selectall", false, { self.server.selectAllSession($0.id.uuidString, window: nil) }),
+            ("font.inc left", false, { self.server.font($0.id.uuidString, window: nil, pane: nil, action: "increase_font_size:1") }),
+            ("font.inc right", true, { self.server.font($0.id.uuidString, window: nil, pane: "right", action: "increase_font_size:1") }),
+        ]
+        for testCase in cases {
+            let (store, target) = try addSession()
+            if testCase.split { store.setSplitVisibility(target.id, shown: true) }
+            let queued = queuePane(in: target, split: testCase.split)
+
+            let response = testCase.run(target)
+
+            XCTAssertEqual(response.error, "session not realized", testCase.name)
+            XCTAssertTrue(queued.granted, "\(testCase.name) must grant the pane before acting on it")
+        }
+    }
+
+    func testReadsLeaveAQueuedPaneQueued() throws {
+        let (_, target) = try addSession()
+        let queued = queuePane(in: target)
+        let id = target.id.uuidString
+
+        let text = server.readSessionText(id, window: nil,
+                                          options: ControlSessionTextOptions(pane: nil, all: false, lines: nil))
+        let copy = server.copySelection(id, window: nil)
+        let cursor = server.readSurfaceCursor("surface:\(id):left", window: nil)
+
+        XCTAssertEqual(text.error, "session not realized")
+        XCTAssertEqual(copy.error, "session not realized")
+        XCTAssertEqual(cursor.error, "surface not realized")
+        XCTAssertFalse(queued.granted, "a read must not spend the pane's turn")
+        XCTAssertTrue(queued.view.awaitingSpawnPermit)
+    }
+
     func testTextPaneIDResolvesTheLiveSlotAndOverridesPane() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

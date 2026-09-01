@@ -491,4 +491,85 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
 
         try await waitUntil("deinit cancels the permit") { pacer.isPassthrough }
     }
+
+    // MARK: - selection preemption
+
+    private func queuedPair() -> (pacer: SpawnPacer, keys: [UUID], views: [GhosttySurfaceView]) {
+        let pacer = SpawnPacer()
+        let keys = [UUID(), UUID()]
+        pacer.arm(order: keys, burst: [])
+        let views = keys.map { key -> GhosttySurfaceView in
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+            view.useSpawnPacer(pacer, key: key)
+            XCTAssertFalse(view.requestSpawnPermit())
+            return view
+        }
+        return (pacer, keys, views)
+    }
+
+    func testSelectingAQueuedPaneGrantsItBeforeTheQueueReachesIt() {
+        let pair = queuedPair()
+
+        pair.views[1].deckActive = true
+
+        XCTAssertTrue(pair.views[1].requestSpawnPermit(), "the selected pane jumps the queue")
+        XCTAssertFalse(pair.views[0].requestSpawnPermit(), "the head of the queue still waits its interval")
+    }
+
+    /// The deck and the zoom host both set `deckActive` before the first `createSurface`, so a selected pane
+    /// is granted on that first request rather than one interval later.
+    func testAPaneActiveBeforeItsFirstRequestIsGrantedOnThatRequest() {
+        let pacer = SpawnPacer()
+        let key = UUID()
+        pacer.arm(order: [UUID(), key], burst: [])
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.useSpawnPacer(pacer, key: key)
+
+        view.deckActive = true
+
+        XCTAssertTrue(view.requestSpawnPermit())
+        XCTAssertFalse(view.awaitingSpawnPermit)
+    }
+
+    func testSelectingAPaneTwiceMintsOneToken() {
+        let pair = queuedPair()
+        var granted: [UUID] = []
+        pair.pacer.onGrant = { granted.append($0) }
+
+        pair.views[0].deckActive = true
+        pair.views[0].deckActive = true
+
+        XCTAssertEqual(granted, [pair.keys[0]])
+        XCTAssertFalse(pair.views[1].requestSpawnPermit(), "a repeated selection must not release the next pane")
+    }
+
+    func testAnUnpacedPaneIgnoresSelection() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        view.deckActive = true
+
+        XCTAssertTrue(view.requestSpawnPermit())
+    }
+
+    func testPrioritizeReleasesNothing() {
+        let pair = queuedPair()
+        var granted: [UUID] = []
+        pair.pacer.onGrant = { granted.append($0) }
+
+        GhosttySurfaceView.prioritizeSpawn([pair.views[1], pair.views[0]])
+
+        XCTAssertTrue(granted.isEmpty, "prioritize reorders; only the timer or an expedite grants")
+        XCTAssertFalse(pair.views[1].requestSpawnPermit())
+    }
+
+    func testPrioritizeSkipsUnpacedViews() {
+        let pair = queuedPair()
+        let plain = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        GhosttySurfaceView.prioritizeSpawn([plain])
+        GhosttySurfaceView.prioritizeSpawn([plain, pair.views[1]])
+
+        XCTAssertTrue(plain.requestSpawnPermit())
+        XCTAssertFalse(pair.views[1].requestSpawnPermit(), "an unpaced view never picks a pacer for the rest")
+    }
 }

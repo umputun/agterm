@@ -53,6 +53,15 @@ struct DashboardView: View {
     /// caption text opacity on an UNSELECTED cell, so the highlighted cell's name stands out.
     private static let unselectedCaptionTextOpacity: Double = 0.55
 
+    /// Puts the members' queued panes at the front of a paced launch, in grid order, releasing none: the
+    /// cells still fill one interval apart. Each pane ref resolves to the slot its cell hosts.
+    static func prioritizeSpawns(of members: [DashboardMember], in store: AppStore) {
+        GhosttySurfaceView.prioritizeSpawn(members.compactMap { member in
+            guard let session = store.session(withID: member.session) else { return nil }
+            return (member.surface == .split ? session.splitSurface : session.surface) as? GhosttySurfaceView
+        })
+    }
+
     var body: some View {
         let members = controller.members
         let (cols, rows) = DashboardLayout.grid(count: members.count)
@@ -66,6 +75,7 @@ struct DashboardView: View {
             }
         }
         .padding(Self.gridSpacing)
+        .onChange(of: members, initial: true) { Self.prioritizeSpawns(of: members, in: store) }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // an OPAQUE themed backdrop: the layer beneath (sidebar, add-buttons, deck) must not bleed through
         // the margins, deliberately dropping window translucency/blur. Not a black scrim — over the

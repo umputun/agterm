@@ -341,29 +341,30 @@ does not apply.
 
 **Files:**
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift` (`deckActive` didSet)
-- Modify: `agterm/Views/TerminalZoom*.swift`, `agterm/Views/Dashboard*.swift` (host attach points)
+- Modify: `agterm/Views/DashboardView.swift` (the zoom host already sets `deckActive`, so it needs no change)
+- Create: `agtermTests/DashboardViewTests.swift`
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift` (`injectText` for `session.type`, `searchSession`,
   `pasteSession`, `selectAllSession`, `font`)
-- Modify: `agterm/Control/ControlServer+Zmx.swift` only if `applyKilledPaneExit` needs a `discard`
+- `agterm/Control/ControlServer+Zmx.swift` unchanged: teardown cancels the key, so `applyKilledPaneExit` needs no `discard`
 - Modify: the corresponding `agtermTests` files and the dispatcher/protocol tests those commands own
 
-- [ ] write tests first: with a paced launch the selected pane of each window is granted synchronously on
+- [x] write tests first: with a paced launch the selected pane of each window is granted synchronously on
       its first request after arm; selecting a queued session grants it before the queue reaches it;
       selecting it twice mints one token
-- [ ] write tests first: `session.type --select` on a queued pane succeeds within the existing 12 x 30 ms
+- [x] write tests first: `session.type --select` on a queued pane succeeds within the existing 12 x 30 ms
       poll; `session.type --pane right` on a queued shown split succeeds and on an absent split fails fast
       as today; `session.search` open on a queued pane realizes it; `session.paste`, `session.selectall`
       and `font.inc` on a queued left pane and on a queued shown right pane succeed synchronously
-- [ ] write tests first: on a queued pane `session.text` and `session.copy` answer `session not realized`
+- [x] write tests first: on a queued pane `session.text` and `session.copy` answer `session not realized`
       and `surface.cursor` answers `surface not realized`, all leaving it queued; a dashboard opened on
       queued members promotes them but records spawns still `interval` apart
-- [ ] write tests first: `zmx kill` on a claimed, mounted, unspawned pane performs the model transition
+- [x] write tests first: `zmx kill` on a claimed, mounted, unspawned pane performs the model transition
       (`handlePaneExit`) and the later grant does not recreate the daemon
-- [ ] keep the expedite set to exactly `session.type`, `session.search`, `session.paste`, `session.selectall`
+- [x] keep the expedite set to exactly `session.type`, `session.search`, `session.paste`, `session.selectall`
       and `font.inc/dec/reset`: the last four resolve a surface and answer `session not realized` when it
       has none (`ControlServer+SurfaceIO.swift:32-62`); the scratch pane is runtime-only and never queued
-- [ ] wire `deckActive`, zoom host and dashboard host; wire the control expedites before each bounded poll
-- [ ] run the touched test classes - must pass before Task 5
+- [x] wire `deckActive`, zoom host and dashboard host; wire the control expedites before each bounded poll
+- [x] run the touched test classes - must pass before Task 5
 
 ### Task 5: Arm from the launch inventory with the survivor hint; drain to passthrough
 
