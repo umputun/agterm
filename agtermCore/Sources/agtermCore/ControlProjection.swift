@@ -145,8 +145,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     ///
     /// NOT proof of an interactive prompt, so it is never permission to type: a builtin such as `read` or
     /// `vared`, and a shell loop, run inside the shell process, leaving a pane blocked on input
-    /// indistinguishable from one at a prompt. Recognized is `CommandRestore.knownShells` or `$SHELL`; a shell outside both reports in
-    /// `foreground` like any other program.
+    /// indistinguishable from one at a prompt. Recognized means agterm knows the argv as a shell, by a
+    /// built-in set widened with the user's `$SHELL`; a shell outside both reports in `foreground` like any
+    /// other program.
     public let foregroundShell: String?
     /// The split (right) pane's foreground shell basename, the split analogue of `foregroundShell`. Read
     /// `hasSplit` before interpreting the split pair: with no split pane both are absent because there is no
