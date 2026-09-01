@@ -297,6 +297,8 @@
               for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx prune</span>),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore</span> (the restore-mode policy),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx</span> (the daemon inventory),
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remote</span> (another Mac's attachable
+              sessions, for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx tree</span>),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">windows</span>, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">app</span>
@@ -509,7 +511,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span> (whether either pane's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> was created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; each omitted otherwise), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; each omitted otherwise),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> (the machine an attached session
+                came from, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach</span>; omitted for a
+                local session, and never present after a relaunch because a remote session is not persisted), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
@@ -2849,6 +2855,9 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A <em>closed</em> window's panes are claimed with zero clients: that is the resting state after you close a window, not a leak, which is why the owner's window state is its own column. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> means the pane inventory was incomplete, so no row can be called an orphan and nothing can be pruned.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> adds <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.zmx.endpoint.executable</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.zmx.endpoint.socketDirectory</span> to the header — what another machine needs to reach these daemons. A server older than remote sessions omits the key.
+              </p>
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
@@ -2875,6 +2884,58 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> scopes the search to one window's claims, for a session prefix claimed in more than one. Omit it to search every window, closed and unindexed ones included. Neither it nor <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> accepts <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx tree [HOST]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.tree</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                List the sessions that can be attached to. With a host it runs over ssh against a machine also running agterm and reports what it offers across <em>every</em> open window; with no host it reports this app's own in the same shape, which is the form the remote call runs on the far side. Feed the result to a picker and hand what the user chooses to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Only a session whose every pane has a live daemon is listed; one whose daemon has gone is omitted rather than offered, because attaching to a name that no longer exists would create a fresh shell wearing it. The remote must be new enough to report where its zmx and its daemons live, or the command says so and lists nothing.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The connection is non-interactive: ssh runs with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">BatchMode</span>, so key-based auth must already work for the host and a password or host-key prompt is a failure rather than a question. The far side also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> installed by the cask or the Help action, since a machine merely running agterm has no CLI an ssh command can find.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Result:</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span> —
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span> (only when one was given — the ssh destination the requesting app was handed, stamped on after decoding, since the far side cannot know which name reached it),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">endpoint</span> (the zmx
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">executable</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">socketDirectory</span>), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>, each with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span> (what
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowName</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceName</span> (show the names, group by the ids — neither is unique, so grouping by name merges two windows called <span style="font-family: &quot;JetBrains Mono&quot;, monospace">main</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (only when its owner set one),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">panes</span>
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane, daemon, foreground}</span>, the last being the argv that pane is running, omitted when the remote reports none).
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx attach HOST SESSION
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.attach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Open one of the sessions <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> listed as a session here, marked remote. It takes the session <em>id</em> from that listing — remote names are editable and repeat across workspaces — and lands in the current window's current workspace, selected, carrying the remote session's split when it has one. Returns the new session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; read <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> on its tree node.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The remote is resolved again before anything is created, so a session gone since the listing fails and creates nothing rather than handing back a fresh shell wearing its name. Only failures found before that point are reported here; a connection that starts and later drops is an ordinary pane exit.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Each pane holds on Ghostty's own press-any-key prompt when its ssh exits, under one line naming the host, the session, the pane and the exit status. Closing the session here ends only this side's connection: the far-side processes keep running, and nothing this command does can kill them. A remote session is never written to disk, so it does not come back after a relaunch.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Pinned zmx has a single leader, and an attach joins as a follower, so the remote arrives at the <em>other</em> machine's window size and ignores input until the first <em>classified</em> key — a printable character, Return, Tab or Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side, so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Leadership is per pane, so typing in one half of a split leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something else resizes it.
               </p>
             </div>
           </section>

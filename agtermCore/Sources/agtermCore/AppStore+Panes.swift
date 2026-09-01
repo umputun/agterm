@@ -174,7 +174,10 @@ extension AppStore {
     /// resets `splitFocused`, else it points the collapsed view at the gone pane.
     public func closeSplit(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let session = session(withID: sessionID) else { return }
-        if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized {
+        // through the ownership projection, not the raw identity: a remote split's daemon is on another
+        // machine and this finalizer only ever kills local ones
+        if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized,
+           session.locallyManagedPaneIdentities.contains(splitPaneIdentity) {
             paneFinalizer?([splitPaneIdentity])
         }
         if let split = session.splitPaneIdentity { launchPaneDrop?([split]) }

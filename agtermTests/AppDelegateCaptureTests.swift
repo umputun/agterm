@@ -6,6 +6,28 @@ import agtermCore
 
 @MainActor
 final class AppDelegateCaptureTests: XCTestCase {
+    func testARemoteSessionIsNeitherReadNorCounted() {
+        let local = Session(initialCwd: "/tmp")
+        local.surface = GhosttySurfaceView(workingDirectory: "/tmp")
+        let remote = Session(initialCwd: "/tmp", remoteHost: "buildbox")
+        remote.surface = GhosttySurfaceView(workingDirectory: "/tmp")
+        var read: [Session] = []
+
+        let count = AppDelegate.captureForegroundCommands(
+            sessions: [local, remote],
+            commandReader: { view, _, _ in
+                read.append(view === local.surface ? local : remote)
+                return ["worker"]
+            })
+
+        // its foreground is an ssh client the save drops, so reading it inflates the count and spends the
+        // exit budget on a pane nothing will persist
+        XCTAssertEqual(count, 1)
+        XCTAssertTrue(read.allSatisfy { $0 === local })
+        XCTAssertNil(remote.foregroundCommand)
+        XCTAssertEqual(local.foregroundCommand, ["worker"])
+    }
+
     func testLivePrimaryAndHiddenSplitUseOneFreshSnapshot() throws {
         let primaryID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         let splitID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!

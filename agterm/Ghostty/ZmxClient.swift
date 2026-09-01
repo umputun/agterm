@@ -47,6 +47,13 @@ final class ZmxClient {
         let killedAll: Bool
     }
 
+    /// What a caller on another machine needs to reach these daemons. Read from the injected client so a
+    /// hosted test answers for the client it built, not for whatever the process environment happens to
+    /// select.
+    var endpoint: ControlZmxEndpoint {
+        ControlZmxEndpoint(executable: executablePath, socketDirectory: socketDirectory)
+    }
+
     @discardableResult
     func reap(knownPaneIdentities: Set<UUID>?, launchDecision: RestoreLaunchDecision) -> ReapOutcome {
         let requestedMode = launchDecision.requested

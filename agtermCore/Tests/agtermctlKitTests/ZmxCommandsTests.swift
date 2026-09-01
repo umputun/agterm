@@ -8,6 +8,77 @@ import Testing
 /// the point is that the CLI cannot send a kill the server would have to refuse, and that a reader can
 /// tell a closed window's resting state from a leak.
 struct ZmxCommandsTests {
+    @Test func treeCarriesItsHostAsAnArgumentNotATarget() throws {
+        let tree = try Zmx.Tree.parse(["buildbox"])
+
+        #expect(try tree.makeRequest().cmd == .zmxTree)
+        #expect(try tree.makeRequest().args?.host == "buildbox")
+        #expect(try tree.makeRequest().target == nil, "a remote host is not a local addressing target")
+    }
+
+    // no host is this app's own attachable sessions, which is the form the remote call runs on the far side
+    @Test func treeWithoutAHostAsksAboutThisApp() throws {
+        let tree = try Zmx.Tree.parse([])
+
+        #expect(try tree.makeRequest().cmd == .zmxTree)
+        #expect(try tree.makeRequest().args?.host == nil)
+    }
+
+    @Test func attachSendsTheHostAsAnArgumentAndTheSessionAsTheTarget() throws {
+        let attach = try Zmx.Attach.parse(["buildbox", "s1"])
+
+        #expect(try attach.makeRequest().cmd == .zmxAttach)
+        #expect(try attach.makeRequest().args?.host == "buildbox")
+        #expect(try attach.makeRequest().target == "s1")
+    }
+
+    @Test(arguments: [[], ["buildbox"]])
+    func attachNeedsBothAHostAndASession(_ arguments: [String]) {
+        #expect(throws: (any Error).self) { try Zmx.Attach.parse(arguments) }
+    }
+
+    @Test func attachEchoesTheLocalSessionItCreated() throws {
+        // it creates a session, so a script can pipe its id onward without --json
+        #expect(try Zmx.Attach.parse(["buildbox", "s1"]).echoesResultID)
+        #expect(try !Zmx.Tree.parse(["buildbox"]).echoesResultID, "a listing creates nothing to echo")
+    }
+
+    @Test func remoteTreeRendersOneRowPerAttachableSession() {
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/z")
+        let plain = ControlRemoteSession(
+            id: "s1", name: "build", windowID: "w-1", windowName: "main", workspaceID: "ws-1",
+            workspaceName: "umputun.dev", cwd: "/repo", splitAxis: nil,
+            panes: [ControlRemotePane(pane: "left", daemon: "agterm-1")])
+        let split = ControlRemoteSession(
+            id: "s2", name: "logs", windowID: "w-2", windowName: "second", workspaceID: "ws-2",
+            workspaceName: "ops", context: "tailing prod", cwd: "/var", splitAxis: "horizontal",
+            panes: [ControlRemotePane(pane: "left", daemon: "agterm-2", foreground: ["/usr/bin/tail", "-f"]),
+                    ControlRemotePane(pane: "right", daemon: "agterm-3", foreground: ["/bin/zsh"])])
+        let tree = ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [plain, split])
+
+        let lines = SocketClient.formatRemoteTree(tree).split(separator: "\n").map(String.init)
+
+        #expect(lines.count == 2)
+        #expect(lines[0] == "  main/umputun.dev/build  [s1]  /repo", "no context and no command adds no tail")
+        #expect(lines[1] == "  second/ops/logs (split horizontal)  [s2]  /var  tailing prod  tail | zsh")
+    }
+
+    // the bare form answers about this app, where no ssh destination exists to name
+    @Test func aLocalEmptyListNamesNoHost() {
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/z")
+
+        #expect(SocketClient.formatRemoteTree(ControlRemoteTree(host: nil, endpoint: endpoint, sessions: []))
+                == "no attachable sessions")
+    }
+
+    @Test func anEmptyRemoteTreeSaysSoRatherThanPrintingNothing() {
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/z")
+        let tree = ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [])
+
+        #expect(SocketClient.formatRemoteTree(tree) == "no attachable sessions on buildbox",
+                "silence reads the same as a failed read")
+    }
+
     @Test func listAndPruneSendTheirCommandWithNothingToResolve() throws {
         let list = try Zmx.List.parse([])
         #expect(try list.makeRequest().cmd == .zmxList)

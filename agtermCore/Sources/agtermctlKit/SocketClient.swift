@@ -193,6 +193,9 @@ struct SocketClient {
         if let keymap = response.result?.keymap {
             return formatKeymap(keymap)
         }
+        if let remote = response.result?.remote {
+            return formatRemoteTree(remote)
+        }
         if let zmx = response.result?.zmx {
             return formatZmx(zmx)
         }
@@ -247,6 +250,24 @@ struct SocketClient {
         if status.restartRequired { lines.append("restart agterm to apply the configured mode") }
         if let reason = status.unavailableReason { lines.append("live unavailable: \(reason)") }
         return lines.joined(separator: "\n")
+    }
+
+    /// A remote host's attachable sessions, one per line, carrying the session id `zmx attach` takes. An
+    /// empty answer says so rather than printing nothing, which a caller cannot tell from a failed read.
+    static func formatRemoteTree(_ tree: ControlRemoteTree) -> String {
+        let place = tree.host.map { " on \($0)" } ?? ""
+        guard !tree.sessions.isEmpty else { return "no attachable sessions\(place)" }
+        return tree.sessions.map { session in
+            let split = session.panes.count > 1 ? " (split\(session.splitAxis.map { " \($0)" } ?? ""))" : ""
+            // what the row is for, then where it is: the running command answers "attach to which one"
+            // more often than the path does, and the context line is the far side's own answer to it
+            let running = session.panes.compactMap { $0.foreground?.first.map { CommandRestore.basename($0) } }
+            let detail = [session.context, running.isEmpty ? nil : running.joined(separator: " | ")]
+                .compactMap { $0 }.joined(separator: "  ")
+            let tail = detail.isEmpty ? "" : "  \(detail)"
+            let at = "\(session.windowName)/\(session.workspaceName)/\(session.name)"
+            return "  \(at)\(split)  [\(session.id)]  \(session.cwd)\(tail)"
+        }.joined(separator: "\n")
     }
 
     /// The daemon inventory under the restore header. Owner window state is its own column rather than

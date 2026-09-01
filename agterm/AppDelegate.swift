@@ -373,6 +373,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ForegroundProcess.command(for: view, shellBasename: shell, zmxSnapshot: snapshot)
         }
     ) -> Int {
+        // filtered here rather than at each caller, so quit and `restore.capture` get the same rule: a
+        // remote pane's foreground is an ssh client the save then drops, and reading it both inflates the
+        // reported count and spends the exit budget on a pane nothing will persist
+        let sessions = sessions.filter(\.isPersistable)
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: exitCaptureBudget)

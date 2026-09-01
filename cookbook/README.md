@@ -55,6 +55,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
+| [remote-session-picker](remote-session-picker/) | pick a session running on another Mac and attach it here | 0.26.0, jq |
 | [same-dir](same-dir/) | sync working directory to target split pane | 0.10.0, jq, zsh |
 | [sqlite-browser](sqlite-browser/) | pick one of the repo's SQLite databases and browse it in an overlay | 0.22.0, python3, tabiew |
 

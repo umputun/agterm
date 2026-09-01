@@ -1060,6 +1060,19 @@ struct ControlProtocolTests {
         #expect(decoded.backedByZmx == nil)
     }
 
+    @Test func treeSessionNodeReportsAndOmitsTheRemoteHost() throws {
+        let remote = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: true, split: false,
+                                        backedByZmx: nil, remoteHost: "buildbox")
+        let encoded = try JSONEncoder().encode(remote)
+        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: encoded).remoteHost == "buildbox")
+
+        let local = ControlSessionNode(id: "s2", name: "shell", cwd: "/tmp", active: false, split: false,
+                                       backedByZmx: nil)
+        let localJSON = try #require(try JSONSerialization
+            .jsonObject(with: try JSONEncoder().encode(local)) as? [String: Any])
+        #expect(localJSON["remoteHost"] == nil, "a local session omits the key, never nulls it")
+    }
+
     @Test func treeSessionNodeToleratesMissingSurfaces() throws {
         // a pre-`surface.zoom` server omits the key entirely, so it must decode as nil.
         let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +

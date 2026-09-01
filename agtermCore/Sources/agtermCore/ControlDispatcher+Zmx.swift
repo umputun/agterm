@@ -3,7 +3,33 @@ import Foundation
 extension ControlDispatcher {
     /// `restore.mode` and the `zmx` group. Split out of `ControlDispatcher.swift` so that file stays inside
     /// the 1000-line limit, following `+Hud` and `+Pick`.
-    func dispatchZmxCommand(_ request: ControlRequest) -> ControlResponse {
+    func dispatchZmxCommand(_ request: ControlRequest) async -> ControlResponse {
+        switch request.cmd {
+        case .zmxTree:
+            // no host is this app's own attachable sessions, which is also exactly what a `zmx tree HOST`
+            // runs on the far side
+            return await actions.remoteTree(host: request.args?.host?.trimmedOrNil)
+        case .zmxAttach:
+            guard let host = request.args?.host?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "zmx.attach requires a host")
+            }
+            // no `active` default: the target names a session on ANOTHER machine, which nothing local
+            // could resolve for the caller
+            guard let session = request.target?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "zmx.attach requires a remote session")
+            }
+            // the unresolved case names the id it could not find, so a control character here would reach
+            // a terminal through that message
+            guard RemoteSession.isPlain(session) else {
+                return ControlResponse(ok: false, error: "invalid remote session")
+            }
+            return await actions.attachRemoteSession(host: host, session: session)
+        default:
+            return dispatchLocalZmxCommand(request)
+        }
+    }
+
+    private func dispatchLocalZmxCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .restoreMode:
             guard let raw = request.args?.mode else { return actions.readRestoreMode() }

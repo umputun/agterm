@@ -156,7 +156,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
-- `zmx.list`, `zmx.prune`, `zmx.kill`
+- `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.tree`, `zmx.attach`
 
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
@@ -660,7 +660,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - Session nodes include foreground/split foreground argv, idle shell basenames, background spec, overlay
   size, pane overlays, split axis, split ratio, split focus, status fields, flag, unseen, restore pins,
-  surfaces, `realized`, and `backedByZmx`.
+  surfaces, `realized`, `backedByZmx`, and `remoteHost`.
 - `foregroundShell`/`splitForegroundShell` name the RECOGNIZED shell HOLDING a pane's foreground, present
   exactly when that pane's `foreground` is absent because a shell holds it.
   For a pane that EXISTS, neither field means agterm could not determine the foreground state — a bare nil
@@ -677,6 +677,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   classifier behind both the tree read and the restore capture, so it would change what restore re-runs too.
   The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
   login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
+- `remoteHost` names the machine a teleported session is attached to and is omitted for a local one. It is
+  live-only: a remote session is never persisted, so it cannot survive a relaunch.
 - `backedByZmx` on a session is true only when every existing primary/split pane is currently backed.
   Primary/split entries in `surfaces` report their own Boolean; scratch and overlays omit it. Older servers
   omit both levels. There is no sidebar indicator.
@@ -812,6 +814,140 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   already gone. The suppression is gated on `backedByZmx`: a requested-live launch that fell back keeps its
   claimed daemons while each pane runs a plain shell, so an ungated kill would close a pane that never
   attached to what it destroyed.
+
+## Remote sessions
+
+- `zmx.tree` lists another Mac's attachable sessions and `zmx.attach` opens one of them here. Each attach
+  imports one session, its split included; whole-workspace teleport is out of scope, and several remote
+  rows may sit side by side.
+- A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
+  ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
+  already held and discarded. The exact fields are below.
+- A remote pane is an ORDINARY command surface whose command is ssh. There is no new surface kind, no new
+  lifecycle and no remote daemon ownership, so closing locally tears the surface down, ssh dies, and the
+  far-side daemon survives. No command asks the remote zmx to kill anything. `Session.remoteHost` is model
+  metadata, and persistence, ownership, icon and factory routing all read it.
+- `zmx list` carries the `endpoint` header — the zmx executable and its `ZMX_DIR` — because neither is
+  guessable from another machine. It is INJECTED from `ZmxClient` through the restored runtime, never
+  recomputed from the process environment, which would duplicate runtime selection and break hosted tests
+  that inject a client. Optional on the wire, so a remote reader tells an older server apart by absence and
+  refuses rather than half-attaching.
+- `zmx.tree`'s host is OPTIONAL, and that is the whole design. Bare, it builds this app's own attachable
+  sessions across every open window; with a host, it sshes once and runs the BARE form on the far side.
+  So the far-side operation is an ordinary public command a user can run and test on its own, there is no
+  second "internal export" noun, and one document comes back already joined. Nothing is composed across
+  two remote calls, which is what removed the framing marker, the two-sequential-calls race, and the
+  extra authentication.
+- The far side cannot know which name reached it, so `ControlRemoteTree.host` is stamped by the
+  REQUESTING app after decoding and is the validated ssh destination it was given, never a self-reported
+  hostname. It is absent from the bare local answer, which sshed nowhere.
+- Still read the exit status BEFORE the output. `agtermctl --json` prints a not-ok response to stdout and
+  exits nonzero, and an ssh that dies mid-write leaves output that may still parse, so an ok-looking
+  payload from a nonzero process is never accepted.
+- Scope is EVERY open window on the far side, keyed by a live store the way `openCounts` tests it. Rows
+  are flat and carry `windowID`/`windowName` and `workspaceID`/`workspaceName`: show the names, group by
+  the ids, because neither rename path nor `addWorkspace` enforces uniqueness, so two windows called
+  `main` and a `dev` workspace in each are ordinary and name-grouping silently merges them.
+- A session is offered only when the store reports `backedByZmx` AND every pane resolves to a `claimed`
+  daemon observed `running` under an agterm daemon name. A claimed daemon alone proves nothing: a
+  requested-live launch that fell back preserves its daemons while showing fresh shells. An incomplete
+  split is dropped whole, never offered half. These are ELIGIBILITY rules, not only a defence against a
+  race, so losing the two network reads does not retire them: the zmx observation is still a subprocess
+  snapshot taken beside the model walk. They now run on whichever side owns the sessions, which is the
+  far side for a remote call.
+- An empty candidate list is a SUCCESSFUL answer and deliberately does not distinguish "not running live"
+  from "live with nothing eligible". `zmx list` is the restore-mode diagnostic; no surface may claim the
+  empty list diagnoses the mode.
+- The attach argv appends a create-only guard command that exits nonzero. Stock `zmx attach` CREATES a
+  daemon whose name is absent, so a daemon that vanished since the tree was read would otherwise hand back
+  a fresh remote shell wearing the session's name. An existing daemon ignores the command; a vanished one
+  runs it and fails visibly.
+- The attach `env` sets the same FOUR variables the local pane sets in `ZmxSupport`: `ZMX_DIR` plus empty
+  `ZMX_SESSION` and `ZMX_SESSION_PREFIX` and `ZMX_NO_DETACH_KEY=1`. Empty rather than `env -u` because zmx
+  reads each as `getenv orelse ""` with a length check, so empty IS unset to it, and because one
+  convention across both panes beats two spellings of one intent. An inherited `ZMX_SESSION` is the
+  dangerous one: attach reads it first and SWITCHES session instead of attaching, never reaching the
+  create-only guard. An inherited `ZMX_SESSION_PREFIX` resolves a name agterm never created, since its
+  daemons are always unprefixed. The detach key is disabled for the same reason as locally — a detached
+  pane has no way back. The tree read needs none of this: it goes through the far side's own app.
+- Two ssh shapes. Tree uses `-T` plus an outer process deadline, `ConnectTimeout` bounding the handshake
+  only; attach uses `-tt`, because a remote command does not reliably get a pty and zmx reads termios and
+  window size, and carries no lifetime deadline. Both pass `BatchMode=yes`, so key-based non-interactive
+  auth is a precondition and a host-key or password prompt is a failure rather than a question a
+  dispatcher could answer. The host is refused rather than escaped; paths and the remote command are
+  argv-quoted.
+- Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
+  host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
+  character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed
+  before the check — so the unresolved-session message can name the id it could not find. The later host
+  interpolations are safe because reaching them means `treeCommand` already accepted it. JSON encoding
+  escapes control bytes, so the protocol framing was never at risk; `agtermctl` decodes and prints to a
+  terminal, which is what this closes. Remote-supplied error detail is deliberately NOT sanitized beyond
+  an edge trim: an ssh failure is worth reading intact, and a chosen remote is the same trust model as
+  running ssh by hand.
+- The far side needs `agtermctl` on sshd's remote-command PATH — a machine merely running agterm has no
+  CLI an ssh command can find, and the read fails with exit 127. sshd's compiled-in default is
+  `/usr/bin:/bin:/usr/sbin:/sbin`, so the tree chain APPENDS `CommandPath.standardDirectories`:
+  `/usr/local/bin` where the Help action links, `/opt/homebrew/bin` where the cask does. Appending is what
+  leaves a PATH deliberately supplied to sshd, and a custom agtermctl already on it, ahead of those two.
+  State this precondition on every surface describing the setup, not only where it is demonstrated:
+  `site/docs.html`, `site/commands.html`, `reference.md`, `SKILL.md` and `examples.md`.
+- That chain travels as `/bin/sh -c '<chain>'` because sshd runs a remote command through the ACCOUNT's
+  shell, where a bare `VAR=value` assignment is a syntax error in fish and tcsh — the whole read then
+  fails before the first `agtermctl`, so it is not merely a PATH that failed to widen. `attachCommand`
+  already followed the same one-command rule, reaching it through `/usr/bin/env ZMX_DIR=...` rather than
+  an assignment. The account shell can also change under a running agterm: live-backed panes survive a
+  `chsh` that a later sshd command then honors.
+- The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
+  freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
+  a second Mac.
+- `zmx.tree` and `zmx.attach` are the ONLY commands `handleConnection` moves off the accept thread, and
+  that thread's own descriptor close moves with them. Everything else stays inline, because dispatch
+  refreshes the window cache in the same execution the fast path reads. Running an ssh inline instead
+  makes `zmx tree <this machine>` DEADLOCK: the far side's own `agtermctl` waits in the backlog this
+  connection is holding. Local `zmx.list` blocks that thread too, on a subprocess bounded at 3s, and
+  stays inline deliberately — contention is not deadlock. `ControlServerTests` pins the free accept
+  thread by probing `window.list`, which the cache answers with no main-actor hop, so only a held ACCEPT
+  thread can fail it.
+- `zmx.attach` re-runs the remote resolution itself before touching the model, since a picker's answer can
+  be minutes old. Discovery, endpoint validation, pane resolution and command construction are all
+  pre-model failures leaving no half-built row; ssh itself starts AFTER insertion, so a transport failure
+  is an ordinary pane exit on the held path. It matches the
+  session by ID ALONE — remote names are mutable and non-unique across workspaces — and panes by role,
+  never array position. The row lands in the frontmost window's current workspace and is selected.
+- The local cwd is this machine's home, not the remote one: libghostty chdirs the ssh process here and a
+  path that exists on the far side may not exist locally. The attached shell reports its real cwd through
+  the terminal stream.
+- Both panes set `commandWait`/`splitCommandWait`, so `shouldCloseOnChildExitAction` returns false, Ghostty
+  holds its own press-any-key prompt, and the wrapper's one sanitized line — host, session, pane, exit
+  status — can be read under the last remote screen. It says nothing about reconnecting: the picker is a
+  keymap custom command the user supplies. There is NO timer, notification or session-wide coalescing;
+  returning false dispatches no app callback, so app code does not learn ssh exited until the keypress, and
+  each pane holding and closing on its own is also right when one half of a split dies.
+- `Session.remoteHost` is immutable and set at construction, because `addSession` saves: a marker written
+  afterwards would let one snapshot reach disk carrying the ssh command. `isPersistable` gates every
+  producer — the launch snapshot, the Recent Closed session record, and a closed workspace's record, whose
+  `sessionCount` and `selectedSessionID` are recomputed after filtering. The in-memory pending-close record
+  keeps remote sessions, so the three-second undo still restores the row.
+- `Session.locallyManagedPaneIdentities` is the single local-ownership predicate, empty for a remote
+  session, read by `finalizePaneIdentities`, the direct `closeSplit` finalizer path, `liveClaims` and live
+  `finalizeWindowPanes`. Without it `liveClaims` invents an `agterm-<uuid>` claim for a pane whose daemon
+  is on another machine and the zmx commands resolve a session agterm does not manage. Structural
+  `paneIdentity` stays valid either way: swap, promotion and control addressing still need it.
+- `ZmxLaunch.wrapsLocally` is the one gate both surface factories read, so a remote pane is never wrapped
+  in a local daemon. Wrapping buys nothing for a session that never restores, and under live mode window
+  close would drop the local client while the daemon kept ssh connected with no UI showing it.
+- Accepted v1 limitations, documented rather than built around. Pinned zmx keeps one `leader_client_fd` and
+  our attach is a follower, so the snapshot arrives at the FAR side's geometry and does not resize until
+  the first classified keystroke calls `setLeader`:
+  - before that keystroke follower input is DROPPED, not merely non-claiming, so mouse, focus and Ctrl-L
+    never reach the remote and a mouse-first TUI looks dead;
+  - leadership is per DAEMON, so a typed primary can sit beside a split still at the far side's geometry;
+  - on detach each daemon we led keeps our geometry until it receives qualifying input or a resize report,
+    while panes we never claimed stay correct.
+
+  An opt-in upstream `zmx attach --take-leadership` with handback would remove all three and is not part of
+  this work.
 
 ## Session backgrounds
 

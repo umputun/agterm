@@ -176,6 +176,113 @@ struct ControlDispatcherZmxTests {
         #expect(foreign.sessionID == nil)
     }
 
+    @Test func zmxTreeReachesTheHostItWasGiven() async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .zmxTree, args: ControlArgs(host: "buildbox"))
+
+        _ = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(actions.calls == [.zmxTree(host: "buildbox")])
+    }
+
+    // a blank host is not a host, and must reach the action as the LOCAL form rather than as an ssh
+    // destination made of whitespace
+    @Test(arguments: [nil, "", "   "])
+    func zmxTreeWithNoUsableHostAsksAboutThisApp(_ host: String?) async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .zmxTree, args: ControlArgs(host: host))
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.zmxTree(host: nil)])
+    }
+
+    @Test func zmxAttachCarriesBothTheHostAndTheRemoteSession() async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .zmxAttach, target: "s1", args: ControlArgs(host: "buildbox"))
+
+        _ = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(actions.calls == [.zmxAttach(host: "buildbox", session: "s1")])
+    }
+
+    @Test func zmxAttachRefusesWithoutAHostOrASessionBeforeTheHostIsCalled() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let noHost = await dispatcher.dispatch(ControlRequest(cmd: .zmxAttach, target: "s1"))
+        #expect(noHost?.error == "zmx.attach requires a host")
+
+        let noSession = await dispatcher.dispatch(ControlRequest(cmd: .zmxAttach,
+                                                                 args: ControlArgs(host: "buildbox")))
+        #expect(noSession?.error == "zmx.attach requires a remote session")
+        #expect(actions.calls.isEmpty)
+    }
+
+    // the unresolved-session message names the id, so a control character reaching it would be printed
+    // to a terminal by agtermctl after JSON decoding
+    @Test(arguments: ["s1\nrm -rf /", "s1\u{1B}[31m", "s1\u{7F}", "s 1"])
+    func zmxAttachRefusesASessionCarryingControlCharactersOrEmbeddedWhitespace(_ session: String) async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .zmxAttach, target: session, args: ControlArgs(host: "buildbox")))
+
+        #expect(response?.error == "invalid remote session")
+        #expect(actions.calls.isEmpty, "it must refuse before the host is reached")
+    }
+
+    @Test func theRemoteTreeSurvivesTheWire() throws {
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx",
+                                          socketDirectory: "/tmp/agterm-zmx-abc")
+        let session = ControlRemoteSession(
+            id: "s1", name: "build", windowID: "w-1", windowName: "main", workspaceID: "ws-1",
+            workspaceName: "umputun.dev", context: "release prep", cwd: "/repo", splitAxis: "vertical",
+            panes: [ControlRemotePane(pane: "left", daemon: "agterm-1", foreground: ["/bin/zsh"]),
+                    ControlRemotePane(pane: "right", daemon: "agterm-2", foreground: nil)])
+        let payload = ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [session])
+
+        let encoded = try JSONEncoder().encode(ControlResponse(ok: true, result: ControlResult(remote: payload)))
+        let decoded = try #require(try JSONDecoder().decode(ControlResponse.self, from: encoded).result?.remote)
+
+        #expect(decoded == payload)
+    }
+
+    @Test func zmxInventoryCarriesTheEndpointARemoteAttachNeeds() throws {
+        let status = ControlRestoreStatus(configured: .live, requestedAtLaunch: .live, active: .live,
+                                          unavailableReason: nil)
+        let result = ZmxInventory.join(observed: [], claims: [], inventoryComplete: true)
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/Contents/Resources/zmx/zmx",
+                                          socketDirectory: "/tmp/agterm-zmx-abc123")
+
+        let payload = ControlZmxInventory(restore: status, result: result, endpoint: endpoint)
+        let response = ControlResponse(ok: true, result: ControlResult(zmx: payload))
+        let encoded = try JSONEncoder().encode(response)
+        let decoded = try #require(try JSONDecoder().decode(ControlResponse.self, from: encoded).result?.zmx)
+
+        #expect(decoded.endpoint == endpoint)
+        let json = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let zmx = try #require((json["result"] as? [String: Any])?["zmx"] as? [String: Any])
+        let wire = try #require(zmx["endpoint"] as? [String: Any])
+        #expect(wire["socketDirectory"] as? String == "/tmp/agterm-zmx-abc123")
+    }
+
+    @Test func zmxInventoryOmitsTheEndpointRatherThanNullingIt() throws {
+        let status = ControlRestoreStatus(configured: .none, requestedAtLaunch: .none, active: .none,
+                                          unavailableReason: nil)
+        let result = ZmxInventory.join(observed: [], claims: [], inventoryComplete: true)
+
+        let payload = ControlZmxInventory(restore: status, result: result)
+        let encoded = try JSONEncoder().encode(ControlResponse(ok: true, result: ControlResult(zmx: payload)))
+        let decoded = try #require(try JSONDecoder().decode(ControlResponse.self, from: encoded).result?.zmx)
+
+        #expect(decoded.endpoint == nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let zmx = try #require((json["result"] as? [String: Any])?["zmx"] as? [String: Any])
+        #expect(zmx["endpoint"] == nil, "a remote reader tells an older server apart by absence")
+    }
+
     @Test func restoreStatusHidesAProbedReasonUnlessLiveActuallyFellBack() {
         let asked = ControlRestoreStatus(configured: .live, requestedAtLaunch: .live, active: .none,
                                          unavailableReason: "the password-database login shell is not zsh")

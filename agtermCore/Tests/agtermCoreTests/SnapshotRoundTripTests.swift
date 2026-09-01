@@ -6,6 +6,66 @@ import Testing
 // restore-time clamping.
 @MainActor
 struct SnapshotRoundTripTests {
+    @Test func remoteSessionIsAbsentFromTheSnapshot() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let remote = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
+
+        let snapshot = store.snapshot()
+
+        let ids = snapshot.workspaces.flatMap(\.sessions).map(\.id)
+        #expect(ids == [local.id])
+    }
+
+    @Test func aWorkspaceOfOnlyRemoteSessionsSnapshotsEmptyRatherThanVanishing() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "remote only")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox")
+
+        let snapshot = store.snapshot()
+
+        let workspace = snapshot.workspaces.first { $0.id == ws.id }
+        #expect(workspace != nil, "the workspace itself is local and must survive")
+        #expect(workspace?.sessions.isEmpty == true)
+    }
+
+    @Test func aRestoredStoreCarriesNoRemoteMarker() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox")
+        let restored = makeStore()
+
+        restored.restore(from: store.snapshot())
+
+        #expect(restored.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+    }
+
+    @Test func quittingOnARemoteSessionRestoresTheMostRecentLocalOne() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let second = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        let remote = store.addSession(toWorkspace: ws.id, cwd: "/c", remoteHost: "buildbox")!
+        store.selectSession(first.id)
+        store.selectSession(second.id)
+        store.selectSession(remote.id)
+
+        let snapshot = store.snapshot()
+
+        #expect(snapshot.selectedSessionID == second.id, "an empty window beside live local rows is a poor restore")
+        #expect(snapshot.sessionRecency?.contains(remote.id) != true, "a remote id must not survive to disk")
+    }
+
+    @Test func aStoreOfOnlyRemoteSessionsPersistsNoSelection() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let remote = store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox")!
+        store.selectSession(remote.id)
+
+        #expect(store.snapshot().selectedSessionID == nil)
+    }
+
     @Test func paneIdentitiesRoundTrip() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

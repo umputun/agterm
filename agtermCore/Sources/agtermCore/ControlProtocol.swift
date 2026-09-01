@@ -89,6 +89,8 @@ public enum Command: String, Codable, Sendable {
     case zmxList = "zmx.list"
     case zmxPrune = "zmx.prune"
     case zmxKill = "zmx.kill"
+    case zmxTree = "zmx.tree"
+    case zmxAttach = "zmx.attach"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied, so a
     /// test can assert the flip drove the reload. Refused outside an XCUITest launch, and EXEMPT from the
@@ -129,6 +131,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `zmx kill`'s explicit confirmation. The command destroys a backend process that can reach detached
     /// claims and every client attached to it, so it has no useful default for who is affected.
     public var force: Bool?
+    /// The machine `zmx tree` reaches, spelled as ssh would take it.
+    public var host: String?
     /// For `session.new`: create in the background without selecting or focusing (the CLI's `--no-select`);
     /// omitted/`false` keeps select-and-focus. Read back via the `tree` `active` flag — the new node is not it.
     public var noSelect: Bool?
@@ -323,7 +327,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, collapsed: Bool? = nil, minimized: Bool? = nil,
-                force: Bool? = nil,
+                force: Bool? = nil, host: String? = nil,
                 noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil, axis: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
@@ -351,6 +355,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.collapsed = collapsed
         self.minimized = minimized
         self.force = force
+        self.host = host
         self.noSelect = noSelect
         self.text = text
         self.select = select
@@ -486,6 +491,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var restore: ControlRestoreStatus?
     /// The daemon inventory for `zmx list`.
     public var zmx: ControlZmxInventory?
+    /// Another machine's attachable sessions, for `zmx tree`.
+    public var remote: ControlRemoteTree?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -496,9 +503,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
                 pick: ControlPickResult? = nil, cursor: ControlCursor? = nil,
                 app: AppIdentity? = nil, restore: ControlRestoreStatus? = nil,
-                zmx: ControlZmxInventory? = nil) {
+                zmx: ControlZmxInventory? = nil, remote: ControlRemoteTree? = nil) {
         self.restore = restore
         self.zmx = zmx
+        self.remote = remote
         self.id = id
         self.tree = tree
         self.text = text

@@ -16,6 +16,50 @@ final class RecentClosedTests {
 
     private var fileURL: URL { directory.appendingPathComponent("recent-closed.json") }
 
+    // MARK: - remote sessions are never written to disk
+
+    @MainActor
+    @Test func closingARemoteSessionRecordsNothingToReopen() {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let remote = store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox")!
+
+        store.closeSession(remote.id)
+
+        #expect(recentClosed.load().isEmpty)
+    }
+
+    @MainActor
+    @Test func closingAWorkspaceRecordsOnlyItsLocalSessionsAndCountsThem() {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.addWorkspace(name: "keep")
+        let ws = store.addWorkspace(name: "mixed")
+        let local = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")
+
+        store.removeWorkspace(ws.id)
+
+        let item = try? #require(recentClosed.load().first { $0.kind == .workspace })
+        #expect(item?.workspace?.snapshot.sessions.map(\.id) == [local.id])
+        #expect(item?.subtitle == "1 session", "the count describes what Reopen will restore")
+    }
+
+    @MainActor
+    @Test func aWorkspaceSelectionPointingAtARemoteSessionIsNotRestored() {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.addWorkspace(name: "keep")
+        let ws = store.addWorkspace(name: "mixed")
+        store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let remote = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
+        store.selectSession(remote.id)
+
+        store.removeWorkspace(ws.id)
+
+        let item = try? #require(recentClosed.load().first { $0.kind == .workspace })
+        #expect(item?.workspace?.selectedSessionID == nil,
+                "restoring a selection the snapshot no longer contains selects nothing")
+    }
+
     @Test func diskRoundTripPreservesNewestFirstItems() {
         let store = RecentClosedStore(directory: directory)
         let first = sessionItem(title: "first")

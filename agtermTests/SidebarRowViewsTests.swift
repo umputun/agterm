@@ -85,6 +85,40 @@ final class SidebarRowViewsTests: XCTestCase {
         XCTAssertNil(field.toolTip, "dragging the divider wider must re-evaluate, or a stale tooltip lingers")
     }
 
+    func testARemoteSessionRowGetsItsOwnIcon() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let local = try XCTUnwrap(store.activeSession)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        buildSidebar(for: store)
+
+        let remoteIcon = try renderedIcon(forSession: remote.id)
+        let localIcon = try renderedIcon(forSession: local.id)
+
+        XCTAssertEqual(remoteIcon, coordinator.remoteSessionIcon)
+        XCTAssertNotEqual(remoteIcon, localIcon, "a teleported row must be tellable from a local one at a glance")
+    }
+
+    func testARemoteRowStillShowsAHiddenSplit() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        store.toggleSplit(remote.id)
+        store.toggleSplit(remote.id)
+        buildSidebar(for: store)
+
+        XCTAssertTrue(remote.hasSplit, "the pane is alive but hidden; the row is the only place this shows")
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), coordinator.remoteSplitSessionIcon)
+    }
+
+    func testAFlaggedRemoteRowKeepsTheUnsplitGlyph() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        remote.flagged = true
+        buildSidebar(for: store)
+
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), coordinator.remoteSessionIcon,
+                       "on a remote row the fill carries split, so flagging must not claim it")
+    }
+
     private func buildSidebar(for store: AppStore) {
         outline = SidebarOutlineView()
         coordinator = WorkspaceSidebar.Coordinator(store: store, actions: actions)
@@ -137,5 +171,15 @@ final class SidebarRowViewsTests: XCTestCase {
         let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
         cell.layoutSubtreeIfNeeded()
         return try XCTUnwrap(cell.textField)
+    }
+
+    private func renderedIcon(forSession id: UUID) throws -> NSImage? {
+        outline.layoutSubtreeIfNeeded()
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { index in
+            guard let node = outline.item(atRow: index) as? SidebarNode else { return false }
+            return node.kind == .session && node.id == id
+        }, "the session row should be visible in the outline")
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
+        return cell.imageView?.image
     }
 }

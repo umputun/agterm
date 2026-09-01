@@ -150,7 +150,7 @@ final class ControlServerTests: XCTestCase {
         var clients: [Int32] = []
         defer { for fd in clients { close(fd) } }
         for _ in 0..<24 {
-            let fd = connectFD(to: socketPath)
+            let fd = Self.connectFD(to: socketPath)
             if fd < 0 { break }
             clients.append(fd)
         }
@@ -195,20 +195,53 @@ final class ControlServerTests: XCTestCase {
                       "the error should name the rejected cmd, got: \(response ?? "nil")")
     }
 
-    private func makeServer() -> ControlServer {
+    private func makeServer(remoteRunner: RemoteCommandRunner? = nil) -> ControlServer {
         let library = WindowLibrary(directory: stateDir)
         let server = ControlServer(
             library: library,
             actions: AppActions(library: library),
             settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
             identity: AppIdentity(version: "9.9.9"),
+            remoteRunner: remoteRunner,
             socketPath: socketPath
         )
         servers.append(server)
         return server
     }
 
-    private func address(for path: String) -> sockaddr_un {
+    // zmx tree ran its ssh inline on the one accept thread, so `zmx tree <this machine>` deadlocked
+    func testARemoteCallDoesNotHoldTheAcceptLoop() {
+        let runner = BlockingRemoteRunner()
+        let path = socketPath!
+        let server = makeServer(remoteRunner: runner)
+        server.start()
+        XCTAssertNotNil(server.boundSocketPath)
+
+        let sshInFlight = expectation(description: "the ssh has started")
+        runner.onEntered = { sshInFlight.fulfill() }
+        let remoteFinished = expectation(description: "the remote call returns once released")
+        Thread {
+            _ = Self.roundTrip(#"{"cmd":"zmx.tree","args":{"host":"buildbox"}}"#, at: path)
+            remoteFinished.fulfill()
+        }.start()
+
+        wait(for: [sshInFlight], timeout: 5)
+
+        let probeAnswered = expectation(description: "a second client is served during the ssh")
+        var probe: String?
+        Thread {
+            probe = Self.roundTrip(#"{"cmd":"window.list"}"#, at: path)
+            probeAnswered.fulfill()
+        }.start()
+
+        wait(for: [probeAnswered], timeout: 5)
+        XCTAssertNotNil(probe, "a second connection must be answered while the remote call is still waiting")
+
+        runner.release.signal()
+        wait(for: [remoteFinished], timeout: 10)
+    }
+
+    nonisolated private static func address(for path: String) -> sockaddr_un {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
         let bytes = path.utf8CString
@@ -221,17 +254,17 @@ final class ControlServerTests: XCTestCase {
     }
 
     private func connects(to path: String) -> Bool {
-        let fd = connectFD(to: path)
+        let fd = Self.connectFD(to: path)
         guard fd >= 0 else { return false }
         close(fd)
         return true
     }
 
     /// A connected fd the caller keeps open, or -1. Holding them is what saturates the listen backlog.
-    private func connectFD(to path: String) -> Int32 {
+    nonisolated private static func connectFD(to path: String) -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return -1 }
-        var addr = address(for: path)
+        var addr = Self.address(for: path)
         let ok = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
                 connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0
@@ -243,8 +276,10 @@ final class ControlServerTests: XCTestCase {
 
     /// One request line in, one response line out. Safe to block this main-actor test on the read: a decode
     /// failure is answered from `acceptQueue` before `handleConnection` hops to the main actor at all.
-    private func roundTrip(_ line: String) -> String? {
-        let fd = connectFD(to: socketPath)
+    private func roundTrip(_ line: String) -> String? { Self.roundTrip(line, at: socketPath) }
+
+    nonisolated private static func roundTrip(_ line: String, at path: String) -> String? {
+        let fd = connectFD(to: path)
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         let payload = Array((line + "\n").utf8)
@@ -257,12 +292,31 @@ final class ControlServerTests: XCTestCase {
     }
 
     private func bindListener(_ fd: Int32, at path: String) -> Bool {
-        var addr = address(for: path)
+        var addr = Self.address(for: path)
         let bound = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
                 Darwin.bind(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
         return bound == 0 && listen(fd, 1) == 0
+    }
+}
+
+/// Stands in for ssh: signals when the call starts, then blocks until the test releases it, so a test can
+/// observe the server WHILE a remote command is still outstanding.
+private final class BlockingRemoteRunner: RemoteCommandRunner, @unchecked Sendable {
+    let release = DispatchSemaphore(value: 0)
+    var onEntered: (@Sendable () -> Void)?
+
+    func run(_: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
+        stall()
+        return RemoteCommandResult(status: 0, stdout: "", stderr: "")
+    }
+
+    /// Not inline in `run`: a semaphore wait is unavailable directly inside an async body, and blocking is
+    /// the whole point here — the real runner blocks on a `Process` the same way.
+    private func stall() {
+        onEntered?()
+        release.wait()
     }
 }

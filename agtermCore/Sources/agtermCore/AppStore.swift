@@ -329,7 +329,7 @@ public final class AppStore {
                                           // no app-side closure like the font sizes above. An empty slot is
                                           // false, not omitted — "no terminal" either way to a caller.
                                           realized: session.surface?.isRealized ?? false,
-                                          context: session.context)
+                                          context: session.context, remoteHost: session.remoteHost)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
@@ -412,12 +412,15 @@ public final class AppStore {
     /// workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
-                           name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true) -> Session? {
+                           name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
+                           remoteHost: String? = nil) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // both reach a custom command's expansion — cwd through initialCwd, name through customName — so
         // both are sanitized here. See TerminalText.
+        // `remoteHost` arrives here rather than being assigned after, because this call saves.
         let session = Session(initialCwd: TerminalText.sanitized(cwd),
-                              customName: name.map(TerminalText.sanitized)?.trimmedOrNil)
+                              customName: name.map(TerminalText.sanitized)?.trimmedOrNil,
+                              remoteHost: remoteHost)
         session.initialCommand = command
         session.commandWait = wait
         if let index {

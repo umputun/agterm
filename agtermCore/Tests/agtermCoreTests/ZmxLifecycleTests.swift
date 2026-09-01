@@ -126,6 +126,58 @@ struct ZmxLifecycleTests {
         #expect(leaders == [ours: 41])
     }
 
+    @Test func remoteSessionCloseFinalizesNothingWhileALocalOneStillDoes() throws {
+        var finalized: [[UUID]] = []
+        let store = AppStore(persistence: temporaryPersistence(),
+                             paneFinalizer: { finalized.append($0) })
+        let workspace = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/local"))
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/remote",
+                                                   remoteHost: "buildbox"))
+        remote.hasSplit = true
+        remote.splitPaneIdentity = UUID()
+
+        store.closeSession(remote.id)
+        #expect(finalized.isEmpty, "its daemons live on buildbox; this finalizer only kills local ones")
+
+        store.closeSession(local.id)
+        #expect(finalized.flatMap { $0 } == [local.paneIdentity])
+    }
+
+    @Test func remoteSplitCloseFinalizesNothingWhileALocalSplitStillDoes() throws {
+        var finalized: [[UUID]] = []
+        let store = AppStore(persistence: temporaryPersistence(),
+                             paneFinalizer: { finalized.append($0) })
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/remote",
+                                                   remoteHost: "buildbox"))
+        remote.hasSplit = true
+        remote.splitPaneIdentity = UUID()
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/local"))
+        let localSplit = UUID()
+        local.hasSplit = true
+        local.splitPaneIdentity = localSplit
+
+        store.closeSplit(remote.id)
+        #expect(finalized.isEmpty)
+
+        store.closeSplit(local.id)
+        #expect(finalized.flatMap { $0 } == [localSplit])
+    }
+
+    @Test func theInventoryProjectionSkipsARemoteSessionEntirely() throws {
+        let store = AppStore(persistence: temporaryPersistence())
+        let workspace = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/local"))
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/remote",
+                                                   remoteHost: "buildbox"))
+        remote.hasSplit = true
+        remote.splitPaneIdentity = UUID()
+
+        #expect(remote.locallyManagedPaneIdentities.isEmpty)
+        #expect(PaneIdentityInventory.identities(in: [local, remote]) == [local.paneIdentity])
+    }
+
     @Test func immediateSessionAndWorkspaceCloseFinalizeEveryOwnedPane() throws {
         var finalized: [[UUID]] = []
         let store = AppStore(persistence: temporaryPersistence(),

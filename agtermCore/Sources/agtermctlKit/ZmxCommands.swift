@@ -15,8 +15,64 @@ struct Zmx: ParsableCommand {
         Every one needs a running agterm: only the app can join its live windows, its pending closes and \
         its persisted snapshots against what zmx reports. With agterm stopped there is nothing to ask.
         """,
-        subcommands: [List.self, Prune.self, Kill.self]
+        subcommands: [List.self, Prune.self, Kill.self, Tree.self, Attach.self]
     )
+
+    struct Attach: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Attach to a session on another Mac, as a session here.",
+            discussion: """
+            Takes a host and the id of one of the sessions `zmx tree` listed, and opens it in this window \
+            marked as remote. A remote session with a split arrives with the same split.
+
+            The remote is resolved again before anything is created, so a session that has gone since the \
+            list was taken fails rather than handing back a fresh shell wearing its name.
+
+            Closing it here ends only this side's connection: the far-side processes keep running, and \
+            nothing this command does can kill them. The session is not restored after a relaunch.
+            """)
+        @Argument(help: "The host, as ssh would take it.")
+        var host: String
+        @Argument(help: "The remote session's id, as `zmx tree` prints it.")
+        var session: String
+        @OptionGroup var options: BasicOptions
+
+        /// It creates a local session, so it echoes that session's id like every other create command.
+        var echoesResultID: Bool { true }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .zmxAttach, target: session, args: ControlArgs(host: host))
+        }
+    }
+
+    struct Tree: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "List the sessions that can be attached to, here or on another Mac.",
+            discussion: """
+            With a HOST, runs over ssh against a machine that is also running agterm and reports what it \
+            offers, across every one of its open windows. Feed the result to a picker and hand what the \
+            user chooses to `zmx attach`.
+
+            With no HOST, reports this app's own attachable sessions in the same shape — which is exactly \
+            the form the remote call runs on the far side, so it is also how to see what another machine \
+            would answer without sshing anywhere.
+
+            Only a session whose every pane has a live daemon is listed. One whose daemon has gone is \
+            omitted rather than offered, because attaching to a name that no longer exists would create a \
+            fresh shell wearing it. An empty list is a successful answer: it does not distinguish a store \
+            that is not running in live mode, which `zmx list` reports.
+
+            The connection is non-interactive: ssh runs with BatchMode, so key-based auth must already \
+            work for this host and a password or host-key prompt is a failure rather than a question.
+            """)
+        @Argument(help: "The host, as ssh would take it. Omit for this app's own sessions.")
+        var host: String?
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .zmxTree, args: ControlArgs(host: host))
+        }
+    }
 
     struct List: RequestCommand {
         static let configuration = CommandConfiguration(

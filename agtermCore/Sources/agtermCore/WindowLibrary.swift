@@ -898,9 +898,14 @@ public final class WindowLibrary {
         var claims: [ZmxPaneClaim] = []
         var complete = true
         for (site, session) in pairs {
-            claims.append(site.claim(.left, identity: session.paneIdentity))
+            // through the ownership projection, so this stays one predicate: an empty list is a session
+            // whose daemons are not ours to claim, and inventing rows for it would name daemons that do
+            // not exist here
+            var owned = session.locallyManagedPaneIdentities.makeIterator()
+            guard let primary = owned.next() else { continue }
+            claims.append(site.claim(.left, identity: primary))
             guard session.hasSplit else { continue }
-            guard let split = session.splitPaneIdentity else {
+            guard let split = owned.next() else {
                 complete = false
                 continue
             }

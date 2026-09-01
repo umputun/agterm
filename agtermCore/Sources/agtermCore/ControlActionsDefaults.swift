@@ -26,6 +26,14 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.kill"))
     }
 
+    func remoteTree(host _: String?) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.tree"))
+    }
+
+    func attachRemoteSession(host _: String, session _: String) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach"))
+    }
+
     func splitSession(_ target: String?, window: String?, mode: String?, axis _: SplitAxis?) -> ControlResponse {
         splitSession(target, window: window, mode: mode)
     }

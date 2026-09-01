@@ -143,8 +143,6 @@ public enum PaneIdentityInventory {
     }
 
     @MainActor public static func identities(in sessions: [Session]) -> [UUID] {
-        sessions.flatMap { session in
-            [session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }
-        }
+        sessions.flatMap(\.locallyManagedPaneIdentities)
     }
 }

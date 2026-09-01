@@ -2413,6 +2413,80 @@
               <span style="color: #f2b45c">"tests passed"</span>
             </div>
 
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Remote sessions
+            </h3>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A session running on another Mac that is also running agterm can be opened here, in the sidebar, marked remote.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx tree [HOST]</span> lists what
+              that machine has to offer across <em>every</em> open window, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx attach HOST ID</span> opens
+              one of them, split included. Both need the far side in
+              <strong style="color: #e6e1d7">Live sessions</strong> mode, since that is what puts a daemon behind each pane, and both
+              run ssh non-interactively — key-based auth has to work for the host already, because a password or host-key prompt is a
+              failure rather than a question. The far side also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>
+              installed by the cask or the Help action: a machine merely running agterm has no CLI an ssh command can find.
+              To check the connection before you need it, run
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh -o BatchMode=yes studio.local true</span> —
+              that is the same non-interactive form agterm uses, so if it exits without printing anything, agterm can reach the host;
+              if it asks for a password or a host key, agterm fails the same way. One difference to know about: agterm runs ssh from the
+              app, which inherits the launch environment rather than your shell's, so an agent exported in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.zshrc</span> passes this check and still fails here.
+              Put <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">IdentityAgent</span> and key settings in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.ssh/config</span>, which both paths read.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl zmx tree <span style="color: #f2b45c">studio.local</span>
+              <span style="color: #6b727a">&nbsp;# window/workspace/name  (split)  [id]  cwd</span><br />agtermctl zmx attach
+              <span style="color: #f2b45c">studio.local</span> <span style="color: #f2b45c">7c1e…</span>
+              <span style="color: #6b727a">&nbsp;# the id from that listing, not the name</span><br /><br /><span
+                style="color: #6b727a"
+                ># pipe the listing into the picker and attach what was chosen</span
+              ><br /><span style="color: #6d82f3">s</span>=$(agtermctl zmx tree
+              <span style="color: #f2b45c">studio.local</span> --json | jq
+              <span style="color: #f2b45c">'[.result.remote.sessions[] | {id, label: .name, subtitle: (.windowName + "/" + .workspaceName + "  " + .cwd)}]'</span> |<br />agtermctl
+              pick --prompt <span style="color: #f2b45c">"Attach which session?"</span> | jq -r
+              <span style="color: #f2b45c">'.id // empty'</span>)<br />[ -n
+              <span style="color: #f2b45c">"$s"</span> ] &amp;&amp; agtermctl zmx attach
+              <span style="color: #f2b45c">studio.local</span> <span style="color: #f2b45c">"$s"</span>
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              Only a session whose every pane still has a live daemon is listed, and the remote is resolved again at attach time, so a
+              session that has gone in between fails instead of handing back a fresh shell wearing its name. Closing the row here ends
+              only this side's connection — the far-side processes keep running, and nothing agterm does from this end can kill them.
+              A remote session is never written to disk, so it does not come back after a relaunch. Its tree node carries
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              An attach joins as a follower, and pinned zmx has one leader per pane, so the pane arrives at the <em>other</em>
+              machine's window size and ignores input until your first <em>classified</em> key — a printable character, Return, Tab or
+              Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side,
+              so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Because the lead is per pane, typing in one half of a split
+              leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something
+              there resizes it. When a connection drops, the pane holds on Ghostty's press-any-key prompt under one line naming the
+              host, the session, the pane and the exit status.
+            </p>
+
             <div
               style="
                 background: rgba(94, 161, 242, 0.07);

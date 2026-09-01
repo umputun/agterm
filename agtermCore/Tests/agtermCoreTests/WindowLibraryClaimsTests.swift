@@ -92,6 +92,22 @@ final class WindowLibraryClaimsTests {
         #expect(walk.claims.first?.sessionID == live.id)
     }
 
+    @Test func remoteSessionClaimsNoLocalDaemon() throws {
+        let library = WindowLibrary(directory: directory)
+        let windowID = try #require(library.windows.first?.id)
+        let store = try #require(library.store(for: windowID))
+        let live = try #require(store.workspaces.first?.sessions.first)
+        let remote = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a",
+                                                   remoteHost: "buildbox"))
+        store.toggleSplit(remote.id)
+
+        let walk = library.paneClaims()
+
+        #expect(walk.complete, "a remote session is not a missing identity")
+        #expect(walk.claims.map(\.paneIdentity) == [live.paneIdentity],
+                "its panes run ssh; claiming them invents a local daemon nothing answers to")
+    }
+
     @Test func windowFileMissingFromTheIndexIsClaimedAsUnindexed() throws {
         let indexed = UUID()
         let stray = UUID()

@@ -11,20 +11,27 @@ extension AppStore {
     /// Builds a `Snapshot` of the current tree; each session captures its live `currentCwd` (or `initialCwd`
     /// if no PWD report arrived). Runs on `@MainActor`; the result is `Sendable`, safe to hand to a writer.
     public func snapshot() -> Snapshot {
-        let workspaceSnapshots = workspaces.map { workspace in
-            let sessions = workspace.sessions.map(sessionSnapshot)
-            // only a collapsed workspace writes the flag, so an all-expanded tree matches a legacy snapshot.
-            return WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: sessions,
-                                     collapsed: workspace.isExpanded ? nil : true)
-        }
+        let workspaceSnapshots = workspaces.map(workspaceSnapshot)
         // TREE order keeps the on-disk list deterministic (not the Set's hash order); an unmarked store omits
         // both focus keys, matching a file written before the set existed. `focusedWorkspaceID` stays unused.
         let focusIDs = workspaces.map(\.id).filter(focusedWorkspaceIDs.contains)
-        return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
+        let persistable = Set(workspaceSnapshots.flatMap(\.sessions).map(\.id))
+        let recency = sessionRecency.items.filter(persistable.contains)
+        return Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
+                        workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
                         focusedWorkspaceIDs: focusIDs.isEmpty ? nil : focusIDs,
                         focusEnabled: focusEnabled ? true : nil,
-                        sessionRecency: sessionRecency.items)
+                        sessionRecency: recency)
+    }
+
+    /// The selection to write. A remote session is not in the snapshot, so naming it would restore an empty
+    /// window while local rows sit there; fall back to the most recent surviving session, then the first,
+    /// matching the MRU repair `reselectIfSelectionHidden` already does for a narrowed tree.
+    private func persistedSelection(among persistable: Set<UUID>, recency: [UUID]) -> UUID? {
+        if let selectedSessionID, persistable.contains(selectedSessionID) { return selectedSessionID }
+        guard selectedSessionID != nil else { return nil }
+        return recency.first ?? workspaces.flatMap(\.sessions).first { persistable.contains($0.id) }?.id
     }
 
     func sessionSnapshot(_ session: Session) -> SessionSnapshot {
@@ -47,8 +54,12 @@ extension AppStore {
                         context: session.context)
     }
 
+    /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
+    /// Recent Closed record. Only a collapsed workspace writes the flag, so an all-expanded tree matches a
+    /// legacy snapshot.
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
-        WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map(sessionSnapshot),
+        WorkspaceSnapshot(id: workspace.id, name: workspace.name,
+                          sessions: workspace.sessions.filter(\.isPersistable).map(sessionSnapshot),
                           collapsed: workspace.isExpanded ? nil : true)
     }
 

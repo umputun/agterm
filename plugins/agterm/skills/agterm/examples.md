@@ -62,8 +62,36 @@ attached to it:
 agtermctl zmx kill --target 3f2a --pane left --force
 ```
 
-Read or change the restore policy without opening Settings. A mode you set applies to the NEXT launch,
-because a pane is wrapped in a daemon or not at the moment it is created:
+## Attach a session running on another Mac
+
+List what the other machine offers across every open window, then open one here by its ID. The far side
+has to be in `live` mode, reachable over ssh with key-based auth, and carry `agtermctl` from the cask or
+the Help action — running agterm alone leaves no CLI an ssh command can find. Run it with no host to ask
+the same of this app, which is the form the remote call runs over there:
+
+```bash
+agtermctl zmx tree studio.local
+agtermctl zmx attach studio.local 7c1e4a02-...
+```
+
+To let the user choose, pipe the listing through the picker:
+
+```bash
+s=$(agtermctl zmx tree studio.local --json |
+  jq '[.result.remote.sessions[] | {id, label: .name,
+        subtitle: (.windowName + "/" + .workspaceName + "  " + .cwd)}]' |
+  agtermctl pick --prompt "Attach which session?" | jq -r '.id // empty')
+[ -n "$s" ] && agtermctl zmx attach studio.local "$s"
+```
+
+The row is marked remote and carries `remoteHost` in the tree. Closing it ends only this side's connection,
+and it does not come back after a relaunch.
+
+## Read or change the local restore policy
+
+This is about THIS instance, not a remote one: `zmx attach` requires nothing of the local restore mode.
+A mode you set applies to the NEXT launch, because a pane is wrapped in a daemon or not at the moment it
+is created:
 
 ```bash
 agtermctl restore mode          # what settings hold, what this launch asked for, what it got

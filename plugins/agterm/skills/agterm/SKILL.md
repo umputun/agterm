@@ -15,8 +15,8 @@ description: >
   subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
   (keymap editor, custom actions, logs); and file a bug as a GitHub issue or a
   feature request / question as a GitHub Discussion. Also list, fetch and install the repository's
-  cookbook recipes, and read one as reference for a tricky workflow; and report the version of the app
-  serving the socket.
+  cookbook recipes, and read one as reference for a tricky workflow; report the version of the app
+  serving the socket; and list and attach a session running on another Mac that also runs agterm.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.split.close, session.swap, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, pane-id, session.search, session.status,
@@ -24,7 +24,8 @@ when_to_use: >
   session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, sidebar.width, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
-  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: agterm cookbook,
+  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: zmx.tree, zmx.attach,
+  remote session, teleport a session, attach a session from another Mac. Also: agterm cookbook,
   cookbook recipe, list recipes, install a recipe, agterm recipe for X, what recipes are there, and
   agterm version, which agterm is running, agterm version check. Also troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
@@ -239,6 +240,8 @@ created by a scheduled job overnight stays unrealized until the displays wake an
 Poll this after an unattended create),
 `backedByZmx` (true only when every existing primary/split pane is currently zmx-backed; primary/split
 entries in `surfaces` report their own Boolean, while scratch and overlays omit it),
+`remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
+session, and never present after a relaunch because a remote session is not persisted),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
 `splitAxis` (`vertical` for left/right or `horizontal` for top/bottom; omitted without a split),
@@ -568,8 +571,19 @@ state rather than a leak · `zmx prune` - kill the daemons no pane claims and no
 refusing outright on an incomplete or conflicted inventory, and reporting each daemon separately since a
 stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --force` - destroy one pane's
 daemon and the process in it; all three are required because this kills a backend process that reaches a
-pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace.
-Every zmx command needs a running agterm.
+pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace ·
+`zmx tree [HOST]` - attachable sessions across EVERY open window, on another Mac with a HOST or this app
+without one (the bare form is exactly what the remote call runs on the far side). Each row carries the id
+`zmx attach` takes plus `windowID`/`windowName`, `workspaceID`/`workspaceName` (show the names, group by
+the ids: neither is unique), `context` when set, and per-pane `foreground`; only a session whose every pane
+still has a live daemon is listed, and an empty list does NOT mean the far side is not in live mode -
+`zmx list` reports that · `zmx attach
+HOST SESSION` - open one of them here, marked remote and carrying its split; takes the ID from that
+listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
+handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
+never restored after a relaunch. Both run ssh non-interactively, so key-based auth must already work, and
+the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm
+has no CLI an ssh command can find. Every zmx command needs a running agterm.
 
 **version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
 `commit` when the build recorded one). App-global: no target, no `--window`, no window need be open, so it
@@ -620,7 +634,7 @@ Full detail, templates, and the exact `gh` commands are in **troubleshooting.md*
 ## Reference files
 
 - **reference.md** — full per-command detail: every flag, the JSON return shapes
-  (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`/`app`/`restore`/`zmx`), error strings, the scratch/overlay/split
+  (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`/`app`/`restore`/`zmx`/`remote`), error strings, the scratch/overlay/split
   lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `|` alternatives,
   `{AGT_X}` tokens).
 - **examples.md** — copy-paste agtermctl examples for common tasks (build a layout, run a program in a

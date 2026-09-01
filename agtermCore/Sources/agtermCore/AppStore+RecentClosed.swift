@@ -150,7 +150,7 @@ extension AppStore {
                                    workspaceIndex: Int,
                                    sessionIndex: Int,
                                    id: UUID = UUID()) -> UUID? {
-        guard let recentClosedStore else { return nil }
+        guard let recentClosedStore, session.isPersistable else { return nil }
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .session,
@@ -172,14 +172,18 @@ extension AppStore {
                                      focusMember: Bool,
                                      id: UUID = UUID()) -> UUID? {
         guard let recentClosedStore else { return nil }
-        let sessionCount = workspace.sessions.count
+        // count and selection describe what Reopen will restore, so both follow the filtered snapshot:
+        // remote sessions are not in it, and a selection pointing at one would restore nothing
+        let snapshot = workspaceSnapshot(workspace)
+        let sessionCount = snapshot.sessions.count
+        let restorable = selectedSessionID.flatMap { id in snapshot.sessions.contains { $0.id == id } ? id : nil }
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .workspace,
             title: workspace.name,
             subtitle: "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
-            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot(workspace),
-                                             selectedSessionID: selectedSessionID,
+            workspace: RecentClosedWorkspace(snapshot: snapshot,
+                                             selectedSessionID: restorable,
                                              focusMember: focusMember)
         ))
         recentClosedDidChange?()

@@ -351,7 +351,7 @@ struct agtermApp: App {
         // foreground pid, so it is never captured and restores via the exec `command` path, keeping close-on-exit.
         // `LaunchSeedProvider` owns the precedence between them and resolves it at spawn time, not here, so
         // the pending slots stay on the session until the pane really spawns.
-        let zmx = ghostty.launchRestoreMode == .live
+        let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
             ? ZmxLaunch.configuration(paneIdentity: session.paneIdentity, pane: "primary", environment: env)
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
@@ -514,7 +514,7 @@ struct agtermApp: App {
         // effectiveCwd. Font size matches the primary; env inherits the parent's window/workspace/session ids.
         // Creation, capture and override precedence matches the primary.
         let ghostty = GhosttyApp.shared
-        let zmx = ghostty.launchRestoreMode == .live
+        let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
             ? ZmxLaunch.configuration(paneIdentity: session.splitPaneIdentity, pane: "split", environment: env)
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,

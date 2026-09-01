@@ -79,17 +79,103 @@ public struct ControlZmxEntry: Codable, Sendable, Equatable {
     }
 }
 
+/// What a caller on another machine needs to reach these daemons over ssh. Neither is guessable from the
+/// far side, so a remote attach cannot be built without asking.
+public struct ControlZmxEndpoint: Codable, Sendable, Equatable {
+    /// Absolute path to the zmx this instance invokes: inside the app bundle, or a debug override.
+    public let executable: String
+    /// The `ZMX_DIR` its daemons live under, hashed from this instance's state directory.
+    public let socketDirectory: String
+
+    public init(executable: String, socketDirectory: String) {
+        self.executable = executable
+        self.socketDirectory = socketDirectory
+    }
+}
+
+/// One pane of a remote session and the daemon behind it.
+public struct ControlRemotePane: Codable, Sendable, Equatable {
+    /// `left` or `right`, matching the local pane vocabulary.
+    public let pane: String
+    public let daemon: String
+    /// Argv of what the far side reports running in this pane, so a caller can say what it is about to
+    /// attach to. Omitted when the remote reports none, which a plain idle shell does.
+    public let foreground: [String]?
+
+    public init(pane: String, daemon: String, foreground: [String]? = nil) {
+        self.pane = pane
+        self.daemon = daemon
+        self.foreground = foreground
+    }
+}
+
+/// A session on another machine, with every pane resolved to a live daemon. A session whose panes did not
+/// all resolve is absent rather than partial — see `RemoteTreeMerger`.
+public struct ControlRemoteSession: Codable, Sendable, Equatable {
+    public let id: String
+    public let name: String
+    /// Where this session lives on the far side: show the names, group by the ids. Neither rename path
+    /// nor `addWorkspace` enforces uniqueness, so grouping by name merges two windows called `main`, and
+    /// the window id alone still merges two `dev` workspaces inside one of them.
+    public let windowID: String
+    public let windowName: String
+    public let workspaceID: String
+    public let workspaceName: String
+    /// The far side's own note of what the session is FOR, when its owner set one.
+    public let context: String?
+    public let cwd: String
+    /// Divider direction, present only for a session that has a split.
+    public let splitAxis: String?
+    public let panes: [ControlRemotePane]
+
+    public init(id: String, name: String, windowID: String, windowName: String, workspaceID: String,
+                workspaceName: String, context: String? = nil, cwd: String, splitAxis: String?,
+                panes: [ControlRemotePane]) {
+        self.id = id
+        self.name = name
+        self.windowID = windowID
+        self.windowName = windowName
+        self.workspaceID = workspaceID
+        self.workspaceName = workspaceName
+        self.context = context
+        self.cwd = cwd
+        self.splitAxis = splitAxis
+        self.panes = panes
+    }
+}
+
+/// `zmx tree [HOST]`'s payload: every open window's attachable sessions, and the one endpoint they all
+/// attach through.
+public struct ControlRemoteTree: Codable, Sendable, Equatable {
+    /// The ssh destination the REQUESTING app was given, stamped on by it after decoding; never the far
+    /// side's own idea of its hostname. Absent from the bare local projection, which nothing sshed to.
+    public let host: String?
+    public let endpoint: ControlZmxEndpoint
+    public let sessions: [ControlRemoteSession]
+
+    public init(host: String?, endpoint: ControlZmxEndpoint, sessions: [ControlRemoteSession]) {
+        self.host = host
+        self.endpoint = endpoint
+        self.sessions = sessions
+    }
+}
+
 /// `zmx list`'s payload. Carries the restore status as a header so a reader can tell whether the rows
 /// describe a live-mode instance without a second call, and `inventoryComplete` because a false one is
 /// what makes every unmatched row `unknown` rather than an orphan.
 public struct ControlZmxInventory: Codable, Sendable, Equatable {
     public let restore: ControlRestoreStatus
     public let inventoryComplete: Bool
+    /// Header rather than per row: one instance has one zmx and one socket directory. Optional so a
+    /// remote reader can tell an older server apart from one that reports nothing to attach to.
+    public let endpoint: ControlZmxEndpoint?
     public let entries: [ControlZmxEntry]
 
-    public init(restore: ControlRestoreStatus, result: ZmxInventoryResult) {
+    public init(restore: ControlRestoreStatus, result: ZmxInventoryResult,
+                endpoint: ControlZmxEndpoint? = nil) {
         self.restore = restore
         inventoryComplete = result.inventoryComplete
+        self.endpoint = endpoint
         entries = result.rows.map(ControlZmxEntry.init(row:))
     }
 }

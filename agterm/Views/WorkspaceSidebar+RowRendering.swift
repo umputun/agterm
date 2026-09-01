@@ -73,7 +73,7 @@ extension WorkspaceSidebar.Coordinator {
             let showSplitIcon = session?.hasSplit == true
             let flagged = store.sidebarMode == .tree && session?.flagged == true
             cell.imageView?.image = iconForSession(split: showSplitIcon, axis: session?.splitAxis ?? .leftRight,
-                                                   flagged: flagged)
+                                                   flagged: flagged, remote: session?.remoteHost != nil)
             cell.imageView?.setAccessibilityIdentifier("session-icon")
         }
         // text/icon colors track the terminal theme; a selected row uses the selection foreground.
@@ -95,7 +95,13 @@ extension WorkspaceSidebar.Coordinator {
 
     /// The leading session-row icon: split-rectangle when split, else plain terminal, each swapped to its
     /// filled variant when `flagged` — tree mode only, the flat flagged view passes `flagged: false`.
-    private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool) -> NSImage? {
+    ///
+    /// A remote row takes its own glyph and keeps the split bit, not the flagged fill: a HIDDEN split is
+    /// state nothing else reveals, while the fill is tree-mode decoration the flat flagged view already
+    /// passes `flagged: false` for. So on a remote row the fill means split, not flagged. The axis is not
+    /// distinguished — no remote-looking symbol family carries both arrangements.
+    private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool, remote: Bool) -> NSImage? {
+        if remote { return split ? remoteSplitSessionIcon : remoteSessionIcon }
         switch (split, axis, flagged) {
         case (true, .topBottom, true): return flaggedHorizontalSplitSessionIcon
         case (true, .topBottom, false): return horizontalSplitSessionIcon

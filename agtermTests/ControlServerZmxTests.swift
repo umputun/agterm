@@ -30,6 +30,199 @@ final class ControlServerZmxTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testRemoteTreeReadsTheFarSidesAnswerInOneInvocation() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        let remote = try XCTUnwrap(response.result?.remote)
+        XCTAssertEqual(remote.host, "buildbox", "the far side names no host; the caller stamps it")
+        XCTAssertEqual(remote.sessions.map(\.id), ["s1"])
+        XCTAssertEqual(remote.sessions.map(\.windowName), ["main"])
+        XCTAssertEqual(remote.endpoint.socketDirectory, "/tmp/agterm-zmx-abc")
+        XCTAssertEqual(runner.invocations.count, 1, "the far side does the whole join in one call")
+        XCTAssertEqual(runner.invocations.first?.first, "ssh")
+    }
+
+    func testTheBareFormAnswersAboutThisAppWithoutSshingAnywhere() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: "", stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: nil)
+
+        let remote = try XCTUnwrap(response.result?.remote)
+        XCTAssertTrue(response.ok)
+        XCTAssertNil(remote.host, "nothing was sshed to, so there is no destination to name")
+        XCTAssertTrue(runner.invocations.isEmpty, "the local form must never reach ssh")
+        // no pane in this fixture is zmx-backed, and an empty list is a successful answer rather than
+        // a refusal: it does not claim to tell "not live" apart from "live with nothing eligible"
+        XCTAssertTrue(remote.sessions.isEmpty)
+    }
+
+    func testRemoteTreeRefusesANonzeroExitBeforeParsing() async {
+        // an ssh that dies mid-write leaves output that may still parse; only the exit status separates a
+        // real answer from a truncated one, which is why it is read first
+        let truncated = String(Self.projection.dropLast(40))
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 255, stdout: truncated,
+                                                                 stderr: "Permission denied (publickey)."))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "Permission denied (publickey).")
+    }
+
+    func testAFailedRemoteReportsItsOwnReasonRatherThanAGenericOne() async {
+        // the remote's agtermctl prints its refusal to stdout and exits nonzero, leaving stderr empty
+        let refusal = #"{"ok":false,"error":"could not read the zmx session list"}"#
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 1, stdout: refusal, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        XCTAssertEqual(response.error, "could not read the zmx session list")
+    }
+
+    func testAnSshFailureStillFallsBackToStderr() async {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 255, stdout: "",
+                                                                  stderr: "ssh: Could not resolve hostname"))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        XCTAssertEqual(response.error, "ssh: Could not resolve hostname")
+    }
+
+    func testRemoteTreeRejectsAHostileHostWithoutRunningAnything() async {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: "", stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "-oProxyCommand=touch /tmp/pwned")
+
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(runner.invocations.isEmpty, "a refused host must never reach a process")
+    }
+
+    // a rejected host is rejected for carrying control characters, so echoing it back would print them
+    // to a terminal once agtermctl decodes the response
+    func testRefusedHostIsNotEchoedIntoTheResponse() async {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: "", stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox\nrm -rf /\u{1B}[31mRED")
+
+        XCTAssertEqual(response.error, "invalid host")
+        XCTAssertFalse(response.error?.contains("\n") ?? true)
+        XCTAssertFalse(response.error?.contains("\u{1B}") ?? true)
+        XCTAssertFalse(response.error?.contains("rm -rf") ?? true)
+    }
+
+    func testAttachCreatesARemoteSessionWithAHoldingSshPane() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertEqual(created.remoteHost, "buildbox")
+        XCTAssertEqual(created.customName, "build")
+        XCTAssertTrue(created.commandWait, "the pane must hold so the disconnect line can be read")
+        let command = try XCTUnwrap(created.initialCommand)
+        XCTAssertTrue(command.contains("ssh"))
+        XCTAssertTrue(command.contains("agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"))
+        XCTAssertFalse(created.hasSplit)
+    }
+
+    func testAttachResolvesTheRemoteAgainRatherThanTrustingTheCaller() async {
+        // the daemon has gone since the picker listed it, so the far side's own eligibility walk no longer
+        // offers the session at all; attaching would CREATE the daemon and hand back a fresh shell
+        // wearing the session's name
+        let vanished = """
+        {"ok":true,"result":{"remote":{\
+        "endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},\
+        "sessions":[]}}}
+        """
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: vanished, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = library.activeStore
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "no attachable session s1 on buildbox")
+        XCTAssertEqual(runner.invocations.count, 1, "it re-reads before touching the model")
+        XCTAssertNil(store?.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil },
+                     "a refused attach must leave no half-built row")
+    }
+
+    func testAFailedDiscoveryCreatesNothingAndKeepsItsReason() async {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 255, stdout: "",
+                                                                  stderr: "Permission denied (publickey)."))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = library.activeStore
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertEqual(response.error, "Permission denied (publickey).")
+        XCTAssertNil(store?.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+    }
+
+    func testAttachTakesTheSessionIdOnlyNotItsName() async {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        // remote names are mutable and non-unique across workspaces, so only the id can address one
+        let response = await server.attachRemoteSession(host: "buildbox", session: "build")
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "no attachable session build on buildbox")
+    }
+
+    func testAttachUsesALocalWorkingDirectoryNotTheRemoteOne() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+
+        _ = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        // libghostty chdirs the local ssh process here; /repo exists on buildbox, not necessarily here
+        XCTAssertNotEqual(created.initialCwd, "/repo")
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: created.initialCwd, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    func testAttachBringsBothPanesOfARemoteSplit() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection,
+                                                                  stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertTrue(created.hasSplit)
+        XCTAssertEqual(created.splitAxis, .topBottom, "the split arrives arranged as it is over there")
+        XCTAssertTrue(created.splitCommandWait)
+        XCTAssertTrue(try XCTUnwrap(created.splitInitialCommand).contains("agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2"))
+    }
+
+    func testListReportsTheEndpointOfTheInjectedClient() throws {
+        let server = makeServer(list: "")
+
+        let inventory = try XCTUnwrap(server.listZmxDaemons().result?.zmx)
+
+        let endpoint = try XCTUnwrap(inventory.endpoint)
+        XCTAssertEqual(endpoint.executable, "/tmp/zmx")
+        XCTAssertEqual(endpoint.socketDirectory, "/tmp/zmx-dir")
+    }
+
     func testListJoinsObservedDaemonsAgainstTheLivePanes() throws {
         let live = try XCTUnwrap(library.allOpenSessions().first)
         let orphan = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -526,18 +719,60 @@ final class ControlServerZmxTests: XCTestCase {
     }
 
     /// A client whose runner returns `list` output, or throws when it is nil.
-    private func makeServer(list output: String?) -> ControlServer {
+    private func makeServer(list output: String?,
+                            remoteRunner: (any RemoteCommandRunner)? = nil) -> ControlServer {
         makeServer(runner: { _ in
             guard let output else { throw ZmxClient.CommandError.timedOut }
             return output
-        })
+        }, remoteRunner: remoteRunner)
     }
 
-    private func makeServer(runner: @escaping ZmxClient.Runner) -> ControlServer {
+    private func makeServer(runner: @escaping ZmxClient.Runner,
+                            remoteRunner: (any RemoteCommandRunner)? = nil) -> ControlServer {
         ControlServer(
             library: library, actions: AppActions(library: library), settingsModel: settingsModel,
             identity: AppIdentity(version: "9.9.9", commit: "testsha"),
             zmxClient: ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: runner),
+            remoteRunner: remoteRunner,
             socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
+    }
+
+    /// What the far side's own `zmx tree` prints: one document, one attachable session, and no `host` —
+    /// it cannot know which name reached it, so the requesting app stamps that on afterwards.
+    private static let projection = """
+    {"ok":true,"result":{"remote":{\
+    "endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},\
+    "sessions":[{"id":"s1","name":"build","windowID":"w1","windowName":"main","workspaceID":"ws1",\
+    "workspaceName":"work","cwd":"/repo",\
+    "panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"}]}]}}}
+    """
+
+    /// The same remote, whose session has a top/bottom split with both daemons live.
+    private static let splitProjection = """
+    {"ok":true,"result":{"remote":{\
+    "endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},\
+    "sessions":[{"id":"s1","name":"build","windowID":"w1","windowName":"main","workspaceID":"ws1",\
+    "workspaceName":"work","cwd":"/repo","splitAxis":"horizontal",\
+    "panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"},\
+    {"pane":"right","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2"}]}]}}}
+    """
+}
+
+/// Records what it was asked to run and answers with a canned result, so the remote commands are covered
+/// without a second Mac.
+private final class FakeRemoteRunner: RemoteCommandRunner, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [[String]] = []
+    private let result: RemoteCommandResult
+
+    var invocations: [[String]] { lock.withLock { recorded } }
+
+    init(result: RemoteCommandResult) {
+        self.result = result
+    }
+
+    func run(_ argv: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
+        lock.withLock { recorded.append(argv) }
+        return result
     }
 }

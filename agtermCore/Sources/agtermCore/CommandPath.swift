@@ -5,10 +5,10 @@
 /// `path_helper`. Without widening, a bare `agtermctl`, `jq` or `lazygit` in a keymap line exits 127 with
 /// the shell's own diagnostic discarded (#393).
 public enum CommandPath {
-    /// Appended when absent: the CLI install target, which reaches `PATH` only through `path_helper` and so
-    /// only in a login shell, and Homebrew's Apple Silicon prefix. Both are fixed macOS locations, not a
-    /// guess at the user's shell config, which the app cannot see.
-    private static let standardDirectories = [CLIInstall.installDirectory, "/opt/homebrew/bin"]
+    /// Appended when absent: the Help installer's target, which reaches `PATH` only through `path_helper`
+    /// and so only in a login shell, and the cask's — the route the README documents. `RemoteSession`
+    /// widens a REMOTE shell with the same list, so the two cannot disagree about where the CLI lives.
+    static let standardDirectories = [CLIInstall.installDirectory, "/opt/homebrew/bin"]
 
     /// The PATH a launchd-started app inherits, used when the environment carries none at all.
     static let launchdDefault = "/usr/bin:/bin:/usr/sbin:/sbin"

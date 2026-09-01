@@ -137,10 +137,20 @@ final class ControlServer {
     /// backend is unavailable rather than pretending an empty listing.
     let zmxClient: ZmxClient?
 
+    /// Runs the ssh invocations behind the remote commands. Injectable so hosted tests drive them against
+    /// a fake instead of a second Mac.
+    let remoteRunner: any RemoteCommandRunner
+
+    /// How long a remote projection read may take before it is abandoned. `ConnectTimeout` bounds only the
+    /// handshake, so this is what covers a remote agterm that never answers.
+    static let remoteTreeDeadline: TimeInterval = 10
+
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
+         remoteRunner: (any RemoteCommandRunner)? = nil,
          socketPath: String? = nil) {
+        self.remoteRunner = remoteRunner ?? RemoteCommandProcessRunner()
         self.library = library
         self.actions = actions
         self.settingsModel = settingsModel
@@ -340,7 +350,9 @@ final class ControlServer {
     /// Read one newline-delimited request from `conn`, decode it, dispatch it on `server` (main actor), write
     /// the response back, close. A decode failure replies with a structured error. Runs on the background queue.
     nonisolated private static func handleConnection(_ conn: Int32, server: ControlServer) {
-        defer { close(conn) }
+        // the remote commands hand the descriptor to a thread of their own, which then owns closing it
+        var handedOff = false
+        defer { if !handedOff { close(conn) } }
         // a write to a client that already hung up would raise the default-fatal SIGPIPE and take the whole
         // app down mid-request; SO_NOSIGPIPE turns it into a normal EPIPE write error.
         var noSigPipe: Int32 = 1
@@ -376,10 +388,29 @@ final class ControlServer {
             return
         }
 
+        // `zmx tree <this machine>` would otherwise deadlock against itself: the far side's own agtermctl
+        // waits in this server's backlog while this connection holds the only accept thread.
+        if Self.waitsOnNetwork(request.cmd) {
+            handedOff = true
+            let worker = Thread {
+                defer { close(conn) }
+                writeResponse(conn, runBlocking { await server.dispatch(request) })
+            }
+            worker.name = "com.umputun.agterm.control.remote"
+            worker.start()
+            return
+        }
+
         // hop to the main actor, blocking this background thread. dispatch refreshes the window cache in that
         // same execution, so the fast path sees this command's mutations without a second, stallable hop.
         let response = runBlocking { await server.dispatch(request) }
         writeResponse(conn, response)
+    }
+
+    /// Commands whose dispatch awaits an ssh round trip. `zmx.attach` re-resolves the remote first, so it
+    /// carries the same wait; local `zmx.list` blocks too, but bounded, and stays inline to keep cache order.
+    nonisolated private static func waitsOnNetwork(_ cmd: Command) -> Bool {
+        cmd == .zmxTree || cmd == .zmxAttach
     }
 
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
@@ -471,7 +502,8 @@ final class ControlServer {
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
-                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .dashboard, .version:
+                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxTree,
+                .zmxAttach, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)

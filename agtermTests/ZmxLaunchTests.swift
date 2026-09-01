@@ -4,6 +4,23 @@ import agtermCore
 
 @MainActor
 final class ZmxLaunchTests: XCTestCase {
+
+    func testALiveLaunchWrapsALocalSessionButNeverARemoteOne() {
+        let local = Session(initialCwd: "/tmp")
+        let remote = Session(initialCwd: "/tmp", remoteHost: "buildbox")
+
+        XCTAssertTrue(ZmxLaunch.wrapsLocally(mode: .live, session: local))
+        // a wrapper would keep the ssh alive inside a surviving daemon after a window close
+        XCTAssertFalse(ZmxLaunch.wrapsLocally(mode: .live, session: remote))
+    }
+
+    func testNoSessionIsWrappedOutsideLiveMode() {
+        let local = Session(initialCwd: "/tmp")
+
+        XCTAssertFalse(ZmxLaunch.wrapsLocally(mode: .none, session: local))
+        XCTAssertFalse(ZmxLaunch.wrapsLocally(mode: .rerun, session: local))
+    }
+
     func testLaunchDispositionKeepsFallbackStateUnconsumed() {
         let configuration = ZmxSupport.Configuration(
             command: "zmx attach session", environment: [:], daemonName: "session",

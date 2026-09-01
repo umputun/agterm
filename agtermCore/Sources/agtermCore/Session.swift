@@ -120,6 +120,26 @@ public final class Session: Identifiable {
     /// transition, not `statusChangedAt`, so a hook re-asserting `blocked` over `blocked` stays muted.
     @ObservationIgnored public var autoFollowConsumed = false
 
+    /// The host this session is teleported from, nil for a local one. NOT persisted, and excluded from
+    /// every snapshot: a persisted ssh command would reconnect on a `rerun` launch or come back as a
+    /// plain shell under a marker that lies.
+    ///
+    /// Immutable and set at construction, because the first save happens inside `addSession`: a marker
+    /// written afterwards would let one snapshot go to disk carrying the ssh command.
+    public let remoteHost: String?
+
+    /// Whether this session may be written to disk at all. Every persistence producer gates on it: the
+    /// launch snapshot, the Recent Closed session record, and a closed workspace's record.
+    public var isPersistable: Bool { remoteHost == nil }
+
+    /// The pane identities this instance's zmx owns — none for a remote session, whose panes run ssh.
+    /// Every reader of local daemon ownership goes through this, or a remote pane reports as a claimed
+    /// local daemon that does not exist. Structural `paneIdentity` stays valid either way.
+    public var locallyManagedPaneIdentities: [UUID] {
+        guard remoteHost == nil else { return [] }
+        return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
+    }
+
     /// User-set flagged working-set membership: surfaces the session in the sidebar's flat cross-workspace
     /// flagged view with a filled row icon. Persisted, surviving a relaunch and a workspace move.
     public var flagged: Bool = false
@@ -403,12 +423,14 @@ public final class Session: Identifiable {
     @ObservationIgnored public weak var searchSurface: (any TerminalSurface)?
 
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil,
-                paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil) {
+                paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil,
+                remoteHost: String? = nil) {
         self.id = id
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
         self.initialCwd = initialCwd
         self.customName = customName
+        self.remoteHost = remoteHost
     }
 
     /// The sidebar label: a non-blank `customName` (a manual rename) wins; else the focused pane's non-blank

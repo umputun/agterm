@@ -216,6 +216,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// each omitted when its pane is unrealized.
     public let realized: Bool?
 
+    /// The host a teleported session is attached to; nil/omitted for a local one. Live-only — a remote
+    /// session is never persisted, so this never survives a relaunch.
+    public let remoteHost: String?
+
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
@@ -230,7 +234,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
-                context: String? = nil) {
+                context: String? = nil, remoteHost: String? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -270,6 +274,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.scratchFontSize = scratchFontSize
         self.surfaces = surfaces
         self.realized = realized
+        self.remoteHost = remoteHost
     }
 }
 
