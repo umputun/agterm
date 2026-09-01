@@ -72,6 +72,49 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(fg, ["tee", marker], "tree should expose the session's live foreground command")
     }
 
+    // the idle direction of the same real prompt/pty/sysctl path: a pane at its prompt names its shell, and
+    // the name goes away the moment a program takes the foreground. Pins `running` -> `buildTree` -> wire:
+    // a tree that dropped the idle case reports null here while every host-free test stays green.
+    func testTreeNamesTheForegroundShellAndDropsItWhenAProgramRuns() throws {
+        var shell: String?
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let name = firstSessionNode(resp)?["foregroundShell"] as? String {
+                XCTAssertNil(firstSessionNode(resp)?["foreground"], "foregroundShell and foreground are exclusive")
+                shell = name
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        let idle = try XCTUnwrap(shell, "a pane sitting at its prompt should name its shell")
+        XCTAssertFalse(idle.hasPrefix("-"), "the login dash must be stripped before the basename: got \(idle)")
+
+        let marker = markerDir.appendingPathComponent("idlefg-\(UUID().uuidString)").path
+        let payload: [String: Any] = ["cmd": "session.type", "args": ["text": "tee \(marker)\n"]]
+        let line = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+        XCTAssertEqual(try sendCommand(line)["ok"] as? Bool, true, "session.type should succeed")
+
+        var ranWithoutShell = false
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let f = firstSessionForeground(resp), f.first == "tee" {
+                ranWithoutShell = firstSessionNode(resp)?["foregroundShell"] == nil
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertTrue(ranWithoutShell, "a pane running a program must drop foregroundShell")
+    }
+
+    /// The first session's whole node from a `tree` response dict, or nil.
+    private func firstSessionNode(_ response: [String: Any]) -> [String: Any]? {
+        guard let result = response["result"] as? [String: Any],
+              let tree = result["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]],
+              let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+        return sessions.first
+    }
+
     /// The first session's `foreground` argv from a `tree` response dict, or nil if at the prompt.
     private func firstSessionForeground(_ response: [String: Any]) -> [String]? {
         guard let result = response["result"] as? [String: Any],

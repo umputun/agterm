@@ -13,7 +13,10 @@ agtermctl tree --json        # workspaces -> sessions, active/split/overlay/scra
 agtermctl window list --json # windows, with open/active flags
 
 # what is each pane RUNNING right now (foreground argv; absent at the shell prompt or for a setuid program like top/sudo)
-agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | "\(.name): \(.foreground // "shell")"'
+# foregroundShell names the shell holding the foreground, so an existing pane with neither could not be read.
+# it does NOT mean the pane is at a prompt: a builtin like `read` runs inside the shell and looks the same
+agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[]
+  | "\(.name): \(.foreground // .foregroundShell // "unknown")"'
 ```
 
 ## Capture or reset the restore-on-restart commands

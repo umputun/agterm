@@ -37,6 +37,44 @@ public enum CommandRestore {
         return !argv.dropFirst().contains { !$0.hasPrefix("-") }
     }
 
+    /// What a pane's foreground argv means to the `tree` read: a program to report, or a recognized shell in
+    /// the foreground. The restore capture collapses `foregroundShell` back to nil — see
+    /// `ForegroundProcess.command` for why it must.
+    public enum PaneForeground: Sendable, Equatable {
+        /// A real foreground program, argv dash-stripped and ready to render.
+        case program([String])
+        /// A RECOGNIZED shell IN THE FOREGROUND, as its basename (`zsh`, `fish`) — not a claim that it sits at
+        /// a prompt, since a builtin runs in the shell process and leaves argv unchanged. A shell outside
+        /// `knownShells` and `$SHELL` is not recognized and reports as `program` instead.
+        case foregroundShell(String)
+
+        /// The argv the tree reports as `foreground`; nil when a shell holds the foreground.
+        public var command: [String]? {
+            if case .program(let argv) = self { return argv }
+            return nil
+        }
+
+        /// The basename the tree reports as `foregroundShell`; nil while a program runs.
+        public var shellName: String? {
+            if case .foregroundShell(let name) = self { return name }
+            return nil
+        }
+    }
+
+    /// Classify a pane's raw foreground argv for the `tree` read. Nil for an empty argv only; the two live
+    /// answers are the cases of `PaneForeground`. `extra` is the user's `$SHELL` basename, widening
+    /// recognition to a non-standard login shell exactly as `isIdleShell` does.
+    ///
+    /// The shell basename is taken AFTER `stripLoginDash`, never before: `basename` splits on `/`, so it
+    /// drops the login mark from a path form (`-/bin/zsh`) but keeps it on the bare form (`-zsh`), which is
+    /// the common case and would otherwise reach callers as `-zsh`.
+    public static func paneForeground(argv: [String], extra: String? = nil) -> PaneForeground? {
+        guard !argv.isEmpty else { return nil }
+        let stripped = stripLoginDash(argv)
+        if isIdleShell(argv: argv, extra: extra) { return .foregroundShell(basename(stripped[0])) }
+        return .program(stripped)
+    }
+
     /// Drop the leading `-` macOS dash-marks a login process's argv[0] with, so the argv names a program
     /// that can actually be rendered and re-run (`-sleep` → `sleep`). Only argv[0] carries the mark, and
     /// only the mark is removed: a path form (`-/bin/zsh`) keeps the rest of the path.

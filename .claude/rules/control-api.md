@@ -650,9 +650,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   no `TERM_PROGRAM_VERSION` (`CustomCommandRunner` merges `ProcessInfo.processInfo.environment` with the
   `AGT_*` context only). That is why a recipe preflight uses `agtermctl version` rather than the variable.
 
-- Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
-  split axis, split ratio, split focus, status fields, flag, unseen, restore pins, surfaces, `realized`,
-  and `backedByZmx`.
+- Session nodes include foreground/split foreground argv, idle shell basenames, background spec, overlay
+  size, pane overlays, split axis, split ratio, split focus, status fields, flag, unseen, restore pins,
+  surfaces, `realized`, and `backedByZmx`.
+- `foregroundShell`/`splitForegroundShell` name the RECOGNIZED shell HOLDING a pane's foreground, present
+  exactly when that pane's `foreground` is absent because a shell holds it.
+  For a pane that EXISTS, neither field means agterm could not determine the foreground state — a bare nil
+  foreground alone conflated the two, which `cookbook/park-and-resume` documents as a data-loss limit: an
+  unreadable pane is parked as idle and replayed as a plain shell. Consult `hasSplit` before interpreting the
+  split pair: with no split pane both are absent because there is no pane, and `hasSplit` is itself omitted
+  when false. Do not make `hasSplit` always present to compensate.
+- The pair is NOT proof of an interactive prompt and must never be treated as permission to type. A builtin
+  such as `read` or `vared`, and a shell loop, run inside the shell process, so argv stays the shell's and a
+  pane blocked on input is indistinguishable from one at a prompt; libghostty exposes no OSC 133 mark, so agterm
+  has no prompt signal to offer instead. This is why the field says `foregroundShell` rather than naming
+  idleness. Recognized is `CommandRestore.knownShells` plus `$SHELL`; a shell outside both reports in
+  `foreground` like any program, and widening that set is NOT the fix — `paneForeground` is the one
+  classifier behind both the tree read and the restore capture, so it would change what restore re-runs too.
+  The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
+  login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
 - `backedByZmx` on a session is true only when every existing primary/split pane is currently backed.
   Primary/split entries in `surfaces` report their own Boolean; scratch and overlays omit it. Older servers
   omit both levels. There is no sidebar indicator.

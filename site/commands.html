@@ -486,6 +486,22 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span> (each pane's live foreground
                 argv, omitted at the shell prompt or for a setuid program like top/sudo),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foregroundShell</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForegroundShell</span> (the shell holding each
+                pane's foreground, as a basename like
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fish</span>; present exactly when that pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> is omitted because a shell holds it.
+                For a pane that exists, both omitted together means agterm could not read the process at all — check
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> before reading the split pair, since a
+                session with no split pane omits both simply because there is no pane.
+                This is <em>not</em> a claim that the pane sits at a prompt, and it is never permission to type into one: a
+                shell builtin such as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">read</span> runs inside the shell itself, so a pane
+                blocked waiting for input looks exactly like one at a prompt.
+                A shell agterm does not recognize — outside the known set and your
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$SHELL</span> — reports in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> like any other program),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">background</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (each pane's pinned

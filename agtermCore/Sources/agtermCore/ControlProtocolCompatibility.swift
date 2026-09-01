@@ -28,3 +28,28 @@ extension ControlSessionNode {
                   surfaces: surfaces, realized: realized)
     }
 }
+
+extension AppStore {
+    /// Keeps the pre-`foregroundShell` `controlTree` callable for agterm-linux, whose lookups answer with an
+    /// argv and nil for a shell. That shape cannot name the shell, so nodes built through here carry no
+    /// `foregroundShell`/`splitForegroundShell` — the "an older caller receives nil" contract above.
+    public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
+                            splitForeground: (Session) -> [String]? = { _ in nil },
+                            fontSize: (Session) -> Double? = { _ in nil },
+                            splitFontSize: (Session) -> Double? = { _ in nil },
+                            scratchFontSize: (Session) -> Double? = { _ in nil },
+                            quickVisible: () -> Bool? = { nil },
+                            zoomedSurface: () -> String? = { nil },
+                            pickPending: () -> String? = { nil },
+                            dashboardMembers: () -> [String]? = { nil },
+                            dashboardHighlighted: () -> String? = { nil },
+                            dashboardFontSize: () -> Double? = { nil },
+                            dashboardFontMode: () -> String? = { nil }, app: AppIdentity? = nil) -> ControlTree {
+        controlTree(paneForeground: { foreground($0).map { .program($0) } },
+                    splitPaneForeground: { splitForeground($0).map { .program($0) } },
+                    fontSize: fontSize, splitFontSize: splitFontSize, scratchFontSize: scratchFontSize,
+                    quickVisible: quickVisible, zoomedSurface: zoomedSurface, pickPending: pickPending,
+                    dashboardMembers: dashboardMembers, dashboardHighlighted: dashboardHighlighted,
+                    dashboardFontSize: dashboardFontSize, dashboardFontMode: dashboardFontMode, app: app)
+    }
+}

@@ -197,7 +197,11 @@ examples in **examples.md**; installable community workflows in **cookbook.md**.
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
 is at its shell prompt, or running a setuid/setgid program like `top` or `sudo` whose argv macOS won't
-expose) — i.e. what each pane is currently running — `restoreCommand`/`splitRestoreCommand` (each pane's
+expose) — i.e. what each pane is currently running — `foregroundShell`/`splitForegroundShell` (the shell
+holding each pane's foreground as a basename, present exactly when that pane's `foreground` is omitted
+because a shell holds it, so an EXISTING pane with neither is one whose process could not be read; check
+`hasSplit` before reading the split pair. Not a claim the pane is at a prompt and never permission to type —
+a builtin like `read` runs inside the shell), `restoreCommand`/`splitRestoreCommand` (each pane's
 persisted restore-command override set via `session restore` — the read side: omitted = auto-capture, `""`
 = pinned to nothing (a plain shell), a command = the shell line that runs on the next launch), `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set

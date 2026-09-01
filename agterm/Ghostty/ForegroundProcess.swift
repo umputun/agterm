@@ -28,11 +28,14 @@ enum ForegroundProcess {
             pid = view.foregroundPid()
         }
         guard let pid, let argv = procArgs(pid: pid) else { return nil }
-        return usable(argv, shellBasename: shellBasename)
+        guard case .program(let command) = CommandRestore.paneForeground(argv: argv, extra: shellBasename)
+        else { return nil }
+        return command
     }
 
-    /// The pane's foreground command for the `tree` read-side: as `command`, plus a descent into the
-    /// process group when the leader's argv is unreadable.
+    /// The pane's foreground state for the `tree` read-side: as `command`, plus a descent into the
+    /// process group when the leader's argv is unreadable, and it KEEPS the shell case that `command`
+    /// discards, so the tree can name the shell holding the foreground. Nil means unreadable.
     ///
     /// libghostty's `foreground_pid` is `tcgetpgrp`, a process GROUP id. An interactive shell puts each
     /// job in its own group, so the leader IS the program. A pane with no job-control shell (a
@@ -45,7 +48,7 @@ enum ForegroundProcess {
     /// pipeline that outlives its `sudo` does report — see `groupDescentCandidates`.
     @MainActor
     static func running(for view: GhosttySurfaceView, shellBasename: String?,
-                        zmxResolver: ZmxForegroundResolver? = nil) -> [String]? {
+                        zmxResolver: ZmxForegroundResolver? = nil) -> CommandRestore.PaneForeground? {
         let pgid: pid_t?
         if view.backedByZmx, let sessionName = view.zmxSessionName {
             pgid = zmxResolver?.foregroundPID(sessionName: sessionName)
@@ -53,21 +56,16 @@ enum ForegroundProcess {
             pgid = view.foregroundPid()
         }
         guard let pgid else { return nil }
-        if let argv = procArgs(pid: pgid) { return usable(argv, shellBasename: shellBasename) }
+        if let argv = procArgs(pid: pgid) {
+            return CommandRestore.paneForeground(argv: argv, extra: shellBasename)
+        }
         let members = CommandRestore.groupDescentCandidates(pgid: pgid, members: processGroup(pgid: pgid))
         for pid in members {
-            if let argv = procArgs(pid: pid) { return usable(argv, shellBasename: shellBasename) }
+            if let argv = procArgs(pid: pid) {
+                return CommandRestore.paneForeground(argv: argv, extra: shellBasename)
+            }
         }
         return nil
-    }
-
-    /// Normalize a raw argv and drop it when it is an idle shell: a shell is skipped ONLY at its prompt (no
-    /// script/command argument); a shell running a script (a `#!/bin/sh` wrapper like `cld`) is a real
-    /// foreground process to report.
-    private static func usable(_ argv: [String], shellBasename: String?) -> [String]? {
-        guard !argv.isEmpty else { return nil }
-        if CommandRestore.isIdleShell(argv: argv, extra: shellBasename) { return nil }
-        return CommandRestore.stripLoginDash(argv)
     }
 
     /// Fetch and parse a process's argv via `sysctl(KERN_PROCARGS2)`; nil on any syscall failure, which is

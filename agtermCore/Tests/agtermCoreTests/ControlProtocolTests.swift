@@ -652,6 +652,20 @@ struct ControlProtocolTests {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("foreground"), "a nil foreground must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("foregroundShell"), "a nil foregroundShell must be omitted from the JSON; got \(json)")
+    }
+
+    @Test func treeSessionNodeRoundTripsWithIdleShell() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         backedByZmx: nil, foregroundShell: "zsh", splitForegroundShell: "fish")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.foregroundShell == "zsh")
+        #expect(node?.splitForegroundShell == "fish")
+        #expect(node?.foreground == nil)
     }
 
     @Test func treeSessionNodeRoundTripsWithFontSizes() throws {

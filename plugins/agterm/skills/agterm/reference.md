@@ -174,6 +174,14 @@ Ephemeral like `unseen`: never persisted, so it is absent after a restart even f
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
+`foregroundShell`/`splitForegroundShell` (the shell HOLDING each pane's foreground as a basename — `zsh`,
+`fish` — present exactly when that pane's `foreground` is omitted because a shell holds it. For a pane that
+EXISTS, both omitted together means agterm could not read the process, which is how you tell "a shell has it"
+from "cannot tell"; check `hasSplit` before reading the split pair, since a session with no split omits both
+simply because there is no pane. It is NOT a claim the pane is at a prompt and NEVER permission to type: a
+builtin like `read` runs inside the shell, so a pane blocked on input is indistinguishable from an idle one.
+A shell agterm does not recognize, outside its known set and your `$SHELL`, reports in `foreground` like any
+other program),
 `restoreCommand`/`splitRestoreCommand` (each pane's persisted restore-command override — the read side of
 `session restore`: omitted = no override (auto-capture), `""` = pinned to nothing (a plain shell), a
 command string = the shell line that runs on the next launch; reported from persisted state, so a read

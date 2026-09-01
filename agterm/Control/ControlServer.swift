@@ -688,13 +688,13 @@ final class ControlServer {
         // dashboard read-backs: the keyboard-driven dashboard bypasses the command path, so a cache goes stale.
         let dashboard = DashboardControllerRegistry.shared.controller(for: windowID)
         return store.controlTree(
-            foreground: { session in
+            paneForeground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
                     ForegroundProcess.running(for: $0, shellBasename: shellBasename,
                                               zmxResolver: zmxForegroundResolver)
                 }
             },
-            splitForeground: { session in
+            splitPaneForeground: { session in
                 (session.splitSurface as? GhosttySurfaceView).flatMap {
                     ForegroundProcess.running(for: $0, shellBasename: shellBasename,
                                               zmxResolver: zmxForegroundResolver)

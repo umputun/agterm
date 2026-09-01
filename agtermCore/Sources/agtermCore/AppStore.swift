@@ -252,8 +252,10 @@ public final class AppStore {
 
     /// Projects this store's workspace/session model into the control-channel `tree` payload. Foreground
     /// command lookup is supplied by the host because live process inspection is platform-specific.
-    public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
-                            splitForeground: (Session) -> [String]? = { _ in nil },
+    /// `paneForeground` takes no default on purpose: the argv-shaped compatibility overload defaults every
+    /// closure, so one here would leave a bare `controlTree()` ambiguous between the two.
+    public func controlTree(paneForeground: (Session) -> CommandRestore.PaneForeground?,
+                            splitPaneForeground: (Session) -> CommandRestore.PaneForeground? = { _ in nil },
                             fontSize: (Session) -> Double? = { _ in nil },
                             splitFontSize: (Session) -> Double? = { _ in nil },
                             scratchFontSize: (Session) -> Double? = { _ in nil },
@@ -270,6 +272,9 @@ public final class AppStore {
         let activeWorkspaceID = currentWorkspaceID
         let nodes = workspaces.map { workspace in
             let sessions = workspace.sessions.map { session in
+                // each closure inspects live processes, so call it once and split the answer in two.
+                let mainPane = paneForeground(session)
+                let splitPane = splitPaneForeground(session)
                 let idle = session.agentIndicator.status == .idle
                 let status = idle ? nil : session.agentIndicator.status.rawValue
                 let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
@@ -296,7 +301,8 @@ public final class AppStore {
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
                                               ? true : nil,
-                                          foreground: foreground(session), splitForeground: splitForeground(session),
+                                          foreground: mainPane?.command, splitForeground: splitPane?.command,
+                                          foregroundShell: mainPane?.shellName, splitForegroundShell: splitPane?.shellName,
                                           // the PERSISTED overrides, not the transient pending payloads, so
                                           // a read after one fired still reports what stays pinned.
                                           restoreCommand: session.restoreCommand,

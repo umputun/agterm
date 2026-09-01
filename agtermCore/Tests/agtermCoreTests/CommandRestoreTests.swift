@@ -88,6 +88,41 @@ struct CommandRestoreTests {
         #expect(!CommandRestore.isIdleShell(argv: []))
     }
 
+    @Test func paneForegroundNamesTheForegroundShellAndStripsTheLoginDash() {
+        #expect(CommandRestore.paneForeground(argv: ["-zsh"]) == .foregroundShell("zsh"))
+        #expect(CommandRestore.paneForeground(argv: ["-/bin/zsh"]) == .foregroundShell("zsh"))
+        #expect(CommandRestore.paneForeground(argv: ["/bin/zsh"]) == .foregroundShell("zsh"))
+        #expect(CommandRestore.paneForeground(argv: ["zsh", "-i", "-l"]) == .foregroundShell("zsh"))
+        #expect(CommandRestore.paneForeground(argv: ["fish"]) == .foregroundShell("fish"))
+        #expect(CommandRestore.paneForeground(argv: ["-nu"], extra: "nu") == .foregroundShell("nu"))
+        #expect(CommandRestore.paneForeground(argv: []) == nil)
+    }
+
+    @Test func paneForegroundCannotSeeAShellBusyInsideItself() {
+        // pins the contract, not a defect: `read`, `vared` and a shell loop all run IN the shell, so argv is still
+        // the shell's and a pane blocked on input classifies exactly as one at a prompt. Callers are told
+        // foregroundShell is never permission to type; if this ever stops matching, that promise moved.
+        #expect(CommandRestore.paneForeground(argv: ["-zsh"]) == .foregroundShell("zsh"))
+        #expect(CommandRestore.paneForeground(argv: ["-bash"]) == .foregroundShell("bash"))
+    }
+
+    @Test func paneForegroundReportsProgramsIncludingUnrecognizedShells() {
+        #expect(CommandRestore.paneForeground(argv: ["htop"]) == .program(["htop"]))
+        #expect(CommandRestore.paneForeground(argv: ["-sleep", "5"]) == .program(["sleep", "5"]))
+        #expect(CommandRestore.paneForeground(argv: ["/bin/sh", "/usr/local/bin/cld"])
+            == .program(["/bin/sh", "/usr/local/bin/cld"]))
+        #expect(CommandRestore.paneForeground(argv: ["bash", "-c", "echo hi"]) == .program(["bash", "-c", "echo hi"]))
+        // a shell in neither knownShells nor $SHELL is not recognized, so it reports as any program does.
+        #expect(CommandRestore.paneForeground(argv: ["nu"]) == .program(["nu"]))
+    }
+
+    @Test func paneForegroundProjectsOneCasePerTreeField() {
+        #expect(CommandRestore.paneForeground(argv: ["-zsh"])?.command == nil)
+        #expect(CommandRestore.paneForeground(argv: ["-zsh"])?.shellName == "zsh")
+        #expect(CommandRestore.paneForeground(argv: ["htop"])?.command == ["htop"])
+        #expect(CommandRestore.paneForeground(argv: ["htop"])?.shellName == nil)
+    }
+
     @Test func shouldRestoreSkipsDenylistByBasename() {
         let denylist: Set<String> = ["vim", "tmux", "hx"]
         #expect(CommandRestore.shouldRestore(argv: ["ssh", "gate"], denylist: denylist))
