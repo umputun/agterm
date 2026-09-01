@@ -30,6 +30,11 @@ struct agtermApp: App {
     private let zmxForegroundResolver: ZmxForegroundResolver?
     private let captureOnExit: AppDelegate.ExitCapture?
 
+    /// The launch spawn queue and the routing of its grants, handed to both pane factories. It stays UNARMED
+    /// here, so every pane spawns on request exactly as it did before pacing existed; a launch restore is
+    /// what arms it.
+    private let spawnRegistry = SpawnRegistry(pacer: SpawnPacer())
+
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
 
@@ -109,13 +114,11 @@ struct agtermApp: App {
                     library: library,
                     makeSurface: {
                         Self.makeSurface(for: $0, store: $1,
-                                         env: surfaceEnv(for: $0, pane: .left), library: library,
-                                         zmxForegroundResolver: zmxForegroundResolver)
+                                         env: surfaceEnv(for: $0, pane: .left), services: surfaceServices)
                     },
                     makeSplitSurface: {
                         Self.makeSplitSurface(for: $0, store: $1,
-                                              env: surfaceEnv(for: $0, pane: .right), library: library,
-                                              zmxForegroundResolver: zmxForegroundResolver)
+                                              env: surfaceEnv(for: $0, pane: .right), services: surfaceServices)
                     },
                     makeOverlaySurface: {
                         Self.makeOverlaySurface(for: $0, store: $1, pane: $2, env: surfaceEnv(for: $0))
@@ -286,13 +289,23 @@ struct agtermApp: App {
         store.setFontSize(sessionID, size)
     }
 
+    /// App-owned services every pane factory wires into the view it builds.
+    struct SurfaceServices {
+        let library: WindowLibrary
+        let zmxForegroundResolver: ZmxForegroundResolver?
+        let spawnRegistry: SpawnRegistry?
+    }
+
+    private var surfaceServices: SurfaceServices {
+        SurfaceServices(library: library, zmxForegroundResolver: zmxForegroundResolver, spawnRegistry: spawnRegistry)
+    }
+
     /// Surface factory: a libghostty-backed view for the session, spawning a login shell in its initial working
     /// directory. On shell exit the view calls back to close the owning session in the store.
     /// Internal rather than private: `SurfaceFactorySeedTests` drives it to pin the launch-seed wiring.
     @MainActor
     static func makeSurface(for session: Session, store: AppStore, env: [String: String],
-                            library: WindowLibrary,
-                            zmxForegroundResolver: ZmxForegroundResolver?) -> GhosttySurfaceView {
+                            services: SurfaceServices) -> GhosttySurfaceView {
         // GhosttyApp resolved resources and latched restore mode before WindowLibrary assembled the launch
         // inventory, so every later factory reads the same process policy and GHOSTTY_RESOURCES_DIR.
         let ghostty = GhosttyApp.shared
@@ -307,17 +320,19 @@ struct agtermApp: App {
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
                                                 active: ghostty.launchRestoreMode, configuration: zmx)
-        if disposition.backedByZmx { zmxForegroundResolver?.noteLifecycleChange() }
+        if disposition.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
-        view.launchSeed = LaunchSeedProvider.pane(session: session, pane: .left, disposition: disposition,
-                                                  policy: Self.launchSeedPolicy(ghostty))
+        let provider = LaunchSeedProvider.pane(session: session, pane: .left, disposition: disposition,
+                                               policy: Self.launchSeedPolicy(ghostty))
+        view.launchSeed = provider
+        services.spawnRegistry?.enqueue(view, key: session.paneIdentity, provider: provider)
         view.session = session
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
+            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: services.library)
         }
         view.onFocusChange = { [weak view] focused in
             guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
@@ -337,7 +352,7 @@ struct agtermApp: App {
         view.onFontSizeChange = { [weak view] size in
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
-        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
+        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: services.library)
         return view
     }
 
@@ -458,8 +473,7 @@ struct agtermApp: App {
     /// Internal rather than private: `SurfaceFactorySeedTests` drives it to pin the launch-seed wiring.
     @MainActor
     static func makeSplitSurface(for session: Session, store: AppStore, env: [String: String],
-                                 library: WindowLibrary,
-                                 zmxForegroundResolver: ZmxForegroundResolver?) -> GhosttySurfaceView {
+                                 services: SurfaceServices) -> GhosttySurfaceView {
         // cwd is the persisted `initialSplitCwd` (a restored split keeps its own directory), else the session's
         // effectiveCwd. Font size matches the primary; env inherits the parent's window/workspace/session ids.
         // Creation, capture and override precedence matches the primary.
@@ -469,19 +483,21 @@ struct agtermApp: App {
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
                                                 active: ghostty.launchRestoreMode, configuration: zmx)
-        if disposition.backedByZmx { zmxForegroundResolver?.noteLifecycleChange() }
+        if disposition.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
         let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
-        view.launchSeed = LaunchSeedProvider.pane(session: session, pane: .right, disposition: disposition,
-                                                  policy: Self.launchSeedPolicy(ghostty))
+        let provider = LaunchSeedProvider.pane(session: session, pane: .right, disposition: disposition,
+                                               policy: Self.launchSeedPolicy(ghostty))
+        view.launchSeed = provider
+        services.spawnRegistry?.enqueue(view, key: session.splitPaneIdentity, provider: provider)
         view.session = session
         view.isSplitPane = true
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
+            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: services.library)
         }
         view.onFocusChange = { [weak view] focused in
             guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
@@ -499,7 +515,7 @@ struct agtermApp: App {
         view.onFontSizeChange = { [weak view] size in
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
-        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
+        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: services.library)
         return view
     }
 

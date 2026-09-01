@@ -359,4 +359,136 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
 
         XCTAssertNil(released)
     }
+
+    // MARK: - spawn permit
+
+    /// Every paced pane in these tests is DENIED its permit: a granted one at a real size would spawn the
+    /// user's login shell inside the test host, which is why the granted side is driven through
+    /// `requestSpawnPermit()` rather than through `createSurface()`.
+    private func makeQueuedPane(size: NSSize = NSSize(width: 240, height: 160))
+        -> (view: GhosttySurfaceView, pacer: SpawnPacer, key: UUID) {
+        let pacer = SpawnPacer()
+        let key = UUID()
+        pacer.arm(order: [key], burst: [])
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.useSpawnPacer(pacer, key: key)
+        view.launchSeed = LaunchSeedProvider(shouldPace: true) { _ in
+            XCTFail("a queued pane must not consume its seed before the permit")
+            return LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        }
+        view.setFrameSize(size)
+        return (view, pacer, key)
+    }
+
+    private func assertStillQueued(_ view: GhosttySurfaceView, _ path: String,
+                                   file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(view.isRealized, "\(path) spawned a surface without a permit", file: file, line: line)
+        XCTAssertTrue(view.awaitingSpawnPermit, "\(path) never reached the gate", file: file, line: line)
+        XCTAssertNotNil(view.launchSeed, "\(path) consumed the pending slots before the permit",
+                        file: file, line: line)
+    }
+
+    func testADeniedPaneCreatesNoSurfaceAndKeepsItsSeedArmed() {
+        let paned = makeQueuedPane()
+
+        paned.view.createSurface()
+
+        assertStillQueued(paned.view, "updateNSView")
+    }
+
+    func testTheWindowAttachEntryPathReachesTheGate() {
+        let paned = makeQueuedPane()
+
+        content.addSubview(paned.view)
+
+        assertStillQueued(paned.view, "viewDidMoveToWindow")
+        paned.view.removeFromSuperview()
+    }
+
+    func testTheDeferredSizeRetryEntryPathReachesTheGate() {
+        let paned = makeQueuedPane(size: .zero)
+
+        paned.view.createSurface()
+        XCTAssertFalse(paned.view.awaitingSpawnPermit, "a zero-size pane asks for nothing")
+        paned.view.setFrameSize(NSSize(width: 240, height: 160))
+
+        assertStillQueued(paned.view, "setFrameSize")
+    }
+
+    func testTheDisplayWakeRetryEntryPathReachesTheGate() async throws {
+        let paned = makeQueuedPane()
+
+        NotificationCenter.default.post(name: .agtermScreensDidWake, object: nil)
+
+        try await waitUntil("the wake retry reaches the gate") { paned.view.awaitingSpawnPermit }
+        assertStillQueued(paned.view, "retryCreationAfterWake")
+    }
+
+    /// A pane deferred on a zero size must not hold a token: the queue would spend an interval on a view
+    /// that still cannot spawn, and the token would be waiting for it when a later layout burst arrives.
+    func testAZeroSizedPaneAsksForNoPermit() {
+        let paned = makeQueuedPane(size: .zero)
+        var granted: [UUID] = []
+        paned.pacer.onGrant = { granted.append($0) }
+
+        paned.view.createSurface()
+        paned.pacer.expedite(paned.key)
+
+        XCTAssertFalse(paned.view.awaitingSpawnPermit)
+        XCTAssertTrue(granted.isEmpty, "expedite grants a READY key, so a token means the view had requested")
+    }
+
+    func testAGrantedKeyPassesTheGate() {
+        let paned = makeQueuedPane()
+
+        XCTAssertFalse(paned.view.requestSpawnPermit())
+        XCTAssertTrue(paned.view.awaitingSpawnPermit)
+        paned.pacer.expedite(paned.key)
+
+        XCTAssertTrue(paned.view.requestSpawnPermit())
+        XCTAssertFalse(paned.view.awaitingSpawnPermit)
+    }
+
+    func testAnUnarmedPacerGrantsOnRequest() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.useSpawnPacer(SpawnPacer(), key: UUID())
+
+        XCTAssertTrue(view.requestSpawnPermit())
+        XCTAssertFalse(view.awaitingSpawnPermit)
+    }
+
+    func testAPaneOutsideTheLaunchQueueNeedsNoPermit() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        XCTAssertTrue(view.requestSpawnPermit())
+    }
+
+    func testTeardownLeavesTheQueueAndTheLaterGrantDoesNothing() {
+        let paned = makeQueuedPane()
+        paned.view.createSurface()
+
+        paned.view.destroySurface()
+
+        XCTAssertTrue(paned.pacer.isPassthrough, "a torn-down pane must not hold the rest of the queue")
+        paned.view.unregisterDraggedTypes()
+        paned.view.createSurface()
+        XCTAssertTrue(paned.view.registeredDraggedTypes.isEmpty,
+                      "a grant reaching a torn-down pane must not re-enter creation")
+    }
+
+    /// The safety net for a queued pane dropped without a teardown: `deinit` is nonisolated, so it schedules
+    /// a key-only cancellation instead of touching the pacer inline.
+    func testDeinitCancelsTheQueuedPermit() async throws {
+        let pacer = SpawnPacer()
+        let key = UUID()
+        pacer.arm(order: [key], burst: [])
+        autoreleasepool {
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+            view.useSpawnPacer(pacer, key: key)
+            _ = view.requestSpawnPermit()
+        }
+        XCTAssertFalse(pacer.isPassthrough)
+
+        try await waitUntil("deinit cancels the permit") { pacer.isPassthrough }
+    }
 }

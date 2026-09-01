@@ -189,14 +189,45 @@ final class SurfaceFactorySeedTests: XCTestCase {
                        LaunchSeed(command: "echo split", initialInput: nil, waitAfterCommand: false))
     }
 
-    private func primarySurface(for session: Session) -> GhosttySurfaceView {
-        agtermApp.makeSurface(for: session, store: store, env: [:], library: library,
-                              zmxForegroundResolver: nil)
+    /// Arming expects every restored primary and shown right pane, before any provider exists to say which
+    /// of them replays a program. A pane that turns out to replay nothing must leave the queue at
+    /// construction, or the drain waits forever on a permit it never asks for.
+    func testAPrimaryThatReplaysNothingLeavesTheLaunchQueue() {
+        let session = restoredSession()
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        registry.pacer.arm(order: [session.paneIdentity], burst: [])
+
+        let view = primarySurface(for: session, registry: registry)
+
+        XCTAssertNil(registry.view(for: session.paneIdentity))
+        XCTAssertTrue(registry.pacer.isPassthrough)
+        XCTAssertTrue(view.requestSpawnPermit(), "an unpaced pane must not wait on a permit")
     }
 
-    private func splitSurface(for session: Session) -> GhosttySurfaceView {
-        agtermApp.makeSplitSurface(for: session, store: store, env: [:], library: library,
-                                   zmxForegroundResolver: nil)
+    func testASplitThatReplaysNothingLeavesTheLaunchQueue() throws {
+        let session = restoredSession()
+        session.splitPaneIdentity = UUID()
+        let splitKey = try XCTUnwrap(session.splitPaneIdentity)
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        registry.pacer.arm(order: [splitKey], burst: [])
+
+        let view = splitSurface(for: session, registry: registry)
+
+        XCTAssertNil(registry.view(for: splitKey))
+        XCTAssertTrue(registry.pacer.isPassthrough)
+        XCTAssertTrue(view.requestSpawnPermit(), "an unpaced pane must not wait on a permit")
+    }
+
+    private func primarySurface(for session: Session, registry: SpawnRegistry? = nil) -> GhosttySurfaceView {
+        agtermApp.makeSurface(for: session, store: store, env: [:], services: services(registry))
+    }
+
+    private func splitSurface(for session: Session, registry: SpawnRegistry? = nil) -> GhosttySurfaceView {
+        agtermApp.makeSplitSurface(for: session, store: store, env: [:], services: services(registry))
+    }
+
+    private func services(_ registry: SpawnRegistry?) -> agtermApp.SurfaceServices {
+        agtermApp.SurfaceServices(library: library, zmxForegroundResolver: nil, spawnRegistry: registry)
     }
 
     private func restoredSession() -> Session {

@@ -38,6 +38,17 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// factories, resolved once in `createSurface`, dropped on resolution and on teardown.
     var launchSeed: LaunchSeedProvider?
 
+    /// This pane's place in the launch spawn queue: the key the pacer grants and the pacer holding it, both
+    /// nil for every view that spawns on request (fresh panes, overlays, scratch, quick, HUD, and a restored
+    /// pane that replays nothing). The pacer is `weak` — the app owns it — and both are
+    /// `nonisolated(unsafe)` so the nonisolated `deinit` net can read them; written on the main actor only.
+    nonisolated(unsafe) private weak var spawnPacer: SpawnPacer?
+    nonisolated(unsafe) private var spawnKey: UUID?
+
+    /// Whether this pane is mounted and sized but still waiting for its spawn permit. `isRealized` already
+    /// reports it unrealized; this separates waiting on the pacer from waiting on a nonzero size.
+    private(set) var awaitingSpawnPermit = false
+
     /// Whether this surface grabs first responder as soon as it is created — the overlay's path: it mounts
     /// over an already-focused session, and `TerminalView.focusIfNeeded` grabs only when the view is in a
     /// window at the first `updateNSView`, which the deferred overlay surface is not, with no later update.
@@ -473,6 +484,11 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     deinit {
         // free directly, not via destroySurface(): deinit is nonisolated and can't call the @MainActor method,
         // while the nonisolated(unsafe) fields free with plain C calls. the net for a view dropped untorn.
+        // the queue exit is the exception: `cancel` is main-actor, so schedule it by KEY, capturing the pacer
+        // and the key but never `self`, which is already being freed.
+        if let pacer = spawnPacer, let key = spawnKey {
+            Task { @MainActor in pacer.cancel(key) }
+        }
         focusObservers.forEach { NotificationCenter.default.removeObserver($0) }
         if let surface { ghostty_surface_free(surface) }
         configCStrings.forEach { free($0) }
@@ -585,8 +601,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
             return
         }
         pendingSurfaceCreation = false
-        // after the size guard: a pane deferred on a zero size keeps its captured argv and restore pin
-        // armed on the session until it really spawns.
+        // after the size guard so a zero-size pane holds no pacer token; the pacer re-enters createSurface
+        // on grant. before the seed resolves so a denied pane keeps its captured argv and restore pin armed.
+        guard requestSpawnPermit() else { return }
         resolveLaunchSeed()
 
         var config = ghostty_surface_config_new()
@@ -692,6 +709,24 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         requestAutoFocus(in: window)
     }
 
+    /// Puts this pane in the launch spawn queue: `createSurface` asks `pacer` for `key` once the view is
+    /// sized, and spawns when the grant comes back through the registry. Called by the pane factories for a
+    /// restored pane that replays a program; every other view spawns on request.
+    func useSpawnPacer(_ pacer: SpawnPacer, key: UUID) {
+        spawnPacer = pacer
+        spawnKey = key
+    }
+
+    /// Whether the surface may spawn now. False leaves the pane queued and the caller returns: the pacer
+    /// re-enters `createSurface` on the grant, against the bounds the view has then, so this deferral is the
+    /// pacer's own rather than a next-tick hop racing layout. True for an unarmed or drained pacer, for a
+    /// key already granted, and for every view outside the queue, which is today's behavior unchanged.
+    func requestSpawnPermit() -> Bool {
+        guard let spawnPacer, let spawnKey else { return true }
+        awaitingSpawnPermit = !spawnPacer.request(spawnKey)
+        return !awaitingSpawnPermit
+    }
+
     /// Consumes the deferred launch seed on the first call, latching it into `command`/`initialInput`/
     /// `waitAfterCommand` and dropping the closure, so a creation retried after an unrelated failure never
     /// takes the session's pending slots twice. Returns the seed in force, which for a view built without a
@@ -790,6 +825,11 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     func destroySurface() {
         // a pane torn down before it spawned must not consume its pending slots; the session keeps them.
         launchSeed = nil
+        // leave the launch queue: a key nobody will ever request holds every pane behind it for an interval,
+        // and the grant that arrives anyway finds a destroyed view and no-ops.
+        if let spawnKey, let spawnPacer { spawnPacer.cancel(spawnKey) }
+        spawnKey = nil
+        awaitingSpawnPermit = false
         cancelPendingRendererVisibility()
         hiddenJanitorTask?.cancel()
         hiddenJanitorTask = nil
@@ -937,60 +977,5 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // the split re-parent invalidates the Metal drawable, and neither a same-grid set_size nor the tick
         // (dirty surfaces only) repaints it — force one or the re-hosted pane stays blank over a live buffer.
         ghostty_surface_refresh(surface)
-    }
-
-    // MARK: - First responder
-
-    override var acceptsFirstResponder: Bool { !viewOnly }
-
-    /// In view-only mode refuse hit-testing, so a click passes THROUGH to the SwiftUI cell overlay instead of
-    /// reaching `mouseDown` — AppKit routes clicks here regardless of `.allowsHitTesting(false)`.
-    ///
-    /// `deckVisible` deliberately does NOT gate this. Refusing while off-screen only promotes the hidden deck
-    /// entry's own container — its `NSSplitView` or pane view — to answer in its place, and that is not a
-    /// `GhosttySurfaceView`, so `ownsPointer` then declines across the whole visible terminal and it loses
-    /// every cursor shape it paints.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        viewOnly ? nil : super.hitTest(point)
-    }
-
-    /// Deliver the LEFT click that reactivates a background window straight to the surface (a "first mouse")
-    /// instead of letting AppKit swallow it to raise the window: otherwise clicking a pane of a two-pane split
-    /// from another window raises it but never runs `mouseDown`, leaving `splitFocused` on the previous pane.
-    /// The click then behaves like any in-window one — selects the pane AND is reported to the program — as in
-    /// Terminal.app/iTerm2/Ghostty. Gated to `.leftMouseDown`: a first-mouse right/middle click reaches
-    /// `rightMouseDown`/`otherMouseDown`, which forward to libghostty, where the default
-    /// `right-click-action = paste` would paste into a window you only meant to raise.
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        // with auto-hide-inactive-sidebars on, activating an inactive window expands its hidden sidebar and
-        // resizes THIS surface, so an activating click on the terminal would drag the still-held press into a
-        // phantom selection. in that mode the click only raises; a follow-up click selects once key.
-        if GhosttyApp.shared.autoHideSidebarInactiveWindows { return false }
-        return event?.type == .leftMouseDown
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        let result = super.becomeFirstResponder()
-        if result, let surface {
-            // report focused, gated on the window being key (a background window's surface stays hollow). push
-            // directly: `window.firstResponder` is not yet self inside this call, so `liveFocus` reads stale.
-            // onFocusChange (split-pane tracking) is independent of key state.
-            ghostty_surface_set_focus(surface, window?.isKeyWindow ?? false)
-            if !suppressFocusChange { onFocusChange?(true) }
-        }
-        // AX hears the move from here, NOT from `updateGhosttyFocus` (which this path deliberately skips):
-        // the post is deferred a run-loop turn precisely because `window.firstResponder` reads stale here.
-        postAccessibilityFocusChange()
-        return result
-    }
-
-    override func resignFirstResponder() -> Bool {
-        let result = super.resignFirstResponder()
-        if result, let surface {
-            ghostty_surface_set_focus(surface, false)
-            if !suppressFocusChange { onFocusChange?(false) }
-        }
-        postAccessibilityFocusChange() // see becomeFirstResponder; the deferred post coalesces the pair
-        return result
     }
 }

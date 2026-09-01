@@ -316,24 +316,26 @@ does not apply.
 **Files:**
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift`
 - Create: `agterm/Ghostty/SpawnRegistry.swift`
+- Create: `agterm/Ghostty/GhosttySurfaceView+FirstResponder.swift` (first-responder overrides moved verbatim to keep the view file under the 1000-line limit)
 - Modify: `agterm/agtermApp.swift` (owns the pacer and registry; injects them into every factory)
 - Create: `agtermTests/SpawnRegistryTests.swift`
 - Modify: `agtermTests/GhosttySurfaceViewTrackingTests.swift`
+- Modify: `agtermTests/SurfaceFactorySeedTests.swift`
 
-- [ ] write tests first: a denied view creates no surface and creates one on grant against current bounds;
+- [x] write tests first: a denied view creates no surface and creates one on grant against current bounds;
       every entry path reaches the same gate and a denied one creates nothing (`TerminalView.updateNSView`,
       `viewDidMoveToWindow`, the `setFrameSize` retry, the 1 s retry); a zero-size view consumes no token
       until it has a size
-- [ ] write tests first: destroy before grant cancels and the grant is a no-op; a deallocated view leaves
+- [x] write tests first: destroy before grant cancels and the grant is a no-op; a deallocated view leaves
       no strong reference in the registry and no callback fires; unarmed pacer keeps today's synchronous
       behavior (surface exists on return from `updateNSView`)
-- [ ] add `spawnKey`, `awaitingSpawnPermit` and the registry hookup to `GhosttySurfaceView`; request the
+- [x] add `spawnKey`, `awaitingSpawnPermit` and the registry hookup to `GhosttySurfaceView`; request the
       permit after the size guard and before the provider resolves the seed, and only when the provider's
       `shouldPace` is true; a `false` provider calls `discard` for its expected key at construction and the
       view spawns synchronously exactly as today
-- [ ] `SpawnRegistry` with weak views keyed by `SpawnKey`; `onGrant` routes through it
-- [ ] `destroySurface` cancels on the main actor; `deinit` schedules a key-only cancellation without `self`
-- [ ] run the touched test classes - must pass before Task 4
+- [x] `SpawnRegistry` with weak views keyed by `SpawnKey`; `onGrant` routes through it
+- [x] `destroySurface` cancels on the main actor; `deinit` schedules a key-only cancellation without `self`
+- [x] run the touched test classes - must pass before Task 4
 
 ### Task 4: Expedite and prioritize from selection, hosts and control
 
