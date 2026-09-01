@@ -86,6 +86,22 @@ Code startup issues 3 `ps` of which one is full-table; 69 sessions, 14 split, 83
   destroyed before its provider resolves deallocates; the `restore.clear` case uses a capture-only session;
   arm emits nothing until a key requests; late-mounting views still spawn `interval` apart from actual
   grants; a live pin-only pane is unpaced and keeps its pin pending
+- **owners** (verified in Task 6): Task 1 `SpawnPacerTests` - late wake, expedite resets the deadline, arm emits
+  nothing, an expected key that has not requested holds the timer. Task 2 `LaunchSeedTests` - rerun replay
+  paced, live survivor unpaced with missing/unknown/nil paced, plain shell/pin-none/denied capture unpaced,
+  live pin-only pane unpaced; `AppDelegateCaptureTests` - rerun and live unspawned clean quit keep the
+  capture, on-demand capture persists no armed copy; `ControlServerRestoreCaptureTests` - `restore.clear`
+  before the permit on a capture-only session; `GhosttySurfaceViewTrackingTests` - a view destroyed before
+  resolution deallocates. Task 3 `GhosttySurfaceViewTrackingTests` - every entry path reaches the gate (red
+  when the gate is deleted), zero-size retry holds no token, teardown and deinit leave no stale callback.
+  Task 4 `GhosttySurfaceViewTrackingTests` - repeated selection expedites once; `ControlServerSessionActionsTests`
+  - reads never realize, `session.type` left and right and `session.search` do, mutators expedite;
+  `ControlServerZmxTests` - `zmx kill` before the permit; `DashboardViewTests` - promotion keeps the rate.
+  Task 5 `SpawnRegistryTests` - N panes `interval` apart after the burst; `LaunchSpawnPlanTests` and
+  `SurfaceFactorySeedTests` - a hidden split is never armed; `ZmxClientTests` - an `err=` row is not a
+  survivor; `SpawnPacerTests` - a window mounting after the first drained spaces its follower. Claim and
+  reap before any grant has no unit test: the sink runs inside `WindowLibrary.init` and arm follows it in
+  `agtermApp.init`, verified by reading.
 
 ## Progress Tracking
 
@@ -242,8 +258,9 @@ after `WindowLibrary` returns, when model order is available, and hands the cont
 which set `shouldPace` when building each provider.
 
 **Read-back:** none new. `realized == false` and `agtermctl tree`'s `(not realized)` already describe a
-pane awaiting its permit; no command sets this state, so the read-back rule for state-setting commands
-does not apply.
+session whose MAIN pane awaits its permit; both read `session.surface` only, so a queued right pane shows
+nothing and an empty tree is no proof the queue drained. The pacer's `onDrain` debug log is the drain
+signal. No command sets this state, so the read-back rule for state-setting commands does not apply.
 
 ## What Goes Where
 
@@ -406,9 +423,10 @@ does not apply.
 - [x] run the touched test classes - must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify every required regression in Testing Strategy exists and names the task that owns it
-- [ ] run full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] confirm `realized` read-back and `agtermctl tree` `(not realized)` describe a queued pane correctly
+- [x] verify every required regression in Testing Strategy exists and names the task that owns it
+- [x] run full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] confirm `realized` read-back and `agtermctl tree` `(not realized)` describe a queued MAIN pane correctly
+      (a queued right pane shows nothing on either)
 
 ### Task 7: Update documentation
 - [ ] `.claude/rules/libghostty.md`: the permit and the late seed inside `createSurface()`, and why the
@@ -433,8 +451,9 @@ carrying a cheap captured command, at 80, 120 and 200 ms, recording peak CPU, ti
 the selected pane and time to full drain; record the numbers in the commit that changes the constant.
 
 **Manual verification, next NATURAL replaying launch only:** no simultaneous `ps` burst and no CPU pin
-(each paced Claude startup still runs its own `ps`), selected panes usable immediately, and
-`agtermctl tree` `(not realized)` shrinking to zero over the drain.
+(each paced Claude startup still runs its own `ps`), selected panes usable immediately, `agtermctl tree`
+`(not realized)` clearing from the queued main panes over the drain, and the `onDrain` debug log line as
+the proof the whole queue drained, since the tag never covers a right pane.
 
 **External:** none. Claude Code's own `ps aux` at startup is upstream behavior and out of scope.
 
