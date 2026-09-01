@@ -1779,4 +1779,56 @@ struct AppStorePaneTests {
         #expect(store.closeScratch(session.id) == true)
         #expect(session.agentIndicator.status == .blocked)
     }
+    // MARK: - launch pane drops
+
+    private func droppingStore() -> (AppStore, DropLog) {
+        let log = DropLog()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: nil,
+                             launchPaneDrop: { log.identities += $0 })
+        store.workspaces = [Workspace(name: "workspace 1", sessions: [])]
+        return (store, log)
+    }
+
+    private final class DropLog {
+        var identities: [UUID] = []
+    }
+
+    @Test func hidingAShownSplitDropsOnlyTheSplitKey() throws {
+        let (store, log) = droppingStore()
+        let session = Session(initialCwd: "/tmp")
+        store.workspaces[0].sessions.append(session)
+        store.setSplitVisibility(session.id, shown: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        store.setSplitVisibility(session.id, shown: false)
+
+        #expect(log.identities == [split])
+    }
+
+    @Test func hidingAHiddenSplitAndShowingOneDropNothing() {
+        let (store, log) = droppingStore()
+        let session = Session(initialCwd: "/tmp")
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        store.workspaces[0].sessions.append(session)
+
+        store.setSplitVisibility(session.id, shown: false)
+        store.setSplitVisibility(session.id, shown: true)
+
+        #expect(log.identities.isEmpty)
+    }
+
+    @Test func closingASplitDropsItsKey() throws {
+        let (store, log) = droppingStore()
+        let session = Session(initialCwd: "/tmp")
+        store.workspaces[0].sessions.append(session)
+        store.setSplitVisibility(session.id, shown: true)
+        let split = try #require(session.splitPaneIdentity)
+        log.identities = []
+
+        store.closeSplit(session.id)
+
+        #expect(log.identities == [split])
+    }
 }

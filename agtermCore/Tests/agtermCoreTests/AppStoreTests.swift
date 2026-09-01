@@ -1681,4 +1681,42 @@ extension AppStoreTests {
         #expect(store.workspaces[0].sessions.map(\.id) == [])
         #expect(store.workspaces[1].sessions.map(\.id) == [c.id, a.id, b.id, d.id])
     }
+    // MARK: - launch pane drops
+
+    private func droppingStore() -> (AppStore, DropLog) {
+        let log = DropLog()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: nil,
+                             launchPaneDrop: { log.identities += $0 })
+        return (store, log)
+    }
+
+    private final class DropLog {
+        var identities: [UUID] = []
+    }
+
+    @Test func closingASessionDropsBothItsPanesFromTheLaunchQueue() throws {
+        let (store, log) = droppingStore()
+        let session = Session(initialCwd: "/tmp")
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        let split = try #require(session.splitPaneIdentity)
+        store.workspaces = [Workspace(name: "workspace 1", sessions: [session])]
+
+        store.closeSession(session.id)
+
+        #expect(Set(log.identities) == [session.paneIdentity, split])
+    }
+
+    @Test func removingAWorkspaceDropsEverySessionsPanes() {
+        let (store, log) = droppingStore()
+        let first = Session(initialCwd: "/tmp")
+        let second = Session(initialCwd: "/tmp")
+        store.workspaces = [Workspace(name: "one", sessions: [first, second]), Workspace(name: "two", sessions: [])]
+
+        store.removeWorkspace(store.workspaces[0].id)
+
+        #expect(Set(log.identities) == [first.paneIdentity, second.paneIdentity])
+    }
 }

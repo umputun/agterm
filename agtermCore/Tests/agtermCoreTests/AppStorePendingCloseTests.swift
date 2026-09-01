@@ -6,8 +6,17 @@ import Testing
 /// so it must stay claimed for the whole grace window.
 @MainActor
 struct AppStorePendingCloseTests {
+    private final class DropLog {
+        var identities: [UUID] = []
+    }
+
+    private let drops = DropLog()
+
     private func store() -> AppStore {
-        let store = makeStore()
+        let log = drops
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: nil,
+                             launchPaneDrop: { log.identities += $0 })
         store.workspaces = [Workspace(name: "workspace 1", sessions: [])]
         return store
     }
@@ -76,5 +85,36 @@ struct AppStorePendingCloseTests {
         #expect(store.undoPendingClose())
         #expect(store.pendingCloseMembers().isEmpty)
         #expect(store.workspaces[0].sessions.map(\.id) == [session.id])
+    }
+    /// A soft close leaves the deck before its grace expires, so the pacer hears about it at the close, not
+    /// at finalization; undo brings the session back as a key outside the armed order.
+    @Test func softClosingASessionDropsBothItsPanesAtTheClose() throws {
+        let store = store()
+        let session = addSession(store, name: "build", split: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        #expect(store.softCloseSession(session.id))
+
+        #expect(Set(drops.identities) == [session.paneIdentity, split])
+    }
+
+    @Test func batchSoftCloseDropsEveryMembersPanes() {
+        let store = store()
+        let first = addSession(store, name: "one")
+        let second = addSession(store, name: "two")
+
+        #expect(store.softCloseSessions([first.id, second.id]))
+
+        #expect(Set(drops.identities) == [first.paneIdentity, second.paneIdentity])
+    }
+
+    @Test func softRemovingAWorkspaceDropsItsSessionsPanes() {
+        let store = store()
+        let session = addSession(store, name: "build")
+        store.workspaces.append(Workspace(name: "workspace 2", sessions: []))
+
+        #expect(store.softRemoveWorkspace(store.workspaces[0].id))
+
+        #expect(drops.identities == [session.paneIdentity])
     }
 }

@@ -89,6 +89,7 @@ extension AppStore {
         let wasActive = selectedSessionID == sessionID
         let session = workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(session, workspace: workspace.id)
+        dropLaunchPanes([session])
         // undo reinserts THIS object, so an override armed at bootstrap and never consumed would survive the
         // round trip and fire when the restored surface is built. drop it; the persisted pin is untouched
         // and still fires on the next launch.
@@ -158,6 +159,7 @@ extension AppStore {
                   workspaces[close.workspaceIndex].sessions[close.sessionIndex].id == close.session.id else { continue }
             _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
         }
+        dropLaunchPanes(closes.map(\.session))
         for close in closes {
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
@@ -198,6 +200,7 @@ extension AppStore {
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
         let visibleWorkspace = workspaces.remove(at: index)
+        dropLaunchPanes(visibleWorkspace.sessions)
         forgetFreshWorkspace(workspaceID)
         for session in visibleWorkspace.sessions { emitSessionClosed(session, workspace: visibleWorkspace.id) }
         if visibleWorkspace.sessions.isEmpty { scheduleTreeChanged() }

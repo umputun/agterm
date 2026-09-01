@@ -205,11 +205,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// first responder on attach, so without this gate one opened in a BACKGROUND session would steal the
     /// keyboard from the visible one; `TerminalView` sets it before `createSurface`, and going inactive
     /// mid-retry bails the loop. Inert for main/split panes, which take focus via `focusIfNeeded`.
-    var deckActive = true {
-        // the user is looking at this pane, so it goes to the front of a paced launch. a no-op when
-        // unpaced, granted or already expedited, so the per-update rewrites mint nothing.
-        didSet { if deckActive { expediteSpawn() } }
-    }
+    var deckActive = true
 
     /// Whether this surface's deck slot is on-screen (session selected, not hidden by a full overlay/scratch).
     /// Unlike `deckActive` it is not split-pane-focus-gated, so both panes of a visible split are
@@ -221,6 +217,11 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// the cursor. `didSet` (un)registers the drag types and the mouse-tracking area for the same reason.
     var deckVisible = true {
         didSet {
+            // the user is looking at this pane, so it goes to the front of a paced launch; a no-op when
+            // unpaced, granted or already expedited, so the per-update rewrites mint nothing. ahead of the
+            // equality guard because the first mount writes true over the default true. `deckActive` is
+            // split-focus-gated and would leave the other half of a shown split queued.
+            if deckVisible { expediteSpawn() }
             // `TerminalView` assigns this on every SwiftUI update pass, so skip the tracking-area teardown/
             // rebuild + drag re-registration unless the visibility actually flipped.
             guard deckVisible != oldValue else { return }

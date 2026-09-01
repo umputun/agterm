@@ -1475,4 +1475,36 @@ final class WindowLibraryTests {
         #expect(!library.saveAllOpenChecked())
     }
 
+    // MARK: - launch pane drops
+
+    private final class DropLog {
+        var identities: [UUID] = []
+    }
+
+    @Test func closingAWindowDropsEveryPaneItHeld() throws {
+        let log = DropLog()
+        let library = WindowLibrary(directory: directory, paneFinalizer: nil, launchPaneDrop: { log.identities += $0 })
+        let work = library.newWindow(name: "work")
+        let store = try #require(library.store(for: work.id))
+        let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        let expected = Set(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions)))
+
+        library.closeWindow(work.id)
+
+        #expect(Set(log.identities) == expected)
+        #expect(log.identities.contains(session.paneIdentity))
+    }
+
+    @Test func removingAWindowDropsEveryPaneItHeld() throws {
+        let log = DropLog()
+        let library = WindowLibrary(directory: directory, paneFinalizer: nil, launchPaneDrop: { log.identities += $0 })
+        let work = library.newWindow(name: "work")
+        let store = try #require(library.store(for: work.id))
+        let expected = Set(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions)))
+
+        library.removeWindow(work.id)
+
+        #expect(Set(log.identities) == expected)
+        #expect(!expected.isEmpty)
+    }
 }

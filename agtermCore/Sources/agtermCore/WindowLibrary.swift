@@ -87,6 +87,7 @@ public final class WindowLibrary {
     /// One bounded run-identified ring shared by every window store for this library/app lifetime.
     @ObservationIgnored private let controlEventRing: ControlEventRing
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
+    @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
     @ObservationIgnored private var launchInventoryComplete = true
     @ObservationIgnored private var treeEventDebouncers: [UUID: Debouncer]
@@ -126,12 +127,14 @@ public final class WindowLibrary {
     public init(directory: URL = PersistenceStore.defaultDirectory,
                 paneFinalizer: (([UUID]) -> Void)?,
                 launchInventorySink: ((Set<UUID>?) -> Void)? = nil,
+                launchPaneDrop: (([UUID]) -> Void)? = nil,
                 controlEventRing: ControlEventRing? = nil) {
         self.directory = directory
         self.recentClosedStore = RecentClosedStore(directory: directory)
         self.controlEventRing = controlEventRing ?? ControlEventRing()
         self.paneFinalizer = paneFinalizer
         self.launchInventorySink = launchInventorySink
+        self.launchPaneDrop = launchPaneDrop
         self.treeEventDebouncers = [:]
         self.stores = [:]
         self.windows = []
@@ -450,6 +453,7 @@ public final class WindowLibrary {
         // the undo window dies with the store, so a soft-closed session left pending here would keep its
         // daemon with nothing able to finalize it. `WindowAccessor` already does this, so it is idempotent.
         store.finalizeAllPendingCloses()
+        store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
         for workspace in store.workspaces {
             for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
         }
@@ -489,6 +493,7 @@ public final class WindowLibrary {
         stores[id]?.finalizeAllPendingCloses()
         finalizeWindowPanes(id)
         if let store = stores[id] {
+            store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
             for workspace in store.workspaces {
                 for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
             }
@@ -711,7 +716,8 @@ public final class WindowLibrary {
                     payload: draft.payload
                 ))
             },
-            paneFinalizer: paneFinalizer
+            paneFinalizer: paneFinalizer,
+            launchPaneDrop: launchPaneDrop
         )
     }
 

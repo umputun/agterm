@@ -36,7 +36,7 @@ public final class SpawnPacer {
     public var onDrain: (@MainActor (Duration) -> Void)?
 
     /// Minimum gap between paced grants.
-    public let interval: Duration
+    private let interval: Duration
 
     /// True when nothing is queued: unarmed, or every armed key granted, cancelled or discarded. In that
     /// state `request` answers synchronously, so a session created after the launch never waits.

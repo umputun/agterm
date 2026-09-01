@@ -144,7 +144,7 @@ Two promotion verbs, because one cannot serve both callers: `expedite(key)` gran
 and resets the deadline (selection, zoom, control commands that must realize now); `prioritize(keys)`
 reorders without releasing (a dashboard opening on many queued members). Once granted a key stays
 granted; a second expedite of a granted or already-expedited key is a no-op, so repeated
-`deckActive = true` writes cannot mint tokens.
+`deckVisible = true` writes cannot mint tokens.
 
 Scope: every launch that replays is paced, whichever mode replays it. In rerun mode every restored pane
 carrying a replay is queued. In live mode a `.wrapped` pane is queued only when its daemon is absent or
@@ -235,7 +235,8 @@ the closure to nil. Lifetime: the closure captures the session only through the 
 before spawning); `destroySurface` also nils it. A view built without a provider (overlay, scratch,
 quick, HUD, dashboard host) keeps its constructor values and never queues.
 
-**Preemption sources:** `deckActive = true` expedites the view's key; zoom host attach expedites; the
+**Preemption sources:** `deckVisible = true` expedites the view's key (not `deckActive`, which is
+split-focus-gated and would leave the other half of a shown split queued); zoom host attach expedites; the
 dashboard host prioritizes its members; the quick terminal and overlays are unarmed. Control commands
 that must realize their pane expedite before their existing bounded poll: `session.type` (left AND right;
 right keeps failing fast when there is no shown split), `session.search` open/update/next/prev, and the
@@ -256,6 +257,15 @@ or did not parse; an orphan-kill failure with a good list leaves it populated. T
 inventory sink captures it into a `LaunchSpawnContext` on `RestoredRuntime`; `agtermApp` arms the pacer
 after `WindowLibrary` returns, when model order is available, and hands the context to the factories,
 which set `shouldPace` when building each provider.
+
+**Model removal drops (revmux round 01):** the pacer grants only a ready head and never jumps an
+expected key, so a pane leaving the visible model before its window mounts would hold the queue forever.
+`AppStore` and `WindowLibrary` take a default-nil `launchPaneDrop` closure and call it with the pane
+identities on hard and soft session close, hard and soft workspace removal, a shown split hidden or
+closed, and a loaded window's close or delete; the app wires it to `SpawnPacer.discard`. A hidden split's
+identity rides along and is ignored as a key outside the order; a view torn down later drops again,
+harmlessly; undo or re-show returns as a key outside the order and spawns synchronously. Owners:
+`AppStoreTests`, `AppStorePendingCloseTests`, `AppStorePaneTests`, `WindowLibraryTests`.
 
 **Read-back:** none new. `realized == false` and `agtermctl tree`'s `(not realized)` already describe a
 session whose MAIN pane awaits its permit; both read `session.surface` only, so a queued right pane shows
@@ -357,8 +367,8 @@ signal. No command sets this state, so the read-back rule for state-setting comm
 ### Task 4: Expedite and prioritize from selection, hosts and control
 
 **Files:**
-- Modify: `agterm/Ghostty/GhosttySurfaceView.swift` (`deckActive` didSet)
-- Modify: `agterm/Views/DashboardView.swift` (the zoom host already sets `deckActive`, so it needs no change)
+- Modify: `agterm/Ghostty/GhosttySurfaceView.swift` (`deckVisible` didSet)
+- Modify: `agterm/Views/DashboardView.swift` (the zoom host already sets `deckVisible`, so it needs no change)
 - Create: `agtermTests/DashboardViewTests.swift`
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift` (`injectText` for `session.type`, `searchSession`,
   `pasteSession`, `selectAllSession`, `font`)
@@ -380,7 +390,7 @@ signal. No command sets this state, so the read-back rule for state-setting comm
 - [x] keep the expedite set to exactly `session.type`, `session.search`, `session.paste`, `session.selectall`
       and `font.inc/dec/reset`: the last four resolve a surface and answer `session not realized` when it
       has none (`ControlServer+SurfaceIO.swift:32-62`); the scratch pane is runtime-only and never queued
-- [x] wire `deckActive`, zoom host and dashboard host; wire the control expedites before each bounded poll
+- [x] wire `deckVisible`, zoom host and dashboard host; wire the control expedites before each bounded poll
 - [x] run the touched test classes - must pass before Task 5
 
 ### Task 5: Arm from the launch inventory with the survivor hint; drain to passthrough

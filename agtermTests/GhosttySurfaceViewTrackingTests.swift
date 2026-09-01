@@ -510,13 +510,13 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
     func testSelectingAQueuedPaneGrantsItBeforeTheQueueReachesIt() {
         let pair = queuedPair()
 
-        pair.views[1].deckActive = true
+        pair.views[1].deckVisible = true
 
         XCTAssertTrue(pair.views[1].requestSpawnPermit(), "the selected pane jumps the queue")
         XCTAssertFalse(pair.views[0].requestSpawnPermit(), "the head of the queue still waits its interval")
     }
 
-    /// The deck and the zoom host both set `deckActive` before the first `createSurface`, so a selected pane
+    /// The deck and the zoom host both set `deckVisible` before the first `createSurface`, so a selected pane
     /// is granted on that first request rather than one interval later.
     func testAPaneActiveBeforeItsFirstRequestIsGrantedOnThatRequest() {
         let pacer = SpawnPacer()
@@ -525,7 +525,7 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         view.useSpawnPacer(pacer, key: key)
 
-        view.deckActive = true
+        view.deckVisible = true
 
         XCTAssertTrue(view.requestSpawnPermit())
         XCTAssertFalse(view.awaitingSpawnPermit)
@@ -536,17 +536,37 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         var granted: [UUID] = []
         pair.pacer.onGrant = { granted.append($0) }
 
-        pair.views[0].deckActive = true
-        pair.views[0].deckActive = true
+        pair.views[0].deckVisible = true
+        pair.views[0].deckVisible = true
 
         XCTAssertEqual(granted, [pair.keys[0]])
         XCTAssertFalse(pair.views[1].requestSpawnPermit(), "a repeated selection must not release the next pane")
     }
 
+    /// Both panes of a shown split are on screen, so selecting the session brings both up, whichever half
+    /// holds split focus.
+    func testSelectingAShownSplitBringsUpBothPanes() {
+        let pair = queuedPair()
+
+        pair.views[0].deckVisible = true
+        pair.views[1].deckVisible = true
+
+        XCTAssertTrue(pair.views[0].requestSpawnPermit())
+        XCTAssertTrue(pair.views[1].requestSpawnPermit())
+    }
+
+    func testFocusAloneExpeditesNothing() {
+        let pair = queuedPair()
+
+        pair.views[1].deckActive = true
+
+        XCTAssertFalse(pair.views[1].requestSpawnPermit(), "focus is not visibility")
+    }
+
     func testAnUnpacedPaneIgnoresSelection() {
         let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
 
-        view.deckActive = true
+        view.deckVisible = true
 
         XCTAssertTrue(view.requestSpawnPermit())
     }

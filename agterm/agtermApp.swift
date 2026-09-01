@@ -36,7 +36,7 @@ struct agtermApp: App {
     /// The launch spawn queue and the routing of its grants, handed to both pane factories. It stays UNARMED
     /// here, so every pane spawns on request exactly as it did before pacing existed; a launch restore is
     /// what arms it.
-    private let spawnRegistry = SpawnRegistry(pacer: SpawnPacer())
+    private let spawnRegistry: SpawnRegistry
     private let launchContext: LaunchSpawnContext
 
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
@@ -67,7 +67,11 @@ struct agtermApp: App {
         // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
         // window and saves it, which a later read would see as evidence of an earlier launch.
         let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)
-        let restored = agtermApp.restoredRuntime(stateDirectory: stateDirectory)
+        // the pacer exists before the library so the model can discard the key of a pane it removes before
+        // that pane's window ever mounts; the registry that routes grants comes after
+        let pacer = SpawnPacer()
+        let restored = agtermApp.restoredRuntime(stateDirectory: stateDirectory, pacer: pacer)
+        spawnRegistry = SpawnRegistry(pacer: pacer)
         let library = restored.library
         zmxForegroundResolver = restored.foregroundResolver
         launchContext = restored.spawnContext
@@ -264,7 +268,7 @@ struct agtermApp: App {
 
     /// Builds the window library and zmx foreground resolver for the state directory. Bootstrap
     /// migrates/recovers persisted windows and inventories claimed pane identities before surfaces mount.
-    private static func restoredRuntime(stateDirectory: URL) -> RestoredRuntime {
+    private static func restoredRuntime(stateDirectory: URL, pacer: SpawnPacer) -> RestoredRuntime {
         guard !isHostedUnitTest else {
             return RestoredRuntime(library: WindowLibrary(directory: stateDirectory),
                                    foregroundResolver: nil, zmxClient: nil, spawnContext: LaunchSpawnContext())
@@ -287,6 +291,9 @@ struct agtermApp: App {
                 context.runningNames = client.reap(knownPaneIdentities: $0,
                                                    launchDecision: ghostty.restoreLaunchDecision).runningNames
                 foregroundResolver.noteLifecycleChange()
+            },
+            launchPaneDrop: { identities in
+                for identity in identities { pacer.discard(identity) }
             })
         return RestoredRuntime(library: library, foregroundResolver: foregroundResolver, zmxClient: client,
                                spawnContext: context)
