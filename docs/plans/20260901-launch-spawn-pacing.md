@@ -258,20 +258,20 @@ does not apply.
 - Create: `agtermCore/Sources/agtermCore/SpawnPacer.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/SpawnPacerTests.swift`
 
-- [ ] write tests first: arm with no requests emits nothing even after the clock advances; N keys requested
+- [x] write tests first: arm with no requests emits nothing even after the clock advances; N keys requested
       late, in any order, yield N grants each `interval` apart in expected order, timed from the actual
       grants; a burst key grants synchronously on its request, not on arm; the timer waits when the next
       expected key has not requested yet; a clock that wakes late by 3 intervals releases ONE grant;
       expedite grants one key now, consumes the token and resets the deadline; prioritize reorders and
       releases nothing; discarding an expected key that never requests cannot block drain
-- [ ] write tests first: double request is idempotent; expedite of a granted, unknown or already-expedited
+- [x] write tests first: double request is idempotent; expedite of a granted, unknown or already-expedited
       key is a no-op; cancel and discard drop without a grant and without catch-up; request after
       passthrough is synchronous; unarmed pacer grants synchronously
-- [ ] add `SpawnKey`, `SpawnPacer` with `request` (marks ready), `expedite`, `prioritize`, `cancel`,
+- [x] add `SpawnKey`, `SpawnPacer` with `request` (marks ready), `expedite`, `prioritize`, `cancel`,
       `discard`, `arm(order:burst:)` (records expectations only), `isPassthrough`, `interval`, injected
       clock/timer, and `onGrant`
-- [ ] leaky-bucket deadline computed from the actual previous grant; no catch-up
-- [ ] run `cd agtermCore && swift test --filter SpawnPacerTests` - must pass before Task 2
+- [x] leaky-bucket deadline computed from the actual previous grant; no catch-up
+- [x] run `cd agtermCore && swift test --filter SpawnPacerTests` - must pass before Task 2
 
 ### Task 2: Late seed: `LaunchSeedProvider` on the view, consumed at spawn
 
