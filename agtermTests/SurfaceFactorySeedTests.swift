@@ -4,6 +4,29 @@ import agtermCore
 
 @MainActor
 final class SurfaceFactorySeedTests: XCTestCase {
+    private var stateDir: URL!
+    private var store: AppStore!
+    private var library: WindowLibrary!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        await MainActor.run {
+            stateDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("agterm-surface-factory-seed-tests-\(UUID().uuidString)", isDirectory: true)
+            store = AppStore(persistence: PersistenceStore(directory: stateDir))
+            library = WindowLibrary(directory: stateDir)
+        }
+    }
+
+    override func tearDown() async throws {
+        await MainActor.run {
+            store = nil
+            library = nil
+            try? FileManager.default.removeItem(at: stateDir)
+        }
+        try await super.tearDown()
+    }
+
     private let configuration = ZmxSupport.Configuration(
         command: "'/bin/zmx' 'attach' 'agterm-pane'",
         environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
@@ -116,6 +139,64 @@ final class SurfaceFactorySeedTests: XCTestCase {
 
         XCTAssertEqual(seed.command, configuration.command)
         XCTAssertEqual(seed.initialInput, "ssh example\n")
+    }
+
+    // MARK: - factory wiring
+
+    // the hosted scheme's isolated state dir latches restore mode `.none`, so both factories build an
+    // ordinary disposition and a fresh pane's durable command is the seed in force.
+    func testPrimaryFactoryDefersItsSeedAndResolvesOnlyTheLeftSlot() {
+        let restored = restoredSession()
+        setPendingCapture(["primary"], on: .left, session: restored)
+        setPendingCapture(["split"], on: .right, session: restored)
+
+        let view = primarySurface(for: restored)
+
+        XCTAssertNotNil(view.launchSeed)
+        XCTAssertEqual(pendingCapture(on: .left, session: restored), ["primary"])
+        XCTAssertEqual(pendingCapture(on: .right, session: restored), ["split"])
+
+        view.resolveLaunchSeed()
+
+        XCTAssertNil(pendingCapture(on: .left, session: restored))
+        XCTAssertEqual(pendingCapture(on: .right, session: restored), ["split"])
+
+        let fresh = Session(initialCwd: "/tmp")
+        fresh.initialCommand = "echo primary"
+        XCTAssertEqual(primarySurface(for: fresh).resolveLaunchSeed(),
+                       LaunchSeed(command: "echo primary", initialInput: nil, waitAfterCommand: false))
+    }
+
+    func testSplitFactoryDefersItsSeedAndResolvesOnlyTheRightSlot() {
+        let restored = restoredSession()
+        setPendingCapture(["primary"], on: .left, session: restored)
+        setPendingCapture(["split"], on: .right, session: restored)
+
+        let view = splitSurface(for: restored)
+
+        XCTAssertNotNil(view.launchSeed)
+        XCTAssertEqual(pendingCapture(on: .left, session: restored), ["primary"])
+        XCTAssertEqual(pendingCapture(on: .right, session: restored), ["split"])
+
+        view.resolveLaunchSeed()
+
+        XCTAssertEqual(pendingCapture(on: .left, session: restored), ["primary"])
+        XCTAssertNil(pendingCapture(on: .right, session: restored))
+
+        let fresh = Session(initialCwd: "/tmp")
+        fresh.splitInitialCommand = "echo split"
+        XCTAssertEqual(splitSurface(for: fresh).resolveLaunchSeed(),
+                       LaunchSeed(command: "echo split", initialInput: nil, waitAfterCommand: false))
+    }
+
+    private func primarySurface(for session: Session) -> GhosttySurfaceView {
+        agtermApp.makeSurface(for: session, store: store, env: [:], library: library,
+                              zmxForegroundResolver: nil)
+    }
+
+    private func splitSurface(for session: Session) -> GhosttySurfaceView {
+        agtermApp.makeSplitSurface(for: session, store: store, env: [:], library: library,
+                                   zmxForegroundResolver: nil)
     }
 
     private func restoredSession() -> Session {

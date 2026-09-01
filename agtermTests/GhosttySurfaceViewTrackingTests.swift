@@ -286,4 +286,77 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertFalse(view.layer === stale, "a torn-down surface must not keep the layer libghostty installed")
         XCTAssertEqual(view.layer?.contentsScale, 3, "the replacement carries the last frame, so nothing blanks")
     }
+
+    // MARK: - launch seed
+
+    func testResolvingTheDeferredSeedRunsOnceAndLatchesTheValues() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        var resolves = 0
+        view.launchSeed = LaunchSeedProvider(shouldPace: true) { _ in
+            resolves += 1
+            return LaunchSeed(command: nil, initialInput: "npm run dev\n", waitAfterCommand: false)
+        }
+
+        let first = view.resolveLaunchSeed()
+        let second = view.resolveLaunchSeed()
+
+        XCTAssertEqual(resolves, 1, "a retried creation must not consume the pending slots a second time")
+        XCTAssertEqual(first, LaunchSeed(command: nil, initialInput: "npm run dev\n", waitAfterCommand: false))
+        XCTAssertEqual(second, first)
+        XCTAssertNil(view.launchSeed)
+    }
+
+    func testResolvingPassesTheSurfacesLivePaneRole() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.setPaneRole(.split)
+        var asked: StatusPane?
+        view.launchSeed = LaunchSeedProvider(shouldPace: true) { pane in
+            asked = pane
+            return LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        }
+
+        view.resolveLaunchSeed()
+
+        XCTAssertEqual(asked, .right)
+    }
+
+    func testAViewWithoutAProviderKeepsItsConstructorValues() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                      command: "revdiff", waitAfterCommand: true)
+
+        XCTAssertEqual(view.resolveLaunchSeed(),
+                       LaunchSeed(command: "revdiff", initialInput: nil, waitAfterCommand: true))
+        XCTAssertNil(view.launchSeed)
+    }
+
+    func testTeardownDropsTheUnresolvedProvider() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.launchSeed = LaunchSeedProvider(shouldPace: true) { _ in
+            XCTFail("a torn-down surface must not consume its pending slots")
+            return LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        }
+
+        view.destroySurface()
+
+        XCTAssertNil(view.launchSeed)
+    }
+
+    /// A provider holding its session strongly would close the `Session -> surface -> provider -> Session`
+    /// cycle and leak every pane destroyed before it spawned.
+    func testAViewDestroyedBeforeResolutionDeallocates() {
+        let session = Session(initialCwd: "/tmp")
+        weak var released: GhosttySurfaceView?
+        autoreleasepool {
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+            view.session = session
+            view.launchSeed = LaunchSeedProvider.pane(
+                session: session, pane: .left, disposition: .ordinary,
+                policy: .init(restoreEnabled: true, denylist: [], runningNames: nil))
+            session.surface = view
+            released = view
+            session.surface = nil
+        }
+
+        XCTAssertNil(released)
+    }
 }

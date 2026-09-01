@@ -318,6 +318,44 @@ final class AppDelegateCaptureTests: XCTestCase {
         XCTAssertNil(session.foregroundCommand)
     }
 
+    // a paced pane mounts its surface seconds before it spawns; the argv must survive a quit landing in that
+    // window, in both replaying modes.
+    func testCleanQuitKeepsTheArgvOfAMountedButUnspawnedPane() throws {
+        let rerun = Session(initialCwd: "/tmp")
+        rerun.surface = GhosttySurfaceView(workingDirectory: "/tmp")
+        rerun.pendingForegroundCommand = ["npm", "run", "dev"]
+
+        _ = AppDelegate.captureForegroundCommands(sessions: [rerun], preserveUnconsumedPending: true)
+
+        XCTAssertFalse(try XCTUnwrap(rerun.surface).isRealized)
+        XCTAssertEqual(rerun.foregroundCommand, ["npm", "run", "dev"])
+
+        let paneID = UUID()
+        let live = Session(initialCwd: "/tmp", paneIdentity: paneID)
+        live.surface = GhosttySurfaceView(
+            workingDirectory: "/tmp", env: ["AGTERM_PANE_ID": paneID.uuidString], backedByZmx: true)
+        live.pendingForegroundCommand = ["npm", "run", "dev"]
+        // the daemon this pane would attach to does not exist yet, which is why the pane is paced at all.
+        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+
+        _ = AppDelegate.captureForegroundCommands(
+            sessions: [live], zmxResolver: resolver, preserveUnconsumedPending: true)
+
+        XCTAssertEqual(live.foregroundCommand, ["npm", "run", "dev"])
+    }
+
+    func testOnDemandCapturePersistsNothingForAMountedButUnspawnedPane() {
+        let session = Session(initialCwd: "/tmp")
+        session.surface = GhosttySurfaceView(workingDirectory: "/tmp")
+        session.pendingForegroundCommand = ["npm", "run", "dev"]
+
+        let count = AppDelegate.captureForegroundCommands(sessions: [session])
+
+        XCTAssertEqual(count, 0)
+        XCTAssertNil(session.foregroundCommand)
+        XCTAssertEqual(session.pendingForegroundCommand, ["npm", "run", "dev"])
+    }
+
     // restore.capture persisting an unconsumed slot while it stays armed lets a later show replay it once and
     // a crash replay the persisted copy again.
     func testOnDemandCaptureLeavesAnUnconsumedPendingArgvOutOfTheSnapshot() {

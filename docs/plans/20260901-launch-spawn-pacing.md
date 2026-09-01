@@ -276,6 +276,10 @@ does not apply.
 ### Task 2: Late seed: `LaunchSeedProvider` on the view, consumed at spawn
 
 **Files:**
+- Create: `agterm/Ghostty/LaunchSeed.swift` (`LaunchSeed`, `LaunchSeedProvider`, `LaunchSeedPolicy` and the
+  classifier live here, not in `GhosttySurfaceView.swift`, which sits at 996 of the 1000-line cap and
+  Task 3 must still grow)
+- Create: `agtermTests/LaunchSeedTests.swift`
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift`
 - Modify: `agterm/agtermApp.swift` (both factories)
 - Modify: `agterm/AppDelegate.swift` (`captureForegroundCommands`, if the unconsumed-pending path needs a
@@ -283,29 +287,29 @@ does not apply.
 - Modify: `agtermTests/AppDelegateCaptureTests.swift`
 - Modify: `agtermTests/GhosttySurfaceViewTrackingTests.swift` (or the file owning surface lifecycle tests)
 
-- [ ] write tests first: a mounted-but-unspawned restored pane leaves `pendingForegroundCommand` and
+- [x] write tests first: a mounted-but-unspawned restored pane leaves `pendingForegroundCommand` and
       `pendingRestoreOverride` on the `Session`; a clean quit at that point persists the same argv for
       rerun AND live; `restore.clear` at that point on a CAPTURE-ONLY session (no `initialCommand`, no
       sticky pin, which the command deliberately leaves alone) makes the later spawn run a plain shell; an
       on-demand `restore.capture` at that point persists nothing for that pane
-- [ ] write tests first: spawning consumes each slot exactly once; a second `createSurface` after a failed
+- [x] write tests first: spawning consumes each slot exactly once; a second `createSurface` after a failed
       first attempt reuses the cached seed; a view without a provider keeps its constructor values; a view
       destroyed before its provider resolves deallocates and leaves the `Session` with no strong path back
       to it; the closure is nil after resolution and after `destroySurface`
-- [ ] write tests first, per disposition: `.ordinary` is true for a captured argv the denylist accepts,
+- [x] write tests first, per disposition: `.ordinary` is true for a captured argv the denylist accepts,
       a nonempty pending override and a restored durable `initialCommand`, false for pin-none, a
       denylist-refused capture and no command; `.wrapped` is true for an eligible capture and for a
       durable `initialCommand`, false for a pane carrying ONLY a sticky pin (which stays pending), and
       false when its daemon name is running; `.fallback` is false and resolving it leaves pin and capture
       pending; explicit `none` is false and resolving it consumes and drops both slots, spawning a plain
       shell, so a later mode change to rerun replays nothing; computing `shouldPace` consumes no slot
-- [ ] add `LaunchSeed`, `LaunchSeedProvider { shouldPace, resolve }`, the provider property and its one-shot
+- [x] add `LaunchSeed`, `LaunchSeedProvider { shouldPace, resolve }`, the provider property and its one-shot
       cache to `GhosttySurfaceView`; `createSurface()` resolves it immediately before
       `ghostty_surface_config_new`; the closure captures the session weakly and is nilled after resolution
       and in `destroySurface`
-- [ ] move each factory's `.wrapped` / `.ordinary` / `.fallback` seed computation into the provider it
+- [x] move each factory's `.wrapped` / `.ordinary` / `.fallback` seed computation into the provider it
       passes to the view; construction no longer calls `takePending*`
-- [ ] run the touched test classes with `-only-testing:` - must pass before Task 3
+- [x] run the touched test classes with `-only-testing:` - must pass before Task 3
 
 ### Task 3: Gate `createSurface()` on the pacer with weak grant routing
 

@@ -20,16 +20,23 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
 
     /// The command run as the surface's process instead of the login shell, nil for the login shell; read in
     /// `createSurface`. The overlay uses it to run one program (e.g. a TUI) whose exit closes the overlay.
-    private let command: String?
+    /// The three seed fields are `nonisolated(unsafe)` for `shouldCloseOnChildExitAction`, read from a C
+    /// callback: `resolveLaunchSeed` writes them on the main actor before the surface exists.
+    nonisolated(unsafe) private var command: String?
 
     /// Text fed to the pty as if typed at startup (libghostty `initial_input`), nil for none.
     /// Restore-running-command uses it: the captured foreground command line + `\n`, so a restored login
     /// shell re-runs it and returns to a prompt on exit — UNLIKE `command`, which replaces the shell.
-    private let initialInput: String?
+    nonisolated(unsafe) private var initialInput: String?
 
     /// Whether a `command`'s exit leaves the surface open on libghostty's "press any key to close" prompt
     /// instead of closing immediately. Only meaningful with `command`.
-    private let waitAfterCommand: Bool
+    nonisolated(unsafe) private var waitAfterCommand: Bool
+
+    /// Defers this pane's seed to spawn time; nil for a view built with explicit constructor values (the
+    /// overlay, scratch, quick terminal and HUD, none of which restore anything). Set by the pane
+    /// factories, resolved once in `createSurface`, dropped on resolution and on teardown.
+    var launchSeed: LaunchSeedProvider?
 
     /// Whether this surface grabs first responder as soon as it is created — the overlay's path: it mounts
     /// over an already-focused session, and `TerminalView.focusIfNeeded` grabs only when the view is in a
@@ -546,7 +553,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// Whether a child-exit should close this surface immediately, suppressing ghostty's "press any key"
     /// prompt. True only for a command surface (the overlay) that did NOT opt into the wait prompt, which
     /// instead closes via `close_surface_cb` after the keypress. `nonisolated` so the C action callback reads
-    /// it with no main-actor hop — both backing fields are `let`s.
+    /// it with no main-actor hop.
     nonisolated var shouldCloseOnChildExitAction: Bool { command != nil && !waitAfterCommand }
 
     func reportFontSize() {
@@ -578,6 +585,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
             return
         }
         pendingSurfaceCreation = false
+        // after the size guard: a pane deferred on a zero size keeps its captured argv and restore pin
+        // armed on the session until it really spawns.
+        resolveLaunchSeed()
 
         var config = ghostty_surface_config_new()
         config.platform_tag = GHOSTTY_PLATFORM_MACOS
@@ -682,6 +692,23 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         requestAutoFocus(in: window)
     }
 
+    /// Consumes the deferred launch seed on the first call, latching it into `command`/`initialInput`/
+    /// `waitAfterCommand` and dropping the closure, so a creation retried after an unrelated failure never
+    /// takes the session's pending slots twice. Returns the seed in force, which for a view built without a
+    /// provider is its constructor values.
+    @discardableResult
+    func resolveLaunchSeed() -> LaunchSeed {
+        guard let provider = launchSeed else {
+            return LaunchSeed(command: command, initialInput: initialInput, waitAfterCommand: waitAfterCommand)
+        }
+        launchSeed = nil
+        let seed = provider.resolve(isSplitPane ? .right : .left)
+        command = seed.command
+        initialInput = seed.initialInput
+        waitAfterCommand = seed.waitAfterCommand
+        return seed
+    }
+
     /// Marks the surface focused in libghostty after a retried `makeFirstResponder` (the overlay/reparent
     /// grabs). By now `window.firstResponder === self`, so `updateGhosttyFocus` reports the true state.
     private func notifySurfaceFocused() {
@@ -761,6 +788,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     }
 
     func destroySurface() {
+        // a pane torn down before it spawned must not consume its pending slots; the session keeps them.
+        launchSeed = nil
         cancelPendingRendererVisibility()
         hiddenJanitorTask?.cancel()
         hiddenJanitorTask = nil

@@ -144,6 +144,25 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
         XCTAssertTrue(library.allOpenSessions().allSatisfy { $0.foregroundCommand == nil })
     }
 
+    /// Pacing widens the gap between a pane mounting and spawning from milliseconds to seconds, so the
+    /// disarm has to reach a seed that has not resolved yet. A capture-only session, since the command
+    /// deliberately leaves the sticky pins alone.
+    func testClearBeforeTheSeedResolvesLeavesAPlainShell() throws {
+        let session = try XCTUnwrap(library.allOpenSessions().first)
+        session.wasRestored = true
+        session.pendingForegroundCommand = ["npm", "run", "dev"]
+        let provider = LaunchSeedProvider.pane(
+            session: session, pane: .left, disposition: .ordinary,
+            policy: .init(restoreEnabled: true, denylist: [], runningNames: nil))
+        XCTAssertTrue(provider.shouldPace)
+
+        XCTAssertTrue(server.clearRestoreCommands().ok)
+
+        let seed = provider.resolve(.left)
+        XCTAssertNil(seed.command)
+        XCTAssertNil(seed.initialInput)
+    }
+
     private func makeServer(launchMode: RestoreMode,
                             zmxForegroundResolver: ZmxForegroundResolver? = nil) -> ControlServer {
         ControlServer(
