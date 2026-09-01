@@ -283,6 +283,50 @@ struct SpawnPacerTests {
         #expect(pacer.isPassthrough)
     }
 
+    @Test func drainFiresOnceWithTheTimeSinceArm() {
+        let clock = FakeSpawnClock()
+        let log = GrantLog()
+        let pacer = makePacer(clock: clock, log: log)
+        var drains: [Duration] = []
+        pacer.onDrain = { drains.append($0) }
+        let keys = [UUID(), UUID()]
+        pacer.arm(order: keys, burst: [keys[0]])
+
+        #expect(pacer.request(keys[0]))
+        #expect(drains.isEmpty)
+        clock.advance(interval)
+        pacer.discard(keys[1])
+
+        #expect(drains == [interval])
+        #expect(pacer.isPassthrough)
+        pacer.cancel(keys[0])
+        #expect(drains.count == 1, "a drop after the drain must not report again")
+    }
+
+    /// A second window mounting after the first drained: its selected pane is burst and spawns on request,
+    /// and its follower is spaced from that grant, never released together with it.
+    @Test func aWindowMountingAfterTheFirstDrainedStillSpacesItsFollower() throws {
+        let clock = FakeSpawnClock()
+        let log = GrantLog()
+        let pacer = makePacer(clock: clock, log: log)
+        let first = [UUID(), UUID()]
+        let second = [UUID(), UUID()]
+        pacer.arm(order: first + second, burst: [first[0], second[0]])
+        #expect(pacer.request(first[0]))
+        #expect(!pacer.request(first[1]))
+        clock.fireNextWake()
+        try #require(log.keys == [first[0], first[1]])
+        clock.advance(interval * 3)
+
+        #expect(pacer.request(second[0]))
+        #expect(!pacer.request(second[1]))
+        clock.fireNextWake()
+
+        try #require(log.keys == [first[0], first[1], second[0], second[1]])
+        #expect(log.instants[3] - log.instants[2] == interval)
+        #expect(pacer.isPassthrough)
+    }
+
     private func makePacer(clock: FakeSpawnClock, log: GrantLog) -> SpawnPacer {
         let pacer = SpawnPacer(interval: interval, now: { clock.now }, schedule: { clock.schedule($0, $1) })
         pacer.onGrant = { key in log.record(key, at: clock.now) }

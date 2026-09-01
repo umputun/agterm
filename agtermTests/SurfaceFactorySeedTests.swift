@@ -226,8 +226,36 @@ final class SurfaceFactorySeedTests: XCTestCase {
         agtermApp.makeSplitSurface(for: session, store: store, env: [:], services: services(registry))
     }
 
+    /// A restored split hidden at quit is not armed: shown later it attaches through the unarmed path,
+    /// its capture still waiting for that spawn, and the queue drains without it.
+    func testAHiddenSplitShownLaterAttachesUnarmedWithItsCaptureIntact() {
+        let session = restoredSession()
+        session.splitPaneIdentity = UUID()
+        session.hasSplit = true
+        setPendingCapture(["split"], on: .right, session: session)
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        registry.pacer.arm(order: [session.paneIdentity], burst: [])
+
+        let view = splitSurface(for: session, registry: registry)
+
+        XCTAssertTrue(view.requestSpawnPermit(), "a key outside the armed order never waits")
+        XCTAssertNotNil(view.launchSeed)
+        XCTAssertEqual(pendingCapture(on: .right, session: session), ["split"])
+        XCTAssertFalse(registry.pacer.isPassthrough, "the armed primary still waits its turn")
+    }
+
+    func testThePolicyCarriesTheReapsRunningNames() {
+        let context = agtermApp.LaunchSpawnContext()
+        context.runningNames = ["agterm-alive"]
+
+        XCTAssertEqual(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: context).runningNames, ["agterm-alive"])
+        XCTAssertNil(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: agtermApp.LaunchSpawnContext()).runningNames,
+                     "a skipped or failed list paces every replaying live pane")
+    }
+
     private func services(_ registry: SpawnRegistry?) -> agtermApp.SurfaceServices {
-        agtermApp.SurfaceServices(library: library, zmxForegroundResolver: nil, spawnRegistry: registry)
+        agtermApp.SurfaceServices(library: library, zmxForegroundResolver: nil, spawnRegistry: registry,
+                                  launchContext: agtermApp.LaunchSpawnContext())
     }
 
     private func restoredSession() -> Session {

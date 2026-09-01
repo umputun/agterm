@@ -102,6 +102,78 @@ final class SpawnRegistryTests: XCTestCase {
         XCTAssertNil(registry.view(for: key))
     }
 
+    // MARK: - launch pipeline
+
+    /// The launch as the app runs it, minus the factories: arm from the plan, queue each pane, request as
+    /// each mounts. The selected pane spawns on its request; the rest follow one interval apart, in model
+    /// order; a session created after the drain never waits.
+    func testALaunchSpawnsTheSelectedPaneNowAndTheRestOneIntervalApart() throws {
+        let sessions = (0..<3).map { _ in restoredSession() }
+        let plan = LaunchSpawnPlan.make(windows: [
+            LaunchSpawnWindow(selectedSessionID: sessions[1].id, sessions: sessions),
+        ])
+        let interval = Duration.milliseconds(120)
+        var clock = ContinuousClock().now
+        var wakes: [@MainActor () -> Void] = []
+        let pacer = SpawnPacer(interval: interval, now: { clock }, schedule: { _, body in wakes.append(body) })
+        let paced = SpawnRegistry(pacer: pacer)
+        var grants: [(key: UUID, at: ContinuousClock.Instant)] = []
+        let route = pacer.onGrant
+        pacer.onGrant = { grants.append(($0, clock)); route?($0) }
+        pacer.arm(order: plan.order, burst: plan.burst)
+        let views = sessions.map { session -> GhosttySurfaceView in
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+            paced.enqueue(view, key: session.paneIdentity, provider: replaying())
+            return view
+        }
+
+        XCTAssertFalse(views[0].requestSpawnPermit())
+        XCTAssertTrue(views[1].requestSpawnPermit(), "the selected pane spawns as soon as it asks")
+        XCTAssertFalse(views[2].requestSpawnPermit())
+        var fired = 0
+        while !wakes.isEmpty, fired < 10 {
+            clock += interval
+            wakes.removeFirst()()
+            fired += 1
+        }
+
+        XCTAssertEqual(grants.map(\.key),
+                       [sessions[1].paneIdentity, sessions[0].paneIdentity, sessions[2].paneIdentity])
+        let times = try XCTUnwrap(grants.count == 3 ? grants.map(\.at) : nil, "every pane must be granted")
+        XCTAssertEqual(times[1] - times[0], interval)
+        XCTAssertEqual(times[2] - times[1], interval)
+        XCTAssertTrue(pacer.isPassthrough)
+        let late = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        paced.enqueue(late, key: UUID(), provider: replaying())
+        XCTAssertTrue(late.requestSpawnPermit(), "after the drain a new session never waits")
+    }
+
+    func testAOneSessionLaunchSpawnsSynchronously() {
+        let session = restoredSession()
+        let plan = LaunchSpawnPlan.make(windows: [
+            LaunchSpawnWindow(selectedSessionID: session.id, sessions: [session]),
+        ])
+        let paced = SpawnRegistry(pacer: SpawnPacer())
+        paced.pacer.arm(order: plan.order, burst: plan.burst)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        paced.enqueue(view, key: session.paneIdentity, provider: replaying())
+
+        XCTAssertTrue(view.requestSpawnPermit())
+        XCTAssertTrue(paced.pacer.isPassthrough)
+    }
+
+    private func restoredSession() -> Session {
+        let session = Session(initialCwd: "/tmp")
+        session.wasRestored = true
+        return session
+    }
+
+    private func replaying() -> LaunchSeedProvider {
+        LaunchSeedProvider(shouldPace: true) { _ in
+            LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        }
+    }
+
     private func enqueue(_ view: GhosttySurfaceView) {
         registry.enqueue(view, key: key, provider: LaunchSeedProvider(shouldPace: true) { _ in
             LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)

@@ -31,6 +31,10 @@ public final class SpawnPacer {
     /// Called with each granted key so the caller can spawn that pane's surface.
     public var onGrant: (@MainActor (UUID) -> Void)?
 
+    /// Called once per launch when the last armed key is granted, cancelled or discarded, with the time
+    /// since `arm`. Diagnostics only: the pacer is already passthrough when it fires.
+    public var onDrain: (@MainActor (Duration) -> Void)?
+
     /// Minimum gap between paced grants.
     public let interval: Duration
 
@@ -51,6 +55,7 @@ public final class SpawnPacer {
     private var states: [UUID: State] = [:]
     private var immediate: Set<UUID> = []
     private var lastGrant: ContinuousClock.Instant?
+    private var armedAt: ContinuousClock.Instant?
     private var wakeScheduled = false
 
     /// Creates a pacer driven by the system clock.
@@ -75,6 +80,7 @@ public final class SpawnPacer {
         immediate = burst.intersection(order)
         lastGrant = nil
         wakeScheduled = false
+        armedAt = now()
     }
 
     /// Marks `key` ready to spawn and answers whether it may spawn now. False leaves it queued for a later
@@ -126,6 +132,14 @@ public final class SpawnPacer {
         pending.removeAll { $0 == key }
         immediate.remove(key)
         scheduleWake()
+        noteDrain()
+    }
+
+    private func noteDrain() {
+        guard armed, pending.isEmpty, let armedAt else { return }
+        armed = false
+        self.armedAt = nil
+        onDrain?(now() - armedAt)
     }
 
     private func grant(_ key: UUID) {
@@ -135,6 +149,7 @@ public final class SpawnPacer {
         lastGrant = now()
         onGrant?(key)
         scheduleWake()
+        noteDrain()
     }
 
     private func scheduleWake() {

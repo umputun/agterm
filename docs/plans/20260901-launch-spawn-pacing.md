@@ -374,31 +374,36 @@ does not apply.
   returns; classification in the factories' providers)
 - Modify: `agtermTests/ZmxClientTests.swift` (owns `reap`: the `ReapOutcome` `err=` row and kill-result
   cases live here)
-- Modify: `agtermTests/ZmxLaunchTests.swift` (disposition classification) and the launch/restore test file
-  that owns bootstrap
+- Create: `agtermCore/Sources/agtermCore/LaunchSpawnPlan.swift` (model order and burst)
+- Create: `agtermCore/Tests/agtermCoreTests/LaunchSpawnPlanTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/SpawnPacer.swift` (`onDrain`)
+- Modify: `agtermCore/Tests/agtermCoreTests/SpawnPacerTests.swift` (drain; late second window)
+- Modify: `agtermTests/SpawnRegistryTests.swift` (launch pipeline with injected clock)
+- Modify: `agtermTests/SurfaceFactorySeedTests.swift` (hidden split; policy carries the reap's names)
+- Disposition classification was pinned by `LaunchSeedTests` in Task 2
 
-- [ ] write tests first (injected clock, spawn recorder): a launch restore of N replaying sessions records
+- [x] write tests first (injected clock, spawn recorder): a launch restore of N replaying sessions records
       N spawns each `interval` apart and goes red when the gate is removed; a session created after drain
       spawns synchronously; a one-session launch spawns synchronously
-- [ ] write tests first: live survivor (name running) spawns unpaced while missing and unknown names are
+- [x] write tests first: live survivor (name running) spawns unpaced while missing and unknown names are
       paced; an `err=` list row is paced; a nil running set paces every replay-bearing live pane; an
       orphan-kill failure with a good list does not pace survivors; rerun-mode replay is paced
-- [ ] write tests first: a plain restored shell, a pin-none pane and a denylist-refused capture are never
+- [x] write tests first: a plain restored shell, a pin-none pane and a denylist-refused capture are never
       queued and spawn synchronously; a restored durable `initialCommand` is paced
-- [ ] write tests first: a restored hidden split is not armed and drain completes without it; showing it
+- [x] write tests first: a restored hidden split is not armed and drain completes without it; showing it
       later attaches through the normal unarmed path with its pending state intact; reap and claim run
       before any grant
-- [ ] `reap` returns `ReapOutcome { runningNames: Set<String>?, killedAll: Bool }` built from records with
+- [x] `reap` returns `ReapOutcome { runningNames: Set<String>?, killedAll: Bool }` built from records with
       `clients != nil`; the inventory sink stores it on `LaunchSpawnContext`
-- [ ] arm from the model BEFORE any window mounts, recording expectations only: every open window's
+- [x] arm from the model BEFORE any window mounts, recording expectations only: every open window's
       selected session's on-screen panes as the burst set, then remaining windows, sessions, primaries and
       shown right panes; never expect fresh or runtime splits, scratch, overlays or quick
-- [ ] write tests first: with arm done and no view mounted, advancing the clock records no spawn; views
+- [x] write tests first: with arm done and no view mounted, advancing the clock records no spawn; views
       that mount one tick late still record spawns `interval` apart from the first actual grant; a
       multi-window launch whose second window mounts after every ready key of the first has been granted
       (not pacer passthrough, which waits on every expected key) records no simultaneous spawns
-- [ ] passthrough once every armed key is granted, cancelled or discarded; log the drain duration at debug
-- [ ] run the touched test classes - must pass before Task 6
+- [x] passthrough once every armed key is granted, cancelled or discarded; log the drain duration at debug
+- [x] run the touched test classes - must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify every required regression in Testing Strategy exists and names the task that owns it

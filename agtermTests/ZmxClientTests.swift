@@ -102,7 +102,7 @@ final class ZmxClientTests: XCTestCase {
 
         XCTAssertTrue(client.reap(
             knownPaneIdentities: [known],
-            launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil)))
+            launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil)).killedAll)
         XCTAssertEqual(invocations.map(\.arguments), [["list"], ["kill", orphan, "--force"]])
         XCTAssertEqual(invocations.map(\.timeout), [1.5, 1.5])
         XCTAssertEqual(invocations[0].environment["ZMX_DIR"], "/tmp/zmx-dir")
@@ -118,7 +118,7 @@ final class ZmxClientTests: XCTestCase {
 
         XCTAssertTrue(client.reap(
             knownPaneIdentities: nil,
-            launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil)))
+            launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil)).killedAll)
         XCTAssertEqual(calls, 0)
     }
 
@@ -132,8 +132,58 @@ final class ZmxClientTests: XCTestCase {
 
         let fallback = RestoreMode.live.launchDecision(liveUnavailableReason: "login shell is not zsh")
         XCTAssertEqual(fallback.active, .none)
-        XCTAssertTrue(client.reap(knownPaneIdentities: [known], launchDecision: fallback))
+        XCTAssertTrue(client.reap(knownPaneIdentities: [known], launchDecision: fallback).killedAll)
         XCTAssertEqual(invocations, [["list"]])
+    }
+
+    func testReapReportsEveryReadableDaemonAsRunning() {
+        let known = UUID()
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { _ in
+            """
+            name=\(ZmxSupport.daemonName(for: known))\tpid=1\tclients=0\tcreated=1
+            name=agterm-attached\tpid=3\tclients=1\tcreated=1
+            name=agterm-stale\terr=Timeout\tstatus=unreachable
+            """
+        }
+
+        let outcome = client.reap(knownPaneIdentities: [known],
+                                  launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil))
+
+        XCTAssertTrue(outcome.killedAll)
+        XCTAssertEqual(outcome.runningNames, [ZmxSupport.daemonName(for: known), "agterm-attached"],
+                       "an err= row is unreadable, so its pane must pace like a missing daemon")
+    }
+
+    func testReapReportsNoRunningNamesWhenTheListIsSkippedOrFails() {
+        let failing = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { _ in
+            throw ZmxClient.CommandError.timedOut
+        }
+        let live = RestoreMode.live.launchDecision(liveUnavailableReason: nil)
+
+        let failed = failing.reap(knownPaneIdentities: [UUID()], launchDecision: live)
+        let skipped = failing.reap(knownPaneIdentities: nil, launchDecision: live)
+
+        XCTAssertEqual(failed, ZmxClient.ReapOutcome(runningNames: nil, killedAll: false))
+        XCTAssertEqual(skipped, ZmxClient.ReapOutcome(runningNames: nil, killedAll: true))
+    }
+
+    func testAFailedOrphanKillKeepsTheRunningNames() {
+        let known = UUID()
+        let orphan = ZmxSupport.daemonName(for: UUID())
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { invocation in
+            guard invocation.arguments == ["list"] else { throw ZmxClient.CommandError.timedOut }
+            return """
+            name=\(ZmxSupport.daemonName(for: known))\tpid=1\tclients=0\tcreated=1
+            name=\(orphan)\tpid=2\tclients=0\tcreated=1
+            """
+        }
+
+        let outcome = client.reap(knownPaneIdentities: [known],
+                                  launchDecision: RestoreMode.live.launchDecision(liveUnavailableReason: nil))
+
+        XCTAssertFalse(outcome.killedAll)
+        XCTAssertEqual(outcome.runningNames, [ZmxSupport.daemonName(for: known), orphan],
+                       "a good list stands even when the orphan kill fails")
     }
 
     func testSemanticKillUsesFullPaneDaemonNames() {
