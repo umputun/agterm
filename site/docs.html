@@ -3131,6 +3131,7 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                   >›</span
                 ><strong style="color: #e6e1d7">Re-run mode starts commands again.</strong> Fresh shells is the default. Re-run
                 commands starts the command each pane had in the foreground at the last clean quit; it does not reattach that process.
+                A launch that replays commands starts its panes at a paced rate rather than all at once, with visible panes first.
                 Only a single-process command restores faithfully; a command whose name or arguments carry a control character
                 starts a plain shell instead, since the restored line is typed and the line editor would read that byte as an
                 editing key rather than text, and so does one carrying bytes that were not valid UTF-8, which are captured

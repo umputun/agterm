@@ -143,6 +143,20 @@ and hyperlink metadata already attached to cells do not. New output behaves norm
 Saving settings with this version removes the legacy `restoreRunningCommand` key. If an older agterm opens
 the same state directory later, it sees no restore setting and defaults to fresh shells.
 
+### "`tree` shows `(not realized)` right after a launch that replays commands"
+
+That is pacing, not a fault. A launch that replays commands starts each window's visible panes at once,
+then the remaining replaying panes one at a time, a short interval apart, so tens of programs do not boot
+in the same instant. A session whose MAIN
+pane is waiting its turn reads `(not realized)` in `tree` and `realized: false` in `tree --json` until its
+turn comes; a queued right pane shows no tag, since `realized` describes the main pane only, so a tree with
+no tags is not proof the launch has finished. While a pane waits for its permit, its captured command stays
+on the session.
+Selecting it, or a command that must act on it (`session type`, `session search`, `session paste`,
+`session selectall`, `font inc`/`dec`/`reset`), brings it up at once; reads such as `session text` and
+`session copy` answer `session not realized` and leave it queued. A main pane still `(not realized)` long
+after its neighbours came up is a different fault, not pacing.
+
 ### "My session restore override didn't fire"
 
 You set `session restore` but the pane came back as a plain shell (or re-ran the old captured command).

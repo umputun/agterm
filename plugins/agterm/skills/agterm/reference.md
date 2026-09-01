@@ -108,12 +108,16 @@ SIGTERM use normal process behavior.
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split SHOWN side by side, the read side of `session split on|off`),
-`realized` (whether the session's MAIN pane has a live terminal — `false` means no shell was spawned, a
-`--command` has not run, and `session type`/`session text` will answer `session not realized`. `session
-new` returns `ok` for a session that exists in the model, which is not the same thing: libghostty refuses
-to create a surface while the DISPLAY is asleep, so a session a scheduled job creates overnight stays
-unrealized until the displays wake, at which point it recovers on its own. Poll this after creating a
-session unattended; `agtermctl tree` also tags the row `(not realized)`),
+`realized` (whether the session's MAIN pane has a live terminal — `false` means no shell was spawned and a
+`--command` has not run. `session text` then answers `session not realized` without realizing anything;
+`session type` brings up a restored main pane still waiting its turn in a launch that replays commands,
+while any other unrealized cause can still exhaust its poll and fail the same way; `session search`
+expedites such a pane too.
+`session new` returns `ok` for a session that exists in the model, which is not the same thing: libghostty
+refuses to create a surface while the DISPLAY is asleep, so a session a scheduled job creates overnight
+stays unrealized until the displays wake, at which point it recovers on its own. A queued right pane shows
+nothing here. Poll this after creating a session unattended; `agtermctl tree` also tags the row
+`(not realized)`),
 `backedByZmx` (true only when every existing primary/split pane is currently zmx-backed; older servers omit
 it),
 `hasSplit` (whether a second pane exists at all, shown or hidden with ⌘D; omitted when there is none —

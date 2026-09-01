@@ -429,17 +429,19 @@ signal. No command sets this state, so the read-back rule for state-setting comm
       (a queued right pane shows nothing on either)
 
 ### Task 7: Update documentation
-- [ ] `.claude/rules/libghostty.md`: the permit and the late seed inside `createSurface()`, and why the
+- [x] `.claude/rules/libghostty.md`: the permit and the late seed inside `createSurface()`, and why the
       deferral does not race layout
-- [ ] `.claude/rules/settings.md` (owns restore capture and the pending slots): seed consumption at
+- [x] `.claude/rules/settings.md` (owns restore capture and the pending slots): seed consumption at
       spawn time; `restore.clear` and clean-quit preservation now cover the paced window; hard reset
       boundary unchanged
-- [ ] `.claude/rules/control-api.md`: which commands expedite a queued pane and which reads never do
-- [ ] `site/docs.html` restore section: one sentence that a launch which replays commands brings panes up
+- [x] `.claude/rules/control-api.md`: which commands expedite a queued pane and which reads never do
+- [x] `site/docs.html` restore section: one sentence that a launch which replays commands brings panes up
       over several seconds, the visible panes first
-- [ ] `plugins/agterm/skills/agterm/troubleshooting.md`: `(not realized)` right after a replaying launch
+- [x] `plugins/agterm/skills/agterm/troubleshooting.md`: `(not realized)` right after a replaying launch
       is pacing, not a fault
-- [ ] move this plan to `docs/plans/completed/`
+- [ ] move this plan to `docs/plans/completed/` (left in place: this run does not move the plan; do it when the PR merges)
+- [x] ➕ `plugins/agterm/skills/agterm/reference.md` and `SKILL.md`: their `realized` sentences said `session type`
+      answers `session not realized` for an unrealized pane, which the expedite makes untrue for a paced one
 
 ## Post-Completion
 

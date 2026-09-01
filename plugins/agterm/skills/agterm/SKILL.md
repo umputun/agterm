@@ -230,8 +230,10 @@ them never has to know the defaults; `spinner` names the STYLE, so `none` is wha
 turn one off. While a HUD is up the node's `overlay` reads `false` and `overlaySizePercent` is omitted, so a
 poll for "is a program covering this session" cannot mistake a message for one; HUD state is poll-only,
 no event announces it),
-`realized` (whether the session's MAIN pane has a live terminal; `false` means no shell was spawned and
-`session type`/`session text` will answer `session not realized`. `session new` returns `ok` for a model
+`realized` (whether the session's MAIN pane has a live terminal; `false` means no shell was spawned.
+`session text` then answers `session not realized` without realizing anything; `session type` brings up a
+restored main pane still waiting its turn in a launch that replays commands, while any other unrealized
+cause can still exhaust its poll and fail the same way. `session new` returns `ok` for a model
 entry, which is weaker — libghostty will not create a surface while the display is asleep, so a session
 created by a scheduled job overnight stays unrealized until the displays wake and then recovers itself.
 Poll this after an unattended create),

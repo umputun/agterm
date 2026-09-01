@@ -180,6 +180,10 @@ paths:
   Anything else that must cancel an armed replay clears those slots too, never the persisted fields:
   `recoverOrphanedWindows`, `Session.clearPendingRestoreOverrides` on the soft-close round trip, and
   `restore.clear`, which the socket can receive before the later windows' decks have mounted.
+  The pending pair is consumed on the first PERMITTED surface-creation attempt, not at view construction
+  (`LaunchSeedProvider`): while a pane waits on its launch spawn permit the argv and pin stay on the
+  session, so `restore.clear` disarms it and a clean quit re-captures it across that window. The on-demand
+  arm (`restore.capture`) keeps its rerun-only boundary.
   Against STALE files from older builds, `loadStore` also rewrites a snapshot that carried captures on a
   mid-run reopen, and `recoverOrphanedWindows` drops captures while the sticky override still arms
   (a corrupt index must not re-execute a closed window's last command).

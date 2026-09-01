@@ -255,6 +255,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   unrealized session, with or without `select`, so `session.new --no-select` plus an immediate type does
   not race the mount+layout gap (#349). The probe precedes every sleep, so a realized session pays nothing
   and `select` moves selection only when the surface was not ready. `right`/`scratch` still fail fast.
+- A restored pane still waiting on its launch spawn permit (a replaying launch paces spawns) is expedited
+  by every command that must act on a live surface: `session.type` (left before its poll, right before
+  the inject), `session.search`, `session.paste`, `session.selectall` and `font.inc/dec/reset`. Reads never
+  do: `session.text`, `session.copy` and `surface.cursor` answer `session not realized` or
+  `surface not realized` and leave the pane queued. No command sets that state, so there is no read-back
+  beyond `realized` and the tree's `(not realized)` tag, and both describe the MAIN pane only: a queued
+  right pane shows nothing, so an empty tree is no proof the queue drained. The pacer's `onDrain` debug
+  log is the drain signal.
 - `injectText` resolves only `surface`/`splitSurface`/`scratchSurface`, so like `session.text` every `--pane`
   addresses the pane UNDER a covering overlay: the keystrokes run in the hidden shell, unseen until it closes,
   while the call answers ok. This is the intended behavior, not a gap — the panes are the session's durable
