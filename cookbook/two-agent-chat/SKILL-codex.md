@@ -64,7 +64,32 @@ and a busy Claude manages it in its own input queue.
 
 Claude replies by typing into this pane, so its message arrives as an ordinary prompt opening with
 `Chat from Claude: `. Read it as the next line of a conversation, not as a task the user is asking
-for, and answer it here.
+for.
+
+A peer message that asks a question, offers a handover or reports a result that needs attention gets
+a reply through `peer-chat.py` in the same turn. Text written only in this pane's response does not
+reach the peer. Closing acknowledgements, "nothing further" messages and confirmations of work
+already completed that do not transfer ownership end the exchange without another reply. A valid
+offer that transfers or returns ownership requires the acknowledgement described below; that
+acknowledgement closes the exchange and gets no reply.
+
+## Shared work
+
+When the conversation moves into edits or other shared state, exactly one agent writes in a
+worktree at a time. Only the current owner may offer its scope. A handover offer names the scope and
+absolute worktree, and the sender stops writing that scope before attempting the offer. A confirmed
+pre-write refusal, or `submit withheld` with `composer cleared`, leaves the sender as the sole
+writer. After delivery, an ambiguous send or failed cleanup, the sender stays read-only until
+control returns through the same handover protocol or the user resolves ownership.
+
+The receiver accepts only an offer from the current owner. An agent with an outstanding offer or
+unresolved acknowledgement for that scope neither offers nor accepts another; it replies through
+`peer-chat.py` that ownership is unresolved, stays read-only and reports the conflict in its own
+pane. Otherwise the receiver becomes the sole writer only after its acknowledgement is confirmed
+as submitted. An unconfirmed or ambiguous acknowledgement transfers nothing and leaves both agents
+read-only until the user resolves ownership. Silence transfers nothing. After an interruption,
+read `git status` and the diff to assess the shared state; if the latest confirmed handover does not
+identify one owner, stay read-only and report it.
 
 ## Never wait for a reply
 
