@@ -1,35 +1,20 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal app, programmatically via its agtermctl CLI and a local
-  control socket. Use when running inside an agterm session and asked to control the terminal:
-  create, rename, close, select, or reorder sessions and workspaces; split panes; toggle the
-  per-session scratch terminal; open or close overlay terminals and read their exit status; post a
-  passive HUD message panel over a session while the user keeps typing;
-  display the native fuzzy picker with caller-supplied choices and poll or cancel it; display
-  an image inline via a bundled helper script; type
-  into a session, copy its selection, or search its scrollback; post desktop notifications; manage windows (new, list,
-  select, close, resize, move); change font size; or reload and edit the keymap and the agterm-scoped
-  ghostty config. Also covers the
-  window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
-  subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
-  (keymap editor, custom actions, logs); and file a bug as a GitHub issue or a
-  feature request / question as a GitHub Discussion. Also list, fetch and install the repository's
-  cookbook recipes, and read one as reference for a tricky workflow; report the version of the app
-  serving the socket; and list and attach a session running on another Mac that also runs agterm.
+  Drive agterm, a native macOS terminal, through its agtermctl CLI and local control socket. Use when
+  running inside an agterm session and asked to control the terminal: create, rename, close, select or
+  reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
+  and read its exit status; post a HUD panel or a desktop notification; show a native picker with
+  caller-supplied choices; display an image inline; type into a session, copy its selection or search its
+  scrollback; manage windows; change font size; set the theme; reload or edit the keymap and the
+  agterm-scoped ghostty config; subscribe to status, notification, lifecycle and tree-change events.
+  Covers the window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees,
+  attaching a session running on another Mac, the cookbook recipes, the running version, and diagnosing
+  problems or filing an agterm bug or feature request.
 when_to_use: >
-  Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.split.close, session.swap, session.scratch, session.focus, session.resize, surface.zoom, surface.cursor, cursor column, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, pane-id, session.search, session.status,
-  session.flag, session.context, what this session is about, session.seen, session.reveal, session.duplicate, session.background, session.overlay,
-  session.hud, hud panel, show a message over a session, workspace.new, workspace.select, workspace.go, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
-  window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, sidebar.width, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
-  theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
-  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: zmx.tree, zmx.attach,
-  remote session, teleport a session, attach a session from another Mac. Also: agterm cookbook,
-  cookbook recipe, list recipes, install a recipe, agterm recipe for X, what recipes are there, and
-  agterm version, which agterm is running, agterm version check. Also troubleshoot agterm,
-  keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
-  bug, report an agterm issue, open an agterm discussion / feature request.
+  Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
+  split the pane, close the overlay, show a message over the session, show an image inline, search the
+  scrollback, attach a session from another Mac, what recipes are there, the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
 
