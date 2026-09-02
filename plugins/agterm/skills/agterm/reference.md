@@ -360,8 +360,9 @@ buys nothing. A caller with no tree uses `version`.
   so you can read a build/test/deploy's final output or an early failure that would otherwise flash and
   vanish. In Re-run commands mode it persists across restart (unlike an overlay's live-only `--wait`),
   so a restored command session that starts its command again also holds; read it back on `tree`'s
-  `commandWait`. Live sessions mode types the command into the persistent zmx shell only on first creation.
-  The shell stays open when it exits, and `--wait` adds no hold prompt. After a clean quit, a missing daemon
+  `commandWait`. Live sessions mode passes the command as a create-only zmx payload, which bypasses the
+  1,024-byte PTY input cap. A surviving daemon ignores the payload; a new daemon runs it, then starts the persistent
+  shell. The shell stays open when it exits, and `--wait` adds no hold prompt. After a clean quit, a missing daemon
   is recreated running whatever that pane's foreground command was; if the command had already exited, or the
   quit never happened, the pane comes back as a fresh shell.
   The command is persisted (`SessionSnapshot.initialCommand`) and starts again on restore in Re-run commands

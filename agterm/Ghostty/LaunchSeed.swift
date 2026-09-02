@@ -3,7 +3,7 @@ import Foundation
 
 /// What a pane spawns with: the exec `command`, the `initialInput` typed into a login shell, and whether a
 /// command's exit holds on libghostty's "press any key" prompt. `command` and `initialInput` are mutually
-/// exclusive except on a zmx-backed pane, whose command is the attach client.
+/// exclusive.
 struct LaunchSeed: Equatable {
     let command: String?
     let initialInput: String?

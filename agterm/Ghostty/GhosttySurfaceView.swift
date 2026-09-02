@@ -637,9 +637,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
         // restore-running-command: feed the captured command line to the login shell as if typed, so it re-runs
         // and exits back to a prompt. Ordinary command surfaces keep the fields mutually exclusive because a
-        // command REPLACES the shell. A zmx-backed surface is the exception: its command is the attach client, and
-        // libghostty's initial input is what that client forwards into the daemon-side shell.
-        if command == nil || backedByZmx, let initialInput, let p = strdup(initialInput) {
+        // command REPLACES the shell.
+        if command == nil, let initialInput, let p = strdup(initialInput) {
             configCStrings.append(p)
             config.initial_input = UnsafePointer(p)
         }

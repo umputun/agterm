@@ -129,7 +129,7 @@ final class SurfaceFactorySeedTests: XCTestCase {
         }
     }
 
-    func testFreshWrappedPrimaryKeepsCreationInput() throws {
+    func testFreshWrappedPrimaryUsesCreateOnlyPayload() throws {
         let session = Session(initialCwd: "/tmp")
         session.initialCommand = "ssh example"
 
@@ -137,8 +137,24 @@ final class SurfaceFactorySeedTests: XCTestCase {
             disposition: .wrapped(configuration), session: session, pane: .left, denylist: []
         ))
 
-        XCTAssertEqual(seed.command, configuration.command)
-        XCTAssertEqual(seed.initialInput, "ssh example\n")
+        XCTAssertEqual(seed.command, ZmxSupport.attachCommand(
+            configuration, replaying: nil, creationCommand: "ssh example", denylist: []
+        ))
+        XCTAssertNil(seed.initialInput)
+    }
+
+    func testFreshWrappedSplitUsesCreateOnlyPayload() throws {
+        let session = Session(initialCwd: "/tmp")
+        session.splitInitialCommand = "watch date"
+
+        let seed = try XCTUnwrap(ZmxLaunch.surfaceSeed(
+            disposition: .wrapped(configuration), session: session, pane: .right, denylist: []
+        ))
+
+        XCTAssertEqual(seed.command, ZmxSupport.attachCommand(
+            configuration, replaying: nil, creationCommand: "watch date", denylist: []
+        ))
+        XCTAssertNil(seed.initialInput)
     }
 
     // MARK: - factory wiring

@@ -3193,8 +3193,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 Reattach restores usable text, TUI state, and normal colors, but its synthesized screen does not retain inline images,
                 earlier OSC 133 prompt markers, program-changed palette entries, or hyperlink metadata already attached to cells.
                 New output after reattach behaves normally. In live mode,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --command</span> types the
-                command into the persistent shell only when the pane is first created. The session stays open when that command exits,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --command</span> passes the
+                command as a create-only zmx payload, which bypasses the 1,024-byte PTY input cap. A surviving daemon ignores the payload;
+                a new daemon runs it, then starts the persistent shell. The session stays open when that command exits,
                 so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> adds no hold prompt. After
                 a clean quit, a missing daemon replays the captured running command inside a new persistent shell; the exclusions above
                 start a fresh shell.

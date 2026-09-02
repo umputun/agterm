@@ -15,7 +15,7 @@ final class ZmxLiveUITests: ControlAPITestCase {
         if let cleanupError { throw cleanupError }
     }
 
-    func testBundledZmxBacksPrimaryAndSplitAndTypesInitialCommandOnce() throws {
+    func testBundledZmxBacksPrimaryAndSplitAndRunsLongCreationCommandOnce() throws {
         let sessionID = try activeSessionID()
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20),
                       "the primary pane should report real zmx backing")
@@ -26,18 +26,21 @@ final class ZmxLiveUITests: ControlAPITestCase {
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left", "right"]), timeout: 20),
                       "both panes and the session aggregate should report zmx backing")
 
-        let marker = stateDir.appendingPathComponent("initial-input.txt")
+        let marker = stateDir.appendingPathComponent("creation-command.txt")
+        let padding = String(repeating: "x", count: 2_048)
+        let command = "payload='\(padding)'; printf x >> '\(marker.path)'"
+        XCTAssertGreaterThan(command.utf8.count, 1_024)
         let request = try JSONSerialization.data(withJSONObject: [
             "cmd": "session.new",
-            "args": ["command": "printf x >> \(marker.path)"],
+            "args": ["command": command],
         ])
         let created = try sendCommand(String(decoding: request, as: UTF8.self))
         XCTAssertEqual(created["ok"] as? Bool, true)
         XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8)) == "x", timeout: 20),
-                      "initial_input should reach the daemon shell")
+                      "the create-only payload should bypass the pty input cap")
         RunLoop.current.run(until: Date().addingTimeInterval(1))
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "x",
-                       "initial_input must be delivered exactly once")
+                       "the create-only payload must run exactly once")
     }
 
     private func isBacked(_ sessionID: String, expectedPanes: Set<String>) -> Bool {

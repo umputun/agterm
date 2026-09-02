@@ -94,21 +94,18 @@ enum ZmxLaunch {
                             denylist: Set<String>) -> SurfaceSeed? {
         guard case .wrapped(let configuration) = disposition else { return nil }
         let replay = session.takePendingForegroundCommand(pane: pane)
-        let creationCommand: String? = if session.wasRestored, replay == nil {
+        let creationCommand: String? = if replay == nil {
             switch pane {
             case .left: session.initialCommand
             case .right: session.splitInitialCommand
             case .scratch: nil
             }
         } else { nil }
-        let initialInput = pane == .left && !session.wasRestored
-            ? session.initialCommand.map { $0 + "\n" }
-            : nil
         return SurfaceSeed(
             command: ZmxSupport.attachCommand(
                 configuration, replaying: replay, creationCommand: creationCommand, denylist: denylist
             ),
-            initialInput: initialInput
+            initialInput: nil
         )
     }
 
