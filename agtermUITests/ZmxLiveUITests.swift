@@ -8,9 +8,9 @@ final class ZmxLiveUITests: ControlAPITestCase {
     override var enablesZmxForUITest: Bool { true }
 
     override func tearDown() async throws {
-        app?.terminate()
         var cleanupError: Error?
-        do { try killTestDaemons() } catch { cleanupError = error }
+        do { try reapTestDaemons() } catch { cleanupError = error }
+        app?.terminate()
         try await super.tearDown()
         if let cleanupError { throw cleanupError }
     }
@@ -58,48 +58,77 @@ final class ZmxLiveUITests: ControlAPITestCase {
         return expectedPanes.isSubset(of: backed)
     }
 
-    private func killTestDaemons() throws {
+    private struct PaneDaemon {
+        let sessionID: String
+        let pane: String
+    }
+
+    /// Ends this run's daemons through the app's own `zmx.kill` instead of signalling them from the test
+    /// runner, which cannot signal what the app spawned: zmx reports that `kill(2)` EPERM as
+    /// `PermissionDenied` and every run leaks its daemons. `session.close` is not a substitute because
+    /// `paneFinalizer` discards the kill result, so it can drop the model while the daemon survives.
+    private func reapTestDaemons() throws {
         guard let stateDir else { return }
-        let zmxDir = ZmxSupport.socketDirectory(forStateDirectory: stateDir.path)
-        let names = try runZmx(["ls", "--short"], directory: zmxDir)
-            .split(whereSeparator: \.isNewline).map(String.init).filter { !$0.isEmpty }
-        guard !names.isEmpty else { return }
-        _ = try runZmx(["kill"] + names + ["--force"], directory: zmxDir)
+        let namespace = ZmxSupport.socketDirectory(forStateDirectory: stateDir.path)
+        let dailyDriver = ZmxSupport.socketDirectory(forStateDirectory: PersistenceStore.defaultDirectory.path)
+        guard namespace != dailyDriver else {
+            throw cleanupFailure("refusing to reap: the test namespace resolved to the default one")
+        }
+
+        // right before left: the split attached through the session the primary's daemon leads
+        for daemon in try liveDaemons("zmx.list before cleanup", namespace: namespace)
+            .sorted(by: { $0.pane > $1.pane }) {
+            let request = try JSONSerialization.data(withJSONObject: [
+                "cmd": "zmx.kill",
+                "target": daemon.sessionID,
+                "args": ["pane": daemon.pane, "force": true],
+            ])
+            let response = try sendCommand(String(decoding: request, as: UTF8.self))
+            guard response["ok"] as? Bool == true else {
+                throw cleanupFailure("zmx.kill \(daemon.sessionID):\(daemon.pane) refused: \(response)")
+            }
+        }
+
+        var remaining = try liveDaemons("zmx.list after cleanup", namespace: namespace)
+        let deadline = Date().addingTimeInterval(20)
+        while !remaining.isEmpty, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            remaining = try liveDaemons("zmx.list after cleanup", namespace: namespace)
+        }
+        guard remaining.isEmpty else {
+            throw cleanupFailure("\(remaining.count) daemon(s) still running after zmx.kill")
+        }
     }
 
-    private func runZmx(_ arguments: [String], directory: String) throws -> String {
-        let process = Process()
-        process.executableURL = try zmxURL()
-        process.arguments = arguments
-        var environment = ProcessInfo.processInfo.environment
-        environment["ZMX_DIR"] = directory
-        process.environment = environment
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        process.waitUntilExit()
-        let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        guard process.terminationStatus == 0 else {
-            throw NSError(domain: "ZmxLiveUITests", code: Int(process.terminationStatus),
-                          userInfo: [NSLocalizedDescriptionKey: text])
+    /// The running daemons this test owns. Fails closed rather than reaping anything it cannot name: an
+    /// incomplete inventory, an endpoint outside this test's namespace, or a running row that is not a
+    /// claimed pane all abort the cleanup instead of widening it.
+    private func liveDaemons(_ context: String, namespace: String) throws -> [PaneDaemon] {
+        let response = try sendCommand(#"{"cmd":"zmx.list"}"#)
+        guard response["ok"] as? Bool == true,
+              let zmx = (response["result"] as? [String: Any])?["zmx"] as? [String: Any] else {
+            throw cleanupFailure("\(context) failed: \(response)")
         }
-        return text
+        guard zmx["inventoryComplete"] as? Bool == true else {
+            throw cleanupFailure("\(context): the inventory is incomplete")
+        }
+        guard let endpoint = zmx["endpoint"] as? [String: Any],
+              endpoint["socketDirectory"] as? String == namespace else {
+            throw cleanupFailure("\(context): the endpoint is not this test's namespace")
+        }
+        return try (zmx["entries"] as? [[String: Any]] ?? [])
+            .filter { $0["observation"] as? String == "running" }
+            .map { entry in
+                guard entry["state"] as? String == "claimed",
+                      let sessionID = entry["sessionID"] as? String,
+                      let pane = entry["pane"] as? String else {
+                    throw cleanupFailure("\(context): running daemon \(entry["daemon"] ?? "?") is unclaimed")
+                }
+                return PaneDaemon(sessionID: sessionID, pane: pane)
+            }
     }
 
-    private func zmxURL() throws -> URL {
-        if let products = ProcessInfo.processInfo.environment["BUILT_PRODUCTS_DIR"] {
-            return URL(fileURLWithPath: products).appendingPathComponent("agterm.app/Contents/MacOS/zmx")
-        }
-        var directory = Bundle(for: type(of: self)).bundleURL
-        while directory.path != "/", directory.lastPathComponent != "Debug" {
-            directory.deleteLastPathComponent()
-        }
-        let url = directory.appendingPathComponent("agterm.app/Contents/MacOS/zmx")
-        guard FileManager.default.isExecutableFile(atPath: url.path) else {
-            throw NSError(domain: "ZmxLiveUITests", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "bundled zmx not found at \(url.path)"])
-        }
-        return url
+    private func cleanupFailure(_ message: String) -> Error {
+        NSError(domain: "ZmxLiveUITests", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
