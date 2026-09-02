@@ -63,7 +63,7 @@ public protocol ControlActions {
     func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse
     func setDashboard(targets: [String], window: String?, close: Bool,
                       fontMode: DashboardFontMode, mru: Bool) -> ControlResponse
-    func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse
+    func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse
     func reloadKeymap() -> ControlResponse
     func listKeymap() -> ControlResponse
     func appIdentity() -> ControlResponse
@@ -475,6 +475,15 @@ public struct ControlDispatcher {
         parsePane(raw, error: "--pane must be left, right, or scratch") { StatusPane(controlName: $0) }
     }
 
+    /// The surface I/O selector (`session.type`, `session.text`, `font.*`). Same vocabulary as `parsePane`,
+    /// so the role and position aliases resolve, but the rejection keeps the per-command
+    /// `invalid pane: <value>` these three have answered since they shipped (#46, #90, #188) and which the
+    /// reference records as their difference from `session.status`/`.restore`. Unifying the wording is a
+    /// separate decision from parsing the value.
+    private func parseSurfacePane(_ raw: String?) -> PaneSelection<StatusPane> {
+        parsePane(raw, error: "invalid pane: \(raw ?? "")") { StatusPane(controlName: $0) }
+    }
+
     /// The `session.overlay.*` selector (`.open`/`.close`/`.result`/`.copy`/`.text`): absent keeps the
     /// session-wide overlay,
     /// `left`/`right` (and their `primary`/`split` aliases) scope to one pane, `scratch` is rejected — there
@@ -592,11 +601,16 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "session.type requires text")
             }
             if let rejection = nulRejection(text) { return rejection }
+            let pane: StatusPane?
+            switch parseSurfacePane(request.args?.pane) {
+            case .pane(let parsed): pane = parsed
+            case .rejected(let rejection): return rejection
+            }
             return await actions.typeSession(request.target, window: request.args?.window,
                                              options: ControlSessionTypeOptions(
                                                 text: text,
                                                 select: request.args?.select ?? false,
-                                                pane: request.args?.pane
+                                                pane: pane
                                              ))
         case .sessionCopy:
             return actions.copySessionSelection(request.target, window: request.args?.window)
@@ -685,14 +699,11 @@ public struct ControlDispatcher {
     private func dispatchAppCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .fontInc:
-            return actions.font(request.target, window: request.args?.window,
-                                pane: request.args?.pane, action: "increase_font_size:1")
+            return dispatchFont(request, action: "increase_font_size:1")
         case .fontDec:
-            return actions.font(request.target, window: request.args?.window,
-                                pane: request.args?.pane, action: "decrease_font_size:1")
+            return dispatchFont(request, action: "decrease_font_size:1")
         case .fontReset:
-            return actions.font(request.target, window: request.args?.window,
-                                pane: request.args?.pane, action: "reset_font_size")
+            return dispatchFont(request, action: "reset_font_size")
         case .quick:
             return actions.setQuickTerminal(mode: request.args?.mode)
         case .keymapReload:
@@ -847,15 +858,29 @@ public struct ControlDispatcher {
         return .extent(all: all, lines: lines)
     }
 
+    /// The three `font.*` arms share one parse, so their pane vocabulary cannot drift apart.
+    private func dispatchFont(_ request: ControlRequest, action: String) -> ControlResponse {
+        switch parseSurfacePane(request.args?.pane) {
+        case .pane(let pane):
+            return actions.font(request.target, window: request.args?.window, pane: pane, action: action)
+        case .rejected(let rejection): return rejection
+        }
+    }
+
     private func dispatchSessionText(_ request: ControlRequest) -> ControlResponse {
         switch parseBufferExtent(request.args) {
         case .rejected(let response): return response
         case .extent(let all, let lines):
-            return actions.readSessionText(request.target, window: request.args?.window,
-                                           options: ControlSessionTextOptions(pane: request.args?.pane,
-                                                                              paneID: request.args?.paneID,
-                                                                              all: all,
-                                                                              lines: lines))
+            // the extent is checked first, so an `--all --lines` caller still gets that error before a pane one.
+            switch parseSurfacePane(request.args?.pane) {
+            case .rejected(let rejection): return rejection
+            case .pane(let pane):
+                return actions.readSessionText(request.target, window: request.args?.window,
+                                               options: ControlSessionTextOptions(pane: pane,
+                                                                                  paneID: request.args?.paneID,
+                                                                                  all: all,
+                                                                                  lines: lines))
+            }
         }
     }
 

@@ -438,7 +438,8 @@ error keeps those names for compatibility.
   `--pane left` types into the main pane (the default when omitted), `--pane right` into the split pane
   (errors with `session has no split pane` when the session has no split), `--pane scratch` into the
   session's scratch terminal even while it is hidden (`session has no scratch terminal` when none opened);
-  like `session text`, no `other` value. `--select` realizes the MAIN pane only — a split pane must
+  the role and position aliases (`primary`/`top`, `split`/`bottom`) resolve to the same panes; like
+  `session text`, no `other` value. `--select` realizes the MAIN pane only — a split pane must
   already exist. Also like `session text`, there is no overlay value: every `--pane` types into the surface
   UNDER a covering overlay, so the keystrokes reach the hidden shell and run there unseen until the overlay
   closes — the call still answers `ok`. That is deliberate: the panes stay drivable whatever is drawn over
@@ -464,7 +465,8 @@ error keeps those names for compatibility.
   are mutually exclusive and `--lines` must be > 0 — enforced server-side too). `--pane left` reads the
   main pane, `--pane right` the split pane (errors if the session has no split), `--pane scratch` the
   session's scratch terminal even while it is hidden (its buffer is kept alive; `session has no scratch
-  terminal` when none opened); omit `--pane` for the visible pane (the scratch terminal when it covers the
+  terminal` when none opened); the role and position aliases (`primary`/`top`, `split`/`bottom`) resolve to
+  the same panes; omit `--pane` for the visible pane (the scratch terminal when it covers the
   session, else the focused pane). `--pane-id` accepts the shell's stable `$AGTERM_PANE_ID`, resolves its
   current live slot and overrides `--pane` when found. An absent or unknown token falls back to `--pane`,
   then to the visible pane. Use it for a long-running watcher because `$AGTERM_PANE` is a spawn role and can
@@ -1101,7 +1103,8 @@ attention list, the title-bar bell, and attention navigation (`session go --to n
 reset the font size of a session pane. `--pane` picks which surface's font to change, like `session type`
 and `session text`: omitted or `left` is the main pane, `right` the split pane (errors with `session has
 no split pane` when the session has no split), `scratch` the session's scratch terminal (settable even
-while hidden). No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
+while hidden). The role and position aliases (`primary`/`top`, `split`/`bottom`) resolve to the same panes.
+No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
 pane's font change is live-only, matching a GUI cmd +/- on those panes. Read the resulting size back from
 `tree` — `fontSize` (main), `splitFontSize`, `scratchFontSize`, each in points and omitted when that pane
 isn't realized.

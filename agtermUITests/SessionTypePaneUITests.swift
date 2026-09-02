@@ -48,9 +48,18 @@ final class SessionTypePaneUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "session has no split pane", "should report no split pane: \(response)")
     }
 
+    // the parse moved to the dispatcher, so this now answers before the app is reached — with the same
+    // wording, which is the point: a raw socket client runs no `validate()` and must see no change.
     func testSessionTypeRejectsInvalidPaneServerSide() throws {
         let response = try sendCommand(#"{"cmd":"session.type","target":"active","args":{"text":"x","pane":"middle"}}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "session.type pane:middle should fail server-side: \(response)")
         XCTAssertEqual(response["error"] as? String, "invalid pane: middle", "should report the invalid pane: \(response)")
+    }
+
+    // the aliases `validatePaneArgument` accepts used to validate on the client and then fail on the server.
+    func testSessionTypeAcceptsAPaneAlias() throws {
+        let response = try sendCommand(typeRequest(text: "echo alias\n", target: "active", select: false,
+                                                   pane: "primary"))
+        XCTAssertEqual(response["ok"] as? Bool, true, "session.type --pane primary should reach main: \(response)")
     }
 }

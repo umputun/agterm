@@ -1,9 +1,11 @@
 public struct ControlSessionTypeOptions: Equatable, Sendable {
     public let text: String
     public let select: Bool
-    public let pane: String?
+    /// The parsed pane, nil for the main one. The dispatcher owns the spelling, so the role and position
+    /// aliases the CLI accepts resolve here rather than being matched again in the host.
+    public let pane: StatusPane?
 
-    public init(text: String, select: Bool, pane: String?) {
+    public init(text: String, select: Bool, pane: StatusPane?) {
         self.text = text
         self.select = select
         self.pane = pane
@@ -42,12 +44,13 @@ public struct ControlSessionBackgroundOptions: Equatable, Sendable {
 }
 
 public struct ControlSessionTextOptions: Equatable, Sendable {
-    public let pane: String?
+    /// The parsed pane, nil for the on-screen one. `paneID` still overrides it when the token resolves.
+    public let pane: StatusPane?
     public let paneID: String?
     public let all: Bool
     public let lines: Int?
 
-    public init(pane: String?, paneID: String? = nil, all: Bool, lines: Int?) {
+    public init(pane: StatusPane?, paneID: String? = nil, all: Bool, lines: Int?) {
         self.pane = pane
         self.paneID = paneID
         self.all = all
@@ -55,9 +58,9 @@ public struct ControlSessionTextOptions: Equatable, Sendable {
     }
 }
 
-/// `session.overlay.text`'s inputs. `pane` is the parsed `OverlayPane` rather than
-/// `ControlSessionTextOptions`' raw string: the overlay family takes only `left`/`right`, so the dispatcher
-/// resolves it and the host never re-parses a vocabulary it could widen by accident.
+/// `session.overlay.text`'s inputs. `pane` is an `OverlayPane` rather than `ControlSessionTextOptions`'
+/// `StatusPane`: the overlay family takes only `left`/`right`, `scratch` having no pane to cover. Both are
+/// parsed by the dispatcher, so the host never re-parses a vocabulary it could widen by accident.
 public struct ControlSessionOverlayTextOptions: Equatable, Sendable {
     public let pane: OverlayPane?
     public let all: Bool

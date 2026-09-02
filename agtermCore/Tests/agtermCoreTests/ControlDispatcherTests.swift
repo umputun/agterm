@@ -739,10 +739,74 @@ struct ControlDispatcherTests {
                                                      args: ControlArgs(pane: "left")))
 
         #expect(actions.calls == [
-            .font(target: "session", window: nil, pane: "right", "decrease_font_size:1"),
-            .font(target: "session", window: "win", pane: "scratch", "increase_font_size:1"),
-            .font(target: "session", window: nil, pane: "left", "reset_font_size")
+            .font(target: "session", window: nil, pane: .right, "decrease_font_size:1"),
+            .font(target: "session", window: "win", pane: .scratch, "increase_font_size:1"),
+            .font(target: "session", window: nil, pane: .left, "reset_font_size")
         ])
+    }
+
+    // `validatePaneArgument` has always accepted the role and position aliases, but the app matched raw
+    // spellings, so `--pane split` validated on the client and then failed on the server. The parse lives in
+    // the dispatcher now, and these are the spellings it has to canonicalize for every pane-taking command.
+    @Test func paneTakingCommandsCanonicalizeTheAliases() async {
+        let aliases: [(String, StatusPane)] = [("left", .left), ("primary", .left), ("top", .left),
+                                               ("right", .right), ("split", .right), ("bottom", .right),
+                                               ("scratch", .scratch)]
+        for (spelling, expected) in aliases {
+            let actions = MockControlActions()
+            let dispatcher = ControlDispatcher(actions: actions)
+
+            _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionType, target: "s",
+                                                         args: ControlArgs(text: "x", pane: spelling)))
+            _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionText, target: "s",
+                                                         args: ControlArgs(pane: spelling)))
+            _ = await dispatcher.dispatch(ControlRequest(cmd: .fontInc, target: "s",
+                                                         args: ControlArgs(pane: spelling)))
+
+            #expect(actions.calls == [
+                .sessionType(target: "s", window: nil,
+                             ControlSessionTypeOptions(text: "x", select: false, pane: expected)),
+                .sessionText(target: "s", window: nil,
+                             ControlSessionTextOptions(pane: expected, all: false, lines: nil)),
+                .font(target: "s", window: nil, pane: expected, "increase_font_size:1")
+            ], "--pane \(spelling) must resolve to \(expected) on every command that takes it")
+        }
+    }
+
+    // a raw socket client runs no `validate()`, so the rejection is the dispatcher's. Parsing the value moved
+    // there, but the wording these three have answered since they shipped did not, so it stays
+    // `invalid pane: <value>` rather than `session.status`'s pinned string. The action must not be reached.
+    @Test func paneTakingCommandsRejectAnUnknownPaneWithoutCallingTheAction() async {
+        let requests: [ControlRequest] = [
+            ControlRequest(cmd: .sessionType, target: "s", args: ControlArgs(text: "x", pane: "middle")),
+            ControlRequest(cmd: .sessionText, target: "s", args: ControlArgs(pane: "middle")),
+            ControlRequest(cmd: .fontInc, target: "s", args: ControlArgs(pane: "middle")),
+            ControlRequest(cmd: .fontDec, target: "s", args: ControlArgs(pane: "middle")),
+            ControlRequest(cmd: .fontReset, target: "s", args: ControlArgs(pane: "middle"))
+        ]
+        for request in requests {
+            let actions = MockControlActions()
+            let dispatcher = ControlDispatcher(actions: actions)
+
+            let response = await dispatcher.dispatch(request)
+
+            #expect(response == ControlResponse(ok: false, error: "invalid pane: middle"),
+                    "\(request.cmd.rawValue) must answer its own pane rejection")
+            #expect(actions.calls.isEmpty, "\(request.cmd.rawValue) must not reach the action")
+        }
+    }
+
+    // the extent is parsed before the pane, so adding a pane error to an already-bad extent must not change
+    // which error a caller sees first. `session.overlay.text` pins the same order.
+    @Test func sessionTextReportsAnExtentErrorBeforeAPaneOne() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionText, target: "s", args: ControlArgs(pane: "middle", all: true, lines: 5)))
+
+        #expect(response == ControlResponse(ok: false, error: "use either --all or --lines, not both"))
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func keymapAndConfigReloadWrapDiagnosticCounts() async {
@@ -926,7 +990,7 @@ struct ControlDispatcherTests {
         #expect(response == ControlResponse(ok: false, error: "session not realized"))
         #expect(actions.calls == [
             .sessionType(target: "session", window: "win",
-                         ControlSessionTypeOptions(text: "ls\n", select: true, pane: "scratch"))
+                         ControlSessionTypeOptions(text: "ls\n", select: true, pane: .scratch))
         ])
     }
 
@@ -1109,7 +1173,7 @@ struct ControlDispatcherTests {
         #expect(response == ControlResponse(ok: true, result: ControlResult(text: "line\n")))
         #expect(actions.calls == [
             .sessionText(target: "session", window: "win",
-                         ControlSessionTextOptions(pane: "scratch", paneID: "stable-token",
+                         ControlSessionTextOptions(pane: .scratch, paneID: "stable-token",
                                                    all: false, lines: 10))
         ])
     }

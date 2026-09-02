@@ -250,7 +250,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - `session.type --pane` accepts `primary|left|top`, `split|right|bottom`, or `scratch`; omission defaults
   to primary for compatibility, not focused/on-screen. Read-back and the stable invalid-value error use
-  canonical `left|right|scratch` names.
+  canonical `left|right|scratch` names. The spelling is parsed ONCE, in the dispatcher, and the host takes
+  a `StatusPane`: `session.type`, `session.text` and `font.*` go through `parseSurfacePane`, so the aliases
+  resolve for a raw socket client too, and they keep their own `invalid pane: <value>` rejection while
+  `session.status`/`.restore` keep the pinned one. Never match a pane spelling in the app target.
   Hidden live scratch is addressable; missing panes error. Main alone bounded-polls (12 × 30ms) a newly
   unrealized session, with or without `select`, so `session.new --no-select` plus an immediate type does
   not race the mount+layout gap (#349). The probe precedes every sleep, so a realized session pays nothing

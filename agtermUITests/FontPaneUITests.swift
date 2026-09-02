@@ -71,10 +71,18 @@ final class FontPaneUITests: ControlAPITestCase {
                        "should report no scratch terminal: \(response)")
     }
 
+    // the parse moved to the dispatcher, so this now answers before the app is reached — with the same
+    // wording, which is the point: a raw socket client runs no `validate()` and must see no change.
     func testFontRejectsInvalidPaneServerSide() throws {
         let response = try sendCommand(#"{"cmd":"font.dec","target":"active","args":{"pane":"middle"}}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "font pane:middle should fail server-side: \(response)")
         XCTAssertEqual(response["error"] as? String, "invalid pane: middle", "should report the invalid pane: \(response)")
+    }
+
+    // the aliases `validatePaneArgument` accepts used to validate on the client and then fail on the server.
+    func testFontAcceptsAPaneAlias() throws {
+        let response = try sendCommand(#"{"cmd":"font.reset","target":"active","args":{"pane":"primary"}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "font --pane primary should reach the main pane: \(response)")
     }
 
     // when the primary pane's shell exits, closePrimaryPane moves the split survivor into `surface` and nils

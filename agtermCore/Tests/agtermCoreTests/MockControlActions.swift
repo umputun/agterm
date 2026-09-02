@@ -44,7 +44,7 @@ final class MockControlActions: ControlActions {
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
         case surfaceCursor(target: String?, window: String?)
         case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool)
-        case font(target: String?, window: String?, pane: String?, String)
+        case font(target: String?, window: String?, pane: StatusPane?, String)
         case keymapReload
         case keymapList
         case version
@@ -369,7 +369,7 @@ final class MockControlActions: ControlActions {
         return nextDashboardResponse
     }
 
-    func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
+    func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse {
         calls.append(.font(target: target, window: window, pane: pane, action))
         return nextFontResponse
     }

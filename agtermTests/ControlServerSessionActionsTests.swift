@@ -325,9 +325,9 @@ final class ControlServerSessionActionsTests: XCTestCase {
         let queued = queuePane(in: target, split: true)
         let (_, bare) = try addSession()
 
-        let shown = await server.injectText("ls\n", into: target.id, store: store, select: false, pane: "right")
+        let shown = await server.injectText("ls\n", into: target.id, store: store, select: false, pane: .right)
         let started = Date()
-        let absent = await server.injectText("ls\n", into: bare.id, store: store, select: false, pane: "right")
+        let absent = await server.injectText("ls\n", into: bare.id, store: store, select: false, pane: .right)
 
         XCTAssertEqual(shown.error, "session not realized")
         XCTAssertTrue(queued.granted)
@@ -350,7 +350,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
             ("session.paste", false, { self.server.pasteSession($0.id.uuidString, window: nil) }),
             ("session.selectall", false, { self.server.selectAllSession($0.id.uuidString, window: nil) }),
             ("font.inc left", false, { self.server.font($0.id.uuidString, window: nil, pane: nil, action: "increase_font_size:1") }),
-            ("font.inc right", true, { self.server.font($0.id.uuidString, window: nil, pane: "right", action: "increase_font_size:1") }),
+            ("font.inc right", true, { self.server.font($0.id.uuidString, window: nil, pane: .right, action: "increase_font_size:1") }),
         ]
         for testCase in cases {
             let (store, target) = try addSession()
@@ -391,10 +391,10 @@ final class ControlServerSessionActionsTests: XCTestCase {
                                                   env: ["AGTERM_PANE_ID": "right-token"])
         session.hasSplit = true
 
-        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "right-token"),
-                       "right")
-        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "scratch", paneID: "unknown"),
-                       "scratch", "an unknown token falls back to the explicit role")
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: .left, paneID: "right-token"),
+                       .right)
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: .scratch, paneID: "unknown"),
+                       .scratch, "an unknown token falls back to the explicit role")
     }
 
     func testTextPaneIDFollowsItsSurfaceAfterSwap() throws {
@@ -409,8 +409,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
         XCTAssertNil(store.swapPanes(session.id))
 
-        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: "left", paneID: "moving-token"),
-                       "right")
+        XCTAssertEqual(ControlServer.resolvedSessionTextPane(in: session, pane: .left, paneID: "moving-token"),
+                       .right)
     }
 
     // the same parked pane, one command over: `surfaceBindingAction`'s cast proves only that the SLOT is
