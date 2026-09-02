@@ -450,10 +450,16 @@ error keeps those names for compatibility.
   selection → `no selection` error. Selection is readable on any realized session regardless of focus, but
   always from the main PANE — a selection made in a covering overlay is `session overlay copy`'s, not this
   command's. A never-shown session → `session not realized`, as with `session select-all`.
-- `session paste [--target] [--window W]` — paste the system clipboard (`NSPasteboard.general`) into the
-  session's main pane, the socket analogue of ⌘V / Edit ▸ Paste. Runs libghostty's `paste_from_clipboard`
-  (bracketed paste, no prompt), so the text lands at the prompt without auto-submitting. Read it back with
-  `session text`. A never-shown session → `session not realized`.
+- `session paste [--pane left|right|scratch] [--target] [--window W]` — paste the system clipboard
+  (`NSPasteboard.general`) into a pane of the session, the socket analogue of ⌘V / Edit ▸ Paste. Runs
+  libghostty's `paste_from_clipboard` (bracketed paste, no prompt), so the text lands at the prompt without
+  auto-submitting. `--pane` (canonical `left`|`right`|`scratch`; role and position aliases above are also
+  accepted) picks the pane: `right` is the split pane (`session has no split pane` when there is none),
+  `scratch` the scratch terminal even while hidden (`session has no scratch terminal` when none opened);
+  omitted and `left` are the main pane, which still reaches a promoted split survivor. An unparseable value
+  is `--pane must be left, right, or scratch`, rejected in the dispatcher so a raw socket client gets it too.
+  Read it back with `session text --pane` naming the same pane. A never-shown session →
+  `session not realized`.
 - `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),
   the socket analogue of ⌘A / Edit ▸ Select All (libghostty `select_all`). Read the resulting selection
   back with `session copy`. A never-shown session → `session not realized`.

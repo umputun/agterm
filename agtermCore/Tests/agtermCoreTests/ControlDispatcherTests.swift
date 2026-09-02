@@ -965,7 +965,51 @@ struct ControlDispatcherTests {
             cmd: .sessionPaste, target: "session", args: ControlArgs(window: "win")))
 
         #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
-        #expect(actions.calls == [.sessionPaste(target: "session", window: "win")])
+        #expect(actions.calls == [.sessionPaste(target: "session", window: "win", pane: nil)])
+    }
+
+    // an omitted `pane` must stay nil rather than becoming a default: the action reads nil as the main pane
+    // through `addressableSurface`, which is what every pre-`--pane` caller got.
+    @Test func sessionPasteRoutesPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionPasteResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionPaste, target: "session", args: ControlArgs(pane: "right")))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [.sessionPaste(target: "session", window: nil, pane: .right)])
+    }
+
+    // the aliases the CLI's `validate()` accepts have to reach the surface, so the pane is parsed HERE rather
+    // than matched as a spelling in the app: `session paste --pane split` used to validate and then fail.
+    @Test func sessionPasteAcceptsThePaneAliases() async {
+        for (spelling, expected) in [("primary", StatusPane.left), ("top", .left),
+                                     ("split", .right), ("bottom", .right), ("scratch", .scratch)] {
+            let actions = MockControlActions()
+            let dispatcher = ControlDispatcher(actions: actions)
+            actions.nextSessionPasteResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+            _ = await dispatcher.dispatch(ControlRequest(
+                cmd: .sessionPaste, target: "session", args: ControlArgs(pane: spelling)))
+
+            #expect(actions.calls == [.sessionPaste(target: "session", window: nil, pane: expected)],
+                    "--pane \(spelling) must resolve to \(expected)")
+        }
+    }
+
+    // a raw socket client runs no `validate()`, so the rejection is the dispatcher's, and it is the same
+    // pinned string the CLI throws. The action must not be reached.
+    @Test func sessionPasteRejectsAnUnknownPaneWithoutCallingTheAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionPaste, target: "session", args: ControlArgs(pane: "other")))
+
+        #expect(response == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func sessionSelectAllRoutesTargetAndWindow() async {

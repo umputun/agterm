@@ -1109,17 +1109,24 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session paste [--target T] [--window W]
+                agtermctl session paste [--pane left|right|scratch] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.paste</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Paste the system clipboard into the session's main pane — the socket analogue of ⌘V / Edit ▸ Paste. It runs
+                Paste the system clipboard into a pane of the session — the socket analogue of ⌘V / Edit ▸ Paste. It runs
                 libghostty's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paste_from_clipboard</span> as a
                 bracketed paste with no prompt, so the text lands at the prompt <em>without auto-submitting</em>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Read it back with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session text</span>. A never-shown
-                session gives <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session not realized</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane</span> picks the pane:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> is the split pane,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span> the scratch terminal even while hidden;
+                omitted is the main pane. The role and position aliases
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">primary</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span>)
+                are accepted too. Read it back with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session text --pane</span> naming the same
+                pane. A never-shown session gives <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session not realized</span>.
               </p>
             </div>
 

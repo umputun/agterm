@@ -606,6 +606,15 @@ printf 'deploy staging' | pbcopy
 agtermctl session paste --target "$other"   # lands at the prompt, not submitted
 ```
 
+`--pane` picks which pane it lands in, so multi-line text can reach a split or the scratch terminal
+without `session type` submitting it line by line:
+
+```bash
+pbcopy < notes.md
+agtermctl session paste --pane right --target "$other"
+agtermctl session text --pane right --target "$other" --json | jq -r '.result.text' | tail -3
+```
+
 ## Read a session's buffer as text
 
 `session text` returns the terminal buffer as plain text in `result.text` — the visible screen by

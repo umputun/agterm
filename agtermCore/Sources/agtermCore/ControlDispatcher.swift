@@ -81,7 +81,7 @@ public protocol ControlActions {
     func readQuickText(all: Bool, lines: Int?) async -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
-    func pasteSession(_ target: String?, window: String?) -> ControlResponse
+    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
                        text: String?, to: String?) async -> ControlResponse
@@ -601,7 +601,11 @@ public struct ControlDispatcher {
         case .sessionCopy:
             return actions.copySessionSelection(request.target, window: request.args?.window)
         case .sessionPaste:
-            return actions.pasteSession(request.target, window: request.args?.window)
+            switch parsePane(request.args?.pane) {
+            case .pane(let parsed):
+                return actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
+            case .rejected(let rejection): return rejection
+            }
         case .sessionSelectAll:
             return actions.selectAllSession(request.target, window: request.args?.window)
         case .sessionSearch:

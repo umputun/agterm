@@ -330,11 +330,15 @@ struct Session: ParsableCommand {
 
     struct Paste: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Paste the system clipboard into a session (like ⌘V).")
+        @Option(name: .long, help: "Which pane to paste into: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to primary.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
+        func validate() throws { try validatePaneArgument(pane) }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionPaste, target: target.target, args: options.withWindow())
+            ControlRequest(cmd: .sessionPaste, target: target.target,
+                           args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
         }
     }
 

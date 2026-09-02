@@ -4,13 +4,36 @@ import agtermCore
 /// `ControlServer` arms that reach into a live `GhosttySurfaceView` — font size, selection copy, background
 /// watermark, buffer read, in-terminal search, text injection. Split out for the swiftlint size limit.
 extension ControlServer {
-    /// Runs a libghostty binding action on the target's addressable surface — a SPECIFIC one, unlike the menu
-    /// path's focused pane. Shared by `session.paste`/`session.selectall`; `Session.addressableSurface` owns
-    /// which pane that resolves to. An empty slot and a parked view whose surface never came up are one state
-    /// to a caller: "session not realized".
-    private func surfaceBindingAction(_ target: String?, window: String?, action: String) -> ControlResponse {
+    /// Runs a libghostty binding action on a pane of the target session — a SPECIFIC one, unlike the menu
+    /// path's focused pane. Shared by `session.paste`/`session.selectall`. `pane` arrives parsed by the
+    /// dispatcher, so no spelling reaches here: nil (`session.selectall` always, `session.paste` without
+    /// `--pane`) and `.left` are the main pane via `addressableSurface`, which keeps the pre-pane behavior and
+    /// still reaches a promoted split survivor; `.scratch` resolves while hidden, its surface kept alive. An
+    /// empty slot and a parked view whose surface never came up are one state to a caller: "session not
+    /// realized".
+    private func surfaceBindingAction(_ target: String?, window: String?, pane: StatusPane?,
+                                      action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
-            guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
+            // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            let chosen: (any TerminalSurface)?
+            switch pane {
+            case nil, .left:
+                chosen = session.addressableSurface
+            case .right:
+                guard let split = session.splitSurface else {
+                    return ControlResponse(ok: false, error: "session has no split pane")
+                }
+                chosen = split
+            case .scratch:
+                guard let scratch = session.scratchSurface else {
+                    return ControlResponse(ok: false, error: "session has no scratch terminal")
+                }
+                chosen = scratch
+            }
+            guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             surface.expediteSpawn()
@@ -66,15 +89,17 @@ extension ControlServer {
     }
 
     /// The ⌘V / Edit ▸ Paste analogue (`session.paste`): the same libghostty `paste_from_clipboard` the
-    /// keyboard takes, so bracketed paste applies and no OSC-52 prompt appears. Read back with `session.text`.
-    func pasteSession(_ target: String?, window: String?) -> ControlResponse {
-        surfaceBindingAction(target, window: window, action: "paste_from_clipboard")
+    /// keyboard takes, so bracketed paste applies and no OSC-52 prompt appears. `pane` addresses the same
+    /// three panes `session.text` reads, so the documented paste-then-read-back pair resolves one pane on both
+    /// halves instead of writing main and reading the split.
+    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse {
+        surfaceBindingAction(target, window: window, pane: pane, action: "paste_from_clipboard")
     }
 
     /// Selects the target session's entire terminal buffer (`session.selectall`, the ⌘A / Edit ▸ Select All
     /// analogue); read the resulting selection back with `session.copy`.
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse {
-        surfaceBindingAction(target, window: window, action: "select_all")
+        surfaceBindingAction(target, window: window, pane: nil, action: "select_all")
     }
 
     /// Returns the surface's current selection text in the response, NOT to the system clipboard (automation

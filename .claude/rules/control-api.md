@@ -286,7 +286,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and an unrealized pane is `session not realized` — `readSelection` cannot tell the two apart, and copy is
   select-all's read-back, so both name that state the same way. It stays on the PANE while an overlay covers
   it, so a selection made inside one is `session.overlay.copy`'s, not this command's.
-  `session.paste` and `.selectall` run Ghostty bindings on main. They use
+  `session.paste` and `.selectall` run Ghostty bindings through one arm. `session.paste` takes `--pane`
+  so its `session.text` read-back can name the same pane; the dispatcher parses it into `StatusPane`
+  (`session.status`'s `parsePane`, so the role and position aliases resolve and a raw client gets the same
+  pinned rejection) and the arm takes the parsed value, never a spelling. `.selectall` stays on main, its
+  `session.copy` read-back having no pane either. Omitted, and for select-all always, the pane is
   `Session.addressableSurface = surface ?? splitSurface`, never focus-aware `activeSurface`, so select-all
   and copy share one pane. Read paste through text and select-all through copy.
 - Keep standard SwiftUI Edit routing. `GhosttySurfaceView` implements Copy/Paste/Select All and validation;

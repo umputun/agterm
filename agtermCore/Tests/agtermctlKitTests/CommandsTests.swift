@@ -515,6 +515,28 @@ struct CommandsTests {
         #expect(try request(["session", "paste", "--target", "9f3c"]) == ControlRequest(cmd: .sessionPaste, target: "9f3c"))
     }
 
+    @Test func sessionPasteWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionPaste, target: "9f3c", args: ControlArgs(pane: "right"))
+        #expect(try request(["session", "paste", "--pane", "right", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionPasteWithScratchPane() throws {
+        let expected = ControlRequest(cmd: .sessionPaste, target: "active", args: ControlArgs(pane: "scratch"))
+        #expect(try request(["session", "paste", "--pane", "scratch"]) == expected)
+    }
+
+    // the CLI validates the spelling and passes it through raw; `ControlDispatcher` turns it into a
+    // `StatusPane`, which is what makes the alias reach the surface.
+    @Test func sessionPasteThreadsAPaneAliasRaw() throws {
+        let expected = ControlRequest(cmd: .sessionPaste, target: "active", args: ControlArgs(pane: "split"))
+        #expect(try request(["session", "paste", "--pane", "split"]) == expected)
+    }
+
+    @Test func sessionPasteRejectsUnknownPane() {
+        // `other` is a session.focus mode, not a pasteable pane.
+        #expect(validationMessage(["session", "paste", "--pane", "other"]) == "--pane must be left, right, or scratch")
+    }
+
     @Test func sessionSelectAllDefaultsActive() throws {
         #expect(try request(["session", "select-all"]) == ControlRequest(cmd: .sessionSelectAll, target: "active"))
     }

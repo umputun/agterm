@@ -110,7 +110,7 @@ An overlay's command runs through `sh -c` with the app's **GUI** `PATH`, which h
 
 `session overlay open --block` exits with the program's own status, so a non-zero code can equally mean agterm refused before revdiff ever ran. Reading only the code turns "overlay already open" into a meaningless "exited with 1", so the script reads the reply text as well.
 
-Putting the notes at the prompt needs `session paste`, because `session type` sends a real Return for every newline and multi-line text would submit itself line by line. `session paste` reads the system clipboard, so the script saves what is on it, pastes, and puts it back. It also has no `--pane` and always targets the session's main pane, so a note taken in a split or scratch pane falls back to typing a one-line pointer at the notes file instead.
+Putting the notes at the prompt needs `session paste`, because `session type` sends a real Return for every newline and multi-line text would submit itself line by line. `session paste` reads the system clipboard, so the script saves what is on it, pastes, and puts it back. The script calls it without `--pane`, so the paste targets the session's main pane, and a note taken in a split or scratch pane falls back to typing a one-line pointer at the notes file instead.
 
 ## Limits
 

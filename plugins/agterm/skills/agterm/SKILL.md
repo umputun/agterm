@@ -326,7 +326,8 @@ omitted when expanded).
   keystroke does; another pane's glyph, an `active` one, and an empty payload are left alone.
 - `session copy` — print the session's selected text (does NOT touch the system clipboard).
 - `session paste` — paste the system clipboard into the session (the socket analogue of ⌘V; read it back with
-  `session text`).
+  `session text`). `--pane left|right|scratch` picks the pane, with the usual role and position aliases;
+  omitted is the main pane.
 - `session select-all` — select the session's entire terminal buffer (the socket analogue of ⌘A; read the
   selection back with `session copy`).
 - `session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN]`: print the session buffer
