@@ -58,9 +58,21 @@ final class ZmxLiveUITests: ControlAPITestCase {
         return expectedPanes.isSubset(of: backed)
     }
 
-    private struct PaneDaemon {
-        let sessionID: String
-        let pane: String
+    private struct DaemonRow {
+        let daemon: String
+        let observation: String
+        let state: String
+        let sessionID: String?
+        let pane: String?
+
+        var isAlive: Bool { observation == "running" || observation == "unreadable" }
+
+        /// `ControlZmxError.killRefusal` accepts only a running, claimed row, so anything else is
+        /// unreapable and belongs in the report rather than in a kill that is certain to be refused.
+        var killTarget: (sessionID: String, pane: String)? {
+            guard observation == "running", state == "claimed", let sessionID, let pane else { return nil }
+            return (sessionID, pane)
+        }
     }
 
     /// Ends this run's daemons through the app's own `zmx.kill` instead of signalling them from the test
@@ -75,35 +87,40 @@ final class ZmxLiveUITests: ControlAPITestCase {
             throw cleanupFailure("refusing to reap: the test namespace resolved to the default one")
         }
 
-        // right before left: the split attached through the session the primary's daemon leads
-        for daemon in try liveDaemons("zmx.list before cleanup", namespace: namespace)
-            .sorted(by: { $0.pane > $1.pane }) {
+        var killErrors: [String] = []
+        // right before left: killing the primary promotes the split, since closePrimaryPane assigns
+        // paneIdentity from splitPaneIdentity, so a right entry captured before that stops resolving
+        let alive = try daemonRows("zmx.list before cleanup", namespace: namespace).filter(\.isAlive)
+        for row in alive.sorted(by: { ($0.pane ?? "") > ($1.pane ?? "") }) {
+            guard let target = row.killTarget else { continue }
             let request = try JSONSerialization.data(withJSONObject: [
                 "cmd": "zmx.kill",
-                "target": daemon.sessionID,
-                "args": ["pane": daemon.pane, "force": true],
+                "target": target.sessionID,
+                "args": ["pane": target.pane, "force": true],
             ])
             let response = try sendCommand(String(decoding: request, as: UTF8.self))
-            guard response["ok"] as? Bool == true else {
-                throw cleanupFailure("zmx.kill \(daemon.sessionID):\(daemon.pane) refused: \(response)")
+            if response["ok"] as? Bool != true {
+                killErrors.append("\(row.daemon): \(response["error"] ?? response)")
             }
         }
 
-        var remaining = try liveDaemons("zmx.list after cleanup", namespace: namespace)
+        var remaining = try daemonRows("zmx.list after cleanup", namespace: namespace).filter(\.isAlive)
         let deadline = Date().addingTimeInterval(20)
         while !remaining.isEmpty, Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-            remaining = try liveDaemons("zmx.list after cleanup", namespace: namespace)
+            remaining = try daemonRows("zmx.list after cleanup", namespace: namespace).filter(\.isAlive)
         }
         guard remaining.isEmpty else {
-            throw cleanupFailure("\(remaining.count) daemon(s) still running after zmx.kill")
+            let names = remaining.map { "\($0.daemon) (\($0.state)/\($0.observation))" }.joined(separator: ", ")
+            let errors = killErrors.isEmpty ? "" : "; kill errors: " + killErrors.joined(separator: ", ")
+            throw cleanupFailure("daemons still alive after zmx.kill: \(names)\(errors)")
         }
     }
 
-    /// The running daemons this test owns. Fails closed rather than reaping anything it cannot name: an
-    /// incomplete inventory, an endpoint outside this test's namespace, or a running row that is not a
-    /// claimed pane all abort the cleanup instead of widening it.
-    private func liveDaemons(_ context: String, namespace: String) throws -> [PaneDaemon] {
+    /// Every daemon in this test's namespace. The endpoint and inventory checks are the safety boundary
+    /// and still fail closed; past them a row is reported rather than dropped, so an unreapable daemon
+    /// surfaces in the post-kill deadline instead of being filtered out of both passes.
+    private func daemonRows(_ context: String, namespace: String) throws -> [DaemonRow] {
         let response = try sendCommand(#"{"cmd":"zmx.list"}"#)
         guard response["ok"] as? Bool == true,
               let zmx = (response["result"] as? [String: Any])?["zmx"] as? [String: Any] else {
@@ -116,16 +133,13 @@ final class ZmxLiveUITests: ControlAPITestCase {
               endpoint["socketDirectory"] as? String == namespace else {
             throw cleanupFailure("\(context): the endpoint is not this test's namespace")
         }
-        return try (zmx["entries"] as? [[String: Any]] ?? [])
-            .filter { $0["observation"] as? String == "running" }
-            .map { entry in
-                guard entry["state"] as? String == "claimed",
-                      let sessionID = entry["sessionID"] as? String,
-                      let pane = entry["pane"] as? String else {
-                    throw cleanupFailure("\(context): running daemon \(entry["daemon"] ?? "?") is unclaimed")
-                }
-                return PaneDaemon(sessionID: sessionID, pane: pane)
-            }
+        return (zmx["entries"] as? [[String: Any]] ?? []).map { entry in
+            DaemonRow(daemon: entry["daemon"] as? String ?? "?",
+                      observation: entry["observation"] as? String ?? "",
+                      state: entry["state"] as? String ?? "",
+                      sessionID: entry["sessionID"] as? String,
+                      pane: entry["pane"] as? String)
+        }
     }
 
     private func cleanupFailure(_ message: String) -> Error {
