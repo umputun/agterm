@@ -351,11 +351,13 @@ buys nothing. A caller with no tree uses `version`.
   existing one or creates it when absent (idempotent). `--command` runs that command as the session's
   process instead of the login shell (no echoed command line; the session closes when the command
   exits). It runs argv-style (tokenized, quotes respected, but NO shell), so shell operators (`;`,
-  `&&`, `$VAR`, redirects, globs) are not interpreted. In Live sessions mode it is a create-only zmx
-  payload run through a login shell instead, so shell operators do work there. It inherits the app's GUI `PATH` (the launchd
+  `&&`, `$VAR`, redirects, globs) are not interpreted, and it inherits the app's GUI `PATH` (the launchd
   default — no `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
-  (`/opt/homebrew/bin/htop`).
+  (`/opt/homebrew/bin/htop`). All of that describes Fresh shells and Re-run commands. In Live sessions
+  mode the command is instead a create-only zmx payload the persistent shell runs as a login shell, so
+  shell operators are interpreted, the `PATH` is that shell's rather than the launchd default, and the
+  session stays open after the command exits.
   `--wait` (only with `--command`, else an error) HOLDS the session open after the command exits —
   showing libghostty's press-any-key prompt with the final output intact instead of closing immediately —
   so you can read a build/test/deploy's final output or an early failure that would otherwise flash and

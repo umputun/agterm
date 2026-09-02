@@ -59,18 +59,23 @@ final class ZmxLiveUITests: ControlAPITestCase {
     }
 
     private struct DaemonRow {
+        /// Mirrors ZmxDaemonObservation and ZmxDaemonState. Parsing through them rather than raw strings
+        /// is what makes a renamed value fail the reap instead of silently reading as not alive.
+        enum Observation: String { case running, unreadable, absent }
+        enum State: String { case claimed, orphan, unknown, conflicted, pendingClose, foreign }
+
         let daemon: String
-        let observation: String
-        let state: String
+        let observation: Observation
+        let state: State
         let sessionID: String?
         let pane: String?
 
-        var isAlive: Bool { observation == "running" || observation == "unreadable" }
+        var isAlive: Bool { observation == .running || observation == .unreadable }
 
         /// `ControlZmxError.killRefusal` accepts only a running, claimed row, so anything else is
         /// unreapable and belongs in the report rather than in a kill that is certain to be refused.
         var killTarget: (sessionID: String, pane: String)? {
-            guard observation == "running", state == "claimed", let sessionID, let pane else { return nil }
+            guard observation == .running, state == .claimed, let sessionID, let pane else { return nil }
             return (sessionID, pane)
         }
     }
@@ -111,7 +116,7 @@ final class ZmxLiveUITests: ControlAPITestCase {
             remaining = try daemonRows("zmx.list after cleanup", namespace: namespace).filter(\.isAlive)
         }
         guard remaining.isEmpty else {
-            let names = remaining.map { "\($0.daemon) (\($0.state)/\($0.observation))" }.joined(separator: ", ")
+            let names = remaining.map { "\($0.daemon) (\($0.state.rawValue)/\($0.observation.rawValue))" }.joined(separator: ", ")
             let errors = killErrors.isEmpty ? "" : "; kill errors: " + killErrors.joined(separator: ", ")
             throw cleanupFailure("daemons still alive after zmx.kill: \(names)\(errors)")
         }
@@ -133,12 +138,25 @@ final class ZmxLiveUITests: ControlAPITestCase {
               endpoint["socketDirectory"] as? String == namespace else {
             throw cleanupFailure("\(context): the endpoint is not this test's namespace")
         }
-        return (zmx["entries"] as? [[String: Any]] ?? []).map { entry in
-            DaemonRow(daemon: entry["daemon"] as? String ?? "?",
-                      observation: entry["observation"] as? String ?? "",
-                      state: entry["state"] as? String ?? "",
-                      sessionID: entry["sessionID"] as? String,
-                      pane: entry["pane"] as? String)
+        guard let entries = zmx["entries"] as? [[String: Any]] else {
+            throw cleanupFailure("\(context): the inventory carries no entries array")
+        }
+        return try entries.map { entry in
+            guard let daemon = entry["daemon"] as? String, let rawObservation = entry["observation"] as? String,
+                  let rawState = entry["state"] as? String else {
+                throw cleanupFailure("\(context): an entry lacks daemon, observation or state: \(entry)")
+            }
+            guard let observation = DaemonRow.Observation(rawValue: rawObservation),
+                  let state = DaemonRow.State(rawValue: rawState) else {
+                throw cleanupFailure("\(context): \(daemon) reports observation \(rawObservation) and state "
+                    + "\(rawState), one of which this test does not know")
+            }
+            let sessionID = entry["sessionID"] as? String
+            let pane = entry["pane"] as? String
+            guard state != .claimed || (sessionID != nil && pane != nil) else {
+                throw cleanupFailure("\(context): claimed daemon \(daemon) carries no sessionID or pane")
+            }
+            return DaemonRow(daemon: daemon, observation: observation, state: state, sessionID: sessionID, pane: pane)
         }
     }
 
