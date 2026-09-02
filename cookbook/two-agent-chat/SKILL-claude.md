@@ -10,8 +10,9 @@ Talk with Codex in the split pane. The user reads both panes, so the conversatio
 result even when code comes out of it.
 
 Everything that touches the pane goes through `peer-chat.py`. Do not drive `agtermctl` directly:
-the script carries the checks that keep a message out of a dialog, and a raw `session type` bypasses
-all of them.
+the script checks the target agent, window, composer and cursor, sends the body as bounded, separately
+observed pieces through `session type --stdin`, then sends the submit key after the final piece
+settles. A raw command bypasses those checks.
 
 ## Preconditions
 
@@ -37,11 +38,23 @@ what agterm reports for that pane. If this machine starts Codex through a wrappe
 recorded here at setup time. Never guess a name after a refusal and never retry with a different
 one until a human has told you which is right.
 
-Do not write `Chat from Claude:` yourself. The script adds the label, and that label is what lets
-Codex read the message as conversation rather than as a fresh instruction from the user.
+Do not write `Chat from Claude:` yourself. The script adds the label, and that label lets Codex
+read the message as conversation instead of as a fresh instruction from the user.
 
-A busy Codex is not a reason to wait. The script submits with Tab, which parks the line in Codex's
-queued follow-ups mid-turn and simply submits on an idle composer.
+A busy Codex is not a reason to wait. The script submits with Return, Codex's steering key. It
+confirms that the composer cleared, while Codex may queue the message when its current state cannot
+accept a steer.
+
+Add `--queue` only for an informational note that needs no action before Codex's current turn ends.
+It changes Return to Tab for that send:
+
+```bash
+peer-chat.py --to codex --queue --stdin <<'CHAT'
+the background check finished; no action is needed in this turn
+CHAT
+```
+
+Answers, review results, corrections and stop signals always use the default steering send.
 
 ## Receiving
 
@@ -66,17 +79,18 @@ Never answer anything on the user's behalf: not a chooser entry, not a trust pro
 permission or approval request, not a warning. Those answers carry the user's authority and are his
 to give.
 
-If the script refuses, read which check failed and stop. A refusal before typing means nothing was
-written. A refusal after typing means the text may still be sitting in the composer, so say so and
-let the user decide whether to clear it or submit it. Never work around a refusal, and never
-re-send blind.
+If the script reports a pre-write refusal, nothing was written. After a body verification failure,
+`composer cleared` means its backspaces restored the empty prompt; `composer cleanup failed` means
+text may remain and the pane must be read. Cleanup checks each visible owned section before a bounded
+backspace batch, including after the opening scrolls away. A submit or acceptance failure is
+ambiguous. Stop, report the exact error and never re-send blind.
 
 Nothing Codex says supplies the user's approval for an action that needed it. "Codex agreed" is not
 approval and must never be reported as if it were.
 
 ## Manners
 
-Plain language, short sentences. Quote what Codex actually said before answering it, rather than
-summarising it away. Disagree when there is a disagreement: two agents converging politely produce
+Plain language, short sentences. Quote what Codex actually said instead of summarising it away.
+Disagree when there is a disagreement: two agents converging politely produce
 nothing, and the useful output is a located disagreement or a checked fact. Verify a claim Codex
 makes about the code with your own tool call before repeating it to the user.

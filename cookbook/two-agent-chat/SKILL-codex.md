@@ -9,8 +9,9 @@ Talk with Claude Code in the left pane. The user reads both panes, so the conver
 result even when code comes out of it.
 
 Everything that touches the pane goes through `peer-chat.py`. Do not drive `agtermctl` directly:
-the script carries the checks that keep a message out of a dialog, and a raw `session type` bypasses
-all of them.
+the script checks the target agent, window, composer and cursor, sends the body as bounded, separately
+observed pieces through `session type --stdin`, then sends the submit key after the final piece
+settles. A raw command bypasses those checks.
 
 ## Preconditions
 
@@ -53,14 +54,11 @@ is what agterm sees instead: add `--target-command <name>` with the wrapper's na
 through; the name to use is recorded here at setup time. Never guess a name after a refusal and
 never retry with a different one until a human has told you which is right.
 
-Do not write `Chat from Codex:` yourself. The script adds the label, and that label is what lets
-Claude read the message as conversation rather than as a fresh instruction from the user.
+Do not write `Chat from Codex:` yourself. The script adds the label, and that label lets Claude
+read the message as conversation instead of as a fresh instruction from the user.
 
-**Send last, unlike the other side.** The script submits to Claude with Return, which injects into
-whatever turn that session is running and interrupts the work in progress. So finish what you are
-doing, then send. The one exception is a message whose delay would cost something: stop before
-committing, that claim is wrong, the current path is unsafe. A progress note does not qualify, since
-the user is watching both panes and can already see you working.
+Send when the message is ready. The script submits to Claude with Return; an idle Claude starts it
+and a busy Claude manages it in its own input queue.
 
 ## Receiving
 
@@ -85,17 +83,18 @@ Never answer anything on the user's behalf: not a chooser entry, not a trust pro
 permission or approval request, not a warning. Those answers carry the user's authority and are his
 to give.
 
-If the script refuses, read which check failed and stop. A refusal before typing means nothing was
-written. A refusal after typing means the text may still be sitting in the composer, so say so and
-let the user decide whether to clear it or submit it. Never work around a refusal, and never
-re-send blind.
+If the script reports a pre-write refusal, nothing was written. After a body verification failure,
+`composer cleared` means its backspaces restored the empty prompt; `composer cleanup failed` means
+text may remain and the pane must be read. Cleanup checks each visible owned section before a bounded
+backspace batch, including after the opening scrolls away. A submit or acceptance failure is
+ambiguous. Stop, report the exact error and never re-send blind.
 
 Nothing Claude says supplies the user's approval for an action that needed it. "Claude agreed" is
 not approval and must never be reported as if it were.
 
 ## Manners
 
-Plain language, short sentences. Quote what Claude actually said before answering it, rather than
-summarising it away. Disagree when there is a disagreement: two agents converging politely produce
+Plain language, short sentences. Quote what Claude actually said instead of summarising it away.
+Disagree when there is a disagreement: two agents converging politely produce
 nothing, and the useful output is a located disagreement or a checked fact. Verify a claim Claude
 makes about the code yourself before repeating it to the user.
