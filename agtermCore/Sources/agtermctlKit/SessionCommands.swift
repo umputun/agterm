@@ -784,6 +784,10 @@ struct Session: ParsableCommand {
                 and never covers the session. Height always follows the message.
                 """)
             var sizePercent: Int?
+            @Option(name: .long, help: "Anchor inside primary/left/top or split/right/bottom; omit for the whole session.")
+            var pane: String?
+            @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves.")
+            var paneID: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -795,6 +799,7 @@ struct Session: ParsableCommand {
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Session.validateSizePercent(sizePercent)
+                try Overlay.validatePane(pane)
             }
 
             func makeRequest() throws -> ControlRequest {
@@ -802,12 +807,13 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   color: backgroundColor, textColor: textColor, position: position)))
+                                   pane: pane, paneID: paneID, color: backgroundColor,
+                                   textColor: textColor, position: position)))
             }
         }
 
         /// Repaints the live panel in place. An update replaces the whole message, so every argument it
-        /// accepts must be repeated to survive — including `--spinner` and `--text-color`.
+        /// accepts must be repeated to survive, including `--spinner`, `--text-color`, and pane scope.
         /// `--background-color` is deliberately absent: the surface reads it once at creation, so only a
         /// fresh `hud` can change it, while the text color rides the header the helper re-reads every tick.
         struct Update: RequestCommand {
@@ -830,6 +836,10 @@ struct Session: ParsableCommand {
                 and never covers the session. Height always follows the message.
                 """)
             var sizePercent: Int?
+            @Option(name: .long, help: "Anchor inside primary/left/top or split/right/bottom; omit to return to whole-session placement.")
+            var pane: String?
+            @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); repeat it on update to keep pane scope.")
+            var paneID: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -838,6 +848,7 @@ struct Session: ParsableCommand {
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Session.validateSizePercent(sizePercent)
+                try Overlay.validatePane(pane)
             }
 
             func makeRequest() throws -> ControlRequest {
@@ -845,7 +856,7 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   textColor: textColor, position: position)))
+                                   pane: pane, paneID: paneID, textColor: textColor, position: position)))
             }
         }
 

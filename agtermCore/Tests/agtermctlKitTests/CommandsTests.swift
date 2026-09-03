@@ -1144,6 +1144,20 @@ struct CommandsTests {
         #expect(built.args?.sizePercent == nil)
         #expect(built.args?.color == nil)
         #expect(built.args?.textColor == nil)
+        #expect(built.args?.pane == nil && built.args?.paneID == nil)
+    }
+    @Test func sessionHudOpenAndUpdateCarryPaneIdentitySelectors() throws {
+        let open = try request(["session", "hud", "wait", "--pane", "right", "--pane-id", "stable-token"])
+        let update = try request(["session", "hud", "update", "done", "--pane", "left", "--pane-id", "stable-token"])
+        #expect(open.args?.pane == "right" && open.args?.paneID == "stable-token")
+        #expect(update.args?.pane == "left" && update.args?.paneID == "stable-token")
+    }
+
+    @Test(arguments: ["scratch", "middle"])
+    func sessionHudRejectsInvalidPane(_ pane: String) {
+        let error = "--pane must be left or right"
+        #expect(validationMessage(["session", "hud", "wait", "--pane", pane]) == error)
+        #expect(validationMessage(["session", "hud", "update", "done", "--pane", pane]) == error)
     }
 
     /// The CLI must take everything the socket does, so a caller can echo back what `tree` handed him and a

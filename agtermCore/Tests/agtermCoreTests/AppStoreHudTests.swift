@@ -11,14 +11,122 @@ struct AppStoreHudTests {
         let spec = HudSpec(message: "gathering options", detail: "scanning 400 files", spinner: .braille,
                            backgroundColor: "#2a1a3a", textColor: "#e0e0e0", sizePercent: 35,
                            position: .topCenter)
-        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/hud", size: HudPanelSize(widthPercent: 35, heightPercent: 12))
+        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 35, heightPercent: 12),
+                      paneIdentity: session.paneIdentity)
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
 
         #expect(node.hud == ControlHudNode(message: "gathering options", detail: "scanning 400 files",
                                            spinner: "braille", backgroundColor: "#2a1a3a",
                                            textColor: "#e0e0e0", sizePercent: 35,
-                                           heightPercent: 12, position: "top-center"))
+                                           heightPercent: 12, position: "top-center", pane: "left"))
+    }
+
+    @Test func paneReadBackFollowsTheStableIdentityAcrossRoleChanges() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let target = UUID()
+        session.splitPaneIdentity = target
+        session.hasSplit = true
+        session.isSplit = true
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8), paneIdentity: target)
+
+        #expect(store.controlTree().workspaces[0].sessions[0].hud?.pane == "right")
+
+        session.paneIdentity = target
+        session.splitPaneIdentity = UUID()
+        #expect(store.controlTree().workspaces[0].sessions[0].hud?.pane == "left")
+    }
+
+    @Test func closingTheTargetPaneClosesItsHudButPreservesAnotherPanesHud() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let splitIdentity = UUID()
+        session.splitPaneIdentity = splitIdentity
+        session.hasSplit = true
+        session.isSplit = true
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "split"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8), paneIdentity: splitIdentity)
+
+        store.closeSplit(session.id)
+        #expect(!session.hudActive)
+
+        session.splitPaneIdentity = UUID()
+        session.hasSplit = true
+        session.isSplit = true
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "primary"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8), paneIdentity: session.paneIdentity)
+        store.closeSplit(session.id)
+        #expect(session.hudActive)
+        #expect(session.hudTargetPane == .left)
+    }
+
+    @Test func closingAnAbsentSplitDoesNotCloseASessionWideHud() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8))
+
+        store.closeSplit(session.id)
+
+        #expect(session.hudActive)
+        #expect(session.hudPaneIdentity == nil)
+    }
+
+    @Test func hidingTheTargetPaneKeepsTheHudForItsReturn() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let target = UUID()
+        session.splitPaneIdentity = target
+        session.hasSplit = true
+        session.isSplit = true
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8), paneIdentity: target)
+
+        store.toggleSplit(session.id)
+        #expect(session.hudActive)
+        #expect(session.hudTargetPane == .right)
+        #expect(!session.rendersPane(.right))
+
+        store.toggleSplit(session.id)
+        #expect(session.hudActive)
+        #expect(session.rendersPane(.right))
+    }
+
+    @Test func primaryExitClosesItsHudAndPreservesASurvivorHud() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.hasSplit = true
+        session.isSplit = true
+        let splitIdentity = UUID()
+        session.splitPaneIdentity = splitIdentity
+
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "primary"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8),
+                      paneIdentity: session.paneIdentity)
+        store.closePrimaryPane(session.id)
+        #expect(!session.hudActive)
+
+        session.splitSurface = SpySurface()
+        session.hasSplit = true
+        session.isSplit = true
+        let nextSplitIdentity = UUID()
+        session.splitPaneIdentity = nextSplitIdentity
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "survivor"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8), paneIdentity: nextSplitIdentity)
+        store.closePrimaryPane(session.id)
+        #expect(session.hudActive)
+        #expect(session.hudPaneIdentity == nextSplitIdentity)
+        #expect(session.hudTargetPane == .left)
     }
 
     /// A caller who sent an alias reads the canonical anchor back, which is what makes it an alias rather

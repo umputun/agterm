@@ -80,8 +80,9 @@ holds a tree of **workspaces**, each holding **sessions**. A session has a prima
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
 An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving the
-sibling pane visible and usable. The same session-wide slot also holds a **HUD** (`session hud`), a small
-passive panel carrying a message instead of a program: the session keeps focus and stays typable under it.
+    sibling pane visible and usable. The same session-wide slot also holds a **HUD** (`session hud`), a small
+    passive panel carrying a message instead of a program. A HUD can use the whole session or one pane as its
+    placement bounds; the session keeps focus and stays typable under it.
 One slot, so a session shows either a HUD or a program overlay, never both. Separately, the app has one
 **quick terminal** (a scratch shell in a floating panel at 90% of the focused screen capped at 1100x700,
 or whatever share Settings sets instead; not part of the tree and not owned by a window).
@@ -210,7 +211,7 @@ overlay resize` for a record-then-restore zoom), `paneOverlays` (the panes cover
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `session overlay
 open --pane`, independent of the session-wide `overlay` flag),
 `hud` (the message panel occupying the session-wide slot — `{message, detail?, spinner, backgroundColor?,
-textColor?, sizePercent?, heightPercent?, position}`, the two percents being the panel's width and height
+textColor?, sizePercent?, heightPercent?, position, pane?}`, the two percents being the panel's width and height
 shares — omitted when none is up; the read side of `session hud`. `position` and `spinner`
 always report the EFFECTIVE value, `center` and a static panel's `none` included, so a caller who omitted
 them never has to know the defaults; `spinner` names the STYLE, so `none` is what a caller echoes back to
@@ -424,8 +425,8 @@ omitted when expanded).
   `--background-color` gives the overlay pane its own solid color, independent of the session's. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
-- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N]` ·
-  `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N]` ·
+- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--pane P] [--pane-id ID]` ·
+  `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--pane P] [--pane-id ID]` ·
   `session hud close` — post a small **passive** panel over the session saying what you are doing
   ("gathering options…"). Unlike an overlay it takes no input and steals nothing: the session keeps first
   responder, the user keeps typing, and the terminal behind it is neither dimmed nor click-blocked. Use it
@@ -440,13 +441,17 @@ omitted when expanded).
   (default `center`), the same set `session background` takes; every anchor off center holds a fixed margin
   off that pane edge automatically, so a corner keeps the panel out of the text the user is reading. The
   bare `top`/`bottom` are still accepted for `top-center`/`bottom-center`, and the read-back reports the
-  canonical anchor. The panel is sized from the message on both axes —
+  canonical anchor. `--pane primary|left|top|split|right|bottom` makes that pane the coordinate space for
+  the anchor, size cap, and margin. `--pane-id "$AGTERM_PANE_ID"` follows the same shell after pane swaps or
+  promotion and overrides `--pane` when it resolves. An unknown token needs a `--pane` fallback. Open refuses
+  a pane that is not visible. Hiding a target keeps the HUD alive until the pane returns; closing it closes
+  the HUD. The panel is sized from the message on both axes:
   width from the longest line, height from the number of them — so a title and a subtitle give a wide, short
   panel, not a square one. `--size-percent N` (1-100) overrides the WIDTH only, bounded to 10-80% of the
   pane, since a message must never cover the session it is about, so a requested 100 reads back as 80. The
   height always follows the message. `--text-color` colors the panel's TEXT and `--background-color` its
   backing, independently. `session hud update` repaints in place with no re-spawn and no blink,
-  and REPLACES the whole spec — repeat `--detail`/`--spinner`/`--text-color` to keep them, since an omitted
+  and REPLACES the whole spec. Repeat `--detail`/`--spinner`/`--text-color`/`--pane`/`--pane-id` to keep them, since an omitted
   one drops. It takes no `--background-color`: the surface reads that once at creation, so only a fresh
   `session hud` changes it and `tree` keeps reporting the creation color across updates, while the text color rides
   the panel's body file and an update recolors it in place. Message and detail are capped at 256 characters and reject control characters, newline included.

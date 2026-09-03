@@ -239,4 +239,18 @@ final class HudDeckGatesTests: XCTestCase {
         let style = OverlayPanelStyle.resolve(hudSession(position: .centerLeft, sizePercent: 95))
         XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 0)
     }
+
+    func testPanelFrameUsesThePaneRectForSizeAndAnchor() {
+        let style = OverlayPanelStyle.resolve(hudSession(position: .bottomRight,
+                                                         sizePercent: 80, heightPercent: 20))
+        let pane = CGRect(x: 500, y: 0, width: 500, height: 800)
+
+        let panel = style.panelFrame(in: pane)
+
+        XCTAssertEqual(panel.width, 400, accuracy: 0.001)
+        XCTAssertEqual(panel.height, 160, accuracy: 0.001)
+        XCTAssertEqual(panel.maxX, 950, accuracy: 0.001)
+        XCTAssertEqual(panel.maxY, 720, accuracy: 0.001)
+        XCTAssertTrue(pane.contains(panel))
+    }
 }

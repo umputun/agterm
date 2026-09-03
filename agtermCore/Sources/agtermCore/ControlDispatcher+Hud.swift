@@ -2,22 +2,29 @@ import Foundation
 
 extension ControlDispatcher {
     /// Validates host-free HUD arguments before the host measures the terminal font, writes the rendered
-    /// message file, and takes the session's overlay slot. Only text, color, percent, and position are
-    /// checked here; slot occupancy and sizing need the store and stay app-side.
+    /// message file, and takes the session's overlay slot. Text, color, percent, position, and pane spelling
+    /// are checked here; slot occupancy, pane identity, and sizing need the store and stay app-side.
     func dispatchHudCommand(_ request: ControlRequest) -> ControlResponse {
         if request.cmd == .sessionHudClose {
             return actions.closeHud(request.target, window: request.args?.window)
         }
         // open and update validate identically — an update replaces the whole spec — so only the effect differs
-        let post: (String?, String?, HudSpec) -> ControlResponse
+        let post: (String?, String?, HudSpec, ControlHudPlacement) -> ControlResponse
         switch request.cmd {
         case .sessionHudOpen: post = actions.openHud
         case .sessionHudUpdate: post = actions.updateHud
         default: preconditionFailure("dispatchHudCommand called for \(request.cmd.rawValue)")
         }
+        let pane: OverlayPane?
+        switch parsePane(request.args?.pane, error: "--pane must be left or right",
+                         parse: { OverlayPane(controlName: $0) }) {
+        case .pane(let parsed): pane = parsed
+        case .rejected(let response): return response
+        }
+        let placement = ControlHudPlacement(pane: pane, paneID: request.args?.paneID)
         switch parseHudSpec(request) {
         case .rejected(let response): return response
-        case .spec(let spec): return post(request.target, request.args?.window, spec)
+        case .spec(let spec): return post(request.target, request.args?.window, spec, placement)
         }
     }
 

@@ -78,8 +78,8 @@ final class MockControlActions: ControlActions {
         case overlayResult(target: String?, window: String?, pane: OverlayPane?)
         case overlayCopy(target: String?, window: String?, pane: OverlayPane?)
         case overlayText(target: String?, window: String?, ControlSessionOverlayTextOptions)
-        case hudOpen(target: String?, window: String?, HudSpec)
-        case hudUpdate(target: String?, window: String?, HudSpec)
+        case hudOpen(target: String?, window: String?, HudSpec, ControlHudPlacement)
+        case hudUpdate(target: String?, window: String?, HudSpec, ControlHudPlacement)
         case hudClose(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
@@ -544,13 +544,15 @@ final class MockControlActions: ControlActions {
         return nextOverlayTextResponse
     }
 
-    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
-        calls.append(.hudOpen(target: target, window: window, spec))
+    func openHud(_ target: String?, window: String?, spec: HudSpec,
+                 placement: ControlHudPlacement) -> ControlResponse {
+        calls.append(.hudOpen(target: target, window: window, spec, placement))
         return nextHudOpenResponse
     }
 
-    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
-        calls.append(.hudUpdate(target: target, window: window, spec))
+    func updateHud(_ target: String?, window: String?, spec: HudSpec,
+                   placement: ControlHudPlacement) -> ControlResponse {
+        calls.append(.hudUpdate(target: target, window: window, spec, placement))
         return nextHudUpdateResponse
     }
 

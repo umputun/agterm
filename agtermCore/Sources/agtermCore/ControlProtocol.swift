@@ -186,8 +186,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`, `other` toggles); to read for
     /// `session.text` (`left`|`right`, omitted = the focused pane, no `other`); `session.type` injects into
     /// (`left`|`right`, omitted = left/main); set `session.status` (`left`|`right`|`scratch`, omitted =
-    /// `left`/main, parsed to `StatusPane`); and `session.restore` pins (same `StatusPane` spelling, omitted
-    /// = `left`/main, `scratch` rejected app-side).
+    /// `left`/main, parsed to `StatusPane`); `session.restore` pins (same `StatusPane` spelling, omitted
+    /// = `left`/main, `scratch` rejected app-side); and `session.hud.open`/`.update` use as optional placement
+    /// bounds (`left`/`right` only, omitted = the whole session detail area).
     ///
     /// The `session.overlay.*` family (`.open`/`.close`/`.result`/`.copy`/`.text`) scopes to ONE pane with
     /// it, parsed to `OverlayPane`, which
@@ -197,12 +198,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// unaffected. A pane overlay is always full-pane, so
     /// `--pane` conflicts with `session.overlay.open --size-percent` and `session.overlay.resize` refuses it.
     public var pane: String?
-    /// A surface's STABLE spawn token for `session.status`/`session.restore`/`session.text --pane-id` (the
-    /// shell's baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's
+    /// A surface's STABLE spawn token for `session.status`/`session.restore`/`session.text`/`session.hud.*`
+    /// (the shell's baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's
     /// live surfaces OVERRIDES the stale role `pane`, so a call from a moved pane reaches the CURRENT slot;
     /// empty/unknown falls back to `pane`. Opaque — validated only by resolving.
-    /// `session.restore` diverges: an unresolvable token with NO explicit `pane` errors there rather than
-    /// silently using `left`, since a wrong restore pin persists. See `Session.paneRole(forToken:)`, #199.
+    /// `session.restore` and `session.hud.*` diverge: an unresolvable token with NO explicit `pane` errors
+    /// rather than silently choosing session-wide or main placement. See `Session.paneRole(forToken:)`, #199.
     public var paneID: String?
     /// Absolute primary-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
@@ -248,7 +249,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// both dimensions; omitted gives the default full-pane overlay. Also the new size for
     /// `session.overlay.resize` (mutually exclusive with `full`), and the caller's OVERRIDE of the HUD panel's
     /// app-measured WIDTH for `session.hud.open`/`.update` — a HUD is always floating, so omitting it sizes the
-    /// panel from the message rather than covering the pane, and its height is measured either way.
+    /// panel from the message rather than covering its session or pane bounds, and its height is measured either way.
     public var sizePercent: Int?
     /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay — the way
     /// to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.

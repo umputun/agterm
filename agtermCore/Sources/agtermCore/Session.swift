@@ -332,6 +332,22 @@ public final class Session: Identifiable {
     /// a HUD is a message about work in flight and means nothing after a relaunch.
     public var hudSpec: HudSpec?
 
+    /// Stable identity of the pane whose bounds scope the HUD, nil for the session detail bounds. The identity
+    /// follows its shell through pane swaps and split-survivor promotion.
+    public var hudPaneIdentity: UUID?
+
+    /// Last live bounds emitted by each deck pane host. Ignored by observation because the drawing path takes
+    /// the current preference value directly; control commands use this cache only for message measurement.
+    @ObservationIgnored public var hudPaneFrames = HudPaneFrames()
+
+    /// The target identity's current role, nil for session-wide placement or a destroyed target.
+    public var hudTargetPane: OverlayPane? {
+        guard let hudPaneIdentity else { return nil }
+        if paneIdentity == hudPaneIdentity { return .left }
+        if splitPaneIdentity == hudPaneIdentity { return .right }
+        return nil
+    }
+
     /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); `discardHudBody`
     /// deletes it. Per SESSION, so an update rewrites the path the running helper already opened.
     /// `@ObservationIgnored`: the surface factory, the HUD commands and `overlay close` read it, and none of
@@ -346,6 +362,7 @@ public final class Session: Identifiable {
     public func discardHudBody() {
         if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
         hudSpec = nil
+        hudPaneIdentity = nil
         hudFile = nil
         hudHeightPercent = nil
     }

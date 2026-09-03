@@ -174,6 +174,8 @@ extension AppStore {
     /// resets `splitFocused`, else it points the collapsed view at the gone pane.
     public func closeSplit(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let session = session(withID: sessionID) else { return }
+        if let splitIdentity = session.splitPaneIdentity,
+           session.hudPaneIdentity == splitIdentity { closeHud(sessionID) }
         // through the ownership projection, not the raw identity: a remote split's daemon is on another
         // machine and this finalizer only ever kills local ones
         if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized,
@@ -224,6 +226,7 @@ extension AppStore {
             closeSession(sessionID, alreadyFinalized: alreadyFinalized)
             return
         }
+        if session.hudPaneIdentity == session.paneIdentity { closeHud(sessionID) }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
         survivor.promoteToPrimaryPane()
@@ -372,12 +375,13 @@ extension AppStore {
     /// A live HUD is REPLACED (torn down and re-opened, so the helper picks up the new file), a live
     /// PROGRAM overlay refuses. False for an unknown session or an occupied program slot. NOT persisted.
     @discardableResult public func openHud(_ sessionID: UUID, command: String, spec: HudSpec, file: String,
-                                           size: HudPanelSize) -> Bool {
+                                           size: HudPanelSize, paneIdentity: UUID? = nil) -> Bool {
         guard openOverlay(sessionID, command: command,
                           sizePercent: HudLayout.clampSizePercent(size.widthPercent),
                           backgroundColor: spec.backgroundColor),
               let session = session(withID: sessionID) else { return false }
         session.hudSpec = spec
+        session.hudPaneIdentity = paneIdentity
         session.hudFile = file
         session.hudHeightPercent = size.heightPercent
         return true
@@ -391,10 +395,12 @@ extension AppStore {
     /// dropped. Only a replacing `openHud` changes the color, and the read-back keeps naming what the panel
     /// actually paints. False with no HUD up, which is the only failure: `resizeOverlay` refuses an empty
     /// slot alone, and a live HUD occupies one.
-    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, size: HudPanelSize) -> Bool {
+    @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, size: HudPanelSize,
+                                             paneIdentity: UUID? = nil) -> Bool {
         guard let session = session(withID: sessionID), let live = session.hudSpec,
               session.hudActive else { return false }
         session.hudSpec = spec.withBackgroundColor(live.backgroundColor)
+        session.hudPaneIdentity = paneIdentity
         session.hudHeightPercent = size.heightPercent
         resizeOverlay(sessionID, sizePercent: size.widthPercent)
         return true

@@ -105,6 +105,34 @@ final class ControlHudUITests: ControlAPITestCase {
         XCTAssertEqual(second["error"] as? String, "no hud")
     }
 
+    func testPaneHudReadsBackItsTargetSurvivesHideAndClosesWithThePane() throws {
+        let session = try activeSessionID()
+        try assertOK(sendCommand(request(command: "session.split", target: session, args: ["mode": "on"])))
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10))
+        try assertOK(openHud(message: "split work", pane: "right"))
+        XCTAssertEqual(try XCTUnwrap(pollHud(session, message: "split work"))["pane"] as? String, "right")
+
+        try assertOK(sendCommand(request(command: "session.focus", target: session, args: ["pane": "left"])))
+        try assertOK(sendCommand(request(command: "session.split", target: session, args: ["mode": "off"])))
+        XCTAssertEqual(try XCTUnwrap(pollHud(session, message: "split work"))["pane"] as? String, "right")
+
+        try assertOK(sendCommand(request(command: "session.split.close", target: session)))
+        XCTAssertTrue(poll(until: hudNode(session) == nil, timeout: 10))
+    }
+
+    func testHudPaneIDOverridesTheRoleAndFollowsItsShellThroughSwap() throws {
+        let session = try activeSessionID()
+        try assertOK(sendCommand(request(command: "session.split", target: session, args: ["mode": "on"])))
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10))
+        let rightToken = try readPaneToken(target: session, pane: "right")
+
+        try assertOK(openHud(message: "right agent", pane: "left", paneID: rightToken))
+        XCTAssertEqual(try XCTUnwrap(pollHud(session, message: "right agent"))["pane"] as? String, "right")
+
+        try assertOK(sendCommand(request(command: "session.swap", target: session)))
+        XCTAssertTrue(poll(until: self.hudNode(session)?["pane"] as? String == "left", timeout: 10))
+    }
+
     /// THE defining property, and the only place it can be observed: with a HUD up — and after a click on
     /// the panel — the real keyboard must still reach the session's own shell. Nothing below can see this;
     /// the deck predicates are pure functions with no view of first responder, so all of `HudDeckGatesTests`
@@ -154,13 +182,16 @@ final class ControlHudUITests: ControlAPITestCase {
 
     private func openHud(message: String, detail: String? = nil, spinner: String? = nil,
                          position: String? = nil, textColor: String? = nil,
-                         sizePercent: Int? = nil) throws -> [String: Any] {
+                         sizePercent: Int? = nil, pane: String? = nil,
+                         paneID: String? = nil) throws -> [String: Any] {
         var args: [String: Any] = ["message": message]
         if let detail { args["detail"] = detail }
         if let spinner { args["spinner"] = spinner }
         if let position { args["position"] = position }
         if let textColor { args["textColor"] = textColor }
         if let sizePercent { args["sizePercent"] = sizePercent }
+        if let pane { args["pane"] = pane }
+        if let paneID { args["paneID"] = paneID }
         return try sendCommand(request(command: "session.hud.open", args: args))
     }
 
@@ -193,6 +224,20 @@ final class ControlHudUITests: ControlAPITestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return nil
+    }
+
+    private func readPaneToken(target: String, pane: String) throws -> String {
+        let tag = "HUD-\(UUID().uuidString.prefix(8))"
+        let needle = "\(tag)-42["
+        let buffer = try pollPaneText(target: target, pane: pane, contains: needle, retype: {
+            _ = try self.sendCommand(self.typeRequest(
+                text: "printf '\(tag)-%s[%s]\\n' \"$((6*7))\" \"$AGTERM_PANE_ID\"\n",
+                target: target, select: false, pane: pane))
+        })
+        let text = try XCTUnwrap(buffer)
+        let regex = try NSRegularExpression(pattern: NSRegularExpression.escapedPattern(for: needle) + "([-0-9A-Fa-f]+)\\]")
+        let match = try XCTUnwrap(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)))
+        return String(text[try XCTUnwrap(Range(match.range(at: 1), in: text))])
     }
 
     private func request(command: String, target: String? = nil, args: [String: Any]? = nil) -> String {

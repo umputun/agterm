@@ -207,7 +207,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
                            args: ControlArgs(sizePercent: 40, message: "gathering options",
                                              detail: "scanning 400 files", spinner: "braille",
-                                             window: "win", color: "#2a1a3a", position: "top")),
+                                             window: "win", pane: "right", paneID: "stable-token",
+                                             color: "#2a1a3a", position: "top")),
             ControlRequest(cmd: .sessionHudUpdate, target: "9f3c",
                            args: ControlArgs(message: "almost there", detail: "12 left", position: "bottom")),
             ControlRequest(cmd: .sessionHudClose, target: "9f3c"),
@@ -215,6 +216,17 @@ struct ControlProtocolTests {
         for request in cases {
             #expect(try roundTrip(request) == request)
         }
+    }
+
+    @Test func hudReadBackRoundTripsItsCurrentPaneAndOmitsSessionWideScope() throws {
+        let paneHud = ControlHudNode(message: "working", sizePercent: 30, heightPercent: 8,
+                                     position: "bottom-right", pane: "right")
+        let paneData = try JSONEncoder().encode(paneHud)
+        #expect(try JSONDecoder().decode(ControlHudNode.self, from: paneData) == paneHud)
+
+        let sessionHud = ControlHudNode(message: "working", position: "center")
+        let json = String(decoding: try JSONEncoder().encode(sessionHud), as: UTF8.self)
+        #expect(!json.contains("pane"))
     }
 
     @Test func sessionHudRawStringsMapToCommands() throws {

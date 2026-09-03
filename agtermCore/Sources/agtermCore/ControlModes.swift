@@ -193,6 +193,18 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
     }
 }
 
+/// The optional pane coordinate space for a HUD. The dispatcher parses `pane`; the app resolves `paneID`
+/// against live surfaces first and uses `pane` only as its fallback.
+public struct ControlHudPlacement: Equatable, Sendable {
+    public let pane: OverlayPane?
+    public let paneID: String?
+
+    public init(pane: OverlayPane? = nil, paneID: String? = nil) {
+        self.pane = pane
+        self.paneID = paneID
+    }
+}
+
 /// The three forms of the `session.restore` per-pane restore-command override, from the wire tokens
 /// `set` / `none` / `clear`. `pinNone` is not spelled `none`: a bare `case none` makes the compiler warn
 /// "assuming you mean Optional<T>.none" in an Optional context, which the dispatcher's parse step is.

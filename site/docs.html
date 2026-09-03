@@ -2269,7 +2269,11 @@
               <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
                 ># anchor it and set its width by hand instead of measuring the message</span
               ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top-right --size-percent
-              30<br /><br /><span style="color: #6b727a"># color both halves of the panel</span
+              30<br /><br /><span style="color: #6b727a"># keep the HUD inside the calling pane, even after its role changes</span
+              ><br />agtermctl session hud <span style="color: #f2b45c">"working"</span> --pane
+              <span style="color: #f2b45c">"$AGTERM_PANE"</span> --pane-id
+              <span style="color: #f2b45c">"$AGTERM_PANE_ID"</span> --target
+              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"># color both halves of the panel</span
               ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --text-color
               <span style="color: #f2b45c">"#7ec07e"</span> --background-color
               <span style="color: #f2b45c">"#202020"</span><br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
@@ -2301,6 +2305,13 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> this took before are
               still accepted for the middle column. The panel comes from the message on both axes — width from the longest line, height
               from the number of them, so a title and a subtitle give a wide, short panel rather than a square one.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> uses one pane as the
+              bounds for sizing, anchors, and margins.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id "$AGTERM_PANE_ID"</span>
+              follows the same shell through pane swaps and promotion, with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> as
+              the fallback. Open refuses a pane that is not rendered. Hiding that pane hides the panel without stopping it;
+              showing the pane restores it, and closing the pane closes its HUD.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides the
               width only, bounded to at most 80% of the pane, so a message never covers the session it is about.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> sets the text's
@@ -2310,7 +2321,9 @@
               An update replaces the whole message, so
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> have to be repeated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id</span> have to be repeated
               to survive it. The spinner takes a style —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner-style bar|braille|circle|blocks|dot|none</span>,
               which turns it on by itself, with
@@ -2336,6 +2349,8 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
               the panel as the session node's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud</span> object, with
+              a pane-scoped HUD's current role in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud.pane</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay</span> reading false beside it;
               there is no event, so a script that needs the state polls the tree.
             </p>

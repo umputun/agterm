@@ -634,6 +634,137 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(session.overlaySizePercent, 25)
     }
 
+    func testHudPaneIDOverridesTheRoleAndUsesThePaneHostMetrics() throws {
+        let (store, session) = try makeHudSession()
+        let rightIdentity = UUID()
+        session.splitPaneIdentity = rightIdentity
+        session.hasSplit = true
+        session.isSplit = true
+        session.surface = SessionRestoreTestSurface(paneToken: "left-token")
+        session.splitSurface = SessionRestoreTestSurface(paneToken: "right-token")
+        session.hudPaneFrames = HudPaneFrames(
+            left: HudPaneFrame(x: 0, y: 0, width: 100, height: 600),
+            right: HudPaneFrame(x: 104, y: 0, width: 1_000, height: 600)
+        )
+        let spec = HudSpec(message: String(repeating: "x", count: 60))
+
+        let response = server.openHud(session.id.uuidString, window: nil, spec: spec,
+                                      placement: ControlHudPlacement(pane: .left, paneID: "right-token"))
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(session.hudPaneIdentity, rightIdentity)
+        XCTAssertEqual(store.controlTree().workspaces[0].sessions.last?.hud?.pane, "right")
+        let rightSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .right))
+        let leftSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .left))
+        XCTAssertEqual(session.overlaySizePercent, rightSize.widthPercent)
+        XCTAssertNotEqual(rightSize.widthPercent, leftSize.widthPercent)
+    }
+
+    func testHudPaneMetricsFallBackToADeckHostedSurfaceBeforeTheFrameCacheFills() throws {
+        let (_, session) = try makeHudSession()
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 640, height: 480),
+                              styleMask: [], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = surface
+        session.surface = surface
+        session.hudPaneFrames = HudPaneFrames()
+        addTeardownBlock { window.orderOut(nil) }
+
+        let metrics = server.paneMetrics(for: session, pane: .left)
+
+        XCTAssertEqual(metrics.paneWidth, 640, accuracy: 0.001)
+        XCTAssertEqual(metrics.paneHeight, 480, accuracy: 0.001)
+    }
+
+    func testHudPaneMetricsDoNotUseAZoomOrDashboardHostedSurface() throws {
+        let (_, session) = try makeHudSession()
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 640, height: 480),
+                              styleMask: [], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = surface
+        surface.suppressFocusChange = true
+        session.surface = surface
+        session.hudPaneFrames = HudPaneFrames()
+        addTeardownBlock { window.orderOut(nil) }
+
+        let metrics = server.paneMetrics(for: session, pane: .left)
+
+        XCTAssertEqual(metrics.paneWidth, 0)
+        XCTAssertEqual(metrics.paneHeight, 0)
+    }
+
+    func testHudPaneOpenRejectsHiddenPaneAndUnknownIdentity() throws {
+        let (_, session) = try makeHudSession()
+        session.hasSplit = true
+        session.isSplit = false
+        session.splitPaneIdentity = UUID()
+
+        let hidden = server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working"),
+                                    placement: ControlHudPlacement(pane: .right))
+        XCTAssertEqual(hidden.error, PaneOverlayError.paneNotVisible)
+        XCTAssertFalse(session.hudActive)
+
+        let unknown = server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working"),
+                                     placement: ControlHudPlacement(paneID: "missing-token"))
+        XCTAssertEqual(unknown.error, "unknown pane id: missing-token")
+        XCTAssertFalse(session.hudActive)
+    }
+
+    func testHiddenPaneHudCanUpdateAndReturnsWhenThePaneIsShown() throws {
+        let (store, session) = try makeHudSession()
+        let rightIdentity = UUID()
+        session.splitPaneIdentity = rightIdentity
+        session.hasSplit = true
+        session.isSplit = true
+
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "first"),
+                                     placement: ControlHudPlacement(pane: .right)).ok)
+        store.toggleSplit(session.id)
+        XCTAssertFalse(session.rendersPane(.right))
+
+        let updated = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "second"),
+                                       placement: ControlHudPlacement(pane: .right))
+        XCTAssertTrue(updated.ok, updated.error ?? "")
+        XCTAssertTrue(session.hudActive)
+        XCTAssertEqual(session.hudPaneIdentity, rightIdentity)
+
+        store.toggleSplit(session.id)
+        XCTAssertTrue(session.rendersPane(.right))
+        XCTAssertEqual(store.controlTree().workspaces[0].sessions.last?.hud?.pane, "right")
+    }
+
+    func testHudUpdateReplacesPaneScopeAndUnknownIDUsesTheRoleFallback() throws {
+        let (_, session) = try makeHudSession()
+        let rightIdentity = UUID()
+        session.splitPaneIdentity = rightIdentity
+        session.hasSplit = true
+        session.isSplit = true
+
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "first"),
+                                     placement: ControlHudPlacement(pane: .right)).ok)
+        let fallback = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "second"),
+                                        placement: ControlHudPlacement(pane: .right, paneID: "unknown"))
+        XCTAssertTrue(fallback.ok, fallback.error ?? "")
+        XCTAssertEqual(session.hudPaneIdentity, rightIdentity)
+
+        let sessionWide = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "third"))
+        XCTAssertTrue(sessionWide.ok, sessionWide.error ?? "")
+        XCTAssertNil(session.hudPaneIdentity)
+    }
+
+    func testScratchPaneIDCannotAnchorAHud() throws {
+        let (_, session) = try makeHudSession()
+        session.scratchSurface = SessionRestoreTestSurface(paneToken: "scratch-token")
+
+        let response = server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working"),
+                                      placement: ControlHudPlacement(paneID: "scratch-token"))
+
+        XCTAssertEqual(response.error, "hud pane must be left or right")
+        XCTAssertFalse(session.hudActive)
+    }
+
     // a hud must never cover the session it is about, which is why `overlay resize --full` is refused; a
     // caller's 100 is the same state by another door, so it takes the same bound.
     func testAnOversizedCallerRequestIsBoundedRatherThanCoveringThePane() throws {

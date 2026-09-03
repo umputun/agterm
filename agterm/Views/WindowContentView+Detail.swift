@@ -13,6 +13,18 @@ enum PaneHostIdentity {
     }
 }
 
+private struct PaneHostCoordinateSpace: Hashable {
+    let sessionID: UUID
+}
+
+private struct HudPaneFramesPreferenceKey: PreferenceKey {
+    static let defaultValue = HudPaneFrames()
+
+    static func reduce(value: inout HudPaneFrames, nextValue: () -> HudPaneFrames) {
+        value.merge(nextValue())
+    }
+}
+
 /// `WindowContentView`'s detail deck: every session's terminal content — panes, split, scratch, and both
 /// overlay kinds — plus the inactive-pane mute.
 extension WindowContentView {
@@ -90,8 +102,8 @@ extension WindowContentView {
             // change this modifier (constant shape). Floating leaves the panes hit-testable;
             // `overlayPanel`'s transparent catcher absorbs the clicks around it.
             .allowsHitTesting(deckInteractive && !hideForOverlay)
-            // the scratch renders in-deck above the hidden pane(s), BELOW the ephemeral overlay (zIndex 1 vs
-            // `overlayPanel`'s 3), and hides under a FULL overlay like they do: under window translucency
+            // the scratch renders above the hidden pane(s) and below the overlay preference layer. It hides
+            // under a FULL overlay like they do: under window translucency
             // every surface background renders fully transparent, so a visible scratch would show THROUGH it.
             // A FLOATING panel's opaque backing needs no such hiding.
             if session.scratchActive, deckHostsSurface(session: session, surface: .scratch) {
@@ -106,10 +118,13 @@ extension WindowContentView {
                     .id("\(session.id.uuidString)-scratch")
                     .zIndex(1)
             }
-            // renders IN-DECK per session, so its program runs even when the session isn't active;
-            // `overlayPanel` owns the constant-shape rule.
-            overlayPanel(session: session, isActive: focusable, onScreen: deckInteractive && isActive)
-                .zIndex(3)
+        }
+        .coordinateSpace(.named(PaneHostCoordinateSpace(sessionID: session.id)))
+        .overlayPreferenceValue(HudPaneFramesPreferenceKey.self) { frames in
+            overlayPanel(session: session, isActive: focusable,
+                         onScreen: deckInteractive && isActive, paneFrames: frames)
+                .onAppear { cachePaneFrames(frames, for: session) }
+                .onChange(of: frames) { _, value in cachePaneFrames(value, for: session) }
         }
         // on PROGRAM overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane
         // hidden under the scratch. One makeFirstResponder loses the race with the overlay's teardown/re-host,
@@ -213,6 +228,17 @@ extension WindowContentView {
             }
             paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
         }
+        .background {
+            GeometryReader { geo in
+                let rect = geo.frame(in: .named(PaneHostCoordinateSpace(sessionID: session.id)))
+                let frame = HudPaneFrame(x: Double(rect.minX), y: Double(rect.minY),
+                                         width: Double(rect.width), height: Double(rect.height))
+                Color.clear.preference(
+                    key: HudPaneFramesPreferenceKey.self,
+                    value: pane == .left ? HudPaneFrames(left: frame) : HudPaneFrames(right: frame)
+                )
+            }
+        }
     }
 
     /// The overlay — FULL, FLOATING, or a HUD — rendered IN-DECK as ONE ALWAYS-PRESENT sibling of each
@@ -221,14 +247,21 @@ extension WindowContentView {
     /// switching full<->% only re-flows the frame and never re-parents the NSView (which would blank its
     /// Metal drawable). `OverlayPanelStyle` supplies every per-occupant parameter, so the chain below is the
     /// same chain whichever one is up.
-    @ViewBuilder private func overlayPanel(session: Session, isActive: Bool, onScreen: Bool) -> some View {
+    @ViewBuilder private func overlayPanel(session: Session, isActive: Bool, onScreen: Bool,
+                                           paneFrames: HudPaneFrames) -> some View {
         let style = OverlayPanelStyle.resolve(session)
         // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
         // stays inert as a whole and the session underneath keeps both.
         let live = isActive && style.interactive
         GeometryReader { geo in
+            let detailFrame = CGRect(origin: .zero, size: geo.size)
+            let paneFrame = session.hudTargetPane.flatMap { paneFrames[$0] }.map { CGRect($0) }
+            let scopedHudVisible = session.hudPaneIdentity == nil || paneFrame != nil
+            let layoutFrame = session.hudActive ? (paneFrame ?? detailFrame) : detailFrame
+            let panelFrame = style.panelFrame(in: layoutFrame)
             ZStack {
-                if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
+                if session.overlayActive, !session.hudActive || scopedHudVisible,
+                   deckHostsSurface(session: session, surface: .overlay) {
                     // absorbs clicks AROUND a floating panel so they can't reach the hit-testable panes and
                     // steal the overlay's first responder (the full variant hides the panes anyway), and
                     // carries the backdrop mute: a floating panel leaves the session live behind it, so the
@@ -246,8 +279,7 @@ extension WindowContentView {
                                  makeSurface: { makeOverlaySurface($0, nil) },
                                  isActive: live, deckVisible: live, viewOnly: !style.interactive,
                                  onScreen: onScreen)
-                        .frame(width: geo.size.width * style.widthFraction,
-                               height: geo.size.height * style.heightFraction)
+                        .frame(width: panelFrame.width, height: panelFrame.height)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
                         // still-visible session; full = translucent and chromeless (libghostty draws only the
                         // terminal, so the window backing shows through); a HUD keeps the backing but drops
@@ -260,8 +292,7 @@ extension WindowContentView {
                                 .strokeBorder(Color.white.opacity(style.borderOpacity), lineWidth: 1)
                         )
                         .shadow(radius: style.shadowRadius)
-                        .offset(x: style.horizontalOffset(paneWidth: geo.size.width),
-                                y: style.verticalOffset(paneHeight: geo.size.height))
+                        .position(x: panelFrame.midX, y: panelFrame.midY)
                         // a replacement (HUD→HUD, HUD→program) keeps `overlayActive` true across the swap, so
                         // without the generation SwiftUI reuses the host: `makeNSView` never re-runs and
                         // `updateNSView` hits a torn-down view with `overlaySurface` nil.
@@ -273,6 +304,12 @@ extension WindowContentView {
         // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
         // intercepts clicks meant for the pane(s).
         .allowsHitTesting(live && session.overlayActive && deckHostsSurface(session: session, surface: .overlay))
+    }
+
+    private func cachePaneFrames(_ frames: HudPaneFrames, for session: Session) {
+        var cached = session.hudPaneFrames
+        cached.merge(frames)
+        if cached != session.hudPaneFrames { session.hudPaneFrames = cached }
     }
 
     /// ONE split pane's overlay, always FULL-PANE (no size percent, no framed chrome — a floating variant
@@ -432,6 +469,15 @@ struct OverlayPanelStyle: Equatable {
         Self.offset(along: paneWidth, fraction: widthFraction, band: position.horizontalBand)
     }
 
+    /// Applies the panel's size and anchor inside one session or pane bounds rect.
+    func panelFrame(in pane: CGRect) -> CGRect {
+        let size = CGSize(width: pane.width * widthFraction, height: pane.height * heightFraction)
+        let center = CGPoint(x: pane.midX + horizontalOffset(paneWidth: pane.width),
+                             y: pane.midY + verticalOffset(paneHeight: pane.height))
+        return CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
+                      width: size.width, height: size.height)
+    }
+
     /// One axis' travel: half the free room left after the panel and its edge margin, signed by the band.
     private static func offset(along extent: CGFloat, fraction: CGFloat,
                                band: HudPosition.Band) -> CGFloat {
@@ -442,6 +488,13 @@ struct OverlayPanelStyle: Equatable {
         case .leading: return -free
         case .trailing: return free
         }
+    }
+}
+
+private extension CGRect {
+    init(_ frame: HudPaneFrame) {
+        self.init(x: CGFloat(frame.x), y: CGFloat(frame.y),
+                  width: CGFloat(frame.width), height: CGFloat(frame.height))
     }
 }
 

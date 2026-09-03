@@ -244,6 +244,46 @@ public struct PaneMetrics: Equatable, Sendable {
     }
 }
 
+/// One deck pane host's bounds in its session detail coordinate space. Double-backed so the app can cache
+/// live SwiftUI geometry without importing CoreGraphics into agtermCore.
+public struct HudPaneFrame: Equatable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+}
+
+/// The live deck frames emitted by the pane hosts. A preference reduction builds a fresh value for drawing;
+/// `Session` also keeps the last non-empty frames so a hidden pane's HUD can still update its paint grid.
+public struct HudPaneFrames: Equatable, Sendable {
+    public var left: HudPaneFrame?
+    public var right: HudPaneFrame?
+
+    public init(left: HudPaneFrame? = nil, right: HudPaneFrame? = nil) {
+        self.left = left
+        self.right = right
+    }
+
+    public subscript(_ pane: OverlayPane) -> HudPaneFrame? {
+        get { pane == .left ? left : right }
+        set {
+            if pane == .left { left = newValue } else { right = newValue }
+        }
+    }
+
+    public mutating func merge(_ other: HudPaneFrames) {
+        if let left = other.left { self.left = left }
+        if let right = other.right { self.right = right }
+    }
+}
+
 /// The panel's share of the pane on each axis. The two are measured separately — a HUD is a couple of lines
 /// of text, so one percent across both made every panel as tall as it was wide — and travel together from
 /// `HudLayout.panelSize` through the store to the deck, so no layer can hold half a size.

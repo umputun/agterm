@@ -211,6 +211,19 @@ struct AppStorePaneSwapTests {
         #expect(fixture.split.assignedRoles == [.primary])
     }
 
+    @Test func paneScopedHudFollowsItsStableIdentityThroughSwap() {
+        let fixture = makeSeededSession()
+        let target = fixture.session.paneIdentity
+        fixture.store.openHud(fixture.session.id, command: "hud.sh", spec: HudSpec(message: "working"),
+                              file: "/tmp/hud", size: HudPanelSize(widthPercent: 30, heightPercent: 8),
+                              paneIdentity: target)
+
+        #expect(fixture.session.hudTargetPane == .left)
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+        #expect(fixture.session.hudPaneIdentity == target)
+        #expect(fixture.session.hudTargetPane == .right)
+    }
+
     @Test func swapUsesCwdFallbacks() {
         let fixture = makeSeededSession()
         fixture.session.currentCwd = nil

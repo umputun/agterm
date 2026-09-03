@@ -467,7 +467,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
-                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position}</span>, where
+                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?}</span>, where
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> names the effective style or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> —
                 omitted when none is up; mutually exclusive with
@@ -1774,7 +1774,8 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session hud [open] &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P]
-                [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--target T] [--window W]
+                [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--pane P] [--pane-id ID]
+                [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1806,6 +1807,13 @@
                 accepted for the middle column, and the read-back reports the canonical anchor. The panel is measured from the message
                 against the session's terminal font on BOTH axes separately — width from the longest wrapped line, height from
                 the number of them — so a title and a subtitle give a wide, short panel rather than a square one.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane primary|left|top|split|right|bottom</span>
+                uses that pane as the bounds for measurement, explicit size, anchors, and margins.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes the shell's stable
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>. A live ID overrides
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>; an unknown ID needs that role as a fallback.
+                Open rejects a pane that is not rendered. Hiding the target keeps the HUD alive and restores it with the pane;
+                closing the target closes the HUD.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100)
                 overrides the WIDTH only; the height always follows the message, since a caller-set height could only strand it
                 in an empty box. The effective width is bounded to 10–80% of the pane, so a message never covers the session
@@ -1836,7 +1844,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session hud update &lt;message&gt; [--detail T] [--spinner] [--spinner-style S] [--position P]
-                [--text-color #rrggbb] [--size-percent N] [--target T] [--window W]
+                [--text-color #rrggbb] [--size-percent N] [--pane P] [--pane-id ID] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.update</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1844,7 +1852,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--detail</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--spinner</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span>, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span> must be repeated to survive;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> must be repeated to survive;
                 an omitted one drops. Same required message and same rejections as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span>. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no hud</span> when none is up.
@@ -1876,7 +1886,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> object, whose
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">position</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> always report the effective value,
-                defaults included. Beside it the node's
+                defaults included. A pane-scoped HUD also reports the target identity's current role as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>. Beside it the node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span> reads false with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span> omitted, so a poll for "is a
                 program covering this session" cannot mistake a message for one, and
@@ -3208,7 +3219,7 @@
                     padding: 4px 9px;
                     white-space: nowrap;
                   "
-                  >pane not visible<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay)</span></span
+                  >pane not visible<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay or HUD open)</span></span
                 >
                 <span
                   style="

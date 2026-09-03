@@ -362,7 +362,8 @@ public final class AppStore {
                               spinner: spec.spinner?.rawValue ?? HudSpinner.noneName,
                               backgroundColor: spec.backgroundColor, textColor: spec.textColor,
                               sizePercent: session.overlaySizePercent,
-                              heightPercent: session.hudHeightPercent, position: spec.position.rawValue)
+                              heightPercent: session.hudHeightPercent, position: spec.position.rawValue,
+                              pane: session.hudTargetPane?.rawValue)
     }
 
     /// Creates a workspace and appends it. With `revealNewWorkspace` (the default) and the filter ON, the new
