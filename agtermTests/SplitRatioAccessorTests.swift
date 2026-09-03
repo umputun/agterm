@@ -63,6 +63,34 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(trackingAreasOwnedByProbe(), 1)
     }
 
+    // pins #539: a background split first lays out at a stale safe-area inset, so the divider has to be
+    // re-applied when the real one arrives.
+    func testASafeAreaInsetChangeReappliesTheStoredRatio() {
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 200, accuracy: 1)
+
+        session.splitRatio = 0.3
+        split.additionalSafeAreaInsets.top = 32
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 120, accuracy: 1)
+    }
+
+    func testAnUnchangedSafeAreaInsetLeavesTheDividerAlone() {
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        session.splitRatio = 0.3
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 200, accuracy: 1)
+    }
+
     private func move(toX x: CGFloat) throws {
         split.setPosition(200, ofDividerAt: 0)
         split.layoutSubtreeIfNeeded()

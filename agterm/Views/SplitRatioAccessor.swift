@@ -89,6 +89,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private var dividerClipMask: CALayer?
         private var dividerTracking: NSTrackingArea?
         private var restored = false
+        /// The split's top safe-area inset when the ratio was last applied; a change re-arms `restored`.
+        private var restoredSafeAreaTop: CGFloat = 0
         /// Primary-pane extent at the previous in-band press, nil when that press missed the band.
         private var lastPressPrimaryExtent: CGFloat?
         /// A press was swallowed and its release is still to come.
@@ -118,14 +120,21 @@ struct SplitRatioAccessor: NSViewRepresentable {
             updateDividerTracking()
             Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
-            guard !suspended else { return }
-            guard !restored, let split = splitView else { return }
+            guard !suspended, let split = splitView else { return }
+            // SwiftUI sizes the primary pane as content plus the top safe-area inset, while the stored ratio
+            // is a fraction of the FULL split height. A background split first lays out at a stale 1pt inset;
+            // when the real one arrives the divider has to be re-applied, or the next window resize falls back
+            // to SwiftUI's own even split of the content space (#539).
+            let safeAreaTop = split.safeAreaInsets.top
+            if restored, safeAreaTop != restoredSafeAreaTop { restored = false }
+            guard !restored else { return }
             if let ratio = session.splitRatio {
                 let total = axisLength(of: split)
                 guard total > 1 else { return } // wait for a real extent; retried on each layout pass
                 split.setPosition(total * CGFloat(ratio), ofDividerAt: 0)
             }
             restored = true
+            restoredSafeAreaTop = safeAreaTop
         }
 
         /// Find the enclosing `NSSplitView` once it's in the tree, then observe divider moves.
