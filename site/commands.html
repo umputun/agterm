@@ -1855,8 +1855,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> must be repeated to survive;
-                an omitted one drops. Same required message and same rejections as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span>. Errors
+                an omitted one drops. It shares <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span>'s
+                message and value validation. Pane lifecycle differs: update accepts a hidden target and reports
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session has no split</span> for a missing split,
+                where open reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane not visible</span>. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no hud</span> when none is up.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">

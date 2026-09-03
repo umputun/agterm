@@ -271,12 +271,7 @@ public struct HudPaneFrames: Equatable, Sendable {
         self.right = right
     }
 
-    public subscript(_ pane: OverlayPane) -> HudPaneFrame? {
-        get { pane == .left ? left : right }
-        set {
-            if pane == .left { left = newValue } else { right = newValue }
-        }
-    }
+    public subscript(_ pane: OverlayPane) -> HudPaneFrame? { pane == .left ? left : right }
 
     public mutating func merge(_ other: HudPaneFrames) {
         if let left = other.left { self.left = left }

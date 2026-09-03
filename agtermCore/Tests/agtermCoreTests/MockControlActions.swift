@@ -544,10 +544,18 @@ final class MockControlActions: ControlActions {
         return nextOverlayTextResponse
     }
 
+    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        openHud(target, window: window, spec: spec, placement: ControlHudPlacement())
+    }
+
     func openHud(_ target: String?, window: String?, spec: HudSpec,
                  placement: ControlHudPlacement) -> ControlResponse {
         calls.append(.hudOpen(target: target, window: window, spec, placement))
         return nextHudOpenResponse
+    }
+
+    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        updateHud(target, window: window, spec: spec, placement: ControlHudPlacement())
     }
 
     func updateHud(_ target: String?, window: String?, spec: HudSpec,

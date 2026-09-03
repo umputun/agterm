@@ -79,10 +79,11 @@ A **window** is the top level: a named bundle rendered in its own on-screen macO
 holds a tree of **workspaces**, each holding **sessions**. A session has a primary shell and can also
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
-An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving the
-    sibling pane visible and usable. The same session-wide slot also holds a **HUD** (`session hud`), a small
-    passive panel carrying a message instead of a program. A HUD can use the whole session or one pane as its
-    placement bounds; the session keeps focus and stays typable under it.
+An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving
+the sibling pane visible and usable. The same session-wide slot also holds a **HUD**
+(`session hud`), a small passive panel carrying a message instead of a program. A HUD can use the
+whole session or one pane as its placement bounds. The session keeps focus and stays typable
+under it.
 One slot, so a session shows either a HUD or a program overlay, never both. Separately, the app has one
 **quick terminal** (a scratch shell in a floating panel at 90% of the focused screen capped at 1100x700,
 or whatever share Settings sets instead; not part of the tree and not owned by a window).

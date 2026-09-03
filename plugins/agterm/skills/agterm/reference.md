@@ -781,7 +781,8 @@ error keeps those names for compatibility.
   `invalid text color: <value> (#rrggbb)`,
   `invalid position: <value> (top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right|top|bottom)`,
   `invalid spinner: <value> (bar|braille|circle|blocks|dot|none)`,
-  `--pane must be left or right`, `pane not visible`, `unknown pane id: <token>`,
+  `--pane must be left or right`, `hud pane must be left or right` when a pane ID resolves to scratch,
+  `pane not visible`, `unknown pane id: <token>`,
   and `session.hud.open: --size-percent must be 1...100`.
   A second `hud` replaces the first; a `session overlay open` replaces a HUD, while a HUD over a RUNNING
   program is refused with `overlay already open` — a message is replaceable, a program is not.
@@ -790,9 +791,11 @@ error keeps those names for compatibility.
   whole spec rather than patching it, so `--detail`, the spinner, `--position`, `--text-color`, and pane selectors must be
   repeated to survive and an omitted one drops. `--spinner-style` may name a DIFFERENT style than the panel
   opened with, and `--text-color` a different color; both ride the message file, so the look changes on the
-  next tick with no re-spawn. Same required message and same rejections as `open`. There is no
-  `--background-color`: the surface reads that once at creation, so only a fresh `session hud` can change
-  it, and `tree` keeps reporting the creation color across updates. Errors `no hud` when none is up.
+  next tick with no re-spawn. It shares `open`'s message, text, color, position, spinner, and pane-spelling
+  validation. Pane lifecycle differs: update accepts a hidden target, while a missing split errors
+  `session has no split` instead of `pane not visible`. There is no `--background-color`: the surface reads
+  that once at creation, so only a fresh `session hud` can change it, and `tree` keeps reporting the creation
+  color across updates. Errors `no hud` when none is up.
 - `session hud close [--target] [--window W]` — take the panel down and delete its message file. Errors
   `no hud` when none is up, so it is not idempotent. A program overlay in the same slot is left alone;
   `session overlay close`, ⌘W, and closing the session or its window also tear a HUD down and delete that
@@ -1455,10 +1458,12 @@ a terminal surface's.
 ## Errors you may see
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
-`invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
+`invalid scratch mode`, `session has no split` (focus, restore, or HUD update), `no selection` (copy),
+`overlay already open` /
 `no overlay` / `overlay still running` / `no overlay result` / `pane overlay already open` /
 `pane not visible` (pane overlay or HUD open),
 `no hud` (session hud update/close with none up) /
+`hud pane must be left or right` (a HUD pane ID resolved to scratch) /
 `no overlay result: the slot holds a hud` (session overlay result over a HUD) /
 `a hud is always floating: pass --size-percent, not --full` (session overlay resize over a HUD) /
 `session.hud.open requires a message` (also for a blank one) / `session.hud.update requires a message` /
@@ -1487,7 +1492,8 @@ locally with `mode must be on, off, or toggle`),
 `failed to read surface buffer` (quick text / session text),
 `text must not contain a NUL byte` (session type / quick type),
 `invalid restore mode` / `session.restore set requires a command` / `command must not contain control characters` /
-`command too long (max 1024 bytes)` / `the scratch terminal is never restored` / `unknown pane id` (restore or HUD) /
+`command too long (max 1024 bytes)` / `the scratch terminal is never restored` /
+`unknown pane id: <token>` (restore or HUD) /
 `failed to save the restore override, the previous value is still in effect` (session
 restore; a `session restore --pane right` on a session with no split also returns `session has no split`),
 `window not open`

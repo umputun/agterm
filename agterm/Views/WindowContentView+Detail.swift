@@ -241,9 +241,9 @@ extension WindowContentView {
         }
     }
 
-    /// The overlay — FULL, FLOATING, or a HUD — rendered IN-DECK as ONE ALWAYS-PRESENT sibling of each
-    /// session's `sessionDetail` ZStack, its content gated INSIDE the GeometryReader so the child count never
-    /// changes (the constant-shape rule). All three share this one surface host, so `session.overlay.resize`
+    /// FULL, FLOATING, and HUD overlays render in `sessionDetail`'s always-present preference layer. Content
+    /// is gated INSIDE the GeometryReader so the ZStack shape never changes. All three share one surface, so
+    /// `session.overlay.resize`
     /// switching full<->% only re-flows the frame and never re-parents the NSView (which would blank its
     /// Metal drawable). `OverlayPanelStyle` supplies every per-occupant parameter, so the chain below is the
     /// same chain whichever one is up.
@@ -256,7 +256,9 @@ extension WindowContentView {
         GeometryReader { geo in
             let detailFrame = CGRect(origin: .zero, size: geo.size)
             let paneFrame = session.hudTargetPane.flatMap { paneFrames[$0] }.map { CGRect($0) }
-            let scopedHudVisible = session.hudPaneIdentity == nil || paneFrame != nil
+            let scopedHudVisible = OverlayPanelStyle.hudCanMount(
+                paneIdentity: session.hudPaneIdentity, paneFrameAvailable: paneFrame != nil
+            )
             let layoutFrame = session.hudActive ? (paneFrame ?? detailFrame) : detailFrame
             let panelFrame = style.panelFrame(in: layoutFrame)
             ZStack {
@@ -450,6 +452,11 @@ struct OverlayPanelStyle: Equatable {
                                  cornerRadius: hudCornerRadius, borderOpacity: hudBorderOpacity,
                                  shadowRadius: 0, backdrop: false, interactive: false,
                                  position: session.hudSpec?.position ?? .center)
+    }
+
+    /// A session-wide HUD needs no pane frame; a scoped HUD mounts only while its target pane is laid out.
+    static func hudCanMount(paneIdentity: UUID?, paneFrameAvailable: Bool) -> Bool {
+        paneIdentity == nil || paneFrameAvailable
     }
 
     /// The panel's offset from the pane's center, positive downward. A `top`/`bottom` anchor holds

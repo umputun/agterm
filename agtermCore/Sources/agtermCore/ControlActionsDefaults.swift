@@ -3,9 +3,8 @@ import Foundation
 // Default `ControlActions` implementations, kept out of `ControlDispatcher.swift` so that file stays
 // inside the 1000-line limit.
 public extension ControlActions {
-    /// Defaults so a conformer outside this repo — the `agterm-linux` fork consumes `agtermCore` as a
-    /// library — keeps building when a Mac-only command joins the protocol. Each refuses by name rather
-    /// than answering an empty success, which would be indistinguishable from a working command.
+    /// Defaults keep outside conformers building when the shared protocol grows. Mac-only commands refuse
+    /// by name rather than answering an empty success; compatibility overloads delegate to the older form.
     func readRestoreMode() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("restore.mode"))
     }
@@ -51,5 +50,17 @@ public extension ControlActions {
 
     func setSessionContext(_: String?, window _: String?, context _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
+    }
+
+    /// `agterm-linux` may implement the original session-wide HUD methods. New dispatchers preserve that
+    /// behavior when the host has not adopted pane placement yet.
+    func openHud(_ target: String?, window: String?, spec: HudSpec,
+                 placement _: ControlHudPlacement) -> ControlResponse {
+        openHud(target, window: window, spec: spec)
+    }
+
+    func updateHud(_ target: String?, window: String?, spec: HudSpec,
+                   placement _: ControlHudPlacement) -> ControlResponse {
+        updateHud(target, window: window, spec: spec)
     }
 }

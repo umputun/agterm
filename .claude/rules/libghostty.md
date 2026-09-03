@@ -166,7 +166,8 @@ paths:
   background pane would abandon whichever view is really composing.
 - Never change the `sessionDetail` ZStack shape for per-session toggles; doing so rehosts `NSSplitView`
   into the titlebar. Search bar is a `detailPane` top-trailing overlay, above deck, scratch, and overlays.
-  Overlay panel stays an always-present `sessionDetail` sibling whose internal content changes.
+  Overlay panel stays in an always-present `sessionDetail` overlay preference layer whose internal
+  content changes.
 - The boundary is the arranged subview, not what it contains. Inside one, a constant-shape ZStack may swap
   children and change modifier values freely: a real NSView mounting and unmounting there held the divider
   across repeated toggles, both focus states, and a 0.85 ratio. That is what makes per-pane chrome — the

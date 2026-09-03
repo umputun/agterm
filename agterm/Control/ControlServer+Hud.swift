@@ -7,8 +7,12 @@ import agtermCore
 /// `ControlDispatcher+Hud`; this layer supplies the three things agtermCore cannot resolve — the bundled
 /// helper's path, the terminal font's cell size, and live geometry, plus the body file the helper reads.
 extension ControlServer {
+    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        openHud(target, window: window, spec: spec, placement: ControlHudPlacement())
+    }
+
     func openHud(_ target: String?, window: String?, spec: HudSpec,
-                 placement: ControlHudPlacement = ControlHudPlacement()) -> ControlResponse {
+                 placement: ControlHudPlacement) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
@@ -17,14 +21,17 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "hud helper is not bundled in this build")
             }
             let paneIdentity: UUID?
+            let pane: OverlayPane?
             switch self.resolveHudPlacement(placement, in: session, requireVisible: true) {
-            case .resolved(let identity): paneIdentity = identity
+            case .resolved(let identity, let targetPane):
+                paneIdentity = identity
+                pane = targetPane
             case .rejected(let response): return response
             }
             let file = Self.bodyFile(for: id)
             // measured ONCE and threaded through: the sizing and the header describe the same panel, and
             // both a font lookup and a pane-geometry union would otherwise run twice per command.
-            let metrics = self.paneMetrics(for: session, pane: self.hudPane(for: paneIdentity, in: session))
+            let metrics = self.paneMetrics(for: session, pane: pane)
             // open FIRST, write second: replacing a live HUD tears its surface down, and that teardown
             // deletes the body file at this same per-session path — writing first would lose it. The
             // header's grid also comes from the size the store RESOLVED, which only exists after this call.
@@ -46,8 +53,12 @@ extension ControlServer {
     /// Rewrites the live HUD's body and re-sizes the panel in place, repainting with no re-spawn per
     /// `HudLayout.renderedBody`. A failed write rolls the store back, as `openHud` does with `closeHud`:
     /// the panel still paints the old message, and `tree` must not claim the new one.
+    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        updateHud(target, window: window, spec: spec, placement: ControlHudPlacement())
+    }
+
     func updateHud(_ target: String?, window: String?, spec: HudSpec,
-                   placement: ControlHudPlacement = ControlHudPlacement()) -> ControlResponse {
+                   placement: ControlHudPlacement) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             // `hudActive` is the occupancy question, asked once and separately from the mutation below, so
             // a store that refused for another reason cannot come back as `noHud`.
@@ -57,12 +68,15 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: OverlayHudError.noHud)
             }
             let paneIdentity: UUID?
+            let pane: OverlayPane?
             switch self.resolveHudPlacement(placement, in: session, requireVisible: false) {
-            case .resolved(let identity): paneIdentity = identity
+            case .resolved(let identity, let targetPane):
+                paneIdentity = identity
+                pane = targetPane
             case .rejected(let response): return response
             }
             let previousPaneIdentity = session.hudPaneIdentity
-            let metrics = self.paneMetrics(for: session, pane: self.hudPane(for: paneIdentity, in: session))
+            let metrics = self.paneMetrics(for: session, pane: pane)
             store.updateHud(id, spec: spec, size: HudLayout.panelSize(for: spec, pane: metrics),
                             paneIdentity: paneIdentity)
             guard self.writeHudBody(session, pane: metrics) else {
@@ -93,9 +107,10 @@ extension ControlServer {
     /// shifts the centering by about a column, as the estimated cell already can.
     private static let windowPadding = (horizontal: 8.0, vertical: 6.0)
 
-    /// Cell size from the configured font and pane size from the deck-frame cache. Before the cache fills, a
-    /// deck-hosted surface supplies the same bounds; zoom and dashboard hosts are excluded. libghostty reports
-    /// no cell metrics, so the estimated cell may still differ by a column. An unmeasured session takes the cap.
+    /// Cell size comes from the configured font. A scoped call reads the deck-frame cache, falling back to its
+    /// deck-hosted surface before the preference arrives; zoom and dashboard hosts are excluded. An unscoped
+    /// call unions the live pane frames, so a hidden focused split contributes its one maximized surface.
+    /// libghostty reports no cell metrics; an unmeasured session takes the cap.
     func paneMetrics(for session: Session, pane: OverlayPane? = nil) -> PaneMetrics {
         let cell = Self.cellSize(family: settingsModel.settings.fontFamily,
                                  size: session.fontSize ?? GhosttyApp.shared.baseFontSize)
@@ -126,7 +141,7 @@ extension ControlServer {
     }
 
     private enum HudPlacementResolution {
-        case resolved(UUID?)
+        case resolved(identity: UUID?, pane: OverlayPane?)
         case rejected(ControlResponse)
     }
 
@@ -143,27 +158,20 @@ extension ControlServer {
                 return .rejected(ControlResponse(ok: false, error: "unknown pane id: \(token)"))
             }
         }
-        guard let pane else { return .resolved(nil) }
+        guard let pane else { return .resolved(identity: nil, pane: nil) }
         if requireVisible, !session.rendersPane(pane) {
             return .rejected(ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible))
         }
         switch pane {
         case .left:
-            return .resolved(session.paneIdentity)
+            return .resolved(identity: session.paneIdentity, pane: .left)
         case .right:
             guard let identity = session.splitPaneIdentity else {
                 let error = requireVisible ? PaneOverlayError.paneNotVisible : "session has no split"
                 return .rejected(ControlResponse(ok: false, error: error))
             }
-            return .resolved(identity)
+            return .resolved(identity: identity, pane: .right)
         }
-    }
-
-    private func hudPane(for identity: UUID?, in session: Session) -> OverlayPane? {
-        guard let identity else { return nil }
-        if session.paneIdentity == identity { return .left }
-        if session.splitPaneIdentity == identity { return .right }
-        return nil
     }
 
     /// One cell of `family` at `size`: the horizontal advance of a digit (every glyph advances the same in

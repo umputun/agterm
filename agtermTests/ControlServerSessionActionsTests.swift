@@ -695,7 +695,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(metrics.paneHeight, 0)
     }
 
-    func testHudPaneOpenRejectsHiddenPaneAndUnknownIdentity() throws {
+    func testHudPaneOpenRejectionsAndMissingSplitUpdate() throws {
         let (_, session) = try makeHudSession()
         session.hasSplit = true
         session.isSplit = false
@@ -710,6 +710,13 @@ final class ControlServerSessionActionsTests: XCTestCase {
                                      placement: ControlHudPlacement(paneID: "missing-token"))
         XCTAssertEqual(unknown.error, "unknown pane id: missing-token")
         XCTAssertFalse(session.hudActive)
+
+        session.hasSplit = false
+        session.splitPaneIdentity = nil
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "open")).ok)
+        let noSplit = server.updateHud(session.id.uuidString, window: nil, spec: HudSpec(message: "update"),
+                                       placement: ControlHudPlacement(pane: .right))
+        XCTAssertEqual(noSplit.error, "session has no split")
     }
 
     func testHiddenPaneHudCanUpdateAndReturnsWhenThePaneIsShown() throws {

@@ -253,4 +253,10 @@ final class HudDeckGatesTests: XCTestCase {
         XCTAssertEqual(panel.maxY, 720, accuracy: 0.001)
         XCTAssertTrue(pane.contains(panel))
     }
+
+    func testHudMountEligibilityDistinguishesSessionWideFromHiddenPaneScope() {
+        XCTAssertTrue(OverlayPanelStyle.hudCanMount(paneIdentity: nil, paneFrameAvailable: false))
+        XCTAssertFalse(OverlayPanelStyle.hudCanMount(paneIdentity: UUID(), paneFrameAvailable: false))
+        XCTAssertTrue(OverlayPanelStyle.hudCanMount(paneIdentity: UUID(), paneFrameAvailable: true))
+    }
 }

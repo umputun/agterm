@@ -346,8 +346,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Promotion moves the right pane's overlay into the left slot without rebuilding its surface, so that
   surface's callbacks resolve their pane through `Session.paneOverlayRole(of:)`, never a captured one.
   Read back `paneOverlays`, ordered left-then-right.
-- Both full and floating use one always-present `overlayPanel` at z3. Gate content inside its
-  `GeometryReader`; never change the `sessionDetail`/HSplitView shape or pane modifiers on overlay state.
+- Both full and floating use one always-present `overlayPanel` in `sessionDetail`'s overlay preference
+  layer. Gate content inside its `GeometryReader`; never change the `sessionDetail`/HSplitView shape or
+  pane modifiers on overlay state.
   Full is translucent/chromeless and hides panes; floating is opaque/framed over visible panes with an
   internal click catcher. Value-only resizing must not reparent the Metal surface.
 - Handle `GHOSTTY_ACTION_SHOW_CHILD_EXITED`. Return true for immediate close, false for wait; process-exit
@@ -399,6 +400,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   resolved pane identity is stored, so swap and promotion move the HUD with its shell. A hidden target keeps
   the HUD alive but unmounted; destroying the target closes it. Open refuses a pane the deck does not render.
   Omission keeps the existing session-detail coordinate space. This is still one last-writer-wins HUD.
+  `ControlActions` retains the original session-wide methods and defaults the placement-carrying overloads
+  to them, so an `agterm-linux` conformer owes no source change until it adopts pane placement.
 - Zoom narrows on the same predicate: `isActive`'s shared `uncovered` and its `.scratch`/`.overlay` arms,
   `isAvailable`'s `.overlay` arm, `isVisible`, and `paneVisible`. Widen `uncovered` and narrow the `.overlay`
   arm together or no case is active and the documented-unreachable `?? .primary` fallback runs. The explicit
