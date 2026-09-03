@@ -13,6 +13,9 @@ the script checks the target agent, window, composer and cursor, sends the body 
 observed pieces through `session type --stdin`, then sends the submit key after the final piece
 settles. A raw command bypasses those checks.
 
+Invoke `peer-chat.py` as a bare command resolved through `PATH`; it is not a file inside this
+skill directory.
+
 ## Preconditions
 
 The session needs both panes running, with Claude Code on the left, started by the user. This skill

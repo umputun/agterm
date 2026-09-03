@@ -22,7 +22,7 @@ agterm 0.24.0 or later, which added `surface cursor`. The recipe refuses to type
 
 1. Copy `peer-chat.py` somewhere on your `PATH`, keeping the executable bit.
 2. Copy `SKILL-claude.md` to `~/.claude/skills/peer-chat/SKILL.md` and `SKILL-codex.md` to `~/.codex/skills/peer-chat/SKILL.md`. Both loaders require the installed file to be named exactly `SKILL.md`, so the suffix here only says which agent the file is for. Each one tells its own agent how to send, how to recognise an incoming message, and what it may not do to the other pane.
-3. Edit both copies so the path they name for `peer-chat.py` matches where you put it.
+3. Keep `peer-chat.py` on your `PATH`: both skills invoke it as a bare command and name no path. If you install it somewhere off `PATH` instead, prefix the command lines in both copies with its full path.
 4. If you start either agent through a wrapper script instead of as `claude` or `codex`, put that wrapper's name in the same file, as the `--target-command` value the agent should pass when sending to it. Without this the first send refuses, saying the target pane is not running the expected command.
 5. To let Codex reserve and send file-backed messages without separate approvals, add these two entries to `~/.codex/rules/default.rules`, creating the file if needed and using the command name or path from step 1:
 
