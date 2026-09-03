@@ -34,6 +34,8 @@
 	<string>public.app-category.developer-tools</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Umputun</string>
+	<key>NSAppDataUsageDescription</key>
+	<string>Command-line tools you run inside agterm (for example, docker talking to Docker Desktop) request access to other applications' data through agterm.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, an osascript one-liner or a build script) request permission to control other apps through agterm.</string>
 	<key>NSAudioCaptureUsageDescription</key>

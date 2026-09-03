@@ -247,7 +247,7 @@ without complaint.
 Those three folders, along with removable and network volumes, are protected by macOS directly. It is a
 different mechanism from the section above: agterm is not sandboxed, and unlike the services listed there no
 missing entitlement can suppress this family's prompt. macOS defines an optional usage-description string per
-folder and agterm ships none, so the prompt carries macOS's own wording rather than agterm's. What matters is
+folder and agterm ships one for each, so the prompt carries agterm's wording. What matters is
 that the answer is recorded against the application macOS holds responsible. Approving kitty or
 Terminal says nothing about agterm, so a Mac where every other terminal reads the folder can still refuse
 this one, and as with the services above a dismissed prompt is not re-offered and the command just keeps
@@ -262,6 +262,30 @@ To tell a privacy denial from ordinary permission bits, run `/bin/ls -la ~/Downl
 against the folder itself, rather than a replacement such as `eza`. A privacy denial usually reads as
 `Operation not permitted` and ordinary permission bits as `Permission denied`, and some replacements print
 the same wording for both.
+
+## "agterm would like to access data from other apps" keeps coming back
+
+A command that reaches into another application's data raises a macOS dialog reading "Agterm.app would like
+to access data from other apps" — docker is the usual one. Allow works, and then the same dialog returns,
+sometimes on the very next command.
+
+This is a third mechanism, separate from both sections above. macOS calls it App Data, and the consent it
+records is held by a running process rather than stored as a setting: it lasts while that process lives and
+is gone once it exits. It is also the one family with no entry of its own in System Settings, so there is
+nothing to switch on ahead of time and nothing to revise afterwards.
+
+Which process holds the consent decides how often the dialog appears. macOS charges the request to the
+responsible app, normally agterm, so a session the running agterm started is charged to agterm — one dialog
+per launch, then quiet. Live sessions mode is different, because it carries panes across a restart on their
+own daemons: a pane carried over that way was started by an agterm that has since exited, and from then on
+every process in it answers as its own responsible process, including each command it runs. The consent
+belongs to the command, which is a new process every time, so the dialog returns on the next one.
+
+Full Disk Access is the only permanent answer. Add agterm under System Settings ▸ Privacy & Security ▸ Full
+Disk Access, which covers App Data as well as the folders above, at the cost that section describes; with it
+on, the App Data request is never made. In Live sessions mode, quitting and relaunching does not help on
+its own, since the same daemons are handed back. A launch in Fresh shells or Re-run commands mode does,
+because every session then starts under the running app.
 
 ## Reporting a problem
 

@@ -210,7 +210,7 @@ matching service, e.g. Automation ▸ agterm. This is macOS policy, not an agter
 
 macOS protects those folders, plus removable and network volumes, on its own: a separate mechanism from the
 services above, gated by no entitlement, and agterm is not sandboxed. The per-folder usage-description
-strings are optional and agterm ships none, so the prompt carries macOS's own wording. The answer is
+strings are optional and agterm ships one for each, so the prompt carries agterm's wording. The answer is
 recorded against the app macOS holds responsible, so another terminal listing the folder proves nothing
 about agterm. The user grants it in System Settings ▸ Privacy & Security ▸ Files & Folders ▸ agterm, or
 gives agterm Full Disk Access, which covers all of them at once. A dismissed prompt is never re-offered.
@@ -218,6 +218,18 @@ gives agterm Full Disk Access, which covers all of them at once. A dismissed pro
 not permitted` for the privacy denial, `Permission denied` for ordinary permission bits, and some `ls`
 replacements print the same wording for both. Needing the grant is macOS policy, not an agterm bug: do not
 file it.
+
+### "agterm would like to access data from other apps, over and over"
+
+macOS App Data, a third mechanism after the two above. The consent is held by a running process rather than
+stored as a setting, and App Data has no entry of its own in System Settings. macOS charges the request to
+the responsible app, so a session the running agterm started costs one prompt per agterm launch. A pane
+carried across a restart by Live sessions mode was started by an agterm that has since exited, and every
+process in it then answers as its own responsible process, so the consent belongs to each command and the
+prompt returns on the next one. Full Disk Access is the only permanent answer and stops the request being
+made at all; in Live sessions mode relaunching does not help on its own, since the same daemons are handed
+back, while a Fresh shells or Re-run commands launch starts every session under the running app. Needing the
+grant is macOS policy: do not file the prompt itself as an agterm bug.
 
 ### "The agent-status glyph does not update"
 
