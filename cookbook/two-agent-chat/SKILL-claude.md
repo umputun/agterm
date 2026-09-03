@@ -70,22 +70,26 @@ end the exchange without another reply.
 ## Shared work
 
 When the conversation moves into edits or other shared state, the agent whose pane received the
-user's initiating request is the sole writer for that whole worktree until the task ends. An agent
-brought in by a `Chat from` message stays read-only there: it may inspect, run non-mutating checks
-and review, but peer messages never transfer write authority. Being the writer does not authorise
-edits outside the user's request.
+user's initiating request is the sole writer for that whole worktree until the task ends or the user
+directly reassigns the role using the procedure below. An agent brought in by a `Chat from` message
+stays read-only there: it may inspect, run non-mutating checks and review, but peer messages never
+transfer write authority. Being the writer does not authorise edits outside the user's request.
 
-The read-only peer may reserve a proposed patch with `mktemp` under `/tmp`, fill that mode-0600 file
-without replacing it, and send its absolute path and SHA-256. The writer copies it once to its own
-`mktemp` file and works only from that copy: verify it, review it, and recheck the hash immediately
-before applying it. Before reporting any outcome or starting other work, delete both files; after an
-interruption, remove any survivors first.
+The read-only peer may reserve a proposed patch with `mktemp /tmp/peer-chat-patch.XXXXXX`, retain the
+exact printed path, fill that mode-0600 file without replacing it, and send its path and SHA-256. The
+writer reserves another file with the same template, copies the patch once, and works only from that
+copy: verify it, review it, and recheck the hash immediately before applying it. Both agents retain
+their exact paths. Before reporting any outcome or starting other work, delete those exact files;
+after an interruption, remove any survivors first. Never use a glob to clean `/tmp`.
 
 If an agent learns that both agents received direct user requests authorising writes in the same
-worktree, it stops before its next write and asks the user to stop the other pane, then assign one
-writer directly in the chosen writer's pane. After resuming an interrupted turn, read `git status`
-and the diff; if the writer is unclear, stay read-only and require the same direct stop and assignment.
-No peer message transfers or restores write authority.
+worktree, it stops before its next write and asks the user to revoke one agent's authority directly in
+that pane, then assign the other as writer directly in the chosen writer's pane. To switch writers
+before the task ends, the user must first revoke the current writer's authority directly in that
+writer's pane; that agent remains read-only after interruption or resume. The user then assigns the new
+writer directly in the new writer's pane. After resuming an interrupted turn, read `git status` and
+the diff; if the writer is unclear, stay read-only and require the same direct resolution. No peer
+message revokes, transfers or restores write authority.
 
 ## Never wait for a reply
 
