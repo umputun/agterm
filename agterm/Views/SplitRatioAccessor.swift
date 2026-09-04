@@ -73,7 +73,13 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var onPersist: (() -> Void)?
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
-        var deckVisible: Bool = true
+        var deckVisible: Bool = true {
+            didSet {
+                guard deckVisible != oldValue else { return }
+                trace("deckVisible.\(deckVisible ? "on" : "off")")
+                DispatchQueue.main.async { [weak self] in self?.trace("deckVisible.next") }
+            }
+        }
         var suspended: Bool = false {
             didSet {
                 guard suspended != oldValue else { return }
@@ -129,20 +135,51 @@ struct SplitRatioAccessor: NSViewRepresentable {
             updateDividerTracking()
             Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
-            guard !suspended, let split = splitView else { return }
+            trace("layout.entry")
+            guard !suspended, let split = splitView else { trace("layout.skip.nosplit"); return }
             // A background split first lays out at a stale 1pt safe-area inset;
             // when the real one arrives the divider has to be re-applied, or the next window resize falls back
             // to SwiftUI's own even split of the content space (#539).
             let safeAreaTop = split.safeAreaInsets.top
-            if restored, safeAreaTop != restoredSafeAreaTop { restored = false }
-            guard !restored else { return }
-            guard axisLength(of: split) > 1 else { return } // wait for a real extent; retried on each pass
+            if restored, safeAreaTop != restoredSafeAreaTop { restored = false; trace("layout.rearm") }
+            guard !restored else { trace("layout.skip.restored"); return }
+            guard axisLength(of: split) > 1 else { trace("layout.skip.noextent"); return } // wait for a real extent
             // a never-set ratio is seeded rather than left to the mount, which is uneven in content space
             let ratio = session.splitRatio ?? AppStore.splitRatioDefault
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
             session.splitRatio = ratio
             restored = true
             restoredSafeAreaTop = safeAreaTop
+            trace("layout.applied")
+            DispatchQueue.main.async { [weak self] in self?.trace("layout.next") }
+        }
+
+        /// #539 diagnostic: one `split-trace.log` line for this probe's split at `trigger`. Trace-branch only.
+        private func trace(_ trigger: String) {
+            var fields = ["trig=\(trigger)",
+                          "sess=\(session.id.uuidString.prefix(8))",
+                          "axis=\(session.splitAxis == .topBottom ? "tb" : "lr")",
+                          "deckVis=\(deckVisible ? 1 : 0)",
+                          "susp=\(suspended ? 1 : 0)",
+                          "restored=\(restored ? 1 : 0)",
+                          String(format: "restSAT=%.1f", restoredSafeAreaTop),
+                          String(format: "ratio=%.4f", session.splitRatio ?? -1),
+                          "probe=\(SplitTrace.describe(self))"]
+            if let split = splitView {
+                let primary = split.arrangedSubviews.first
+                fields += [String(format: "sat=%.1f", split.safeAreaInsets.top),
+                           String(format: "splitH=%.1f", split.bounds.height),
+                           String(format: "splitW=%.1f", split.bounds.width),
+                           String(format: "scale=%.1f", split.window?.backingScaleFactor ?? -1),
+                           "split=\(SplitTrace.describe(split))",
+                           "p0=\(SplitTrace.describe(primary))",
+                           "p0host=\(SplitTrace.describe(primary?.subviews.first))",
+                           "p0host2=\(SplitTrace.describe(primary?.subviews.first?.subviews.first))",
+                           "p1=\(SplitTrace.describe(split.arrangedSubviews.dropFirst().first))"]
+            } else {
+                fields.append("split=nil")
+            }
+            SplitTrace.log(fields)
         }
 
         /// Find the enclosing `NSSplitView` once it's in the tree, then observe divider moves.
@@ -151,11 +188,15 @@ struct SplitRatioAccessor: NSViewRepresentable {
             if splitView !== enclosing { detach() }
             guard splitView == nil, let split = enclosing else { return }
             splitView = split
+            trace("attach")
             resizeObserver = NotificationCenter.default.addObserver(
                 forName: NSSplitView.didResizeSubviewsNotification, object: split, queue: .main) { [weak self] _ in
                 // the observer fires on the main queue; assume the main actor to call the @MainActor
                 // `capture()`, matching the codebase's notification-closure pattern (e.g. ControlServer).
-                MainActor.assumeIsolated { self?.capture() }
+                MainActor.assumeIsolated {
+                    self?.trace("resize.notify")
+                    self?.capture()
+                }
             }
             // `session.resize` stores a new fraction on the session and posts this (object-scoped to the
             // session) to move the LIVE divider — the programmatic analogue of a user drag, firing on
@@ -167,6 +208,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         }
 
         private func detach() {
+            if splitView != nil { trace("detach") }
             if let dividerTracking { splitView?.removeTrackingArea(dividerTracking) }
             dividerTracking = nil
             if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
@@ -325,6 +367,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             // new fraction on the next pass instead of leaving the model ahead of the divider.
             guard total > 1 else { restored = false; return }
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
+            trace("applyRatio")
         }
 
         /// Mask the split's divider out of the titlebar zone — the strip ABOVE the window's titlebar

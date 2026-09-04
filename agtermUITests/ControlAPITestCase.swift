@@ -58,9 +58,23 @@ class ControlAPITestCase: XCTestCase {
 
     override func tearDown() async throws {
         app?.terminate()
+        preserveSplitTrace()
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
         if let socketPath { try? FileManager.default.removeItem(atPath: socketPath) }
         if let markerDir { try? FileManager.default.removeItem(at: markerDir) }
+    }
+
+    /// #539 diagnostic, trace-branch only: the app writes `split-trace.log` into the per-test state dir,
+    /// which tearDown deletes, so it is copied to a stable per-test path first and its location printed.
+    private func preserveSplitTrace() {
+        guard let stateDir else { return }
+        let source = stateDir.appendingPathComponent("split-trace.log")
+        guard FileManager.default.fileExists(atPath: source.path) else { return }
+        let destination = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("agterm-split-trace-\(name).log")
+        try? FileManager.default.removeItem(at: destination)
+        try? FileManager.default.copyItem(at: source, to: destination)
+        print("split trace: \(destination.path)")
     }
 
     /// Settings to write into the isolated state dir's `settings.json` before launch. Nil (the default)
