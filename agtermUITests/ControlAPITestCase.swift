@@ -42,9 +42,7 @@ class ControlAPITestCase: XCTestCase {
         // the sandbox grant (the per-test AGTERM_STATE_DIR subdir is ~135 bytes; /tmp gives EPERM).
         socketPath = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("agtermc-\(UUID().uuidString.prefix(8)).sock")
-        app = XCUIApplication()
-        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
-        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app = makeApp()
         // pin the title-bar double-click action so the header gesture tests are hermetic regardless of
         // the host's Desktop & Dock setting; launch args can't carry it — FB11763863.
         app.launchEnvironment["AGTERM_UITEST_DOUBLECLICK_ACTION"] =
@@ -75,6 +73,20 @@ class ControlAPITestCase: XCTestCase {
         try? FileManager.default.removeItem(at: destination)
         try? FileManager.default.copyItem(at: source, to: destination)
         print("split trace: \(destination.path)")
+    }
+
+    /// Defaults every launch of this case seeds through `NSArgumentDomain`, which the app reads ahead of
+    /// its own plist. The XCUITest runner is app-sandboxed, so a `UserDefaults(suiteName:)` write from the
+    /// test process lands in the runner's container and never reaches the app.
+    var seededDefaults: [String: String] = [:]
+
+    /// A fresh `XCUIApplication` pointed at this case's isolated state dir, socket and seeded defaults.
+    private func makeApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app.launchArguments += seededDefaults.flatMap { ["-\($0.key)", $0.value] }
+        return app
     }
 
     /// Settings to write into the isolated state dir's `settings.json` before launch. Nil (the default)
@@ -173,9 +185,7 @@ class ControlAPITestCase: XCTestCase {
         app.terminate()
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
         try Data(snapshot.utf8).write(to: stateDir.windowSnapshotFile())
-        app = XCUIApplication()
-        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
-        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app = makeApp()
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "restored session should exist")
     }
@@ -200,9 +210,7 @@ class ControlAPITestCase: XCTestCase {
         let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
         try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
         try Data(contents.utf8).write(to: configDir.appendingPathComponent(fileName))
-        app = XCUIApplication()
-        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
-        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app = makeApp()
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
     }
@@ -217,9 +225,7 @@ class ControlAPITestCase: XCTestCase {
         app.terminate()
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
         try Data(json.utf8).write(to: stateDir.appendingPathComponent("settings.json"))
-        app = XCUIApplication()
-        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
-        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app = makeApp()
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
     }

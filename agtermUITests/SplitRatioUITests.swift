@@ -4,11 +4,11 @@ import XCTest
 /// The split ratio as the user sees it, through the pty: `stty size` in each pane reports the rows the
 /// surface was last sized to, so an even content-space ratio reads as equal row counts whatever the titlebar
 /// inset, and a pane laid out under the titlebar (#539) reads as extra rows. The reporter's 1000x432 frame
-/// is seeded through the app's defaults: the frame persists only on `willClose`, which `terminate()` skips.
+/// is seeded through the launch argument domain: the frame persists only on `willClose`, which
+/// `terminate()` skips.
 final class SplitRatioUITests: ControlAPITestCase {
     private static let width = 1000
     private static let height = 432
-    private static let debugBundleID = "com.umputun.agterm.debug"
     /// The compact-mode safe-area band the split spans, measured by the probe log in the #539 trace.
     private static let titlebarInset: CGFloat = 32
 
@@ -146,15 +146,16 @@ final class SplitRatioUITests: ControlAPITestCase {
         XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should show")
     }
 
-    /// Persist the reporter's 1000x432 frame under the first launch's window id, which the relaunch reopens.
+    /// Seed the reporter's 1000x432 frame under the first launch's window id, which the relaunch reopens.
+    /// Through the argument domain: the runner is sandboxed, so its own defaults writes never reach the app.
     private func seedWindowFrame() throws {
         let windowFile = stateDir.windowSnapshotFile()
         let windowID = try XCTUnwrap(UUID(uuidString: windowFile.deletingPathExtension().lastPathComponent),
                                      "the first launch should have written a per-window snapshot file")
-        let key = "agterm-frame-\(windowID.uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: Self.debugBundleID), "the app's defaults domain")
-        defaults.set(NSStringFromRect(NSRect(x: 120, y: 120, width: Self.width, height: Self.height)), forKey: key)
-        addTeardownBlock { UserDefaults(suiteName: Self.debugBundleID)?.removeObject(forKey: key) }
+        let frame = NSRect(x: 120, y: 120, width: Self.width, height: Self.height)
+        // quoted: NSArgumentDomain parses a value as an old-style plist, where a bare `{{x, y}, {w, h}}`
+        // reads as a malformed dictionary and the key is dropped without a word.
+        seededDefaults["agterm-frame-\(windowID.uuidString)"] = "\"\(NSStringFromRect(frame))\""
     }
 
     private func assertWindowSize(width: Int, height: Int, tolerance: CGFloat, _ message: String) throws {
