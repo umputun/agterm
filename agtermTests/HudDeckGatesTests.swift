@@ -341,17 +341,20 @@ final class HudDeckGatesTests: XCTestCase {
         // than for the first one to arrive — a fixed settle would only move the threshold.
         let deadline = Date().addingTimeInterval(2)
         var settled: HudPaneFrames?
+        var previous: HudPaneFrames?
         var repeats = 0
-        while Date() < deadline {
+        while Date() < deadline, settled == nil {
             // forcing a pass every turn is what makes a repeat mean "layout settled" rather than
             // "no pass has run yet", which a pre-layout rect would satisfy just as well.
             window.layoutIfNeeded()
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
             guard let current = resolved, current.left != nil, !split || current.right != nil else { continue }
-            repeats = current == settled ? repeats + 1 : 0
-            settled = current
-            if repeats >= 2 { break }
+            repeats = current == previous ? repeats + 1 : 0
+            previous = current
+            if repeats >= 2 { settled = current }
         }
+        // only a value that repeated is returned: handing back the last mid-flight sample would fail the
+        // assertions as a coordinate leak when the fixture simply never settled.
         return try XCTUnwrap(settled, "the deck never reported settled pane frames")
     }
 }
