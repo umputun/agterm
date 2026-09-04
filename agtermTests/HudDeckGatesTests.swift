@@ -337,12 +337,21 @@ final class HudDeckGatesTests: XCTestCase {
         defer { window.close() }
         window.contentView = NSHostingView(rootView: probe)
         window.layoutIfNeeded()
+        // the first layout pass reports a pre-layout rect, so wait for the frames to stop moving rather
+        // than for the first one to arrive — a fixed settle would only move the threshold.
         let deadline = Date().addingTimeInterval(2)
-        while resolved?.left == nil || (split && resolved?.right == nil), Date() < deadline {
+        var settled: HudPaneFrames?
+        var repeats = 0
+        while Date() < deadline {
+            // forcing a pass every turn is what makes a repeat mean "layout settled" rather than
+            // "no pass has run yet", which a pre-layout rect would satisfy just as well.
+            window.layoutIfNeeded()
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+            guard let current = resolved, current.left != nil, !split || current.right != nil else { continue }
+            repeats = current == settled ? repeats + 1 : 0
+            settled = current
+            if repeats >= 2 { break }
         }
-        // the first layout pass reports a pre-layout rect, so settle before reading.
-        for _ in 0..<5 { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
-        return try XCTUnwrap(resolved)
+        return try XCTUnwrap(settled, "the deck never reported settled pane frames")
     }
 }
