@@ -23,4 +23,4 @@ hits the same wall.
 Adding it is a `splitCwd` field on `ControlSessionNode`, populated from `session.splitCwd ??
 session.initialSplitCwd` next to the existing split fields, plus the read-back test the control-api
 rule requires. The `title`/`splitTitle` pair has the same asymmetry and is worth deciding at the same
-time. Surfaced by Fable while reviewing the synthetic-title fix.
+time. Surfaced while verifying the synthetic-title fix.
