@@ -368,6 +368,19 @@ class ControlAPITestCase: XCTestCase {
         }
     }
 
+    /// A pane's terminal width in columns, read from its own shell. `splitRatio` alone cannot tell a moved
+    /// divider from a still one: the model is written by a drag, `session.resize` and the first-layout seed,
+    /// never from a layout pass, so a normalize leaves the stored value untouched. The pty is resized by the
+    /// layout, so its width is the live geometry. `tag` names the moment, keeping each read's marker distinct.
+    func paneColumns(id: String, pane: String, tag: String) throws -> Int {
+        let file = markerDir.appendingPathComponent("\(tag)-\(pane)-stty")
+        let value = try XCTUnwrap(typeUntilMarker("stty size > '\(file.path)'\n", target: id, file: file,
+                                                  select: false, pane: pane),
+                                  "the \(pane) pane should report its pty size (\(tag))")
+        let columns = value.split(separator: " ").last.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        return Int(columns ?? "") ?? -1
+    }
+
     /// Polls the hermetic snapshot file until the (single seeded workspace's) first session's `splitRatio`
     /// equals `expected` — the persisted side effect of `session.resize`.
     func pollSplitRatio(_ expected: Double, timeout: TimeInterval) -> Bool {

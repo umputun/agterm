@@ -104,7 +104,7 @@ final class SplitRatioUITests: ControlAPITestCase {
         }
     }
 
-    /// Only a divider drag writes the ratio back, and it persists across a relaunch. The drag starts on the
+    /// A divider drag captures the live ratio into the session, and it persists across a relaunch. The drag starts on the
     /// divider's screen position derived from the content-space ratio; a thin divider has a grab band of a
     /// few points, so the start is retried at small offsets until the read-back moves.
     func testDividerDragPersistsTheRatio() throws {

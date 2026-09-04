@@ -772,7 +772,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
 
     // the divider-normalize regression guard. A pane overlay renders INSIDE the NSSplitView's arranged
     // subview, so mounting or freeing one must never re-lay-out the split. `splitRatio` in the tree is
-    // captured off the LIVE NSSplitView by `SplitRatioAccessor`, so a normalize surfaces here as 0.5.
+    // the pane widths are the live geometry; the stored ratio no longer follows a layout pass on its own.
     func testPaneOverlayOpenAndCloseKeepSplitRatio() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
@@ -783,7 +783,12 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
                        true, "setting a non-default divider should succeed")
         XCTAssertTrue(pollSplitRatio(0.3, timeout: 10), "0.3 should reach the live divider")
 
+        let baseline = ["left": try paneColumns(id: id, pane: "left", tag: "ratio-baseline"),
+                        "right": try paneColumns(id: id, pane: "right", tag: "ratio-baseline")]
+
         for pane in ["right", "left"] {
+            // the overlaid pane's shell is behind its overlay, so the SIBLING carries the geometry check
+            let sibling = pane == "right" ? "left" : "right"
             let marker = markerDir.appendingPathComponent("pane-overlay-\(pane)")
             let cmd = "sh -c 'printf UP > \(marker.path); cat'"
             let json = try! JSONSerialization.data(withJSONObject:
@@ -798,6 +803,8 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
             settle()
             XCTAssertEqual(try liveSplitRatio(id: id), 0.3, accuracy: 0.02,
                            "opening the \(pane) pane overlay must not move the divider")
+            XCTAssertEqual(try paneColumns(id: id, pane: sibling, tag: "open-\(pane)"), baseline[sibling],
+                           "opening the \(pane) pane overlay must not resize the \(sibling) pane")
 
             let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"\#(pane)"}}"#)
             XCTAssertEqual(close["ok"] as? Bool, true, "closing the \(pane) pane overlay should succeed: \(close)")
@@ -805,6 +812,8 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
             settle()
             XCTAssertEqual(try liveSplitRatio(id: id), 0.3, accuracy: 0.02,
                            "closing the \(pane) pane overlay must not move the divider")
+            XCTAssertEqual(try paneColumns(id: id, pane: sibling, tag: "closed-\(pane)"), baseline[sibling],
+                           "closing the \(pane) pane overlay must not resize the \(sibling) pane")
         }
     }
 
@@ -1101,14 +1110,14 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closed["ok"] as? Bool, true, "the held pane overlay should still close on request: \(closed)")
     }
 
-    /// Drain the run loop for a beat so any SwiftUI relayout the last command triggered — and the
-    /// `didResizeSubviews` capture that would follow it — has landed before a divider read.
+    /// Drain the run loop for a beat so any SwiftUI relayout the last command triggered has landed before a
+    /// divider read.
     private func settle() {
         RunLoop.current.run(until: Date().addingTimeInterval(1))
     }
 
-    /// The session's `splitRatio` from a fresh `tree`. `SplitRatioAccessor` writes it from the LIVE
-    /// NSSplitView, so it reports where the divider actually sits, not merely what was last requested.
+    /// The session's `splitRatio` from a fresh `tree`: what was last requested or dragged. It does NOT track
+    /// a layout pass, so `paneColumns` is what catches a divider the layout moved on its own.
     private func liveSplitRatio(id: String) throws -> Double {
         try XCTUnwrap(sessionNode(id: id)["splitRatio"] as? Double, "a split session should report a splitRatio")
     }

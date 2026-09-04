@@ -103,9 +103,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let backedByZmx: Bool?
     /// Divider direction for a live split (`vertical`=left/right, `horizontal`=top/bottom); nil without one.
     public let splitAxis: String?
-    /// The primary-pane fraction (0.05...0.95) of a session that HAS a split (shown or hidden); nil with no
-    /// split OR when the ratio was never explicitly set (via `session.resize` or a divider drag), the divider
-    /// then sitting at the default 0.5. The read side of `session.resize`, otherwise echoed only on that call.
+    /// The primary-pane fraction (0.05...0.95) of the pane area below the titlebar band, for a session that
+    /// HAS a split; nil with no split, or while the split has never been SHOWN, since the divider is seeded
+    /// on its first layout. A shown split therefore always reports a value, 0.5 when nothing set one. The
+    /// read side of `session.resize`, otherwise echoed only on that call.
     public let splitRatio: Double?
     /// For a session that HAS a split (shown or hidden), which pane holds keyboard focus: `true` = split
     /// (right), `false` = main (left); nil/omitted with no split. The read side of `session.focus`.

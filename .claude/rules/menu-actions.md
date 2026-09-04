@@ -125,7 +125,7 @@ paths:
   surface occupant before any public swap entry point is added.
 - Persist each pane cwd and the 0...1 primary-pane `splitRatio`. `SplitRatioAccessor` is an unconditional
   background representable on primary, introspects `NSSplitView`, retries until its axis extent exists, observes
-  `didResizeSubviews`, and debounces save by about 0.4 seconds. Regular saves and quit flush also persist it.
+  `didResizeSubviews` but writes only during a drag, and debounces save by about 0.4 seconds. Regular saves and quit flush also persist it.
 - Double-clicking the divider restores `splitRatioDefault` through the same `applyRatio` path as
   `session.resize`, persisting immediately rather than through the drag debounce. AppKit offers no hook:
   `NSSplitView`'s own double-click collapses a pane through the delegate SwiftUI owns. One shared

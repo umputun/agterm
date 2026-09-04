@@ -24,9 +24,10 @@ extension NSView {
 /// (1) Once the split has a real axis extent it restores `session.splitRatio` via `setPosition`, seeding
 /// `splitRatioDefault` when none is stored. The fraction is of the pane area BELOW the titlebar band, which is
 /// where SwiftUI lays the panes out; measuring against the full split height instead makes an even ratio render
-/// uneven in compact mode. Only a divider DRAG writes back — every other resize notification is a layout pass,
-/// and those carry transient frames (a collapsed pane, a stale inset) that would be persisted as the ratio. The
-/// next `save()` (or the quit-flush) persists it, like a live cwd change.
+/// uneven in compact mode. Only a divider DRAG captures the live divider back; `session.resize`, the
+/// double-click reset and that seed write the session directly, while every other resize notification is a
+/// layout pass whose transient frames (a collapsed pane, a stale inset) must not become the ratio. The next
+/// `save()` (or the quit-flush) persists it, like a live cwd change.
 ///
 /// (2) In COMPACT mode the SwiftUI `.padding(.top, titlebarHeight)` (30px) lands inside the window's
 /// safe-area band, so the AppKit `NSSplitView` ignores it and grows to the FULL window height (verified:
@@ -129,8 +130,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
             guard !suspended, let split = splitView else { return }
-            // SwiftUI sizes the primary pane as content plus the top safe-area inset, while the stored ratio
-            // is a fraction of the FULL split height. A background split first lays out at a stale 1pt inset;
+            // A background split first lays out at a stale 1pt safe-area inset;
             // when the real one arrives the divider has to be re-applied, or the next window resize falls back
             // to SwiftUI's own even split of the content space (#539).
             let safeAreaTop = split.safeAreaInsets.top
@@ -314,8 +314,9 @@ struct SplitRatioAccessor: NSViewRepresentable {
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before
-        /// it posts `.agtermApplySplitRatio`). The follow-on `didResizeSubviews` → `capture()` is a no-op:
-        /// the captured fraction equals what was just set, so `capture()`'s near-equal guard skips it.
+        /// it posts `.agtermApplySplitRatio`). The follow-on `didResizeSubviews` → `capture()` writes nothing:
+        /// `session.resize` holds no mouse button, so it stops at the drag gate. The double-click reset does
+        /// hold one, and there the near-equal guard is what skips the write.
         private func applyRatio() {
             guard !suspended else { restored = false; return }
             guard let split = splitView, let ratio = session.splitRatio else { return }
@@ -366,8 +367,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
             split.layer?.mask = mask // re-assert (SwiftUI may rebuild the split's layer)
         }
 
-        /// Record the current primary-pane fraction onto the session, skipping no-op and degenerate values so
-        /// a window resize that keeps the ratio doesn't churn it.
+        /// Record the dragged primary-pane fraction onto the session. A resize notification outside a drag
+        /// never reaches here, so the near-equal and degenerate guards only filter the drag stream itself.
         private func capture() {
             guard !suspended else { return }
             guard restored, let split = splitView else { return }

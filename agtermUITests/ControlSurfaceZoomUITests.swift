@@ -15,6 +15,7 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         let resize = try sendCommand(#"{"cmd":"session.resize","args":{"ratio":0.33}}"#)
         XCTAssertEqual(resize["ok"] as? Bool, true, "split resize should succeed: \(resize)")
         XCTAssertTrue(pollSplitRatio(0.33, timeout: 10), "the split ratio should persist before zoom")
+        let leftColumns = try paneColumns(id: originalSessionID, pane: "left", tag: "before-zoom")
 
         let leftSurface = try activeSurfaceID(kind: "left")
         let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show"}}"#)
@@ -37,6 +38,8 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         zoomExit.click()
         XCTAssertTrue(zoomExit.waitForNonExistence(timeout: 10), "clicking the zoom-out button should exit zoom")
         XCTAssertTrue(pollSplitRatio(0.33, timeout: 10), "zoom round-trip must not change the split ratio")
+        XCTAssertEqual(try paneColumns(id: originalSessionID, pane: "left", tag: "after-zoom"), leftColumns,
+                       "zoom round-trip must not resize the left pane")
     }
 
     // promotion keeps the zoom target's semantic identity (`surface:<session>:left`), so the zoom host

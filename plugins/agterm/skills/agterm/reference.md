@@ -129,8 +129,8 @@ its pane stays alive, and it is present exactly when `splitRatio`/`splitFocused`
 `splitAxis` (`vertical` for left/right or `horizontal` for top/bottom; omitted when there is no split),
 `splitRatio` (the primary-pane fraction 0.05-0.95 of the area below the titlebar, left or top, of a
 session that HAS a split,
-shown or hidden; omitted when there's no split or the ratio was never explicitly set (divider at the
-default 0.5) — the read side
+shown or hidden; omitted when there's no split, or while the split has never been shown — a shown split
+always reports a value, 0.5 when nothing set one) — the read side
 of `session resize`, record it to restore the exact divider position),
 `splitFocused` (which pane holds focus in a session that HAS a split: `true` = the split/right/bottom pane,
 `false` = the primary/left/top pane; omitted when there's no split; the read side of `session focus`, record it
