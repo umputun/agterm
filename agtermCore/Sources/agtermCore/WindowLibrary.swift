@@ -328,6 +328,12 @@ public final class WindowLibrary {
         return windows.first { $0.id == id }?.name ?? ""
     }
 
+    /// The window's user-set name, nil for an auto "window N" name or an unknown id.
+    public func customWindowName(for id: UUID) -> String? {
+        guard let info = windows.first(where: { $0.id == id }), info.hasCustomName else { return nil }
+        return info.name
+    }
+
     public var defaultWindowName: String {
         "window \(windows.count + 1)"
     }

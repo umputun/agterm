@@ -57,8 +57,9 @@ session drag are out of scope.
   `hasReopened`.
 - Do not use `.restorationBehavior`; it requires macOS 15, the floor is 14, and `SceneBuilder` rejects
   availability conditionals without an `AnyScene` eraser. Deduplicate by ID on both systems.
-- `TitleProbeView` sets `frameAutosaveName("agterm-window-<id>")`, reports key/main changes, and on close
-  tears down surfaces before `closeWindow`.
+- `TitleProbeView` persists the frame under the window UUID in `UserDefaults` on close and restores it
+  once on attach (SwiftUI's index-based autosave overrides `frameAutosaveName`), reports key/main
+  changes, and on close tears down surfaces before `closeWindow`.
   An app-exit close captures foreground commands first, while those surfaces are still alive; see
   [[settings]] for that contract.
 - `AppActions`, commands, palette construction, `ControlServer`, `SettingsModel`, and `SessionSwitcher`
