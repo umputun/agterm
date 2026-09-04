@@ -124,6 +124,9 @@ class ClaudeLivePromptTextTests(unittest.TestCase):
             'Try "fix lint errors"',
             'Try "create a util logging.py that..."',
             'Try "edit cookbook/two-agent-chat/peer-chat.py to..."',
+            # git quotes and escapes a path holding a double quote, so the suggestion
+            # carries its own; pins `.+` over `[^"]*`
+            'Try "refactor "odd\\"name.py""',
         ]
 
         for hint in hints:
