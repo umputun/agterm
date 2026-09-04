@@ -4,7 +4,7 @@ import XCTest
 import agtermCore
 
 /// Hosted coverage for the sidebar status glyph's blink lifecycle: it starts and stops with the indicator,
-/// and survives a per-row reload, which a terminal title change triggers through `displayName`.
+/// and survives a terminal title change, which relabels the row's cell in place through `displayName`.
 @MainActor
 final class SidebarStatusBlinkTests: XCTestCase {
     private var stateDir: URL!
@@ -13,6 +13,7 @@ final class SidebarStatusBlinkTests: XCTestCase {
     private var window: NSWindow!
     private var outline: SidebarOutlineView!
     private var coordinator: WorkspaceSidebar.Coordinator!
+    private var builds: CellBuildCounter!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -30,6 +31,7 @@ final class SidebarStatusBlinkTests: XCTestCase {
             window = nil
             outline = nil
             coordinator = nil
+            builds = nil
             actions = nil
             library = nil
             try? FileManager.default.removeItem(at: stateDir)
@@ -48,15 +50,31 @@ final class SidebarStatusBlinkTests: XCTestCase {
         session.agentIndicator = AgentIndicator(status: .active, blink: true)
         coordinator.reconcile()
         let (firstCell, firstBlink) = try renderedStatus(forSession: session.id)
+        let built = builds.count
 
         session.oscTitle = "spin 1"
         coordinator.reconcile()
         let (secondCell, secondBlink) = try renderedStatus(forSession: session.id)
 
-        XCTAssertTrue(firstCell === secondCell,
-                      "a per-row reload must recycle the cell, or a surviving animation proves nothing")
+        XCTAssertEqual(builds.count, built, "a title tick must relabel the live cell, not rebuild it through reloadItem")
+        XCTAssertTrue(firstCell === secondCell, "the relabel must land on the cell already on screen")
+        XCTAssertEqual(secondCell.textField?.stringValue, "spin 1")
         XCTAssertTrue(firstBlink === secondBlink,
-                      "the blink must ride through the reload; a fresh animation restarts the fade at full opacity")
+                      "the blink must ride through the relabel; a fresh animation restarts the fade at full opacity")
+    }
+
+    func testAFlagChangeStillRebuildsTheCell() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        _ = try renderedRow(forSession: session.id)
+        let built = builds.count
+
+        session.flagged = true
+        coordinator.reconcile()
+        _ = try renderedRow(forSession: session.id)
+
+        XCTAssertGreaterThan(builds.count, built, "the counter must see a reload, or the zero above proves nothing")
     }
 
     func testStatusChangeStillStartsTheBlink() throws {
@@ -123,8 +141,9 @@ final class SidebarStatusBlinkTests: XCTestCase {
     private func buildSidebar(for store: AppStore) {
         outline = SidebarOutlineView()
         coordinator = WorkspaceSidebar.Coordinator(store: store, actions: actions)
+        builds = CellBuildCounter(forwarding: coordinator)
         outline.dataSource = coordinator
-        outline.delegate = coordinator
+        outline.delegate = builds
         outline.headerView = nil
         outline.rowSizeStyle = .custom
         outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize)
@@ -162,5 +181,29 @@ final class SidebarStatusBlinkTests: XCTestCase {
         let blink = try XCTUnwrap(cell.statusIcon.layer?.animation(forKey: Self.blinkKey),
                                   "a blinking status should have installed the opacity animation")
         return (cell, blink)
+    }
+}
+
+/// Counts the outline's cell-builder calls and hands every other delegate message to the coordinator.
+@MainActor
+private final class CellBuildCounter: NSObject, NSOutlineViewDelegate {
+    private(set) var count = 0
+    private let coordinator: WorkspaceSidebar.Coordinator
+
+    init(forwarding coordinator: WorkspaceSidebar.Coordinator) {
+        self.coordinator = coordinator
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        count += 1
+        return coordinator.outlineView(outlineView, viewFor: tableColumn, item: item)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || coordinator.responds(to: aSelector)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        coordinator
     }
 }

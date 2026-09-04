@@ -349,10 +349,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// A row's visible content: label (workspace name or session `displayName`), split-rectangle icon,
-        /// the gated unseen-badge count and the agent-status indicator. A delta reloads just that row. Uses
-        /// `hasSplit` (not `isSplit`) so the icon persists while a split is hidden.
+        /// the gated unseen-badge count and the agent-status indicator. A delta reloads just that row, except
+        /// a session's label alone, which its live cell takes in place. Uses `hasSplit` (not `isSplit`) so
+        /// the icon persists while a split is hidden.
         private struct RowContent: Equatable {
-            let label: String
+            var label: String
             let hasSplit: Bool
             let splitAxis: SplitAxis
             let unseen: Int
@@ -364,6 +365,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
             /// independent of `focusEnabled`, so marking re-renders just that row even while the filter is
             /// off (with it on the shape changes too and the rebuild branch takes over). False for sessions.
             let focusMember: Bool
+
+            func differsOnlyInLabel(from other: RowContent) -> Bool {
+                var relabeled = self
+                relabeled.label = other.label
+                return label != other.label && relabeled == other
+            }
         }
 
         /// The session's own agent-status indicator (`.idle` for an unknown id / workspace row). Shown
@@ -381,8 +388,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// Decides between a full rebuild (a SHAPE change: add/move/close/reorder) and a targeted per-row
-        /// reload (a content change: rename, cwd-driven name, split open/close, badge). A reload during an
-        /// in-progress rename is skipped so a tick can't drop the edit.
+        /// update (a content change: rename, cwd-driven name, split open/close, badge). A row update during
+        /// an in-progress rename is skipped so a tick can't drop the edit.
         func reconcile() {
             // a mode flip swaps the whole data source, so rebuild regardless of the shape diff.
             let shape = currentShape()
@@ -409,15 +416,19 @@ struct WorkspaceSidebar: NSViewRepresentable {
             }
         }
 
-        /// Reloads only the rows whose visible content changed — the session row and, for a badge roll-up,
-        /// its workspace row. A per-row `reloadItem` re-renders at the row's stable frame, so a name/cwd
+        /// Updates only the rows whose visible content changed — the session row and, for a badge roll-up,
+        /// its workspace row. A session row whose label alone changed is relabeled in place; every other
+        /// delta takes a per-row `reloadItem`, which re-renders at the row's stable frame, so a name/cwd
         /// update never re-lays-out the tree. Skipped mid-rename so it can't drop an in-progress edit.
         private func reloadChangedContentRows() {
             guard let outline = outlineView, !renameController.isCommitting, !renameController.isEditing else { return }
             func reloadIfChanged(_ id: UUID, _ content: RowContent) {
-                guard content != lastRowContent[id] else { return }
+                let previous = lastRowContent[id]
+                guard content != previous else { return }
                 lastRowContent[id] = content
-                if let node = nodeCache[id] { outline.reloadItem(node) }
+                guard let node = nodeCache[id] else { return }
+                if node.kind == .session, previous?.differsOnlyInLabel(from: content) == true, relabel(node, content.label) { return }
+                outline.reloadItem(node)
             }
             for workspace in store.workspaces {
                 reloadIfChanged(workspace.id, rowContent(forWorkspace: workspace))
@@ -425,6 +436,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
                     reloadIfChanged(session.id, rowContent(forSession: session, workspaceName: workspace.name))
                 }
             }
+        }
+
+        /// Puts a new label on a session row's live cell; false when the row has no cell (collapsed or
+        /// scrolled off). Schedules layout so the changed label refreshes its truncation tooltip.
+        private func relabel(_ node: SidebarNode, _ label: String) -> Bool {
+            guard let outline = outlineView else { return false }
+            let row = outline.row(forItem: node)
+            guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView,
+                  let field = cell.textField else { return false }
+            field.stringValue = label
+            cell.needsLayout = true
+            return true
         }
 
         /// Records every row's current visible content, keyed by id, so the next reconcile can diff it.

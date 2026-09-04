@@ -66,6 +66,23 @@ final class SidebarRowViewsTests: XCTestCase {
         XCTAssertNil(field.toolTip, "a fully visible name needs no tooltip; repeating it on hover is noise")
     }
 
+    func testATitleTickRefreshesTheTooltipOnTheLiveCell() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        let cell = try renderedCell(forSession: session.id)
+        let long = "PROJ-123 enforce the storage quota on the plan endpoint before the billing cutover"
+
+        for (title, expected) in [("api", nil), (long, long), ("api", nil)] {
+            session.oscTitle = title
+            coordinator.reconcile()
+            cell.layoutSubtreeIfNeeded()
+            XCTAssertTrue(try renderedCell(forSession: session.id) === cell, "a title tick must keep the cell")
+            XCTAssertEqual(cell.textField?.stringValue, title)
+            XCTAssertEqual(cell.textField?.toolTip, expected, "the relabel must schedule the layout pass that owns the tooltip")
+        }
+    }
+
     func testWideningTheRowClearsAToolTipItNoLongerNeeds() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
@@ -163,14 +180,18 @@ final class SidebarRowViewsTests: XCTestCase {
     }
 
     private func renderedNameField(forSession id: UUID) throws -> NSTextField {
+        let cell = try renderedCell(forSession: id)
+        cell.layoutSubtreeIfNeeded()
+        return try XCTUnwrap(cell.textField)
+    }
+
+    private func renderedCell(forSession id: UUID) throws -> SidebarCellView {
         outline.layoutSubtreeIfNeeded()
         let row = try XCTUnwrap((0..<outline.numberOfRows).first { index in
             guard let node = outline.item(atRow: index) as? SidebarNode else { return false }
             return node.kind == .session && node.id == id
         }, "the session row should be visible in the outline")
-        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
-        cell.layoutSubtreeIfNeeded()
-        return try XCTUnwrap(cell.textField)
+        return try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
     }
 
     private func renderedIcon(forSession id: UUID) throws -> NSImage? {
