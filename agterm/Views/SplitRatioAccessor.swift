@@ -105,6 +105,9 @@ struct SplitRatioAccessor: NSViewRepresentable {
         /// sees that release from inside `NSSplitView`'s own tracking loop is not something to depend on.
         private var dividerPressed = false
 
+        /// A divider drag is live right now: that press, with the button still down.
+        private var dividerDragging: Bool { dividerPressed && NSEvent.pressedMouseButtons & 1 != 0 }
+
         init(session: Session) {
             self.session = session
             super.init(frame: .zero)
@@ -163,6 +166,10 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private func rearmOnInsetChange() {
             guard !suspended, restored, let split = splitView else { return }
             guard split.safeAreaInsets.top != restoredSafeAreaTop else { return }
+            // an inset change mid-drag would drop the drag at `capture()`'s `restored` gate and snap the
+            // divider to the stored ratio a turn later, under the user's grip. Skipping leaves
+            // `restoredSafeAreaTop` stale, which costs nothing: it still differs, so a later pass re-arms.
+            guard !dividerDragging else { return }
             restored = false
             DispatchQueue.main.async { [weak self] in self?.restoreDivider() }
         }
@@ -401,7 +408,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             guard restored, let split = splitView else { return }
             // only a drag is intent. Every other resize notification is a layout pass, and those carry
             // transient frames — a collapsed pane, a stale inset — that would be persisted as the ratio.
-            guard dividerPressed, NSEvent.pressedMouseButtons & 1 != 0 else { return }
+            guard dividerDragging else { return }
             guard let ratio = contentRatio(in: split) else { return }
             guard ratio > AppStore.splitRatioMin, ratio < AppStore.splitRatioMax else { return }
             if let current = session.splitRatio, abs(current - ratio) < 0.004 { return }

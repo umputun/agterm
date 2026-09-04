@@ -149,22 +149,26 @@ final class SplitRatioAccessorTests: XCTestCase {
         }
     }
 
-    // pins #539: macOS 27 never re-enters `layout()` when a restored background split is revealed, so the
-    // inset change has to reach the divider through the split's own resize notification instead.
-    func testASafeAreaInsetChangeReappliesTheStoredRatioWithoutALayoutPass() async {
+    // pins #539 geometry; layout() re-applies first here, so the notification path needs SplitRatioUITests
+    func testATopBottomSafeAreaInsetChangeReappliesTheStoredRatio() async {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
         session.splitRatio = 0.5
         probe.layout()
         split.layoutSubtreeIfNeeded()
 
         session.splitRatio = 0.3
         split.additionalSafeAreaInsets.top = 32
+        // the reveal delivers two, and the second must not queue a second apply
+        NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
         NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
         await runloopTurn()
 
-        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 120, accuracy: 1)
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 82.4, accuracy: 1)
     }
 
-    func testAResizeNotificationAtAnUnchangedInsetLeavesTheDividerAlone() async {
+    func testAResizeNotificationAtAnUnchangedInsetChangesNothing() async {
         session.splitRatio = 0.5
         probe.layout()
         split.layoutSubtreeIfNeeded()
