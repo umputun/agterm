@@ -13,15 +13,41 @@ enum PaneHostIdentity {
     }
 }
 
-private struct PaneHostCoordinateSpace: Hashable {
-    let sessionID: UUID
+/// The deck panes' bounds, carried as SwiftUI anchors rather than as resolved rects. `HSplitView` hosts its
+/// arranged subviews across an AppKit bridge that a named coordinate space does not cross: `frame(in:)`
+/// inside a split silently returns WINDOW coordinates, which the overlay layer then applies a second time
+/// through `.position`. An anchor has no space of its own — the reader resolves it in the reader's — so both
+/// the split and the lone-pane shape land in the session detail space `HudPaneFrame` documents.
+struct HudPaneAnchors {
+    var left: Anchor<CGRect>?
+    var right: Anchor<CGRect>?
+
+    mutating func merge(_ other: HudPaneAnchors) {
+        if let left = other.left { self.left = left }
+        if let right = other.right { self.right = right }
+    }
+
+    /// The panes' bounds in `proxy`'s own space.
+    func frames(in proxy: GeometryProxy) -> HudPaneFrames {
+        HudPaneFrames(left: left.map { HudPaneFrame(proxy[$0]) },
+                      right: right.map { HudPaneFrame(proxy[$0]) })
+    }
 }
 
-private struct HudPaneFramesPreferenceKey: PreferenceKey {
-    static let defaultValue = HudPaneFrames()
+struct HudPaneAnchorsPreferenceKey: PreferenceKey {
+    static let defaultValue = HudPaneAnchors()
 
-    static func reduce(value: inout HudPaneFrames, nextValue: () -> HudPaneFrames) {
+    static func reduce(value: inout HudPaneAnchors, nextValue: () -> HudPaneAnchors) {
         value.merge(nextValue())
+    }
+}
+
+extension View {
+    /// Publishes this pane host's bounds for the session's overlay layer to resolve.
+    func hudPaneAnchor(_ pane: OverlayPane) -> some View {
+        anchorPreference(key: HudPaneAnchorsPreferenceKey.self, value: .bounds) { anchor in
+            pane == .left ? HudPaneAnchors(left: anchor) : HudPaneAnchors(right: anchor)
+        }
     }
 }
 
@@ -119,12 +145,9 @@ extension WindowContentView {
                     .zIndex(1)
             }
         }
-        .coordinateSpace(.named(PaneHostCoordinateSpace(sessionID: session.id)))
-        .overlayPreferenceValue(HudPaneFramesPreferenceKey.self) { frames in
+        .overlayPreferenceValue(HudPaneAnchorsPreferenceKey.self) { anchors in
             overlayPanel(session: session, isActive: focusable,
-                         onScreen: deckInteractive && isActive, paneFrames: frames)
-                .onAppear { cachePaneFrames(frames, for: session) }
-                .onChange(of: frames) { _, value in cachePaneFrames(value, for: session) }
+                         onScreen: deckInteractive && isActive, paneAnchors: anchors)
         }
         // on PROGRAM overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane
         // hidden under the scratch. One makeFirstResponder loses the race with the overlay's teardown/re-host,
@@ -228,17 +251,7 @@ extension WindowContentView {
             }
             paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
         }
-        .background {
-            GeometryReader { geo in
-                let rect = geo.frame(in: .named(PaneHostCoordinateSpace(sessionID: session.id)))
-                let frame = HudPaneFrame(x: Double(rect.minX), y: Double(rect.minY),
-                                         width: Double(rect.width), height: Double(rect.height))
-                Color.clear.preference(
-                    key: HudPaneFramesPreferenceKey.self,
-                    value: pane == .left ? HudPaneFrames(left: frame) : HudPaneFrames(right: frame)
-                )
-            }
-        }
+        .hudPaneAnchor(pane)
     }
 
     /// FULL, FLOATING, and HUD overlays render in `sessionDetail`'s always-present preference layer. Content
@@ -248,13 +261,14 @@ extension WindowContentView {
     /// Metal drawable). `OverlayPanelStyle` supplies every per-occupant parameter, so the chain below is the
     /// same chain whichever one is up.
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool, onScreen: Bool,
-                                           paneFrames: HudPaneFrames) -> some View {
+                                           paneAnchors: HudPaneAnchors) -> some View {
         let style = OverlayPanelStyle.resolve(session)
         // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
         // stays inert as a whole and the session underneath keeps both.
         let live = isActive && style.interactive
         GeometryReader { geo in
             let detailFrame = CGRect(origin: .zero, size: geo.size)
+            let paneFrames = paneAnchors.frames(in: geo)
             let paneFrame = session.hudTargetPane.flatMap { paneFrames[$0] }.map { CGRect($0) }
             let scopedHudVisible = OverlayPanelStyle.hudCanMount(
                 paneIdentity: session.hudPaneIdentity, paneFrameAvailable: paneFrame != nil
@@ -302,6 +316,8 @@ extension WindowContentView {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .onAppear { cachePaneFrames(paneFrames, for: session) }
+            .onChange(of: paneFrames) { _, value in cachePaneFrames(value, for: session) }
         }
         // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
         // intercepts clicks meant for the pane(s).
@@ -502,6 +518,13 @@ private extension CGRect {
     init(_ frame: HudPaneFrame) {
         self.init(x: CGFloat(frame.x), y: CGFloat(frame.y),
                   width: CGFloat(frame.width), height: CGFloat(frame.height))
+    }
+}
+
+private extension HudPaneFrame {
+    init(_ rect: CGRect) {
+        self.init(x: Double(rect.minX), y: Double(rect.minY),
+                  width: Double(rect.width), height: Double(rect.height))
     }
 }
 
