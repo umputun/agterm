@@ -53,6 +53,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 |---|---|---|
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
+| [keymap-cheatsheet](keymap-cheatsheet/) | your own shortcut sheet in an overlay, and a drafted row for every chord you bound but never wrote down | >0.21.0, python3, glow, Claude Code |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 | [remote-session-picker](remote-session-picker/) | pick a session running on another Mac and attach it here | 0.26.0, jq |
