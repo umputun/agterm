@@ -73,13 +73,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var onPersist: (() -> Void)?
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
-        var deckVisible: Bool = true {
-            didSet {
-                guard deckVisible != oldValue else { return }
-                trace("deckVisible.\(deckVisible ? "on" : "off")")
-                DispatchQueue.main.async { [weak self] in self?.trace("deckVisible.next") }
-            }
-        }
+        var deckVisible: Bool = true
         var suspended: Bool = false {
             didSet {
                 guard suspended != oldValue else { return }
@@ -135,8 +129,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             updateDividerTracking()
             Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
-            trace("layout.entry")
-            restoreDivider(from: "layout")
+            restoreDivider()
         }
 
         /// Apply the stored ratio once the split has a real extent, and again whenever the safe-area inset
@@ -144,12 +137,12 @@ struct SplitRatioAccessor: NSViewRepresentable {
         /// the divider has to be re-applied, or the top pane keeps the stale position and overruns the
         /// titlebar, and the next window resize falls back to SwiftUI's own even split of the content space
         /// (#539).
-        private func restoreDivider(from trigger: String) {
-            guard !suspended, let split = splitView else { trace("\(trigger).skip.nosplit"); return }
+        private func restoreDivider() {
+            guard !suspended, let split = splitView else { return }
             let safeAreaTop = split.safeAreaInsets.top
-            if restored, safeAreaTop != restoredSafeAreaTop { restored = false; trace("\(trigger).rearm") }
-            guard !restored else { trace("\(trigger).skip.restored"); return }
-            guard axisLength(of: split) > 1 else { trace("\(trigger).skip.noextent"); return } // wait for a real extent
+            if restored, safeAreaTop != restoredSafeAreaTop { restored = false }
+            guard !restored else { return }
+            guard axisLength(of: split) > 1 else { return } // wait for a real extent
             // a never-set ratio is seeded rather than left to the mount, which is uneven in content space
             let ratio = session.splitRatio ?? AppStore.splitRatioDefault
             // marked applied BEFORE the move: `setPosition` posts `didResizeSubviews` synchronously, and
@@ -158,8 +151,6 @@ struct SplitRatioAccessor: NSViewRepresentable {
             restoredSafeAreaTop = safeAreaTop
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
             session.splitRatio = ratio
-            trace("\(trigger).applied")
-            DispatchQueue.main.async { [weak self] in self?.trace("\(trigger).next") }
         }
 
         /// Catch the inset change from the split's own resize notification, because macOS 27 never re-enters
@@ -173,36 +164,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             guard !suspended, restored, let split = splitView else { return }
             guard split.safeAreaInsets.top != restoredSafeAreaTop else { return }
             restored = false
-            trace("resize.rearm")
-            DispatchQueue.main.async { [weak self] in self?.restoreDivider(from: "resize") }
-        }
-
-        /// #539 diagnostic: one `split-trace.log` line for this probe's split at `trigger`. Trace-branch only.
-        private func trace(_ trigger: String) {
-            var fields = ["trig=\(trigger)",
-                          "sess=\(session.id.uuidString.prefix(8))",
-                          "axis=\(session.splitAxis == .topBottom ? "tb" : "lr")",
-                          "deckVis=\(deckVisible ? 1 : 0)",
-                          "susp=\(suspended ? 1 : 0)",
-                          "restored=\(restored ? 1 : 0)",
-                          String(format: "restSAT=%.1f", restoredSafeAreaTop),
-                          String(format: "ratio=%.4f", session.splitRatio ?? -1),
-                          "probe=\(SplitTrace.describe(self))"]
-            if let split = splitView {
-                let primary = split.arrangedSubviews.first
-                fields += [String(format: "sat=%.1f", split.safeAreaInsets.top),
-                           String(format: "splitH=%.1f", split.bounds.height),
-                           String(format: "splitW=%.1f", split.bounds.width),
-                           String(format: "scale=%.1f", Double(split.window?.backingScaleFactor ?? -1)),
-                           "split=\(SplitTrace.describe(split))",
-                           "p0=\(SplitTrace.describe(primary))",
-                           "p0host=\(SplitTrace.describe(primary?.subviews.first))",
-                           "p0host2=\(SplitTrace.describe(primary?.subviews.first?.subviews.first))",
-                           "p1=\(SplitTrace.describe(split.arrangedSubviews.dropFirst().first))"]
-            } else {
-                fields.append("split=nil")
-            }
-            SplitTrace.log(fields)
+            DispatchQueue.main.async { [weak self] in self?.restoreDivider() }
         }
 
         /// Find the enclosing `NSSplitView` once it's in the tree, then observe divider moves.
@@ -211,13 +173,11 @@ struct SplitRatioAccessor: NSViewRepresentable {
             if splitView !== enclosing { detach() }
             guard splitView == nil, let split = enclosing else { return }
             splitView = split
-            trace("attach")
             resizeObserver = NotificationCenter.default.addObserver(
                 forName: NSSplitView.didResizeSubviewsNotification, object: split, queue: .main) { [weak self] _ in
                 // the observer fires on the main queue; assume the main actor to call the @MainActor
                 // `capture()`, matching the codebase's notification-closure pattern (e.g. ControlServer).
                 MainActor.assumeIsolated {
-                    self?.trace("resize.notify")
                     // before `capture()`, whose `restored` gate then skips the pass whose divider this
                     // re-arm is about to re-apply, rather than reading the frame it is about to replace.
                     self?.rearmOnInsetChange()
@@ -234,7 +194,6 @@ struct SplitRatioAccessor: NSViewRepresentable {
         }
 
         private func detach() {
-            if splitView != nil { trace("detach") }
             if let dividerTracking { splitView?.removeTrackingArea(dividerTracking) }
             dividerTracking = nil
             if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
@@ -393,7 +352,6 @@ struct SplitRatioAccessor: NSViewRepresentable {
             // new fraction on the next pass instead of leaving the model ahead of the divider.
             guard total > 1 else { restored = false; return }
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
-            trace("applyRatio")
         }
 
         /// Mask the split's divider out of the titlebar zone — the strip ABOVE the window's titlebar

@@ -263,10 +263,7 @@ struct WindowAccessor: NSViewRepresentable {
         private func restoreSavedFrame(_ window: NSWindow) {
             guard !frameRestored else { return }
             frameRestored = true
-            let stored = UserDefaults.standard.string(forKey: Self.frameKey(windowID))
-            SplitTrace.log(["trig=frameRestore", "key=\(Self.frameKey(windowID))", "stored=\(stored ?? "nil")",
-                            "current=\(NSStringFromRect(window.frame))"])
-            guard let saved = stored else { return }
+            guard let saved = UserDefaults.standard.string(forKey: Self.frameKey(windowID)) else { return }
             let frame = NSRectFromString(saved)
             guard frame.width > 0, frame.height > 0 else { return }
             window.setFrame(Self.constrainedRestoredFrame(frame, for: window), display: true)
