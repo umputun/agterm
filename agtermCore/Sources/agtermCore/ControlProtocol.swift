@@ -205,8 +205,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `session.restore` and `session.hud.*` diverge: an unresolvable token with NO explicit `pane` errors
     /// rather than silently choosing session-wide or main placement. See `Session.paneRole(forToken:)`, #199.
     public var paneID: String?
-    /// Absolute primary-pane split fraction (0...1) for `session.resize`, clamped server-side to
-    /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
+    /// Absolute primary-pane split fraction (0...1) of the pane area below the titlebar band, for
+    /// `session.resize`, clamped server-side to `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive
+    /// with `ratioDelta`.
     public var ratio: Double?
     /// Signed relative split-divider nudge for `session.resize`: a positive fraction grows the PRIMARY
     /// pane, negative grows the split pane. Applied to the session's

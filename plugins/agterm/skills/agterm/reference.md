@@ -127,7 +127,8 @@ local session, and never present after a relaunch because a remote session is ne
 read THIS to decide whether a session has a split, because a hidden split reports `split: false` while
 its pane stays alive, and it is present exactly when `splitRatio`/`splitFocused` can be),
 `splitAxis` (`vertical` for left/right or `horizontal` for top/bottom; omitted when there is no split),
-`splitRatio` (the primary-pane fraction 0.05-0.95, left or top, of a session that HAS a split,
+`splitRatio` (the primary-pane fraction 0.05-0.95 of the area below the titlebar, left or top, of a
+session that HAS a split,
 shown or hidden; omitted when there's no split or the ratio was never explicitly set (divider at the
 default 0.5) — the read side
 of `session resize`, record it to restore the exact divider position),
@@ -525,7 +526,8 @@ error keeps those names for compatibility.
   split DIVIDER (the divider is otherwise mouse-only: drag it, or double-click it for an even split. No
   GUI/menu/keymap action reaches any other fraction, so bind a key by mapping a
   `command "agtermctl session resize …"` custom action). Provide exactly one form:
-  `--split-ratio` sets the absolute primary-pane fraction (`0..1`, left or top). The grow options are
+  `--split-ratio` sets the absolute primary-pane fraction of the area below the titlebar (`0..1`, left
+  or top). The grow options are
   equivalent role/position aliases: primary/left/top versus split/right/bottom. The result is clamped to
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored

@@ -79,6 +79,57 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(split.arrangedSubviews[0].frame.width, 120, accuracy: 1)
     }
 
+    func testATopBottomRatioIsAFractionOfTheAreaBelowTheTitlebarBand() {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        split.additionalSafeAreaInsets.top = 32
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 116, accuracy: 1)
+    }
+
+    func testALeftRightRatioIgnoresTheTitlebarBand() {
+        split.additionalSafeAreaInsets.top = 32
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 200, accuracy: 1)
+    }
+
+    func testAFreshSplitSeedsTheDefaultRatioRatherThanTheMountedFrames() {
+        XCTAssertNil(session.splitRatio)
+        split.setPosition(320, ofDividerAt: 0)
+        split.layoutSubtreeIfNeeded()
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(session.splitRatio ?? -1, AppStore.splitRatioDefault, accuracy: 0.001)
+        XCTAssertEqual(split.arrangedSubviews[0].frame.width, 200, accuracy: 1)
+    }
+
+    func testAResizeOutsideADragDoesNotChangeTheStoredRatio() {
+        session.splitRatio = 0.5
+        probe.layout()
+        offsetDivider(to: 320)
+        NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
+
+        XCTAssertEqual(session.splitRatio ?? -1, 0.5, accuracy: 0.001)
+    }
+
+    func testAPressThatNeverDraggedDoesNotCaptureALaterLayoutPass() throws {
+        session.splitRatio = 0.5
+        probe.layout()
+        _ = try press(atX: try dividerX(), count: 1)
+        offsetDivider(to: 320)
+        NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
+
+        XCTAssertEqual(session.splitRatio ?? -1, 0.5, accuracy: 0.001)
+    }
+
     func testAnUnchangedSafeAreaInsetLeavesTheDividerAlone() {
         session.splitRatio = 0.5
         probe.layout()

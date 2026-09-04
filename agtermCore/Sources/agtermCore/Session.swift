@@ -177,9 +177,10 @@ public final class Session: Identifiable {
     /// inactive one. Meaningless when not split.
     public var splitFocused: Bool = false
 
-    /// The split divider's primary-pane fraction, captured from the live `NSSplitView` and persisted, so it
-    /// survives a hide/show and a relaunch. Within `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95):
-    /// capture skips degenerate extremes, restore clamps and seeds. nil = even; never read by a SwiftUI view.
+    /// The split divider's primary-pane fraction of the pane area below the titlebar band, captured from the
+    /// live `NSSplitView` on a divider drag and persisted, so it survives a hide/show and a relaunch. Within
+    /// `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95): capture skips degenerate extremes, restore
+    /// clamps and seeds. nil = even; never read by a SwiftUI view.
     @ObservationIgnored public var splitRatio: Double?
 
     /// The second pane's surface, created lazily on first split and, like `surface`, surviving view churn —

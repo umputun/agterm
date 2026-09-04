@@ -221,6 +221,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--grow-left|right|primary|split|top|bottom` delta, defaulting an unset ratio to 0.5. Require a split,
   clamp through store limits, persist, then post the object-scoped live-divider notification. Hidden split
   stores for next show. Return clamped ratio as `%.3f`; read `splitRatio`.
+  The fraction is of the pane area BELOW the titlebar band, not the full split height, so an even ratio
+  renders even in every toolbar mode. Only a divider drag writes a new value back to the session.
 - `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
   the placement store, wraps within filtered scope, and returns selected ID. It has no target.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and

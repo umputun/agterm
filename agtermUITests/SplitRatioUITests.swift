@@ -1,15 +1,16 @@
 import AppKit
 import XCTest
 
-/// #539: a top/bottom split restored in the background and selected after launch lays its top pane out
-/// under the compact titlebar until the window is resized. The pty is the oracle: a stale hosting view
-/// sizes the surface taller than its pane, so `stty size` in a pane changes across a 1-point resize and
-/// restore at the SAME window size only when the revealed layout was stale. The reporter's frame is seeded
-/// through the app's defaults: the frame persists only on `willClose`, which `terminate()` skips.
-final class RestoredSplitLayoutUITests: ControlAPITestCase {
+/// The split ratio as the user sees it, through the pty: `stty size` in each pane reports the rows the
+/// surface was last sized to, so an even content-space ratio reads as equal row counts whatever the titlebar
+/// inset, and a pane laid out under the titlebar (#539) reads as extra rows. The reporter's 1000x432 frame
+/// is seeded through the app's defaults: the frame persists only on `willClose`, which `terminate()` skips.
+final class SplitRatioUITests: ControlAPITestCase {
     private static let width = 1000
     private static let height = 432
     private static let debugBundleID = "com.umputun.agterm.debug"
+    /// The compact-mode safe-area band the split spans, measured by the probe log in the #539 trace.
+    private static let titlebarInset: CGFloat = 32
 
     private struct PtySizes: Equatable {
         let top: String
@@ -24,10 +25,10 @@ final class RestoredSplitLayoutUITests: ControlAPITestCase {
         private func rows(_ size: String) -> Int { Int(size.split(separator: " ").first ?? "") ?? -1 }
     }
 
-    /// Two oracles, 539 first so a drift failure cannot mask it. 539: right after the reveal at an even
-    /// split, the titlebar inset costs the top pane at least one row, so top rows < bottom rows; the
-    /// reporter's stale host is 31pt taller, which makes top >= bottom. Drift: a 1-point resize and restore
-    /// at the same window size leaves the persisted ratio and both pty sizes unchanged.
+    /// Two oracles, 539 first so a drift failure cannot mask it. 539: right after the reveal an even split
+    /// has equal rows; the reporter's stale host is 31pt taller, which gives the top pane one or two extra.
+    /// Drift: a 1-point resize and restore at the same window size leaves the persisted ratio and both pty
+    /// sizes unchanged.
     func testRestoredBackgroundTopBottomSplitLaysOutAndHoldsItsRatio() throws {
         let splitID = UUID(uuidString: "53900000-0000-0000-0000-000000000001")!
         let helperID = UUID(uuidString: "53900000-0000-0000-0000-000000000002")!
@@ -55,8 +56,8 @@ final class RestoredSplitLayoutUITests: ControlAPITestCase {
         let revealed = try ptySizes(tag: "revealed", target: splitID.uuidString)
         // automatic captures are dropped on success, and a clean run is the one that must show the screen
         attachScreenshot("restored split revealed, before any resize")
-        XCTAssertLessThan(revealed.topRows, revealed.bottomRows,
-                          "the top pane should lose at least one row to the titlebar inset (#539): \(revealed)")
+        XCTAssertEqual(revealed.topRows, revealed.bottomRows,
+                       "an even split revealed from the background should have equal rows (#539): \(revealed)")
         XCTAssertEqual(revealed.ratio ?? -1, 0.5, accuracy: 0.004, "the stored ratio should survive the reveal")
 
         try resizeWindow(width: Self.width, height: Self.height + 1)
@@ -67,26 +68,82 @@ final class RestoredSplitLayoutUITests: ControlAPITestCase {
         XCTAssertEqual(revealed, resized, "pty sizes changed across a same-size resize")
     }
 
-    /// The visible-first control: a fresh top/bottom split with its ratio set through the control API holds
-    /// it across two 1-point resize cycles, so a reveal-keyed fix must not disturb the path that already works.
-    func testFreshTopBottomSplitRatioSurvivesWindowResize() throws {
+    /// A fresh top/bottom split is seeded with the default ratio, reads it back, renders even, and holds it
+    /// across two 1-point resize cycles: the control for the reveal-keyed re-arm.
+    func testFreshTopBottomSplitIsEvenAndHoldsAcrossWindowResize() throws {
         let id = try activeSessionID()
         try resizeWindow(width: Self.width, height: Self.height)
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on","axis":"horizontal"}}"#)["ok"] as? Bool,
-                       true, "top/bottom split should open")
-        XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should show")
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.resize","target":"\#(id)","args":{"ratio":0.5}}"#)["ok"] as? Bool,
-                       true, "ratio 0.5 should apply")
-        let set = try ptySizes(tag: "set", target: id)
+        try openTopBottomSplit(id)
+        let fresh = try ptySizes(tag: "fresh", target: id)
+        attachScreenshot("fresh top/bottom split, compact toolbar")
+        XCTAssertEqual(fresh.ratio ?? -1, 0.5, accuracy: 0.004, "a fresh split should read back the default ratio")
+        XCTAssertEqual(fresh.topRows, fresh.bottomRows, "a fresh split should be even: \(fresh)")
         try resizeWindow(width: Self.width, height: Self.height + 1)
         try resizeWindow(width: Self.width, height: Self.height)
         let once = try ptySizes(tag: "once", target: id)
         try resizeWindow(width: Self.width, height: Self.height + 1)
         try resizeWindow(width: Self.width, height: Self.height)
         let twice = try ptySizes(tag: "twice", target: id)
-        XCTAssertEqual(set.ratio ?? -1, 0.5, accuracy: 0.004, "session.resize should store 0.5")
-        XCTAssertEqual(set, once, "pty sizes or ratio changed across the first same-size resize")
-        XCTAssertEqual(once, twice, "pty sizes or ratio changed across the second same-size resize")
+        XCTAssertEqual(fresh, once, "pty sizes changed across the first same-size resize")
+        XCTAssertEqual(once, twice, "pty sizes changed across the second same-size resize")
+        XCTAssertEqual(twice.ratio ?? -1, 0.5, accuracy: 0.004, "the ratio drifted across the resizes")
+    }
+
+    /// The ratio is a fraction of the pane area below the titlebar, so 0.5 is even in every toolbar mode.
+    /// Compact is the default and covered above; the captures carry the divider position per mode.
+    func testEvenSplitRendersEvenInNormalAndHiddenToolbarModes() throws {
+        for mode in ["normal", "hidden"] {
+            try relaunch(withSettings: #"{"toolbarMode":"\#(mode)"}"#)
+            let id = try activeSessionID()
+            try resizeWindow(width: Self.width, height: Self.height)
+            try openTopBottomSplit(id)
+            let sizes = try ptySizes(tag: mode, target: id)
+            attachScreenshot("fresh top/bottom split, \(mode) toolbar")
+            XCTAssertEqual(sizes.ratio ?? -1, 0.5, accuracy: 0.004, "\(mode): the default ratio should read back")
+            XCTAssertEqual(sizes.topRows, sizes.bottomRows, "\(mode): an even split should have equal rows: \(sizes)")
+        }
+    }
+
+    /// Only a divider drag writes the ratio back, and it persists across a relaunch. The drag starts on the
+    /// divider's screen position derived from the content-space ratio; a thin divider has a grab band of a
+    /// few points, so the start is retried at small offsets until the read-back moves.
+    func testDividerDragPersistsTheRatio() throws {
+        let id = try activeSessionID()
+        try resizeWindow(width: Self.width, height: Self.height)
+        try openTopBottomSplit(id)
+        let before = try ptySizes(tag: "before-drag", target: id)
+        XCTAssertEqual(before.ratio ?? -1, 0.5, accuracy: 0.004, "the fresh split should start at the default")
+
+        let window = app.windows.firstMatch
+        let dividerY = Self.titlebarInset + 0.5 * (CGFloat(Self.height) - Self.titlebarInset)
+        var dragged: Double?
+        for offset in [0, -2, 2, -4, 4] {
+            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: (dividerY + CGFloat(offset)) / CGFloat(Self.height)))
+            let end = start.withOffset(CGVector(dx: 0, dy: 60))
+            start.click(forDuration: 0.2, thenDragTo: end, withVelocity: 120, thenHoldForDuration: 0.2)
+            if poll(until: ((try? sessionNode(id: id)["splitRatio"] as? Double) ?? 0.5) > 0.55, timeout: 2) {
+                dragged = try sessionNode(id: id)["splitRatio"] as? Double
+                break
+            }
+        }
+        let ratio = try XCTUnwrap(dragged, "dragging the divider down 60 points should move the read-back past 0.55")
+        let after = try ptySizes(tag: "after-drag", target: id)
+        attachScreenshot("top/bottom split after dragging the divider down")
+        XCTAssertGreaterThan(after.topRows, before.topRows, "the top pane should gain rows from the drag: \(after)")
+
+        // the drag's save is debounced; give it time to land before the relaunch restores from disk
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        try relaunch(withSettings: "{}")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should restore")
+        let restored = try ptySizes(tag: "restored-drag", target: id)
+        XCTAssertEqual(restored.ratio ?? -1, ratio, accuracy: 0.004, "the dragged ratio should survive a relaunch")
+        XCTAssertEqual(restored.topRows, after.topRows, "the restored top pane should keep its dragged rows: \(restored)")
+    }
+
+    private func openTopBottomSplit(_ id: String) throws {
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on","axis":"horizontal"}}"#)["ok"] as? Bool,
+                       true, "top/bottom split should open")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should show")
     }
 
     /// Persist the reporter's 1000x432 frame under the first launch's window id, which the relaunch reopens.

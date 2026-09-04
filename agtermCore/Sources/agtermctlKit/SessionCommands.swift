@@ -280,7 +280,7 @@ struct Session: ParsableCommand {
     struct Resize: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Resize a split session's divider (set or nudge the primary-pane fraction).")
-        @Option(name: .customLong("split-ratio"), help: "Absolute primary-pane fraction 0..1 (left or top; e.g. 0.7). Clamped to 0.05..0.95.") var splitRatio: Double?
+        @Option(name: .customLong("split-ratio"), help: "Absolute primary-pane fraction 0..1 of the area below the titlebar (left or top; e.g. 0.7). Clamped to 0.05..0.95.") var splitRatio: Double?
         @Option(name: .customLong("grow-left"), help: "Grow the left pane by this fraction (e.g. 0.05); shrinks the right.") var growLeft: Double?
         @Option(name: .customLong("grow-right"), help: "Grow the right pane by this fraction (e.g. 0.05); shrinks the left.") var growRight: Double?
         @Option(name: .customLong("grow-primary"), help: "Grow the primary pane by this fraction.") var growPrimary: Double?

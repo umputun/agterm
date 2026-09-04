@@ -153,8 +153,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// The split (right) pane's working directory, so each pane restores to its OWN cwd. The live
     /// `splitCwd`, or its restore seed before the split reports a PWD; nil when there is no split.
     public var splitCwd: String?
-    /// The split divider's primary-pane fraction. Within `AppStore.splitRatioMin...splitRatioMax`
-    /// (~0.05...0.95) — capture skips degenerate extremes, restore clamps; nil restores the even default.
+    /// The split divider's primary-pane fraction of the pane area below the titlebar band. Within
+    /// `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95) — capture skips degenerate extremes, restore
+    /// clamps; nil restores the even default.
     public var splitRatio: Double?
     /// Whether the session is in the flagged working-set; nil = not flagged.
     public var flagged: Bool?
