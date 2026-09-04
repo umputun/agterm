@@ -54,6 +54,11 @@ CLAUDE_EMPTY_PROMPTS = {
     "Press up to edit queued messages",
     "Press up to edit queued messages, Enter to send them immediately",
 }
+# a freshly started Claude Code draws a suggestion in its empty composer. The suggested text is built
+# from the user's own frequently-edited files, so only this wrapper is fixed and no literal set can
+# cover it. `.+` rather than `[^"]*` because git quotes and escapes a path containing a double quote,
+# which then reaches the suggestion with its own quotes intact.
+CLAUDE_STARTUP_HINT_RE = re.compile(r'^Try ".+"$')
 MESSAGE_NAME_RE = re.compile(r"peer-chat-[a-z0-9][a-z0-9-]{2,48}\.txt")
 MESSAGE_SPOOL = Path(tempfile.gettempdir()) / f"agterm-peer-chat-{os.getuid()}"
 
@@ -514,9 +519,12 @@ def live_prompt_text(profile: Profile, text: str) -> str | None:
 
 def composer_is_empty(profile: Profile, content: str) -> bool:
     """Recognise the empty input content instead of inferring it from the caret."""
+    joined = " ".join(content.splitlines())
     if profile.agent == "codex":
-        return " ".join(content.splitlines()) == CODEX_EMPTY_PROMPT
-    return " ".join(content.splitlines()) in CLAUDE_EMPTY_PROMPTS
+        return joined == CODEX_EMPTY_PROMPT
+    return joined in CLAUDE_EMPTY_PROMPTS or bool(
+        CLAUDE_STARTUP_HINT_RE.fullmatch(joined)
+    )
 
 
 def composer_state(

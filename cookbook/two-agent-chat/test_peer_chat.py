@@ -119,6 +119,45 @@ class ClaudeLivePromptTextTests(unittest.TestCase):
                 self.assertEqual(content, hint)
                 self.assertTrue(COMPOSER_IS_EMPTY(CLAUDE_PROFILE, content))
 
+    def test_startup_hints_are_known_empty_claude_placeholders(self) -> None:
+        hints = [
+            'Try "fix lint errors"',
+            'Try "create a util logging.py that..."',
+            'Try "edit cookbook/two-agent-chat/peer-chat.py to..."',
+        ]
+
+        for hint in hints:
+            with self.subTest(hint=hint):
+                screen = f"{RULE}\n❯ {hint}\n{RULE}"
+                content = LIVE_PROMPT_TEXT(CLAUDE_PROFILE, screen)
+                self.assertEqual(content, hint)
+                self.assertTrue(COMPOSER_IS_EMPTY(CLAUDE_PROFILE, content))
+
+    def test_wrapped_startup_hint_is_a_known_empty_claude_placeholder(self) -> None:
+        screen = (
+            f"{RULE}\n"
+            '❯ Try "write a test for cookbook/two-agent-chat/\n'
+            '  peer-chat.py"\n'
+            f"{RULE}"
+        )
+
+        content = LIVE_PROMPT_TEXT(CLAUDE_PROFILE, screen)
+
+        self.assertTrue(COMPOSER_IS_EMPTY(CLAUDE_PROFILE, content))
+
+    def test_startup_hint_pattern_does_not_accept_other_claude_text(self) -> None:
+        drafts = [
+            'Try to fix the lint errors',
+            'please Try "fix lint errors"',
+            'Try ""',
+        ]
+
+        for draft in drafts:
+            with self.subTest(draft=draft):
+                screen = f"{RULE}\n❯ {draft}\n{RULE}"
+                content = LIVE_PROMPT_TEXT(CLAUDE_PROFILE, screen)
+                self.assertFalse(COMPOSER_IS_EMPTY(CLAUDE_PROFILE, content))
+
     def test_wrapped_queue_hint_is_a_known_empty_claude_placeholder(self) -> None:
         screen = (
             f"{RULE}\n"
