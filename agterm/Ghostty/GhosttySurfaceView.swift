@@ -525,15 +525,17 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // already on the main actor; `oscTitle`/`splitTitle` are observed, so the sidebar row and window
         // title refresh live. like applyPwd this does NOT save() — OSC set-title re-fires on every prompt
         // redraw — and sanitizes: the title flows unquoted into a /bin/sh -c line via {AGT_SESSION_NAME}.
-        logger.debug("terminal title pane=\(self.paneToken, privacy: .public) split=\(self.isSplitPane) cwd=\(self.workingDirectory, privacy: .public) title=\(rawTitle, privacy: .public)")
         let title = TerminalText.sanitized(rawTitle)
+        // one value for the log and the drop below, so a trace can never name a cwd the check did not use.
+        let paneCwd = session.map { isSplitPane ? $0.cwd(for: .right) : $0.effectiveCwd }
+        logger.debug("terminal title pane=\(self.paneToken, privacy: .public) split=\(self.isSplitPane) cwd=\(paneCwd ?? "<none>", privacy: .public) title=\(rawTitle, privacy: .public)")
 
         // libghostty answers OSC 7 with a synthetic title equal to the pwd, and its PWD action does not
         // reliably reach `applyPwd` before that title, so no arming handshake catches it. A shell titles
         // with a basename or an abbreviated path, never the bare absolute cwd. Compares the SANITIZED
         // title, since `applyPwd` stores a sanitized cwd. Residual: between a cd and its OSC 7 the cwd
         // here is still the old one, so a synthetic title for the NEW directory is accepted.
-        if let session, title == (isSplitPane ? session.cwd(for: .right) : session.effectiveCwd) { return }
+        if title == paneCwd { return }
 
         if isSplitPane {
             if session?.splitTitle != title { session?.splitTitle = title }
