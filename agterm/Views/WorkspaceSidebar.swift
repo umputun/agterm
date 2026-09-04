@@ -341,7 +341,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // MARK: - Model rebuild
 
         /// The tree SHAPE: a workspace's id and its ordered session ids. Equal shapes mean no
-        /// add/remove/move/reorder, so a content change takes a targeted per-row reload. Row TEXT is NOT
+        /// add/remove/move/reorder, so a content change takes a targeted per-row update. Row TEXT is NOT
         /// here: a cwd-driven `displayName` change must not `reloadData` + re-expand, which jitters labels.
         private struct TreeShape: Equatable {
             let workspaceID: UUID
