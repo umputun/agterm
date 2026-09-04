@@ -16,9 +16,9 @@ enum WindowAppearance {
     }
 
     /// Apply the blend to `window` using `background` (the terminal background color) and the `chrome`
-    /// inputs. Idempotent, and re-applying on attach and on every window/title/appearance update is
-    /// REQUIRED: AppKit rebuilds the titlebar subviews and re-asserts a default toolbar style on
-    /// key/main/fullscreen transitions, bringing the seam back and unsticking the chosen toolbar style.
+    /// inputs. Idempotent, and re-applying on attach and on every key/main/fullscreen and appearance update
+    /// is REQUIRED: AppKit rebuilds the titlebar subviews and re-asserts a default toolbar style on those
+    /// transitions, bringing the seam back and unsticking the chosen toolbar style.
     ///
     /// At full opacity the window is opaque with a solid background; below it the window goes non-opaque
     /// and its background carries the alpha — the renderer is pinned transparent

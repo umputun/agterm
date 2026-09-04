@@ -2,14 +2,13 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// Blends the window title bar with the terminal (the title text comes from SwiftUI's
-/// `.navigationTitle`/`.navigationSubtitle`): the probe's `window` is nil at make time, so the blend is
-/// applied from `viewDidMoveToWindow` and re-applied on every `titleToken` change (session switch) and the
-/// key/fullscreen transitions where AppKit rebuilds the titlebar subviews. It also carries the per-window
-/// plumbing: persisting/restoring the frame, reporting frontmost (key/main) and close (`willClose`) to the
-/// `WindowLibrary`, and registering the `NSWindow` in `WindowRegistry`.
+/// Blends the window title bar with the terminal: the probe's `window` is nil at make time, so the blend is
+/// applied from `viewDidMoveToWindow` and re-applied on the key/fullscreen transitions where AppKit rebuilds
+/// the titlebar subviews and on appearance changes. A `titleToken` change writes the OS title alone. It also
+/// carries the per-window plumbing: persisting/restoring the frame, reporting frontmost (key/main) and close
+/// (`willClose`) to the `WindowLibrary`, and registering the `NSWindow` in `WindowRegistry`.
 struct WindowAccessor: NSViewRepresentable {
-    /// Changes when the active session changes, so `updateNSView` re-runs the blend.
+    /// The OS window title, written on every change.
     let titleToken: String
     let windowID: WindowInfo.ID
     let library: WindowLibrary
@@ -21,7 +20,7 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TitleProbeView, context _: Context) {
-        nsView.reapplyBlend(title: titleToken)
+        nsView.setTitle(titleToken)
     }
 
     final class TitleProbeView: NSView {
@@ -55,9 +54,12 @@ struct WindowAccessor: NSViewRepresentable {
         /// XCUITest title-matching, but hidden via titleVisibility — the custom header draws the visible one.
         private var latestTitle = ""
 
-        func reapplyBlend(title: String) {
+        /// Writes the title and nothing else: an animated OSC title ticks this many times a second, and the
+        /// blend's other inputs reach `applyTitlebarBlend` through attach and the notifications below (#516).
+        func setTitle(_ title: String) {
             latestTitle = title
-            if let window { applyTitlebarBlend(window) }
+            guard let window, window.title != title else { return }
+            window.title = title
         }
 
         override func viewDidMoveToWindow() {

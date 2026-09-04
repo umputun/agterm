@@ -42,7 +42,7 @@ extension WindowContentView {
     }
 
     /// "Dashboard", plus "— <window name>" for a custom window name (auto "window N" omitted, like the
-    /// normal `windowTitle`). No cwd subtitle — the grid has no single active session to source one from.
+    /// `WindowTitleSync`). No cwd subtitle — the grid has no single active session to source one from.
     private var dashboardWindowTitle: String {
         guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else {
             return "Dashboard"

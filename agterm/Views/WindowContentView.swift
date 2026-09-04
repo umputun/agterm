@@ -220,9 +220,8 @@ struct WindowContentView: View {
             if let state = fullscreenState(from: note) { windowFullscreen = state }
         })
         // blend the title bar with the terminal; report frontmost/close to the library; surface the window
-        // un-minimized on launch. the title token re-runs the blend in updateNSView on a session switch.
-        .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store,
-                                   captureOnExit: captureOnExit))
+        // un-minimized on launch. a child view, so the OS title it feeds is read off this body.
+        .background(windowTitleSync)
         .onAppear {
             terminalZoom.targetResolver = { [store] in
                 TerminalZoomController.resolveTarget(store: store)

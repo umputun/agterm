@@ -6,63 +6,17 @@ import SwiftUI
 /// Owns the title text (session / window name, gated by the Interface toggles), the row layout, and the
 /// per-session chrome buttons; recent-sessions / attention / dashboard buttons live in their own extensions.
 extension WindowContentView {
-    /// The titlebar title (first line): the active session's display name, suffixed as "session — window" for
-    /// a custom (user-set) window name; auto "window N" names are omitted, and "Agterm" when nothing is
-    /// selected. Non-private: the body's `WindowAccessor` uses it as the OS window title, always the real
-    /// name, regardless of the Interface toggles that gate only the on-screen `titleText`.
-    var windowTitle: String {
-        let session = store.activeSession?.displayName ?? "Agterm"
-        guard let name = customWindowName else { return session }
-        return "\(session) — \(name)"
+    /// The window title at the terminal's leading edge, shared with the zoom titlebar. A child view, so its
+    /// session-name reads register on its own body and an OSC title tick never invalidates this one (#516).
+    var titleLabel: TitlebarLabel {
+        TitlebarLabel(store: store, library: library, windowID: windowID, toolbarMode: toolbarMode,
+                      chromeText: chromeText, showsSessionName: shows(.sessionName),
+                      showsWindowName: shows(.windowName), showsContext: shows(.sessionContext))
     }
 
-    /// The titlebar subtitle (second line): the session's `context` when one is set and shown, else the
-    /// focused pane's `subtitleDetail` — the terminal title for a remote (SSH) session whose local cwd is
-    /// stale, else its cwd. Normal mode only; compact/hidden drop it.
-    private var windowSubtitle: String { composition.subtitle }
-
-    /// Both title-bar lines, laid out host-free. The toggles are resolved into `Parts` here, so
-    /// `TitlebarComposition` never sees the settings.
-    private var composition: TitlebarComposition {
-        TitlebarComposition.compose(
-            TitlebarComposition.Parts(
-                sessionName: shows(.sessionName) ? (store.activeSession?.displayName ?? "Agterm") : nil,
-                windowName: shows(.windowName) ? customWindowName : nil,
-                context: shows(.sessionContext) ? store.activeSession?.context : nil,
-                detail: store.activeSession?.subtitleDetail ?? ""
-            ),
-            mode: toolbarMode
-        )
-    }
-
-    /// The window's user-set name, or nil when it has none (an auto "window N" name). Feeds the optional
-    /// window-name part of `titleText`.
-    private var customWindowName: String? {
-        guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else { return nil }
-        return info.name
-    }
-
-    /// The VISIBLE title-bar label. `windowTitle` above still feeds the OS title, so Mission Control and the
-    /// Window menu stay labelled whatever the Interface toggles hide here.
-    private var titleText: String { composition.title }
-
-    /// The window title at the terminal's leading edge, laid out by `composition` above. Non-private so the
-    /// zoom titlebar reuses it — a zoomed terminal shows the same title as the normal window.
-    var titleLabel: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            if !titleText.isEmpty {
-                Text(titleText).fontWeight(.semibold)
-            }
-            if !windowSubtitle.isEmpty {
-                Text(windowSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(chromeText.opacity(0.6))
-            }
-        }
-        // a caller-set context can run to 256 bytes, far past the row; tail truncation drops its end rather
-        // than letting the label push the trailing button cluster off the bar.
-        .lineLimit(1)
-        .truncationMode(.tail)
+    /// Feeds the OS window title to `WindowAccessor` from its own body, for the same reason as `titleLabel`.
+    var windowTitleSync: WindowTitleSync {
+        WindowTitleSync(store: store, library: library, windowID: windowID, captureOnExit: captureOnExit)
     }
 
     /// The window chrome above the terminal: the full custom titlebar row, or in hidden mode an invisible ~3px
@@ -237,5 +191,79 @@ extension WindowContentView {
         .help(helpHint("Quick Terminal", .quickTerminal))
         .disabled(pick.pending != nil)
         .accessibilityIdentifier("quick-terminal-toggle")
+    }
+}
+
+/// The OS window title: the active session's display name, suffixed as "session — window" for a custom
+/// (user-set) window name; auto "window N" names are omitted, and "Agterm" when nothing is selected. Always
+/// the real name, regardless of the Interface toggles that gate only the on-screen `TitlebarLabel`, so
+/// Mission Control and the Window menu stay labelled.
+struct WindowTitleSync: View {
+    let store: AppStore
+    let library: WindowLibrary
+    let windowID: WindowInfo.ID
+    let captureOnExit: AppDelegate.ExitCapture?
+
+    var body: some View {
+        WindowAccessor(titleToken: title, windowID: windowID, library: library, store: store,
+                       captureOnExit: captureOnExit)
+    }
+
+    private var title: String {
+        let session = store.activeSession?.displayName ?? "Agterm"
+        guard let name = library.customWindowName(for: windowID) else { return session }
+        return "\(session) — \(name)"
+    }
+}
+
+/// Both title-bar lines: the session / window name, and in normal mode the session's `context` when one is
+/// set and shown, else the focused pane's `subtitleDetail`. The Interface toggles are resolved into `Parts`
+/// here, so `TitlebarComposition` never sees the settings.
+struct TitlebarLabel: View {
+    let store: AppStore
+    let library: WindowLibrary
+    let windowID: WindowInfo.ID
+    let toolbarMode: ToolbarMode
+    let chromeText: Color
+    let showsSessionName: Bool
+    let showsWindowName: Bool
+    let showsContext: Bool
+
+    var body: some View {
+        let composition = composition
+        VStack(alignment: .leading, spacing: 1) {
+            if !composition.title.isEmpty {
+                Text(composition.title).fontWeight(.semibold)
+            }
+            if !composition.subtitle.isEmpty {
+                Text(composition.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(chromeText.opacity(0.6))
+            }
+        }
+        // a caller-set context can run to 256 bytes, far past the row; tail truncation drops its end rather
+        // than letting the label push the trailing button cluster off the bar.
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    private var composition: TitlebarComposition {
+        TitlebarComposition.compose(
+            TitlebarComposition.Parts(
+                sessionName: showsSessionName ? (store.activeSession?.displayName ?? "Agterm") : nil,
+                windowName: showsWindowName ? library.customWindowName(for: windowID) : nil,
+                context: showsContext ? store.activeSession?.context : nil,
+                detail: store.activeSession?.subtitleDetail ?? ""
+            ),
+            mode: toolbarMode
+        )
+    }
+}
+
+extension WindowLibrary {
+    /// The window's user-set name, nil for an auto "window N" name.
+    func customWindowName(for id: WindowInfo.ID) -> String? {
+        guard let info = windows.first(where: { $0.id == id }), info.hasCustomName else { return nil }
+        return info.name
     }
 }
