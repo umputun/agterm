@@ -185,8 +185,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     var rendererVisible = true
     /// Sweeps the hidden layer's retained frame on a slow cadence; exits itself on reveal or teardown.
     var hiddenJanitorTask: Task<Void, Never>?
-    /// Sanitized OSC 7 value expected back as libghostty's synthetic title while this pane has no real title.
-    private var pendingPwdFallbackTitle: String?
     /// After `destroySurface()` the view is retired: never recreate a surface (a stray viewDidMoveToWindow).
     private var isDestroyed = false
 
@@ -516,13 +514,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // no save(): OSC 7 fires on every cd/prompt redraw and would thrash the disk. live cwd is persisted on
         // quit and on structural mutations, so a crash loses only cwd changes since the last save. the
         // equality guard matters likewise: an equal write still notifies observers and churns the reconcile.
-        if let session {
-            let modelTitle = isSplitPane ? session.splitTitle : session.oscTitle
-            let titleIsBlank = modelTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-            pendingPwdFallbackTitle = titleIsBlank ? pwd : nil
-        } else {
-            pendingPwdFallbackTitle = nil
-        }
         if isSplitPane {
             if session?.splitCwd != pwd { session?.splitCwd = pwd }
         } else {
@@ -536,11 +527,13 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // redraw — and sanitizes: the title flows unquoted into a /bin/sh -c line via {AGT_SESSION_NAME}.
         logger.debug("terminal title pane=\(self.paneToken, privacy: .public) split=\(self.isSplitPane) cwd=\(self.workingDirectory, privacy: .public) title=\(rawTitle, privacy: .public)")
         let title = TerminalText.sanitized(rawTitle)
-        if pendingPwdFallbackTitle == title {
-            pendingPwdFallbackTitle = nil
-            return
-        }
-        pendingPwdFallbackTitle = nil
+
+        // libghostty answers OSC 7 with a synthetic title equal to the pwd, and its PWD action does not
+        // reliably reach `applyPwd` before that title, so no arming handshake catches it. A shell titles
+        // with a basename or an abbreviated path, never the bare absolute cwd. Compares the SANITIZED
+        // title, since `applyPwd` stores a sanitized cwd. Residual: between a cd and its OSC 7 the cwd
+        // here is still the old one, so a synthetic title for the NEW directory is accepted.
+        if let session, title == (isSplitPane ? session.cwd(for: .right) : session.effectiveCwd) { return }
 
         if isSplitPane {
             if session?.splitTitle != title { session?.splitTitle = title }

@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class GhosttySurfaceViewTitleTests: XCTestCase {
-    func testPwdFallbackDoesNotBecomePrimaryTitle() {
+    func testCwdEqualTitleIsDroppedAfterPwdReport() {
         let (session, view) = makeView()
 
         view.applyPwd("/tmp/\u{7}repo")
@@ -14,37 +14,102 @@ final class GhosttySurfaceViewTitleTests: XCTestCase {
         XCTAssertNil(session.oscTitle)
     }
 
-    func testRealTitleEqualToCwdWinsAfterPwdFallback() {
+    func testCwdEqualTitleIsDroppedWithoutAnyPwdReport() {
+        // a live-restored pane can get the synthetic title before the PWD action, leaving a guard armed
+        // by applyPwd unfired and the absolute path in the sidebar.
+        let (session, view) = makeView()
+
+        view.applyTitle("/tmp/start")
+
+        XCTAssertNil(session.currentCwd)
+        XCTAssertNil(session.oscTitle)
+    }
+
+    func testRepeatedCwdEqualTitleStaysDropped() {
         let (session, view) = makeView()
 
         view.applyPwd("/tmp/repo")
         view.applyTitle("/tmp/repo")
         view.applyTitle("/tmp/repo")
 
-        XCTAssertEqual(session.oscTitle, "/tmp/repo")
+        XCTAssertNil(session.oscTitle)
     }
 
-    func testExistingTitleDoesNotArmPwdFallback() {
+    func testCwdEqualTitleLeavesAnExistingTitleAlone() {
         let (session, view) = makeView()
         session.oscTitle = "existing"
 
         view.applyPwd("/tmp/repo")
         view.applyTitle("/tmp/repo")
 
-        XCTAssertEqual(session.oscTitle, "/tmp/repo")
+        XCTAssertEqual(session.oscTitle, "existing")
     }
 
-    func testDifferentTitleClearsPwdFallbackCandidate() {
+    func testRealTitleIsKeptAndDoesNotUnlockTheCwdTitle() {
         let (session, view) = makeView()
 
         view.applyPwd("/tmp/repo")
         view.applyTitle("chosen")
         view.applyTitle("/tmp/repo")
 
-        XCTAssertEqual(session.oscTitle, "/tmp/repo")
+        XCTAssertEqual(session.oscTitle, "chosen")
     }
 
-    func testPwdFallbackCandidateSurvivesSplitPromotion() {
+    func testTitleUnderTheCwdIsKept() {
+        let (session, view) = makeView()
+
+        view.applyPwd("/tmp/repo")
+        view.applyTitle("repo")
+
+        XCTAssertEqual(session.oscTitle, "repo")
+    }
+
+    func testSplitPaneDropsATitleEqualToItsOwnCwd() {
+        let (session, view) = makeView(split: true)
+        session.initialSplitCwd = "/tmp/right"
+
+        view.applyTitle("/tmp/right")
+
+        XCTAssertNil(session.splitTitle)
+    }
+
+    func testTitleIsSanitizedBeforeTheCwdComparison() {
+        let (session, view) = makeView()
+
+        view.applyPwd("/tmp/repo")
+        view.applyTitle("/tmp/\u{7}repo")
+
+        XCTAssertNil(session.oscTitle)
+    }
+
+    func testSplitPaneComparesTheLiveSplitCwdOverTheRestoredOne() {
+        let (session, view) = makeView(split: true)
+        session.initialSplitCwd = "/tmp/restored"
+
+        view.applyPwd("/tmp/live")
+        view.applyTitle("/tmp/live")
+
+        XCTAssertNil(session.splitTitle)
+    }
+
+    func testSplitPaneWithNoSplitCwdFallsBackToThePrimaryCwd() {
+        let (session, view) = makeView(split: true)
+
+        view.applyTitle("/tmp/start")
+
+        XCTAssertNil(session.splitTitle)
+    }
+
+    func testSplitPaneKeepsATitleEqualToThePrimaryCwd() {
+        let (session, view) = makeView(split: true)
+        session.initialSplitCwd = "/tmp/right"
+
+        view.applyTitle("/tmp/start")
+
+        XCTAssertEqual(session.splitTitle, "/tmp/start")
+    }
+
+    func testPromotedSplitDropsTheTitleEqualToTheMigratedCwd() {
         let (session, view) = makeView(split: true)
 
         view.applyPwd("/tmp/right")
