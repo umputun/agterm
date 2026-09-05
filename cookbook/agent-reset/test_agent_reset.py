@@ -79,6 +79,26 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.panes_typed(calls), ["left", "right", "right"])
         self.assertEqual(calls[-1][:2], ["session", "context"])
 
+    def typed_text(self, calls):
+        return [c[2] for c in calls if c[:2] == ["session", "type"]]
+
+    def test_resets_both_panes_when_both_run_codex(self):
+        code, calls = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/opt/homebrew/bin/codex"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.panes_typed(calls), ["left", "left", "right", "right"])
+        self.assertEqual(self.typed_text(calls), ["/clear", KITTY_ENTER, "/clear", KITTY_ENTER])
+
+    def test_resets_both_panes_when_both_run_claude(self):
+        code, calls = self.run_main("left", ["/usr/local/bin/claude"], ["/usr/local/bin/claude"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.panes_typed(calls), ["left", "right"])
+        self.assertEqual(self.typed_text(calls), ["/clear\n", "/clear\n"])
+
+    def test_each_pane_gets_the_submit_its_own_agent_needs(self):
+        code, calls = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/usr/local/bin/claude"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.typed_text(calls), ["/clear", KITTY_ENTER, "/clear\n"])
+
     def test_does_not_cascade_from_the_split(self):
         code, calls = self.run_main("right", ["/usr/local/bin/claude"], ["/usr/local/bin/claude"])
         self.assertEqual(code, 0)

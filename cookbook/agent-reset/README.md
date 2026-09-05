@@ -78,7 +78,7 @@ The title-bar clear is gated on the main pane's own write succeeding, and not on
 
 **A reset throws away the agent's conversation.** That is the whole point of the chord, but it is not undoable and the agent will not ask: whatever context it had built up is gone the moment the chord lands. Pressed in the main pane it does this to the split's agent too, which is the surprising half — two conversations end on one keypress.
 
-On codex it destroys more than the conversation. That agent's `/clear` wipes the pane's scrollback along with the chat, so output you had not finished reading is gone, and anything polling the pane with `agtermctl session text` reads an empty screen until new output arrives.
+On codex it destroys more than the conversation. That agent's `/clear` wipes the pane's scrollback along with the chat, so output you had not finished reading is gone, and anything polling the pane with `agtermctl session text` reads nothing but codex's fresh banner until new output arrives.
 
 It also clears the session's title-bar context, so a note you wanted to keep there has to be set again.
 
