@@ -66,7 +66,11 @@ AGT_SESSION_ID=<id> AGT_PANE=left ~/bin/agent-reset.py
 
 Both agents take `/clear` and submit it with a newline. What differs is where that newline goes.
 
-Claude Code accepts it on the end of the command, in one write. codex does not: an Enter that shares a write with the text is not acted on, and the command sits in the composer unsent. Measured on codex 0.153.4, `agtermctl session type $'probe\n'` leaves `probe` in the composer, while the same text followed by `agtermctl session type $'\n'` as a second call submits it. Back-to-back calls with no sleep between them submit too, so the script waits for nothing. Note what that measured: two `agtermctl` invocations, which are always a process launch apart. A caller that collapsed both writes into one process holding the socket open would send them far closer together than anything tested here, and should check for itself rather than assume.
+Claude Code accepts it on the end of the command, in one write. codex does not: an Enter that shares a write with the text is not acted on, and the command sits in the composer unsent. Measured on codex 0.153.4, `agtermctl session type $'probe\n'` leaves `probe` in the composer, while the same text followed by `agtermctl session type $'\n'` as a second call submits it.
+
+codex's own composer says why. A run of characters arriving faster than 8ms apart is buffered as a paste rather than typed, and an Enter that lands while that buffer is open is appended to it as a newline instead of submitting. After 8ms of idle the buffer flushes as a paste, and the flush also clears the 120ms window that would otherwise go on suppressing Enter. `agtermctl session type` sends a whole run as one keystroke event, so anything the script types is always a buffered burst.
+
+That is what the delay before the second write is for, and it is worth more than it looks. Two `agtermctl` launches are about 15ms apart on this machine, which clears the 8ms floor by roughly 7ms and nothing else; a caller that held one socket open for both writes would not clear it at all. The 150ms wait clears the flush timeout and the suppression window together.
 
 So the codex path is two writes of the same bytes rather than one, which is why the script returns a tuple of writes per agent instead of a single string.
 

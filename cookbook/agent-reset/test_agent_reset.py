@@ -19,6 +19,7 @@ INPUTS_FOR = SCRIPT["inputs_for"]
 IS_CLAUDE = SCRIPT["is_claude"]
 IS_PRIMARY = SCRIPT["is_primary"]
 SUBMIT = SCRIPT["SUBMIT"]
+SUBMIT_DELAY_SECONDS = SCRIPT["SUBMIT_DELAY_SECONDS"]
 MAIN = SCRIPT["main"]
 
 
@@ -60,6 +61,7 @@ class MainTests(unittest.TestCase):
     def run_main(self, pane, left, right, fired_pane_rc=0):
         """run_main drives main() against stubbed panes, returning the agtermctl argv it ran."""
         calls = []
+        self.slept = []
 
         def fake_run(args, socket):
             calls.append(list(args))
@@ -71,6 +73,7 @@ class MainTests(unittest.TestCase):
             "os": type("os", (), {"environ": env})(),
             "run": fake_run,
             "foreground": lambda socket, sid, p: left if p == "left" else right,
+            "time": type("time", (), {"sleep": staticmethod(self.slept.append)})(),
         }
         with patch.dict(MAIN.__globals__, replacements):
             code = MAIN()
@@ -104,6 +107,11 @@ class MainTests(unittest.TestCase):
         code, calls = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/usr/local/bin/claude"])
         self.assertEqual(code, 0)
         self.assertEqual(self.typed_text(calls), ["/clear", SUBMIT, "/clear\n"])
+
+    def test_waits_before_the_codex_submit_and_not_before_a_claude_one(self):
+        """codex appends an Enter to its paste buffer unless the write is late enough to miss it."""
+        _, _ = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/usr/local/bin/claude"])
+        self.assertEqual(self.slept, [SUBMIT_DELAY_SECONDS])
 
     def test_does_not_cascade_from_the_split(self):
         code, calls = self.run_main("right", ["/usr/local/bin/claude"], ["/usr/local/bin/claude"])

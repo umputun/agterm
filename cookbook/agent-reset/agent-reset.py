@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 AGTERMCTL = os.environ.get("AGTERMCTL", "agtermctl")
 
@@ -37,9 +38,12 @@ CODEX_FG_MATCH = re.compile(os.environ.get("CODEX_FG_MATCH", r"(^|/)codex$"))
 # screen back with `session text` finds only codex's fresh banner after a reset.
 RESET_COMMAND = "/clear"
 
-# codex does not act on an Enter that shares a write with the text: the command stays in the
-# composer. Sent as its own write it submits, so the submit is a second `session type` call.
+# codex buffers characters typed under 8ms apart as a paste, and an Enter arriving while that buffer
+# is open joins it as a newline instead of submitting. 8ms of idle flushes the buffer and clears the
+# 120ms window that would otherwise keep suppressing Enter, so the submit is its own write after a
+# pause past both.
 SUBMIT = "\n"
+SUBMIT_DELAY_SECONDS = 0.15
 
 
 def is_claude(argv: list[str]) -> bool:
@@ -91,7 +95,9 @@ def is_primary(pane: str) -> bool:
 def send(socket: str, sid: str, pane: str, inputs: tuple[str, ...]) -> bool:
     """send types one agent's reset into a pane, reporting whether every write succeeded."""
     typed = True
-    for text in inputs:
+    for index, text in enumerate(inputs):
+        if index:
+            time.sleep(SUBMIT_DELAY_SECONDS)
         res = run(["session", "type", text, "--target", sid, "--pane", pane], socket)
         typed = typed and res.returncode == 0
     return typed
