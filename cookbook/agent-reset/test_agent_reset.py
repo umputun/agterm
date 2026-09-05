@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """Regression checks for agent-reset."""
 
+import os
 import runpy
 import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-SCRIPT = runpy.run_path(Path(__file__).with_name("agent-reset.py"))
+# the script compiles its match patterns from the environment as it loads, and overriding them is a
+# documented feature, so the suite loads it with those cleared rather than testing whatever the
+# developer's shell exports
+_WITHOUT_OVERRIDES = {k: v for k, v in os.environ.items()
+                      if k not in ("CLAUDE_FG_MATCH", "CODEX_FG_MATCH")}
+with patch.dict(os.environ, _WITHOUT_OVERRIDES, clear=True):
+    SCRIPT = runpy.run_path(Path(__file__).with_name("agent-reset.py"))
 INPUTS_FOR = SCRIPT["inputs_for"]
 IS_CLAUDE = SCRIPT["is_claude"]
 IS_PRIMARY = SCRIPT["is_primary"]
