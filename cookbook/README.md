@@ -26,6 +26,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 |---|---|---|
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh or fish, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
+| [copilot-session-resume](copilot-session-resume/) | each tab reopens its own Copilot CLI session after a restart | 0.3.1, zsh or bash, Copilot CLI |
 | [kimi-session-resume](kimi-session-resume/) | each tab reopens its own Kimi Code conversation after a restart | 0.16.0, Kimi Code, python3 |
 | [opencode-session-resume](opencode-session-resume/) | each tab reopens its own opencode conversation after a restart | 0.3.1, zsh, opencode |
 
@@ -59,7 +60,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [same-dir](same-dir/) | sync working directory to target split pane | 0.10.0, jq, zsh |
 | [sqlite-browser](sqlite-browser/) | pick one of the repo's SQLite databases and browse it in an overlay | 0.22.0, python3, tabiew |
 
-Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Three of the four session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI; the Kimi one is a lifecycle hook that pins its tab's restore command through `agtermctl`. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
+Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Some session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI; the Kimi one is a lifecycle hook that pins its tab's restore command through `agtermctl`. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
 ## Contributing a recipe
 
