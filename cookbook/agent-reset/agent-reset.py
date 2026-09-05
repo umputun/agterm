@@ -38,10 +38,10 @@ CODEX_FG_MATCH = re.compile(os.environ.get("CODEX_FG_MATCH", r"(^|/)codex$"))
 # screen back with `session text` finds only codex's fresh banner after a reset.
 RESET_COMMAND = "/clear"
 
-# codex buffers characters typed under 8ms apart as a paste, and an Enter arriving while that buffer
-# is open joins it as a newline instead of submitting. 8ms of idle flushes the buffer and clears the
-# 120ms window that would otherwise keep suppressing Enter, so the submit is its own write after a
-# pause past both.
+# codex buffers a run of three or more characters typed under 8ms apart as a paste, and an Enter
+# arriving while that buffer is open joins it as a newline instead of submitting. 8ms of idle
+# flushes the buffer and clears the 120ms window that would otherwise keep suppressing Enter, so
+# the submit is its own write after a pause past both.
 SUBMIT = "\n"
 SUBMIT_DELAY_SECONDS = 0.15
 
