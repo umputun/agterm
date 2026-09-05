@@ -6,8 +6,8 @@ $AGT_SOCKET, and spawns this under the app's launch PATH rather than a shell's.
 
 The agent is read from the pane's live foreground argv rather than assumed, so the chord is inert
 in a shell or another TUI. A reset is a slash command, which means something to a coding agent and
-noise to anything else. Claude Code and codex want different commands and different submit keys,
-so each pane is matched on its own argv.
+noise to anything else. Both agents take the same command and need different submit keys, so each
+pane is matched on its own argv.
 
 Fired from the PRIMARY pane it also resets the split's agent and clears the session's title-bar
 context, because the primary agent owns the session: resetting it ends what the session was doing.
@@ -34,10 +34,9 @@ AGTERMCTL = os.environ.get("AGTERMCTL", "agtermctl")
 CLAUDE_FG_MATCH = re.compile(os.environ.get("CLAUDE_FG_MATCH", r"(^|/)claude$"))
 CODEX_FG_MATCH = re.compile(os.environ.get("CODEX_FG_MATCH", r"(^|/)codex$"))
 
-CLAUDE_RESET = "/clear"
-# codex has both: /clear also wipes the terminal, /new only starts a new chat. Anything reading the
-# pane back with `session text` keeps its scrollback this way.
-CODEX_RESET = "/new"
+# both agents take /clear. On codex it also wipes the pane's scrollback, so anything reading the
+# screen back with `session text` finds it empty after a reset.
+RESET_COMMAND = "/clear"
 
 # codex turns on the Kitty keyboard protocol, under which agterm's synthetic Return produces nothing
 # codex acts on, so the submit is the Kitty encoding of Enter. It must be its OWN write: in the same
@@ -59,9 +58,9 @@ def is_codex(argv: list[str]) -> bool:
 def inputs_for(argv: list[str]) -> tuple[str, ...]:
     """inputs_for returns the writes that reset the agent in argv, or nothing when none matches."""
     if is_claude(argv):
-        return (CLAUDE_RESET + "\n",)
+        return (RESET_COMMAND + "\n",)
     if is_codex(argv):
-        return (CODEX_RESET, KITTY_ENTER)
+        return (RESET_COMMAND, KITTY_ENTER)
     return ()
 
 

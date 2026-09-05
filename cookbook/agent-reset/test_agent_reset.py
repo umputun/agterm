@@ -33,7 +33,7 @@ class DetectionTests(unittest.TestCase):
         cases = [
             ("claude submits with a newline", ["/usr/local/bin/claude"], ("/clear\n",)),
             ("codex submits with the kitty encoding", ["/opt/homebrew/bin/codex"],
-             ("/new", KITTY_ENTER)),
+             ("/clear", KITTY_ENTER)),
             ("shell", ["-zsh"], ()),
             ("nothing running", [], ()),
         ]

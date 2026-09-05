@@ -4,9 +4,9 @@ One chord clears the coding agent running in the pane you pressed it in, and doe
 
 ## What it does
 
-Starting a fresh conversation is the thing you do most often and the thing that is most annoying to reach: the context is long, the reply is slow, and you have to click into the right pane first. This binds it to a chord, and sends each agent the command it actually has — `/clear` for Claude Code, `/new` for codex.
+Starting a fresh conversation is the thing you do most often and the thing that is most annoying to reach: the context is long, the reply is slow, and you have to click into the right pane first. This binds it to a chord.
 
-The part worth copying is the guard. A slash command is meaningful to a coding agent and to nothing else, so the script reads what the pane is actually running before it sends anything, and sends only when that is an agent it recognizes. Anywhere else it exits without a keystroke rather than pushing text at a program that never asked for it. Each pane is matched on its own foreground, so a split running Claude Code on one side and codex on the other gets the right command on each side.
+The part worth copying is the guard. A slash command is meaningful to a coding agent and to nothing else, so the script reads what the pane is actually running before it sends anything, and sends only when that is an agent it recognizes. Anywhere else it exits without a keystroke rather than pushing text at a program that never asked for it. Each pane is matched on its own foreground, so a split running Claude Code on one side and codex on the other gets the submit each one needs.
 
 Two things follow from the chord being pressed in the main pane rather than the split. It resets the split's agent as well, because the main pane's agent is the one that owns the session. And it clears the session's title-bar context, because the task that line described is over. From the split it resets that pane alone: one of two agents starting fresh is not the session starting fresh.
 
@@ -64,9 +64,9 @@ AGT_SESSION_ID=<id> AGT_PANE=left ~/bin/agent-reset.py
 
 `agtermctl tree --json` reports each session's `foreground` and `splitForeground`, the live argv of whatever each pane is running. The script finds its own session by the id the runner gave it, reads the field for the pane the chord fired in, and matches that argv against the two patterns. A wrapper script shows up as its own argv element, which is why the match is against any element rather than the first.
 
-The two agents need different writes. Claude Code takes `/clear` with a newline, the ordinary submit. codex has both `/clear` and `/new`, and they differ: `/clear` wipes the terminal as well as the conversation, `/new` starts a new chat and leaves the scrollback alone. `/new` is the one to send, so anything reading the pane back with `agtermctl session text` still finds what was there.
+Both agents take `/clear`. What differs is the submit.
 
-codex also turns on the Kitty keyboard protocol, and under it agterm's synthetic Return produces nothing codex acts on — `agtermctl session type $'/status\n'` leaves `/status` sitting in the composer. The submit has to be written as the Kitty encoding of Enter instead, `CSI 13;1u`.
+codex turns on the Kitty keyboard protocol, and under it agterm's synthetic Return produces nothing codex acts on — `agtermctl session type $'/status\n'` leaves `/status` sitting in the composer. The submit has to be written as the Kitty encoding of Enter instead, `CSI 13;1u`.
 
 That escape has to be its own write. Sent in the same write as the command it is dropped and the line stays in the composer, exactly as a plain newline does; sent separately a fraction of a second later it submits. The pause in the script is what makes the second write land, not a precaution.
 
@@ -77,6 +77,8 @@ The title-bar clear is gated on the main pane's own write succeeding, and not on
 ## Limits
 
 **A reset throws away the agent's conversation.** That is the whole point of the chord, but it is not undoable and the agent will not ask: whatever context it had built up is gone the moment the chord lands. Pressed in the main pane it does this to the split's agent too, which is the surprising half — two conversations end on one keypress.
+
+On codex it destroys more than the conversation. That agent's `/clear` wipes the pane's scrollback along with the chat, so output you had not finished reading is gone, and anything polling the pane with `agtermctl session text` reads an empty screen until new output arrives.
 
 It also clears the session's title-bar context, so a note you wanted to keep there has to be set again.
 
