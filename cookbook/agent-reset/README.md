@@ -64,11 +64,11 @@ AGT_SESSION_ID=<id> AGT_PANE=left ~/bin/agent-reset.py
 
 `agtermctl tree --json` reports each session's `foreground` and `splitForeground`, the live argv of whatever each pane is running. The script finds its own session by the id the runner gave it, reads the field for the pane the chord fired in, and matches that argv against the two patterns. A wrapper script shows up as its own argv element, which is why the match is against any element rather than the first.
 
-Both agents take `/clear`. What differs is the submit.
+Both agents take `/clear` and submit it with a newline. What differs is where that newline goes.
 
-codex turns on the Kitty keyboard protocol, and under it agterm's synthetic Return produces nothing codex acts on — `agtermctl session type $'/status\n'` leaves `/status` sitting in the composer. The submit has to be written as the Kitty encoding of Enter instead, `CSI 13;1u`.
+Claude Code accepts it on the end of the command, in one write. codex does not: an Enter that shares a write with the text is not acted on, and the command sits in the composer unsent. Measured on codex 0.153.4, `agtermctl session type $'probe\n'` leaves `probe` in the composer, while the same text followed by `agtermctl session type $'\n'` as a second call submits it. Back-to-back calls with no sleep between them submit too, so the script waits for nothing. Note what that measured: two `agtermctl` invocations, which are always a process launch apart. A caller that collapsed both writes into one process holding the socket open would send them far closer together than anything tested here, and should check for itself rather than assume.
 
-That escape has to be its own write. Sent in the same write as the command it is dropped and the line stays in the composer, exactly as a plain newline does; sent separately a fraction of a second later it submits. The pause in the script is what makes the second write land, not a precaution.
+So the codex path is two writes of the same bytes rather than one, which is why the script returns a tuple of writes per agent instead of a single string.
 
 Every call passes `--socket "$AGT_SOCKET"`, the socket of the app that fired the chord. That matters when more than one agterm is running, or when the `agtermctl` on `PATH` belongs to a different install than the app you pressed the key in: the socket decides which app is addressed, not the binary.
 

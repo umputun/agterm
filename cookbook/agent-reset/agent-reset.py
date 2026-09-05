@@ -6,8 +6,8 @@ $AGT_SOCKET, and spawns this under the app's launch PATH rather than a shell's.
 
 The agent is read from the pane's live foreground argv rather than assumed, so the chord is inert
 in a shell or another TUI. A reset is a slash command, which means something to a coding agent and
-noise to anything else. Both agents take the same command and need different submit keys, so each
-pane is matched on its own argv.
+noise to anything else. Both agents take the same command; they differ in how it is submitted, so
+each pane is matched on its own argv.
 
 Fired from the PRIMARY pane it also resets the split's agent and clears the session's title-bar
 context, because the primary agent owns the session: resetting it ends what the session was doing.
@@ -25,7 +25,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 
 AGTERMCTL = os.environ.get("AGTERMCTL", "agtermctl")
 
@@ -35,14 +34,12 @@ CLAUDE_FG_MATCH = re.compile(os.environ.get("CLAUDE_FG_MATCH", r"(^|/)claude$"))
 CODEX_FG_MATCH = re.compile(os.environ.get("CODEX_FG_MATCH", r"(^|/)codex$"))
 
 # both agents take /clear. On codex it also wipes the pane's scrollback, so anything reading the
-# screen back with `session text` finds it empty after a reset.
+# screen back with `session text` finds only codex's fresh banner after a reset.
 RESET_COMMAND = "/clear"
 
-# codex turns on the Kitty keyboard protocol, under which agterm's synthetic Return produces nothing
-# codex acts on, so the submit is the Kitty encoding of Enter. It must be its OWN write: in the same
-# write as the command it is dropped and the line stays in the composer.
-KITTY_ENTER = "\x1b[13;1u"
-CODEX_SUBMIT_DELAY_SECONDS = 0.15
+# codex does not act on an Enter that shares a write with the text: the command stays in the
+# composer. Sent as its own write it submits, so the submit is a second `session type` call.
+SUBMIT = "\n"
 
 
 def is_claude(argv: list[str]) -> bool:
@@ -58,9 +55,9 @@ def is_codex(argv: list[str]) -> bool:
 def inputs_for(argv: list[str]) -> tuple[str, ...]:
     """inputs_for returns the writes that reset the agent in argv, or nothing when none matches."""
     if is_claude(argv):
-        return (RESET_COMMAND + "\n",)
+        return (RESET_COMMAND + SUBMIT,)
     if is_codex(argv):
-        return (RESET_COMMAND, KITTY_ENTER)
+        return (RESET_COMMAND, SUBMIT)
     return ()
 
 
@@ -94,9 +91,7 @@ def is_primary(pane: str) -> bool:
 def send(socket: str, sid: str, pane: str, inputs: tuple[str, ...]) -> bool:
     """send types one agent's reset into a pane, reporting whether every write succeeded."""
     typed = True
-    for index, text in enumerate(inputs):
-        if index:
-            time.sleep(CODEX_SUBMIT_DELAY_SECONDS)
+    for text in inputs:
         res = run(["session", "type", text, "--target", sid, "--pane", pane], socket)
         typed = typed and res.returncode == 0
     return typed

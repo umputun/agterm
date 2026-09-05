@@ -11,7 +11,7 @@ SCRIPT = runpy.run_path(Path(__file__).with_name("agent-reset.py"))
 INPUTS_FOR = SCRIPT["inputs_for"]
 IS_CLAUDE = SCRIPT["is_claude"]
 IS_PRIMARY = SCRIPT["is_primary"]
-KITTY_ENTER = SCRIPT["KITTY_ENTER"]
+SUBMIT = SCRIPT["SUBMIT"]
 MAIN = SCRIPT["main"]
 
 
@@ -32,8 +32,8 @@ class DetectionTests(unittest.TestCase):
     def test_inputs_for(self):
         cases = [
             ("claude submits with a newline", ["/usr/local/bin/claude"], ("/clear\n",)),
-            ("codex submits with the kitty encoding", ["/opt/homebrew/bin/codex"],
-             ("/clear", KITTY_ENTER)),
+            ("codex submits in a second write", ["/opt/homebrew/bin/codex"],
+             ("/clear", SUBMIT)),
             ("shell", ["-zsh"], ()),
             ("nothing running", [], ()),
         ]
@@ -64,7 +64,6 @@ class MainTests(unittest.TestCase):
             "os": type("os", (), {"environ": env})(),
             "run": fake_run,
             "foreground": lambda socket, sid, p: left if p == "left" else right,
-            "time": type("time", (), {"sleep": staticmethod(lambda _: None)})(),
         }
         with patch.dict(MAIN.__globals__, replacements):
             code = MAIN()
@@ -86,7 +85,7 @@ class MainTests(unittest.TestCase):
         code, calls = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/opt/homebrew/bin/codex"])
         self.assertEqual(code, 0)
         self.assertEqual(self.panes_typed(calls), ["left", "left", "right", "right"])
-        self.assertEqual(self.typed_text(calls), ["/clear", KITTY_ENTER, "/clear", KITTY_ENTER])
+        self.assertEqual(self.typed_text(calls), ["/clear", SUBMIT, "/clear", SUBMIT])
 
     def test_resets_both_panes_when_both_run_claude(self):
         code, calls = self.run_main("left", ["/usr/local/bin/claude"], ["/usr/local/bin/claude"])
@@ -97,7 +96,7 @@ class MainTests(unittest.TestCase):
     def test_each_pane_gets_the_submit_its_own_agent_needs(self):
         code, calls = self.run_main("left", ["/opt/homebrew/bin/codex"], ["/usr/local/bin/claude"])
         self.assertEqual(code, 0)
-        self.assertEqual(self.typed_text(calls), ["/clear", KITTY_ENTER, "/clear\n"])
+        self.assertEqual(self.typed_text(calls), ["/clear", SUBMIT, "/clear\n"])
 
     def test_does_not_cascade_from_the_split(self):
         code, calls = self.run_main("right", ["/usr/local/bin/claude"], ["/usr/local/bin/claude"])
