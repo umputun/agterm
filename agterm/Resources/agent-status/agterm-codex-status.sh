@@ -4,7 +4,7 @@
 # Codex fires PermissionRequest before Auto Review decides whether a person must approve. Treating
 # that raw event as blocked therefore false-flags automatically reviewed tools. This hook keeps the
 # agent-specific workaround inside the installed hook package: one watcher per agterm pane reads the
-# live visible footer for dialogs, while Stop checks the final assistant message for a question mark.
+# live visible footer for dialogs, while Stop checks the final assistant message for a question.
 set -u
 
 [ -n "${AGTERM_SESSION_ID:-}" ] || exit 0
@@ -27,9 +27,15 @@ report_status() {
 }
 
 assistant_message_contains_question() {
-  local message
+  local message prose question
   message=$(/usr/bin/plutil -extract last_assistant_message raw -o - - 2>/dev/null) || return 1
-  [[ "$message" == *"?"* ]]
+  # a span becomes a word rather than nothing so "run `make test`?" keeps its ? attached
+  prose=$(printf '%s\n' "$message" \
+    | /usr/bin/awk '/^[[:space:]]*```/ { fenced = !fenced; next } !fenced' \
+    | /usr/bin/sed 's/`[^`]*`/code/g')
+  # bash 3.2 cannot parse this bracket set inline in [[ ]]
+  question=$'[^[:space:]]\\?[]"\')*_!’”]*([[:space:]]|$)'
+  [[ "$prose" =~ $question ]]
 }
 
 read_visible_screen() {

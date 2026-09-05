@@ -116,6 +116,49 @@ struct CodexStatusHookTests {
         #expect(try run("stop", input: input).statusCalls == ["blocked"])
     }
 
+    @Test func stopReportsBlockedWhenQuestionFollowsCodeSpan() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":"Run `make test`?"}"#
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test func stopReportsBlockedWhenQuestionFollowsFencedBlock() throws {
+        let input = """
+        {"hook_event_name":"Stop","last_assistant_message":"Patch:\\n```diff\\n-a\\n+b\\n```\\nApply it?"}
+        """
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test(arguments: [
+        #"Confirm “deploy now?”"#, #"Confirm ‘deploy now?’"#, #"Confirm \"deploy now?\""#,
+        "Confirm 'deploy now?'", "Confirm (deploy now?)", "Confirm [deploy now?]", "Confirm *deploy now?*",
+        "Confirm _deploy now?_", "Deploy now?!",
+    ])
+    func stopReportsBlockedWhenQuestionEndsInClosingPunctuation(message: String) throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":""# + message + #""}"#
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test func stopReportsCompletedWhenQuestionMarkIsLiteralCharacter() throws {
+        let input = """
+        {"hook_event_name":"Stop","last_assistant_message":"Sent Claude one remaining blocker: \
+        Mongo\\u2019s credential parsing differs from `url.Parse`, allowing numeric-prefix passwords \
+        containing `/` or `?` to leak. Two real-provider probes reproduce it.\\n\\nAll 14 previous probes pass."}
+        """
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
+    }
+
+    @Test func stopReportsCompletedWhenQuestionMarkIsDetachedOrInsideURL() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":"Passwords with / or ? leak; see https://example.com/a?b=1 for details."}"#
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
+    }
+
+    @Test func stopReportsCompletedWhenQuestionMarkEndsFencedCodeLine() throws {
+        let input = """
+        {"hook_event_name":"Stop","last_assistant_message":"The prompt is\\n```text\\nProceed?\\n```\\nand it renders."}
+        """
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
+    }
+
     @Test func stopReportsCompletedWhenAssistantMessageHasNoQuestionMark() throws {
         let input = #"{"hook_event_name":"Stop","last_assistant_message":"Review completed."}"#
         #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
