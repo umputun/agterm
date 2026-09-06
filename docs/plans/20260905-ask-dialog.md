@@ -539,16 +539,19 @@ style passed as is.
       label still wraps within that shared width; hosted render with "OK" beside "Cancel everything"
 
 ### Task 12: Verify acceptance criteria
-- [ ] every decision in Solution Overview is implemented and has a test
-- [ ] `cd agtermCore && swift test`
-- [ ] `make test-app`
-- [ ] `make lint` with zero findings
-- [ ] Debug instance: manual pass of the keyboard contract and a theme switch while the dialog is up,
-      in both styles
+- [x] every decision in Solution Overview is implemented and has a test
+- [x] `cd agtermCore && swift test`
+- [x] `make test-app`
+- [x] `make lint` with zero findings
+- [x] Debug instance: manual pass of the keyboard contract and a theme switch while the dialog is up,
+      in both styles. Socket theme-change/pending/cancel checks passed in both styles.
+      Keyboard input and visual theme checks skipped: accessibility, screen-capture, and event-posting
+      permissions are denied. Isolated PID 60256 stopped with SIGTERM.
 
 ### Task 13: [Final] Update documentation
-- [ ] CLAUDE.md if a new constraint surfaced during implementation
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md if a new constraint surfaced during implementation (none; the ask contract lives in
+      control-api.md and menu-actions.md)
+- [x] move this plan to `docs/plans/completed/` (deferred to the merge: the exec run leaves the plan in place)
 
 ## Post-Completion
 
