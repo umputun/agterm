@@ -100,10 +100,11 @@ agtermctl session type $'pwd\n' --target "$sid"           # drive a session you 
 agtermctl session text --target "$sid" --lines 10         # read its terminal back
 agtermctl session status blocked --target "$sid"          # set the sidebar status glyph
 printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"   # open the native picker
+agtermctl ask "Deploy now?" --button yes=Deploy --button no=Not\ yet --default no  # ask a question, get the button
 agtermctl tree --json                                     # dump the whole model as JSON
 ```
 
-`session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` blocks until someone chooses.
+`session type` returns once the keystrokes are queued, so a following `session text` races the shell, and `pick` and `ask` block until someone answers.
 
 The same interface covers windows, splits, overlays, dashboards, HUDs, notifications, events, themes, and restoration. Every command is at [agterm.com/commands](https://agterm.com/commands).
 
