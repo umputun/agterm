@@ -421,7 +421,7 @@ struct Pick: ParsableCommand {
                 send: client.send,
                 sleep: Thread.sleep(forTimeInterval:),
                 output: { print($0) },
-                errorOutput: Self.writeStandardError
+                errorOutput: ModalCommandRunner.writeStandardError
             )
         }
 
@@ -429,82 +429,14 @@ struct Pick: ParsableCommand {
         /// real delays or process fds.
         func execute(
             input: Data,
-            send: (ControlRequest) throws -> ControlResponse,
-            sleep: (TimeInterval) -> Void,
-            output: (String) -> Void,
-            errorOutput: (String) -> Void = Self.writeStandardError
+            send: @escaping (ControlRequest) throws -> ControlResponse,
+            sleep: @escaping (TimeInterval) -> Void,
+            output: @escaping (String) -> Void,
+            errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError
         ) throws {
-            let opened = try send(makeRequest(input: input))
-            guard opened.ok else {
-                Self.writeResponse(opened, json: options.json, output: output, errorOutput: errorOutput)
-                throw ExitCode.failure
-            }
-            guard let pickID = opened.result?.id else {
-                errorOutput("error: pick.open result missing id")
-                throw ExitCode.failure
-            }
-            if noBlock {
-                output(try SocketClient.formatPickID(pickID))
-                return
-            }
-
-            var pendingPolls = 0
-            while true {
-                let response: ControlResponse
-                do {
-                    response = try send(ControlRequest(cmd: .pickResult, target: pickID))
-                } catch {
-                    // a transport failure mid-wait leaves the picker up with nobody waiting; every request
-                    // opens its own connection, so the cancel can still land though this poll could not.
-                    abandon(pickID, send: send)
-                    throw error
-                }
-                // the poll carries no window selector, so a pending picker is always found by id and answers
-                // ok; a not-ok response means the server no longer holds one, with nothing left to dismiss.
-                guard response.ok else {
-                    Self.writeResponse(response, json: options.json, output: output, errorOutput: errorOutput)
-                    throw ExitCode.failure
-                }
-                guard let result = response.result?.pick else {
-                    errorOutput("error: pick.result missing result")
-                    abandon(pickID, send: send)
-                    throw ExitCode.failure
-                }
-                if result.result == .pending {
-                    pendingPolls += 1
-                    sleep(SocketClient.pickPollDelay(afterPendingPoll: pendingPolls))
-                    continue
-                }
-
-                output(try SocketClient.formatPickResult(result))
-                let code = SocketClient.pickExitCode(for: result.result)
-                if code.rawValue != 0 { throw code }
-                return
-            }
-        }
-
-        /// Dismiss a picker this command opened but can no longer wait on: else the window holds one whose
-        /// owner is gone and refuses the next `pick.open`. Best effort — the poll already failed anyway.
-        private func abandon(_ pickID: String, send: (ControlRequest) throws -> ControlResponse) {
-            _ = try? send(ControlRequest(cmd: .pickCancel, target: pickID))
-        }
-
-        private static func writeResponse(
-            _ response: ControlResponse,
-            json: Bool,
-            output: (String) -> Void,
-            errorOutput: (String) -> Void
-        ) {
-            let line = SocketClient.formatResponse(response, json: json)
-            if json {
-                output(line)
-            } else {
-                errorOutput(line)
-            }
-        }
-
-        private static func writeStandardError(_ line: String) {
-            FileHandle.standardError.write(Data("\(line)\n".utf8))
+            let runner = ModalCommandRunner(family: .pick, json: options.json, send: send, sleep: sleep,
+                                            output: output, errorOutput: errorOutput)
+            try runner.open(makeRequest(input: input), noBlock: noBlock)
         }
     }
 
@@ -523,38 +455,20 @@ struct Pick: ParsableCommand {
             try execute(
                 send: SocketClient(path: options.socketPath()).send,
                 output: { print($0) },
-                errorOutput: Self.writeStandardError
+                errorOutput: ModalCommandRunner.writeStandardError
             )
         }
 
         /// One-shot read with injectable transport/stdout/stderr, so every wire outcome and exit mapping is
         /// covered without replacing process file descriptors.
         func execute(
-            send: (ControlRequest) throws -> ControlResponse,
-            output: (String) -> Void,
-            errorOutput: (String) -> Void = Self.writeStandardError
+            send: @escaping (ControlRequest) throws -> ControlResponse,
+            output: @escaping (String) -> Void,
+            errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError
         ) throws {
-            let response = try send(makeRequest())
-            guard response.ok else {
-                let line = SocketClient.formatResponse(response, json: options.json)
-                if options.json {
-                    output(line)
-                } else {
-                    errorOutput(line)
-                }
-                throw ExitCode.failure
-            }
-            guard let result = response.result?.pick else {
-                errorOutput("error: pick.result missing result")
-                throw ExitCode.failure
-            }
-            output(try SocketClient.formatPickResult(result))
-            let code = SocketClient.pickExitCode(for: result.result)
-            if code.rawValue != 0 { throw code }
-        }
-
-        private static func writeStandardError(_ line: String) {
-            FileHandle.standardError.write(Data("\(line)\n".utf8))
+            let runner = ModalCommandRunner(family: .pick, json: options.json, send: send, sleep: { _ in },
+                                            output: output, errorOutput: errorOutput)
+            try runner.read(makeRequest())
         }
     }
 
@@ -566,6 +480,107 @@ struct Pick: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .pickCancel, target: id, args: options.withWindow())
         }
+    }
+}
+
+struct ModalCommandRunner {
+    enum Family: String {
+        case pick, ask
+
+        var resultCommand: Command { self == .pick ? .pickResult : .askResult }
+        var cancelCommand: Command { self == .pick ? .pickCancel : .askCancel }
+    }
+
+    let family: Family
+    let json: Bool
+    let send: (ControlRequest) throws -> ControlResponse
+    let sleep: (TimeInterval) -> Void
+    let output: (String) -> Void
+    let errorOutput: (String) -> Void
+
+    func open(_ request: ControlRequest, noBlock: Bool) throws {
+        let opened = try send(request)
+        try requireSuccess(opened)
+        guard let id = opened.result?.id else {
+            errorOutput("error: \(family.rawValue).open result missing id")
+            throw ExitCode.failure
+        }
+        if noBlock {
+            output(try SocketClient.formatPickID(id))
+            return
+        }
+        var pendingPolls = 0
+        while true {
+            let response: ControlResponse
+            do {
+                response = try send(ControlRequest(cmd: family.resultCommand, target: id))
+            } catch {
+                // each request opens its own connection, so cancellation can still reach the host after a failed poll.
+                abandon(id)
+                throw error
+            }
+            // the id-only poll cannot resolve to another window; failure means the host no longer holds the dialog.
+            try requireSuccess(response)
+            guard let result = try reply(from: response) else {
+                errorOutput("error: \(family.rawValue).result missing result")
+                abandon(id)
+                throw ExitCode.failure
+            }
+            if result.pending {
+                pendingPolls += 1
+                sleep(SocketClient.pickPollDelay(afterPendingPoll: pendingPolls))
+                continue
+            }
+            output(result.line)
+            if result.code.rawValue != 0 { throw result.code }
+            return
+        }
+    }
+
+    func read(_ request: ControlRequest) throws {
+        let response = try send(request)
+        try requireSuccess(response)
+        guard let result = try reply(from: response) else {
+            errorOutput("error: \(family.rawValue).result missing result")
+            throw ExitCode.failure
+        }
+        output(result.line)
+        if result.code.rawValue != 0 { throw result.code }
+    }
+
+    private struct Reply {
+        let pending: Bool
+        let line: String
+        let code: ExitCode
+    }
+
+    private func reply(from response: ControlResponse) throws -> Reply? {
+        switch family {
+        case .pick:
+            guard let result = response.result?.pick else { return nil }
+            return Reply(pending: result.result == .pending, line: try SocketClient.formatPickResult(result),
+                         code: SocketClient.pickExitCode(for: result.result))
+        case .ask:
+            guard let result = response.result?.ask else { return nil }
+            return Reply(pending: result.result == .pending, line: try SocketClient.formatAskResult(result),
+                         code: SocketClient.askExitCode(for: result.result))
+        }
+    }
+
+    private func requireSuccess(_ response: ControlResponse) throws {
+        guard !response.ok else { return }
+        let line = SocketClient.formatResponse(response, json: json)
+        if json { output(line) } else { errorOutput(line) }
+        throw ExitCode.failure
+    }
+
+    // otherwise an abandoned caller leaves the shared modal slot occupied; cancellation stays best effort.
+    private func abandon(_ id: String) {
+        _ = try? send(ControlRequest(cmd: family.cancelCommand, target: id))
+    }
+
+    static func writeStandardError(_ line: String) {
+        FileHandle.standardError.write(Data("\(line)\n".utf8))
     }
 }
 

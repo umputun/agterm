@@ -228,12 +228,12 @@ teardown call `cancelAsk()`.
   is geometry movement, allowed; only a different anchor would be relocation, which never happens.
 - Accessibility ids: `ask-dialog`, `ask-title`, `ask-message`, `ask-button-<id>`.
 
-### CLI (`agtermctlKit/MiscCommands.swift`, `Ask` command)
+### CLI (`agtermctlKit/AskCommands.swift`, `Ask` command)
 
 ```
 agtermctl ask TITLE [--message TEXT] --button ID=LABEL [--button ...] [--hotkey ID=K ...]
              [--default ID] [--cancel ID] [--destructive ID]
-             [--target SESSION] [--pane left|right] [--window W] [--follow] [--no-block]
+             [--target SESSION] [--pane left|right] [--pane-id TOKEN] [--window W] [--follow] [--no-block]
 agtermctl ask result ID
 agtermctl ask cancel ID
 ```
@@ -242,6 +242,7 @@ agtermctl ask cancel ID
   attaches a hotkey to a declared button.
 - `--target` is `ask`'s own optional option, not `TargetOptions`, whose default of `active` would turn
   every no-target call into an anchored one and break window-center placement.
+- `--pane-id` exposes the existing stable-token wire field, with the same target requirement as `--pane`.
 - `Ask.self` is registered in `Agtermctl.configuration.subcommands` (`agtermctlKit/Commands.swift`).
 - Default subcommand is open. Blocking poll, delays, abandon-on-transport-failure, and exit codes (0
   answered, 2 cancelled, 1 failure) reuse the pick helpers, generalized to take the outcome kind.
@@ -391,17 +392,17 @@ event-arguments rule.
 - Modify: `agtermCore/Sources/agtermctlKit/MiscCommands.swift` (share the poll loop with pick)
 - Modify: `agtermCore/Sources/agtermctlKit/Commands.swift` (register `Ask.self`)
 - Modify: `agtermCore/Sources/agtermctlKit/SocketClient.swift` (exit code and format helpers)
-- Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`,
-  `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
+- Create: `agtermCore/Tests/agtermctlKitTests/AskCommandsTests.swift` (the existing CommandsTests is at its line limit)
+- Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
-- [ ] `Ask` command with `Open` (default), `Result`, `Cancel`; button and hotkey parsing; its own
+- [x] `Ask` command with `Open` (default), `Result`, `Cancel`; button and hotkey parsing; its own
       optional `--target`
-- [ ] register `Ask.self` in the root subcommand list
-- [ ] blocking poll and abandon reuse the pick loop, generalized over the outcome kind
-- [ ] tests through `Agtermctl.parseAsRoot`: every option, `ID=LABEL` split, default subcommand, no
+- [x] register `Ask.self` in the root subcommand list
+- [x] blocking poll and abandon reuse the pick loop, generalized over the outcome kind
+- [x] tests through `Agtermctl.parseAsRoot`: every option, `ID=LABEL` split, default subcommand, no
       target means no `target` in the request, request shaping
-- [ ] tests: exit codes and result formatting
-- [ ] run `swift test` for `agtermctlKitTests`
+- [x] tests: exit codes and result formatting
+- [x] run `swift test --filter agtermctlKitTests` (463 tests passed, using the existing clean scratch path)
 
 ### Task 8: Hosted UI tests
 

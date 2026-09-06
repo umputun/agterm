@@ -140,7 +140,7 @@ struct SocketClient {
         print(formatResponse(response, json: json, echoID: echoID))
     }
 
-    /// Render the immediate `pick.open` response as the documented `{"id":"…"}` JSON object.
+    /// Render a pick or ask open response as the documented `{"id":"…"}` JSON object.
     static func formatPickID(_ id: String) throws -> String {
         String(decoding: try JSONEncoder().encode(ControlResult(id: id)), as: UTF8.self)
     }
@@ -148,6 +148,20 @@ struct SocketClient {
     /// Render the nested `pick.result` payload itself, rather than the enclosing control response.
     static func formatPickResult(_ result: ControlPickResult) throws -> String {
         String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
+    }
+
+    /// formatAskResult emits the nested ask payload without the control response wrapper.
+    static func formatAskResult(_ result: ControlAskResult) throws -> String {
+        String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
+    }
+
+    /// askExitCode matches pick's success, pending, and cancellation process statuses.
+    static func askExitCode(for outcome: ControlAskOutcome) -> ExitCode {
+        switch outcome {
+        case .answered: .success
+        case .pending: .failure
+        case .cancelled: ExitCode(rawValue: 2)
+        }
     }
 
     /// Map every picker state to a process status. `pending` is non-terminal in the blocking loop; if

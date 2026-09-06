@@ -423,6 +423,21 @@ struct SocketClientTests {
         #expect(SocketClient.pickExitCode(for: outcome).rawValue == expected)
     }
 
+    @Test(arguments: [(ControlAskOutcome.pending, Int32(1)), (.answered, Int32(0)), (.cancelled, Int32(2))])
+    func askExitCodeMapsEveryOutcome(outcome: ControlAskOutcome, expected: Int32) {
+        #expect(SocketClient.askExitCode(for: outcome).rawValue == expected)
+    }
+
+    @Test func formatsAskResultAsBareJSON() throws {
+        let result = ControlAskResult(result: .answered, id: "save", label: "Save", index: 0)
+        let line = try SocketClient.formatAskResult(result)
+        #expect(try JSONDecoder().decode(ControlAskResult.self, from: Data(line.utf8)) == result)
+        let fields = try #require(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+        #expect(fields["result"] as? String == "answered")
+        #expect(fields["ask"] == nil)
+        #expect(fields["ok"] == nil)
+    }
+
     @Test func pickPollBackoffUsesTenFastSleepsThenSlowSleeps() {
         #expect((1...10).map(SocketClient.pickPollDelay(afterPendingPoll:)) ==
             Array(repeating: 0.1, count: 10))
