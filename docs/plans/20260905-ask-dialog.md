@@ -145,7 +145,8 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 - `PickController` gains `pendingAsk: PendingAsk?`, `recentAskResults: [ResolvedAsk]`,
   `openAsk(_:) -> Bool`, `resolveAsk(_:)`, `cancelAsk()`, `askResult(for:)`, and the shared predicate
   `modalPending: Bool` (`pending != nil || pendingAsk != nil`). `open`/`openAsk` both refuse while
-  `modalPending`. Retention limits and the resolution sequence are shared with pick.
+  `modalPending`. Each family retains its own history using pick's existing 8/32 caps, so ask traffic
+  does not evict unread pick answers. The resolution sequence is shared with pick.
 - `PickRegistry.unregister` cancels the pending ask and retains its results; `liveAsk(for:)` and
   `retainedAskResult(for:)` mirror the pick lookups.
 - `AskNavigation` (host-free, in `Ask.swift`) holds the highlight state machine: `highlighted: Int?`
@@ -274,17 +275,17 @@ event-arguments rule.
 - Create: `agtermCore/Tests/agtermCoreTests/AskTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/PickTests.swift`
 
-- [ ] add `PendingAsk` and `AskAnchor`
-- [ ] add `pendingAsk`, `recentAskResults`, `openAsk`, `resolveAsk`, `cancelAsk`, `askResult(for:)`, and
+- [x] add `PendingAsk` and `AskAnchor`
+- [x] add `pendingAsk`, `recentAskResults`, `openAsk`, `resolveAsk`, `cancelAsk`, `askResult(for:)`, and
       `modalPending` to `PickController`; `open` and `openAsk` refuse while `modalPending`
-- [ ] `PickRegistry`: cancel and retain asks on `unregister`; add `liveAsk(for:)`, `retainedAskResult(for:)`
-- [ ] `AskNavigation` state machine (seeded highlight, forward/backward with first/last entry and wrap,
+- [x] `PickRegistry`: cancel and retain asks on `unregister`; add `liveAsk(for:)`, `retainedAskResult(for:)`
+- [x] `AskNavigation` state machine (seeded highlight, forward/backward with first/last entry and wrap,
       inert activate with no highlight, hotkey lookup)
-- [ ] tests: open/resolve/retain, cancel, result-by-id, retention cap, registry retention across unregister
-- [ ] tests: ask refuses while a pick is pending and pick refuses while an ask is pending
-- [ ] tests: the whole keyboard contract on `AskNavigation`, with and without `default`, one and six
+- [x] tests: open/resolve/retain, cancel, result-by-id, retention cap, registry retention across unregister
+- [x] tests: ask refuses while a pick is pending and pick refuses while an ask is pending
+- [x] tests: the whole keyboard contract on `AskNavigation`, with and without `default`, one and six
       buttons, hotkey case folding
-- [ ] run `swift test` for `AskTests` and `PickTests`
+- [x] run `swift test --filter 'agtermCoreTests\.(AskTests|PickTests)/'` (35 tests passed)
 
 ### Task 3: Host-free validation and dispatch
 
