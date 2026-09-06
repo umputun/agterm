@@ -16,7 +16,7 @@ public struct AskAnchor: Equatable, Sendable {
     }
 }
 
-/// PendingAsk holds one dialog awaiting an answer in its owning window.
+/// A dialog awaiting an answer in its owning session or window.
 public struct PendingAsk: Equatable, Sendable {
     /// id is the globally unique dialog request id.
     public let id: String
@@ -28,7 +28,7 @@ public struct PendingAsk: Equatable, Sendable {
     public let buttons: [ControlAskButton]
     /// defaultID identifies the initially highlighted button.
     public let defaultID: String?
-    /// style selects the dialog rendering without changing its behavior.
+    /// Style selects session ownership for terminal asks, window ownership for GUI asks, and default placement.
     public let style: ControlAskStyle
     /// align positions the button block in both row and column layouts.
     public let align: ControlAskAlignment
@@ -52,6 +52,67 @@ public struct PendingAsk: Equatable, Sendable {
         self.width = width
         self.destructiveID = destructiveID
         self.anchor = anchor
+    }
+}
+
+/// Indexes live ask owners and retains finished results after their owners disappear.
+@MainActor
+public final class AskRegistry {
+    public static let shared = AskRegistry()
+    static let retainedResultLimit = 32
+
+    /// Identifies the live slot and its owning window for result and cancellation scoping.
+    public enum Owner: Equatable, Sendable {
+        case window(WindowInfo.ID)
+        case session(UUID, window: WindowInfo.ID)
+
+        public var windowID: WindowInfo.ID {
+            switch self {
+            case .window(let id), .session(_, window: let id): id
+            }
+        }
+    }
+
+    /// Reads the owner's current pending ask without keeping a second copy in the registry.
+    public var resolveOwner: (Owner) -> PendingAsk?
+    private var owners: [String: Owner] = [:]
+    private var finished: [(id: String, result: ControlAskResult, windowID: WindowInfo.ID)] = []
+
+    public init(resolveOwner: @escaping (Owner) -> PendingAsk? = { _ in nil }) {
+        self.resolveOwner = resolveOwner
+    }
+
+    /// Indexes an opened ask, refusing an id already pending or retained.
+    @discardableResult
+    public func register(id: String, owner: Owner) -> Bool {
+        guard owners[id] == nil, !finished.contains(where: { $0.id == id }) else { return false }
+        owners[id] = owner
+        return true
+    }
+
+    /// Returns the registered live owner; finished and unknown ids have none.
+    public func owner(for id: String) -> Owner? {
+        owners[id]
+    }
+
+    /// Returns a pending or retained result; a registered id not held by its owner is unknown, so openAsk must precede register.
+    public func result(for id: String) -> (result: ControlAskResult, windowID: WindowInfo.ID)? {
+        if let owner = owners[id] {
+            guard resolveOwner(owner)?.id == id else { return nil }
+            return (ControlAskResult(result: .pending), owner.windowID)
+        }
+        guard let resolved = finished.first(where: { $0.id == id }) else { return nil }
+        return (resolved.result, resolved.windowID)
+    }
+
+    /// The first terminal outcome wins; repeated resolution does not refresh its eviction order.
+    @discardableResult
+    public func retain(id: String, result: ControlAskResult, window: WindowInfo.ID) -> Bool {
+        guard result.result != .pending, owners[id]?.windowID == window else { return false }
+        owners[id] = nil
+        finished.append((id, result, window))
+        if finished.count > Self.retainedResultLimit { finished.removeFirst() }
+        return true
     }
 }
 

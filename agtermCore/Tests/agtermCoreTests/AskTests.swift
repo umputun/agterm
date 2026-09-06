@@ -4,6 +4,120 @@ import Testing
 
 @MainActor
 struct AskTests {
+    @Test(arguments: ControlAskStyle.allCases)
+    func sharedRegistryLooksUpLiveOwnerAndRetainsAfterOwnerDisappears(style: ControlAskStyle) {
+        let windowID = UUID()
+        let session = Session(initialCwd: "/tmp")
+        let controller = PickController()
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: buttons(count: 1), style: style)
+        let owner: AskRegistry.Owner = style == .terminal ? .session(session.id, window: windowID) : .window(windowID)
+        let registry = AskRegistry { candidate in
+            guard candidate == owner else { return nil }
+            return style == .terminal ? session.askPending : controller.pendingAsk
+        }
+        #expect(style == .terminal ? session.openAsk(ask) : controller.openAsk(ask))
+        #expect(registry.register(id: ask.id, owner: owner))
+        #expect(registry.owner(for: ask.id) == owner)
+        #expect(registry.result(for: ask.id)?.result == ControlAskResult(result: .pending))
+        #expect(registry.result(for: ask.id)?.windowID == windowID)
+        #expect(registry.result(for: "unknown") == nil)
+
+        let answer = ControlAskResult(result: .answered, id: "button-0", label: "Button 0", index: 0)
+        #expect(registry.retain(id: ask.id, result: answer, window: windowID))
+        if style == .terminal { session.resolveAsk(id: ask.id, answer) } else { controller.resolveAsk(answer) }
+        registry.resolveOwner = { _ in nil }
+        #expect(registry.owner(for: ask.id) == nil)
+        #expect(registry.result(for: ask.id)?.result == answer)
+        #expect(registry.result(for: ask.id)?.windowID == windowID)
+    }
+
+    @Test func sessionResolutionRetainsItsRegisteredOutcomeSynchronously() {
+        let registry = AskRegistry.shared
+        let previousResolver = registry.resolveOwner
+        defer { registry.resolveOwner = previousResolver }
+        let session = Session(initialCwd: "/tmp")
+        let windowID = UUID()
+        let ask = makeAsk(id: UUID().uuidString)
+        let owner = AskRegistry.Owner.session(session.id, window: windowID)
+        registry.resolveOwner = { candidate in
+            candidate == owner ? session.askPending : previousResolver(candidate)
+        }
+        #expect(session.openAsk(ask))
+        #expect(registry.register(id: ask.id, owner: owner))
+        #expect(registry.result(for: ask.id)?.result.result == .pending)
+
+        #expect(session.cancelAsk(id: ask.id))
+
+        #expect(session.askPending == nil)
+        #expect(registry.owner(for: ask.id) == nil)
+        #expect(registry.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+        #expect(registry.result(for: ask.id)?.windowID == windowID)
+        #expect(!session.cancelAsk(id: ask.id))
+        #expect(registry.result(for: ask.id)?.result.result == .cancelled)
+    }
+
+    @Test func registryRejectsDuplicateIDsWrongWindowsAndNonterminalRetention() {
+        let controller = PickController()
+        let windowID = UUID()
+        let ask = makeAsk(id: "original")
+        let owner = AskRegistry.Owner.window(windowID)
+        let registry = AskRegistry { _ in controller.pendingAsk }
+        #expect(controller.openAsk(ask))
+        #expect(registry.register(id: ask.id, owner: owner))
+        #expect(!registry.register(id: ask.id, owner: .window(UUID())))
+        #expect(registry.owner(for: ask.id) == owner)
+        #expect(!registry.retain(id: ask.id, result: ControlAskResult(result: .pending), window: windowID))
+        #expect(!registry.retain(id: ask.id, result: ControlAskResult(result: .cancelled), window: UUID()))
+        #expect(registry.result(for: ask.id)?.result.result == .pending)
+
+        #expect(registry.retain(id: ask.id, result: ControlAskResult(result: .escaped), window: windowID))
+        #expect(!registry.retain(id: ask.id, result: ControlAskResult(result: .cancelled), window: windowID))
+        #expect(!registry.register(id: ask.id, owner: owner))
+        #expect(registry.result(for: ask.id)?.result.result == .escaped)
+    }
+
+    @Test func registryDoesNotMistakeTheOwnersNextAskForTheRegisteredID() {
+        let controller = PickController()
+        let registry = AskRegistry { _ in controller.pendingAsk }
+        #expect(registry.register(id: "first", owner: .window(UUID())))
+        #expect(registry.result(for: "first") == nil)
+        #expect(controller.openAsk(makeAsk(id: "first")))
+        #expect(registry.result(for: "first")?.result.result == .pending)
+        controller.cancelAsk()
+        #expect(controller.openAsk(makeAsk(id: "next")))
+        #expect(registry.result(for: "first") == nil)
+        #expect(registry.result(for: "next") == nil)
+    }
+
+    @Test func registryEvictsByResolutionOrderAndNeverEvictsPendingAsks() {
+        let windowIDs = (0..<(AskRegistry.retainedResultLimit + 3)).map { _ in UUID() }
+        var controllers: [UUID: PickController] = [:]
+        let registry = AskRegistry { controllers[$0.windowID]?.pendingAsk }
+        for (index, windowID) in windowIDs.enumerated() {
+            let controller = PickController()
+            controllers[windowID] = controller
+            #expect(controller.openAsk(makeAsk(id: "ask-\(index)")))
+            #expect(registry.register(id: "ask-\(index)", owner: .window(windowID)))
+        }
+        for index in windowIDs.indices {
+            #expect(registry.result(for: "ask-\(index)")?.result.result == .pending)
+        }
+        for index in windowIDs.indices.dropFirst().reversed() {
+            #expect(registry.retain(id: "ask-\(index)", result: ControlAskResult(result: .cancelled), window: windowIDs[index]))
+            controllers[windowIDs[index]]?.cancelAsk()
+            controllers[windowIDs[index]] = nil
+        }
+
+        #expect(registry.result(for: "ask-0")?.result.result == .pending)
+        #expect(registry.owner(for: "ask-0") == .window(windowIDs[0]))
+        for index in 1...AskRegistry.retainedResultLimit {
+            #expect(registry.result(for: "ask-\(index)")?.result.result == .cancelled)
+            #expect(registry.result(for: "ask-\(index)")?.windowID == windowIDs[index])
+        }
+        #expect(registry.result(for: "ask-\(AskRegistry.retainedResultLimit + 1)") == nil)
+        #expect(registry.result(for: "ask-\(AskRegistry.retainedResultLimit + 2)") == nil)
+    }
+
     @Test func escapeRetainsAButtonlessResultAndReleasesTheSlot() {
         let controller = PickController()
         #expect(controller.openAsk(makeAsk(id: "escaped")))

@@ -337,6 +337,43 @@ public final class Session: Identifiable {
     /// follows its shell through pane swaps and split-survivor promotion.
     public var hudPaneIdentity: UUID?
 
+    /// The session's pending terminal ask, independent of the HUD/program overlay slot.
+    public private(set) var askPending: PendingAsk?
+    /// Stable identity of the covered pane; nil covers the whole session.
+    public private(set) var askPaneIdentity: UUID?
+
+    /// The anchored pane's current role, nil for session-wide placement or a destroyed pane.
+    public var askTargetPane: OverlayPane? {
+        askPaneIdentity.flatMap(paneRole(forIdentity:))
+    }
+
+    /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
+    @discardableResult
+    public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil) -> Bool {
+        guard askPending == nil else { return false }
+        askPaneIdentity = paneIdentity
+        askPending = ask
+        return true
+    }
+
+    /// Retains a registered ask's terminal outcome before clearing its slot; stale ids are ignored.
+    @discardableResult
+    public func resolveAsk(id: String, _ result: ControlAskResult) -> Bool {
+        guard askPending?.id == id, result.result != .pending else { return false }
+        if case let .session(sessionID, windowID) = AskRegistry.shared.owner(for: id), sessionID == self.id {
+            AskRegistry.shared.retain(id: id, result: result, window: windowID)
+        }
+        askPending = nil
+        askPaneIdentity = nil
+        return true
+    }
+
+    /// Cancels the current ask only when its id matches.
+    @discardableResult
+    public func cancelAsk(id: String) -> Bool {
+        resolveAsk(id: id, ControlAskResult(result: .cancelled))
+    }
+
     /// Last live bounds emitted by each deck pane host. Ignored by observation because the drawing path takes
     /// the current preference value directly; control commands use this cache only for message measurement.
     @ObservationIgnored public var hudPaneFrames = HudPaneFrames()

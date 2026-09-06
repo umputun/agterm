@@ -4,6 +4,91 @@ import Testing
 
 @MainActor
 struct SessionTests {
+    @Test func askSlotIsIndependentOfOverlayAndRejectsReplacement() {
+        let session = Session(initialCwd: "/tmp")
+        let paneIdentity = UUID()
+        session.splitPaneIdentity = paneIdentity
+        session.overlayActive = true
+        session.overlayCommand = "review"
+        let first = PendingAsk(id: "first", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let second = PendingAsk(id: "second", title: "Stop?", buttons: [ControlAskButton(id: "no", label: "No")])
+
+        #expect(session.openAsk(first, paneIdentity: paneIdentity))
+        #expect(!session.openAsk(second))
+        #expect(session.askPending == first)
+        #expect(session.askPaneIdentity == paneIdentity)
+        #expect(session.askTargetPane == .right)
+        #expect(session.overlayActive)
+        #expect(session.overlayCommand == "review")
+    }
+
+    @Test func separateSessionsCanHoldAsksTogether() {
+        let first = Session(initialCwd: "/tmp")
+        let second = Session(initialCwd: "/tmp")
+        let ask = PendingAsk(id: "first", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let other = PendingAsk(id: "second", title: "Continue?", buttons: ask.buttons)
+
+        #expect(first.openAsk(ask))
+        #expect(second.openAsk(other))
+        #expect(first.askPending == ask)
+        #expect(second.askPending == other)
+        #expect(first.askPaneIdentity == nil)
+        #expect(first.askTargetPane == nil)
+    }
+
+    @Test(arguments: [ControlAskOutcome.answered, .escaped, .cancelled])
+    func askResolutionRequiresCurrentIDAndClearsPlacement(outcome: ControlAskOutcome) {
+        let session = Session(initialCwd: "/tmp")
+        let ask = PendingAsk(id: "first", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let result = outcome == .answered
+            ? ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0)
+            : ControlAskResult(result: outcome)
+        #expect(session.openAsk(ask, paneIdentity: session.paneIdentity))
+        #expect(!session.resolveAsk(id: "stale", result))
+        #expect(!session.cancelAsk(id: "stale"))
+        #expect(!session.resolveAsk(id: ask.id, ControlAskResult(result: .pending)))
+        #expect(session.askPending == ask)
+        #expect(session.askPaneIdentity == session.paneIdentity)
+
+        if outcome == .cancelled {
+            #expect(session.cancelAsk(id: ask.id))
+        } else {
+            #expect(session.resolveAsk(id: ask.id, result))
+        }
+        #expect(session.askPending == nil)
+        #expect(session.askPaneIdentity == nil)
+        #expect(session.askTargetPane == nil)
+
+        let next = PendingAsk(id: "next", title: "Again?", buttons: ask.buttons)
+        #expect(session.openAsk(next))
+        #expect(!session.resolveAsk(id: ask.id, result))
+        #expect(!session.cancelAsk(id: ask.id))
+        #expect(session.askPending == next)
+    }
+
+    @Test func askPlacementFollowsSwapAndPromotedSurvivor() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        let identity = try #require(session.splitPaneIdentity)
+        let ask = PendingAsk(id: "survivor", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        #expect(session.openAsk(ask, paneIdentity: identity))
+        #expect(session.askTargetPane == .right)
+
+        #expect(store.swapPanes(session.id) == nil)
+        #expect(session.askTargetPane == .left)
+        #expect(session.askPaneIdentity == identity)
+        #expect(store.swapPanes(session.id) == nil)
+        #expect(session.askTargetPane == .right)
+        store.closePrimaryPane(session.id)
+        #expect(session.askTargetPane == .left)
+        #expect(session.askPaneIdentity == identity)
+        #expect(session.askPending == ask)
+    }
+
     @Test func paneRoleFollowsPromotedSurvivorUntilItsPaneIsRemoved() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")
