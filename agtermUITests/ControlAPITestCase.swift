@@ -468,6 +468,63 @@ class ControlAPITestCase: XCTestCase {
 
     // MARK: - Socket client
 
+    var askDialog: XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "ask-dialog").firstMatch
+    }
+
+    func askButton(_ id: String) -> XCUIElement {
+        app.buttons.matching(identifier: "ask-button-\(id)").firstMatch
+    }
+
+    func clickAskButton(_ id: String) {
+        XCTAssertTrue(askButton(id).waitForExistence(timeout: 5))
+        let matches = app.buttons.matching(identifier: "ask-button-\(id)")
+        (matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch).click()
+    }
+
+    func sendControlCommand(_ command: String, target: String? = nil,
+                            args: [String: Any]? = nil) throws -> [String: Any] {
+        var request: [String: Any] = ["cmd": command]
+        if let target { request["target"] = target }
+        if let args { request["args"] = args }
+        let data = try JSONSerialization.data(withJSONObject: request)
+        return try sendCommand(String(decoding: data, as: UTF8.self))
+    }
+
+    func openAsk(_ buttons: [[String: Any]], title: String = "Choose an action",
+                 target: String? = nil, options: [String: Any] = [:]) throws -> String {
+        var args = options
+        args["buttons"] = buttons
+        args["title"] = title
+        let response = try sendControlCommand("ask.open", target: target, args: args)
+        XCTAssertEqual(response["ok"] as? Bool, true, "\(response)")
+        return try XCTUnwrap((response["result"] as? [String: Any])?["id"] as? String)
+    }
+
+    func askResult(_ id: String, window: String? = nil) throws -> [String: Any] {
+        let response = try sendControlCommand("ask.result", target: id, args: window.map { ["window": $0] })
+        XCTAssertEqual(response["ok"] as? Bool, true, "\(response)")
+        return try XCTUnwrap((response["result"] as? [String: Any])?["ask"] as? [String: Any])
+    }
+
+    func awaitAskResult(_ id: String, window: String? = nil, timeout: TimeInterval = 10) throws -> [String: Any] {
+        let deadline = Date().addingTimeInterval(timeout)
+        var result = try askResult(id, window: window)
+        while result["result"] as? String == "pending", Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            result = try askResult(id, window: window)
+        }
+        XCTAssertNotEqual(result["result"] as? String, "pending")
+        return result
+    }
+
+    func treeAskPending(window: String? = nil) throws -> String? {
+        let response = try sendControlCommand("tree", args: window.map { ["window": $0] })
+        XCTAssertEqual(response["ok"] as? Bool, true, "\(response)")
+        let tree = try XCTUnwrap((response["result"] as? [String: Any])?["tree"] as? [String: Any])
+        return tree["askPending"] as? String
+    }
+
     /// Connect to the app's control socket, send `line` (newline-terminated), read the single response
     /// line, and parse it as JSON. Retries the connect briefly since the server's scene `.task` may bind a
     /// beat after the window appears.

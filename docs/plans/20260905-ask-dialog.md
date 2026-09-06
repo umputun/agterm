@@ -410,18 +410,19 @@ event-arguments rule.
 - Create: `agtermUITests/ControlAskUITests.swift`
 - Modify: `agtermUITests/ControlAPITestCase.swift` (ask helpers next to the pick helpers)
 
-- [ ] render, click a button, `askPending` in tree, result id/label/index, dialog dismissed
-- [ ] keyboard: no default leaves Return inert, Tab then Return answers the first button; hotkey answers
-- [ ] Esc with a cancel button answers it; Esc without returns `cancelled`
-- [ ] `ask.open` while a pick is pending is rejected, and the reverse
-- [ ] `dashboard`, `quick`, `session.search`, and zoom commands are refused while an ask is pending
-- [ ] `ask.cancel` on a dialog with a named cancel button returns `cancelled`, not the button; closing
+- [x] render, click a button, `askPending` in tree, result id/label/index, dialog dismissed
+- [x] keyboard: no default leaves Return inert, Tab then Return answers the first button; hotkey answers
+- [x] Esc with a cancel button answers it; Esc without returns `cancelled`
+- [x] `ask.open` while a pick is pending is rejected, and the reverse
+- [x] `dashboard`, `quick`, `session.search`, and zoom commands are refused while an ask is pending
+- [x] `ask.cancel` on a dialog with a named cancel button returns `cancelled`, not the button; closing
       the window while pending returns `cancelled` and the result stays readable afterwards
-- [ ] `--pane right` on a split session draws within the right pane frame; a hidden session rejects open;
+- [x] `--pane right` on a split session draws within the right pane frame; a hidden session rejects open;
       selecting another session by control while anchored resolves `cancelled`; collapsing the split under
       a session-wide anchor keeps the dialog up
-- [ ] an unanchored ask opened while zoom is active renders above it; an anchored one is rejected
-- [ ] run only `-only-testing:agtermUITests/ControlAskUITests`
+- [x] an unanchored ask opened while zoom is active renders above it; an anchored one is rejected
+- [x] run only `ControlAskUITests`: 13 of 14 passed initially; corrected the render test to read macOS
+      static text `value`, then that method passed on its targeted rerun. No other UI suite ran.
 
 ### Task 9: Documentation
 
