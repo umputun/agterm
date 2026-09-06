@@ -168,6 +168,14 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree(pickPending: { nil }).pickPending == nil)
     }
 
+    @Test(arguments: [Optional("ask-42"), nil])
+    func controlTreeReportsAskPendingThroughBothBuilders(pending: String?) {
+        let store = makeStore()
+        #expect(store.controlTree(paneForeground: { _ in nil }, askPending: { pending }).askPending == pending)
+        #expect(store.controlTree(askPending: { pending }).askPending == pending)
+        #expect(store.controlTree().askPending == nil)
+    }
+
     @Test func controlTreeReportsDashboardFieldsFromClosures() {
         let store = makeStore()
         let bare = store.controlTree()

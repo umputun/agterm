@@ -382,6 +382,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let dashboardFontMode: String?
     /// The id of the picker currently awaiting a choice, or nil when no picker is open.
     public let pickPending: String?
+    /// askPending identifies the dialog awaiting an answer in this window.
+    public let askPending: String?
     /// The app serving this socket. Constant rather than live like every field above it, and present so an
     /// agent already reading the tree gets its version floor without a second round-trip; `version` answers
     /// the same question for a caller that has no tree, no window, and no JSON parser.
@@ -392,7 +394,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 quickVisible: Bool? = nil,
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
-                dashboardFontMode: String? = nil, pickPending: String? = nil,
+                dashboardFontMode: String? = nil, pickPending: String? = nil, askPending: String? = nil,
                 app: AppIdentity? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
@@ -408,6 +410,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.dashboardFontSize = dashboardFontSize
         self.dashboardFontMode = dashboardFontMode
         self.pickPending = pickPending
+        self.askPending = askPending
         self.app = app
     }
 }

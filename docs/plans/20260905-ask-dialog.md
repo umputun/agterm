@@ -161,9 +161,9 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 - `openAsk`: with a session target, `resolver.resolveSession` finds the store and session, the window
   owning it is the modal owner, the session must be selected in that window (`session not visible`), and
   pane placement resolves through the HUD placement resolver moved to a shared file
-  (`resolvePanePlacement(_:in:requireVisible:)`), capturing `paneIdentity`. Terminal zoom or an open
+  (`resolvePanePlacement(_:paneID:in:requireVisible:invalidPaneError:)`), capturing `paneIdentity`. Terminal zoom or an open
   dashboard in that window rejects an anchored open (`session not visible`). Without a target,
-  `resolvePlacementStore(window)` picks the window and the anchor is nil. `follow` raises the window.
+  `resolveOpenPlacementStore(window)` picks the window and the anchor is nil. `follow` raises the window.
 - `askResult`/`cancelAsk` copy `pickResult`/`cancelPick` including window-mismatch and retained lookups.
 - Tree: `askPending` is a top-level `ControlTree` field beside `pickPending` (`ControlProjection.swift`),
   populated through the same closure path: `AppStore.swift` tree builder (`pickPending:` parameter and
@@ -310,22 +310,25 @@ event-arguments rule.
 
 **Files:**
 - Create: `agterm/Control/ControlServer+Ask.swift`
+- Create: `agterm/Control/ControlServer+PanePlacement.swift`
+- Create: `agtermTests/ControlServerAskTests.swift`
 - Modify: `agterm/Control/ControlServer+Hud.swift` (move `resolveHudPlacement` to a shared pane
   placement resolver)
 - Modify: `agterm/Control/ControlServer.swift` (tree `askPending` closure)
 - Modify: `agtermCore/Sources/agtermCore/ControlProjection.swift`, `AppStore.swift` (tree builder
   parameter and call), `ControlProtocolCompatibility.swift` (agterm-linux shim)
+- Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift` (`result.pane` documentation)
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`,
   `ControlProtocolTests.swift`
 
-- [ ] `openAsk` resolves the session or placement window, requires a visible session and pane, rejects
+- [x] `openAsk` resolves the session or placement window, requires a visible session and pane, rejects
       an anchored open while zoom or dashboard covers the window, captures the anchor, opens on the
       window's controller, handles `follow`, closes the palette, returns `result.pane` for a pane anchor
-- [ ] `askResult` and `cancelAsk` with the pick lookup order (live by id, retained, explicit window)
-- [ ] add top-level `askPending` through projection, store builder, shim, and server closure
-- [ ] projection test for `askPending` presence and absence; nil-omission test beside the `pickPending`
+- [x] `askResult` and `cancelAsk` with the pick lookup order (live by id, retained, explicit window)
+- [x] add top-level `askPending` through projection, store builder, shim, and server closure
+- [x] projection test for `askPending` presence and absence; nil-omission test beside the `pickPending`
       one in `ControlProtocolTests`
-- [ ] build the app target
+- [x] build the app target through the isolated `agtermTests` scheme; 18 hosted tests passed
 
 ### Task 5: Shared modal gates and ⌘W/termination paths
 

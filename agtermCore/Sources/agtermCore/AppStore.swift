@@ -269,6 +269,7 @@ public final class AppStore {
                             quickVisible: () -> Bool? = { nil },
                             zoomedSurface: () -> String? = { nil },
                             pickPending: () -> String? = { nil },
+                            askPending: () -> String? = { nil },
                             dashboardMembers: () -> [String]? = { nil },
                             dashboardHighlighted: () -> String? = { nil },
                             dashboardFontSize: () -> Double? = { nil },
@@ -345,7 +346,7 @@ public final class AppStore {
                            dashboardHighlighted: dashboardHighlighted(),
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
-                           pickPending: pickPending(), app: app)
+                           pickPending: pickPending(), askPending: askPending(), app: app)
     }
 
     /// The tree's `paneOverlays`: the panes covered by their own overlay, omitted when neither is.

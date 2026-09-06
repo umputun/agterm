@@ -22,7 +22,8 @@ extension ControlServer {
             }
             let paneIdentity: UUID?
             let pane: OverlayPane?
-            switch self.resolveHudPlacement(placement, in: session, requireVisible: true) {
+            switch self.resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+                                            requireVisible: true, invalidPaneError: "hud pane must be left or right") {
             case .resolved(let identity, let targetPane):
                 paneIdentity = identity
                 pane = targetPane
@@ -69,7 +70,8 @@ extension ControlServer {
             }
             let paneIdentity: UUID?
             let pane: OverlayPane?
-            switch self.resolveHudPlacement(placement, in: session, requireVisible: false) {
+            switch self.resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+                                            requireVisible: false, invalidPaneError: "hud pane must be left or right") {
             case .resolved(let identity, let targetPane):
                 paneIdentity = identity
                 pane = targetPane
@@ -138,40 +140,6 @@ extension ControlServer {
                            paneWidth: size.width, paneHeight: size.height,
                            paddingWidth: Self.windowPadding.horizontal,
                            paddingHeight: Self.windowPadding.vertical)
-    }
-
-    private enum HudPlacementResolution {
-        case resolved(identity: UUID?, pane: OverlayPane?)
-        case rejected(ControlResponse)
-    }
-
-    private func resolveHudPlacement(_ placement: ControlHudPlacement, in session: Session,
-                                     requireVisible: Bool) -> HudPlacementResolution {
-        var pane = placement.pane
-        if let token = placement.paneID, !token.isEmpty {
-            if let resolved = session.paneRole(forToken: token) {
-                guard resolved != .scratch else {
-                    return .rejected(ControlResponse(ok: false, error: "hud pane must be left or right"))
-                }
-                pane = resolved == .left ? .left : .right
-            } else if pane == nil {
-                return .rejected(ControlResponse(ok: false, error: "unknown pane id: \(token)"))
-            }
-        }
-        guard let pane else { return .resolved(identity: nil, pane: nil) }
-        if requireVisible, !session.rendersPane(pane) {
-            return .rejected(ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible))
-        }
-        switch pane {
-        case .left:
-            return .resolved(identity: session.paneIdentity, pane: .left)
-        case .right:
-            guard let identity = session.splitPaneIdentity else {
-                let error = requireVisible ? PaneOverlayError.paneNotVisible : "session has no split"
-                return .rejected(ControlResponse(ok: false, error: error))
-            }
-            return .resolved(identity: identity, pane: .right)
-        }
     }
 
     /// One cell of `family` at `size`: the horizontal advance of a digit (every glyph advances the same in

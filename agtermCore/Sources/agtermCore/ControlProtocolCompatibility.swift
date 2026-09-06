@@ -41,6 +41,7 @@ extension AppStore {
                             quickVisible: () -> Bool? = { nil },
                             zoomedSurface: () -> String? = { nil },
                             pickPending: () -> String? = { nil },
+                            askPending: () -> String? = { nil },
                             dashboardMembers: () -> [String]? = { nil },
                             dashboardHighlighted: () -> String? = { nil },
                             dashboardFontSize: () -> Double? = { nil },
@@ -49,6 +50,7 @@ extension AppStore {
                     splitPaneForeground: { splitForeground($0).map { .program($0) } },
                     fontSize: fontSize, splitFontSize: splitFontSize, scratchFontSize: scratchFontSize,
                     quickVisible: quickVisible, zoomedSurface: zoomedSurface, pickPending: pickPending,
+                    askPending: askPending,
                     dashboardMembers: dashboardMembers, dashboardHighlighted: dashboardHighlighted,
                     dashboardFontSize: dashboardFontSize, dashboardFontMode: dashboardFontMode, app: app)
     }

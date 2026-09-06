@@ -503,12 +503,14 @@ final class ControlServer {
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxTree,
-                .zmxAttach, .dashboard, .version, .askOpen, .askResult, .askCancel:
+                .zmxAttach, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
         case .pickOpen, .pickResult, .pickCancel:
             preconditionFailure("pick command returned nil from ControlDispatcher")
+        case .askOpen, .askResult, .askCancel:
+            preconditionFailure("ask command returned nil from ControlDispatcher")
         case .sessionHudOpen, .sessionHudUpdate, .sessionHudClose:
             preconditionFailure("hud command returned nil from ControlDispatcher")
         }
@@ -745,6 +747,7 @@ final class ControlServer {
             // resolved through the projected window's registry entry on every tree build, and tree-only:
             // window.list is cache-backed, so mirroring a GUI-resolved pick there would go stale.
             pickPending: { windowID.flatMap { PickRegistry.shared.controller(for: $0)?.pending?.id } },
+            askPending: { windowID.flatMap { PickRegistry.shared.controller(for: $0)?.pendingAsk?.id } },
             dashboardMembers: {
                 guard let dashboard, dashboard.isOpen else { return nil }
                 return dashboard.members.map(\.controlRef)
