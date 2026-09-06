@@ -1048,14 +1048,17 @@ unique case-insensitively. Command, Control, and Option combinations do not trig
 Outside clicks leave the dialog open.
 
 `--style terminal|gui` defaults to `terminal`. Terminal style uses monospace text and the theme's
-background and foreground. Buttons have padded, bracketed labels and a dim foreground fill; the active
-button uses solid foreground fill and background-colored text. GUI style uses the picker's material,
+background and foreground. Both styles fit their content, capped at 90 percent of the anchor width and
+72 cells; labels wrap and buttons fall back to a column. Buttons have padded labels and a
+dim foreground fill; the active button uses solid foreground fill and background-colored text. GUI style uses the picker's material,
 corner radius, and light/dark appearance, system fonts, a headline title, and a secondary-colored message.
 Native push buttons sit in a row, with a prominent accent-colored highlight and a red-tinted
 destructive button that becomes prominent red when highlighted; colors follow the system appearance. Both styles share keyboard behavior, hotkeys,
 results, anchoring, and modality. Style has no read-back; an invalid value returns `unknown style`.
 `--align left|center|right` defaults to `right` and aligns the entire button block in either style,
 including its vertical fallback. It has no read-back; invalid values return `unknown align`.
+`--width N` replaces automatic sizing with a fixed integer percentage of the anchor width, 10...100,
+for either style. It has no read-back; invalid values return `width must be 10 to 100`.
 
 Omit `--target` to center over the terminal area, excluding the sidebar, or name a session to center over
 its whole area. A target must be

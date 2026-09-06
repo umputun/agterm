@@ -136,6 +136,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertEqual(controller.pendingAsk?.defaultID, ask.defaultID)
         XCTAssertEqual(controller.pendingAsk?.style, .gui)
         XCTAssertEqual(controller.pendingAsk?.align, .left)
+        XCTAssertEqual(controller.pendingAsk?.width, 50)
         XCTAssertEqual(controller.pendingAsk?.destructiveID, ask.destructiveID)
     }
 
@@ -402,7 +403,7 @@ final class ControlServerAskTests: XCTestCase {
         PendingAsk(id: UUID().uuidString, title: "Continue?", message: "Choose an action.", buttons: [
             ControlAskButton(id: "yes", label: "Yes"), ControlAskButton(id: "no", label: "No"),
             ControlAskButton(id: "delete", label: "Delete"),
-        ], defaultID: "yes", destructiveID: "delete", style: .gui, align: .left)
+        ], defaultID: "yes", destructiveID: "delete", style: .gui, align: .left, width: 50)
     }
 
     private func open(_ ask: PendingAsk, target: String? = nil, window: String? = nil,

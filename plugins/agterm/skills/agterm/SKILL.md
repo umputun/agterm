@@ -529,6 +529,7 @@ one to six buttons and blocks for a bare JSON answer. `--default ID` seeds the h
 active (the first button if it is the only choice). Return always activates the highlighted button.
 `--style terminal|gui` defaults to `terminal`; `gui` uses the picker's material appearance and native
 buttons. `--align left|center|right` aligns the button block in either style (default `right`).
+`--width N` fixes the width to 10...100 percent of the anchor; omitted means automatic content sizing.
 Style changes only decoration, has no read-back, and rejects other values as `unknown style`.
 No `--target` centers over the terminal area, excluding the sidebar; a selected session target uses its whole area, narrowed by
 `--pane` or `--pane-id`. `--window` selects the window and `--follow` raises it.

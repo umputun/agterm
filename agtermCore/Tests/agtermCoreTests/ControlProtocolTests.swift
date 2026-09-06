@@ -3,6 +3,13 @@ import Testing
 @testable import agtermCore
 
 struct ControlProtocolTests {
+    @Test func askWidthRoundTripsAndNullMeansAuto() throws {
+        let request = ControlRequest(cmd: .askOpen, args: ControlArgs(width: 50))
+        #expect(try roundTrip(request) == request)
+        let data = Data(#"{"cmd":"ask.open","args":{"width":null}}"#.utf8)
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data).args?.width == nil)
+    }
+
     // round-trip a request through JSON and back, asserting equality with the original.
     private func roundTrip(_ request: ControlRequest) throws -> ControlRequest {
         let data = try JSONEncoder().encode(request)

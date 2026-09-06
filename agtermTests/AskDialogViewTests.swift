@@ -6,13 +6,84 @@ import agtermCore
 
 @MainActor
 final class AskDialogViewTests: XCTestCase {
+    func testEqualButtonsRenderInBothLayoutsAndStyles() throws {
+        for style in ControlAskStyle.allCases {
+            for width: CGFloat in [700, 140] {
+                let ask = PendingAsk(id: "equal-buttons", title: "Choose", buttons: [
+                    ControlAskButton(id: "ok", label: "OK"), ControlAskButton(id: "cancel", label: "Cancel everything"),
+                ], style: style)
+                let view = AskDialogView(ask: ask, anchorFrame: CGRect(x: (700 - width) / 2, y: 0, width: width, height: 400),
+                                         font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+                                         foreground: .white, background: .black, focusAllowed: false,
+                                         onAnswer: { _ in }, onDismiss: {})
+                    .frame(width: 700, height: 400)
+                    .environment(\.colorScheme, .dark)
+                    .environment(\.controlActiveState, .key)
+                let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 700, height: 400),
+                                      styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false
+                defer { window.close() }
+                window.appearance = NSAppearance(named: .darkAqua)
+                let host = NSHostingView(rootView: view)
+                window.contentView = host
+                window.orderFront(nil)
+                host.layoutSubtreeIfNeeded()
+                host.displayIfNeeded()
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                XCTAssertGreaterThan(brightSamples(in: bitmap), 10)
+                let image = NSImage(size: host.bounds.size)
+                image.addRepresentation(bitmap)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ask-equal-buttons-\(style.rawValue)-\(Int(width))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
+    func testTerminalPanelFitsShortContentAndCapsLongLabelsInBothAppearances() throws {
+        for dark in [false, true] {
+            for long in [false, true] {
+                let buttons = long
+                    ? [ControlAskButton(id: "long", label: String(repeating: "A long button label ", count: 4))]
+                    : [ControlAskButton(id: "yes", label: "Yes"), ControlAskButton(id: "no", label: "No")]
+                let ask = PendingAsk(id: "sizing", title: "Continue?", message: "Choose.", buttons: buttons)
+                let background: CGFloat = dark ? 0.08 : 0.95
+                let view = AskDialogView(ask: ask, anchorFrame: CGRect(x: 50, y: 0, width: 300, height: 400),
+                                         font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+                                         foreground: dark ? .white : .black, background: Color(white: background),
+                                         focusAllowed: false, onAnswer: { _ in }, onDismiss: {})
+                    .frame(width: 400, height: 400)
+                    .background(Color(white: 0.5))
+                let image = try XCTUnwrap(ImageRenderer(content: view).nsImage)
+                let bitmap = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(image.tiffRepresentation)))
+                let panelPixels = (0..<bitmap.pixelsWide).filter { x in
+                    guard let color = bitmap.colorAt(x: x, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else { return false }
+                    return abs(color.redComponent - background) < 0.03
+                }
+                let width = try XCTUnwrap(panelPixels.last) - XCTUnwrap(panelPixels.first) + 1
+                XCTAssertLessThanOrEqual(width, 270)
+                if long {
+                    XCTAssertGreaterThanOrEqual(width, 266)
+                } else {
+                    XCTAssertLessThan(width, 210)
+                }
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ask-sized-\(long ? "long" : "short")-\(dark ? "dark" : "light")"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
     func testBothStylesRenderInLightAndDarkAppearance() throws {
         for style in ControlAskStyle.allCases {
-            for dark in [false, true] {
+            for (dark, width) in [(false, Int?.none), (true, nil), (false, 50), (true, 50)] {
                 let ask = PendingAsk(id: "appearance", title: "Keep these changes?", message: "Choose what happens next.",
                                      buttons: [ControlAskButton(id: "keep", label: "Keep", hotkey: "k"),
                                                ControlAskButton(id: "delete", label: "Delete", hotkey: "d")],
-                                     defaultID: "keep", destructiveID: "delete", style: style)
+                                     defaultID: "keep", destructiveID: "delete", style: style, width: width)
                 let view = AskDialogView(ask: ask, anchorFrame: CGRect(x: 0, y: 0, width: 700, height: 400),
                                          font: .monospacedSystemFont(ofSize: 13, weight: .regular),
                                          foreground: dark ? .white : .black, background: dark ? .black : .white,
@@ -37,7 +108,7 @@ final class AskDialogViewTests: XCTestCase {
                 let image = NSImage(size: host.bounds.size)
                 image.addRepresentation(bitmap)
                 let attachment = XCTAttachment(image: image)
-                attachment.name = "ask-\(style.rawValue)-\(dark ? "dark" : "light")"
+                attachment.name = "ask-\(style.rawValue)-\(dark ? "dark" : "light")-\(width == nil ? "auto" : "50-percent")"
                 attachment.lifetime = .keepAlways
                 add(attachment)
             }
@@ -159,14 +230,16 @@ final class AskDialogViewTests: XCTestCase {
     func testButtonLabelsShowDestructiveAndMissingLetterHotkey() throws {
         let destructive = AskDialogView.buttonLabel(ControlAskButton(id: "delete", label: "Delete", hotkey: "d"),
                                                     destructive: true)
-        XCTAssertEqual(String(destructive.characters), "[ ! Delete ]")
+        XCTAssertEqual(String(destructive.characters), "! Delete")
         let letter = try XCTUnwrap(destructive.range(of: "D"))
         XCTAssertNotNil(destructive[letter].underlineStyle)
         let fallback = AskDialogView.buttonLabel(ControlAskButton(id: "save", label: "Save", hotkey: "x"),
                                                  destructive: false)
-        XCTAssertEqual(String(fallback.characters), "[ Save (X) ]")
+        XCTAssertEqual(String(fallback.characters), "Save (X)")
         let hint = try XCTUnwrap(fallback.range(of: "X"))
         XCTAssertNotNil(fallback[hint].underlineStyle)
+        let plain = AskDialogView.buttonLabel(ControlAskButton(id: "yes", label: "Yes"), destructive: false)
+        XCTAssertEqual(String(plain.characters), "Yes")
     }
 
     private func event(_ keyCode: UInt16, text: String = "", modifiers: NSEvent.ModifierFlags = []) throws -> NSEvent {

@@ -4,6 +4,29 @@ import Testing
 
 @MainActor
 struct ControlDispatcherAskTests {
+    @Test(arguments: [-1, 0, 9, 101, Int.max])
+    func invalidWidthNeverReachesHost(width: Int) async {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: ControlArgs(
+            buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Choose", width: width
+        )))
+        #expect(response == ControlResponse(ok: false, error: "width must be 10 to 100"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [10, 50, 100])
+    func fixedWidthReachesHost(width: Int) async throws {
+        let actions = MockControlActions()
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: ControlArgs(
+            buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Choose", width: width
+        )))
+        guard case let .askOpen(ask, _, _, _, _) = try #require(actions.calls.first) else {
+            Issue.record("expected ask.open")
+            return
+        }
+        #expect(ask.width == width)
+    }
+
     @Test(arguments: ["", "GUI", "other"])
     func invalidStyleOrAlignmentNeverReachesTheHost(value: String) async {
         for args in [ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], style: value, title: "Choose"),
@@ -178,6 +201,7 @@ struct ControlDispatcherAskTests {
         #expect(ask.defaultID == nil)
         #expect(ask.style == .terminal)
         #expect(ask.align == .right)
+        #expect(ask.width == nil)
         #expect(ask.destructiveID == nil)
         #expect(ask.anchor == nil)
         #expect(target == nil)

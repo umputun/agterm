@@ -5,6 +5,22 @@ import agtermCore
 @testable import agtermctlKit
 
 struct AskCommandsTests {
+    @Test(arguments: [10, 50, 100])
+    func rootMapsFixedWidth(width: Int) throws {
+        let command = try open(["Choose", "--button", "ok", "--width", String(width)])
+        #expect(try command.makeRequest().args?.width == width)
+    }
+
+    @Test(arguments: ["-1", "0", "9", "101", "50.5", "wide", "", "999999999999999999999"])
+    func rootRejectsInvalidWidth(width: String) {
+        do {
+            _ = try open(["Choose", "--button", "ok", "--width", width])
+            Issue.record("expected invalid width")
+        } catch {
+            #expect(Agtermctl.message(for: error) == "width must be 10 to 100")
+        }
+    }
+
     @Test func rootDefaultsToBlockingOpenWithoutATarget() throws {
         let command = try open(["Continue?", "--button", "yes=Yes"])
         let request = try command.makeRequest()

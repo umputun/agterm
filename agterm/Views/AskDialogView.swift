@@ -48,7 +48,8 @@ struct AskDialogView: View {
         _navigation = State(initialValue: AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID, destructiveID: ask.destructiveID))
     }
 
-    private var cell: CGFloat { ask.style == .gui ? 8 : max(8, font.pointSize * 0.6) }
+    private var terminalCell: CGFloat { max(8, font.pointSize * 0.6) }
+    private var cell: CGFloat { ask.style == .gui ? 8 : terminalCell }
     private var buttonAlignment: Alignment {
         switch ask.align {
         case .left: .leading
@@ -56,14 +57,10 @@ struct AskDialogView: View {
         case .right: .trailing
         }
     }
-    private var columnAlignment: HorizontalAlignment {
-        switch ask.align {
-        case .left: .leading
-        case .center: .center
-        case .right: .trailing
-        }
+    private var panelWidth: CGFloat {
+        if let width = ask.width { return max(0, anchorFrame.width) * CGFloat(min(100, max(10, width))) / 100 }
+        return min(max(0, anchorFrame.width * 0.9), 72 * terminalCell)
     }
-    private var panelWidth: CGFloat { min(max(0, anchorFrame.width - 2 * cell), 72 * cell) }
     private var panelHeight: CGFloat { max(0, anchorFrame.height - 2 * cell) }
 
     var body: some View {
@@ -72,18 +69,13 @@ struct AskDialogView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { focusRevision += 1 }
             ScrollViewReader { reader in
-                ViewThatFits(in: .vertical) {
-                    content.fixedSize(horizontal: false, vertical: true)
-                        .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("ask-dialog")
-                    ScrollView { content }
-                        .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("ask-dialog")
+                ViewThatFits(in: .horizontal) {
+                    if ask.width == nil {
+                        panel.fixedSize(horizontal: true, vertical: false)
+                    }
+                    panel.frame(width: panelWidth)
                 }
-                .frame(width: panelWidth)
-                .frame(maxHeight: panelHeight)
+                .frame(maxWidth: panelWidth, maxHeight: panelHeight)
                 .position(x: anchorFrame.midX, y: anchorFrame.midY)
                 .onChange(of: navigation.highlighted, initial: true) { _, index in
                     guard let index else { return }
@@ -99,6 +91,19 @@ struct AskDialogView: View {
         .simultaneousGesture(TapGesture().onEnded { focusRevision += 1 })
     }
 
+    private var panel: some View {
+        ViewThatFits(in: .vertical) {
+            content.fixedSize(horizontal: false, vertical: true)
+                .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("ask-dialog")
+            ScrollView { content }
+                .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("ask-dialog")
+        }
+    }
+
     private var content: some View {
         VStack(alignment: .leading, spacing: cell * 1.5) {
             Text(verbatim: ask.title)
@@ -108,18 +113,18 @@ struct AskDialogView: View {
                 .accessibilityIdentifier("ask-title")
             if let message = ask.message, !message.isEmpty {
                 Text(verbatim: message)
-                    .foregroundStyle(ask.style == .gui ? .secondary : foreground)
+                    .foregroundStyle(ask.style == .gui ? .secondary : foreground.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("ask-message")
             }
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: cell) {
+                AskButtonLayout(axis: .horizontal, spacing: cell) {
                     ForEach(Array(ask.buttons.enumerated()), id: \.element.id) { index, choice in
-                        button(choice, index: index).fixedSize()
+                        button(choice, index: index)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: buttonAlignment)
-                VStack(alignment: columnAlignment, spacing: cell) {
+                AskButtonLayout(axis: .vertical, spacing: cell) {
                     ForEach(Array(ask.buttons.enumerated()), id: \.element.id) { index, choice in
                         button(choice, index: index)
                     }
@@ -152,6 +157,7 @@ struct AskDialogView: View {
                 .fontWeight(choice.id == ask.destructiveID ? .bold : .regular)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, cell * 0.5)
                 .padding(.vertical, cell * 0.4)
                 .foregroundStyle(navigation.highlighted == index ? background : foreground)
@@ -165,9 +171,10 @@ struct AskDialogView: View {
         let button = Button(role: choice.id == ask.destructiveID ? .destructive : nil) {
             onAnswer(index)
         } label: {
-            Text(Self.buttonLabel(choice, destructive: false, bracketed: false))
+            Text(Self.buttonLabel(choice, destructive: false))
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
         }
         .tint(choice.id == ask.destructiveID ? Color.red : Color.accentColor)
         if navigation.highlighted == index {
@@ -177,7 +184,7 @@ struct AskDialogView: View {
         }
     }
 
-    static func buttonLabel(_ choice: ControlAskButton, destructive: Bool, bracketed: Bool = true) -> AttributedString {
+    static func buttonLabel(_ choice: ControlAskButton, destructive: Bool) -> AttributedString {
         var label = AttributedString(choice.label)
         if let hotkey = choice.hotkey {
             if let range = label.range(of: hotkey, options: .caseInsensitive) {
@@ -188,7 +195,7 @@ struct AskDialogView: View {
                 label += AttributedString(" (") + hint + AttributedString(")")
             }
         }
-        return bracketed ? AttributedString(destructive ? "[ ! " : "[ ") + label + AttributedString(" ]") : label
+        return destructive ? AttributedString("! ") + label : label
     }
 
     private func handle(_ key: AskKey) {
@@ -200,6 +207,41 @@ struct AskDialogView: View {
         case .cancel: onDismiss()
         case .hotkey(let letter):
             if let index = navigation.hotkey(letter) { onAnswer(index) }
+        }
+    }
+}
+
+private struct AskButtonLayout: Layout {
+    let axis: Axis
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        let sizes = sizes(proposal: proposal, subviews: subviews)
+        let gaps = spacing * CGFloat(max(0, sizes.count - 1))
+        if axis == .horizontal {
+            return CGSize(width: sizes.reduce(0) { $0 + $1.width } + gaps, height: sizes.map(\.height).max() ?? 0)
+        }
+        return CGSize(width: sizes.first?.width ?? 0, height: sizes.reduce(0) { $0 + $1.height } + gaps)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        let sizes = sizes(proposal: ProposedViewSize(bounds.size), subviews: subviews)
+        var offset: CGFloat = 0
+        for (index, subview) in subviews.enumerated() {
+            let size = sizes[index]
+            let point = axis == .horizontal
+                ? CGPoint(x: bounds.minX + offset, y: bounds.midY - size.height / 2)
+                : CGPoint(x: bounds.minX, y: bounds.minY + offset)
+            subview.place(at: point, anchor: .topLeading, proposal: ProposedViewSize(size))
+            offset += (axis == .horizontal ? size.width : size.height) + spacing
+        }
+    }
+
+    private func sizes(proposal: ProposedViewSize, subviews: Subviews) -> [CGSize] {
+        let widest = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        let width = axis == .vertical ? min(widest, proposal.width ?? widest) : widest
+        return subviews.map {
+            CGSize(width: width, height: $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height)
         }
     }
 }
@@ -217,7 +259,7 @@ private struct AskPanelStyle: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: style == .gui ? 12 : 0))
             .overlay {
                 RoundedRectangle(cornerRadius: style == .gui ? 12 : 0)
-                    .strokeBorder(style == .gui ? .white.opacity(0.1) : foreground.opacity(0.6))
+                    .strokeBorder(style == .gui ? .white.opacity(0.1) : foreground.opacity(0.3))
             }
             .shadow(radius: style == .gui ? 24 : 0)
     }

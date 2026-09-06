@@ -2,12 +2,52 @@ import XCTest
 
 @MainActor
 final class ControlAskUITests: ControlAPITestCase {
+    func testButtonsShareWidthInBothLayoutsAndStyles() throws {
+        for style in ["terminal", "gui"] {
+            for width in [20, 80] {
+                let id = try openAsk([["id": "ok", "label": "OK"], ["id": "cancel", "label": "Cancel everything"]],
+                                     options: ["style": style, "width": width])
+                XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+                let first = askButton("ok").frame
+                let last = askButton("cancel").frame
+                XCTAssertEqual(first.width, last.width, accuracy: 1)
+                if width == 20 {
+                    XCTAssertGreaterThan(last.midY, first.midY)
+                    XCTAssertGreaterThan(last.height, first.height)
+                } else {
+                    XCTAssertEqual(first.midY, last.midY, accuracy: 1)
+                    XCTAssertGreaterThan(last.midX, first.midX)
+                }
+                clickAskButton("cancel")
+                XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "cancel")
+                XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
+            }
+        }
+    }
+
+    func testCLIFixedWidthHonorsRangeInBothStyles() throws {
+        let session = try activeSessionID()
+        let anchor = terminalPanes.firstMatch.frame
+        for style in ["terminal", "gui"] {
+            for width in [10, 50, 100] {
+                let id = try openAskCLI(["--style", style, "--target", session, "--width", String(width), "--button", "ok=OK"])
+                XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+                XCTAssertEqual(askDialog.frame.width, anchor.width * Double(width) / 100, accuracy: 2)
+                XCTAssertEqual(askDialog.frame.midX, anchor.midX, accuracy: 2)
+                clickAskButton("ok")
+                XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "ok")
+                XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
+            }
+        }
+    }
+
     func testButtonBlockAlignmentInBothStylesAndLayouts() throws {
         for style in ["terminal", "gui"] {
             for vertical in [false, true] {
                 let label = vertical ? "A longer choice that forces the button row to wrap" : "First"
                 for align in ["left", "center", "right"] {
                     let id = try openAsk([["id": "first", "label": label], ["id": "last", "label": label]],
+                                         title: "Choose what happens next for the current working session and its files",
                                          options: ["style": style, "align": align])
                     XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
                     let first = askButton("first").frame
@@ -278,7 +318,7 @@ final class ControlAskUITests: ControlAPITestCase {
 
         XCTAssertEqual(try sendControlCommand("window.resize", target: "active",
                                               args: ["width": width, "height": 650])["ok"] as? Bool, true)
-        XCTAssertTrue(poll(until: askDialog.frame.width > before.width, timeout: 5))
+        XCTAssertTrue(poll(until: askDialog.frame.midX > before.midX, timeout: 5))
         XCTAssertTrue(right.frame.insetBy(dx: -1, dy: -1).contains(askDialog.frame))
         XCTAssertEqual(try sendControlCommand("session.focus", target: session, args: ["pane": "left"])["ok"] as? Bool, true)
         XCTAssertEqual(try sendControlCommand("session.split", target: session, args: ["mode": "off"])["ok"] as? Bool, true)
@@ -307,7 +347,7 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
     }
 
-    func testSessionWideAnchorSpansBothPanesAndSurvivesCollapse() throws {
+    func testSessionWideAnchorCentersAcrossBothPanesAndSurvivesCollapse() throws {
         let session = try activeSessionID()
         XCTAssertEqual(try sendControlCommand("session.split", target: session, args: ["mode": "on"])["ok"] as? Bool, true)
         XCTAssertTrue(try pollSplit(session, timeout: 10))
@@ -317,7 +357,7 @@ final class ControlAskUITests: ControlAPITestCase {
         let id = try openAsk([["id": "ok", "label": "OK"]], target: session)
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
         XCTAssertEqual(askDialog.frame.midX, area.midX, accuracy: 2)
-        XCTAssertGreaterThan(askDialog.frame.width, panes[1].frame.width)
+        XCTAssertLessThanOrEqual(askDialog.frame.width, area.width * 0.9)
 
         XCTAssertEqual(try sendControlCommand("session.split", target: session, args: ["mode": "off"])["ok"] as? Bool, true)
 

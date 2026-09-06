@@ -85,15 +85,21 @@ Decisions settled in design review (Eugene, with codex as second reader):
   terminal, or search while an ask is pending is refused by the shared modal gates.
 - **Rendering has two styles**, selected by `style` (`terminal` default, `gui`), identical in every
   behavior. `terminal` is drawn over the pane in the theme's background and foreground with the terminal
-  font: every button is a padded, bracketed monospace label on a dim fill (foreground at low opacity),
+  font: every button is a padded monospace label on a dim fill (foreground at low opacity),
   the active one solid foreground with background-colored text, hotkeys underlined. `gui` reuses the
   picker's material panel, corner radius and appearance handling with system fonts: headline title,
   secondary message, native push buttons in a trailing row, the current highlight prominent in the accent color,
   the destructive one tinted red and prominent red when highlighted, no hard-coded colors. Clicking outside the panel does nothing in either.
   `style` is decoration, so it has no read-back; an unknown value is rejected.
+- Buttons in a row share the widest button's width. In a column they share its width, with long labels
+  wrapping within it, in both styles.
 - **Button block alignment** is `align` (`left`, `center`, `right`; default `right`), CLI `--align`, in
   both styles. It places the whole button block within the panel; the vertical fallback aligns its column
   the same way. Decoration like `style`: no read-back, unknown value rejected.
+- **Panel width** is automatic in both styles: natural content width capped at 90 percent of the anchor
+  and 72 cells. Optional `width`, CLI `--width N`, replaces that rule with a fixed integer percentage of
+  the anchor from 10 to 100. Invalid values return `width must be 10 to 100`. It is decoration, with no
+  read-back, and is carried on `PendingAsk`.
 - **Dismissal is two kinds.** User dismissal (Esc, ⌘W) returns `escaped`, CLI exit 3. Administrative
   cancellation (`ask.cancel`, window teardown, app termination, CLI abandon, anchor loss) returns
   `cancelled`, exit 2. Neither synthesizes a button, and there is no cancel button role: a caller's
@@ -154,7 +160,7 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 
 ### Model (`Ask.swift`, agtermCore)
 
-- `PendingAsk { id, title, message?, buttons, defaultID?, destructiveID?, style, align, anchor: AskAnchor? }`
+- `PendingAsk { id, title, message?, buttons, defaultID?, destructiveID?, style, align, width?, anchor: AskAnchor? }`
   with `AskAnchor { sessionID: UUID, pane: OverlayPane?, paneIdentity: UUID? }`.
 - `PickController` gains `pendingAsk: PendingAsk?`, `recentAskResults: [ResolvedAsk]`,
   `openAsk(_:) -> Bool`, `resolveAsk(_:)`, `cancelAsk()`, `askResult(for:)`, and the shared predicate
@@ -214,9 +220,9 @@ left outside the pick host itself. Sites by kind:
 - Layout: title (bold), message (wrapped), then buttons in one row when the widest layout fits the anchor
   frame minus padding, else one per row; caller order preserved either way. Width is clamped to the anchor.
   Content that exceeds the anchor height scrolls; keyboard navigation brings the selected button into view.
-  A button reads `[ Label ]`; the highlighted one is drawn in inverse video (foreground and background
+  A button is a filled block with a plain label; the highlighted one is drawn in inverse video (foreground and background
   swapped); the hotkey letter is underlined; the `destructive` button carries a leading `!` marker
-  (`[ ! Delete ]`) and bold weight, since the app has no access to the theme's ANSI red.
+  (`! Delete`) and bold weight, since the app has no access to the theme's ANSI red.
   A hotkey absent from its label appears as an underlined parenthesized hint.
 - Input: `AskKeyCatcher` (`NSViewRepresentable`, modelled on `DashboardKeyCatcher`) owns first responder
   while mounted and maps Tab/Shift-Tab/arrows/Return/Esc/letters onto `AskNavigation` calls, dropping any
@@ -484,7 +490,7 @@ code to what the docs already say; the Solution Overview above is the authority.
       (the width clamp applies to the text, not only the panel), and the panel never exceeds the anchor;
       hosted render check with a label longer than the anchor is wide
 - [x] terminal style: every button on a dim fill (foreground at low opacity), the active one solid
-      foreground with background-colored text, bracket marker and hotkey underline kept
+      foreground with background-colored text, filled block and hotkey underline kept
 - [x] gui style: picker's `PalettePanelBackground`, corner radius and appearance handling, system font,
       headline title, secondary message, native push buttons in a trailing row, `.borderedProminent`
       highlight, red-tinted destructive; same `AskKeyCatcher` and `AskNavigation`
@@ -499,7 +505,40 @@ code to what the docs already say; the Solution Overview above is the authority.
       inert-Return unit and UI cases become "Return without default answers the first non-destructive
       button"; the terminal active style must read as active at a glance against the dim fills
 
-### Task 11: Verify acceptance criteria
+### ➕ Task 11: Demo fixes
+
+From Eugene's case-by-case review of the Debug build on 2026-09-05. Terminal style only; the gui
+style passed as is.
+
+**Files:**
+- Modify: `agterm/Views/AskDialogView.swift`, `agtermTests/AskDialogViewTests.swift`
+- Modify: `.claude/rules/control-api.md` and the skill reference only where they state the panel width
+
+- [x] message text is drawn in a muted foreground (foreground at reduced opacity), the title stays full
+- [x] the frame border is dimmer than today's 60 percent foreground; pick a value that reads as a
+      quiet outline against both light and dark themes
+- [x] the panel takes its content's natural width instead of filling the anchor, capped at 90 percent
+      of the anchor width and the 72-cell maximum; a short question gets a short panel, a long one
+      keeps a margin on both sides; the column fallback and wrapping still apply within the cap
+- [x] hosted render checks: short question in a narrow pane, long label in a narrow pane, light and dark
+- [x] targeted `AskDialogViewTests` and `-only-testing:agtermUITests/ControlAskUITests`
+- [x] terminal buttons drop the `[ ` and ` ]` brackets; the filled block is the button. The destructive
+      button keeps its `! ` prefix. Update `buttonLabel`, its tests, the Solution Overview rendering
+      bullet, and every doc line that shows a bracketed button; re-run the targeted render and UI checks
+- [x] gui uses the same width rule as terminal: the content's natural width, capped at 90 percent of the
+      anchor and the same maximum, so a short question gets a compact gui panel too
+- [x] `width` on the wire and `--width N` on the CLI, an integer percent of the anchor width from 10 to
+      100, in both styles; when given it fixes the panel width instead of the auto rule (still never
+      wider than the anchor); absent means auto; out of range is `width must be 10 to 100`.
+      CLI non-integers use that message; malformed wire types use the ordinary decode error.
+      Decoration like `style` and `align`: carried on `PendingAsk`, no read-back; validated host-free with
+      dispatcher tests, CLI parsing tests, a hosted render at 50 percent in both styles, and docs beside
+      `align` in control-api.md, commands.html, docs.html and the skill reference
+- [x] equal-width buttons within one dialog: in the row layout every button takes the widest button's
+      width; in the column layout every button takes the column's width; both styles; a wrapped long
+      label still wraps within that shared width; hosted render with "OK" beside "Cancel everything"
+
+### Task 12: Verify acceptance criteria
 - [ ] every decision in Solution Overview is implemented and has a test
 - [ ] `cd agtermCore && swift test`
 - [ ] `make test-app`
@@ -507,7 +546,7 @@ code to what the docs already say; the Solution Overview above is the authority.
 - [ ] Debug instance: manual pass of the keyboard contract and a theme switch while the dialog is up,
       in both styles
 
-### Task 12: [Final] Update documentation
+### Task 13: [Final] Update documentation
 - [ ] CLAUDE.md if a new constraint surfaced during implementation
 - [ ] move this plan to `docs/plans/completed/`
 

@@ -2386,7 +2386,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl ask [open] TITLE --button ID=LABEL [--button ...] [--message TEXT]
-                [--hotkey ID=LETTER ...] [--default ID] [--destructive ID] [--style terminal|gui] [--align left|center|right]
+                [--hotkey ID=LETTER ...] [--default ID] [--destructive ID] [--style terminal|gui] [--align left|center|right] [--width N]
                 [--target T] [--pane left|right] [--pane-id TOKEN] [--window W] [--follow] [--no-block]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">ask.open</div>
@@ -2397,7 +2397,7 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style terminal</span> is the default:
-                monospace text, theme colors, and padded, bracketed buttons with a dim foreground fill. The active button
+                monospace text, theme colors, and padded buttons with a dim foreground fill. The active button
                 has solid foreground fill and background-colored text.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span> uses the picker's material,
                 corner radius, and light/dark appearance, system fonts, a headline title, and a secondary-colored message.
@@ -2410,6 +2410,11 @@
                 (wire argument <span style="font-family: &quot;JetBrains Mono&quot;, monospace">align</span>) defaults to right.
                 It aligns the whole button block in either style, including the vertical fallback, with no read-back.
                 Invalid values return <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown align</span>.
+                Both styles fit their content up to 90 percent of the anchor width and 72 cells.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--width N</span> (wire argument
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">width</span>) replaces that automatic sizing
+                with a fixed integer percentage of the anchor, 10 through 100. It has no read-back; invalid values return
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">width must be 10 to 100</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--default</span> seeds the highlight. Without it,

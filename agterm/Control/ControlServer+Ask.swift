@@ -42,7 +42,7 @@ extension ControlServer {
         }
         let pending = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
                                  defaultID: ask.defaultID, destructiveID: ask.destructiveID, style: ask.style, align: ask.align,
-                                 anchor: anchor)
+                                 width: ask.width, anchor: anchor)
         guard controller.openAsk(pending) else {
             return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
         }

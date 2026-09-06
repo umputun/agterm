@@ -21,6 +21,8 @@ struct Ask: ParsableCommand {
         @Option(name: .customLong("default"), help: "ID of the initially highlighted button.") var defaultButton: String?
         @Option(name: .long, help: "Dialog style: terminal or gui.") var style = "terminal"
         @Option(name: .long, help: "Button block alignment: left, center, or right.") var align = "right"
+        @Option(name: .long, parsing: .unconditional, help: "Panel width as an integer percent of the anchor (10...100); omit for automatic sizing.")
+        var width: String?
         @Option(name: .customLong("destructive"), help: "ID of the destructive button.") var destructiveButton: String?
         @Option(name: .long, help: "Visible session id, prefix, or 'active'. Omit to center over the terminal area.") var target: String?
         @Option(name: .long, help: "Anchor to the session's left or right pane.") var pane: String?
@@ -41,14 +43,23 @@ struct Ask: ParsableCommand {
             }
             guard ControlAskStyle(rawValue: style) != nil else { throw ValidationError("unknown style") }
             guard ControlAskAlignment(rawValue: align) != nil else { throw ValidationError("unknown align") }
+            _ = try parsedWidth()
             _ = try parsedButtons()
         }
 
         func makeRequest() throws -> ControlRequest {
             let args = ControlArgs(follow: follow ? true : nil, message: message, buttons: try parsedButtons(),
                                    defaultButton: defaultButton, destructiveButton: destructiveButton, style: style, align: align,
-                                   pane: pane, paneID: paneID, title: title)
+                                   pane: pane, paneID: paneID, title: title, width: try parsedWidth())
             return ControlRequest(cmd: .askOpen, target: target, args: options.withWindow(args))
+        }
+
+        private func parsedWidth() throws -> Int? {
+            guard let width else { return nil }
+            guard let value = Int(width), (10...100).contains(value) else {
+                throw ValidationError("width must be 10 to 100")
+            }
+            return value
         }
 
         private func parsedButtons() throws -> [ControlAskButton] {

@@ -32,6 +32,8 @@ public struct PendingAsk: Equatable, Sendable {
     public let style: ControlAskStyle
     /// align positions the button block in both row and column layouts.
     public let align: ControlAskAlignment
+    /// width is a fixed percentage of the anchor, absent for content sizing.
+    public let width: Int?
     /// destructiveID identifies the button styled as destructive.
     public let destructiveID: String?
     /// anchor is absent for a dialog centered over the window's terminal area.
@@ -39,7 +41,7 @@ public struct PendingAsk: Equatable, Sendable {
 
     public init(id: String, title: String, message: String? = nil, buttons: [ControlAskButton],
                 defaultID: String? = nil, destructiveID: String? = nil, style: ControlAskStyle = .terminal, align: ControlAskAlignment = .right,
-                anchor: AskAnchor? = nil) {
+                width: Int? = nil, anchor: AskAnchor? = nil) {
         self.id = id
         self.title = title
         self.message = message
@@ -47,6 +49,7 @@ public struct PendingAsk: Equatable, Sendable {
         self.defaultID = defaultID
         self.style = style
         self.align = align
+        self.width = width
         self.destructiveID = destructiveID
         self.anchor = anchor
     }

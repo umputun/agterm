@@ -76,6 +76,9 @@ extension ControlDispatcher {
         guard let align = ControlAskAlignment(rawValue: args.align ?? "right") else {
             return ControlResponse(ok: false, error: "unknown align")
         }
+        if let width = args.width, !(10...100).contains(width) {
+            return ControlResponse(ok: false, error: "width must be 10 to 100")
+        }
         var hotkeys = Set<String>()
         for button in buttons {
             guard let hotkey = button.hotkey else { continue }
@@ -99,7 +102,7 @@ extension ControlDispatcher {
         let ask = PendingAsk(
             id: UUID().uuidString, title: title, message: args.message,
             buttons: buttons.map { ControlAskButton(id: $0.id, label: $0.label, hotkey: $0.hotkey?.lowercased()) },
-            defaultID: args.defaultButton, destructiveID: args.destructiveButton, style: style, align: align
+            defaultID: args.defaultButton, destructiveID: args.destructiveButton, style: style, align: align, width: args.width
         )
         return actions.openAsk(ask, target: request.target, window: args.window,
                                placement: ControlAskPlacement(pane: pane, paneID: args.paneID),

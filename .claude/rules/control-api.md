@@ -583,7 +583,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   anchoring, modality, and the modal slot.
 - Optional `align` is `left`, `center`, or `right` (default). It aligns the whole button block, including
   the vertical fallback, in both styles. Invalid values return `unknown align`; it has no read-back.
-- Terminal buttons use padded, bracketed labels and a dim fill from the theme foreground at low opacity.
+- Both styles fit their content, capped at 90 percent of the anchor width and 72 cells.
+  Narrow layouts wrap labels and use the vertical button fallback.
+- Optional `width` fixes the panel width to an integer percentage of the anchor, 10...100, in either
+  style. It replaces automatic sizing and has no read-back. Invalid values return `width must be 10 to 100`.
+- Terminal buttons use padded labels and a dim fill from the theme foreground at low opacity.
   The active button uses solid foreground fill with background-colored text. Colors come from the theme.
 - GUI style uses the picker's material, corner radius, and appearance handling, with system fonts,
   a headline title, secondary message, and native push buttons in a row. The active button is
