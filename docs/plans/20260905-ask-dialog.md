@@ -201,9 +201,11 @@ teardown call `cancelAsk()`.
   `settingsModel.settings.fontFamily`/`fontSize` (the HUD's `cellSize` lookup).
 - Layout: title (bold), message (wrapped), then buttons in one row when the widest layout fits the anchor
   frame minus padding, else one per row; caller order preserved either way. Width is clamped to the anchor.
+  Content that exceeds the anchor height scrolls; keyboard navigation brings the selected button into view.
   A button reads `[ Label ]`; the highlighted one is drawn in inverse video (foreground and background
   swapped); the hotkey letter is underlined; the `destructive` button carries a leading `!` marker
   (`[ ! Delete ]`) and bold weight, since the app has no access to the theme's ANSI red.
+  A hotkey absent from its label appears as an underlined parenthesized hint.
 - Input: `AskKeyCatcher` (`NSViewRepresentable`, modelled on `DashboardKeyCatcher`) owns first responder
   while mounted and maps Tab/Shift-Tab/arrows/Return/Esc/letters onto `AskNavigation` calls, dropping any
   event with Command, Control, or Option; mouse click on a button activates it; the scrim consumes clicks
@@ -358,24 +360,28 @@ event-arguments rule.
 
 **Files:**
 - Create: `agterm/Views/AskDialogView.swift`
+- Create: `agtermTests/AskDialogViewTests.swift` (native keyboard/scrolling and render attachments)
 - Modify: `agtermCore/Sources/agtermCore/Session.swift` (`askTargetPane`),
   `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 - Modify: `agterm/Views/WindowContentView.swift` (mount at zIndex 20 beside `pickPaletteOverlay`),
   `agterm/Views/WindowContentView+Detail.swift` (publish `AskAnchorPreferenceKey` from the selected
   session's container and rendered panes)
 
-- [ ] panel with theme colors, terminal font, title/message/buttons, horizontal-or-vertical layout
-- [ ] `AskKeyCatcher` maps key events onto `AskNavigation` (letters without modifiers, Esc, Return, Tab,
+- [x] panel with theme colors, terminal font, title/message/buttons, horizontal-or-vertical layout
+- [x] `AskKeyCatcher` maps key events onto `AskNavigation` (letters without modifiers, Esc, Return, Tab,
       arrows) and nothing else
-- [ ] mouse activation on buttons; scrim swallows clicks; destructive marker and inverse-video highlight
-- [ ] live anchor geometry from the preference in the host's coordinate space (session container, one
+- [x] mouse activation on buttons; scrim swallows clicks; destructive marker and inverse-video highlight
+- [x] live anchor geometry from the preference in the host's coordinate space (session container, one
       pane, or whole-window center); the frame follows resize and sidebar changes
-- [ ] `Session.askTargetPane` resolves the captured identity to its current role; validity from state
+- [x] `Session.askTargetPane` resolves the captured identity to its current role; validity from state
       (selected session, resolved role, `rendersPane`); the host cancels the ask when it fails
-- [ ] test in `SessionTests`: a right-anchored identity resolves to `left` after `closePrimaryPane`
+- [x] test in `SessionTests`: a right-anchored identity resolves to `left` after `closePrimaryPane`
       promotes the survivor, and to nil once the pane is gone
-- [ ] accessibility identifiers
-- [ ] launch an isolated Debug instance and exercise open, keyboard, click, and pane anchoring by hand
+- [x] accessibility identifiers
+- [x] launch isolated Debug with a short explicit socket and fresh-shell state; socket checks passed for
+      resize, hidden-pane cancellation, session collapse, deselection, and pane promotion. Stopped its
+      exact PID with SIGTERM. Live keyboard/click/screen capture skipped: macOS denied the helper those
+      permissions. Native-host keyboard/scrolling tests passed and test-generated renders were inspected.
 
 ### Task 7: CLI command
 

@@ -4,6 +4,26 @@ import Testing
 
 @MainActor
 struct SessionTests {
+    @Test func askTargetPaneFollowsPromotedSurvivorUntilItsPaneIsRemoved() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        let identity = try #require(session.splitPaneIdentity)
+        #expect(session.askTargetPane(for: identity) == .right)
+
+        store.closePrimaryPane(session.id)
+
+        #expect(store.session(withID: session.id) != nil)
+        #expect(session.askTargetPane(for: identity) == .left)
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        store.closePrimaryPane(session.id)
+        #expect(session.askTargetPane(for: identity) == nil)
+    }
+
     @Test(arguments: [
         ("/Users/user/dev/foo", "foo"),
         ("/", "/"),

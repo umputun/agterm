@@ -131,6 +131,10 @@ struct WindowContentView: View {
                 .padding(.top, titlebarHeight)
                 .zIndex(20)
         }
+        .overlayPreferenceValue(AskAnchorPreferenceKey.self) { anchors in
+            askDialogOverlay(anchors).zIndex(20)
+                .allowsHitTesting(pick.pendingAsk != nil)
+        }
         // with the title bar hidden (.hiddenTitleBar), pull our header to the very top so the traffic
         // lights overlay it as one row; no system title bar is left to clip the content.
         .ignoresSafeArea(.container, edges: .top)
@@ -595,6 +599,65 @@ struct WindowContentView: View {
             )
             .id(pending.id)
         }
+    }
+
+    private func askDialogOverlay(_ anchors: AskAnchorPreferences) -> some View {
+        GeometryReader { proxy in
+            if let ask = pick.pendingAsk {
+                let valid = askAnchorIsValid(ask.anchor)
+                ZStack {
+                    Color.clear.contentShape(Rectangle()).onTapGesture {}
+                    if let frame = askAnchorFrame(ask.anchor, anchors: anchors, proxy: proxy), valid {
+                        AskDialogView(ask: ask, anchorFrame: frame, font: askFont,
+                                      foreground: chromeText, background: terminalColor, focusAllowed: isFrontmost,
+                                      onAnswer: { index in
+                                          guard pick.pendingAsk?.id == ask.id else { return }
+                                          let button = ask.buttons[index]
+                                          pick.resolveAsk(ControlAskResult(result: .answered, id: button.id,
+                                                                           label: button.label, index: index))
+                                      },
+                                      onDismiss: {
+                                          guard pick.pendingAsk?.id == ask.id else { return }
+                                          actions.dismissPendingAsk(for: windowID, userInitiated: true)
+                                      })
+                    }
+                }
+                .id(ask.id)
+                .onChange(of: valid, initial: true) { _, valid in
+                    if !valid, pick.pendingAsk?.id == ask.id { pick.cancelAsk() }
+                }
+            }
+        }
+    }
+
+    private var askFont: NSFont {
+        let size = actions.settingsModel?.settings.fontSize ?? GhosttyApp.shared.baseFontSize
+        if let family = actions.settingsModel?.settings.fontFamily, let font = NSFont(name: family, size: size) {
+            return font
+        }
+        return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+
+    private func askAnchorIsValid(_ anchor: AskAnchor?) -> Bool {
+        guard let anchor else { return true }
+        guard store.selectedSessionID == anchor.sessionID,
+              let session = store.session(withID: anchor.sessionID) else { return false }
+        guard let identity = anchor.paneIdentity else { return anchor.pane == nil }
+        guard let pane = session.askTargetPane(for: identity) else { return false }
+        return session.rendersPane(pane)
+    }
+
+    private func askAnchorFrame(_ anchor: AskAnchor?, anchors: AskAnchorPreferences, proxy: GeometryProxy) -> CGRect? {
+        guard let anchor else {
+            return CGRect(x: 0, y: titlebarHeight, width: proxy.size.width, height: max(0, proxy.size.height - titlebarHeight))
+        }
+        guard anchors.sessionID == anchor.sessionID else { return nil }
+        if let identity = anchor.paneIdentity {
+            guard let session = store.session(withID: anchor.sessionID),
+                  let pane = session.askTargetPane(for: identity), let bounds = anchors.panes[pane] else { return nil }
+            return proxy[bounds]
+        }
+        return anchors.container.map { proxy[$0] }
     }
 
     /// The Ctrl-Tab session switcher overlay, mounted only while cycling in the frontmost window.

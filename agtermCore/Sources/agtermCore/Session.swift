@@ -349,6 +349,13 @@ public final class Session: Identifiable {
         return nil
     }
 
+    /// askTargetPane resolves a captured identity after pane roles change.
+    public func askTargetPane(for identity: UUID) -> OverlayPane? {
+        if paneIdentity == identity { return .left }
+        if splitPaneIdentity == identity { return .right }
+        return nil
+    }
+
     /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); `discardHudBody`
     /// deletes it. Per SESSION, so an update rewrites the path the running helper already opened.
     /// `@ObservationIgnored`: the surface factory, the HUD commands and `overlay close` read it, and none of
