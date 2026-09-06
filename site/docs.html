@@ -751,7 +751,7 @@
               The building block is the <strong style="color: #e6e1d7">control API</strong>. Overlays are one entry in a much
               larger catalog: the same
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> creates and renames
-              sessions, splits panes, moves windows, opens the native picker, reads a session's text back, and posts
+              sessions, splits panes, moves windows, opens the native picker or a question dialog, reads a session's text back, and posts
               notifications. Every state it sets it also reads back, which is what lets a script build a whole layout rather than
               fire a single action.
             </p>
@@ -1973,6 +1973,35 @@
               agtermctl tree --json | jq -r
               <span style="color: #f2b45c">'.result.tree.pickPending // empty'</span>
             </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 24px 0 12px;
+              "
+            >
+              Question dialogs
+            </h3>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl ask "Continue?" --button yes=Yes --button no=No --default no</span>
+              opens a themed dialog and blocks for a bare JSON answer. Inspect its id before acting: Yes and No both exit 0.
+              An ask is modal to its window and shares one pending slot with pick.
+              The default <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style terminal</span> uses monospace text
+              and theme-colored filled buttons; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span>
+              uses the picker's material appearance, system fonts, and native buttons. Both styles share placement and behavior.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              Without a default, use Tab or arrows before Return. Esc and Command-W return
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">escaped</span> with exit 3.
+              Cancellation through the API, window teardown, app termination, or anchor loss returns
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span> with exit 2.
+              Target a selected session to center over its whole area, optionally narrowed to a pane; omit the target for
+              window-center placement. See the <a href="/commands#ask" style="color: #6d82f3">ask reference</a> for flags,
+              result polling, and cancellation.
+            </p>
 
             <h3
               style="

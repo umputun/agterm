@@ -431,13 +431,13 @@ event-arguments rule.
   `site/docs.html`, `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`, `examples.md`;
   `ARCHITECTURE.md` does not list control widgets and `cookbook/` stays untouched
 
-- [ ] control-api.md: ask section (validation, shared slot, dismissal kinds, anchor rules, events
+- [x] control-api.md: ask section (validation, shared slot, dismissal kinds, anchor rules, events
       exemption) beside pick
-- [ ] menu-actions.md modal cover list names the pending ask
-- [ ] commands.html: `ask` section with arguments and read-back; docs.html mention in the control widgets
+- [x] menu-actions.md modal cover list names the pending ask
+- [x] commands.html: `ask` section with arguments and read-back; docs.html mention in the control widgets
       list
-- [ ] skill reference and examples: the command, one hook example (a yes/no before a destructive step)
-- [ ] no surface states a command count
+- [x] skill reference and examples: the command, one hook example (a yes/no before a destructive step)
+- [x] no surface states a command count
 
 ### Task 10: Verify acceptance criteria
 - [ ] every decision in Solution Overview is implemented and has a test

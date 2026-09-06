@@ -5,16 +5,18 @@ description: >
   running inside an agterm session and asked to control the terminal: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
   and read its exit status; post a HUD panel or a desktop notification; show a native picker with
-  caller-supplied choices; display an image inline; type into a session, copy its selection or search its
-  scrollback; manage windows; change font size; set the theme; reload or edit the keymap and the
-  agterm-scoped ghostty config; subscribe to status, notification, lifecycle and tree-change events.
+  caller-supplied choices or a question dialog with named buttons; display an image inline; type into a
+  session, copy its selection or search its scrollback; manage windows; change font size; set the theme;
+  reload or edit the keymap and the agterm-scoped ghostty config; subscribe to status, notification,
+  lifecycle and tree-change events.
   Covers the window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees,
   attaching a session running on another Mac, the cookbook recipes, the running version, and diagnosing
   problems or filing an agterm bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
-  split the pane, close the overlay, show a message over the session, show an image inline, search the
-  scrollback, attach a session from another Mac, what recipes are there, the keymap editor will not open.
+  split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
+  show an image inline, search the scrollback, attach a session from another Mac, what recipes are there,
+  the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
 
@@ -100,7 +102,7 @@ sidebar is currently shown — the read side of the write-only `sidebar` command
 (`tree` or `flagged` — the read side of `sidebar mode`), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
-reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, and `app` (the
+reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `askPending`, and `app` (the
 serving app's `version`, plus `commit` when the build recorded one — the same value `agtermctl version`
 returns). reference.md lists every one with its exact shape. List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
@@ -517,8 +519,21 @@ the field and filters on open, which re-ranks and drops that order. An empty ite
 `< /dev/null` or it blocks. The default blocks until the user chooses or cancels and prints the bare JSON
 result. `--no-block` prints the picker id instead;
 `pick result ID [--window W]` reads it later, and `pick cancel ID [--window W]` cancels it.
-Only one picker may be pending per window. It opens without raising a background target unless
+Only one pick or ask may be pending per window. It opens without raising a background target unless
 `--follow` is set. Read the live picker id from the tree's top-level `pickPending` field.
+
+**ask**: `ask TITLE --button ID=LABEL [--button ...] [--message TEXT]` opens a themed question with
+one to six buttons and blocks for a bare JSON answer. `--default ID` seeds the highlight;
+`--destructive ID` styles a button that cannot be the default.
+`--hotkey ID=LETTER` adds a letter shortcut. Without a default, use Tab/arrows before Return.
+`--style terminal|gui` defaults to `terminal`; `gui` uses the picker's material appearance and native
+buttons. Style changes only decoration, has no read-back, and rejects other values as `unknown style`.
+No `--target` centers in the window; a selected session target uses its whole area, narrowed by
+`--pane` or `--pane-id`. `--window` selects the window and `--follow` raises it.
+Exit 0 means answered, including No: inspect `.id` before acting. Esc/Command-W return `escaped`
+with exit 3; `ask.cancel`, window teardown, app termination, and anchor loss return `cancelled` with exit 2.
+`--no-block` returns an id for `ask result ID` or `ask cancel ID`; result/cancel accept `--window`.
+Tree reports `askPending`. See reference.md for validation, anchor loss, and retained results.
 
 **quick** — `quick [show|hide|toggle]` (visibility; read back from the tree's `quickVisible`; a panel YOU open
 with `quick show` stays up when agterm loses focus, unlike one the user summoned by hotkey, so a following

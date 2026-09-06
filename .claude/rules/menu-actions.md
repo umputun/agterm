@@ -28,8 +28,9 @@ paths:
   (no active session, no current workspace). Add a term to `PaletteContext` and the predicate; never to one
   item's `.disabled(…)`. An action's own `AppActions` method keeps its guard as well — belt and braces, not
   the contract.
-- The modal cover — terminal zoom, the open dashboard grid, a pending native picker — reads off the same
-  predicate. Close Session, both reloads, the three font sizes and Toggle Terminal Zoom carry no modal term
+- Modal covers include terminal zoom, the dashboard, and a pending pick or ask. They share the same
+  predicate. Ask's terminal and GUI styles have the same modal gates.
+  Close Session, both reloads, the three font sizes and Toggle Terminal Zoom carry no modal term
   (⌘W is how a cover is dismissed); Dashboard carries every cover but its own grid, its item being that
   grid's escape hatch. Items with no palette row (window management, the three palette launchers) keep the
   bare `context.modalActive`.
@@ -150,12 +151,11 @@ paths:
 
 ## Close and reselection
 
-- Command-W first dismisses the frontmost cover: the quick-terminal panel (un-zoom, then hide), then
-  overlay, then scratch, then the
-  FOCUSED pane's own overlay (`focusedOverlayPane`; one on the sibling pane is not in front of the user and
-  does not intercept). Only then close the active session. If no cover or session exists, the menu performs
-  window close. Keep the cover check inside `closeActiveSession`, since a sessionless window can still show
-  quick terminal.
+- Command-W first dismisses a pending pick or ask. An ask returns `escaped`, as with Esc.
+  Then come the quick terminal (un-zoom, then hide), terminal zoom,
+  dashboard, session overlay, scratch, and the focused pane's overlay (`focusedOverlayPane`; a sibling's
+  overlay does not intercept). Only then close the active session, or the window when no session remains.
+  Keep cover checks before the active-session lookup; a sessionless window can still show a modal.
 - The panel's two rungs read `holdsKey`, not `isVisible`. A PINNED panel (a control `quick show`) stays on
   screen without owning the keyboard, and Command-W in a terminal window must then close that session
   rather than reach past it to the panel.

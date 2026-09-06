@@ -151,7 +151,8 @@ renumbering. Do not reintroduce a count anywhere.
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
-- `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`
+- `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
+  `ask.open`, `ask.result`, `ask.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`, `notify`
 - `font.inc`, `font.dec`, `font.reset`
@@ -337,7 +338,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   read failure, and no open window. Hidden previously shown quick remains addressable (#170).
   Text is type's read-back.
 
-## Overlay, zoom, dashboard, and picker
+## Overlay, zoom, dashboard, pick, and ask
 
 - Overlay open runs one shell-wrapped program in a nonpersisted per-session surface. Size nil is full;
   1...100 is floating; values outside that range are refused. Optional color uses shared validated
@@ -553,7 +554,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   without `allowCustom` returns `pick.open requires at least one item`.
   Optional subtitle/prompt/query/custom/follow; `query` prefills the field so the picker opens filtered.
   Reject duplicate IDs and control characters host-free; `prompt` and `query` stay unvalidated free text.
-  One picker may be pending per window. Background remains background unless follow raises and publishes
+  One pick or ask may be pending per window. Background remains background unless follow raises and publishes
   frontmost.
 - Caller-supplied rows match on their label only. Subtitles are displayed but never searched, so
   consequence text cannot filter a safe row out and leave a destructive one preselected. An empty query
@@ -569,6 +570,44 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - CLI reads JSON array when stdin begins `[`, otherwise nonblank lines become ID=label. Blocking poll is
   100ms for one second, then 500ms; print bare result JSON; exit 0 picked/custom, 2 cancelled, 1 failure.
   `--no-block` prints picker ID JSON; result/cancel are one-shot commands.
+
+- `ask.open` accepts a nonblank `title`, optional `message`, and 1...6 `buttons` with unique ids and
+  nonempty labels. Title, message, and labels reject control characters. Optional button `hotkey` is
+  one ASCII letter, unique case-insensitively and stored lowercase.
+- `defaultButton` and `destructiveButton` name supplied ids and cannot name the same button.
+  Default seeds the highlight; without it Return is inert until navigation. Tab/Right/Down enter at
+  the first button, Shift-Tab/Left/Up at the last, then wrap.
+  Return chooses the highlight; a letter hotkey chooses directly. Outside clicks leave the dialog open.
+- Optional `style` is `terminal` (default) or `gui`; invalid values return `unknown style`.
+  Style affects decoration only and has no read-back. Both styles share keyboard behavior, results,
+  anchoring, modality, and the modal slot.
+- Terminal buttons use padded, bracketed labels and a dim fill from the theme foreground at low opacity.
+  The active button uses solid foreground fill with background-colored text. Colors come from the theme.
+- GUI style uses the picker's material, corner radius, and appearance handling, with system fonts,
+  a headline title, secondary message, and native push buttons in a trailing row. The default is
+  prominent in the accent color; destructive is tinted red. No hard-coded colors.
+- The dialog is window-modal and shares `PickController.modalPending` with pick. A second open of
+  either family is refused. Focus, auto-follow, menu, quick-terminal, search, zoom, and dashboard gates
+  consult the shared predicate.
+- No `target` centers the dialog in the window. A session target anchors to its whole area;
+  `pane` or `paneID` narrows it and requires a target. The session must be selected in its owning
+  window and the pane rendered; zoom/dashboard reject anchored opens. `follow` raises the window.
+  A live pane token overrides the role; an unknown token uses the supplied role or errors without one.
+  `ask.open` echoes the resolved role in `result.pane` for pane placement.
+- Anchor geometry follows resize and the captured pane identity through role changes. Closing or
+  deselecting the session, or losing the pane's identity or rendered role, cancels. Session-wide
+  anchors and a still-rendered pane survive split collapse.
+- Esc and Command-W return `escaped`. `ask.cancel`, window teardown, app termination, and anchor loss
+  return `cancelled`. Result/cancel use the exact global ask id; an explicit window must match its owner.
+  Cancelling a retained terminal result is a successful no-op.
+- Blocking CLI output is `{"result":"answered","id":"yes","label":"Yes","index":0}`,
+  `{"result":"escaped"}`, or `{"result":"cancelled"}`; index follows caller order.
+  Exit 0 means answered, including a No button; exit 3 means escaped, exit 2 means cancelled,
+  and exit 1 means failure. `--no-block` prints `{"id":"…"}`.
+  One-shot `ask result` also prints `pending` and exits 1 for it.
+- Tree exposes top-level `askPending` while waiting. Ask results retain eight answers per open window
+  and 32 across closed windows, separately from pick. App shutdown can interrupt polling.
+  Ask emits no events; result and tree polling are its explicit event exemption.
 
 ## Status, notifications, and flags
 
@@ -725,7 +764,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   qualifies. The capture (`.command`) stays leader-only, because a non-nil capture sets `hadForeground`,
   which preempts `initialCommand` in `restorePlan` and would drop the exec path.
 - Top-level tree includes idle/auto-follow, live sidebar visibility/mode/width, workspace filter, quick
-  visibility, zoom, dashboard, and picker state. Prefer live tree sidebar state over cached window list.
+  visibility, zoom, dashboard, pick, and ask state. Prefer live tree sidebar state over cached window list.
   `sidebarWidth` is tree-only: nothing needs width discovery across windows, which is all the cached
   `window.list` copy would add.
   `quickVisible` and a `quick` `zoomedSurface` are APP-level, so every projected window reports the same

@@ -929,6 +929,30 @@ agtermctl pick cancel "$pick_id" --window "$AGTERM_WINDOW_ID"
 Add `--follow` to raise a background target window when the picker opens. Without it, the picker waits in
 that window without stealing focus.
 
+## Require a yes/no answer in a cleanup hook
+
+A shell cleanup hook can require approval before removing `./build`. This example runs inside
+agterm and requires `jq`. Only an `answered` result with id `yes` reaches the removal:
+
+```bash
+#!/usr/bin/env bash
+answer=$(agtermctl ask "Remove ./build?" \
+  --message "Delete $PWD/build." \
+  --button yes=Delete --button no=Keep --default no --destructive yes \
+  --window "${AGTERM_WINDOW_ID:?run this hook inside agterm}" --follow \
+  --socket "${AGTERM_SOCKET:?run this hook inside agterm}") || exit 1
+
+printf '%s\n' "$answer" |
+  jq -e '.result == "answered" and .id == "yes"' >/dev/null || exit 1
+rm -rf -- ./build
+```
+
+Choosing Keep returns an answer with exit 0, so the id check is required. Esc and Command-W return
+`escaped` with exit 3; cancellation returns `cancelled` with exit 2. Both stop the hook.
+`ask` leaves the hook's stdin untouched. Omit `--target` to keep the question centered in its window
+even when the hook's session is not selected. The default `--style terminal` uses the terminal theme;
+add `--style gui` for the picker's material appearance and native buttons. The hook's behavior is the same.
+
 ## Say what you are doing while the user waits
 
 `session hud` posts a passive panel over a session. The session keeps focus and stays typable under it, so
