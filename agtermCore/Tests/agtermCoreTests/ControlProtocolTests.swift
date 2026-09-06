@@ -19,6 +19,97 @@ struct ControlProtocolTests {
         #expect(try roundTrip(request) == request)
     }
 
+    @Test func askOpenRoundTripsEveryArgument() throws {
+        let request = ControlRequest(
+            cmd: .askOpen, target: "session-id",
+            args: ControlArgs(
+                follow: true, message: "Keep the current changes?",
+                buttons: [
+                    ControlAskButton(id: "save", label: "Save", hotkey: "s"),
+                    ControlAskButton(id: "cancel", label: "Not now"),
+                    ControlAskButton(id: "discard", label: "Discard", hotkey: "d"),
+                ],
+                defaultButton: "save", cancelButton: "cancel", destructiveButton: "discard",
+                window: "window-id", pane: "right", paneID: "pane-id", title: "Unsaved changes"
+            )
+        )
+        let json = """
+        {"cmd":"ask.open","target":"session-id","args":{
+            "title":"Unsaved changes","message":"Keep the current changes?","follow":true,
+            "buttons":[
+                {"id":"save","label":"Save","hotkey":"s"},
+                {"id":"cancel","label":"Not now"},
+                {"id":"discard","label":"Discard","hotkey":"d"}
+            ],
+            "defaultButton":"save","cancelButton":"cancel","destructiveButton":"discard",
+            "window":"window-id","pane":"right","paneID":"pane-id"
+        }}
+        """
+
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8)) == request)
+        #expect(try roundTrip(request) == request)
+    }
+
+    @Test(arguments: [(Command.askResult, "ask.result"), (.askCancel, "ask.cancel")])
+    func askLookupCommandsRoundTrip(command: Command, wireName: String) throws {
+        let request = ControlRequest(cmd: command, target: "ask-id", args: ControlArgs(window: "window-id"))
+        let json = """
+        {"cmd":"\(wireName)","target":"ask-id","args":{"window":"window-id"}}
+        """
+
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8)) == request)
+        #expect(try roundTrip(request) == request)
+    }
+
+    @Test(arguments: [
+        (ControlAskResult(result: .pending), #"{"ok":true,"result":{"ask":{"result":"pending"}}}"#),
+        (ControlAskResult(result: .answered, id: "save", label: "Save", index: 0),
+         #"{"ok":true,"result":{"ask":{"result":"answered","id":"save","label":"Save","index":0}}}"#),
+        (ControlAskResult(result: .cancelled), #"{"ok":true,"result":{"ask":{"result":"cancelled"}}}"#),
+    ])
+    func askResultRoundTripsEveryOutcomeShape(ask: ControlAskResult, json: String) throws {
+        let response = ControlResponse(ok: true, result: ControlResult(ask: ask))
+        let encoded = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(response)) as? NSDictionary)
+        let expected = try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? NSDictionary)
+
+        #expect(encoded == expected)
+        #expect(try roundTrip(response) == response)
+    }
+
+    @Test func controlResultAskOmitsWhenNil() throws {
+        let result = ControlResult(id: "ask-id")
+        let data = try JSONEncoder().encode(result)
+        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: String])
+
+        #expect(json == ["id": "ask-id"])
+        #expect(try JSONDecoder().decode(ControlResult.self, from: data).ask == nil)
+    }
+
+    @Test func askOpenResponseRoundTripsPaneReadBack() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(id: "ask-id", pane: "right"))
+        #expect(try roundTrip(response) == response)
+    }
+
+    @Test func askOptionalFieldsRemainAbsent() throws {
+        let request = ControlRequest(cmd: .askOpen, args: ControlArgs(
+            buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Ready"
+        ))
+        let data = try JSONEncoder().encode(request)
+        let encoded = try #require(try JSONSerialization.jsonObject(with: data) as? NSDictionary)
+        let json = #"{"cmd":"ask.open","args":{"title":"Ready","buttons":[{"id":"ok","label":"OK"}]}}"#
+        let expected = try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? NSDictionary)
+
+        #expect(encoded == expected)
+        #expect(try roundTrip(request) == request)
+        #expect(try JSONDecoder().decode(ControlArgs.self, from: Data("{}".utf8)) == ControlArgs())
+    }
+
+    @Test(arguments: [(ControlArgs(), "{}"), (ControlArgs(buttons: []), #"{"buttons":[]}"#)])
+    func controlArgsDistinguishesEmptyButtonsFromAbsentButtons(args: ControlArgs, json: String) throws {
+        #expect(String(decoding: try JSONEncoder().encode(args), as: UTF8.self) == json)
+        #expect(try JSONDecoder().decode(ControlArgs.self, from: Data(json.utf8)) == args)
+    }
+
     @Test func pickCommandsRoundTrip() throws {
         let items = [
             ControlPickItem(id: "first", label: "First choice", subtitle: "recommended"),

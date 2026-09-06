@@ -82,6 +82,9 @@ public enum Command: String, Codable, Sendable {
     case pickOpen = "pick.open"
     case pickResult = "pick.result"
     case pickCancel = "pick.cancel"
+    case askOpen = "ask.open"
+    case askResult = "ask.result"
+    case askCancel = "ask.cancel"
     case restoreClear = "restore.clear"
     case version = "version"
     case restoreCapture = "restore.capture"
@@ -281,6 +284,14 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var query: String?
     /// Whether `pick.open` accepts the current query as a custom result.
     public var allowCustom: Bool?
+    /// buttons are the caller-ordered choices for ask.open.
+    public var buttons: [ControlAskButton]?
+    /// defaultButton identifies the initially highlighted ask button.
+    public var defaultButton: String?
+    /// cancelButton identifies the ask button returned on user dismissal.
+    public var cancelButton: String?
+    /// destructiveButton identifies the ask button styled as destructive.
+    public var destructiveButton: String?
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
     /// (= frontmost).
     public var window: String?
@@ -335,7 +346,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
-                query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
+                query: String? = nil, allowCustom: Bool? = nil,
+                buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
+                cancelButton: String? = nil, destructiveButton: String? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -375,6 +388,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.prompt = prompt
         self.query = query
         self.allowCustom = allowCustom
+        self.buttons = buttons
+        self.defaultButton = defaultButton
+        self.cancelButton = cancelButton
+        self.destructiveButton = destructiveButton
         self.window = window
         self.pane = pane
         self.paneID = paneID
@@ -484,6 +501,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var keymap: ControlKeymap?
     /// The current or terminal picker outcome for `pick.result`.
     public var pick: ControlPickResult?
+    /// ask is the current or terminal dialog outcome for ask.result.
+    public var ask: ControlAskResult?
     /// The addressed surface's cursor position for `surface.cursor`.
     public var cursor: ControlCursor?
     /// The app serving this socket, for `version`. The same value `tree` carries.
@@ -503,7 +522,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 sidebarWidth: Double? = nil, pane: String? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
                 events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
-                pick: ControlPickResult? = nil, cursor: ControlCursor? = nil,
+                pick: ControlPickResult? = nil, ask: ControlAskResult? = nil, cursor: ControlCursor? = nil,
                 app: AppIdentity? = nil, restore: ControlRestoreStatus? = nil,
                 zmx: ControlZmxInventory? = nil, remote: ControlRemoteTree? = nil) {
         self.restore = restore
@@ -527,6 +546,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.events = events
         self.keymap = keymap
         self.pick = pick
+        self.ask = ask
         self.cursor = cursor
         self.app = app
     }
