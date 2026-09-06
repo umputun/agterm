@@ -949,7 +949,7 @@ rm -rf -- ./build
 
 Choosing Keep returns an answer with exit 0, so the id check is required. Esc and Command-W return
 `escaped` with exit 3; cancellation returns `cancelled` with exit 2. Both stop the hook.
-`ask` leaves the hook's stdin untouched. Omit `--target` to keep the question centered in its window
+`ask` leaves the hook's stdin untouched. Omit `--target` to keep the question centered over its window's terminal area
 even when the hook's session is not selected. The default `--style terminal` uses the terminal theme;
 add `--style gui` for the picker's material appearance and native buttons. The hook's behavior is the same.
 

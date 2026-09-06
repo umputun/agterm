@@ -6,6 +6,44 @@ import agtermCore
 
 @MainActor
 final class AskDialogViewTests: XCTestCase {
+    func testBothStylesRenderInLightAndDarkAppearance() throws {
+        for style in ControlAskStyle.allCases {
+            for dark in [false, true] {
+                let ask = PendingAsk(id: "appearance", title: "Keep these changes?", message: "Choose what happens next.",
+                                     buttons: [ControlAskButton(id: "keep", label: "Keep", hotkey: "k"),
+                                               ControlAskButton(id: "delete", label: "Delete", hotkey: "d")],
+                                     defaultID: "keep", destructiveID: "delete", style: style)
+                let view = AskDialogView(ask: ask, anchorFrame: CGRect(x: 0, y: 0, width: 700, height: 400),
+                                         font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+                                         foreground: dark ? .white : .black, background: dark ? .black : .white,
+                                         focusAllowed: true, onAnswer: { _ in }, onDismiss: {})
+                    .frame(width: 700, height: 400)
+                    .environment(\.colorScheme, dark ? .dark : .light)
+                    .environment(\.controlActiveState, .key)
+                let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 700, height: 400),
+                                      styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false
+                defer { window.close() }
+                window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+                let host = NSHostingView(rootView: view)
+                window.contentView = host
+                window.orderFront(nil)
+                host.layoutSubtreeIfNeeded()
+                host.displayIfNeeded()
+                XCTAssertTrue(window.firstResponder is AskKeyCatcher.KeyCatcherView)
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                XCTAssertGreaterThan(brightSamples(in: bitmap), 10)
+                let image = NSImage(size: host.bounds.size)
+                image.addRepresentation(bitmap)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ask-\(style.rawValue)-\(dark ? "dark" : "light")"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
     func testOverflowDialogRendersInNativeHost() throws {
         var selected: Int?
         let ask = PendingAsk(id: "overflow", title: "Choose an action",
@@ -28,7 +66,7 @@ final class AskDialogViewTests: XCTestCase {
         host.displayIfNeeded()
         let catcher = try XCTUnwrap(window.firstResponder as? AskKeyCatcher.KeyCatcherView)
         catcher.keyDown(with: try event(36))
-        XCTAssertNil(selected)
+        XCTAssertEqual(selected, 0)
         catcher.keyDown(with: try event(48, modifiers: .shift))
         let scroll = try XCTUnwrap(descendant(NSScrollView.self, in: host))
         for _ in 0..<30 where scroll.contentView.bounds.minY == 0 {
@@ -57,11 +95,15 @@ final class AskDialogViewTests: XCTestCase {
                              buttons: [ControlAskButton(id: "save", label: "Save workspace", hotkey: "s"),
                                        ControlAskButton(id: "cancel", label: "Keep editing", hotkey: "k"),
                                        ControlAskButton(id: "discard", label: "Discard changes", hotkey: "d")],
-                             defaultID: "save", cancelID: "cancel", destructiveID: "discard")
+                             defaultID: "save", destructiveID: "discard")
         let frames = [
             ("wide", CGRect(x: 0, y: 30, width: 900, height: 570), ask),
             ("pane", CGRect(x: 565, y: 30, width: 335, height: 570), ask),
             ("short-pane", CGRect(x: 565, y: 280, width: 335, height: 220), ask),
+            ("long-label-terminal", CGRect(x: 565, y: 30, width: 335, height: 570),
+             PendingAsk(id: "long-terminal", title: "Confirm", buttons: [ControlAskButton(id: "long", label: String(repeating: "A long button label ", count: 8))])),
+            ("long-label-gui", CGRect(x: 565, y: 30, width: 335, height: 570),
+             PendingAsk(id: "long-gui", title: "Confirm", buttons: [ControlAskButton(id: "long", label: String(repeating: "A long button label ", count: 8))], style: .gui)),
         ]
         for (name, frame, question) in frames {
             let view = AskDialogView(ask: question, anchorFrame: frame, font: .monospacedSystemFont(ofSize: 13, weight: .regular),

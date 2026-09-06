@@ -29,7 +29,7 @@ struct ControlProtocolTests {
                     ControlAskButton(id: "cancel", label: "Not now"),
                     ControlAskButton(id: "discard", label: "Discard", hotkey: "d"),
                 ],
-                defaultButton: "save", cancelButton: "cancel", destructiveButton: "discard",
+                defaultButton: "save", destructiveButton: "discard", style: "gui", align: "left",
                 window: "window-id", pane: "right", paneID: "pane-id", title: "Unsaved changes"
             )
         )
@@ -41,7 +41,7 @@ struct ControlProtocolTests {
                 {"id":"cancel","label":"Not now"},
                 {"id":"discard","label":"Discard","hotkey":"d"}
             ],
-            "defaultButton":"save","cancelButton":"cancel","destructiveButton":"discard",
+            "defaultButton":"save","destructiveButton":"discard","style":"gui","align":"left",
             "window":"window-id","pane":"right","paneID":"pane-id"
         }}
         """
@@ -66,6 +66,7 @@ struct ControlProtocolTests {
         (ControlAskResult(result: .answered, id: "save", label: "Save", index: 0),
          #"{"ok":true,"result":{"ask":{"result":"answered","id":"save","label":"Save","index":0}}}"#),
         (ControlAskResult(result: .cancelled), #"{"ok":true,"result":{"ask":{"result":"cancelled"}}}"#),
+        (ControlAskResult(result: .escaped), #"{"ok":true,"result":{"ask":{"result":"escaped"}}}"#),
     ])
     func askResultRoundTripsEveryOutcomeShape(ask: ControlAskResult, json: String) throws {
         let response = ControlResponse(ok: true, result: ControlResult(ask: ask))

@@ -23,15 +23,35 @@ public enum ControlAskOutcome: String, Codable, Sendable, CaseIterable {
     case pending
     /// answered means the dialog resolved to a caller-provided button.
     case answered
-    /// cancelled means the dialog resolved without a button answer.
+    /// escaped means the user dismissed the dialog with Esc or Command-W.
+    case escaped
+    /// cancelled means the dialog was cancelled administratively.
     case cancelled
+}
+
+/// ControlAskStyle selects dialog decoration without changing behavior or placement.
+public enum ControlAskStyle: String, Codable, Sendable, CaseIterable {
+    /// terminal uses monospace text and terminal theme colors.
+    case terminal
+    /// gui uses the palette appearance and native buttons.
+    case gui
+}
+
+/// ControlAskAlignment positions the button block within its panel.
+public enum ControlAskAlignment: String, Codable, Sendable, CaseIterable {
+    /// left aligns the block to the leading edge.
+    case left
+    /// center centers the block horizontally.
+    case center
+    /// right aligns the block to the trailing edge.
+    case right
 }
 
 /// ControlAskResult is the nested wire payload returned by ask.result.
 public struct ControlAskResult: Codable, Sendable, Equatable {
     /// result is the current or terminal dialog outcome.
     public let result: ControlAskOutcome
-    /// id identifies the answered button, absent for pending or cancelled results.
+    /// id identifies the answered button, absent without a button answer.
     public let id: String?
     /// label is the answered button's text, absent without a button answer.
     public let label: String?

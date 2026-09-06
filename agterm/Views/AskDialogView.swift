@@ -45,10 +45,24 @@ struct AskDialogView: View {
         self.focusAllowed = focusAllowed
         self.onAnswer = onAnswer
         self.onDismiss = onDismiss
-        _navigation = State(initialValue: AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID))
+        _navigation = State(initialValue: AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID, destructiveID: ask.destructiveID))
     }
 
-    private var cell: CGFloat { max(8, font.pointSize * 0.6) }
+    private var cell: CGFloat { ask.style == .gui ? 8 : max(8, font.pointSize * 0.6) }
+    private var buttonAlignment: Alignment {
+        switch ask.align {
+        case .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
+    }
+    private var columnAlignment: HorizontalAlignment {
+        switch ask.align {
+        case .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
+    }
     private var panelWidth: CGFloat { min(max(0, anchorFrame.width - 2 * cell), 72 * cell) }
     private var panelHeight: CGFloat { max(0, anchorFrame.height - 2 * cell) }
 
@@ -60,13 +74,11 @@ struct AskDialogView: View {
             ScrollViewReader { reader in
                 ViewThatFits(in: .vertical) {
                     content.fixedSize(horizontal: false, vertical: true)
-                        .background(background)
-                        .overlay { Rectangle().stroke(foreground.opacity(0.6), lineWidth: 1) }
+                        .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("ask-dialog")
                     ScrollView { content }
-                        .background(background)
-                        .overlay { Rectangle().stroke(foreground.opacity(0.6), lineWidth: 1) }
+                        .modifier(AskPanelStyle(style: ask.style, foreground: foreground, background: background))
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("ask-dialog")
                 }
@@ -82,19 +94,21 @@ struct AskDialogView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .font(Font(font))
-        .foregroundStyle(foreground)
+        .font(ask.style == .gui ? .body : Font(font))
+        .foregroundStyle(ask.style == .gui ? .primary : foreground)
         .simultaneousGesture(TapGesture().onEnded { focusRevision += 1 })
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: cell * 1.5) {
             Text(verbatim: ask.title)
+                .font(ask.style == .gui ? .headline : Font(font))
                 .fontWeight(.bold)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("ask-title")
             if let message = ask.message, !message.isEmpty {
                 Text(verbatim: message)
+                    .foregroundStyle(ask.style == .gui ? .secondary : foreground)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("ask-message")
             }
@@ -104,11 +118,13 @@ struct AskDialogView: View {
                         button(choice, index: index).fixedSize()
                     }
                 }
-                VStack(alignment: .leading, spacing: cell) {
+                .frame(maxWidth: .infinity, alignment: buttonAlignment)
+                VStack(alignment: columnAlignment, spacing: cell) {
                     ForEach(Array(ask.buttons.enumerated()), id: \.element.id) { index, choice in
                         button(choice, index: index)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: buttonAlignment)
             }
         }
         .padding(cell * 2)
@@ -116,15 +132,13 @@ struct AskDialogView: View {
     }
 
     private func button(_ choice: ControlAskButton, index: Int) -> some View {
-        Button { onAnswer(index) } label: {
-            Text(Self.buttonLabel(choice, destructive: choice.id == ask.destructiveID))
-                .fontWeight(choice.id == ask.destructiveID ? .bold : .regular)
-                .padding(.horizontal, cell * 0.5)
-                .padding(.vertical, cell * 0.4)
-                .foregroundStyle(navigation.highlighted == index ? background : foreground)
-                .background(navigation.highlighted == index ? foreground : Color.clear)
+        Group {
+            if ask.style == .gui {
+                guiButton(choice, index: index)
+            } else {
+                terminalButton(choice, index: index)
+            }
         }
-        .buttonStyle(.plain)
         .focusable(false)
         .id(choice.id)
         .accessibilityLabel(Text(verbatim: choice.label))
@@ -132,7 +146,38 @@ struct AskDialogView: View {
         .accessibilityIdentifier("ask-button-\(choice.id)")
     }
 
-    static func buttonLabel(_ choice: ControlAskButton, destructive: Bool) -> AttributedString {
+    private func terminalButton(_ choice: ControlAskButton, index: Int) -> some View {
+        Button { onAnswer(index) } label: {
+            Text(Self.buttonLabel(choice, destructive: choice.id == ask.destructiveID))
+                .fontWeight(choice.id == ask.destructiveID ? .bold : .regular)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, cell * 0.5)
+                .padding(.vertical, cell * 0.4)
+                .foregroundStyle(navigation.highlighted == index ? background : foreground)
+                .background(navigation.highlighted == index ? foreground : foreground.opacity(0.12))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func guiButton(_ choice: ControlAskButton, index: Int) -> some View {
+        let button = Button(role: choice.id == ask.destructiveID ? .destructive : nil) {
+            onAnswer(index)
+        } label: {
+            Text(Self.buttonLabel(choice, destructive: false, bracketed: false))
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .tint(choice.id == ask.destructiveID ? Color.red : Color.accentColor)
+        if navigation.highlighted == index {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
+    }
+
+    static func buttonLabel(_ choice: ControlAskButton, destructive: Bool, bracketed: Bool = true) -> AttributedString {
         var label = AttributedString(choice.label)
         if let hotkey = choice.hotkey {
             if let range = label.range(of: hotkey, options: .caseInsensitive) {
@@ -143,7 +188,7 @@ struct AskDialogView: View {
                 label += AttributedString(" (") + hint + AttributedString(")")
             }
         }
-        return AttributedString(destructive ? "[ ! " : "[ ") + label + AttributedString(" ]")
+        return bracketed ? AttributedString(destructive ? "[ ! " : "[ ") + label + AttributedString(" ]") : label
     }
 
     private func handle(_ key: AskKey) {
@@ -156,6 +201,25 @@ struct AskDialogView: View {
         case .hotkey(let letter):
             if let index = navigation.hotkey(letter) { onAnswer(index) }
         }
+    }
+}
+
+private struct AskPanelStyle: ViewModifier {
+    let style: ControlAskStyle
+    let foreground: Color
+    let background: Color
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if style == .gui { PalettePanelBackground() } else { background }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: style == .gui ? 12 : 0))
+            .overlay {
+                RoundedRectangle(cornerRadius: style == .gui ? 12 : 0)
+                    .strokeBorder(style == .gui ? .white.opacity(0.1) : foreground.opacity(0.6))
+            }
+            .shadow(radius: style == .gui ? 24 : 0)
     }
 }
 

@@ -19,9 +19,10 @@ struct Ask: ParsableCommand {
         @Option(name: .customLong("hotkey"), help: "Button ID=LETTER. Repeat for more buttons.")
         var hotkeys: [String] = []
         @Option(name: .customLong("default"), help: "ID of the initially highlighted button.") var defaultButton: String?
-        @Option(name: .customLong("cancel"), help: "Button ID returned on Esc or Command-W.") var cancelButton: String?
+        @Option(name: .long, help: "Dialog style: terminal or gui.") var style = "terminal"
+        @Option(name: .long, help: "Button block alignment: left, center, or right.") var align = "right"
         @Option(name: .customLong("destructive"), help: "ID of the destructive button.") var destructiveButton: String?
-        @Option(name: .long, help: "Visible session id, prefix, or 'active'. Omit to center in the window.") var target: String?
+        @Option(name: .long, help: "Visible session id, prefix, or 'active'. Omit to center over the terminal area.") var target: String?
         @Option(name: .long, help: "Anchor to the session's left or right pane.") var pane: String?
         @Option(name: .customLong("pane-id"), help: "Stable pane token; takes precedence over --pane.") var paneID: String?
         @Flag(name: .long, help: "Raise the owning window.") var follow = false
@@ -38,12 +39,14 @@ struct Ask: ParsableCommand {
             if let pane, OverlayPane(controlName: pane) == nil {
                 throw ValidationError("--pane must be left or right")
             }
+            guard ControlAskStyle(rawValue: style) != nil else { throw ValidationError("unknown style") }
+            guard ControlAskAlignment(rawValue: align) != nil else { throw ValidationError("unknown align") }
             _ = try parsedButtons()
         }
 
         func makeRequest() throws -> ControlRequest {
             let args = ControlArgs(follow: follow ? true : nil, message: message, buttons: try parsedButtons(),
-                                   defaultButton: defaultButton, cancelButton: cancelButton, destructiveButton: destructiveButton,
+                                   defaultButton: defaultButton, destructiveButton: destructiveButton, style: style, align: align,
                                    pane: pane, paneID: paneID, title: title)
             return ControlRequest(cmd: .askOpen, target: target, args: options.withWindow(args))
         }

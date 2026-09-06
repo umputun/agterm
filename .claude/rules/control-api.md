@@ -575,21 +575,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   nonempty labels. Title, message, and labels reject control characters. Optional button `hotkey` is
   one ASCII letter, unique case-insensitively and stored lowercase.
 - `defaultButton` and `destructiveButton` name supplied ids and cannot name the same button.
-  Default seeds the highlight; without it Return is inert until navigation. Tab/Right/Down enter at
-  the first button, Shift-Tab/Left/Up at the last, then wrap.
+  Default seeds the highlight; otherwise the first non-destructive button is selected, or the first
+  button if it is the only choice. Tab/Right/Down move forward, Shift-Tab/Left/Up move back, and wrap.
   Return chooses the highlight; a letter hotkey chooses directly. Outside clicks leave the dialog open.
 - Optional `style` is `terminal` (default) or `gui`; invalid values return `unknown style`.
   Style affects decoration only and has no read-back. Both styles share keyboard behavior, results,
   anchoring, modality, and the modal slot.
+- Optional `align` is `left`, `center`, or `right` (default). It aligns the whole button block, including
+  the vertical fallback, in both styles. Invalid values return `unknown align`; it has no read-back.
 - Terminal buttons use padded, bracketed labels and a dim fill from the theme foreground at low opacity.
   The active button uses solid foreground fill with background-colored text. Colors come from the theme.
 - GUI style uses the picker's material, corner radius, and appearance handling, with system fonts,
-  a headline title, secondary message, and native push buttons in a trailing row. The default is
-  prominent in the accent color; destructive is tinted red. No hard-coded colors.
+  a headline title, secondary message, and native push buttons in a row. The active button is
+  prominent in the accent color; destructive is tinted red and becomes prominent red when active. No hard-coded colors.
 - The dialog is window-modal and shares `PickController.modalPending` with pick. A second open of
   either family is refused. Focus, auto-follow, menu, quick-terminal, search, zoom, and dashboard gates
   consult the shared predicate.
-- No `target` centers the dialog in the window. A session target anchors to its whole area;
+- No `target` centers the dialog over the terminal area, excluding the sidebar. A session target anchors to its whole area;
   `pane` or `paneID` narrows it and requires a target. The session must be selected in its owning
   window and the pane rendered; zoom/dashboard reject anchored opens. `follow` raises the window.
   A live pane token overrides the role; an unknown token uses the supplied role or errors without one.

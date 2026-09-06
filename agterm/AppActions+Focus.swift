@@ -39,18 +39,11 @@ extension AppActions {
         PickRegistry.shared.controller(for: windowID)?.modalPending == true
     }
 
-    /// dismissPendingAsk reserves named answers for user dismissal; administrative cancellation never picks a button.
     @discardableResult
-    func dismissPendingAsk(for windowID: WindowInfo.ID?, userInitiated: Bool) -> Bool {
+    func escapePendingAsk(for windowID: WindowInfo.ID?) -> Bool {
         guard let controller = PickRegistry.shared.controller(for: windowID),
-              let ask = controller.pendingAsk else { return false }
-        if userInitiated, let cancelID = ask.cancelID,
-           let index = ask.buttons.firstIndex(where: { $0.id == cancelID }) {
-            let button = ask.buttons[index]
-            controller.resolveAsk(ControlAskResult(result: .answered, id: button.id, label: button.label, index: index))
-        } else {
-            controller.cancelAsk()
-        }
+              controller.pendingAsk != nil else { return false }
+        controller.escapeAsk()
         return true
     }
 

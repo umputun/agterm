@@ -259,7 +259,7 @@ final class AppActions {
         guard let controller = PickRegistry.shared.controller(for: windowID),
               controller.modalPending
         else { return false }
-        if dismissPendingAsk(for: windowID, userInitiated: true) { return true }
+        if escapePendingAsk(for: windowID) { return true }
         controller.cancel()
         return true
     }

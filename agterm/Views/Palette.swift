@@ -340,7 +340,7 @@ struct CommandPalette: View {
 }
 
 /// A separate view type so a selection change in `CommandPalette` doesn't re-resolve the whole backdrop.
-private struct PalettePanelBackground: View {
+struct PalettePanelBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @ViewBuilder var body: some View {

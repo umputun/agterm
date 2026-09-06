@@ -28,22 +28,25 @@ public struct PendingAsk: Equatable, Sendable {
     public let buttons: [ControlAskButton]
     /// defaultID identifies the initially highlighted button.
     public let defaultID: String?
-    /// cancelID identifies the button returned on user dismissal.
-    public let cancelID: String?
+    /// style selects the dialog rendering without changing its behavior.
+    public let style: ControlAskStyle
+    /// align positions the button block in both row and column layouts.
+    public let align: ControlAskAlignment
     /// destructiveID identifies the button styled as destructive.
     public let destructiveID: String?
-    /// anchor is absent for a dialog centered in the window.
+    /// anchor is absent for a dialog centered over the window's terminal area.
     public let anchor: AskAnchor?
 
     public init(id: String, title: String, message: String? = nil, buttons: [ControlAskButton],
-                defaultID: String? = nil, cancelID: String? = nil, destructiveID: String? = nil,
+                defaultID: String? = nil, destructiveID: String? = nil, style: ControlAskStyle = .terminal, align: ControlAskAlignment = .right,
                 anchor: AskAnchor? = nil) {
         self.id = id
         self.title = title
         self.message = message
         self.buttons = buttons
         self.defaultID = defaultID
-        self.cancelID = cancelID
+        self.style = style
+        self.align = align
         self.destructiveID = destructiveID
         self.anchor = anchor
     }
@@ -51,13 +54,15 @@ public struct PendingAsk: Equatable, Sendable {
 
 /// AskNavigation tracks keyboard selection in caller button order.
 public struct AskNavigation: Sendable {
-    /// highlighted is absent until a default or navigation selects a button.
+    /// highlighted is absent only when the button list is empty.
     public private(set) var highlighted: Int?
     private let buttons: [ControlAskButton]
 
-    public init(buttons: [ControlAskButton], defaultID: String? = nil) {
+    public init(buttons: [ControlAskButton], defaultID: String? = nil, destructiveID: String? = nil) {
         self.buttons = buttons
         highlighted = defaultID.flatMap { id in buttons.firstIndex { $0.id == id } }
+            ?? buttons.firstIndex { $0.id != destructiveID }
+            ?? buttons.indices.first
     }
 
     /// moveForward enters at the first button and wraps after the last.
@@ -72,7 +77,7 @@ public struct AskNavigation: Sendable {
         highlighted = highlighted.map { ($0 + buttons.count - 1) % buttons.count } ?? (buttons.count - 1)
     }
 
-    /// activate returns the highlighted button's index, or nil before selection.
+    /// activate returns the highlighted button's index, or nil for an empty list.
     public func activate() -> Int? {
         highlighted
     }

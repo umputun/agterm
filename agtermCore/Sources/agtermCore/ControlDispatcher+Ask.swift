@@ -59,7 +59,7 @@ extension ControlDispatcher {
               buttons.allSatisfy({ !containsControlCharacters($0.label) }) else {
             return ControlResponse(ok: false, error: "ask text must not contain control characters")
         }
-        for (role, id) in [("default", args.defaultButton), ("cancel", args.cancelButton),
+        for (role, id) in [("default", args.defaultButton),
                            ("destructive", args.destructiveButton)] {
             if let id, !ids.contains(id) {
                 return ControlResponse(ok: false, error: "unknown \(role) button: \(id)")
@@ -69,9 +69,12 @@ extension ControlDispatcher {
             if args.defaultButton == destructive {
                 return ControlResponse(ok: false, error: "default button must not be destructive")
             }
-            if args.cancelButton == destructive {
-                return ControlResponse(ok: false, error: "cancel button must not be destructive")
-            }
+        }
+        guard let style = ControlAskStyle(rawValue: args.style ?? "terminal") else {
+            return ControlResponse(ok: false, error: "unknown style")
+        }
+        guard let align = ControlAskAlignment(rawValue: args.align ?? "right") else {
+            return ControlResponse(ok: false, error: "unknown align")
         }
         var hotkeys = Set<String>()
         for button in buttons {
@@ -96,7 +99,7 @@ extension ControlDispatcher {
         let ask = PendingAsk(
             id: UUID().uuidString, title: title, message: args.message,
             buttons: buttons.map { ControlAskButton(id: $0.id, label: $0.label, hotkey: $0.hotkey?.lowercased()) },
-            defaultID: args.defaultButton, cancelID: args.cancelButton, destructiveID: args.destructiveButton
+            defaultID: args.defaultButton, destructiveID: args.destructiveButton, style: style, align: align
         )
         return actions.openAsk(ask, target: request.target, window: args.window,
                                placement: ControlAskPlacement(pane: pane, paneID: args.paneID),

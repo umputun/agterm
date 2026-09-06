@@ -288,8 +288,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var buttons: [ControlAskButton]?
     /// defaultButton identifies the initially highlighted ask button.
     public var defaultButton: String?
-    /// cancelButton identifies the ask button returned on user dismissal.
-    public var cancelButton: String?
+    /// style selects terminal or gui ask decoration.
+    public var style: String?
+    /// align positions the ask button block within its panel.
+    public var align: String?
     /// destructiveButton identifies the ask button styled as destructive.
     public var destructiveButton: String?
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
@@ -348,7 +350,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil,
                 buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
-                cancelButton: String? = nil, destructiveButton: String? = nil, window: String? = nil,
+                destructiveButton: String? = nil, style: String? = nil, align: String? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -390,7 +392,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.allowCustom = allowCustom
         self.buttons = buttons
         self.defaultButton = defaultButton
-        self.cancelButton = cancelButton
+        self.style = style
+        self.align = align
         self.destructiveButton = destructiveButton
         self.window = window
         self.pane = pane

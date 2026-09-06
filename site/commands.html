@@ -2386,7 +2386,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl ask [open] TITLE --button ID=LABEL [--button ...] [--message TEXT]
-                [--hotkey ID=LETTER ...] [--default ID] [--destructive ID] [--style terminal|gui]
+                [--hotkey ID=LETTER ...] [--default ID] [--destructive ID] [--style terminal|gui] [--align left|center|right]
                 [--target T] [--pane left|right] [--pane-id TOKEN] [--window W] [--follow] [--no-block]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">ask.open</div>
@@ -2401,20 +2401,26 @@
                 has solid foreground fill and background-colored text.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span> uses the picker's material,
                 corner radius, and light/dark appearance, system fonts, a headline title, and a secondary-colored message.
-                Native buttons sit in a trailing row; the default is prominent in the accent color and destructive is tinted red,
+                Native buttons sit in a row; the current highlight is prominent in the accent color and destructive is tinted red,
+                becoming prominent red when highlighted,
                 with no hard-coded colors. Both styles share keyboard behavior, hotkeys, results, anchoring, and modality.
                 The wire argument is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">style</span>;
                 it has no read-back. Invalid values return <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown style</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--align left|center|right</span>
+                (wire argument <span style="font-family: &quot;JetBrains Mono&quot;, monospace">align</span>) defaults to right.
+                It aligns the whole button block in either style, including the vertical fallback, with no read-back.
+                Invalid values return <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown align</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--default</span> seeds the highlight. Without it,
-                Return is inert until Tab or an arrow selects a button; navigation wraps. Return chooses the highlight.
+                the first non-destructive button is active, or the first if it is the only choice. Tab and arrows
+                move the highlight and wrap. Return chooses the active button in either style.
                 Hotkeys are single ASCII letters, unique case-insensitively.
                 A <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--destructive</span> button cannot be the default.
                 Outside clicks leave the question open.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                No <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> centers in the window.
+                No <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> centers over the terminal area, excluding the sidebar.
                 A session target must be selected and anchors to its whole area.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> narrows placement;
                 a live <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes precedence.

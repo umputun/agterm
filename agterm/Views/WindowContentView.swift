@@ -618,7 +618,7 @@ struct WindowContentView: View {
                                       },
                                       onDismiss: {
                                           guard pick.pendingAsk?.id == ask.id else { return }
-                                          actions.dismissPendingAsk(for: windowID, userInitiated: true)
+                                          actions.escapePendingAsk(for: windowID)
                                       })
                     }
                 }
@@ -649,7 +649,8 @@ struct WindowContentView: View {
 
     private func askAnchorFrame(_ anchor: AskAnchor?, anchors: AskAnchorPreferences, proxy: GeometryProxy) -> CGRect? {
         guard let anchor else {
-            return CGRect(x: 0, y: titlebarHeight, width: proxy.size.width, height: max(0, proxy.size.height - titlebarHeight))
+            return CGRect(x: terminalAreaInset, y: titlebarHeight, width: max(0, proxy.size.width - terminalAreaInset),
+                          height: max(0, proxy.size.height - titlebarHeight))
         }
         guard anchors.sessionID == anchor.sessionID else { return nil }
         if let identity = anchor.paneIdentity {

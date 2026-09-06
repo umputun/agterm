@@ -4,6 +4,31 @@ import Testing
 
 @MainActor
 struct ControlDispatcherAskTests {
+    @Test(arguments: ["", "GUI", "other"])
+    func invalidStyleOrAlignmentNeverReachesTheHost(value: String) async {
+        for args in [ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], style: value, title: "Choose"),
+                     ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], align: value, title: "Choose")] {
+            let actions = MockControlActions()
+            let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+            #expect(response == ControlResponse(ok: false, error: args.style == nil ? "unknown align" : "unknown style"))
+            #expect(actions.calls.isEmpty)
+        }
+    }
+
+    @Test(arguments: ControlAskStyle.allCases, ControlAskAlignment.allCases)
+    func decorationReachesHost(style: ControlAskStyle, align: ControlAskAlignment) async throws {
+        let actions = MockControlActions()
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: ControlArgs(
+            buttons: [ControlAskButton(id: "ok", label: "OK")], style: style.rawValue, align: align.rawValue, title: "Choose"
+        )))
+        guard case let .askOpen(ask, _, _, _, _) = try #require(actions.calls.first) else {
+            Issue.record("expected ask.open")
+            return
+        }
+        #expect(ask.style == style)
+        #expect(ask.align == align)
+    }
+
     @Test(arguments: [
         (ControlArgs(), "ask.open requires a title"),
         (ControlArgs(title: ""), "ask.open requires a title"),
@@ -25,16 +50,11 @@ struct ControlDispatcherAskTests {
          "ask text must not contain control characters"),
         (ControlArgs(buttons: [ControlAskButton(id: "yes", label: "Yes")], defaultButton: "missing", title: "Choose"),
          "unknown default button: missing"),
-        (ControlArgs(buttons: [ControlAskButton(id: "yes", label: "Yes")], cancelButton: "missing", title: "Choose"),
-         "unknown cancel button: missing"),
         (ControlArgs(buttons: [ControlAskButton(id: "yes", label: "Yes")], destructiveButton: "missing", title: "Choose"),
          "unknown destructive button: missing"),
         (ControlArgs(buttons: [ControlAskButton(id: "delete", label: "Delete")],
                      defaultButton: "delete", destructiveButton: "delete", title: "Choose"),
          "default button must not be destructive"),
-        (ControlArgs(buttons: [ControlAskButton(id: "delete", label: "Delete")],
-                     cancelButton: "delete", destructiveButton: "delete", title: "Choose"),
-         "cancel button must not be destructive"),
         (ControlArgs(buttons: [ControlAskButton(id: "one", label: "One", hotkey: "y"),
                               ControlAskButton(id: "two", label: "Two", hotkey: "Y")], title: "Choose"),
          "ask button hotkeys must be unique"),
@@ -108,7 +128,7 @@ struct ControlDispatcherAskTests {
                 ControlAskButton(id: "cancel", label: "Not now", hotkey: "n"),
                 ControlAskButton(id: "delete", label: "Delete"),
             ],
-            defaultButton: "Save", cancelButton: "cancel", destructiveButton: "delete",
+            defaultButton: "Save", destructiveButton: "delete", style: "gui", align: "center",
             window: "window-id", pane: "right", paneID: "pane-id", title: "  Choose  "
         )
         let response = await ControlDispatcher(actions: actions).dispatch(
@@ -130,7 +150,8 @@ struct ControlDispatcherAskTests {
             ControlAskButton(id: "delete", label: "Delete"),
         ])
         #expect(ask.defaultID == "Save")
-        #expect(ask.cancelID == "cancel")
+        #expect(ask.style == .gui)
+        #expect(ask.align == .center)
         #expect(ask.destructiveID == "delete")
         #expect(ask.anchor == nil)
         #expect(target == "session-id")
@@ -155,7 +176,8 @@ struct ControlDispatcherAskTests {
         #expect(ask.buttons == buttons)
         #expect(ask.message == nil)
         #expect(ask.defaultID == nil)
-        #expect(ask.cancelID == nil)
+        #expect(ask.style == .terminal)
+        #expect(ask.align == .right)
         #expect(ask.destructiveID == nil)
         #expect(ask.anchor == nil)
         #expect(target == nil)
@@ -196,12 +218,12 @@ struct ControlDispatcherAskTests {
         #expect(placement == ControlAskPlacement(paneID: "identity"))
     }
 
-    @Test func defaultAndCancelMayNameTheSameSafeButton() async {
+    @Test func cancelLabelIsAnOrdinaryDefaultButton() async {
         let actions = MockControlActions()
         let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
             cmd: .askOpen,
             args: ControlArgs(buttons: [ControlAskButton(id: "cancel", label: "Cancel")],
-                              defaultButton: "cancel", cancelButton: "cancel", title: "Choose")
+                              defaultButton: "cancel", title: "Choose")
         ))
         #expect(response == ControlResponse(ok: true))
         #expect(actions.calls.count == 1)

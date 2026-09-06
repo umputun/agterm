@@ -9,7 +9,7 @@ struct AskCommandsTests {
         let command = try open(["Continue?", "--button", "yes=Yes"])
         let request = try command.makeRequest()
         #expect(request == ControlRequest(cmd: .askOpen, args: ControlArgs(
-            buttons: [ControlAskButton(id: "yes", label: "Yes")], title: "Continue?"
+            buttons: [ControlAskButton(id: "yes", label: "Yes")], style: "terminal", align: "right", title: "Continue?"
         )))
         #expect(!command.noBlock)
         let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
@@ -20,7 +20,7 @@ struct AskCommandsTests {
         let command = try open([
             "Keep changes?", "--message", "Choose an action.", "--button", "save=Save=keep",
             "--button", "no", "--button", "discard=Discard", "--hotkey", "save=S", "--hotkey", "no=n",
-            "--default", "save", "--cancel", "no", "--destructive", "discard",
+            "--default", "save", "--destructive", "discard", "--style", "gui", "--align", "left",
             "--target", "session-id", "--pane", "right", "--pane-id", "pane-token", "--window", "window-id",
             "--follow", "--no-block", "--socket", "/tmp/ask-cli.sock", "--json",
         ])
@@ -29,7 +29,7 @@ struct AskCommandsTests {
             buttons: [ControlAskButton(id: "save", label: "Save=keep", hotkey: "S"),
                       ControlAskButton(id: "no", label: "no", hotkey: "n"),
                       ControlAskButton(id: "discard", label: "Discard")],
-            defaultButton: "save", cancelButton: "no", destructiveButton: "discard",
+            defaultButton: "save", destructiveButton: "discard", style: "gui", align: "left",
             window: "window-id", pane: "right", paneID: "pane-token", title: "Keep changes?"
         )))
         #expect(command.noBlock)
@@ -44,6 +44,8 @@ struct AskCommandsTests {
     }
 
     @Test(arguments: [
+        (["Question", "--button", "ok", "--style", "other"], "unknown style"),
+        (["Question", "--button", "ok", "--align", "other"], "unknown align"),
         (["Question"], "ask requires at least one --button"),
         ([" ", "--button", "ok"], "ask.open requires a title"),
         (["Question", "--button", "ok", "--hotkey", "o"], "--hotkey requires ID=LETTER"),
@@ -109,17 +111,18 @@ struct AskCommandsTests {
         #expect(try JSONDecoder().decode(ControlAskResult.self, from: Data(#require(lines.first).utf8)) == answer)
     }
 
-    @Test func cancelledAnswerPrintsBeforeExitTwo() throws {
+    @Test(arguments: [(ControlAskOutcome.cancelled, Int32(2)), (.escaped, Int32(3))])
+    func dismissalPrintsBeforeExit(outcome: ControlAskOutcome, code: Int32) throws {
         let command = try open(["Continue?", "--button", "yes=Yes"])
         var lines: [String] = []
-        #expect(throws: ExitCode(rawValue: 2)) {
+        #expect(throws: ExitCode(rawValue: code)) {
             try command.execute(send: {
                 $0.cmd == .askOpen
                     ? ControlResponse(ok: true, result: ControlResult(id: "ask-id"))
-                    : ControlResponse(ok: true, result: ControlResult(ask: ControlAskResult(result: .cancelled)))
+                    : ControlResponse(ok: true, result: ControlResult(ask: ControlAskResult(result: outcome)))
             }, sleep: { _ in }, output: { lines.append($0) })
         }
-        #expect(lines == [#"{"result":"cancelled"}"#])
+        #expect(lines == ["{\"result\":\"\(outcome.rawValue)\"}"])
     }
 
     @Test(arguments: [false, true])
@@ -208,6 +211,7 @@ struct AskCommandsTests {
         (ControlAskResult(result: .pending), Int32(1)),
         (ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0), Int32(0)),
         (ControlAskResult(result: .cancelled), Int32(2)),
+        (ControlAskResult(result: .escaped), Int32(3)),
     ])
     func oneShotResultPrintsEveryOutcomeAndMapsExit(result: ControlAskResult, expectedExit: Int32) throws {
         let command = try #require(try Agtermctl.parseAsRoot(["ask", "result", "ask-id", "--window", "w"]) as? Ask.Result)

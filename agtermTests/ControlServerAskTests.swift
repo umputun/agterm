@@ -134,7 +134,8 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertEqual(controller.pendingAsk?.message, ask.message)
         XCTAssertEqual(controller.pendingAsk?.buttons, ask.buttons)
         XCTAssertEqual(controller.pendingAsk?.defaultID, ask.defaultID)
-        XCTAssertEqual(controller.pendingAsk?.cancelID, ask.cancelID)
+        XCTAssertEqual(controller.pendingAsk?.style, .gui)
+        XCTAssertEqual(controller.pendingAsk?.align, .left)
         XCTAssertEqual(controller.pendingAsk?.destructiveID, ask.destructiveID)
     }
 
@@ -306,7 +307,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertEqual(controller.pendingAsk?.id, ask.id)
     }
 
-    func testCommandWAnswersCancelWithoutClosingSessionOrZoom() throws {
+    func testCommandWEscapesWithoutClosingSessionOrZoom() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let controller = register(windowID)
         let session = try XCTUnwrap(library.activeStore?.activeSession)
@@ -319,27 +320,27 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(actions.closeActiveSession())
 
         XCTAssertEqual(controller.askResult(for: ask.id),
-                       ControlAskResult(result: .answered, id: "no", label: "No", index: 1))
+                       ControlAskResult(result: .escaped))
         XCTAssertEqual(zoom.target, .session(session.id, .primary))
         XCTAssertEqual(library.activeStore?.activeSession?.id, session.id)
     }
 
-    func testCommandWWithoutCancelButtonReturnsCancelled() throws {
+    func testCommandWReturnsEscaped() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let controller = register(windowID)
         let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
         XCTAssertTrue(open(ask).ok)
         XCTAssertTrue(actions.closeActiveSession())
-        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .cancelled))
+        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .escaped))
     }
 
-    func testAdministrativeDismissalNeverAnswersTheCancelButton() throws {
+    func testEscapeReleasesTheModalSlot() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let controller = register(windowID)
         let ask = makeAsk()
         XCTAssertTrue(open(ask).ok)
-        XCTAssertTrue(actions.dismissPendingAsk(for: windowID, userInitiated: false))
-        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .cancelled))
+        XCTAssertTrue(actions.escapePendingAsk(for: windowID))
+        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .escaped))
     }
 
     func testTerminationCancelsBothFamiliesAcrossWindows() throws {
@@ -401,7 +402,7 @@ final class ControlServerAskTests: XCTestCase {
         PendingAsk(id: UUID().uuidString, title: "Continue?", message: "Choose an action.", buttons: [
             ControlAskButton(id: "yes", label: "Yes"), ControlAskButton(id: "no", label: "No"),
             ControlAskButton(id: "delete", label: "Delete"),
-        ], defaultID: "yes", cancelID: "no", destructiveID: "delete")
+        ], defaultID: "yes", destructiveID: "delete", style: .gui, align: .left)
     }
 
     private func open(_ ask: PendingAsk, target: String? = nil, window: String? = nil,

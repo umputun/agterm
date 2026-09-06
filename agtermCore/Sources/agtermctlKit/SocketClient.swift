@@ -155,10 +155,11 @@ struct SocketClient {
         String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
     }
 
-    /// askExitCode matches pick's success, pending, and cancellation process statuses.
+    /// askExitCode distinguishes user dismissal from administrative cancellation.
     static func askExitCode(for outcome: ControlAskOutcome) -> ExitCode {
         switch outcome {
         case .answered: .success
+        case .escaped: ExitCode(rawValue: 3)
         case .pending: .failure
         case .cancelled: ExitCode(rawValue: 2)
         }

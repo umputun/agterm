@@ -423,7 +423,7 @@ struct SocketClientTests {
         #expect(SocketClient.pickExitCode(for: outcome).rawValue == expected)
     }
 
-    @Test(arguments: [(ControlAskOutcome.pending, Int32(1)), (.answered, Int32(0)), (.cancelled, Int32(2))])
+    @Test(arguments: [(ControlAskOutcome.pending, Int32(1)), (.answered, Int32(0)), (.cancelled, Int32(2)), (.escaped, Int32(3))])
     func askExitCodeMapsEveryOutcome(outcome: ControlAskOutcome, expected: Int32) {
         #expect(SocketClient.askExitCode(for: outcome).rawValue == expected)
     }

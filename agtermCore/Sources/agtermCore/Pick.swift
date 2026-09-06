@@ -107,6 +107,11 @@ public final class PickController {
         resolveAsk(ControlAskResult(result: .cancelled))
     }
 
+    /// escapeAsk retains a user dismissal separately from administrative cancellation.
+    public func escapeAsk() {
+        resolveAsk(ControlAskResult(result: .escaped))
+    }
+
     /// askResult returns the pending or retained outcome for an exact ask id.
     public func askResult(for id: String) -> ControlAskResult? {
         if pendingAsk?.id == id {

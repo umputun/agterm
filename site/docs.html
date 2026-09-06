@@ -1992,14 +1992,17 @@
               The default <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style terminal</span> uses monospace text
               and theme-colored filled buttons; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span>
               uses the picker's material appearance, system fonts, and native buttons. Both styles share placement and behavior.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--align left|center|right</span> aligns the button
+              block in either style, including a vertical column; the default is right.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Without a default, use Tab or arrows before Return. Esc and Command-W return
+              Without a default, the first non-destructive button is active, or the first if it is the only choice.
+              Tab and arrows move the highlight; Return activates it in either style. Esc and Command-W return
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">escaped</span> with exit 3.
               Cancellation through the API, window teardown, app termination, or anchor loss returns
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span> with exit 2.
               Target a selected session to center over its whole area, optionally narrowed to a pane; omit the target for
-              window-center placement. See the <a href="/commands#ask" style="color: #6d82f3">ask reference</a> for flags,
+              placement over the terminal area, excluding the sidebar. See the <a href="/commands#ask" style="color: #6d82f3">ask reference</a> for flags,
               result polling, and cancellation.
             </p>
 

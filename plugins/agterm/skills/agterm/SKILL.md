@@ -525,10 +525,12 @@ Only one pick or ask may be pending per window. It opens without raising a backg
 **ask**: `ask TITLE --button ID=LABEL [--button ...] [--message TEXT]` opens a themed question with
 one to six buttons and blocks for a bare JSON answer. `--default ID` seeds the highlight;
 `--destructive ID` styles a button that cannot be the default.
-`--hotkey ID=LETTER` adds a letter shortcut. Without a default, use Tab/arrows before Return.
+`--hotkey ID=LETTER` adds a letter shortcut. Without a default, the first non-destructive button is
+active (the first button if it is the only choice). Return always activates the highlighted button.
 `--style terminal|gui` defaults to `terminal`; `gui` uses the picker's material appearance and native
-buttons. Style changes only decoration, has no read-back, and rejects other values as `unknown style`.
-No `--target` centers in the window; a selected session target uses its whole area, narrowed by
+buttons. `--align left|center|right` aligns the button block in either style (default `right`).
+Style changes only decoration, has no read-back, and rejects other values as `unknown style`.
+No `--target` centers over the terminal area, excluding the sidebar; a selected session target uses its whole area, narrowed by
 `--pane` or `--pane-id`. `--window` selects the window and `--follow` raises it.
 Exit 0 means answered, including No: inspect `.id` before acting. Esc/Command-W return `escaped`
 with exit 3; `ask.cancel`, window teardown, app termination, and anchor loss return `cancelled` with exit 2.

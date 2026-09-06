@@ -8,7 +8,8 @@ pressed. Today the control API offers a searchable list (`pick`), one-way panels
 `pick` shows a search field and a list where a dialog is wanted.
 
 `ask` adds a theme-styled, terminal-looking modal dialog: a title, an optional message, and one to six
-caller-named buttons. It resolves with the pressed button's id, label, and caller index, or `cancelled`.
+caller-named buttons. It resolves with the pressed button's id, label, and caller index, or `escaped`
+or `cancelled`.
 The command family, blocking CLI, result retention, and tree read-back copy `pick` one to one.
 
 ## Context (from discovery)
@@ -70,7 +71,8 @@ Decisions settled in design review (Eugene, with codex as second reader):
   that reads "is a picker pending" reads "is a modal pending" instead.
 - **Placement: session-wide by default.** With a session target the dialog draws over that session's
   whole area, both halves of a split; `--pane left|right` narrows it to one half. With no session it
-  draws at window center. A supplied session or pane that is missing or not visible rejects the open;
+  centers over the terminal area, right of the sidebar and below the titlebar, exactly where the pick
+  palette centers (`terminalAreaInset`). A supplied session or pane that is missing or not visible rejects the open;
   `--pane` without a session is rejected.
 - **Anchor identity is captured at open**; its geometry follows resizes. The anchor is lost, and the ask
   resolves `cancelled`, when the anchored session is closed or deselected in its window, or when an
@@ -79,24 +81,32 @@ Decisions settled in design review (Eugene, with codex as second reader):
   screen, maximized included. The dialog never relocates.
 - **Zoom and dashboard**: an anchored open while terminal zoom or the dashboard covers the owning window
   is rejected with `session not visible`, since the deck under them is not on screen. An unanchored ask
-  draws at window center above zoom and dashboard, exactly as pick does. Opening zoom, dashboard, quick
+  draws at terminal-area center above zoom and dashboard, exactly as pick does. Opening zoom, dashboard, quick
   terminal, or search while an ask is pending is refused by the shared modal gates.
-- **Rendering: theme-styled and terminal-looking**, drawn by agterm over the pane in the theme's
-  background and foreground with the terminal font. Buttons are bracketed monospace labels with a
-  highlighted current button and underlined hotkeys, never Aqua push buttons. Clicking outside the panel
-  does nothing.
-- **Dismissal is two kinds.** User dismissal (Esc, ⌘W, the button named `cancel`) returns the `cancel`
-  button as `answered` when one is named, otherwise `cancelled`. Administrative cancellation
-  (`ask.cancel`, window teardown, app termination, CLI abandon, anchor loss) always returns `cancelled`
-  and never synthesizes a button.
-- **Keyboard contract**, independent of macOS conventions: `default` names the initially highlighted
-  button; with no `default` nothing is highlighted and Return is inert until navigation. Tab, Right, Down
-  select the first button when nothing is highlighted and otherwise move forward; Shift-Tab, Left, Up
-  select the last and otherwise move back; movement wraps. Return activates the highlight; a hotkey
-  activates its button directly. A `destructive` button is reachable by navigation and hotkey but may
-  not be `default` or `cancel`; both are validation errors, never silently ignored.
-- **Result shape** copies pick: `{"result":"answered","id":"yes","label":"Yes","index":0}` or
-  `{"result":"cancelled"}`; `index` is the caller's button order regardless of vertical layout.
+- **Rendering has two styles**, selected by `style` (`terminal` default, `gui`), identical in every
+  behavior. `terminal` is drawn over the pane in the theme's background and foreground with the terminal
+  font: every button is a padded, bracketed monospace label on a dim fill (foreground at low opacity),
+  the active one solid foreground with background-colored text, hotkeys underlined. `gui` reuses the
+  picker's material panel, corner radius and appearance handling with system fonts: headline title,
+  secondary message, native push buttons in a trailing row, the current highlight prominent in the accent color,
+  the destructive one tinted red and prominent red when highlighted, no hard-coded colors. Clicking outside the panel does nothing in either.
+  `style` is decoration, so it has no read-back; an unknown value is rejected.
+- **Button block alignment** is `align` (`left`, `center`, `right`; default `right`), CLI `--align`, in
+  both styles. It places the whole button block within the panel; the vertical fallback aligns its column
+  the same way. Decoration like `style`: no read-back, unknown value rejected.
+- **Dismissal is two kinds.** User dismissal (Esc, ⌘W) returns `escaped`, CLI exit 3. Administrative
+  cancellation (`ask.cancel`, window teardown, app termination, CLI abandon, anchor loss) returns
+  `cancelled`, exit 2. Neither synthesizes a button, and there is no cancel button role: a caller's
+  "Cancel" button is an ordinary button answered by id. ⌘W dismisses the ask for consistency with pick.
+- **Keyboard contract**: exactly one button is highlighted at every moment and Return activates it.
+  `default` names the initial highlight; without it the first button that is not `destructive` is
+  highlighted, or the first button when it is the only one. Tab, Right, Down move forward; Shift-Tab,
+  Left, Up move back; movement wraps. A hotkey activates its button directly. A `destructive` button is
+  reachable by navigation and hotkey but may not be `default`; that is a validation error, never
+  silently ignored. The active button is visibly distinct from the others in both styles.
+- **Result shape** copies pick: `{"result":"answered","id":"yes","label":"Yes","index":0}`,
+  `{"result":"escaped"}` or `{"result":"cancelled"}`; `index` is the caller's button order regardless
+  of vertical layout.
   `ask.result` over the socket also reports `pending`; the blocking CLI prints only the terminal answer.
 - **Tree** exposes `askPending` (the id) on the window node next to `pickPending`.
 - **Naming**: `ask.open` / `ask.result` / `ask.cancel`; CLI `agtermctl ask`.
@@ -113,23 +123,26 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 
 - `Command`: `askOpen = "ask.open"`, `askResult = "ask.result"`, `askCancel = "ask.cancel"`.
 - `ControlArgs` additions: `buttons: [ControlAskButton]?`, `defaultButton: String?`,
-  `cancelButton: String?`, `destructiveButton: String?`. Reused: `title` (notify's field), `message`
+  `destructiveButton: String?`, `style: String?`, `align: String?`. Reused: `title` (notify's field), `message`
   (dialog body), `pane`, `paneID`, `window`, `follow`. `target` is the session for `ask.open` (optional)
   and the ask id for `ask.result`/`ask.cancel`. `ControlArgs` is synthesized `Codable` with no coding
   keys, so the additions are plain optional fields.
 - `ControlResult.ask: ControlAskResult?`; `ask.open` answers `ControlResult(id:)` like pick, plus
   `result.pane` when a pane anchor was resolved: `--pane` changes where the dialog lands, and
   control-api.md requires a read-back for such a field, as `session.restore` does.
-- `ControlAskButton { id, label, hotkey: String? }`, `ControlAskOutcome { pending, answered, cancelled }`,
-  `ControlAskResult { result, id?, label?, index? }` in `ControlAsk.swift`.
+- `ControlAskButton { id, label, hotkey: String? }`, `ControlAskOutcome { pending, answered, escaped,
+  cancelled }`, `ControlAskResult { result, id?, label?, index? }`, `ControlAskStyle { terminal, gui }`,
+  `ControlAskAlignment { left, center, right }``
+  in `ControlAsk.swift`.
 
 ### Validation (`ControlDispatcher+Ask.swift`, host-free)
 
 - `ControlAskPlacement` carries parsed `pane` and unresolved `paneID` together in the host action.
 - `title` required and non-blank; `title`, `message`, and every label free of control characters.
 - 1...6 buttons (`ControlAskButton.maxButtons = 6`), unique ids, non-empty labels.
-- `default`, `cancel`, `destructive` must each name an existing button; `default == destructive` and
-  `cancel == destructive` are rejected with explicit messages.
+- `default` and `destructive` must each name an existing button; `default == destructive` is rejected
+  with an explicit message.
+- `style`, when present, is `terminal` or `gui`; anything else is `unknown style`.
 - `hotkey` is one ASCII letter, stored lowercased, unique across buttons. Return, Tab, Esc, arrows,
   digits and punctuation are rejected so a hotkey can never collide with navigation or dismissal. A key
   event carrying Command, Control, or Option never activates a hotkey.
@@ -141,7 +154,7 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 
 ### Model (`Ask.swift`, agtermCore)
 
-- `PendingAsk { id, title, message?, buttons, defaultID?, cancelID?, destructiveID?, anchor: AskAnchor? }`
+- `PendingAsk { id, title, message?, buttons, defaultID?, destructiveID?, style, align, anchor: AskAnchor? }`
   with `AskAnchor { sessionID: UUID, pane: OverlayPane?, paneIdentity: UUID? }`.
 - `PickController` gains `pendingAsk: PendingAsk?`, `recentAskResults: [ResolvedAsk]`,
   `openAsk(_:) -> Bool`, `resolveAsk(_:)`, `cancelAsk()`, `askResult(for:)`, and the shared predicate
@@ -151,8 +164,8 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 - `PickRegistry.unregister` cancels the pending ask and retains its results; `liveAsk(for:)` and
   `retainedAskResult(for:)` mirror the pick lookups.
 - `AskNavigation` (host-free, in `Ask.swift`) holds the highlight state machine: `highlighted: Int?`
-  seeded from `defaultID`, `moveForward()`, `moveBackward()` with the first/last entry rules and wrap,
-  `activate() -> Int?` (nil while nothing is highlighted), `hotkey(_ letter:) -> Int?`. The app-side key
+  seeded from `defaultID`, otherwise the first non-destructive button or first available button.
+  `moveForward()` and `moveBackward()` wrap; `activate() -> Int?` is nil only for an empty list, `hotkey(_ letter:) -> Int?`. The app-side key
   catcher only maps key events onto these calls, so the whole keyboard contract is unit-tested in
   `agtermCore`.
 
@@ -191,8 +204,7 @@ left outside the pick host itself. Sites by kind:
   `PickController.pendingModalError` (`pick pending` or `ask pending`) so the pick message and its tests
   stay unchanged
 
-⌘W: `dismissPendingAsk(userInitiated: true)` resolves the cancel button or `cancelled`; termination and
-teardown call `cancelAsk()`.
+⌘W and Esc: `escapeAsk()` resolves `escaped`; termination and teardown call `cancelAsk()`.
 
 ### View (`agterm/Views/AskDialogView.swift`)
 
@@ -218,7 +230,7 @@ teardown call `cancelAsk()`.
   bounds and each rendered pane's bounds, so the preference `reduce` never merges frames from the other
   deck sessions the `ForEach` keeps mounted at opacity zero; the ask host resolves the anchors in its own
   coordinate space (sidebar and titlebar offsets included). Session-wide uses the container bounds, `--pane` the named pane's bounds, no anchor
-  the whole window center below the titlebar. Validity is derived from state, not from the preference:
+  the terminal area center below the titlebar and right of the sidebar. Validity is derived from state, not from the preference:
   `store.selectedSessionID == anchor.sessionID`, and for a pane anchor the captured pane IDENTITY is
   resolved to its CURRENT role first (`Session.askTargetPane`, the same identity-to-role lookup as
   `hudTargetPane`), then `session.rendersPane(role)`; a nil role or a false `rendersPane` cancels. Both
@@ -232,7 +244,7 @@ teardown call `cancelAsk()`.
 
 ```
 agtermctl ask TITLE [--message TEXT] --button ID=LABEL [--button ...] [--hotkey ID=K ...]
-             [--default ID] [--cancel ID] [--destructive ID]
+             [--default ID] [--destructive ID] [--style terminal|gui]
              [--target SESSION] [--pane left|right] [--pane-id TOKEN] [--window W] [--follow] [--no-block]
 agtermctl ask result ID
 agtermctl ask cancel ID
@@ -241,11 +253,11 @@ agtermctl ask cancel ID
 - `--button ID=LABEL` splits on the first `=`; a missing `=` uses the token as both. `--hotkey ID=K`
   attaches a hotkey to a declared button.
 - `--target` is `ask`'s own optional option, not `TargetOptions`, whose default of `active` would turn
-  every no-target call into an anchored one and break window-center placement.
+  every no-target call into an anchored one and break terminal-area placement.
 - `--pane-id` exposes the existing stable-token wire field, with the same target requirement as `--pane`.
 - `Ask.self` is registered in `Agtermctl.configuration.subcommands` (`agtermctlKit/Commands.swift`).
 - Default subcommand is open. Blocking poll, delays, abandon-on-transport-failure, and exit codes (0
-  answered, 2 cancelled, 1 failure) reuse the pick helpers, generalized to take the outcome kind.
+  answered, 3 escaped, 2 cancelled, 1 failure) reuse the pick helpers, generalized to take the outcome kind.
 - `--no-block` prints `{"id":...}`. The one-shot `ask result ID` prints whatever the socket reports,
   `pending` included, and exits 1 for pending like `pick result`.
 
@@ -439,14 +451,63 @@ event-arguments rule.
 - [x] skill reference and examples: the command, one hook example (a yes/no before a destructive step)
 - [x] no surface states a command count
 
-### Task 10: Verify acceptance criteria
+### ➕ Task 10: Escaped result, filled buttons, and the gui style
+
+Eugene's review of the built dialog changed the contract after Task 9 documented it. This task moves the
+code to what the docs already say; the Solution Overview above is the authority.
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/ControlAsk.swift` (`escaped`, `ControlAskStyle`),
+  `ControlProtocol.swift` (drop `cancelButton`, add `style` and `align`),
+  `Ask.swift` (drop `cancelID`, add `style` and `align`),
+  `Pick.swift` (`escapeAsk()`), `ControlDispatcher+Ask.swift` (drop the cancel role, validate `style`)
+- Modify: `agtermCore/Sources/agtermctlKit/AskCommands.swift` (drop `--cancel`, add `--style`),
+  `SocketClient.swift` (`escaped` exits 3)
+- Modify: `agterm/AppActions+Focus.swift` (`dismissPendingAsk` becomes escape, no button lookup),
+  `agterm/Views/AskDialogView.swift` (filled buttons, `gui` rendering), `agterm/Views/WindowContentView.swift`
+  (Esc resolves `escaped`)
+- Modify: every test that named the cancel role: `ControlProtocolTests`, `AskTests`,
+  `ControlDispatcherAskTests`, `AskCommandsTests`, `SocketClientTests`, `ControlServerAskTests`,
+  `AskDialogViewTests`, `ControlAskUITests`
+
+- [x] `ControlAskOutcome.escaped`; `escapeAsk()` on the controller; Esc and ⌘W resolve it
+- [x] remove `cancelButton`/`cancelID`/`--cancel` and the cancel-versus-destructive rule everywhere
+- [x] `style` on the wire, validated host-free, carried on `PendingAsk`; CLI `--style`, default `terminal`
+- [x] `align` on the wire (`ControlAskAlignment { left, center, right }`), validated host-free, carried
+      on `PendingAsk`; CLI `--align`, default `right`; both styles and the vertical fallback honor it
+- [x] docs: add `style` and `align` to control-api.md, commands.html, docs.html and the skill reference
+      where Task 9 described `style`
+- [x] unanchored placement centers over the terminal area: `askAnchorFrame` with no anchor starts at
+      `terminalAreaInset`, not x 0, so the sidebar is excluded like the pick palette; UI test asserts
+      the dialog's minX is at or right of the sidebar's maxX with the sidebar visible
+- [x] long labels never clip: in the vertical fallback a button's label wraps within the panel width
+      (the width clamp applies to the text, not only the panel), and the panel never exceeds the anchor;
+      hosted render check with a label longer than the anchor is wide
+- [x] terminal style: every button on a dim fill (foreground at low opacity), the active one solid
+      foreground with background-colored text, bracket marker and hotkey underline kept
+- [x] gui style: picker's `PalettePanelBackground`, corner radius and appearance handling, system font,
+      headline title, secondary message, native push buttons in a trailing row, `.borderedProminent`
+      highlight, red-tinted destructive; same `AskKeyCatcher` and `AskNavigation`
+- [x] CLI exit 3 for `escaped`; `ask result` one-shot maps it the same way
+- [x] update unit, hosted and UI tests to the new contract; Esc and ⌘W cases assert `escaped`
+- [x] UI tests: `--default` then Return answers the default; Right arrow then Return answers the second
+      button; a `--style gui` open renders `ask-dialog` with native buttons and answers by click
+- [x] hosted render check of both styles in light and dark appearance
+- [x] run `-only-testing:agtermUITests/ControlAskUITests` and the affected core suites
+- [x] one button is always highlighted: `AskNavigation` seeds from `default`, else the first
+      non-destructive button, else the first; `activate()` never returns nil for a non-empty list; the
+      inert-Return unit and UI cases become "Return without default answers the first non-destructive
+      button"; the terminal active style must read as active at a glance against the dim fills
+
+### Task 11: Verify acceptance criteria
 - [ ] every decision in Solution Overview is implemented and has a test
 - [ ] `cd agtermCore && swift test`
 - [ ] `make test-app`
 - [ ] `make lint` with zero findings
-- [ ] Debug instance: manual pass of the keyboard contract and a theme switch while the dialog is up
+- [ ] Debug instance: manual pass of the keyboard contract and a theme switch while the dialog is up,
+      in both styles
 
-### Task 11: [Final] Update documentation
+### Task 12: [Final] Update documentation
 - [ ] CLAUDE.md if a new constraint surfaced during implementation
 - [ ] move this plan to `docs/plans/completed/`
 
@@ -454,6 +515,6 @@ event-arguments rule.
 
 **Manual verification**:
 - run the bundled skill's example hook against a Release build installed with `make deploy`
-- confirm `agtermctl ask` from inside a session with no `--target` still draws at window center
+- confirm `agtermctl ask` from inside a session with no `--target` still draws at terminal-area center
 
 Smells pre-check: skipped — non-Go project

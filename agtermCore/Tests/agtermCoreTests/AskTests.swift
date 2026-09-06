@@ -4,12 +4,23 @@ import Testing
 
 @MainActor
 struct AskTests {
+    @Test func escapeRetainsAButtonlessResultAndReleasesTheSlot() {
+        let controller = PickController()
+        #expect(controller.openAsk(makeAsk(id: "escaped")))
+        controller.escapeAsk()
+        controller.cancelAsk()
+        #expect(!controller.modalPending)
+        #expect(controller.askResult(for: "escaped") == ControlAskResult(result: .escaped))
+        #expect(controller.recentAskResults.count == 1)
+        #expect(controller.openAsk(makeAsk(id: "next")))
+    }
+
     @Test func openCarriesDialogFieldsAndReservesModalSlot() {
         let controller = PickController()
         let anchor = AskAnchor(sessionID: UUID(), pane: .right, paneIdentity: UUID())
         let ask = PendingAsk(
             id: "anchored", title: "Save changes?", message: "Changes have not been saved.",
-            buttons: buttons(count: 3), defaultID: "button-0", cancelID: "button-1",
+            buttons: buttons(count: 3), defaultID: "button-0",
             destructiveID: "button-2", anchor: anchor
         )
 
@@ -40,10 +51,9 @@ struct AskTests {
         #expect(controller.askResult(for: ask.id) == answer)
     }
 
-    @Test func cancelDoesNotAnswerTheNamedCancelButton() {
+    @Test func cancelRetainsAdministrativeOutcome() {
         let controller = PickController()
-        let ask = PendingAsk(id: "cancelled", title: "Continue?", buttons: buttons(count: 1),
-                             cancelID: "button-0")
+        let ask = PendingAsk(id: "cancelled", title: "Continue?", buttons: buttons(count: 1))
         #expect(controller.openAsk(ask))
 
         controller.cancelAsk()
@@ -130,8 +140,7 @@ struct AskTests {
         registry.register(windowID, controller: controller)
         #expect(controller.open(PendingPick(id: pickID, items: [ControlPickItem(id: "one", label: "One")])))
         controller.cancel()
-        #expect(controller.openAsk(PendingAsk(id: askID, title: "Continue?", buttons: buttons(count: 1),
-                                             cancelID: "button-0")))
+        #expect(controller.openAsk(PendingAsk(id: askID, title: "Continue?", buttons: buttons(count: 1))))
 
         registry.unregister(windowID)
         registry.unregister(windowID)
@@ -172,10 +181,10 @@ struct AskTests {
     }
 
     @Test(arguments: [1, 6])
-    func navigationWithoutDefaultLeavesReturnInert(count: Int) {
-        let navigation = AskNavigation(buttons: buttons(count: count))
-        #expect(navigation.highlighted == nil)
-        #expect(navigation.activate() == nil)
+    func navigationWithoutDefaultAnswersFirstNonDestructiveButton(count: Int) {
+        let navigation = AskNavigation(buttons: buttons(count: count), destructiveID: "button-0")
+        #expect(navigation.highlighted == (count == 1 ? 0 : 1))
+        #expect(navigation.activate() == (count == 1 ? 0 : 1))
     }
 
     @Test(arguments: [(1, "button-0", 0), (6, "button-4", 4)])
@@ -185,8 +194,8 @@ struct AskTests {
         #expect(navigation.activate() == expectedIndex)
     }
 
-    @Test(arguments: [(1, [0, 0]), (6, [0, 1, 2, 3, 4, 5, 0])])
-    func forwardNavigationEntersFirstAndWraps(count: Int, expectedIndices: [Int]) {
+    @Test(arguments: [(1, [0, 0]), (6, [1, 2, 3, 4, 5, 0, 1])])
+    func forwardNavigationAdvancesAndWraps(count: Int, expectedIndices: [Int]) {
         var navigation = AskNavigation(buttons: buttons(count: count))
         for expected in expectedIndices {
             navigation.moveForward()
@@ -196,7 +205,7 @@ struct AskTests {
     }
 
     @Test(arguments: [(1, [0, 0]), (6, [5, 4, 3, 2, 1, 0, 5])])
-    func backwardNavigationEntersLastAndWraps(count: Int, expectedIndices: [Int]) {
+    func backwardNavigationWrapsToLast(count: Int, expectedIndices: [Int]) {
         var navigation = AskNavigation(buttons: buttons(count: count))
         for expected in expectedIndices {
             navigation.moveBackward()
@@ -214,13 +223,13 @@ struct AskTests {
     }
 
     @Test(arguments: [("y", 0), ("Y", 0), ("n", 1), ("N", 1)])
-    func hotkeysAreCaseInsensitiveAndNeedNoHighlight(letter: String, expectedIndex: Int) {
+    func hotkeysAreCaseInsensitiveAndIndependentOfHighlight(letter: String, expectedIndex: Int) {
         let navigation = AskNavigation(buttons: [
             ControlAskButton(id: "yes", label: "Yes", hotkey: "Y"),
             ControlAskButton(id: "no", label: "No", hotkey: "n"),
         ])
         #expect(navigation.hotkey(letter) == expectedIndex)
-        #expect(navigation.highlighted == nil)
+        #expect(navigation.highlighted == 0)
     }
 
     @Test func undeclaredHotkeyDoesNotMatchALabelOrChangeSelection() {
@@ -237,9 +246,9 @@ struct AskTests {
         let ask = PendingAsk(id: "delete", title: "Delete?", buttons: [
             ControlAskButton(id: "cancel", label: "Cancel"),
             ControlAskButton(id: "delete", label: "Delete", hotkey: "d"),
-        ], cancelID: "cancel", destructiveID: "delete")
-        var navigation = AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID)
-        #expect(navigation.activate() == nil)
+        ], destructiveID: "delete")
+        var navigation = AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID, destructiveID: ask.destructiveID)
+        #expect(navigation.activate() == 0)
         navigation.moveBackward()
         #expect(navigation.activate() == 1)
         #expect(navigation.hotkey("d") == 1)

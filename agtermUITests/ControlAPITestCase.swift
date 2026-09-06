@@ -507,6 +507,22 @@ class ControlAPITestCase: XCTestCase {
         return try XCTUnwrap((response["result"] as? [String: Any])?["ask"] as? [String: Any])
     }
 
+    func openAskCLI(_ arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = Bundle.main.bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("agterm.app/Contents/MacOS/agtermctl")
+        process.arguments = ["ask", "Choose an action", "--no-block", "--socket", socketPath] + arguments
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, String(decoding: data, as: UTF8.self))
+        let result = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try XCTUnwrap(result["id"] as? String)
+    }
+
     func awaitAskResult(_ id: String, window: String? = nil, timeout: TimeInterval = 10) throws -> [String: Any] {
         let deadline = Date().addingTimeInterval(timeout)
         var result = try askResult(id, window: window)

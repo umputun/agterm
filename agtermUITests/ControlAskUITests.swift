@@ -2,6 +2,76 @@ import XCTest
 
 @MainActor
 final class ControlAskUITests: ControlAPITestCase {
+    func testButtonBlockAlignmentInBothStylesAndLayouts() throws {
+        for style in ["terminal", "gui"] {
+            for vertical in [false, true] {
+                let label = vertical ? "A longer choice that forces the button row to wrap" : "First"
+                for align in ["left", "center", "right"] {
+                    let id = try openAsk([["id": "first", "label": label], ["id": "last", "label": label]],
+                                         options: ["style": style, "align": align])
+                    XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+                    let first = askButton("first").frame
+                    let last = askButton("last").frame
+                    let block = first.union(last)
+                    let panel = askDialog.frame
+                    if vertical {
+                        XCTAssertGreaterThan(last.midY, first.midY)
+                    } else {
+                        XCTAssertEqual(first.midY, last.midY, accuracy: 1)
+                        XCTAssertGreaterThan(last.midX, first.midX)
+                    }
+                    switch align {
+                    case "left": XCTAssertLessThan(block.midX, panel.midX - 5)
+                    case "right": XCTAssertGreaterThan(block.midX, panel.midX + 5)
+                    default: XCTAssertEqual(block.midX, panel.midX, accuracy: 2)
+                    }
+                    clickAskButton("last")
+                    XCTAssertEqual(try awaitAskResult(id)["index"] as? Int, 1)
+                    XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
+                }
+            }
+        }
+    }
+
+    func testCLIDefaultThenReturnAnswersDefault() throws {
+        let id = try openAskCLI(["--button", "yes=Yes", "--button", "no=No", "--default", "no"])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "no")
+    }
+
+    func testUnanchoredDialogExcludesVisibleSidebar() throws {
+        let response = try sendControlCommand("tree")
+        let tree = try XCTUnwrap((response["result"] as? [String: Any])?["tree"] as? [String: Any])
+        XCTAssertEqual(tree["sidebarVisible"] as? Bool, true)
+        let width = try XCTUnwrap(tree["sidebarWidth"] as? Double)
+        let id = try openAsk([["id": "ok", "label": "OK"]])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(askDialog.frame.minX, app.windows.firstMatch.frame.minX + width)
+        clickAskButton("ok")
+        XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "ok")
+    }
+
+    func testCLIArrowMovesFromDefaultToSecondButton() throws {
+        let id = try openAskCLI(["--button", "yes=Yes", "--button", "no=No", "--default", "yes"])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        app.typeKey(.rightArrow, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        let result = try awaitAskResult(id)
+        XCTAssertEqual(result["id"] as? String, "no")
+        XCTAssertEqual(result["index"] as? Int, 1)
+    }
+
+    func testCLIGUIStyleAnswersByNativeButtonClick() throws {
+        let id = try openAskCLI(["--style", "gui", "--button", "yes=Yes", "--button", "no=No", "--default", "yes"])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["ask-button-no"].waitForExistence(timeout: 5))
+        clickAskButton("no")
+        let result = try awaitAskResult(id)
+        XCTAssertEqual(result["result"] as? String, "answered")
+        XCTAssertEqual(result["id"] as? String, "no")
+    }
+
     func testRenderClickReturnsCallerButtonAndClearsPending() throws {
         let id = try openAsk([
             ["id": "save", "label": "Save"],
@@ -24,23 +94,55 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertNil(try treeAskPending())
     }
 
-    func testReturnIsInertUntilTabSelectsFirstButton() throws {
-        let id = try openAsk([["id": "yes", "label": "Yes"], ["id": "no", "label": "No"]])
-        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
-
-        app.typeKey(.return, modifierFlags: [])
-
-        XCTAssertFalse(askDialog.waitForNonExistence(timeout: 1))
-        XCTAssertEqual(try askResult(id)["result"] as? String, "pending")
-        app.typeKey(.tab, modifierFlags: [])
-        app.typeKey(.return, modifierFlags: [])
-        let result = try awaitAskResult(id)
-        XCTAssertEqual(result["result"] as? String, "answered")
-        XCTAssertEqual(result["id"] as? String, "yes")
-        XCTAssertEqual(result["index"] as? Int, 0)
+    func testReturnWithoutDefaultAnswersFirstNonDestructiveButton() throws {
+        for style in ["terminal", "gui"] {
+            let id = try openAsk([["id": "delete", "label": "Delete"], ["id": "keep", "label": "Keep"]],
+                                 options: ["style": style, "destructiveButton": "delete"])
+            XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+            XCTAssertEqual(askButton("keep").value as? String, "selected")
+            XCTAssertEqual(askButton("delete").value as? String, "")
+            app.typeKey(.return, modifierFlags: [])
+            let result = try awaitAskResult(id)
+            XCTAssertEqual(result["result"] as? String, "answered")
+            XCTAssertEqual(result["id"] as? String, "keep")
+            XCTAssertEqual(result["index"] as? Int, 1)
+            XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
+        }
     }
 
-    func testHotkeyAnswersWithoutAnInitialHighlight() throws {
+    func testGUIHighlightMovesWithArrowsAndTab() throws {
+        let id = try openAsk([["id": "keep", "label": "Keep"], ["id": "delete", "label": "Delete", "hotkey": "d"]],
+                             options: ["style": "gui", "destructiveButton": "delete"])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        XCTAssertEqual(askButton("keep").value as? String, "selected")
+        app.typeKey(.rightArrow, modifierFlags: [])
+        XCTAssertEqual(askButton("delete").value as? String, "selected")
+        XCTAssertEqual(askButton("keep").value as? String, "")
+        app.typeKey(.tab, modifierFlags: [])
+        XCTAssertEqual(askButton("keep").value as? String, "selected")
+        app.typeKey(.tab, modifierFlags: .shift)
+        XCTAssertEqual(askButton("delete").value as? String, "selected")
+        app.typeKey(.leftArrow, modifierFlags: [])
+        XCTAssertEqual(askButton("keep").value as? String, "selected")
+        app.typeKey("d", modifierFlags: [])
+        XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "delete")
+    }
+
+    func testGUICLIRightThenReturnAndEscape() throws {
+        let arguments = ["--style", "gui", "--button", "first=First", "--button", "second=Second"]
+        let id = try openAskCLI(arguments)
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        app.typeKey(.rightArrow, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "second")
+        XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
+        let escaped = try openAskCLI(arguments)
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertEqual(try awaitAskResult(escaped)["result"] as? String, "escaped")
+    }
+
+    func testHotkeyAnswersIndependentlyOfHighlight() throws {
         let id = try openAsk([
             ["id": "yes", "label": "Yes", "hotkey": "y"],
             ["id": "no", "label": "No", "hotkey": "n"],
@@ -55,42 +157,32 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertEqual(result["index"] as? Int, 1)
     }
 
-    func testEscapeUsesNamedCancelOrReturnsCancelled() throws {
-        let named = try openAsk([["id": "yes", "label": "Yes"], ["id": "later", "label": "Later"]],
-                                options: ["cancelButton": "later"])
+    func testEscapeReturnsEscapedWithoutAButtonAnswer() throws {
+        let id = try openAsk([["id": "cancel", "label": "Cancel"]])
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
         app.typeKey(.escape, modifierFlags: [])
-        let answer = try awaitAskResult(named)
-        XCTAssertEqual(answer["result"] as? String, "answered")
-        XCTAssertEqual(answer["id"] as? String, "later")
-        XCTAssertEqual(answer["index"] as? Int, 1)
-        XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
-
-        let unnamed = try openAsk([["id": "yes", "label": "Yes"]])
-        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
-        app.typeKey(.escape, modifierFlags: [])
-        let cancelled = try awaitAskResult(unnamed)
-        XCTAssertEqual(cancelled["result"] as? String, "cancelled")
-        XCTAssertNil(cancelled["id"])
+        let result = try awaitAskResult(id)
+        XCTAssertEqual(result["result"] as? String, "escaped")
+        XCTAssertNil(result["id"])
         XCTAssertTrue(askDialog.waitForNonExistence(timeout: 10))
     }
 
-    func testCommandWAnswersCancelWithoutClosingTheWindow() throws {
+    func testCommandWEscapesWithoutClosingTheWindow() throws {
         let session = try activeSessionID()
-        let id = try openAsk([["id": "later", "label": "Later"]], options: ["cancelButton": "later"])
+        let id = try openAsk([["id": "later", "label": "Later"]])
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
 
         app.typeKey("w", modifierFlags: .command)
 
         let result = try awaitAskResult(id)
-        XCTAssertEqual(result["result"] as? String, "answered")
-        XCTAssertEqual(result["id"] as? String, "later")
+        XCTAssertEqual(result["result"] as? String, "escaped")
+        XCTAssertNil(result["id"])
         XCTAssertTrue(app.windows.firstMatch.exists)
         XCTAssertEqual(try sessionNode(id: session)["active"] as? Bool, true)
     }
 
     func testOutsideClickKeepsTheQuestionPending() throws {
-        let id = try openAsk([["id": "ok", "label": "OK"]], options: ["cancelButton": "ok"])
+        let id = try openAsk([["id": "ok", "label": "OK"]])
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
         let window = app.windows.firstMatch
         let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.98))
@@ -143,8 +235,8 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertTrue(askDialog.exists)
     }
 
-    func testAdministrativeCancelDoesNotAnswerTheCancelButton() throws {
-        let id = try openAsk([["id": "later", "label": "Later"]], options: ["cancelButton": "later"])
+    func testAdministrativeCancelReturnsCancelled() throws {
+        let id = try openAsk([["id": "later", "label": "Later"]])
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
 
         XCTAssertEqual(try sendControlCommand("ask.cancel", target: id)["ok"] as? Bool, true)
@@ -160,7 +252,7 @@ final class ControlAskUITests: ControlAPITestCase {
         let windows = try XCTUnwrap((listed["result"] as? [String: Any])?["windows"] as? [[String: Any]])
         let owner = try XCTUnwrap(windows.first?["id"] as? String)
         XCTAssertEqual(try sendControlCommand("window.new", args: ["name": "keeper", "minimized": true])["ok"] as? Bool, true)
-        let id = try openAsk([["id": "later", "label": "Later"]], options: ["cancelButton": "later", "window": owner])
+        let id = try openAsk([["id": "later", "label": "Later"]], options: ["window": owner])
         XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
 
         XCTAssertEqual(try sendControlCommand("window.close", target: owner)["ok"] as? Bool, true)

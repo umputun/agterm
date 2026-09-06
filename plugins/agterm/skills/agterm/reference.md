@@ -1040,9 +1040,9 @@ Supply one to six buttons with unique ids and nonempty labels. A token without `
 label; otherwise only the first `=` separates them. The title must be nonblank, and title, message,
 and labels cannot contain control characters.
 
-`--default ID` names the initially highlighted button. Without it, Return is inert until Tab or an
-arrow selects one. Tab/Right/Down enter at the first button; Shift-Tab/Left/Up enter at the last;
-navigation wraps. Return chooses the highlight. Repeat `--hotkey ID=LETTER` for letter shortcuts,
+`--default ID` names the initially highlighted button. Otherwise the first non-destructive button is
+highlighted, or the first button if it is the only choice. Exactly one button is active. Tab/Right/Down
+move forward; Shift-Tab/Left/Up move back; navigation wraps. Return chooses the highlight. Repeat `--hotkey ID=LETTER` for letter shortcuts,
 unique case-insensitively. Command, Control, and Option combinations do not trigger them.
 `--destructive ID` adds the destructive marker; it cannot name the default button.
 Outside clicks leave the dialog open.
@@ -1051,11 +1051,14 @@ Outside clicks leave the dialog open.
 background and foreground. Buttons have padded, bracketed labels and a dim foreground fill; the active
 button uses solid foreground fill and background-colored text. GUI style uses the picker's material,
 corner radius, and light/dark appearance, system fonts, a headline title, and a secondary-colored message.
-Native push buttons sit in a trailing row, with a prominent accent-colored default and a red-tinted
-destructive button; colors follow the system appearance. Both styles share keyboard behavior, hotkeys,
+Native push buttons sit in a row, with a prominent accent-colored highlight and a red-tinted
+destructive button that becomes prominent red when highlighted; colors follow the system appearance. Both styles share keyboard behavior, hotkeys,
 results, anchoring, and modality. Style has no read-back; an invalid value returns `unknown style`.
+`--align left|center|right` defaults to `right` and aligns the entire button block in either style,
+including its vertical fallback. It has no read-back; invalid values return `unknown align`.
 
-Omit `--target` to center in the window, or name a session to center over its whole area. A target must be
+Omit `--target` to center over the terminal area, excluding the sidebar, or name a session to center over
+its whole area. A target must be
 selected in its owning window. `--pane left|right` narrows the anchor and requires `--target`;
 `--pane-id TOKEN` resolves a live pane token first, using `--pane` as fallback. A hidden pane or
 session is rejected, as is an anchored open under zoom or dashboard. `--window W` selects the window;
