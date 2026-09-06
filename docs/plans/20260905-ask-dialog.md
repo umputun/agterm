@@ -125,6 +125,7 @@ across ten files for no behavior; the shared-slot predicate is named `modalPendi
 
 ### Validation (`ControlDispatcher+Ask.swift`, host-free)
 
+- `ControlAskPlacement` carries parsed `pane` and unresolved `paneID` together in the host action.
 - `title` required and non-blank; `title`, `message`, and every label free of control characters.
 - 1...6 buttons (`ControlAskButton.maxButtons = 6`), unique ids, non-empty labels.
 - `default`, `cancel`, `destructive` must each name an existing button; `default == destructive` and
@@ -292,17 +293,18 @@ event-arguments rule.
 **Files:**
 - Create: `agtermCore/Sources/agtermCore/ControlDispatcher+Ask.swift`
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift` (`ControlActions` + routing)
+- Modify: `agtermCore/Sources/agtermCore/ControlActionsDefaults.swift` (unsupported-host defaults)
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/ControlDispatcherAskTests.swift`
 
-- [ ] add `openAsk`, `askResult`, `cancelAsk` to `ControlActions`; route the three commands
-- [ ] implement every validation rule from Technical Details with pick-style messages
-- [ ] mock records the calls
-- [ ] table-driven tests: each rejection (title, buttons count, ids, labels, control chars, unknown role
+- [x] add `openAsk`, `askResult`, `cancelAsk` to `ControlActions`; route the three commands
+- [x] implement every validation rule from Technical Details with pick-style messages
+- [x] mock records the calls
+- [x] table-driven tests: each rejection (title, buttons count, ids, labels, control chars, unknown role
       ids, default==destructive, cancel==destructive, hotkey length and collision, pane without session,
       invalid pane, missing result/cancel target)
-- [ ] tests: a valid open reaches the mock with the parsed `PendingAsk` fields intact
-- [ ] run `swift test` for the dispatcher suite
+- [x] tests: a valid open reaches the mock with the parsed `PendingAsk` fields intact
+- [x] run `swift test --filter 'agtermCoreTests\.ControlDispatcher(Ask|Pick|Hud)Tests/'` (51 tests passed)
 
 ### Task 4: App-side host and tree read-back
 

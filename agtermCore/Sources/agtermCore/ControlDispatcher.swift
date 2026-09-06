@@ -130,6 +130,13 @@ public protocol ControlActions {
     func pickResult(_ target: String, window: String?) -> ControlResponse
     /// Cancel a native picker. The host owns window resolution, registry lookup, and dismissal.
     func cancelPick(_ target: String, window: String?) -> ControlResponse
+    /// openAsk lets the host resolve a validated dialog's window and session or pane anchor.
+    func openAsk(_ ask: PendingAsk, target: String?, window: String?,
+                 placement: ControlAskPlacement, follow: Bool) -> ControlResponse
+    /// askResult reads the current or retained outcome by globally unique dialog id.
+    func askResult(_ target: String, window: String?) -> ControlResponse
+    /// cancelAsk administratively cancels a dialog without answering a named button.
+    func cancelAsk(_ target: String, window: String?) -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
     /// Capture every open pane's foreground command now, the same read `applicationWillTerminate` does. The
     /// host owns the `sysctl` read, the save, and the count it reports back.
@@ -203,7 +210,7 @@ public struct ControlDispatcher {
         case .pickOpen, .pickResult, .pickCancel:
             return dispatchPickCommand(request)
         case .askOpen, .askResult, .askCancel:
-            return nil
+            return dispatchAskCommand(request)
         case .sessionHudOpen, .sessionHudUpdate, .sessionHudClose:
             return dispatchHudCommand(request)
         }
