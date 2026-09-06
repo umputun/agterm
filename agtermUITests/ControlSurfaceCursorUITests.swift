@@ -41,6 +41,39 @@ final class ControlSurfaceCursorUITests: ControlAPITestCase {
         XCTAssertEqual(empty["error"] as? String, "surface not available: surface:\(sessionID):scratch")
     }
 
+    // a hidden pane's view has no window, and a read that divided by the window's scale refused it
+    func testSurfaceCursorReadsAHiddenSplitPaneInBothDirections() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"on"}}"#)["ok"] as? Bool, true,
+                       "split on should succeed")
+        try waitForPrompt(sessionID, marker: "hidden-left-ready", pane: "left")
+        try waitForPrompt(sessionID, marker: "hidden-right-ready", pane: "right")
+
+        for (hidden, focused) in [("right", "left"), ("left", "right")] {
+            let target = "surface:\(sessionID):\(hidden)"
+            let shown = try XCTUnwrap(settledCursorColumn(target: target, timeout: 10),
+                                      "the shown \(hidden) pane should settle at its prompt")
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","args":{"pane":"\#(focused)"}}"#)["ok"] as? Bool,
+                           true, "focusing the \(focused) pane should succeed")
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"off"}}"#)["ok"] as? Bool, true,
+                           "split off should succeed")
+            try assertSplitHidden(sessionID, focusedRight: focused == "right")
+
+            XCTAssertTrue(pollCursorColumn(shown, target: target, timeout: 10),
+                          "the hidden \(hidden) pane should read its prompt column \(shown); got \(String(describing: cursorColumnOrNil(target: target)))")
+            let probe = "abcdefg"
+            try type(probe, into: sessionID, pane: hidden)
+            XCTAssertTrue(pollCursorColumn(shown + probe.count, target: target, timeout: 10),
+                          "the hidden \(hidden) pane's column should advance by the typed length; got \(String(describing: cursorColumnOrNil(target: target)))")
+            try assertSplitHidden(sessionID, focusedRight: focused == "right")
+
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"on"}}"#)["ok"] as? Bool, true,
+                           "split on should succeed")
+            XCTAssertTrue(pollCursorColumn(shown + probe.count, target: target, timeout: 10),
+                          "the reshown \(hidden) pane should agree with the column read while hidden")
+        }
+    }
+
     // zooming a NONFOCUSED pane leaves `splitFocused` alone, so resolving `active` from the store's focus
     // instead of the window's zoom controller silently read the hidden pane.
     func testSurfaceCursorActiveFollowsAnExplicitZoomOfTheNonFocusedPane() throws {
@@ -151,6 +184,13 @@ final class ControlSurfaceCursorUITests: ControlAPITestCase {
         let value = try typeUntilMarker("printf READY > '\(file.path)'\n",
                                         target: sessionID, file: file, select: false, pane: pane)
         XCTAssertEqual(value, "READY", "the \(pane ?? "left") pane's shell should be reading commands")
+    }
+
+    private func assertSplitHidden(_ sessionID: String, focusedRight: Bool) throws {
+        let node = try sessionNode(id: sessionID)
+        XCTAssertEqual(node["split"] as? Bool, false, "the split should be hidden")
+        XCTAssertEqual(node["hasSplit"] as? Bool, true, "the split pane should stay alive while hidden")
+        XCTAssertEqual(node["splitFocused"] as? Bool, focusedRight, "focus should stay on the shown pane")
     }
 
     private func type(_ text: String, into sessionID: String, pane: String?) throws {

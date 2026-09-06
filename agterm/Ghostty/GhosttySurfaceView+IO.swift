@@ -144,17 +144,17 @@ extension GhosttySurfaceView {
         guard columnZeroX >= 0 else { return nil }
 
         let size = ghostty_surface_size(surface)
-        // both readings are pre-divided by the content scale agterm gave libghostty, which is the WINDOW's
-        // (`updateMetalLayerSize`). Never substitute a screen's for a detached view: that answers 2x for a
-        // surface last driven at 1x, an in-range wrong column.
-        guard let scale = window?.backingScaleFactor, scale > 0 else { return nil }
-        guard size.cell_width_px > 0, size.columns > 0 else { return nil }
-        let cellWidth = Double(size.cell_width_px) / Double(scale)
+        guard size.cell_width_px > 0, size.cell_height_px > 0, size.columns > 0 else { return nil }
 
         var x = 0.0, y = 0.0, w = 0.0, h = 0.0
         ghostty_surface_ime_point(surface, &x, &y, &w, &h)
         let after = ghostty_surface_size(surface)
-        guard after.cell_width_px == size.cell_width_px, after.columns == size.columns else { return nil }
+        guard after.cell_width_px == size.cell_width_px, after.cell_height_px == size.cell_height_px,
+              after.columns == size.columns else { return nil }
+        // `h` is one cell height over the content scale libghostty retains, the divisor behind `x` and `tl_px_x`
+        // too. agterm hands it equal X/Y scales, so `h` recovers the logical cell width without a window.
+        guard h > 0, h.isFinite else { return nil }
+        let cellWidth = h * Double(size.cell_width_px) / Double(size.cell_height_px)
         let column = Int(((x - columnZeroX) / cellWidth).rounded(.down))
         guard column >= 0, column < Int(size.columns) else { return nil }
         return column
