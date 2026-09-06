@@ -4,6 +4,79 @@ import Testing
 
 @MainActor
 struct AppStorePaneTests {
+    @Test(arguments: OverlayPane.allCases, ["session", "left", "right"])
+    func paneCloseCancelsOnlyItsOwnAnchoredAsk(closingPane: OverlayPane, scope: String) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        let identity = scope == "session" ? nil : (scope == "left" ? session.paneIdentity : session.splitPaneIdentity)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let windowID = UUID()
+        let registry = AskRegistry.shared
+        #expect(session.openAsk(ask, paneIdentity: identity))
+        #expect(registry.register(id: ask.id, owner: .session(session.id, window: windowID)))
+        defer { session.cancelAsk(id: ask.id) }
+
+        if closingPane == .left { store.closePrimaryPane(session.id) } else { store.closeSplit(session.id) }
+
+        #expect(store.session(withID: session.id) === session)
+        if scope == closingPane.rawValue {
+            #expect(session.askPending == nil)
+            #expect(session.askPaneIdentity == nil)
+            #expect(registry.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+            #expect(registry.result(for: ask.id)?.windowID == windowID)
+        } else {
+            #expect(session.askPending == ask)
+            #expect(session.askPaneIdentity == identity)
+            #expect(session.askTargetPane == (scope == "session" ? nil : .left))
+            #expect(registry.owner(for: ask.id) == .session(session.id, window: windowID))
+        }
+    }
+
+    @Test func lastPrimaryPaneCloseCancelsTheSessionAsk() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let windowID = UUID()
+        #expect(session.openAsk(ask))
+        #expect(AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: windowID)))
+        defer { session.cancelAsk(id: ask.id) }
+
+        store.closePrimaryPane(session.id)
+
+        #expect(store.session(withID: session.id) == nil)
+        #expect(session.askPending == nil)
+        #expect(AskRegistry.shared.result(for: ask.id)?.result.result == .cancelled)
+    }
+
+    @Test(arguments: OverlayPane.allCases)
+    func collapsingSplitKeepsAskWhetherItsPaneRemainsVisible(focusedPane: OverlayPane) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        let identity = try #require(session.splitPaneIdentity)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        #expect(session.openAsk(ask, paneIdentity: identity))
+        session.splitFocused = focusedPane == .right
+
+        store.toggleSplit(session.id)
+
+        #expect(session.rendersPane(.right) == (focusedPane == .right))
+        #expect(session.askPending == ask)
+        #expect(session.askPaneIdentity == identity)
+        store.toggleSplit(session.id)
+        #expect(session.rendersPane(.right))
+        #expect(session.askPending == ask)
+        #expect(session.askTargetPane == .right)
+    }
+
     // MARK: - split panes
 
     @Test func toggleSplitFlipsFlag() {

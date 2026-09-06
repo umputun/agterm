@@ -4,6 +4,29 @@ import Testing
 
 @MainActor
 struct AppStorePaneSwapTests {
+    @Test(arguments: OverlayPane.allCases)
+    func closingTheAskPaneAfterSwapCancelsByIdentity(originalPane: OverlayPane) throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        let identity = try #require(originalPane == .left ? session.paneIdentity : session.splitPaneIdentity)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let windowID = UUID()
+        #expect(session.openAsk(ask, paneIdentity: identity))
+        #expect(AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: windowID)))
+        defer { session.cancelAsk(id: ask.id) }
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+
+        let currentPane: OverlayPane = originalPane == .left ? .right : .left
+        #expect(session.askTargetPane == currentPane)
+        #expect(session.askPaneIdentity == identity)
+        #expect(session.askPending == ask)
+        if currentPane == .left { fixture.store.closePrimaryPane(session.id) } else { fixture.store.closeSplit(session.id) }
+        #expect(session.askPending == nil)
+        #expect(AskRegistry.shared.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+        #expect(AskRegistry.shared.result(for: ask.id)?.windowID == windowID)
+    }
+
     private final class RigidSurface: TerminalSurface {
         var isRealized = true
         var paneToken = "rigid"

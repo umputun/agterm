@@ -374,6 +374,9 @@ public final class Session: Identifiable {
         resolveAsk(id: id, ControlAskResult(result: .cancelled))
     }
 
+    /// Cancels the session's pending ask, if any.
+    public func cancelPendingAsk() { if let ask = askPending { cancelAsk(id: ask.id) } }
+
     /// Last live bounds emitted by each deck pane host. Ignored by observation because the drawing path takes
     /// the current preference value directly; control commands use this cache only for message measurement.
     @ObservationIgnored public var hudPaneFrames = HudPaneFrames()

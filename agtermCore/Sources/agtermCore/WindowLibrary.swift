@@ -461,7 +461,10 @@ public final class WindowLibrary {
         store.finalizeAllPendingCloses()
         store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
         for workspace in store.workspaces {
-            for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
+            for session in workspace.sessions {
+                session.cancelPendingAsk()
+                store.emitSessionClosed(session, workspace: workspace.id)
+            }
         }
         store.scheduleTreeChanged()
         stores[id] = nil
@@ -501,7 +504,10 @@ public final class WindowLibrary {
         if let store = stores[id] {
             store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
             for workspace in store.workspaces {
-                for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
+                for session in workspace.sessions {
+                    session.cancelPendingAsk()
+                    store.emitSessionClosed(session, workspace: workspace.id)
+                }
             }
         }
         scheduleTreeChanged(for: id)

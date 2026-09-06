@@ -176,6 +176,8 @@ extension AppStore {
         guard let session = session(withID: sessionID) else { return }
         if let splitIdentity = session.splitPaneIdentity,
            session.hudPaneIdentity == splitIdentity { closeHud(sessionID) }
+        if let splitIdentity = session.splitPaneIdentity,
+           session.askPaneIdentity == splitIdentity { session.cancelPendingAsk() }
         // through the ownership projection, not the raw identity: a remote split's daemon is on another
         // machine and this finalizer only ever kills local ones
         if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized,
@@ -227,6 +229,7 @@ extension AppStore {
             return
         }
         if session.hudPaneIdentity == session.paneIdentity { closeHud(sessionID) }
+        if session.askPaneIdentity == session.paneIdentity { session.cancelPendingAsk() }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
         survivor.promoteToPrimaryPane()

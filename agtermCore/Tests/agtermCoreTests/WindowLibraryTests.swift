@@ -7,6 +7,61 @@ import Testing
 /// `WindowLibrary` is `@MainActor`, so the suite is too.
 @MainActor
 final class WindowLibraryTests {
+    @Test(arguments: [false, true])
+    func droppingAWindowCancelsAllItsSessionAsks(remove: Bool) throws {
+        let library = WindowLibrary(directory: directory)
+        let remainingID = try #require(library.activeWindowID)
+        let remainingSession = try #require(library.activeStore?.activeSession)
+        let closing = library.newWindow(name: "closing")
+        let store = try #require(library.store(for: closing.id))
+        let workspace = store.addWorkspace(name: "second workspace")
+        _ = store.addSession(toWorkspace: workspace.id, cwd: "/tmp")
+        let sessions = store.workspaces.flatMap(\.sessions) + [remainingSession]
+        let registry = AskRegistry.shared
+        let asks = sessions.map { session in
+            let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+            let windowID = session === remainingSession ? remainingID : closing.id
+            #expect(session.openAsk(ask))
+            #expect(registry.register(id: ask.id, owner: .session(session.id, window: windowID)))
+            return ask
+        }
+        defer { for (session, ask) in zip(sessions, asks) { session.cancelAsk(id: ask.id) } }
+
+        if remove { library.removeWindow(closing.id) } else { library.closeWindow(closing.id) }
+
+        #expect(library.store(for: closing.id) == nil)
+        for (session, ask) in zip(sessions.dropLast(), asks.dropLast()) {
+            #expect(session.askPending == nil)
+            #expect(registry.owner(for: ask.id) == nil)
+            #expect(registry.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+            #expect(registry.result(for: ask.id)?.windowID == closing.id)
+        }
+        #expect(remainingSession.askPending == asks.last)
+        #expect(library.store(for: remainingID) != nil)
+    }
+
+    @Test(arguments: [false, true])
+    func windowRemovalNoOpsKeepTheSessionAsk(terminating: Bool) throws {
+        let library = WindowLibrary(directory: directory)
+        let windowID = try #require(library.activeWindowID)
+        let session = try #require(library.activeStore?.activeSession)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        #expect(session.openAsk(ask))
+        #expect(AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: windowID)))
+        defer { session.cancelAsk(id: ask.id) }
+
+        if terminating {
+            library.isTerminating = true
+            library.closeWindow(windowID)
+        } else {
+            library.removeWindow(windowID)
+        }
+
+        #expect(library.store(for: windowID)?.session(withID: session.id) === session)
+        #expect(session.askPending == ask)
+        #expect(AskRegistry.shared.owner(for: ask.id) == .session(session.id, window: windowID))
+    }
+
     private let directory: URL
 
     init() throws {

@@ -140,14 +140,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`, `AppStorePendingCloseTests.swift`,
   `AppStorePaneTests.swift`, `AppStorePaneSwapTests.swift`, `WindowLibraryTests.swift`
 
-- [ ] cancel the session ask in `closeSession`, `softCloseSession`, `softCloseSessions`, `removeWorkspace`,
+- [x] cancel the session ask in `closeSession`, `softCloseSession`, `softCloseSessions`, `removeWorkspace`,
       `softRemoveWorkspace`, before the session leaves the tree; undo never restores a cancelled ask
-- [ ] on pane close, cancel only when the closed pane's identity equals `askPaneIdentity`, next to the HUD
+- [x] on pane close, cancel only when the closed pane's identity equals `askPaneIdentity`, next to the HUD
       hooks; swap and promotion leave the identity alone
-- [ ] `WindowLibrary.closeWindow` and `removeWindow` cancel every session ask in the dropped store
-- [ ] tests: each path yields `cancelled` from `AskRegistry.result` immediately after the call, batch and
+- [x] `WindowLibrary.closeWindow` and `removeWindow` cancel every session ask in the dropped store
+- [x] tests: each path yields `cancelled` from `AskRegistry.result` immediately after the call, batch and
       soft variants included; sibling pane close keeps a session-wide ask; swap and promotion keep the ask
-- [ ] `swift test --filter` on the touched files; must pass before Task 3
+- [x] `swift test --filter` on the touched files; must pass before Task 3
 
 ### Task 3: Session-owned dialog mount and input ownership
 

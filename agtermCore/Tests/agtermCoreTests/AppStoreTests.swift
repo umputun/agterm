@@ -4,6 +4,44 @@ import Testing
 
 @MainActor
 struct AppStoreTests {
+    @Test(arguments: [false, true])
+    func ownerRemovalRetainsCancelledAsksWithoutAffectingOtherSessions(removeWorkspace: Bool) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "closing")
+        let other = store.addWorkspace(name: "staying")
+        let first = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/one"))
+        let second = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/two"))
+        let third = try #require(store.addSession(toWorkspace: other.id, cwd: "/three"))
+        let sessions = [first, second, third]
+        let windowID = UUID()
+        let registry = AskRegistry.shared
+        let asks = sessions.map { session in
+            let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+            #expect(session.openAsk(ask))
+            #expect(registry.register(id: ask.id, owner: .session(session.id, window: windowID)))
+            return ask
+        }
+        defer { for (session, ask) in zip(sessions, asks) { session.cancelAsk(id: ask.id) } }
+
+        if removeWorkspace { store.removeWorkspace(workspace.id) } else { store.closeSession(first.id) }
+
+        for index in sessions.indices {
+            let removed = index == 0 || (removeWorkspace && index == 1)
+            let session = sessions[index], ask = asks[index]
+            if removed {
+                #expect(store.session(withID: session.id) == nil)
+                #expect(session.askPending == nil)
+                #expect(registry.owner(for: ask.id) == nil)
+                #expect(registry.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+                #expect(registry.result(for: ask.id)?.windowID == windowID)
+            } else {
+                #expect(store.session(withID: session.id) === session)
+                #expect(session.askPending == ask)
+                #expect(registry.owner(for: ask.id) == .session(session.id, window: windowID))
+            }
+        }
+    }
+
     @Test func emptyStoreHasNoSelectionOrActiveSession() {
         let store = makeStore()
         #expect(store.workspaces.isEmpty)

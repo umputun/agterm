@@ -493,7 +493,9 @@ public final class AppStore {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
-        let removed = workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
+        let removed = workspace.sessions[location.sessionIndex]
+        removed.cancelPendingAsk()
+        workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
         recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
@@ -532,7 +534,10 @@ public final class AppStore {
         // record the membership BEFORE `dropFocusMember` below prunes it, so Reopen Closed Item can re-mark it
         recordRecentClosedWorkspace(workspace, selectedSessionID: removingActive ? selectedSessionID : nil,
                                     focusMember: focusedWorkspaceIDs.contains(workspaceID))
-        for session in workspace.sessions { emitSessionClosed(session, workspace: workspace.id) }
+        for session in workspace.sessions {
+            session.cancelPendingAsk()
+            emitSessionClosed(session, workspace: workspace.id)
+        }
         if workspace.sessions.isEmpty { scheduleTreeChanged() }
         finalizePaneIdentities(workspace.sessions)
         dropLaunchPanes(workspace.sessions)
