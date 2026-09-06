@@ -123,8 +123,8 @@ paths:
   that way. One that changes WHERE a mutation lands is not: give it a read-back so a caller can see what the
   server did, rather than leaving the two outcomes indistinguishable. A read-back is any observable read, not
   necessarily a response field: `session.paste --pane` is covered by `session.text --pane`, its documented
-  read-back command, as `session.type` and `font.*` are, and only `session.restore` carries `result.pane`,
-  for the token reason below. Since `agtermctl` ships inside the
+  read-back command, as `session.type` and `font.*` are, and `result.pane` is carried by `session.restore`,
+  for the token reason below, and by `ask.open` for its resolved pane anchor. Since `agtermctl` ships inside the
   bundle, the CLI that sends a field and the app that reads it are the same build, so the exposure is a
   stale RUNNING process across an upgrade, not a mismatched install. Only an app predating `result.pane`
   omits it from a successful `session.restore`; treat absence as UNKNOWN, never as the default pane.

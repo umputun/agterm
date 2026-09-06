@@ -6,7 +6,7 @@ extension ControlServer {
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse {
         withPickController(window: window) { controller, windowID in
             guard controller.open(pick) else {
-                return ControlResponse(ok: false, error: "pick already pending")
+                return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
             }
 
             if follow {

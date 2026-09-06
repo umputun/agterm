@@ -211,7 +211,7 @@ struct AskDialogView: View {
     }
 }
 
-private struct AskButtonLayout: Layout {
+struct AskButtonLayout: Layout {
     let axis: Axis
     let spacing: CGFloat
 
@@ -238,11 +238,18 @@ private struct AskButtonLayout: Layout {
     }
 
     private func sizes(proposal: ProposedViewSize, subviews: Subviews) -> [CGSize] {
-        let widest = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
-        let width = axis == .vertical ? min(widest, proposal.width ?? widest) : widest
+        let width = Self.sharedWidth(natural: subviews.map { $0.sizeThatFits(.unspecified).width },
+                                     proposal: proposal.width, axis: axis)
         return subviews.map {
             CGSize(width: width, height: $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height)
         }
+    }
+
+    /// Every button takes the widest natural width; a column also caps it at the proposed width so a long
+    /// label wraps instead of widening the panel.
+    static func sharedWidth(natural: [CGFloat], proposal: CGFloat?, axis: Axis) -> CGFloat {
+        let widest = natural.max() ?? 0
+        return axis == .vertical ? min(widest, proposal ?? widest) : widest
     }
 }
 

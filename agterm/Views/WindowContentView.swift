@@ -643,7 +643,7 @@ struct WindowContentView: View {
         guard store.selectedSessionID == anchor.sessionID,
               let session = store.session(withID: anchor.sessionID) else { return false }
         guard let identity = anchor.paneIdentity else { return anchor.pane == nil }
-        guard let pane = session.askTargetPane(for: identity) else { return false }
+        guard let pane = session.paneRole(forIdentity: identity) else { return false }
         return session.rendersPane(pane)
     }
 
@@ -655,7 +655,7 @@ struct WindowContentView: View {
         guard anchors.sessionID == anchor.sessionID else { return nil }
         if let identity = anchor.paneIdentity {
             guard let session = store.session(withID: anchor.sessionID),
-                  let pane = session.askTargetPane(for: identity), let bounds = anchors.panes[pane] else { return nil }
+                  let pane = session.paneRole(forIdentity: identity), let bounds = anchors.panes[pane] else { return nil }
             return proxy[bounds]
         }
         return anchors.container.map { proxy[$0] }

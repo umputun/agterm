@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct SessionTests {
-    @Test func askTargetPaneFollowsPromotedSurvivorUntilItsPaneIsRemoved() throws {
+    @Test func paneRoleFollowsPromotedSurvivorUntilItsPaneIsRemoved() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
@@ -12,16 +12,16 @@ struct SessionTests {
         store.toggleSplit(session.id)
         session.splitSurface = SpySurface()
         let identity = try #require(session.splitPaneIdentity)
-        #expect(session.askTargetPane(for: identity) == .right)
+        #expect(session.paneRole(forIdentity: identity) == .right)
 
         store.closePrimaryPane(session.id)
 
         #expect(store.session(withID: session.id) != nil)
-        #expect(session.askTargetPane(for: identity) == .left)
+        #expect(session.paneRole(forIdentity: identity) == .left)
         store.toggleSplit(session.id)
         session.splitSurface = SpySurface()
         store.closePrimaryPane(session.id)
-        #expect(session.askTargetPane(for: identity) == nil)
+        #expect(session.paneRole(forIdentity: identity) == nil)
     }
 
     @Test(arguments: [

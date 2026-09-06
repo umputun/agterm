@@ -97,6 +97,20 @@ final class ControlServerPickTests: XCTestCase {
         XCTAssertEqual(controller.pending, first)
     }
 
+    func testOpenRefusedByPendingAskNamesTheAsk() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = registerPick(windowID)
+        let ask = PendingAsk(id: "ask", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        XCTAssertTrue(controller.openAsk(ask))
+
+        XCTAssertEqual(
+            server.openPick(makePick("second"), window: nil, follow: false),
+            ControlResponse(ok: false, error: "ask already pending")
+        )
+        XCTAssertEqual(controller.pendingAsk, ask)
+        XCTAssertNil(controller.pending)
+    }
+
     func testOpenOnFrontmostWindowClosesBuiltInPaletteAndReturnsID() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let controller = registerPick(windowID)

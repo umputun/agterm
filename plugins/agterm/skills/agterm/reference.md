@@ -1001,7 +1001,8 @@ keystroke replaces it rather than appending. `--allow-custom` adds a row for a n
 query and returns it as a custom result; with an empty item list that row is the only possible one, and it
 appears as soon as the query is nonblank, prefilled or typed; whitespace and newlines are trimmed first.
 A background `--window` target is not raised by default; `--follow` raises it. Only one pick or ask can be
-pending in a window, and a second open fails with `pick already pending`.
+pending in a window, and a second open fails with `pick already pending`, or `ask already pending` when a
+dialog owns the slot.
 
 The default call polls until the user answers and prints one bare JSON result:
 

@@ -42,6 +42,16 @@ final class AskDialogViewTests: XCTestCase {
         }
     }
 
+    func testSharedButtonWidthTakesTheWidestAndCapsAColumnAtTheProposal() {
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: 500, axis: .horizontal), 120)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: nil, axis: .horizontal), 120)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: 90, axis: .horizontal), 120)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: 500, axis: .vertical), 120)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: 90, axis: .vertical), 90)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [30, 120, 64], proposal: nil, axis: .vertical), 120)
+        XCTAssertEqual(AskButtonLayout.sharedWidth(natural: [], proposal: 90, axis: .horizontal), 0)
+    }
+
     func testTerminalPanelFitsShortContentAndCapsLongLabelsInBothAppearances() throws {
         for dark in [false, true] {
             for long in [false, true] {
