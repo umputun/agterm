@@ -31,7 +31,7 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasCurrentWorkspace: Bool
     public let terminalZoomActive: Bool
     public let dashboardOpen: Bool
-    /// Whether a control-API native picker is pending over the window.
+    /// pickerActive covers either a control picker or an ask dialog in the window.
     public let pickerActive: Bool
 
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all

@@ -107,7 +107,7 @@ extension WindowContentView {
                 captionBackground: terminalColor,
                 pillColor: dashboardPillColor,
                 pillTextColor: dashboardPillTextColor,
-                focusAllowed: pick.pending == nil,
+                focusAllowed: !pick.modalPending,
                 showsTopHairline: toolbarMode != .hidden,
                 onClick: { clickDashboardMember($0) },
                 onSelect: { selectDashboardMember($0) },

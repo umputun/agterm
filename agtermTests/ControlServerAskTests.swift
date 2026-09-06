@@ -275,6 +275,113 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertEqual(controller.pendingAsk?.id, next.id)
     }
 
+    func testAskBlocksControlCoversAndSearchButAllowsDismissals() async throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        configureSplit(session)
+        let controller = register(windowID)
+        TerminalZoomRegistry.shared.register(windowID, controller: TerminalZoomController())
+        DashboardControllerRegistry.shared.register(windowID, controller: DashboardController())
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask).ok)
+        let blocked = ControlResponse(ok: false, error: "ask pending")
+
+        XCTAssertEqual(server.setQuickTerminal(mode: "show"), blocked)
+        XCTAssertEqual(server.setSurfaceZoom(nil, window: windowID.uuidString, mode: .on), blocked)
+        XCTAssertEqual(server.setSurfaceZoom(TerminalZoomTarget.session(session.id, .primary).controlID,
+                                             window: windowID.uuidString, mode: .on), blocked)
+        XCTAssertEqual(server.setDashboard(targets: [session.id.uuidString], window: windowID.uuidString,
+                                           close: false, fontMode: .untouched, mru: false), blocked)
+        let searchOpen = await server.searchSession(session.id, store: store, text: "needle", to: nil)
+        XCTAssertEqual(searchOpen, blocked)
+        let searchNext = await server.searchSession(session.id, store: store, text: nil, to: "next")
+        XCTAssertEqual(searchNext, blocked)
+        let searchClose = await server.searchSession(session.id, store: store, text: nil, to: "close")
+        XCTAssertTrue(searchClose.ok)
+        XCTAssertTrue(server.setQuickTerminal(mode: "hide").ok)
+        XCTAssertTrue(server.setSurfaceZoom(nil, window: windowID.uuidString, mode: .off).ok)
+        XCTAssertTrue(server.setDashboard(targets: [], window: windowID.uuidString,
+                                          close: true, fontMode: .untouched, mru: false).ok)
+        XCTAssertEqual(controller.pendingAsk?.id, ask.id)
+    }
+
+    func testCommandWAnswersCancelWithoutClosingSessionOrZoom() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        zoom.set(.on, target: .session(session.id, .primary))
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask).ok)
+
+        XCTAssertTrue(actions.closeActiveSession())
+
+        XCTAssertEqual(controller.askResult(for: ask.id),
+                       ControlAskResult(result: .answered, id: "no", label: "No", index: 1))
+        XCTAssertEqual(zoom.target, .session(session.id, .primary))
+        XCTAssertEqual(library.activeStore?.activeSession?.id, session.id)
+    }
+
+    func testCommandWWithoutCancelButtonReturnsCancelled() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        XCTAssertTrue(open(ask).ok)
+        XCTAssertTrue(actions.closeActiveSession())
+        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .cancelled))
+    }
+
+    func testAdministrativeDismissalNeverAnswersTheCancelButton() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask).ok)
+        XCTAssertTrue(actions.dismissPendingAsk(for: windowID, userInitiated: false))
+        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .cancelled))
+    }
+
+    func testTerminationCancelsBothFamiliesAcrossWindows() throws {
+        let ownerID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(ownerID)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask).ok)
+        let otherID = library.newWindow(name: "other").id
+        let pick = register(otherID)
+        XCTAssertTrue(pick.open(PendingPick(id: "termination-pick", items: [ControlPickItem(id: "one", label: "One")])))
+        let counts = library.openCounts()
+
+        NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: NSApp)
+
+        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .cancelled))
+        XCTAssertEqual(pick.result(for: "termination-pick"), ControlPickResult(result: .cancelled))
+        XCTAssertEqual(library.openCounts().windows, counts.windows)
+        XCTAssertEqual(library.openCounts().sessions, counts.sessions)
+    }
+
+    func testAskUsesSharedMenuAndWindowFocusGates() throws {
+        let ownerID = try XCTUnwrap(library.activeWindowID)
+        _ = register(ownerID)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        windows[ownerID] = window
+        WindowRegistry.shared.register(ownerID, window: window)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask).ok)
+
+        XCTAssertFalse(actions.uiActionsEnabled)
+        XCTAssertTrue(actions.paletteContext.modalActive)
+        XCTAssertTrue(actions.pickActive(for: ownerID))
+        XCTAssertTrue(GhosttySurfaceView.pickOwnsFocus(in: window))
+        XCTAssertFalse(actions.pickActive(for: UUID()))
+        XCTAssertTrue(server.cancelAsk(ask.id, window: nil).ok)
+        XCTAssertTrue(actions.uiActionsEnabled)
+        XCTAssertFalse(actions.paletteContext.modalActive)
+        XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: window))
+    }
+
     private func register(_ windowID: UUID) -> PickController {
         let controller = PickController()
         PickRegistry.shared.register(windowID, controller: controller)

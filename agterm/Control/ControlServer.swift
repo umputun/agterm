@@ -645,8 +645,8 @@ final class ControlServer {
                 controller.close()
                 return ControlResponse(ok: true)
             }
-            if PickRegistry.shared.controller(for: windowID)?.pending != nil {
-                return ControlResponse(ok: false, error: "pick pending")
+            if let error = PickRegistry.shared.controller(for: windowID)?.pendingModalError {
+                return ControlResponse(ok: false, error: error)
             }
             var resolvedTargets: [ResolvedDashboardTarget] = []
             var unresolved: [String] = []

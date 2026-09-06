@@ -21,6 +21,20 @@ struct PickTests {
         #expect(controller.result(for: pick.id) == outcome)
     }
 
+    @Test func pendingModalErrorNamesTheCurrentOwner() {
+        let controller = PickController()
+        #expect(controller.pendingModalError == nil)
+        #expect(controller.open(makePick(id: "pick")))
+        #expect(controller.pendingModalError == "pick pending")
+        controller.cancel()
+        #expect(controller.pendingModalError == nil)
+        #expect(controller.openAsk(PendingAsk(id: "ask", title: "Continue?",
+                                             buttons: [ControlAskButton(id: "yes", label: "Yes")])))
+        #expect(controller.pendingModalError == "ask pending")
+        controller.cancelAsk()
+        #expect(controller.pendingModalError == nil)
+    }
+
     @Test func cancelRetainsCancelledResult() {
         let controller = PickController()
         let pick = makePick(id: "pick-cancel")

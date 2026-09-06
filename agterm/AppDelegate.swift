@@ -317,7 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_: Notification) {
         // resolve in-memory picker state before closing the socket: a client already polling may observe
         // cancellation, but a later poll can still race socket teardown at process exit.
-        actions?.cancelAllPendingPicks()
+        actions?.cancelAllPendingModals()
         controlServer?.stop()
         customCommandRunner?.stop()
         // clear the OS-level Dock badge — it outlives the process while unseenCount is ephemeral, so a quit

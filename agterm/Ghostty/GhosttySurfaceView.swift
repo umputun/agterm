@@ -827,12 +827,12 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
     }
 
-    /// A picker is modal to terminal keyboard focus in its own window. The check lives inside both retry loops,
-    /// not just their callers: a picker can open after a retry starts, and the next tick must stop before it
-    /// steals first responder from the picker field.
+    /// A control dialog owns keyboard focus in its window. The check lives inside both retry loops,
+    /// not just their callers: a dialog can open after a retry starts, and the next tick must stop before it
+    /// steals first responder from the dialog.
     static func pickOwnsFocus(in window: NSWindow?) -> Bool {
         guard let window, let windowID = WindowRegistry.shared.windowID(for: window) else { return false }
-        return PickRegistry.shared.controller(for: windowID)?.pending != nil
+        return PickRegistry.shared.controller(for: windowID)?.modalPending == true
     }
 
     func destroySurface() {

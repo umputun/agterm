@@ -45,7 +45,7 @@ final class AppActions {
         guard let windowID else { return false }
         return TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil
             && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
-            && PickRegistry.shared.controller(for: windowID)?.pending == nil
+            && PickRegistry.shared.controller(for: windowID)?.modalPending != true
     }
 
     /// Set while a rename starts, so the palette / quick-terminal close focus-restore skips the rename field.
@@ -95,7 +95,7 @@ final class AppActions {
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.cancelAllPendingPicks() }
+            MainActor.assumeIsolated { self?.cancelAllPendingModals() }
         }
     }
 
@@ -216,9 +216,9 @@ final class AppActions {
     // keep-alive, and a floating overlay holds first responder too, so ANY overlay is dismissed, not only full.
     @discardableResult
     func closeActiveSession() -> Bool {
-        // a pick is an external caller waiting on an answer: the first ⌘W layer even behind a zoomed terminal,
+        // a control dialog has an external caller waiting: the first ⌘W layer even behind a zoomed terminal,
         // and resolved rather than hidden so the caller can finish.
-        if cancelPendingPick(for: library.activeWindowID) { return true }
+        if dismissPendingModal(for: library.activeWindowID) { return true }
         // the quick-terminal panel floats above every window, so it outranks anything inside one — the window
         // rungs below read state the panel is covering, and clearing a zoom the user cannot see is a silent
         // mutation of state they never touched. Stepwise like zoom: a zoomed panel un-zooms first, the next
@@ -252,22 +252,25 @@ final class AppActions {
         if !closeActiveSession() { window?.performClose(nil) }
     }
 
-    /// Resolve the pending picker owned by `windowID` as cancelled. Used by ⌘W and app termination;
+    /// dismissPendingModal resolves the window's control dialog on user dismissal;
     /// window teardown cancels through `PickRegistry.unregister` so it can retain the terminal result.
     @discardableResult
-    func cancelPendingPick(for windowID: WindowInfo.ID?) -> Bool {
+    func dismissPendingModal(for windowID: WindowInfo.ID?) -> Bool {
         guard let controller = PickRegistry.shared.controller(for: windowID),
-              controller.pending != nil
+              controller.modalPending
         else { return false }
+        if dismissPendingAsk(for: windowID, userInitiated: true) { return true }
         controller.cancel()
         return true
     }
 
-    /// Resolve every open window's pending picker during the synchronous app-termination notification. The
+    /// cancelAllPendingModals resolves each window's pending dialog during synchronous app termination. The
     /// library retains its open ids through quit teardown, so every mounted controller is still addressable.
-    func cancelAllPendingPicks() {
+    func cancelAllPendingModals() {
         for windowID in library.openIDs() {
-            cancelPendingPick(for: windowID)
+            guard let controller = PickRegistry.shared.controller(for: windowID) else { continue }
+            controller.cancel()
+            controller.cancelAsk()
         }
     }
 

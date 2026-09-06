@@ -189,7 +189,7 @@ extension WindowContentView {
             Label("Quick Terminal", systemImage: "terminal")
         }
         .help(helpHint("Quick Terminal", .quickTerminal))
-        .disabled(pick.pending != nil)
+        .disabled(pick.modalPending)
         .accessibilityIdentifier("quick-terminal-toggle")
     }
 }

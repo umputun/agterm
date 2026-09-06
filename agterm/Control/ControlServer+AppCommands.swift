@@ -237,8 +237,8 @@ extension ControlServer {
         let want = parsedMode.desiredValue(current: controller.isVisible)
         // NOT gated on the panel being hidden: `show` also carries the pin, and `canShow` refuses under a
         // pending pick, so an already-visible panel would answer ok with the pin silently not applied.
-        if want, PickRegistry.shared.controller(for: library.activeWindowID)?.pending != nil {
-            return ControlResponse(ok: false, error: "pick pending")
+        if want, let error = PickRegistry.shared.controller(for: library.activeWindowID)?.pendingModalError {
+            return ControlResponse(ok: false, error: error)
         }
         // `show` runs even when the panel is ALREADY visible, which `hide` has no equivalent of: it is what
         // pins a panel the user summoned by hotkey. Skipping it there would answer ok and leave the caller's

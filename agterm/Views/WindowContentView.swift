@@ -185,8 +185,8 @@ struct WindowContentView: View {
         }
         // a native picker owns keyboard focus like a palette: pair auto-follow suppression per window, then
         // return first responder to this window's terminal after every resolution path.
-        .onChange(of: pick.pending?.id) { old, new in
-            if old == nil, new != nil, !pickSuppressesAutoFollow {
+        .onChange(of: pick.modalPending) { old, new in
+            if !old, new, !pickSuppressesAutoFollow {
                 // a socket-driven picker may arrive with either title-bar popover already open; dismiss
                 // both so no second interactive surface remains above the modal picker. The quick-terminal
                 // panel is now exactly that surface and the worst of them: it floats above every window and
@@ -197,7 +197,7 @@ struct WindowContentView: View {
                 attentionPopoverShown = false
                 store.suppressAutoFollow()
                 pickSuppressesAutoFollow = true
-            } else if old != nil, new == nil, pickSuppressesAutoFollow {
+            } else if old, !new, pickSuppressesAutoFollow {
                 store.resumeAutoFollow()
                 pickSuppressesAutoFollow = false
                 if pickFocusRestoration.pickerResolved(isFrontmost: isFrontmost) {
@@ -303,8 +303,8 @@ struct WindowContentView: View {
             .opacity(terminalZoom.target == nil ? 1 : 0)
             .allowsHitTesting(terminalZoom.target == nil)
             .onChange(of: isFrontmost) { _, frontmost in
-                if frontmost, pick.pending != nil { palette.close() }
-                if frontmost, pickFocusRestoration.windowBecameFrontmost(pickPending: pick.pending != nil) {
+                if frontmost, pick.modalPending { palette.close() }
+                if frontmost, pickFocusRestoration.windowBecameFrontmost(pickPending: pick.modalPending) {
                     restoreFocusAfterPick()
                 }
             }
@@ -560,7 +560,7 @@ struct WindowContentView: View {
     /// Mounted only while a palette is open in the frontmost window; its content (search field + result
     /// list) is rebuilt from `palette.mode`.
     @ViewBuilder private var commandPaletteOverlay: some View {
-        if isFrontmost, pick.pending == nil, palette.mode != nil {
+        if isFrontmost, !pick.modalPending, palette.mode != nil {
             CommandPalette(controller: palette, actions: actions, terminalAreaInset: terminalAreaInset)
         }
     }

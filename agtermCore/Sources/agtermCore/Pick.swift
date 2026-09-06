@@ -41,6 +41,11 @@ public final class PickController {
     public private(set) var recentAskResults: [ResolvedAsk] = []
     /// modalPending prevents pick and ask from presenting competing modals.
     public var modalPending: Bool { pending != nil || pendingAsk != nil }
+    /// pendingModalError names the modal blocking another control action, or nil when the slot is free.
+    public var pendingModalError: String? {
+        guard modalPending else { return nil }
+        return pendingAsk == nil ? "pick pending" : "ask pending"
+    }
 
     public init() {}
 

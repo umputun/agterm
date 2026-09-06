@@ -479,7 +479,7 @@ struct agtermApp: App {
             guard windowID.flatMap({ TerminalZoomRegistry.shared.controller(for: $0) })?.target == nil else { return }
             // a control picker is the topmost modal: `session.search --to close` stays valid cleanup while one
             // is pending, but its async END must not return focus behind it.
-            guard PickRegistry.shared.controller(for: windowID)?.pending == nil else { return }
+            guard PickRegistry.shared.controller(for: windowID)?.modalPending != true else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
         view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }
@@ -726,14 +726,14 @@ struct agtermApp: App {
         // selection behind the panel while the user types (mirrors the overlay/scratch).
         controller.onUserInput = { [weak library] in library?.activeStore?.noteUserActivity() }
         controller.focusAllowed = { [weak library] in
-            PickRegistry.shared.controller(for: library?.activeWindowID)?.pending == nil
+            PickRegistry.shared.controller(for: library?.activeWindowID)?.modalPending != true
         }
         // the global hotkey reaches the controller directly, with none of the `uiActionsEnabled` gating every
         // in-app path has, so the pick term belongs here. Only that term: refusing a system-wide summon
         // because some BACKGROUND window has a dashboard open would defeat the point of the chord.
         controller.canShow = { [weak library] in
             guard let library, !library.openIDs().isEmpty else { return false }
-            return PickRegistry.shared.controller(for: library.activeWindowID)?.pending == nil
+            return PickRegistry.shared.controller(for: library.activeWindowID)?.modalPending != true
         }
         controller.terminalColorProvider = { WindowContentView.resolvedTerminalColor() }
     }

@@ -401,8 +401,8 @@ extension ControlServer {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
         if let windowID = library.windowID(forSession: id) {
-            if PickRegistry.shared.controller(for: windowID)?.pending != nil {
-                return ControlResponse(ok: false, error: "pick pending")
+            if let error = PickRegistry.shared.controller(for: windowID)?.pendingModalError {
+                return ControlResponse(ok: false, error: error)
             }
             if TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil {
                 return ControlResponse(ok: false, error: "terminal zoom active")

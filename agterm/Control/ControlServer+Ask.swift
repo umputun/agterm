@@ -44,7 +44,7 @@ extension ControlServer {
                                  defaultID: ask.defaultID, cancelID: ask.cancelID, destructiveID: ask.destructiveID,
                                  anchor: anchor)
         guard controller.openAsk(pending) else {
-            return ControlResponse(ok: false, error: controller.pending != nil ? "pick already pending" : "ask already pending")
+            return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
         }
         if follow {
             WindowRegistry.shared.raise(windowID)

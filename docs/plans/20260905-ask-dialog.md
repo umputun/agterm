@@ -335,22 +335,24 @@ event-arguments rule.
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/PaletteCatalog.swift`,
   `agtermCore/Tests/agtermCoreTests/PaletteCatalogTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/Pick.swift`, `agtermCore/Tests/agtermCoreTests/PickTests.swift`
+- Modify: `agtermTests/ControlServerAskTests.swift`
 - Modify: `agterm/AppActions+Focus.swift`, `agterm/AppActions.swift`, `agterm/agtermApp.swift`,
-  `agterm/agtermApp+Menus.swift`, `agterm/AppDelegate.swift` (termination hook if it calls
-  `cancelAllPendingPicks`), `agterm/Ghostty/GhosttySurfaceView.swift`
+  `agterm/AppDelegate.swift`, `agterm/Ghostty/GhosttySurfaceView.swift`
 - Modify: `agterm/Views/WindowContentView.swift`, `WindowContentView+Dashboard.swift`,
   `WindowContentView+Zoom.swift`, `WindowContentView+Titlebar.swift`, `WindowContentView+RecentSessions.swift`
 - Modify: `agterm/Control/ControlServer.swift`, `ControlServer+AppCommands.swift`,
-  `ControlServer+SurfaceIO.swift`, `ControlServer+SessionActions.swift`
+  `ControlServer+SurfaceIO.swift`, `ControlServer+SessionActions.swift`, `ControlServer+Ask.swift`
 
-- [ ] switch every pending-pick predicate to `modalPending`, the five control entry points included,
+- [x] switch every pending-pick predicate to `modalPending`, the five control entry points included,
       with `pendingModalError` supplying the message; finish with the grep from Technical Details showing
       no read left outside the pick host
-- [ ] `PaletteContext` takes the modal predicate; `modalActive` covers an ask
-- [ ] `dismissPendingAsk(userInitiated:)` for ⌘W; `cancelAllPendingModals` for termination
-- [ ] auto-follow suppression and quick-terminal hide pair with the ask exactly as with the pick
-- [ ] tests: `PaletteCatalogTests` case for `modalActive` under a pending ask
-- [ ] build the app target and run the existing `ControlPickUITests` once to confirm no regression
+- [x] `PaletteContext` takes the modal predicate; `modalActive` covers an ask
+- [x] `dismissPendingAsk(userInitiated:)` for ⌘W; `cancelAllPendingModals` for termination
+- [x] auto-follow suppression and quick-terminal hide pair with the ask exactly as with the pick
+- [x] tests: `PaletteCatalogTests` case for `modalActive` under a pending ask
+- [x] build the app target and attempt `ControlPickUITests` once; UI verification skipped because the
+      runner timed out enabling automation mode before any test methods ran. Core and hosted checks passed.
 
 ### Task 6: Dialog view, keyboard, and placement
 

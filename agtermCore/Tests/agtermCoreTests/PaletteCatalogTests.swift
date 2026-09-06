@@ -234,6 +234,24 @@ struct PaletteCatalogTests {
         }
     }
 
+    @MainActor @Test func aPendingAskUsesTheSharedModalPredicate() {
+        let controller = PickController()
+        #expect(controller.openAsk(PendingAsk(id: "ask", title: "Continue?",
+                                             buttons: [ControlAskButton(id: "yes", label: "Yes")])))
+        let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
+                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     canStepWorkspaces: true,
+                                     activeSessionHasSplit: true, hasPendingClose: true,
+                                     hasRecentClosed: true, hasActiveSession: true,
+                                     hasCurrentWorkspace: true, pickerActive: controller.modalPending)
+        #expect(context.modalActive)
+        for command in PaletteCommand.allCases {
+            #expect(command.isEnabled(in: context) == Self.coverProof.contains(command), "\(command)")
+        }
+        controller.cancelAsk()
+        #expect(!PaletteContext(pickerActive: controller.modalPending).modalActive)
+    }
+
     // Navigate ▸ Dashboard is the open grid's own escape hatch, so its item alone survives that one cover.
     @Test func theOpenDashboardSparesItsOwnToggle() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
