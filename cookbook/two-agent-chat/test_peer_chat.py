@@ -106,6 +106,31 @@ class ClaudeLivePromptTextTests(unittest.TestCase):
             "Chat from Codex: review this",
         )
 
+    def test_live_composer_accepts_padded_status_rows(self) -> None:
+        rows = [
+            "   repo [branch] [Opus 5] 70% /rc\n  ⏵⏵ auto mode on (shift+tab to cycle)",
+            "  repo [branch] [Opus 5] 70% /rc\n    --%\n  ⏵⏵ auto mode on (shift+tab to cycle)",
+        ]
+
+        for status in rows:
+            with self.subTest(status=status):
+                screen = f"{RULE}\n❯ Chat from Codex: review this\n{RULE}\n{status}"
+                self.assertEqual(
+                    LIVE_PROMPT_TEXT(CLAUDE_PROFILE, screen),
+                    "Chat from Codex: review this",
+                )
+
+    def test_padded_status_row_does_not_admit_a_dialog(self) -> None:
+        trailers = [
+            "   repo [branch] [Opus 5] 70% /rc\nAllow this command?",
+            "   repo [branch] [Opus 5] 70% /rc\n    1. Yes\n    2. No",
+        ]
+
+        for trailer in trailers:
+            with self.subTest(trailer=trailer):
+                screen = f"{RULE}\n❯ previous user prompt\n{RULE}\n{trailer}"
+                self.assertIsNone(LIVE_PROMPT_TEXT(CLAUDE_PROFILE, screen))
+
     def test_queue_hints_are_known_empty_claude_placeholders(self) -> None:
         hints = [
             "Press up to edit queued messages",

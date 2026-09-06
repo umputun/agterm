@@ -48,7 +48,8 @@ CODEX_EMPTY_PROMPT = "Ask Codex to do anything"
 # therefore fails closed instead of weakening the live-prompt guard.
 CODEX_FOOTER_RE = re.compile(r"^ {2}\S.*$")
 CLAUDE_PROMPT_RE = re.compile(r"^\s*❯[\s ]*(.*?)\s*$")
-CLAUDE_FOOTER_RE = re.compile(r"^ {2}\S.*$")
+# status-line commands can add padding beyond Claude Code's two-space indent.
+CLAUDE_FOOTER_RE = re.compile(r"^ {2,}\S.*$")
 CLAUDE_EMPTY_PROMPTS = {
     "",
     "Press up to edit queued messages",
