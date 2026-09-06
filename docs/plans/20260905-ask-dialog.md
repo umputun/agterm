@@ -89,7 +89,7 @@ Decisions settled in design review (Eugene, with codex as second reader):
   the active one solid foreground with background-colored text, hotkeys underlined. `gui` reuses the
   picker's material panel, corner radius and appearance handling with system fonts: headline title,
   secondary message, native push buttons in a trailing row, the current highlight prominent in the accent color,
-  the destructive one tinted red and prominent red when highlighted, no hard-coded colors. Clicking outside the panel does nothing in either.
+  the destructive one tinted red and prominent red when highlighted, system colors only. Clicking outside the panel does nothing in either.
   `style` is decoration, so it has no read-back; an unknown value is rejected.
 - Buttons in a row share the widest button's width. In a column they share its width, with long labels
   wrapping within it, in both styles.

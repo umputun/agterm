@@ -591,7 +591,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The active button uses solid foreground fill with background-colored text. Colors come from the theme.
 - GUI style uses the picker's material, corner radius, and appearance handling, with system fonts,
   a headline title, secondary message, and native push buttons in a row. The active button is
-  prominent in the accent color; destructive is tinted red and becomes prominent red when active. No hard-coded colors.
+  prominent in the accent color; destructive is tinted red and becomes prominent red when active. System colors only, so light and dark follow the picker.
 - The dialog is window-modal and shares `PickController.modalPending` with pick. A second open of
   either family is refused. Focus, auto-follow, menu, quick-terminal, search, zoom, and dashboard gates
   consult the shared predicate.
