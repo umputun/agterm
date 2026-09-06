@@ -1373,9 +1373,9 @@
               Accessibility
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
-              Voice dictation tools that probe for a focused text field — the system Dictation, MacWhisper, and similar
-              assistive apps — engage over the terminal: the on-screen pane advertises itself to the accessibility system as
-              an editable text area, so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text
+              Voice dictation tools that probe for a focused text field — MacWhisper and similar assistive apps — engage
+              over the terminal: the on-screen pane advertises itself to the accessibility system as an editable text area,
+              so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text
               arrives at the cursor the same way typing does, and an insert carrying a newline, a tab, or any other control
               character goes in as a bracketed paste, so a program that accepts bracketed paste takes it as literal text
               instead of running the line or completing the word. That last part is the same caveat &#8984;V carries: at a raw
@@ -1388,6 +1388,10 @@
               read back, a dictation tool that re-sends its whole transcription on every revision (rather than only the new
               words) will concatenate its drafts at the prompt; tools that insert incrementally, MacWhisper among them, are
               unaffected.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              System Dictation inserts text through macOS text input, the same path used by the keyboard and input
+              methods.
             </p>
           </section>
 

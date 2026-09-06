@@ -398,7 +398,11 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         ghostty_surface_preedit(surface, nil, 0)
     }
 
-    func selectedRange() -> NSRange { _selectedRange }
+    /// Dictation needs a valid caret outside a composition (#555), and the stored IME selection is stale
+    /// once one ends.
+    func selectedRange() -> NSRange {
+        hasMarkedText() ? _selectedRange : NSRange(location: 0, length: 0)
+    }
     func markedRange() -> NSRange { _markedRange }
     func hasMarkedText() -> Bool { _markedRange.location != NSNotFound }
 
