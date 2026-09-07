@@ -630,7 +630,7 @@ struct WindowContentView: View {
         }
     }
 
-    private var askFont: NSFont {
+    var askFont: NSFont {
         let size = actions.settingsModel?.settings.fontSize ?? GhosttyApp.shared.baseFontSize
         if let family = actions.settingsModel?.settings.fontFamily, let font = NSFont(name: family, size: size) {
             return font

@@ -480,7 +480,7 @@ struct agtermApp: App {
             // a control picker is the topmost modal: `session.search --to close` stays valid cleanup while one
             // is pending, but its async END must not return focus behind it.
             guard PickRegistry.shared.controller(for: windowID)?.modalPending != true else { return }
-            (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+            if let surface = session.topmostSurface as? GhosttySurfaceView, !surface.deferFocusToAsk() { surface.focusAfterReparent() }
         }
         view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }
         view.onSearchSelected = { selected in store.session(withID: sessionID)?.searchSelected = selected }

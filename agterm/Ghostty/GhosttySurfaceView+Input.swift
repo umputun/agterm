@@ -151,6 +151,7 @@ extension GhosttySurfaceView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard !deferMouseToAsk(with: event) else { return }
         guard let surface else { return }
         window?.makeFirstResponder(self)
         updateGhosttyFocus()
@@ -159,6 +160,7 @@ extension GhosttySurfaceView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        guard !askBlocksFocus else { return }
         guard let surface else { return }
         reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, mods(event))

@@ -6,6 +6,107 @@ import agtermCore
 
 @MainActor
 final class AskDialogViewTests: XCTestCase {
+    func testSessionAskReclaimsInputWhenItsWindowBecomesKeyAgain() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open()
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+        fixture.window.keyEligible = false
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: fixture.window)
+        XCTAssertFalse(fixture.window.firstResponder === catcher)
+        fixture.window.keyEligible = true
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: fixture.window)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+    }
+
+    func testSessionBackdropDoesNotPaintOutsideTheCoveredPane() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        let host = NSHostingView(rootView: fixture.overlay().frame(width: 600, height: 300).background(.white))
+        fixture.window.contentView = host
+        fixture.window.orderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let left = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 8, y: bitmap.pixelsHigh / 8)?.usingColorSpace(.deviceRGB))
+        let right = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide * 7 / 8, y: bitmap.pixelsHigh / 8)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(left.redComponent, 0.95)
+        XCTAssertLessThan(right.redComponent, left.redComponent - 0.1)
+    }
+
+    func testSessionAskMountHidesForCoversWithoutResolving() throws {
+        for pane: OverlayPane? in [nil, .right] {
+            let fixture = try SessionAskTestFixture()
+            defer { fixture.close() }
+            try fixture.open(pane: pane)
+            let id = try XCTUnwrap(fixture.session.askPending?.id)
+            fixture.mount()
+            XCTAssertNotNil(fixture.catcher)
+            fixture.session.scratchActive = true
+            fixture.mount()
+            XCTAssertEqual(fixture.catcher == nil, pane != nil)
+            fixture.session.scratchActive = false
+            let zoom = TerminalZoomController()
+            TerminalZoomRegistry.shared.register(fixture.windowID, controller: zoom)
+            zoom.set(.on, target: .session(fixture.session.id, .primary))
+            fixture.mount()
+            XCTAssertNil(fixture.catcher)
+            zoom.clear()
+            fixture.mount()
+            XCTAssertNotNil(fixture.catcher)
+            XCTAssertEqual(AskRegistry.shared.result(for: id)?.result.result, .pending)
+        }
+    }
+
+    func testSessionAskMountUsesOnlyItsCoveredPaneAndReleasesFocus() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        fixture.session.splitFocused = true
+        let overlay = fixture.overlay()
+        XCTAssertEqual(overlay.coveredFrame, CGRect(x: 300, y: 0, width: 300, height: 300))
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        XCTAssertEqual(catcher.bounds.size, CGSize(width: 300, height: 300))
+        XCTAssertEqual(catcher.convert(catcher.bounds, to: nil).minX, 300, accuracy: 1)
+        catcher.updateFocus(revision: 1)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+        fixture.session.splitFocused = false
+        catcher.updateFocus(revision: 2)
+        XCTAssertFalse(fixture.window.firstResponder === catcher)
+        XCTAssertNotNil(fixture.session.askPending)
+    }
+
+    func testSessionAskWithoutPaneGeometryDoesNotMount() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        XCTAssertNil(fixture.overlay(frames: HudPaneFrames()).coveredFrame)
+        fixture.mount(frames: HudPaneFrames())
+        XCTAssertNil(fixture.catcher)
+        XCTAssertNotNil(fixture.session.askPending)
+    }
+
+    func testSessionAskAnswerDoesNotTakeFocusFromAnUncoveredPane() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        let field = NSTextField(frame: CGRect(x: 10, y: 10, width: 100, height: 24))
+        fixture.window.contentView?.addSubview(field)
+        fixture.window.makeFirstResponder(field)
+        let responder = fixture.window.firstResponder
+        let ask = try XCTUnwrap(fixture.session.askPending)
+        fixture.session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        catcher.updateFocus(revision: 1)
+        XCTAssertTrue(fixture.window.firstResponder === responder)
+        XCTAssertEqual(AskRegistry.shared.result(for: ask.id)?.result.result, .answered)
+    }
+
     func testEqualButtonsRenderInBothLayoutsAndStyles() throws {
         for style in ControlAskStyle.allCases {
             for width: CGFloat in [700, 140] {
@@ -279,4 +380,85 @@ final class AskDialogViewTests: XCTestCase {
         }
         return count
     }
+}
+
+@MainActor
+final class SessionAskTestFixture {
+    let library: WindowLibrary
+    let store: AppStore
+    let actions: AppActions
+    let session: Session
+    let windowID: UUID
+    let window: SessionAskTestWindow
+    private let directory: URL
+    private let previousResolver: (AskRegistry.Owner) -> PendingAsk?
+
+    init() throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("ask-focus-\(UUID().uuidString)")
+        library = WindowLibrary(directory: directory)
+        store = try XCTUnwrap(library.activeStore)
+        session = try XCTUnwrap(store.activeSession)
+        windowID = try XCTUnwrap(library.activeWindowID)
+        actions = AppActions(library: library)
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitPaneIdentity = UUID()
+        window = SessionAskTestWindow(contentRect: CGRect(x: 0, y: 0, width: 600, height: 300),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        WindowRegistry.shared.register(windowID, window: window)
+        previousResolver = AskRegistry.shared.resolveOwner
+        let store = store, previous = previousResolver
+        AskRegistry.shared.resolveOwner = { owner in
+            if case .session(let id, _) = owner, let session = store.session(withID: id) { return session.askPending }
+            return previous(owner)
+        }
+    }
+
+    var catcher: AskKeyCatcher.KeyCatcherView? {
+        AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID)
+    }
+
+    func open(pane: OverlayPane? = nil) throws {
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let identity = pane.map { $0 == .left ? session.paneIdentity : session.splitPaneIdentity! }
+        XCTAssertTrue(session.openAsk(ask, paneIdentity: identity))
+        XCTAssertTrue(AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: windowID)))
+    }
+
+    func overlay(frames: HudPaneFrames? = nil) -> SessionAskOverlay {
+        SessionAskOverlay(session: session, store: store, actions: actions, windowID: windowID,
+                          detailFrame: CGRect(x: 0, y: 0, width: 600, height: 300),
+                          paneFrames: frames ?? HudPaneFrames(left: HudPaneFrame(CGRect(x: 0, y: 0, width: 300, height: 300)),
+                                                             right: HudPaneFrame(CGRect(x: 300, y: 0, width: 300, height: 300))),
+                          font: .monospacedSystemFont(ofSize: 13, weight: .regular), foreground: .white, background: .black)
+    }
+
+    func mount(frames: HudPaneFrames? = nil) {
+        let host = NSHostingView(rootView: overlay(frames: frames).frame(width: 600, height: 300))
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        catcher?.updateFocus(revision: 1)
+    }
+
+    func close() {
+        session.cancelPendingAsk()
+        catcher?.unregister()
+        AskRegistry.shared.resolveOwner = previousResolver
+        PickRegistry.shared.unregister(windowID)
+        TerminalZoomRegistry.shared.unregister(windowID)
+        DashboardControllerRegistry.shared.unregister(windowID)
+        WindowRegistry.shared.unregister(windowID)
+        window.contentView = nil
+        window.orderOut(nil)
+        try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+/// Key eligibility is controlled here; the isolated Debug check verifies real window activation.
+final class SessionAskTestWindow: NSWindow {
+    var keyEligible = true
+    override var canBecomeKey: Bool { true }
+    override var isKeyWindow: Bool { keyEligible }
 }

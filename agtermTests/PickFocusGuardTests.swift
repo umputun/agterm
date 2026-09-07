@@ -8,6 +8,123 @@ import agtermCore
 /// agtermCore's host-free tests.
 @MainActor
 final class PickFocusGuardTests: XCTestCase {
+    func testQuickTerminalPriorityReleasesTheSessionAskCatcher() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open()
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        let quick = QuickTerminalController.shared
+        let previousCanShow = quick.canShow
+        let previousFocusAllowed = quick.focusAllowed
+        defer {
+            quick.hide()
+            quick.canShow = previousCanShow
+            quick.focusAllowed = previousFocusAllowed
+        }
+        quick.canShow = { true }
+        quick.focusAllowed = { true }
+        quick.show(dismissOnFocusLoss: false)
+        let panel = try XCTUnwrap(NSApp.windows.first { $0 is QuickTerminalPanel })
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: panel)
+        XCTAssertTrue(quick.holdsKey)
+        XCTAssertFalse(catcher.canFocus)
+        catcher.updateFocus(revision: 2)
+        XCTAssertFalse(fixture.window.firstResponder === catcher)
+        quick.hide()
+        catcher.updateFocus(revision: 3)
+        XCTAssertTrue(catcher.canFocus)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+    }
+
+    func testSessionAskGuardTracksPaneSelectionAndHigherPriorityInput() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        fixture.session.splitFocused = true
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        let input = try XCTUnwrap(catcher.sessionInput)
+        XCTAssertTrue(input.ownsInput(in: fixture.window, pane: .right))
+        XCTAssertFalse(input.ownsInput(in: fixture.window, pane: .left))
+        XCTAssertTrue(GhosttySurfaceView.pickOwnsFocus(in: fixture.window, session: fixture.session, pane: .right))
+        XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: fixture.window, session: fixture.session, pane: .left))
+        fixture.session.splitFocused = false
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        input.selectPane()
+        XCTAssertTrue(fixture.session.splitFocused)
+        fixture.store.selectedSessionID = nil
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        fixture.store.selectedSessionID = fixture.session.id
+        fixture.actions.renamePending = true
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        XCTAssertTrue(GhosttySurfaceView.pickOwnsFocus(in: fixture.window, session: fixture.session, pane: .right))
+        fixture.actions.renamePending = false
+        let palette = PaletteController()
+        fixture.actions.palette = palette
+        palette.open(.actions)
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        XCTAssertTrue(GhosttySurfaceView.pickOwnsFocus(in: fixture.window, session: fixture.session, pane: .right))
+        palette.close()
+        let pick = PickController()
+        PickRegistry.shared.register(fixture.windowID, controller: pick)
+        XCTAssertTrue(pick.open(PendingPick(id: "picker", items: [])))
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        pick.cancel()
+        XCTAssertTrue(input.ownsInput(in: fixture.window))
+        XCTAssertTrue(pick.openAsk(PendingAsk(id: "gui", title: "GUI", buttons: [], style: .gui)))
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+        pick.cancelAsk()
+        fixture.window.keyEligible = false
+        XCTAssertFalse(input.ownsInput(in: fixture.window))
+    }
+
+    func testSessionAskVisibilityTracksZoomDashboardAndScratchScope() throws {
+        for pane: OverlayPane? in [nil, .right] {
+            let fixture = try SessionAskTestFixture()
+            defer { fixture.close() }
+            try fixture.open(pane: pane)
+            fixture.session.splitFocused = true
+            fixture.mount()
+            let input = try XCTUnwrap(fixture.catcher?.sessionInput)
+            let zoom = TerminalZoomController()
+            TerminalZoomRegistry.shared.register(fixture.windowID, controller: zoom)
+            zoom.set(.on, target: .session(fixture.session.id, .primary))
+            XCTAssertFalse(input.visible)
+            XCTAssertFalse(input.ownsInput(in: fixture.window))
+            zoom.clear()
+            let dashboard = DashboardController()
+            DashboardControllerRegistry.shared.register(fixture.windowID, controller: dashboard)
+            dashboard.open(members: [DashboardMember(session: fixture.session.id, surface: .primary)])
+            XCTAssertFalse(input.visible)
+            dashboard.close()
+            fixture.session.scratchActive = true
+            XCTAssertEqual(input.visible, pane == nil)
+            XCTAssertEqual(input.ownsInput(in: fixture.window), pane == nil)
+            fixture.session.scratchActive = false
+            XCTAssertTrue(input.visible)
+            XCTAssertNotNil(fixture.session.askPending)
+        }
+    }
+
+    func testCommandWDismissesOnlyAnInteractiveSessionAsk() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open(pane: .right)
+        fixture.mount()
+        XCTAssertFalse(fixture.actions.escapePendingSessionAsk())
+        XCTAssertNotNil(fixture.session.askPending)
+        XCTAssertNil(fixture.store.openPaneOverlay(fixture.session.id, pane: .left, command: "/bin/cat"))
+        XCTAssertTrue(fixture.actions.closeActiveSession())
+        XCTAssertNil(fixture.session.paneOverlay(.left))
+        XCTAssertNotNil(fixture.session.askPending)
+        fixture.session.splitFocused = true
+        let ask = try XCTUnwrap(fixture.session.askPending)
+        XCTAssertTrue(fixture.actions.closeActiveSession())
+        XCTAssertNotNil(fixture.store.session(withID: fixture.session.id))
+        XCTAssertEqual(AskRegistry.shared.result(for: ask.id)?.result.result, .escaped)
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var actions: AppActions!

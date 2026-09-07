@@ -63,6 +63,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
 
     /// The owning model session, `weak` to break the cycle with `Session.surface`. Set by the factory.
     weak var session: Session?
+    /// Input ownership also follows sessionless overlay and scratch surfaces.
+    weak var focusSession: Session?
 
     /// Whether this primary/split pane launched through zmx. Fixed before `createSurface` reads its config.
     let backedByZmx: Bool
@@ -766,7 +768,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// Starts the bounded auto-focus retry (overlay only), if not already done/in-flight.
     private func requestAutoFocus(in window: NSWindow?) {
         guard autoFocus, deckActive, !didAutoFocus, !autoFocusInFlight, let window,
-              !Self.pickOwnsFocus(in: window) else { return }
+              !deferFocusToAsk() else { return }
         autoFocusInFlight = true
         restoreAutoFocus(in: window, attempt: 0)
     }
@@ -775,7 +777,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// first responder, then marks it focused. Bounded; gives up if the view is torn down or moved windows
     /// (macterm's FocusRestoration pattern).
     private func restoreAutoFocus(in window: NSWindow, attempt: Int) {
-        guard autoFocus, deckActive, !didAutoFocus, !isDestroyed, !Self.pickOwnsFocus(in: window) else {
+        guard autoFocus, deckActive, !didAutoFocus, !isDestroyed, !deferFocusToAsk() else {
             autoFocusInFlight = false
             return
         }
@@ -808,7 +810,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     }
 
     private func retryReparentFocus(attempt: Int, heldFor: Int) {
-        guard !isDestroyed, !Self.pickOwnsFocus(in: window) else {
+        guard !isDestroyed, !deferFocusToAsk() else {
             reparentFocusInFlight = false
             return
         }
@@ -827,12 +829,13 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
     }
 
-    /// A control dialog owns keyboard focus in its window. The check lives inside both retry loops,
-    /// not just their callers: a dialog can open after a retry starts, and the next tick must stop before it
-    /// steals first responder from the dialog.
-    static func pickOwnsFocus(in window: NSWindow?) -> Bool {
+    /// Rechecked inside retries so a newly opened dialog can claim its region's input.
+    static func pickOwnsFocus(in window: NSWindow?, session: Session? = nil, pane: OverlayPane? = nil) -> Bool {
         guard let window, let windowID = WindowRegistry.shared.windowID(for: window) else { return false }
-        return PickRegistry.shared.controller(for: windowID)?.modalPending == true
+        if PickRegistry.shared.controller(for: windowID)?.modalPending == true { return true }
+        guard let session, let catcher = AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID),
+              catcher.window === window else { return false }
+        return catcher.sessionInput?.blocksTerminalFocus(in: window, pane: pane) == true
     }
 
     func destroySurface() {

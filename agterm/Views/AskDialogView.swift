@@ -23,6 +23,136 @@ struct AskAnchorPreferenceKey: PreferenceKey {
     }
 }
 
+@MainActor
+struct SessionAskInput {
+    let session: Session
+    let store: AppStore
+    let actions: AppActions
+    let windowID: UUID
+    let askID: String
+    let frame: CGRect?
+
+    var visible: Bool {
+        guard session.askPending?.id == askID, store.selectedSessionID == session.id,
+              let frame, !frame.isEmpty,
+              TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil,
+              DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true else { return false }
+        guard session.askPaneIdentity != nil else { return true }
+        guard let pane = session.askTargetPane else { return false }
+        return session.rendersPane(pane) && !session.scratchActive
+    }
+
+    var wantsFocus: Bool {
+        guard visible, actions.library.activeWindowID == windowID,
+              PickRegistry.shared.controller(for: windowID)?.modalPending != true,
+              actions.palette?.mode == nil, !actions.renamePending,
+              !actions.quickTerminal.holdsKey else { return false }
+        guard let target = session.askTargetPane else { return true }
+        return target == (session.splitFocused ? .right : .left)
+    }
+
+    func ownsInput(in window: NSWindow?, pane: OverlayPane? = nil) -> Bool {
+        guard wantsFocus, let window, window.isKeyWindow,
+              WindowRegistry.shared.windowID(for: window) == windowID,
+              !(window.firstResponder is NSText) else { return false }
+        return pane == nil || session.askTargetPane == nil || pane == session.askTargetPane
+    }
+
+    func blocksTerminalFocus(in window: NSWindow?, pane: OverlayPane?) -> Bool {
+        guard visible else { return false }
+        if actions.quickTerminal.holdsKey { return true }
+        if actions.library.activeWindowID == windowID,
+           actions.palette?.mode != nil || actions.renamePending || window?.firstResponder is NSText { return true }
+        return ownsInput(in: window, pane: pane)
+    }
+
+    func selectPane() {
+        guard visible, let pane = session.askTargetPane else { return }
+        actions.setSplitFocus(pane == .right, of: session)
+    }
+}
+
+struct SessionAskOverlay: View {
+    let session: Session
+    let store: AppStore
+    let actions: AppActions
+    let windowID: UUID
+    let detailFrame: CGRect
+    let paneFrames: HudPaneFrames
+    let font: NSFont
+    let foreground: Color
+    let background: Color
+
+    var body: some View {
+        if let ask = session.askPending {
+            let frame = coveredFrame
+            let input = SessionAskInput(session: session, store: store, actions: actions,
+                                        windowID: windowID, askID: ask.id, frame: frame)
+            if let frame, input.visible {
+                AskDialogView(ask: ask, anchorFrame: CGRect(origin: .zero, size: frame.size), font: font,
+                              foreground: foreground, background: background, focusAllowed: input.wantsFocus,
+                              sessionInput: input, onFocus: input.selectPane,
+                              onAnswer: { index in
+                                  let button = ask.buttons[index]
+                                  session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: button.id,
+                                                                                label: button.label, index: index))
+                              }, onDismiss: { session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped)) })
+                    .frame(width: frame.width, height: frame.height)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .position(x: frame.midX, y: frame.midY)
+                    .id(ask.id)
+            }
+        }
+    }
+
+    var coveredFrame: CGRect? {
+        guard session.askPaneIdentity != nil else { return detailFrame }
+        return session.askTargetPane.flatMap { paneFrames[$0] }.map { CGRect($0) }
+    }
+}
+
+extension GhosttySurfaceView {
+    func deferMouseToAsk(with event: NSEvent) -> Bool {
+        if Self.pickOwnsFocus(in: window) { return true }
+        guard let owner = focusSession ?? session,
+              let catcher = AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: owner.id as NSUUID),
+              catcher.window === window, let input = catcher.sessionInput, input.visible else { return false }
+        if input.actions.palette?.mode != nil || input.actions.renamePending || input.actions.quickTerminal.holdsKey { return true }
+        if catcher.bounds.contains(catcher.convert(event.locationInWindow, from: nil)) {
+            input.selectPane()
+            catcher.grabFocus()
+            return true
+        }
+        if owner.overlaySurface as? GhosttySurfaceView === self, let target = owner.askTargetPane {
+            owner.splitFocused = target == .left
+        }
+        return false
+    }
+
+    /// Hands a blocked terminal focus request to its visible session dialog.
+    func deferFocusToAsk() -> Bool {
+        guard askBlocksFocus else { return false }
+        if let owner = focusSession ?? session {
+            AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: owner.id as NSUUID)?.grabFocus()
+        }
+        return true
+    }
+
+    var askBlocksFocus: Bool {
+        let owner = focusSession ?? session
+        let pane: OverlayPane?
+        if let owner, owner.surface as? GhosttySurfaceView === self || owner.leftOverlaySurface as? GhosttySurfaceView === self {
+            pane = .left
+        } else if let owner, owner.splitSurface as? GhosttySurfaceView === self || owner.rightOverlaySurface as? GhosttySurfaceView === self {
+            pane = .right
+        } else {
+            pane = nil
+        }
+        return Self.pickOwnsFocus(in: window, session: owner, pane: pane)
+    }
+}
+
 struct AskDialogView: View {
     let ask: PendingAsk
     let anchorFrame: CGRect
@@ -30,19 +160,24 @@ struct AskDialogView: View {
     let foreground: Color
     let background: Color
     let focusAllowed: Bool
+    let sessionInput: SessionAskInput?
+    let onFocus: () -> Void
     let onAnswer: (Int) -> Void
     let onDismiss: () -> Void
     @State private var navigation: AskNavigation
     @State private var focusRevision = 0
 
     init(ask: PendingAsk, anchorFrame: CGRect, font: NSFont, foreground: Color, background: Color,
-         focusAllowed: Bool, onAnswer: @escaping (Int) -> Void, onDismiss: @escaping () -> Void) {
+         focusAllowed: Bool, sessionInput: SessionAskInput? = nil, onFocus: @escaping () -> Void = {},
+         onAnswer: @escaping (Int) -> Void, onDismiss: @escaping () -> Void) {
         self.ask = ask
         self.anchorFrame = anchorFrame
         self.font = font
         self.foreground = foreground
         self.background = background
         self.focusAllowed = focusAllowed
+        self.sessionInput = sessionInput
+        self.onFocus = onFocus
         self.onAnswer = onAnswer
         self.onDismiss = onDismiss
         _navigation = State(initialValue: AskNavigation(buttons: ask.buttons, defaultID: ask.defaultID, destructiveID: ask.destructiveID))
@@ -67,7 +202,7 @@ struct AskDialogView: View {
         ZStack {
             Color.black.opacity(0.2)
                 .contentShape(Rectangle())
-                .onTapGesture { focusRevision += 1 }
+                .onTapGesture { onFocus(); focusRevision += 1 }
             ScrollViewReader { reader in
                 ViewThatFits(in: .horizontal) {
                     if ask.width == nil {
@@ -82,8 +217,8 @@ struct AskDialogView: View {
                     reader.scrollTo(ask.buttons[index].id)
                 }
             }
-            AskKeyCatcher(focusAllowed: focusAllowed, focusRevision: focusRevision, onKey: handle)
-                .frame(width: 0, height: 0)
+            AskKeyCatcher(focusAllowed: focusAllowed, focusRevision: focusRevision, sessionInput: sessionInput, onKey: handle)
+                .frame(width: sessionInput == nil ? 0 : anchorFrame.width, height: sessionInput == nil ? 0 : anchorFrame.height)
                 .allowsHitTesting(false)
         }
         .font(ask.style == .gui ? .body : Font(font))
@@ -280,20 +415,26 @@ enum AskKey: Equatable {
 struct AskKeyCatcher: NSViewRepresentable {
     let focusAllowed: Bool
     let focusRevision: Int
+    var sessionInput: SessionAskInput?
     let onKey: (AskKey) -> Void
 
     func makeNSView(context _: Context) -> KeyCatcherView {
         let view = KeyCatcherView()
         view.focusAllowed = focusAllowed
+        view.sessionInput = sessionInput
         view.onKey = onKey
         return view
     }
 
     func updateNSView(_ nsView: KeyCatcherView, context _: Context) {
-        _ = focusRevision
         nsView.focusAllowed = focusAllowed
+        nsView.sessionInput = sessionInput
         nsView.onKey = onKey
-        nsView.grabFocus()
+        nsView.updateFocus(revision: focusRevision)
+    }
+
+    static func dismantleNSView(_ nsView: KeyCatcherView, coordinator _: ()) {
+        nsView.unregister()
     }
 
     static func key(for event: NSEvent) -> AskKey? {
@@ -312,22 +453,74 @@ struct AskKeyCatcher: NSViewRepresentable {
     }
 
     final class KeyCatcherView: NSView {
+        static let sessionCatchers = NSMapTable<NSUUID, KeyCatcherView>(keyOptions: .strongMemory, valueOptions: .weakMemory)
         var focusAllowed = false
+        var sessionInput: SessionAskInput?
         var onKey: ((AskKey) -> Void)?
+        private var previouslyAllowed = false
+        private var lastRevision = 0
+
+        var canFocus: Bool { sessionInput.map { $0.ownsInput(in: window) } ?? focusAllowed }
 
         override var acceptsFirstResponder: Bool { true }
+        override func hitTest(_: NSPoint) -> NSView? { nil }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            grabFocus()
+            stopObservingKeyWindow()
+            if sessionInput != nil, let window {
+                for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+                    NotificationCenter.default.addObserver(self, selector: #selector(windowKeyChanged), name: name, object: window)
+                }
+            }
+            if window == nil { unregister() } else { updateFocus(revision: lastRevision) }
+        }
+
+        /// Window activation can change without invalidating the SwiftUI host.
+        @objc private func windowKeyChanged(_: Notification) { updateFocus(revision: lastRevision) }
+
+        private func stopObservingKeyWindow() {
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+                NotificationCenter.default.removeObserver(self, name: name, object: nil)
+            }
+        }
+
+        func unregister() {
+            stopObservingKeyWindow()
+            releaseFocus()
+            guard let input = sessionInput,
+                  Self.sessionCatchers.object(forKey: input.session.id as NSUUID) === self else { return }
+            Self.sessionCatchers.removeObject(forKey: input.session.id as NSUUID)
+        }
+
+        func updateFocus(revision: Int) {
+            if let input = sessionInput, window != nil { Self.sessionCatchers.setObject(self, forKey: input.session.id as NSUUID) }
+            let allowed = canFocus
+            if allowed, sessionInput == nil || !previouslyAllowed || revision != lastRevision { grabFocus() }
+            if !allowed { releaseFocus() }
+            previouslyAllowed = allowed
+            lastRevision = revision
+        }
+
+        private func releaseFocus() {
+            guard let window, window.firstResponder === self else { return }
+            window.makeFirstResponder(nil)
+            guard let input = sessionInput, input.session.askPending == nil,
+                  input.store.selectedSessionID == input.session.id,
+                  input.actions.library.activeWindowID == input.windowID, window.isKeyWindow,
+                  input.actions.palette?.mode == nil, !input.actions.renamePending,
+                  !input.actions.quickTerminal.holdsKey,
+                  let surface = input.session.topmostSurface as? GhosttySurfaceView, !surface.askBlocksFocus else { return }
+            window.makeFirstResponder(surface)
         }
 
         func grabFocus() {
-            guard focusAllowed, let window, window.firstResponder !== self else { return }
+            guard canFocus, let window, window.firstResponder !== self else { return }
             window.makeFirstResponder(self)
         }
 
         override func keyDown(with event: NSEvent) {
+            guard sessionInput == nil || canFocus else { return }
             if let key = AskKeyCatcher.key(for: event) { onKey?(key) }
         }
     }

@@ -219,6 +219,7 @@ final class AppActions {
         // a control dialog has an external caller waiting: the first ⌘W layer even behind a zoomed terminal,
         // and resolved rather than hidden so the caller can finish.
         if dismissPendingModal(for: library.activeWindowID) { return true }
+        if escapePendingSessionAsk() { return true }
         // the quick-terminal panel floats above every window, so it outranks anything inside one — the window
         // rungs below read state the panel is covering, and clearing a zoom the user cannot see is a silent
         // mutation of state they never touched. Stepwise like zoom: a zoomed panel un-zooms first, the next

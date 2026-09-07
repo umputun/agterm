@@ -44,9 +44,10 @@ struct TerminalView: NSViewRepresentable {
     func makeNSView(context _: Context) -> GhosttySurfaceView {
         let view = (session[keyPath: surfaceKeyPath] as? GhosttySurfaceView) ?? makeSurface(session)
         session[keyPath: surfaceKeyPath] = view
+        view.focusSession = session
         // before the view attaches: gate the overlay/scratch auto-focus to the active slot so a background
         // session's overlay can't grab first responder during its initial createSurface.
-        view.deckActive = isActive
+        view.deckActive = isActive && !view.askBlocksFocus
         view.deckVisible = deckVisible
         view.deckOnScreen = onScreen ?? deckVisible
         view.suppressFocusChange = !reportsFocusChange
@@ -57,7 +58,8 @@ struct TerminalView: NSViewRepresentable {
     func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
         // keep the auto-focus gate in sync with selection, set BEFORE createSurface (which fires the overlay
         // auto-focus) so a background slot never starts the focus-grab retry.
-        nsView.deckActive = isActive
+        nsView.focusSession = session
+        nsView.deckActive = isActive && !nsView.askBlocksFocus
         nsView.deckVisible = deckVisible
         nsView.deckOnScreen = onScreen ?? deckVisible
         nsView.suppressFocusChange = !reportsFocusChange
@@ -66,7 +68,7 @@ struct TerminalView: NSViewRepresentable {
         // surface == nil and a non-zero backing size). synchronous on purpose: a deferred next-tick create
         // races the layout and gives the surface a stale size.
         nsView.createSurface()
-        guard isActive else {
+        guard nsView.deckActive else {
             // hidden deck pane: drop the focus latch so it re-grabs when next active, and never hold first
             // responder while hidden — the active pane needs it, and a background pane that still looks
             // "focused" wrongly suppresses its own OSC 9 desktop notification.
@@ -86,6 +88,7 @@ struct TerminalView: NSViewRepresentable {
     /// is first responder, so editing a sidebar rename survives a re-render. `mouseDown` covers the rest.
     private func focusIfNeeded(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
         guard let window = nsView.window else { return }
+        guard !nsView.askBlocksFocus else { return }
         if window.firstResponder === nsView { return }
         // don't steal focus from an active text field editor (a sidebar rename); its editor is an NSText.
         if window.firstResponder is NSText { return }

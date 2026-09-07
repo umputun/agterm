@@ -158,25 +158,26 @@
 - Modify: `agtermTests/AskDialogViewTests.swift`, `PickFocusGuardTests.swift`,
   `GhosttySurfaceViewInputTests.swift`
 
-- [ ] mount `Session.askPending` in the session detail layer above the HUD panel, framed and hit-tested to
+- [x] mount `Session.askPending` in the session detail layer above the HUD panel, framed and hit-tested to
       the pane frame from `HudPaneAnchorsPreferenceKey` or the detail frame; hidden under zoom, dashboard
       and, for a pane ask, the scratch; the GUI mount in `WindowContentView.swift` is untouched
-- [ ] extend `pickOwnsFocus(in:)` into the input-ownership decision described in Solution Overview; it
+- [x] extend `pickOwnsFocus(in:)` into the input-ownership decision described in Solution Overview; it
       takes the candidate session and pane alongside the window, since a window-only answer cannot block
       the covered right pane while allowing a left-pane refocus; `AskKeyCatcher` grabs when it becomes
       true for its pane and resigns first responder when it turns false; clicking the dialog selects and
       focuses its pane; answering does not refocus
-- [ ] hosted fixtures seed the ask through `Session.openAsk` plus `AskRegistry.register` with a test
+- [x] hosted fixtures seed the ask through `Session.openAsk` plus `AskRegistry.register` with a test
       resolver and mount the session view directly; `ControlServer` still routes terminal asks to
       `PickController` until Task 4, and the existing GUI fixtures stay untouched
-- [ ] consult the decision inside every focus path listed in Context, including `retryReparentFocus`,
+- [x] consult the decision inside every focus path listed in Context, including `retryReparentFocus`,
       `mouseDown`, overlay-close and scratch-toggle refocus, and the sidebar's direct grab
-- [ ] Escape and the Cmd-W ladder in `AppActions.swift` dismiss the session ask only when it owns input
-- [ ] tests: backdrop frame equals the covered pane; ownership truth table over selected session, window
+- [x] Escape and the Cmd-W ladder in `AppActions.swift` dismiss the session ask only when it owns input
+- [x] tests: backdrop frame equals the covered pane; ownership truth table over selected session, window
       eligibility, laid-out region, focused pane, GUI modal, palette, rename, quick terminal, zoom,
       dashboard, scratch by anchor kind; catcher resigns when ownership turns false; `mouseDown` and
       reparent retry skip the grab while the ask owns the pane
-- [ ] `make test-app` scoped to the three test classes; must pass before Task 4
+- [x] `make test-app` scoped to the three test classes; must pass before Task 4
+      (equivalent `xcodegen`/scoped `xcodebuild test`; the Make target unconditionally runs the prohibited setup script)
 
 ### Task 4: Host, dispatcher and read-back switch over by style
 

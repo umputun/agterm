@@ -146,8 +146,16 @@ extension WindowContentView {
             }
         }
         .overlayPreferenceValue(HudPaneAnchorsPreferenceKey.self) { anchors in
-            overlayPanel(session: session, isActive: focusable,
-                         onScreen: deckInteractive && isActive, paneAnchors: anchors)
+            ZStack {
+                overlayPanel(session: session, isActive: focusable,
+                             onScreen: deckInteractive && isActive, paneAnchors: anchors)
+                GeometryReader { geo in
+                    SessionAskOverlay(session: session, store: store, actions: actions, windowID: windowID,
+                                      detailFrame: CGRect(origin: .zero, size: geo.size), paneFrames: anchors.frames(in: geo),
+                                      font: askFont, foreground: chromeText, background: terminalColor)
+                }
+                .allowsHitTesting(session.askPending != nil && deckInteractive && isActive)
+            }
         }
         .transformAnchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { value, anchor in
             if isActive {
@@ -528,14 +536,14 @@ struct OverlayPanelStyle: Equatable {
     }
 }
 
-private extension CGRect {
+extension CGRect {
     init(_ frame: HudPaneFrame) {
         self.init(x: CGFloat(frame.x), y: CGFloat(frame.y),
                   width: CGFloat(frame.width), height: CGFloat(frame.height))
     }
 }
 
-private extension HudPaneFrame {
+extension HudPaneFrame {
     init(_ rect: CGRect) {
         self.init(x: Double(rect.minX), y: Double(rect.minY),
                   width: Double(rect.width), height: Double(rect.height))

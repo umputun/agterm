@@ -47,6 +47,14 @@ extension AppActions {
         return true
     }
 
+    /// Dismisses only the session dialog currently eligible to receive keys.
+    func escapePendingSessionAsk() -> Bool {
+        guard let session = store?.activeSession, let ask = session.askPending,
+              let catcher = AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID),
+              catcher.canFocus else { return false }
+        return session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
+    }
+
     /// Whether terminal zoom is active in the window OWNING this session — the right gate for the
     /// session-addressed focus paths, since control commands resolve sessions across ALL windows: gating on
     /// the FRONTMOST window's zoom would silently drop the focus step for an un-zoomed background window,
@@ -137,6 +145,7 @@ extension AppActions {
         if pickActive(for: library.activeWindowID) { return }
         if quickTerminal.holdsKey { return }
         if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
+            guard !view.deferFocusToAsk() else { return }
             window.makeFirstResponder(view)
         }
         guard attempt < 12 else { return }
@@ -190,6 +199,7 @@ extension AppActions {
         // restores the session.
         if quickTerminal.holdsKey { return }
         if let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
+            guard !view.deferFocusToAsk() else { return }
             window.makeFirstResponder(view)
         }
         guard attempt < 12 else { return }
