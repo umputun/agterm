@@ -91,7 +91,7 @@ One slot, so a session shows either a HUD or a program overlay, never both. Sepa
 or whatever share Settings sets instead; not part of the tree and not owned by a window).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
+`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `hud`, `ask`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
 control address for `surface zoom` and `surface cursor` (`left`, `right`, `scratch`, `overlay`,
@@ -102,7 +102,7 @@ sidebar is currently shown — the read side of the write-only `sidebar` command
 (`tree` or `flagged` — the read side of `sidebar mode`), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
-reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `askPending`, and `app` (the
+reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `askPending` (GUI asks only), and `app` (the
 serving app's `version`, plus `commit` when the build recorded one — the same value `agtermctl version`
 returns). reference.md lists every one with its exact shape. List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
@@ -519,24 +519,23 @@ the field and filters on open, which re-ranks and drops that order. An empty ite
 `< /dev/null` or it blocks. The default blocks until the user chooses or cancels and prints the bare JSON
 result. `--no-block` prints the picker id instead;
 `pick result ID [--window W]` reads it later, and `pick cancel ID [--window W]` cancels it.
-Only one pick or ask may be pending per window. It opens without raising a background target unless
-`--follow` is set. Read the live picker id from the tree's top-level `pickPending` field.
+Pick shares its window modal slot with GUI asks. A background target is raised only with `--follow`.
+Read the live picker id from the tree's top-level `pickPending` field.
 
-**ask**: `ask TITLE --button ID=LABEL [--button ...] [--message TEXT]` opens a themed question with
-one to six buttons and blocks for a bare JSON answer. `--default ID` seeds the highlight;
-`--destructive ID` styles a button that cannot be the default.
-`--hotkey ID=LETTER` adds a letter shortcut. Without a default, the first non-destructive button is
-active (the first button if it is the only choice). Return always activates the highlighted button.
-`--style terminal|gui` defaults to `terminal`; `gui` uses the picker's material appearance and native
-buttons. `--align left|center|right` aligns the button block in either style (default `right`).
-`--width N` fixes the width to 10...100 percent of the anchor; omitted means automatic content sizing.
-Style changes only decoration, has no read-back, and rejects other values as `unknown style`.
-No `--target` centers over the terminal area, excluding the sidebar; a selected session target uses its whole area, narrowed by
-`--pane` or `--pane-id`. `--window` selects the window and `--follow` raises it.
-Exit 0 means answered, including No: inspect `.id` before acting. Esc/Command-W return `escaped`
-with exit 3; `ask.cancel`, window teardown, app termination, and anchor loss return `cancelled` with exit 2.
-`--no-block` returns an id for `ask result ID` or `ask cancel ID`; result/cancel accept `--window`.
-Tree reports `askPending`. See reference.md for validation, anchor loss, and retained results.
+**ask**: `ask TITLE --button ID=LABEL [--button ...] [--message TEXT]` opens a question and waits for
+an answer. The default `--style terminal` uses the selected session, with one pending ask per session.
+`--pane` or `--pane-id` narrows it to a pane without requiring `--target`. An explicit unselected session
+is accepted and keeps its ask hidden and pending. A terminal ask leaves the rest of the window usable.
+`--style gui` uses the window modal slot shared with pick; GUI pane placement requires a selected
+`--target`. Without a target, GUI style centers over the window's terminal area, excluding the sidebar.
+`--window` selects the window; `--follow` raises it without changing session selection.
+`--default ID` seeds the highlight, `--hotkey ID=LETTER` adds a shortcut, and `--destructive ID` marks a
+button that cannot be the default. `--align left|center|right` aligns the buttons; `--width N` fixes the
+panel width to 10...100 percent of its region. Exit 0 means answered, including No: inspect `.id`.
+Esc/Command-W on the interactive ask return `escaped` with exit 3; cancellation returns `cancelled`
+with exit 2. `--no-block` returns an id for `ask result ID` or `ask cancel ID`; explicit `--window` must
+match its owner. Tree exposes terminal asks on session nodes as `ask: {id, pane?}` and GUI asks as
+top-level `askPending`. See [reference.md](reference.md#ask) for result formats and command details.
 
 **quick** — `quick [show|hide|toggle]` (visibility; read back from the tree's `quickVisible`; a panel YOU open
 with `quick show` stays up when agterm loses focus, unlike one the user summoned by hotkey, so a following

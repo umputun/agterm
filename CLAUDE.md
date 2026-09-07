@@ -176,6 +176,7 @@ C-boundary concurrency before changing the bridge.
   "the slot is occupied"; every layer asking "is a program covering this session" reads
   `Session.programOverlayActive` instead. Deck gates, focus routing, zoom, and scratch focus all turn on
   that distinction, so never spell the predicate inline. `control-api.md` lists the sites.
+- A terminal ask has a separate slot on `Session`, independent of the HUD/program overlay slot; see [[control-api]].
 - A long-lived process spawned into a surface needs a stop condition of its own. A hard-killed app runs no
   teardown, and no SIGHUP reaches the process because the pty's session leader is the surviving `login`, so
   it outlives the app in whatever loop it was in. `hud.sh` takes the app's pid through its input file and

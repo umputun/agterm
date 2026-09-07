@@ -474,6 +474,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> —
                 omitted when none is up; mutually exclusive with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>, which reads false beside it),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> (the pending terminal question as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id, pane?}</span>, omitted when none is pending;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span> is omitted for session-wide placement),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (what the session is about,
@@ -555,7 +558,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> (the pending native picker's id,
                 omitted when none is open),
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span> (the pending question's id,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span> (the pending GUI question's id,
                 omitted after resolution),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomedSurface</span>, the four
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard*</span> fields, and
@@ -2267,7 +2270,7 @@
               pick
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A caller-supplied fuzzy picker rendered by agterm. One pick or ask may be pending in each window.
+              A caller-supplied fuzzy picker rendered by agterm. Pick shares its window modal slot with GUI asks.
             </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -2313,7 +2316,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item label must not be empty</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item ids must be unique</span>, or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">item text must not contain control characters</span>.
-                A second live picker returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick already pending</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask already pending</span> when a dialog owns the slot;
+                A second live picker returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick already pending</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask already pending</span> when a GUI ask owns the slot;
                 an unavailable target returns the standard window-resolution error,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no open window</span>, or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no pick surface</span>.
@@ -2380,7 +2383,8 @@
               ask
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A themed question with named buttons. It is modal to its window and shares one pending slot with pick.
+              A themed question with named buttons. Terminal style allows one pending ask per session.
+              GUI style shares its window modal slot with pick; terminal asks can coexist with both.
             </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -2403,7 +2407,7 @@
                 corner radius, and light/dark appearance, system fonts, a headline title, and a secondary-colored message.
                 Native buttons sit in a row; the current highlight is prominent in the accent color and destructive is tinted red,
                 becoming prominent red when highlighted,
-                with system colors only, so light and dark follow the picker. Both styles share keyboard behavior, hotkeys, results, anchoring, and modality.
+                with system colors only, so light and dark follow the picker. Both styles use the same button navigation, hotkeys, and result formats.
                 The wire argument is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">style</span>;
                 it has no read-back. Invalid values return <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown style</span>.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--align left|center|right</span>
@@ -2425,18 +2429,27 @@
                 Outside clicks leave the question open.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                No <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> centers over the terminal area, excluding the sidebar.
-                A session target must be selected and anchors to its whole area.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> narrows placement;
-                a live <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes precedence.
-                Both require a target. Hidden targets and anchored opens under zoom/dashboard are rejected.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises the owning window.
-                Resize and pane-role changes preserve the anchor; losing it cancels the question.
+                Terminal style without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> uses
+                the selected session in the requested window. An explicit unselected session is accepted without selecting it;
+                its question waits hidden. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane left|right</span>
+                narrows placement, and a live <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span>
+                takes precedence. Terminal pane selectors can omit the target; the pane must be part of its session's layout.
+                GUI style without a target centers over the window's terminal area, excluding the sidebar. A GUI target must
+                be selected in its window, and GUI pane selectors require it. Anchored GUI opens under zoom or dashboard are rejected.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises the owning window without
+                changing session selection. Resize, pane swaps, and survivor promotion preserve terminal pane identity.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A terminal ask takes keys only in its focused session or pane and leaves the rest of the window usable.
+                It draws above program overlays and the HUD within that region. GUI asks, picks, palettes, rename fields,
+                and the quick terminal take input priority. An unselected session or hidden pane keeps its question pending.
+                Zoom and dashboard hide terminal asks without resolving them. A session-wide ask draws above the scratch;
+                a pane ask hides beneath it and returns when the scratch is dismissed.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Blocking output is
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"answered","id":"yes","label":"Yes","index":0}</span>
-                or a dismissal result: Esc and Command-W return
+                or a dismissal result: Esc and Command-W on the interactive ask return
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"escaped"}</span> with exit 3;
                 cancellation returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"cancelled"}</span> with exit 2.
                 Index follows caller order. An answer exits 0, including No; failure exits 1.
@@ -2445,8 +2458,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"id":"…"}</span> immediately.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                <strong style="color: #bfbab0">Read-back:</strong> top-level
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span> in tree holds the waiting id.
+                <strong style="color: #bfbab0">Read-back:</strong> the session node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> holds the terminal question's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span> and optional current
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>.
+                Top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span> holds the GUI question's id.
+                Each field is omitted when its slot is empty.
                 The raw protocol's open reply includes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.pane</span>
                 for pane placement. Ask state is poll-only.
               </p>
@@ -2461,7 +2478,8 @@
                 Read the exact global id, independent of the frontmost window. An explicit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> must match.
                 Prints the bare result, including <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"pending"}</span>
-                with exit 1. Terminal results keep the latest eight per open window and 32 across closed windows.
+                with exit 1. The latest 32 finished results are retained across both styles, including after owner closure.
+                Pending requests are never evicted.
                 An unknown id returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown ask: &lt;id&gt;</span>.
                 App shutdown can interrupt polling.
               </p>
@@ -2474,11 +2492,13 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">ask.cancel</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Resolve a pending question as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span>. The cancel command returns
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ok</span>; a retained terminal result is a successful no-op.
-                The exact id and optional window follow the result command's rules. Window teardown, app termination,
-                and anchor loss also return <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span> to the waiting caller.
-                Resolution removes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span>
-                from tree.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ok</span>; a retained finished result is a successful no-op.
+                The exact id and optional window follow the result command's rules. Closing a terminal ask's session or
+                addressed pane cancels it; undo restores the session without the question. GUI anchor loss, including
+                deselection or hiding its target pane, cancels a GUI ask. Window teardown and app termination cancel both styles;
+                shutdown can interrupt polling. Resolution clears the session's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> or the GUI
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">askPending</span>, according to its owner.
               </p>
             </div>
           </section>

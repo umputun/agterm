@@ -28,8 +28,8 @@ paths:
   (no active session, no current workspace). Add a term to `PaletteContext` and the predicate; never to one
   item's `.disabled(…)`. An action's own `AppActions` method keeps its guard as well — belt and braces, not
   the contract.
-- Modal covers include terminal zoom, the dashboard, and a pending pick or ask. They share the same
-  predicate. Ask's terminal and GUI styles have the same modal gates.
+- Window modal covers include terminal zoom, the dashboard, picks, and GUI asks. Terminal asks use
+  session/pane input ownership; see [[control-api]] for priority and lifecycle.
   Close Session, both reloads, the three font sizes and Toggle Terminal Zoom carry no modal term
   (⌘W is how a cover is dismissed); Dashboard carries every cover but its own grid, its item being that
   grid's escape hatch. Items with no palette row (window management, the three palette launchers) keep the
@@ -151,7 +151,8 @@ paths:
 
 ## Close and reselection
 
-- Command-W first dismisses a pending pick or ask. An ask returns `escaped`, as with Esc.
+- Command-W dismisses a window pick or GUI ask, or the terminal ask that owns input. Ask dismissal
+  returns `escaped`, as with Esc; input ownership is defined in [[control-api]].
   Then come the quick terminal (un-zoom, then hide), terminal zoom,
   dashboard, session overlay, scratch, and the focused pane's overlay (`focusedOverlayPane`; a sibling's
   overlay does not intercept). Only then close the active session, or the window when no session remains.

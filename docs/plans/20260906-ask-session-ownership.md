@@ -247,12 +247,12 @@
   `site/commands.html`, `site/docs.html`, `plugins/agterm/skills/agterm/SKILL.md`,
   `plugins/agterm/skills/agterm/reference.md`
 
-- [ ] `control-api.md` owns the contract: ownership by style, cancel paths, input priority order, scratch
+- [x] `control-api.md` owns the contract: ownership by style, cancel paths, input priority order, scratch
       rule; `menu-actions.md` modal-cover line names GUI asks only; `CLAUDE.md` overlay-slot note gains one
       line that the ask slot is separate
-- [ ] `commands.html`, `SKILL.md`, `reference.md`: `ask` on the session node, `askPending` GUI-only,
+- [x] `commands.html`, `SKILL.md`, `reference.md`: `ask` on the session node, `askPending` GUI-only,
       terminal default placement, `--pane` without a target, every "one pick or ask per window" sentence
-- [ ] `docs.html`: the terminal ask covers one session or pane and leaves the rest of the window usable
+- [x] `docs.html`: the terminal ask covers one session or pane and leaves the rest of the window usable
 
 ### Task 8: Verify acceptance criteria and close the plan
 
