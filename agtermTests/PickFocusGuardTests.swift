@@ -8,6 +8,40 @@ import agtermCore
 /// agtermCore's host-free tests.
 @MainActor
 final class PickFocusGuardTests: XCTestCase {
+    func testDismissedPickerFieldEditorDoesNotStrandSessionAsk() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        try fixture.open()
+        fixture.mount()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        let terminal = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        terminal.focusSession = fixture.session
+        fixture.session.surface = terminal
+        fixture.window.contentView?.addSubview(terminal)
+        let pick = PickController()
+        PickRegistry.shared.register(fixture.windowID, controller: pick)
+        XCTAssertTrue(pick.open(PendingPick(id: "picker", items: [])))
+        let field = NSTextField(frame: CGRect(x: 10, y: 10, width: 200, height: 24))
+        fixture.window.contentView?.addSubview(field)
+        XCTAssertTrue(fixture.window.makeFirstResponder(field))
+        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSText)
+        XCTAssertFalse(catcher.canFocus)
+        pick.cancel()
+        fixture.actions.renamePending = true
+        fixture.actions.focusActiveSession()
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        fixture.actions.renamePending = false
+        let palette = PaletteController()
+        fixture.actions.palette = palette
+        palette.open(.actions)
+        fixture.actions.focusActiveSession()
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        palette.close()
+        fixture.actions.focusActiveSession()
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+        XCTAssertNotNil(fixture.session.askPending)
+    }
+
     func testQuickTerminalPriorityReleasesTheSessionAskCatcher() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }

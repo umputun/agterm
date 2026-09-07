@@ -224,19 +224,21 @@
 
 **Files:**
 - Modify: `agtermUITests/ControlAskUITests.swift`
+- Modify: `agterm/Views/AskDialogView.swift`, `agtermTests/PickFocusGuardTests.swift` (picker focus repair found by UI acceptance)
 
-- [ ] left pane keeps typing while a right-pane ask is pending; answering it sends no bytes to the right
+- [x] left pane keeps typing while a right-pane ask is pending; answering it sends no bytes to the right
       shell
-- [ ] two sessions hold terminal asks at once; a GUI ask opens over a session with a terminal ask and takes
+- [x] two sessions hold terminal asks at once; a GUI ask opens over a session with a terminal ask and takes
       the keys until answered
-- [ ] a pick opened over a pending terminal ask takes keys; closing it returns them to the ask
-- [ ] overlay exit and sibling pane close while an ask is pending do not steal its keys; the anchored pane
+- [x] a pick opened over a pending terminal ask takes keys; closing it returns them to the ask
+- [x] a dismissed picker's stale field editor releases input to the ask; live rename and palette owners retain priority
+- [x] overlay exit and sibling pane close while an ask is pending do not steal its keys; the anchored pane
       closing cancels it
-- [ ] zoom hides the ask and typing reaches the zoomed terminal; scratch over a session-wide ask leaves the
+- [x] zoom hides the ask and typing reaches the zoomed terminal; scratch over a session-wide ask leaves the
       ask on top, scratch over a pane ask hides it until dismissed
-- [ ] soft close then immediate `ask result` returns `cancelled`; undo brings the session back without the
+- [x] soft close then immediate `ask result` returns `cancelled`; undo brings the session back without the
       dialog
-- [ ] `-only-testing:agtermUITests/ControlAskUITests`; must pass before Task 7
+- [x] `-only-testing:agtermUITests/ControlAskUITests`; must pass before Task 7
 
 ### Task 7: Documentation
 

@@ -53,8 +53,7 @@ struct SessionAskInput {
 
     func ownsInput(in window: NSWindow?, pane: OverlayPane? = nil) -> Bool {
         guard wantsFocus, let window, window.isKeyWindow,
-              WindowRegistry.shared.windowID(for: window) == windowID,
-              !(window.firstResponder is NSText) else { return false }
+              WindowRegistry.shared.windowID(for: window) == windowID else { return false }
         return pane == nil || session.askTargetPane == nil || pane == session.askTargetPane
     }
 
@@ -62,7 +61,7 @@ struct SessionAskInput {
         guard visible else { return false }
         if actions.quickTerminal.holdsKey { return true }
         if actions.library.activeWindowID == windowID,
-           actions.palette?.mode != nil || actions.renamePending || window?.firstResponder is NSText { return true }
+           actions.palette?.mode != nil || actions.renamePending { return true }
         return ownsInput(in: window, pane: pane)
     }
 
