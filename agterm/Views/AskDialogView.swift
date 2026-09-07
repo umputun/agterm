@@ -124,6 +124,7 @@ extension GhosttySurfaceView {
             catcher.grabFocus()
             return true
         }
+        // a click on the program outside the dialog selects the uncovered pane, so the program keeps its keys
         if owner.overlaySurface as? GhosttySurfaceView === self, let target = owner.askTargetPane {
             owner.splitFocused = target == .left
         }
