@@ -214,11 +214,11 @@
 - Modify: `agtermCore/Sources/agtermctlKit/AskCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/AskCommandsTests.swift`
 
-- [ ] drop the target requirement for `--pane`/`--pane-id` when the style is terminal; help text names
+- [x] drop the target requirement for `--pane`/`--pane-id` when the style is terminal; help text names
       the selected-session default
-- [ ] tests: pane without target for terminal builds the request, GUI without target still refused, exit
+- [x] tests: pane without target for terminal builds the request, GUI without target still refused, exit
       mapping unchanged
-- [ ] `swift test --filter AskCommandsTests`; must pass before Task 6
+- [x] `swift test --filter AskCommandsTests`; must pass before Task 6
 
 ### Task 6: UI acceptance tests
 

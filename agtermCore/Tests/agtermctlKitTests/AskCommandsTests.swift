@@ -5,6 +5,20 @@ import agtermCore
 @testable import agtermctlKit
 
 struct AskCommandsTests {
+    @Test(arguments: [(Optional("right"), Optional<String>.none), (nil, "pane-token"), ("left", "pane-token")], [false, true])
+    func terminalPanePlacementBuildsRequestWithoutTarget(placement: (String?, String?), explicitStyle: Bool) throws {
+        var argv = ["Continue?", "--button", "yes=Yes", "--window", "window-id"]
+        if let pane = placement.0 { argv += ["--pane", pane] }
+        if let paneID = placement.1 { argv += ["--pane-id", paneID] }
+        if explicitStyle { argv += ["--style", "terminal"] }
+        let command = try open(argv)
+        let request = try command.makeRequest()
+        #expect(request == ControlRequest(cmd: .askOpen, args: ControlArgs(
+            buttons: [ControlAskButton(id: "yes", label: "Yes")], style: "terminal", align: "right",
+            window: "window-id", pane: placement.0, paneID: placement.1, title: "Continue?"
+        )))
+    }
+
     @Test(arguments: [10, 50, 100])
     func rootMapsFixedWidth(width: Int) throws {
         let command = try open(["Choose", "--button", "ok", "--width", String(width)])
@@ -67,8 +81,9 @@ struct AskCommandsTests {
         (["Question", "--button", "ok", "--hotkey", "o"], "--hotkey requires ID=LETTER"),
         (["Question", "--button", "ok", "--hotkey", "missing=x"], "unknown hotkey button: missing"),
         (["Question", "--button", "ok", "--hotkey", "ok=o", "--hotkey", "ok=k"], "hotkey already assigned to button: ok"),
-        (["Question", "--button", "ok", "--pane", "right"], "--pane requires a session"),
-        (["Question", "--button", "ok", "--pane-id", "token"], "--pane requires a session"),
+        (["Question", "--button", "ok", "--style", "gui", "--pane", "right"], "--pane requires a session"),
+        (["Question", "--button", "ok", "--style", "gui", "--pane-id", "token"], "--pane requires a session"),
+        (["Question", "--button", "ok", "--style", "gui", "--pane", "left", "--pane-id", "token"], "--pane requires a session"),
         (["Question", "--button", "ok", "--target", "active", "--pane", "scratch"], "--pane must be left or right"),
     ])
     func rootRejectsInvalidSyntax(argv: [String], expected: String) {

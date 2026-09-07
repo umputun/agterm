@@ -24,9 +24,9 @@ struct Ask: ParsableCommand {
         @Option(name: .long, parsing: .unconditional, help: "Panel width as an integer percent of the anchor (10...100); omit for automatic sizing.")
         var width: String?
         @Option(name: .customLong("destructive"), help: "ID of the destructive button.") var destructiveButton: String?
-        @Option(name: .long, help: "Visible session id, prefix, or 'active'. Omit to center over the terminal area.") var target: String?
-        @Option(name: .long, help: "Anchor to the session's left or right pane.") var pane: String?
-        @Option(name: .customLong("pane-id"), help: "Stable pane token; takes precedence over --pane.") var paneID: String?
+        @Option(name: .long, help: "Session id, prefix, or 'active'. Default: selected session for terminal, window-centered for gui.") var target: String?
+        @Option(name: .long, help: "Anchor to the session's left or right pane. GUI style requires --target.") var pane: String?
+        @Option(name: .customLong("pane-id"), help: "Stable pane token; overrides --pane. GUI style requires --target.") var paneID: String?
         @Flag(name: .long, help: "Raise the owning window.") var follow = false
         @Flag(name: .long, help: "Print the dialog id and return without waiting.") var noBlock = false
         @OptionGroup var options: ClientOptions
@@ -35,7 +35,7 @@ struct Ask: ParsableCommand {
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw ValidationError("ask.open requires a title")
             }
-            if pane != nil || paneID != nil, target == nil {
+            if style == "gui", pane != nil || paneID != nil, target == nil {
                 throw ValidationError("--pane requires a session")
             }
             if let pane, OverlayPane(controlName: pane) == nil {
