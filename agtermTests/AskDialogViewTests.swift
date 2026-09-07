@@ -6,6 +6,39 @@ import agtermCore
 
 @MainActor
 final class AskDialogViewTests: XCTestCase {
+    func testSearchEndReturnsItsEditorToPendingSessionAsk() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        let services = agtermApp.SurfaceServices(library: fixture.library, actions: fixture.actions, zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+        let terminal = agtermApp.makeSurface(for: fixture.session, store: fixture.store, env: [:], services: services)
+        defer { terminal.teardown() }
+        fixture.session.surface = terminal
+        terminal.onSearchStart?("needle")
+        XCTAssertTrue(fixture.session.searchActive)
+        let host = NSHostingView(rootView: SearchAndAskFixtureView(fixture: fixture, terminal: terminal).frame(width: 600, height: 300))
+        fixture.window.contentView = host
+        host.addSubview(terminal)
+        fixture.window.orderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        let field = try XCTUnwrap(descendant(NSTextField.self, in: host))
+        XCTAssertTrue(fixture.window.makeFirstResponder(field))
+        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSText)
+        try fixture.open()
+        let deadline = Date(timeIntervalSinceNow: 1)
+        while fixture.catcher == nil, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+        let catcher = try XCTUnwrap(fixture.catcher)
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        let askID = try XCTUnwrap(fixture.session.askPending?.id)
+        terminal.onSearchEnd?()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        XCTAssertFalse(fixture.session.searchActive)
+        XCTAssertNil(fixture.session.searchSurface)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+        catcher.keyDown(with: try event(36, text: "\r"))
+        XCTAssertEqual(AskRegistry.shared.result(for: askID)?.result.result, .answered)
+    }
+
     func testSessionAskMountPreservesLiveFieldEditorUntilItResigns() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
@@ -410,6 +443,22 @@ final class AskDialogViewTests: XCTestCase {
             }
         }
         return count
+    }
+}
+
+private struct SearchAndAskFixtureView: View {
+    let fixture: SessionAskTestFixture
+    let terminal: GhosttySurfaceView
+
+    var body: some View {
+        @Bindable var session = fixture.session
+        ZStack(alignment: .topTrailing) {
+            fixture.overlay()
+            if session.searchActive {
+                TerminalSearchBar(needle: $session.searchNeedle, displayText: "", onNext: {}, onPrevious: {},
+                                  onClose: { terminal.onSearchEnd?() }, chromeText: .white, terminalColor: .black)
+            }
+        }
     }
 }
 

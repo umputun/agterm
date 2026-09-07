@@ -181,7 +181,7 @@ struct WindowContentView: View {
         // reshuffle the selection under it and an action-palette run hit the wrong session.
         .onChange(of: palette.mode == nil) { _, closed in
             if closed {
-                Self.resignPaletteFieldEditor(windowID: windowID, actions: actions)
+                actions.resignDismissedFieldEditor(for: windowID)
                 store.resumeAutoFollow()
                 actions.focusActiveSession()
             } else {

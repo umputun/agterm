@@ -26,6 +26,15 @@ extension AppActions {
 
     // MARK: - Modal focus guards
 
+    /// Resigns a dismissed field editor before handing focus to the terminal or ask.
+    func resignDismissedFieldEditor(for windowID: UUID?) {
+        guard let windowID, library.activeWindowID == windowID, !renamePending, palette?.mode == nil,
+              PickRegistry.shared.controller(for: windowID)?.modalPending != true,
+              let window = NSApp.windows.first(where: { WindowRegistry.shared.windowID(for: $0) == windowID }),
+              window.firstResponder is NSText else { return }
+        window.makeFirstResponder(nil)
+    }
+
     /// Whether the frontmost window's dashboard grid overlay is open. Like a zoom or an open palette it is
     /// modal and its key-catcher owns first responder, so `focusActiveSession` must not grab the active
     /// session's surface while it is up (that surface is a view-only grid cell).

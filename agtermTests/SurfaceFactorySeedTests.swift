@@ -270,7 +270,7 @@ final class SurfaceFactorySeedTests: XCTestCase {
     }
 
     private func services(_ registry: SpawnRegistry?) -> agtermApp.SurfaceServices {
-        agtermApp.SurfaceServices(library: library, zmxForegroundResolver: nil, spawnRegistry: registry,
+        agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil, spawnRegistry: registry,
                                   launchContext: agtermApp.LaunchSpawnContext())
     }
 
