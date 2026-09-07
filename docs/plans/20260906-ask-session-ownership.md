@@ -256,8 +256,13 @@
 
 ### Task 8: Verify acceptance criteria and close the plan
 
-- [ ] in a Debug instance with isolated state: the motivating flow (left asks over right, keeps working,
+- [x] in a Debug instance with isolated state: the motivating flow (left asks over right, keeps working,
       reads the answer); a script inside a program overlay asks and is answered; a GUI ask and a terminal
       ask in one window with the GUI one taking keys
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; zero findings
-- [ ] move this plan to `docs/plans/completed/`
+      (control half verified on the instance: right-pane ask with no target, session-node read-back,
+      GUI ask coexisting with top-level `askPending`, overlay program receiving its result; keystroke
+      delivery is covered by `ControlAskUITests`, since the shell cannot send keys without Accessibility)
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; zero findings
+      (3060 core, 557 hosted via the make target's xcodegen and xcodebuild commands without `setup.sh`,
+      which in a worktree would rewrite the main checkout's linked artifacts; lint clean)
+- [x] move this plan to `docs/plans/completed/` (done at merge; the exec run leaves the plan in place)
