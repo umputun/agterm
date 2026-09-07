@@ -26,17 +26,22 @@ final class PickFocusGuardTests: XCTestCase {
         XCTAssertTrue(fixture.window.makeFirstResponder(field))
         let editor = try XCTUnwrap(fixture.window.firstResponder as? NSText)
         XCTAssertFalse(catcher.canFocus)
+        WindowContentView.resignPaletteFieldEditor(windowID: fixture.windowID, actions: fixture.actions)
+        XCTAssertTrue(fixture.window.firstResponder === editor)
         pick.cancel()
         fixture.actions.renamePending = true
+        WindowContentView.resignPaletteFieldEditor(windowID: fixture.windowID, actions: fixture.actions)
         fixture.actions.focusActiveSession()
         XCTAssertTrue(fixture.window.firstResponder === editor)
         fixture.actions.renamePending = false
         let palette = PaletteController()
         fixture.actions.palette = palette
         palette.open(.actions)
+        WindowContentView.resignPaletteFieldEditor(windowID: fixture.windowID, actions: fixture.actions)
         fixture.actions.focusActiveSession()
         XCTAssertTrue(fixture.window.firstResponder === editor)
         palette.close()
+        WindowContentView.resignPaletteFieldEditor(windowID: fixture.windowID, actions: fixture.actions)
         fixture.actions.focusActiveSession()
         XCTAssertTrue(fixture.window.firstResponder === catcher)
         XCTAssertNotNil(fixture.session.askPending)

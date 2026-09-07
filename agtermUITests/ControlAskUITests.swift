@@ -18,10 +18,18 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(after.path)'", file: after), leftTTY)
         XCTAssertEqual(try askResult(id)["result"] as? String, "pending")
         XCTAssertEqual(try Data(contentsOf: received).count, 0)
-        XCTAssertEqual(try sendControlCommand("session.focus", target: session, args: ["pane": "right"])["ok"] as? Bool, true)
+        askDialog.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).click()
+        XCTAssertTrue(try pollSplitFocused(session, expected: true, timeout: 5))
         app.typeKey(.return, modifierFlags: [])
         XCTAssertEqual(try awaitAskResult(id)["id"] as? String, "stay")
         XCTAssertEqual(try Data(contentsOf: received).count, 0)
+        XCTAssertEqual(try sendControlCommand("session.focus", target: session, args: ["pane": "left"])["ok"] as? Bool, true)
+        let neutral = try openAsk([["id": "neutral", "label": "Answer"]], options: ["pane": "right"])
+        clickAskButton("neutral")
+        XCTAssertEqual(try awaitAskResult(neutral)["id"] as? String, "neutral")
+        XCTAssertEqual(try sessionNode(id: session)["splitFocused"] as? Bool, false)
+        let afterClick = markerDir.appendingPathComponent("left-after-answer-click")
+        XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(afterClick.path)'", file: afterClick), leftTTY)
     }
 
     func testTwoSessionsKeepAsksWhileGUIOwnsTheKeyboard() throws {

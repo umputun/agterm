@@ -33,8 +33,7 @@ extension AppActions {
         DashboardControllerRegistry.shared.controller(for: library.activeWindowID)?.isOpen == true
     }
 
-    /// Whether the specified window has a control picker or ask pending. Kept as one window-scoped
-    /// predicate so both frontmost and session-addressed focus paths use the same modal invariant.
+    /// Checks the window slot for a pick or GUI ask; terminal asks are checked through `deferFocusToAsk`.
     func pickActive(for windowID: WindowInfo.ID?) -> Bool {
         PickRegistry.shared.controller(for: windowID)?.modalPending == true
     }

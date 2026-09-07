@@ -35,10 +35,10 @@ public final class PickController {
     public private(set) var pending: PendingPick?
     /// Terminal results in resolution order, oldest first, capped at `retainedResultLimit`.
     public private(set) var recentResults: [ResolvedPick] = []
-    /// pendingAsk is the dialog currently awaiting an answer.
+    /// The GUI ask currently awaiting an answer in this window.
     public private(set) var pendingAsk: PendingAsk?
     fileprivate var windowID: WindowInfo.ID?
-    /// modalPending prevents pick and ask from presenting competing modals.
+    /// Reserves the window modal slot for a pick or GUI ask.
     public var modalPending: Bool { pending != nil || pendingAsk != nil }
     /// pendingModalError names the modal blocking another control action, or nil when the slot is free.
     public var pendingModalError: String? {

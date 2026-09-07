@@ -6,6 +6,37 @@ import agtermCore
 
 @MainActor
 final class AskDialogViewTests: XCTestCase {
+    func testSessionAskMountPreservesLiveFieldEditorUntilItResigns() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        let container = NSView(frame: CGRect(x: 0, y: 0, width: 600, height: 300))
+        fixture.window.contentView = container
+        let field = NSTextField(frame: CGRect(x: 10, y: 260, width: 200, height: 24))
+        container.addSubview(field)
+        fixture.window.orderFront(nil)
+        XCTAssertTrue(fixture.window.makeFirstResponder(field))
+        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSText)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?",
+                             buttons: [ControlAskButton(id: "yes", label: "Yes", hotkey: "y")])
+        XCTAssertTrue(fixture.session.openAsk(ask))
+        XCTAssertTrue(AskRegistry.shared.register(id: ask.id, owner: .session(fixture.session.id, window: fixture.windowID)))
+        let host = NSHostingView(rootView: fixture.overlay().frame(width: 600, height: 300))
+        host.frame = container.bounds
+        container.addSubview(host)
+        host.layoutSubtreeIfNeeded()
+        let catcher = try XCTUnwrap(fixture.catcher)
+        catcher.updateFocus(revision: 1)
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        XCTAssertFalse(catcher.canFocus)
+        catcher.keyDown(with: try event(16, text: "y"))
+        XCTAssertEqual(fixture.session.askPending?.id, ask.id)
+        fixture.window.makeFirstResponder(nil)
+        catcher.updateFocus(revision: 2)
+        XCTAssertTrue(fixture.window.firstResponder === catcher)
+        catcher.keyDown(with: try event(16, text: "y"))
+        XCTAssertEqual(AskRegistry.shared.result(for: ask.id)?.result.id, "yes")
+    }
+
     func testSessionAskReclaimsInputWhenItsWindowBecomesKeyAgain() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
@@ -429,8 +460,8 @@ final class SessionAskTestFixture {
     func overlay(frames: HudPaneFrames? = nil) -> SessionAskOverlay {
         SessionAskOverlay(session: session, store: store, actions: actions, windowID: windowID,
                           detailFrame: CGRect(x: 0, y: 0, width: 600, height: 300),
-                          paneFrames: frames ?? HudPaneFrames(left: HudPaneFrame(CGRect(x: 0, y: 0, width: 300, height: 300)),
-                                                             right: HudPaneFrame(CGRect(x: 300, y: 0, width: 300, height: 300))),
+                          paneFrames: frames ?? HudPaneFrames(left: HudPaneFrame(x: 0, y: 0, width: 300, height: 300),
+                                                             right: HudPaneFrame(x: 300, y: 0, width: 300, height: 300)),
                           font: .monospacedSystemFont(ofSize: 13, weight: .regular), foreground: .white, background: .black)
     }
 

@@ -605,8 +605,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the owning window without selecting another session. `ask.open` echoes the resolved role in `result.pane`.
 - A terminal ask covers only its session or pane. It takes keys when that region is laid out, its
   session and covered pane are selected, and its window can receive input. GUI asks, picks, palettes,
-  sidebar rename, and the quick terminal take priority. Live rename/palette state determines text-input
-  priority. Clicking the covered region focuses its dialog; answering an unfocused ask does not pull focus.
+  sidebar rename, and the quick terminal take priority. Active text editors retain input until they resign;
+  palette dismissal ends editing before focus restoration. Clicking the covered region focuses its dialog;
+  answering an unfocused ask does not pull focus.
 - Terminal asks draw above program overlays, pane overlays, and the HUD within their region.
   A session-wide ask draws above the scratch; a pane ask hides under it. Zoom and dashboard hide terminal
   asks without resolving them. Deselecting a session or hiding its pane also keeps the ask pending.

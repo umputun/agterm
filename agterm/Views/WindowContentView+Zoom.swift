@@ -6,6 +6,7 @@ extension WindowContentView {
     /// Restore keyboard ownership to whichever full-window cover was already present below a picker.
     /// The ordinary session focus helper intentionally refuses to cross these modal layers.
     func restoreFocusAfterPick() {
+        Self.resignPaletteFieldEditor(windowID: windowID, actions: actions)
         if dashboard.isOpen {
             dashboard.requestFocus()
             return
@@ -18,6 +19,15 @@ extension WindowContentView {
             return
         }
         actions.focusActiveSession()
+    }
+
+    /// Ends the dismissed palette's editing before restoring its covered input owner.
+    static func resignPaletteFieldEditor(windowID: UUID, actions: AppActions) {
+        guard actions.library.activeWindowID == windowID, !actions.renamePending, actions.palette?.mode == nil,
+              PickRegistry.shared.controller(for: windowID)?.modalPending != true,
+              let window = NSApp.windows.first(where: { WindowRegistry.shared.windowID(for: $0) == windowID }),
+              window.firstResponder is NSText else { return }
+        window.makeFirstResponder(nil)
     }
 
     /// The chrome above the zoomed terminal: the exit-zoom row, or — in hidden toolbar mode — the same

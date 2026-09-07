@@ -53,7 +53,8 @@ struct SessionAskInput {
 
     func ownsInput(in window: NSWindow?, pane: OverlayPane? = nil) -> Bool {
         guard wantsFocus, let window, window.isKeyWindow,
-              WindowRegistry.shared.windowID(for: window) == windowID else { return false }
+              WindowRegistry.shared.windowID(for: window) == windowID,
+              !(window.firstResponder is NSText) else { return false }
         return pane == nil || session.askTargetPane == nil || pane == session.askTargetPane
     }
 
@@ -61,7 +62,7 @@ struct SessionAskInput {
         guard visible else { return false }
         if actions.quickTerminal.holdsKey { return true }
         if actions.library.activeWindowID == windowID,
-           actions.palette?.mode != nil || actions.renamePending { return true }
+           actions.palette?.mode != nil || actions.renamePending || window?.firstResponder is NSText { return true }
         return ownsInput(in: window, pane: pane)
     }
 
@@ -152,6 +153,14 @@ extension GhosttySurfaceView {
     }
 }
 
+private struct AskButtonAnchors: PreferenceKey {
+    static let defaultValue: [Anchor<CGRect>] = []
+
+    static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
 struct AskDialogView: View {
     let ask: PendingAsk
     let anchorFrame: CGRect
@@ -165,6 +174,7 @@ struct AskDialogView: View {
     let onDismiss: () -> Void
     @State private var navigation: AskNavigation
     @State private var focusRevision = 0
+    @State private var buttonFrames: [CGRect] = []
 
     init(ask: PendingAsk, anchorFrame: CGRect, font: NSFont, foreground: Color, background: Color,
          focusAllowed: Bool, sessionInput: SessionAskInput? = nil, onFocus: @escaping () -> Void = {},
@@ -201,7 +211,6 @@ struct AskDialogView: View {
         ZStack {
             Color.black.opacity(0.2)
                 .contentShape(Rectangle())
-                .onTapGesture { onFocus(); focusRevision += 1 }
             ScrollViewReader { reader in
                 ViewThatFits(in: .horizontal) {
                     if ask.width == nil {
@@ -222,7 +231,17 @@ struct AskDialogView: View {
         }
         .font(ask.style == .gui ? .body : Font(font))
         .foregroundStyle(ask.style == .gui ? .primary : foreground)
-        .simultaneousGesture(TapGesture().onEnded { focusRevision += 1 })
+        .overlayPreferenceValue(AskButtonAnchors.self) { anchors in
+            GeometryReader { proxy in
+                Color.clear.onChange(of: anchors.map { proxy[$0] }, initial: true) { _, frames in buttonFrames = frames }
+            }
+            .allowsHitTesting(false)
+        }
+        .simultaneousGesture(SpatialTapGesture().onEnded { tap in
+            guard !buttonFrames.contains(where: { $0.contains(tap.location) }) else { return }
+            onFocus()
+            focusRevision += 1
+        })
     }
 
     private var panel: some View {
@@ -283,6 +302,7 @@ struct AskDialogView: View {
         .accessibilityLabel(Text(verbatim: choice.label))
         .accessibilityValue(navigation.highlighted == index ? "selected" : "")
         .accessibilityIdentifier("ask-button-\(choice.id)")
+        .anchorPreference(key: AskButtonAnchors.self, value: .bounds) { [$0] }
     }
 
     private func terminalButton(_ choice: ControlAskButton, index: Int) -> some View {
