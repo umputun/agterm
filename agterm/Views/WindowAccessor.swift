@@ -148,6 +148,7 @@ struct WindowAccessor: NSViewRepresentable {
                     // unregister synchronously on the real AppKit close edge: the registry cancels any pending
                     // pick and retains its result for a poll arriving after the window and store are gone.
                     PickRegistry.shared.unregister(windowID)
+                    store.workspaces.flatMap(\.sessions).forEach { $0.cancelPendingAsk() }
                     store.finalizeAllPendingCloses()
                     // flush cwd drift before dropping the store — AppStore doesn't save on a live `cd`, so a
                     // reopened window would load a stale snapshot. skipped once the window is no longer open:

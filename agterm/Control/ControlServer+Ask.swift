@@ -4,6 +4,11 @@ import agtermCore
 extension ControlServer {
     func openAsk(_ ask: PendingAsk, target: String?, window: String?,
                  placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
+        if ask.style == .terminal {
+            return resolver.resolveSession(target, window: window) { store, id in
+                presentTerminalAsk(ask, in: store, sessionID: id, placement: placement, follow: follow)
+            }
+        }
         if let target {
             return resolver.resolveSession(target, window: window) { store, id in
                 presentAsk(ask, in: store, sessionID: id, placement: placement, follow: follow)
@@ -46,6 +51,7 @@ extension ControlServer {
         guard controller.openAsk(pending) else {
             return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
         }
+        AskRegistry.shared.register(id: ask.id, owner: .window(windowID))
         if follow {
             WindowRegistry.shared.raise(windowID)
             takeFrontmost(windowID)
@@ -56,69 +62,56 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: anchor?.pane?.rawValue))
     }
 
+    private func presentTerminalAsk(_ ask: PendingAsk, in store: AppStore, sessionID: UUID,
+                                    placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
+        guard let session = store.session(withID: sessionID), let windowID = library.windowID(for: store) else {
+            return ControlResponse(ok: false, error: "no such session")
+        }
+        let identity: UUID?
+        let pane: OverlayPane?
+        switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+                                    requireVisible: true, invalidPaneError: "ask pane must be left or right") {
+        case let .resolved(resolvedIdentity, resolvedPane):
+            identity = resolvedIdentity
+            pane = resolvedPane
+        case .rejected(let response): return response
+        }
+        guard session.openAsk(ask, paneIdentity: identity) else { return ControlResponse(ok: false, error: "ask already pending") }
+        AskRegistry.shared.register(id: ask.id, owner: .session(sessionID, window: windowID))
+        if follow {
+            WindowRegistry.shared.raise(windowID)
+            takeFrontmost(windowID)
+        }
+        return ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue))
+    }
+
     func askResult(_ target: String, window: String?) -> ControlResponse {
-        if window == nil {
-            if let live = PickRegistry.shared.liveAsk(for: target),
-               let result = live.controller.askResult(for: target) {
-                return ControlResponse(ok: true, result: ControlResult(ask: result))
-            }
-            if let retained = PickRegistry.shared.retainedAskResult(for: target) {
-                return ControlResponse(ok: true, result: ControlResult(ask: retained.result))
-            }
-            return ControlResponse(ok: false, error: "unknown ask: \(target)")
-        }
-        if let retained = PickRegistry.shared.retainedAskResult(for: target) {
-            return resolver.resolveWindowID(window) { windowID in
-                guard windowID == retained.windowID else {
-                    return ControlResponse(ok: false, error: "unknown ask: \(target)")
-                }
-                return ControlResponse(ok: true, result: ControlResult(ask: retained.result))
-            }
-        }
-        return withAskController(window: window) { controller in
-            guard let result = controller.askResult(for: target) else {
-                return ControlResponse(ok: false, error: "unknown ask: \(target)")
-            }
-            return ControlResponse(ok: true, result: ControlResult(ask: result))
+        withAskResult(target, window: window) { result in
+            ControlResponse(ok: true, result: ControlResult(ask: result))
         }
     }
 
     func cancelAsk(_ target: String, window: String?) -> ControlResponse {
-        if window == nil {
-            if let live = PickRegistry.shared.liveAsk(for: target) {
-                if live.controller.pendingAsk?.id == target { live.controller.cancelAsk() }
-                return ControlResponse(ok: true)
+        withAskResult(target, window: window) { result in
+            guard result.result == .pending else { return ControlResponse(ok: true) }
+            switch AskRegistry.shared.owner(for: target) {
+            case .window(let windowID):
+                let controller = PickRegistry.shared.controller(for: windowID)
+                if controller?.pendingAsk?.id == target { controller?.cancelAsk() }
+            case .session(let sessionID, let windowID):
+                library.store(for: windowID)?.session(withID: sessionID)?.cancelAsk(id: target)
+            case nil: return ControlResponse(ok: false, error: "unknown ask: \(target)")
             }
-            if PickRegistry.shared.retainedAskResult(for: target) != nil {
-                return ControlResponse(ok: true)
-            }
-            return ControlResponse(ok: false, error: "unknown ask: \(target)")
-        }
-        if let retained = PickRegistry.shared.retainedAskResult(for: target) {
-            return resolver.resolveWindowID(window) { windowID in
-                windowID == retained.windowID
-                    ? ControlResponse(ok: true)
-                    : ControlResponse(ok: false, error: "unknown ask: \(target)")
-            }
-        }
-        return withAskController(window: window) { controller in
-            guard controller.askResult(for: target) != nil else {
-                return ControlResponse(ok: false, error: "unknown ask: \(target)")
-            }
-            if controller.pendingAsk?.id == target { controller.cancelAsk() }
             return ControlResponse(ok: true)
         }
     }
 
-    private func withAskController(window: String?, _ body: (PickController) -> ControlResponse) -> ControlResponse {
-        resolver.resolveOpenPlacementStore(window) { store in
-            guard let windowID = library.windowID(for: store) else {
-                return ControlResponse(ok: false, error: "no open window")
-            }
-            guard let controller = PickRegistry.shared.controller(for: windowID) else {
-                return ControlResponse(ok: false, error: "no ask surface")
-            }
-            return body(controller)
+    private func withAskResult(_ id: String, window: String?, _ body: (ControlAskResult) -> ControlResponse) -> ControlResponse {
+        guard let retained = AskRegistry.shared.result(for: id) else { return ControlResponse(ok: false, error: "unknown ask: \(id)") }
+        guard let window else { return body(retained.result) }
+        return resolver.resolveWindowID(window) { windowID in
+            guard windowID == retained.windowID else { return ControlResponse(ok: false, error: "unknown ask: \(id)") }
+            return body(retained.result)
         }
     }
 }

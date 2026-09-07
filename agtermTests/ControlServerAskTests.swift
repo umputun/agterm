@@ -5,6 +5,135 @@ import agtermCore
 
 @MainActor
 final class ControlServerAskTests: XCTestCase {
+    func testTargetedTerminalAskOpensOnBackgroundSessionWithoutSelectingIt() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let selectedID = try XCTUnwrap(store.selectedSessionID)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let background = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        configureSplit(background)
+        store.selectSession(selectedID)
+        for pane: OverlayPane? in [nil, .right] {
+            let ask = makeTerminalAsk()
+            XCTAssertEqual(open(ask, target: background.id.uuidString, placement: ControlAskPlacement(pane: pane)),
+                           ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue)))
+            XCTAssertEqual(store.selectedSessionID, selectedID)
+            XCTAssertEqual(background.askPending, ask)
+            XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .pending)
+            let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
+            XCTAssertNil(tree.askPending)
+            XCTAssertEqual(tree.workspaces.flatMap(\.sessions).first { $0.id == background.id.uuidString }?.ask,
+                           ControlSessionAsk(id: ask.id, pane: pane?.rawValue))
+            let input = SessionAskInput(session: background, store: store, actions: actions, windowID: windowID,
+                                        askID: ask.id, frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+            XCTAssertFalse(input.visible)
+            XCTAssertTrue(server.cancelAsk(ask.id, window: nil).ok)
+        }
+        background.isSplit = false
+        background.splitFocused = false
+        XCTAssertEqual(open(makeTerminalAsk(), target: background.id.uuidString, placement: ControlAskPlacement(pane: .right)),
+                       ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible))
+    }
+
+    func testTerminalOpenUsesSelectedSessionAndPaneWithoutWindowController() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        configureSplit(session)
+        let ask = makeTerminalAsk()
+        XCTAssertEqual(open(ask, placement: ControlAskPlacement(pane: .right)),
+                       ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: "right")))
+        XCTAssertEqual(session.askPending, ask)
+        XCTAssertEqual(session.askPaneIdentity, session.splitPaneIdentity)
+        XCTAssertEqual(AskRegistry.shared.owner(for: ask.id), .session(session.id, window: windowID))
+        let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
+        XCTAssertNil(tree.askPending)
+        XCTAssertEqual(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.ask,
+                       ControlSessionAsk(id: ask.id, pane: "right"))
+        XCTAssertEqual(open(makeTerminalAsk()), ControlResponse(ok: false, error: "ask already pending"))
+    }
+
+    func testTerminalAskCoexistsWithGUIAskAndPickWithoutClosingPalette() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let controller = register(windowID)
+        let gui = makeAsk()
+        XCTAssertTrue(open(gui).ok)
+        let terminal = makeTerminalAsk()
+        XCTAssertTrue(open(terminal).ok)
+        XCTAssertEqual(controller.pendingAsk?.id, gui.id)
+        XCTAssertEqual(session.askPending?.id, terminal.id)
+        XCTAssertTrue(server.cancelAsk(gui.id, window: nil).ok)
+        XCTAssertTrue(controller.open(PendingPick(id: "picker", items: [ControlPickItem(id: "one", label: "One")])))
+        XCTAssertTrue(server.cancelAsk(terminal.id, window: nil).ok)
+        let palette = PaletteController()
+        actions.palette = palette
+        palette.open(.actions)
+        XCTAssertTrue(open(makeTerminalAsk()).ok)
+        XCTAssertEqual(palette.mode, .actions)
+        XCTAssertNotNil(controller.pending)
+        XCTAssertNotNil(session.askPending)
+    }
+
+    func testTerminalResultsKeepWindowScopeAcrossSelectionAndWindowClose() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let first = makeTerminalAsk()
+        XCTAssertTrue(open(first).ok)
+        let secondSession = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        store.selectSession(secondSession.id)
+        let second = makeTerminalAsk()
+        XCTAssertTrue(open(second).ok)
+        let otherID = library.newWindow(name: "other").id
+        for ask in [first, second] {
+            XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .pending)
+            XCTAssertFalse(server.askResult(ask.id, window: otherID.uuidString).ok)
+            XCTAssertFalse(server.cancelAsk(ask.id, window: otherID.uuidString).ok)
+        }
+        XCTAssertTrue(server.cancelAsk(first.id, window: windowID.uuidString).ok)
+        library.closeWindow(windowID)
+        for ask in [first, second] {
+            XCTAssertEqual(server.askResult(ask.id, window: windowID.uuidString).result?.ask?.result, .cancelled)
+            XCTAssertFalse(server.askResult(ask.id, window: otherID.uuidString).ok)
+            XCTAssertFalse(server.cancelAsk(ask.id, window: otherID.uuidString).ok)
+            XCTAssertTrue(server.cancelAsk(ask.id, window: windowID.uuidString).ok)
+        }
+        library.removeWindow(windowID)
+        XCTAssertEqual(server.askResult(second.id, window: nil).result?.ask?.result, .cancelled)
+    }
+
+    func testTerminalOpenUnderZoomAndDashboardKeepsPendingSessionState() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        _ = register(windowID)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        zoom.set(.on, target: .session(session.id, .primary))
+        let first = makeTerminalAsk()
+        XCTAssertTrue(open(first, target: session.id.uuidString).ok)
+        XCTAssertEqual(server.askResult(first.id, window: nil).result?.ask?.result, .pending)
+        XCTAssertTrue(server.cancelAsk(first.id, window: nil).ok)
+        zoom.clear()
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        dashboard.open(members: [DashboardMember(session: session.id, surface: .primary)])
+        let second = makeTerminalAsk()
+        XCTAssertTrue(open(second, target: session.id.uuidString).ok)
+        XCTAssertEqual(session.askPending?.id, second.id)
+        XCTAssertTrue(dashboard.isOpen)
+    }
+
+    func testTerminationCancelsTerminalAskWithoutARegisteredWindowController() {
+        let ask = makeTerminalAsk()
+        XCTAssertTrue(open(ask).ok)
+        library.isTerminating = true
+        NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: NSApp)
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .cancelled)
+        XCTAssertNil(library.activeStore?.activeSession?.askPending)
+    }
+
+    private func makeTerminalAsk() -> PendingAsk {
+        PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var actions: AppActions!
@@ -27,6 +156,7 @@ final class ControlServerAskTests: XCTestCase {
 
     override func tearDown() async throws {
         await MainActor.run {
+            actions.cancelAllPendingModals()
             for id in registeredIDs {
                 PickRegistry.shared.unregister(id)
                 TerminalZoomRegistry.shared.unregister(id)
@@ -326,13 +456,13 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertEqual(library.activeStore?.activeSession?.id, session.id)
     }
 
-    func testCommandWReturnsEscaped() throws {
-        let windowID = try XCTUnwrap(library.activeWindowID)
-        let controller = register(windowID)
+    func testUnmountedTerminalAskDoesNotInterceptCommandW() throws {
+        let sessionID = try XCTUnwrap(library.activeStore?.activeSession?.id)
         let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
         XCTAssertTrue(open(ask).ok)
         XCTAssertTrue(actions.closeActiveSession())
-        XCTAssertEqual(controller.askResult(for: ask.id), ControlAskResult(result: .escaped))
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask, ControlAskResult(result: .cancelled))
+        XCTAssertNil(library.activeStore?.session(withID: sessionID))
     }
 
     func testEscapeReleasesTheModalSlot() throws {

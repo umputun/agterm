@@ -6,6 +6,28 @@ import Testing
 // reports. Split out of `AppStoreTests.swift` for the file size limit.
 @MainActor
 struct AppStoreTreeProjectionTests {
+    @Test func terminalAskProjectionFollowsPaneIdentityAndOmitsResolvedAsks() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        let id = UUID().uuidString
+        #expect(session.openAsk(PendingAsk(id: id, title: "Continue?", buttons: []), paneIdentity: session.splitPaneIdentity))
+        #expect(store.controlTree().workspaces[0].sessions[0].ask == ControlSessionAsk(id: id, pane: "right"))
+        #expect(store.controlTree().askPending == nil)
+        #expect(store.swapPanes(session.id) == nil)
+        let node = store.controlTree().workspaces[0].sessions[0]
+        #expect(node.ask?.pane == "left")
+        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: JSONEncoder().encode(node)) == node)
+        session.cancelPendingAsk()
+        let cleared = store.controlTree().workspaces[0].sessions[0]
+        #expect(cleared.ask == nil)
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(cleared)) as? [String: Any])
+        #expect(json["ask"] == nil)
+    }
+
     @Test func controlTreeProjectsWorkspaceAndSessionShape() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

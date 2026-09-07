@@ -80,6 +80,19 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     }
 }
 
+/// The session's pending terminal ask and its current pane placement.
+public struct ControlSessionAsk: Codable, Sendable, Equatable {
+    /// Exact request id for result and cancellation lookup.
+    public let id: String
+    /// Current left/right placement, nil for the whole session.
+    public let pane: String?
+
+    public init(id: String, pane: String? = nil) {
+        self.id = id
+        self.pane = pane
+    }
+}
+
 /// A session as projected into the `tree` response.
 public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let id: String
@@ -126,6 +139,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The HUD panel occupying the session-wide overlay slot; nil/omitted when none is up. Mutually exclusive
     /// with `overlay` — one slot, and whichever holds it is the one that reports.
     public let hud: ControlHudNode?
+    /// Pending terminal ask; GUI asks are exposed at the tree's top level.
+    public let ask: ControlSessionAsk?
     public let scratch: Bool
     public let flagged: Bool
     /// What the session is FOR, the read side of `session.context`; nil/omitted when none is set. Durable
@@ -229,7 +244,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, paneOverlays: [String]? = nil,
-                hud: ControlHudNode? = nil, scratch: Bool = false, flagged: Bool = false,
+                hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
@@ -255,6 +270,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.overlaySizePercent = overlaySizePercent
         self.paneOverlays = paneOverlays
         self.hud = hud
+        self.ask = ask
         self.scratch = scratch
         self.flagged = flagged
         self.context = context
@@ -382,7 +398,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let dashboardFontMode: String?
     /// The id of the picker currently awaiting a choice, or nil when no picker is open.
     public let pickPending: String?
-    /// askPending identifies the dialog awaiting an answer in this window.
+    /// The pending GUI ask; terminal asks are exposed on their session nodes.
     public let askPending: String?
     /// The app serving this socket. Constant rather than live like every field above it, and present so an
     /// agent already reading the tree gets its version floor without a second round-trip; `version` answers

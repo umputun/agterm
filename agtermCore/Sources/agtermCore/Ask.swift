@@ -36,7 +36,7 @@ public struct PendingAsk: Equatable, Sendable {
     public let width: Int?
     /// destructiveID identifies the button styled as destructive.
     public let destructiveID: String?
-    /// anchor is absent for a dialog centered over the window's terminal area.
+    /// GUI session/pane anchor; terminal placement belongs to Session.
     public let anchor: AskAnchor?
 
     public init(id: String, title: String, message: String? = nil, buttons: [ControlAskButton],

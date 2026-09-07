@@ -189,22 +189,24 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherAskTests.swift`, `PickTests.swift`,
   `AppStoreTreeProjectionTests.swift`; `agtermTests/ControlServerAskTests.swift`
 
-- [ ] dispatcher: accept `--pane`/`--pane-id` without a target for terminal style only; GUI keeps the
+- [x] dispatcher: accept `--pane`/`--pane-id` without a target for terminal style only; GUI keeps the
       rejection and its target-anchored placement
-- [ ] host: terminal open resolves the target or the window's selected session, captures pane identity,
-      refuses `ask already pending` and `session not visible`, drops the zoom and dashboard refusal, and
+- [x] host: terminal open resolves the target or the window's selected session, captures pane identity,
+      accepts background sessions without selecting them, refuses duplicate asks and unrendered panes,
+      drops the zoom and dashboard refusal, and
       registers the owner; result and cancel locate either owner through `AskRegistry` and keep the
       `--window` mismatch refusal for both styles
-- [ ] remove ask retention from `PickController` and `PickRegistry`; `modalPending` covers GUI asks and
+- [x] remove ask retention from `PickController` and `PickRegistry`; `modalPending` covers GUI asks and
       picks only; the `unregister` hooks in `WindowAccessor` and `WindowContentView` and the quit path in
       `AppDelegate` cancel session asks too, before `ControlServer.stop`
-- [ ] `ControlSessionNode.ask` (id, pane) in the `AppStore.swift:296` projection; `askPending` at
+- [x] `ControlSessionNode.ask` (id, pane) in the `AppStore.swift:296` projection; `askPending` at
       `ControlServer.swift:750` stays GUI-only
-- [ ] tests: untargeted terminal `--pane` resolves to the selected session, GUI rejection kept, second
+- [x] tests: untargeted terminal `--pane` resolves to the selected session, GUI rejection kept, second
       terminal ask refused, wrong `--window` refused for a terminal id, result by id for both styles,
       `ask` on the session node with `askPending` nil for a terminal ask, existing GUI anchor tests still
       pass unchanged
-- [ ] `swift test --filter` plus `make test-app` scoped to `ControlServerAskTests`; must pass before Task 5
+- [x] `swift test --filter` plus `make test-app` scoped to `ControlServerAskTests`; must pass before Task 5
+      (scoped `xcodebuild test` bypasses the Make target's prohibited setup step)
 
 ### Task 5: CLI accepts pane placement without a target
 

@@ -305,6 +305,7 @@ public final class AppStore {
                                           overlaySizePercent: session.programOverlayActive
                                               ? session.overlaySizePercent : nil,
                                           paneOverlays: paneOverlays(session), hud: hudNode(session),
+                                          ask: session.askPending.map { ControlSessionAsk(id: $0.id, pane: session.askTargetPane?.rawValue) },
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)

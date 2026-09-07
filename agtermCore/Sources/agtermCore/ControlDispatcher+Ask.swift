@@ -90,7 +90,7 @@ extension ControlDispatcher {
                 return ControlResponse(ok: false, error: "ask button hotkeys must be unique")
             }
         }
-        if args.pane != nil || args.paneID != nil, request.target == nil {
+        if style == .gui, args.pane != nil || args.paneID != nil, request.target == nil {
             return ControlResponse(ok: false, error: "--pane requires a session")
         }
         let pane: OverlayPane?

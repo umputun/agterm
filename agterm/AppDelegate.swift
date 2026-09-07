@@ -315,7 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
-        // resolve in-memory picker state before closing the socket: a client already polling may observe
+        // resolve in-memory pickers and asks before closing the socket: a client already polling may observe
         // cancellation, but a later poll can still race socket teardown at process exit.
         actions?.cancelAllPendingModals()
         controlServer?.stop()

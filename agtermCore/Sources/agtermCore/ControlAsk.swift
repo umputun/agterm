@@ -29,7 +29,7 @@ public enum ControlAskOutcome: String, Codable, Sendable, CaseIterable {
     case cancelled
 }
 
-/// ControlAskStyle selects dialog decoration without changing behavior or placement.
+/// Selects dialog ownership, default placement, and appearance.
 public enum ControlAskStyle: String, Codable, Sendable, CaseIterable {
     /// terminal uses monospace text and terminal theme colors.
     case terminal

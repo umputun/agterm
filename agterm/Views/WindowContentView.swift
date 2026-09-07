@@ -242,6 +242,7 @@ struct WindowContentView: View {
                 pickSuppressesAutoFollow = false
             }
             PickRegistry.shared.unregister(windowID)
+            store.workspaces.flatMap(\.sessions).forEach { $0.cancelPendingAsk() }
         }
     }
 

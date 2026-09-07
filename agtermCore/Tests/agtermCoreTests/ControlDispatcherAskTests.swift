@@ -4,6 +4,21 @@ import Testing
 
 @MainActor
 struct ControlDispatcherAskTests {
+    @Test(arguments: [(Optional("right"), Optional<String>.none), (nil, "pane-id")])
+    func terminalPaneSelectorsReachHostWithoutSession(pane: String?, paneID: String?) async throws {
+        let actions = MockControlActions()
+        let args = ControlArgs(buttons: [ControlAskButton(id: "yes", label: "Yes")], pane: pane, paneID: paneID, title: "Choose")
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+        guard case let .askOpen(ask, target, _, placement, _) = try #require(actions.calls.first) else {
+            Issue.record("expected ask.open")
+            return
+        }
+        #expect(ask.style == .terminal)
+        #expect(target == nil)
+        #expect(placement.pane == pane.flatMap(OverlayPane.init(controlName:)))
+        #expect(placement.paneID == paneID)
+    }
+
     @Test(arguments: [-1, 0, 9, 101, Int.max])
     func invalidWidthNeverReachesHost(width: Int) async {
         let actions = MockControlActions()
@@ -109,10 +124,10 @@ struct ControlDispatcherAskTests {
     }
 
     @Test(arguments: [(Optional("right"), Optional<String>.none), (nil, "pane-id"), (nil, "")])
-    func paneSelectorsRequireSession(pane: String?, paneID: String?) async {
+    func guiPaneSelectorsRequireSession(pane: String?, paneID: String?) async {
         let actions = MockControlActions()
         let args = ControlArgs(buttons: [ControlAskButton(id: "yes", label: "Yes")],
-                               pane: pane, paneID: paneID, title: "Choose")
+                               style: "gui", pane: pane, paneID: paneID, title: "Choose")
         let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
 
         #expect(response == ControlResponse(ok: false, error: "--pane requires a session"))

@@ -265,9 +265,9 @@ final class AppActions {
         return true
     }
 
-    /// cancelAllPendingModals resolves each window's pending dialog during synchronous app termination. The
-    /// library retains its open ids through quit teardown, so every mounted controller is still addressable.
+    /// Cancels both ask ownership styles and window pickers before quit tears down their owners.
     func cancelAllPendingModals() {
+        library.allOpenSessions().forEach { $0.cancelPendingAsk() }
         for windowID in library.openIDs() {
             guard let controller = PickRegistry.shared.controller(for: windowID) else { continue }
             controller.cancel()
