@@ -32,6 +32,8 @@ extension AppActions {
               PickRegistry.shared.controller(for: windowID)?.modalPending != true,
               let window = NSApp.windows.first(where: { WindowRegistry.shared.windowID(for: $0) == windowID }),
               window.firstResponder is NSText else { return }
+        if let editor = window.firstResponder as? NSTextView, let field = editor.delegate as? NSTextField,
+           (field.delegate as? SidebarRenameController)?.isEditing == true { return }
         window.makeFirstResponder(nil)
     }
 

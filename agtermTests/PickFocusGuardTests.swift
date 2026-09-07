@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import agterm
 import agtermCore
@@ -8,6 +9,50 @@ import agtermCore
 /// agtermCore's host-free tests.
 @MainActor
 final class PickFocusGuardTests: XCTestCase {
+    func testSearchClosePreservesLiveSidebarRenameAfterPendingTimeout() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        let services = agtermApp.SurfaceServices(library: fixture.library, actions: fixture.actions, zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+        let terminal = agtermApp.makeSurface(for: fixture.session, store: fixture.store, env: [:], services: services)
+        defer { terminal.teardown() }
+        fixture.session.surface = terminal
+        terminal.onSearchStart?("needle")
+        try fixture.open()
+        let host = NSHostingView(rootView: HStack {
+            WorkspaceSidebar(store: fixture.store, actions: fixture.actions).frame(width: 200)
+            fixture.overlay().frame(width: 600, height: 300)
+        })
+        let container = NSView(frame: CGRect(x: 0, y: 0, width: 800, height: 300))
+        fixture.window.contentView = container
+        host.frame = container.bounds
+        container.addSubview(host)
+        container.addSubview(terminal)
+        fixture.window.orderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        fixture.actions.renameActiveSession()
+        XCTAssertTrue(fixture.actions.renamePending)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.7))
+        XCTAssertFalse(fixture.actions.renamePending)
+        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
+        let field = try XCTUnwrap(editor.delegate as? NSTextField)
+        let rename = try XCTUnwrap(field.delegate as? SidebarRenameController)
+        XCTAssertTrue(rename.isEditing)
+        let originalName = fixture.session.displayName
+        editor.string = "unfinished rename"
+
+        terminal.onSearchEnd?()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        XCTAssertFalse(fixture.session.searchActive)
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        XCTAssertTrue(rename.isEditing)
+        XCTAssertEqual(editor.string, "unfinished rename")
+        XCTAssertEqual(fixture.session.displayName, originalName)
+        XCTAssertNotNil(fixture.session.askPending)
+        _ = rename.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+    }
+
     func testDismissedPickerFieldEditorDoesNotStrandSessionAsk() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
