@@ -188,7 +188,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// Sweeps the hidden layer's retained frame on a slow cadence; exits itself on reveal or teardown.
     var hiddenJanitorTask: Task<Void, Never>?
     /// After `destroySurface()` the view is retired: never recreate a surface (a stray viewDidMoveToWindow).
-    private var isDestroyed = false
+    private(set) var isDestroyed = false
 
     /// Guards `handleProcessExit` so the close runs once. Both the `SHOW_CHILD_EXITED` action and the
     /// `close_surface_cb` can fire for one exit (ghostty documents no ordering/exclusivity between them).

@@ -141,6 +141,24 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertEqual(try awaitAskResult(pane)["id"] as? String, "pane")
     }
 
+    func testAnsweredAskThenSocketCloseFocusesTheReselectedSession() throws {
+        let neighbour = try activeSessionID()
+        let before = markerDir.appendingPathComponent("neighbour-tty")
+        let neighbourTTY = try XCTUnwrap(typeUntilMarker("tty > '\(before.path)'\n", target: neighbour, file: before, select: false))
+        for style in ["terminal", "gui"] {
+            let closing = try newSession("closing-\(style)", select: true)
+            XCTAssertTrue(poll(until: (try? sessionNode(id: closing)["active"] as? Bool) == true, timeout: 10))
+            let ask = try openAsk([["id": "close", "label": "Close"]], target: closing, options: ["style": style])
+            XCTAssertTrue(askButton("close").waitForExistence(timeout: 10))
+            app.typeKey(.return, modifierFlags: [])
+            XCTAssertEqual(try awaitAskResult(ask)["id"] as? String, "close")
+            XCTAssertEqual(try sendControlCommand("session.close", target: closing)["ok"] as? Bool, true)
+            XCTAssertEqual(try sessionNode(id: neighbour)["active"] as? Bool, true)
+            let after = markerDir.appendingPathComponent("neighbour-after-\(style)")
+            XCTAssertEqual(keyboardTypeUntilMarker("tty > '\(after.path)'", file: after, attempts: 1, perAttempt: 5), neighbourTTY, style)
+        }
+    }
+
     func testSoftCloseCancelsImmediatelyAndUndoDoesNotRestoreAsk() throws {
         let first = try newSession("closing-a", select: false)
         let second = try newSession("closing-b", select: false)

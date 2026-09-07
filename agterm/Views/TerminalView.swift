@@ -88,6 +88,9 @@ struct TerminalView: NSViewRepresentable {
     /// is first responder, so editing a sidebar rename survives a re-render. `mouseDown` covers the rest.
     private func focusIfNeeded(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
         guard let window = nsView.window else { return }
+        // a closing session's entry can update once more after the store tore its surface down, still
+        // carrying `isActive`; grabbing there leaves the keyboard on a dead pane instead of the reselected one.
+        guard !nsView.isDestroyed else { return }
         guard !nsView.askBlocksFocus else { return }
         if window.firstResponder === nsView { return }
         // don't steal focus from an active text field editor (a sidebar rename); its editor is an NSText.
