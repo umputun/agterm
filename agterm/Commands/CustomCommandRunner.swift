@@ -244,15 +244,17 @@ final class CustomCommandRunner {
         spawn(command, context: context)
     }
 
-    /// Resolve scratch and overlay ownership by surface identity, even while selection is ahead of focus.
+    /// Resolve the surface and its owning store together, since a session id can repeat across windows.
     /// The quick terminal has no session owner and keeps the active-session fallback.
     private func runFromSessionlessSurface(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
-        for session in library.allOpenSessions() {
-            guard let pane = sessionlessPane(of: focusedSurface, in: session),
-                  let store = library.store(forSession: session.id) else { continue }
-            let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
-            spawn(command, context: context)
-            return
+        for windowID in library.openIDs() {
+            guard let store = library.store(for: windowID) else { continue }
+            for session in store.workspaces.flatMap(\.sessions) {
+                guard let pane = sessionlessPane(of: focusedSurface, in: session) else { continue }
+                let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
+                spawn(command, context: context)
+                return
+            }
         }
         runNoSurface(command)
     }
@@ -303,7 +305,7 @@ final class CustomCommandRunner {
     private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
                          pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
-        let windowID = library.windowID(forSession: session.id)
+        let windowID = library.windowID(for: store)
         let windowName = library.windowName(for: windowID)
         return CommandContext(
             sessionID: session.id.uuidString,

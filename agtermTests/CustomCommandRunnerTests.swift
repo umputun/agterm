@@ -442,6 +442,41 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(actualCwd.path, cwd.resolvingSymlinksInPath().path)
     }
 
+    func testScratchChordUsesItsOwnWindowWhenAnotherHoldsTheSameSessionID() throws {
+        let fix = try fixture()
+        let source = fix.store
+        let sourceSession = try XCTUnwrap(source.activeSession)
+        let destination = try XCTUnwrap(library.store(for: library.newWindow().id))
+        let destinationWindow = try XCTUnwrap(library.windowID(for: destination))
+
+        XCTAssertTrue(source.softCloseSession(sourceSession.id))
+        XCTAssertTrue(library.reopenLatestRecentClosed(into: destination))
+        let copy = try XCTUnwrap(destination.session(withID: sourceSession.id))
+        XCTAssertTrue(source.undoPendingClose())
+        XCTAssertFalse(copy === sourceSession)
+        XCTAssertTrue(library.store(forSession: copy.id) === source)
+
+        // reopen preserves the workspace uuid; move the copy so the two workspaces differ.
+        let destinationWorkspace = destination.addWorkspace(name: "destination").id
+        destination.moveSession(copy.id, toWorkspace: destinationWorkspace)
+        let sourceWindow = try XCTUnwrap(library.windowID(for: source))
+        XCTAssertNotEqual(destinationWindow, sourceWindow)
+        XCTAssertNotEqual(destinationWorkspace, source.workspace(forSession: sourceSession.id)?.id)
+
+        let copyDir = stateDir.appendingPathComponent("copy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: copyDir, withIntermediateDirectories: true)
+        copy.currentCwd = copyDir.path
+        let surface = GhosttySurfaceView(workingDirectory: copyDir.path)
+        defer { surface.teardown() }
+        copy.scratchActive = true
+        copy.scratchSurface = surface
+
+        let written = try XCTUnwrap(fired(fix.runner, from: surface,
+                                          writing: "\"$AGT_PANE|$AGT_WINDOW_ID|$AGT_WORKSPACE_ID|$AGT_SESSION_PWD\""))
+        XCTAssertEqual(written.components(separatedBy: "|"),
+                       ["scratch", destinationWindow.uuidString, destinationWorkspace.uuidString, copyDir.path])
+    }
+
     func testAChordFiredInSplitPaneResolvesSplitPaneWorkingDirectory() throws {
         let fix = try fixture()
         let leftDir = stateDir.appendingPathComponent("left-cwd")
