@@ -3,10 +3,24 @@ import Foundation
 extension AppStore {
     @discardableResult
     public func restoreRecentClosed(_ item: RecentClosedItem) -> Bool {
+        restoreRecentClosed(item, occupiedElsewhere: []).restored
+    }
+
+    /// Restore `item` into this store, treating `occupiedElsewhere` as session ids another open window
+    /// already holds: they are never rebuilt here, because a second object under one id makes every
+    /// id-keyed lookup answer with whichever window sorts first.
+    @discardableResult
+    func restoreRecentClosed(_ item: RecentClosedItem,
+                             occupiedElsewhere: Set<UUID>) -> RecentClosedRestore {
         switch item.kind {
         case .session:
-            guard let recent = item.session else { return false }
-            if restoreOrSelectExistingRecentSession(recent) { return true }
+            guard let recent = item.session else { return .failed }
+            if restoreOrSelectExistingRecentSession(recent) {
+                return RecentClosedRestore(restored: true, complete: true)
+            }
+            // the routing sends the entry to the window already holding this session, so reaching here with
+            // the id occupied means that lookup missed. Refuse rather than build the second object.
+            guard !occupiedElsewhere.contains(recent.snapshot.id) else { return .failed }
             let index: Int
             if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
                 index = existing
@@ -24,14 +38,19 @@ extension AppStore {
             disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
             save()
-            return true
+            return RecentClosedRestore(restored: true, complete: true)
         case .workspace:
-            guard let recent = item.workspace else { return false }
-            if restoreOrSelectExistingRecentWorkspace(recent) { return true }
+            guard let recent = item.workspace else { return .failed }
+            if restoreOrSelectExistingRecentWorkspace(recent, occupiedElsewhere: occupiedElsewhere) {
+                return workspaceRestoreOutcome(recent, occupiedElsewhere: occupiedElsewhere)
+            }
             var workspace = workspace(from: recent.snapshot)
             // a session of this snapshot may have been moved into another workspace that is itself pending
-            // a close. its original object is alive in that record, so rebuild everything except it.
-            let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
+            // a close, or into another WINDOW. its original object is alive there, so rebuild everything
+            // except it.
+            let taken = Set(workspaces.flatMap(\.sessions).map(\.id))
+                .union(pendingHeldSessionIDs())
+                .union(occupiedElsewhere)
             workspace.sessions.removeAll { taken.contains($0.id) }
             // persistent Open Recent appends, like most editors' recent-project flow: a reopen brings the
             // workspace back without reshuffling current workspaces.
@@ -55,8 +74,19 @@ extension AppStore {
                 recordRecency()
             }
             save()
-            return true
+            return workspaceRestoreOutcome(recent, occupiedElsewhere: occupiedElsewhere)
         }
+    }
+
+    /// Whether every session of `recent`'s snapshot now exists somewhere: in this store, parked in one of
+    /// its pending closes, or in another window that already held it.
+    private func workspaceRestoreOutcome(_ recent: RecentClosedWorkspace,
+                                         occupiedElsewhere: Set<UUID>) -> RecentClosedRestore {
+        let placed = Set(workspaces.flatMap(\.sessions).map(\.id))
+            .union(pendingHeldSessionIDs())
+            .union(occupiedElsewhere)
+        let complete = recent.snapshot.sessions.allSatisfy { placed.contains($0.id) }
+        return RecentClosedRestore(restored: true, complete: complete)
     }
 
     private func restoreOrSelectExistingRecentSession(_ recent: RecentClosedSession) -> Bool {
@@ -68,7 +98,8 @@ extension AppStore {
         return true
     }
 
-    private func restoreOrSelectExistingRecentWorkspace(_ recent: RecentClosedWorkspace) -> Bool {
+    private func restoreOrSelectExistingRecentWorkspace(_ recent: RecentClosedWorkspace,
+                                                        occupiedElsewhere: Set<UUID>) -> Bool {
         let sessionIDs = Set(recent.snapshot.sessions.map(\.id))
         // pending closes may hold this workspace, or any number of its sessions closed one at a time. undo
         // every match, not just the newest: an undo returns live sessions to the tree and the merge below only
@@ -84,7 +115,9 @@ extension AppStore {
             // selecting without merging would drop the snapshot's other sessions — their only copy — while the
             // caller deletes the recent entry on success. rebuild only the ones absent from the tree AND from
             // a pending close whose undo would reinsert the original.
-            let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
+            let taken = Set(workspaces.flatMap(\.sessions).map(\.id))
+                .union(pendingHeldSessionIDs())
+                .union(occupiedElsewhere)
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
             for session in missing { emitSessionCreated(session, workspace: workspaces[index].id) }
@@ -96,6 +129,13 @@ extension AppStore {
             save()
             return true
         }
+        let placed = Set(workspaces.flatMap(\.sessions).map(\.id))
+            .union(pendingHeldSessionIDs())
+            .union(occupiedElsewhere)
+        // selecting one overlapping session used to answer success, which let the caller delete the recent
+        // entry while a member present only in the snapshot was never rebuilt anywhere. Decline instead, so
+        // the rebuild path runs and restores the remainder.
+        guard sessionIDs.allSatisfy({ placed.contains($0) }) else { return false }
         if let existingSession = workspaces.flatMap(\.sessions).first(where: { sessionIDs.contains($0.id) }) {
             selectSession(existingSession.id)
             return true

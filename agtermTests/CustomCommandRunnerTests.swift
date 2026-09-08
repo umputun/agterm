@@ -442,29 +442,41 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(actualCwd.path, cwd.resolvingSymlinksInPath().path)
     }
 
+    /// Two window files written with one session id, the shape a snapshot saved before the reopen routing
+    /// existed still has on disk. Returns the two window ids, A frontmost.
+    private func seedDuplicateSessionWindows(sessionID: UUID, cwd: String) throws -> (a: UUID, b: UUID) {
+        let a = UUID(), b = UUID()
+        let shared = SessionSnapshot(id: sessionID, customName: "api", cwd: cwd)
+        let windows = stateDir.appendingPathComponent("windows")
+        for (id, workspaceName) in [(a, "source"), (b, "destination")] {
+            try PersistenceStore(directory: windows, fileName: "\(id.uuidString).json")
+                .save(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: workspaceName,
+                                                              sessions: [shared])]))
+        }
+        let index = WindowsIndex(frontmost: a, windows: [WindowEntry(id: a, name: "a", isOpen: true),
+                                                        WindowEntry(id: b, name: "b", isOpen: true)])
+        try JSONEncoder().encode(index).write(to: stateDir.appendingPathComponent("windows.json"))
+        return (a, b)
+    }
+
     func testScratchChordUsesItsOwnWindowWhenAnotherHoldsTheSameSessionID() throws {
-        let fix = try fixture()
-        let source = fix.store
-        let sourceSession = try XCTUnwrap(source.activeSession)
-        let destination = try XCTUnwrap(library.store(for: library.newWindow().id))
-        let destinationWindow = try XCTUnwrap(library.windowID(for: destination))
-
-        XCTAssertTrue(source.softCloseSession(sourceSession.id))
-        XCTAssertTrue(library.reopenLatestRecentClosed(into: destination))
-        let copy = try XCTUnwrap(destination.session(withID: sourceSession.id))
-        XCTAssertTrue(source.undoPendingClose())
-        XCTAssertFalse(copy === sourceSession)
-        XCTAssertTrue(library.store(forSession: copy.id) === source)
-
-        // reopen preserves the workspace uuid; move the copy so the two workspaces differ.
-        let destinationWorkspace = destination.addWorkspace(name: "destination").id
-        destination.moveSession(copy.id, toWorkspace: destinationWorkspace)
-        let sourceWindow = try XCTUnwrap(library.windowID(for: source))
-        XCTAssertNotEqual(destinationWindow, sourceWindow)
-        XCTAssertNotEqual(destinationWorkspace, source.workspace(forSession: sourceSession.id)?.id)
-
+        let sessionID = UUID()
         let copyDir = stateDir.appendingPathComponent("copy-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: copyDir, withIntermediateDirectories: true)
+        let (windowA, windowB) = try seedDuplicateSessionWindows(sessionID: sessionID, cwd: copyDir.path)
+        library = WindowLibrary(directory: stateDir)
+        let fix = try fixture()
+
+        let source = try XCTUnwrap(library.store(for: windowA))
+        let destination = try XCTUnwrap(library.store(for: windowB))
+        let original = try XCTUnwrap(source.session(withID: sessionID))
+        let copy = try XCTUnwrap(destination.session(withID: sessionID))
+        XCTAssertFalse(copy === original)
+        XCTAssertTrue(library.store(forSession: sessionID) === source, "the id lookup answers with A")
+        let destinationWorkspace = try XCTUnwrap(destination.workspace(forSession: sessionID)?.id)
+        XCTAssertNotEqual(destinationWorkspace, source.workspace(forSession: sessionID)?.id)
+        XCTAssertNotEqual(windowA, windowB)
+
         copy.currentCwd = copyDir.path
         let surface = GhosttySurfaceView(workingDirectory: copyDir.path)
         defer { surface.teardown() }
@@ -474,7 +486,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         let written = try XCTUnwrap(fired(fix.runner, from: surface,
                                           writing: "\"$AGT_PANE|$AGT_WINDOW_ID|$AGT_WORKSPACE_ID|$AGT_SESSION_PWD\""))
         XCTAssertEqual(written.components(separatedBy: "|"),
-                       ["scratch", destinationWindow.uuidString, destinationWorkspace.uuidString, copyDir.path])
+                       ["scratch", windowB.uuidString, destinationWorkspace.uuidString, copyDir.path])
     }
 
     func testAChordFiredInSplitPaneResolvesSplitPaneWorkingDirectory() throws {

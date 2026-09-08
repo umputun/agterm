@@ -68,8 +68,9 @@ public final class WindowLibrary {
     /// The ordered window metadata, for the menu/palette.
     public private(set) var windows: [WindowInfo]
 
-    /// App-wide recent closed sessions/workspaces, newest first. Reopening inserts into the active window;
-    /// independent of window reopen semantics.
+    /// App-wide recent closed sessions/workspaces, newest first. Reopening inserts into the active window
+    /// unless another one still holds the session, live or pending its close, in which case it restores
+    /// there. Independent of window reopen semantics.
     public private(set) var recentClosedItems: [RecentClosedItem]
 
     /// The id of the frontmost on-screen window, mirrored into the index on change. Outlives the window
@@ -83,7 +84,7 @@ public final class WindowLibrary {
 
     /// The state directory (AGTERM_STATE_DIR-aware): the index here, per-window files in `windows/`.
     @ObservationIgnored private let directory: URL
-    @ObservationIgnored private let recentClosedStore: RecentClosedStore
+    @ObservationIgnored let recentClosedStore: RecentClosedStore
     /// One bounded run-identified ring shared by every window store for this library/app lifetime.
     @ObservationIgnored private let controlEventRing: ControlEventRing
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
@@ -422,30 +423,6 @@ public final class WindowLibrary {
             log("stripCaptures failed: \(error)")
             return false
         }
-    }
-
-    @discardableResult
-    public func reopenRecentClosed(_ itemID: UUID, into targetStore: AppStore? = nil) -> Bool {
-        refreshRecentClosedItems()
-        guard let item = recentClosedItems.first(where: { $0.id == itemID }),
-              let store = targetStore ?? activeStore,
-              store.restoreRecentClosed(item)
-        else { return false }
-        recentClosedStore.remove(itemID)
-        refreshRecentClosedItems()
-        return true
-    }
-
-    @discardableResult
-    public func reopenLatestRecentClosed(into targetStore: AppStore? = nil) -> Bool {
-        refreshRecentClosedItems()
-        guard let item = recentClosedItems.first else { return false }
-        return reopenRecentClosed(item.id, into: targetStore)
-    }
-
-    public func clearRecentClosedItems() {
-        recentClosedStore.clear()
-        refreshRecentClosedItems()
     }
 
     /// Closes a window: drops its store and persists the index. The app-target caller tears down the
@@ -978,7 +955,7 @@ public final class WindowLibrary {
         }
     }
 
-    private func refreshRecentClosedItems() {
+    func refreshRecentClosedItems() {
         recentClosedItems = recentClosedStore.load()
     }
 

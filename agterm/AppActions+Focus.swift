@@ -139,6 +139,14 @@ extension AppActions {
         }
     }
 
+    /// Front and focus the window a recent-closed reopen restored into; the frontmost id is assigned here
+    /// because `raise` moves AppKit, not the model, and `focusActiveSession` reads `activeStore`.
+    func revealRestoredWindow(_ id: WindowInfo.ID) {
+        library.frontmostWindowID = id
+        _ = WindowRegistry.shared.raise(id)
+        focusActiveSession()
+    }
+
     /// Move first responder back to the active session's topmost surface (after the quick terminal or a
     /// palette/rename field closes). Targets `topmostSurface` (overlay > scratch > active pane), so a close
     /// re-focuses whatever is actually visible and never a pane hidden under a cover, and re-asserts briefly

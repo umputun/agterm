@@ -5,6 +5,16 @@ public enum RecentClosedKind: String, Codable, Sendable {
     case workspace
 }
 
+/// What one `restoreRecentClosed` call achieved. `complete` is false when a member of the snapshot ended
+/// up neither in the restoring store nor in another window that already held it, which is the case where
+/// consuming the recent entry would lose that session for good.
+struct RecentClosedRestore: Equatable, Sendable {
+    let restored: Bool
+    let complete: Bool
+
+    static let failed = RecentClosedRestore(restored: false, complete: false)
+}
+
 public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
     public let id: UUID
     public let kind: RecentClosedKind

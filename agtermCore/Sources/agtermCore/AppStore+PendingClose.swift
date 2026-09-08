@@ -343,6 +343,17 @@ extension AppStore {
         return (folded, focusMember)
     }
 
+    /// Whether a pending close is holding workspace `id`: the workspace itself, or a session recorded as
+    /// having lived in it, whose undo would put that workspace back.
+    func pendingHoldsWorkspace(_ id: UUID) -> Bool {
+        pendingCloseRecords.values.contains { record in
+            switch record {
+            case .sessions(let close): return close.sessions.contains { $0.workspaceID == id }
+            case .workspace(let close): return close.workspace.id == id
+            }
+        }
+    }
+
     /// Session ids a pending close still holds. They are absent from the tree, but their live objects are
     /// intact and an undo reinserts them, so a restore that rebuilt one from a snapshot would put two
     /// objects under a single id. Callers union this with the tree's ids to decide what is already taken.

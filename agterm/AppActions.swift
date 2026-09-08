@@ -298,14 +298,14 @@ final class AppActions {
 
     func openRecentClosed(_ id: RecentClosedItem.ID) {
         guard uiActionsEnabled else { return }
-        guard library.reopenRecentClosed(id) else { return }
-        focusActiveSession()
+        guard let owner = library.reopenRecentClosedReportingWindow(id) else { return }
+        revealRestoredWindow(owner)
     }
 
     func openLatestRecentClosed() {
         guard uiActionsEnabled else { return }
-        guard library.reopenLatestRecentClosed() else { return }
-        focusActiveSession()
+        guard let owner = library.reopenLatestRecentClosedReportingWindow() else { return }
+        revealRestoredWindow(owner)
     }
 
     func clearRecentClosedItems() {
