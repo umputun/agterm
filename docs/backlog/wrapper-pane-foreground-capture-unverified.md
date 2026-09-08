@@ -1,6 +1,6 @@
 ---
 worth: maybe
-where: agterm/Ghostty/ForegroundProcess.swift:22
+where: agterm/Ghostty/ForegroundProcess.swift:command(for:)
 added: 2026-08-28
 ---
 # what a wrapper pane actually captures on restore is unverified

@@ -1,6 +1,6 @@
 ---
 worth: later
-where: scripts/setup.sh:23
+where: scripts/setup.sh
 added: 2026-09-07
 ---
 # zmx replay paints unwritten cells with the previous cell's style

@@ -1,6 +1,6 @@
 ---
 worth: later
-where: agterm/Commands/CustomCommandRunner.swift:252
+where: agterm/Commands/CustomCommandRunner.swift:runFromSessionlessSurface
 added: 2026-08-13
 ---
 # a chord fired in a sessionless surface resolves against whichever session is active

@@ -1,6 +1,6 @@
 ---
 worth: later
-where: agtermCore/Sources/agtermCore/AgentHooksInstall.swift:116
+where: agtermCore/Sources/agtermCore/AgentHooksInstall.swift:mergeClaudeSettings
 added: 2026-08-18
 ---
 # a changed Claude hook mapping never reaches an existing install

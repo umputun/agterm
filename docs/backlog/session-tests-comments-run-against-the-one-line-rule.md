@@ -1,6 +1,6 @@
 ---
 worth: maybe
-where: agtermCore/Tests/agtermCoreTests/SessionTests.swift:532
+where: agtermCore/Tests/agtermCoreTests/SessionTests.swift:clearPendingForegroundCommandsDropsBothCapturesAndKeepsTheRestorePins
 added: 2026-08-27
 ---
 # SessionTests carries 24 multi-line test comments against the one-line rule

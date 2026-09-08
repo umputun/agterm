@@ -1,6 +1,6 @@
 ---
 worth: no
-where: agtermCore/Sources/agtermCore/AgentHooksInstall.swift:368
+where: agtermCore/Sources/agtermCore/AgentHooksInstall.swift:serialize
 added: 2026-08-19
 ---
 # merging Claude hooks reorders and reformats the user's whole settings.json

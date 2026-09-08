@@ -1,6 +1,6 @@
 ---
 worth: later
-where: agterm/Ghostty/GhosttySurfaceView+Visibility.swift
+where: agterm/Ghostty/GhosttySurfaceView+Visibility.swift:showsOnScreen
 added: 2026-08-28
 ---
 # hidden windows keep their on-screen hosts' swap chains
