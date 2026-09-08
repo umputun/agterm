@@ -233,7 +233,7 @@ final class CustomCommandRunner {
     /// split/scratch (or during a window-switch race) runs against THAT surface's session/cwd/window and reads
     /// its selection. A sessionless focused surface routes through `runFromSessionlessSurface`.
     func runFromKeybind(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
-        guard let session = focusedSurface.session, let store = library.store(forSession: session.id) else {
+        guard let session = focusedSurface.session, let store = store(owning: session) else {
             runFromSessionlessSurface(command, focusedSurface: focusedSurface)
             return
         }
@@ -242,6 +242,17 @@ final class CustomCommandRunner {
         let pane: CommandContext.Pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? .right : .left
         let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
         spawn(command, context: context)
+    }
+
+    /// The open store holding `session` itself. Matched by object identity rather than through
+    /// `store(forSession:)`, which answers with the first window carrying that id and a snapshot written by
+    /// an older build can put one id in two windows.
+    private func store(owning session: Session) -> AppStore? {
+        for windowID in library.openIDs() {
+            guard let store = library.store(for: windowID) else { continue }
+            if store.workspaces.contains(where: { $0.sessions.contains { $0 === session } }) { return store }
+        }
+        return nil
     }
 
     /// Resolve the surface and its owning store together, since a session id can repeat across windows.

@@ -459,6 +459,33 @@ final class CustomCommandRunnerTests: XCTestCase {
         return (a, b)
     }
 
+    func testPrimaryPaneChordUsesItsOwnWindowWhenAnotherHoldsTheSameSessionID() throws {
+        let sessionID = UUID()
+        let paneDir = stateDir.appendingPathComponent("pane-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: paneDir, withIntermediateDirectories: true)
+        let (windowA, windowB) = try seedDuplicateSessionWindows(sessionID: sessionID, cwd: paneDir.path)
+        library = WindowLibrary(directory: stateDir)
+        let fix = try fixture()
+
+        let source = try XCTUnwrap(library.store(for: windowA))
+        let destination = try XCTUnwrap(library.store(for: windowB))
+        let copy = try XCTUnwrap(destination.session(withID: sessionID))
+        XCTAssertFalse(copy === source.session(withID: sessionID))
+        XCTAssertTrue(library.store(forSession: sessionID) === source, "the id lookup answers with A")
+        let destinationWorkspace = try XCTUnwrap(destination.workspace(forSession: sessionID)?.id)
+
+        copy.currentCwd = paneDir.path
+        let surface = GhosttySurfaceView(workingDirectory: paneDir.path)
+        defer { surface.teardown() }
+        surface.session = copy
+        copy.surface = surface
+
+        let written = try XCTUnwrap(fired(fix.runner, from: surface,
+                                          writing: "\"$AGT_PANE|$AGT_WINDOW_ID|$AGT_WORKSPACE_ID\""))
+        XCTAssertEqual(written.components(separatedBy: "|"),
+                       ["left", windowB.uuidString, destinationWorkspace.uuidString])
+    }
+
     func testScratchChordUsesItsOwnWindowWhenAnotherHoldsTheSameSessionID() throws {
         let sessionID = UUID()
         let copyDir = stateDir.appendingPathComponent("copy-\(UUID().uuidString)")

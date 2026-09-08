@@ -73,6 +73,11 @@ final class AppActionsFocusTests: XCTestCase {
         XCTAssertEqual(library.frontmostWindowID, windowA, "the reopen starts from the other window")
         XCTAssertFalse(hostB.isVisible, "off screen until the reveal orders it front")
 
+        var posted = 0
+        let token = NotificationCenter.default.addObserver(forName: .agtermWindowFrontmostChanged,
+                                                          object: nil, queue: .main) { _ in posted += 1 }
+        defer { NotificationCenter.default.removeObserver(token) }
+
         let actions = AppActions(library: library)
         actions.openLatestRecentClosed()
 
@@ -80,5 +85,10 @@ final class AppActionsFocusTests: XCTestCase {
         XCTAssertTrue(hostB.isVisible, "and be ordered front: a hidden window can still hold a responder")
         XCTAssertTrue(storeB.session(withID: sessionID) === session, "the original object comes back")
         XCTAssertTrue(hostB.firstResponder === surface, "and its surface takes first responder")
+
+        XCTAssertEqual(posted, 1, "the frontmost change must be published for the control cache")
+        let saved = try JSONDecoder().decode(WindowsIndex.self,
+                                             from: Data(contentsOf: stateDir.appendingPathComponent("windows.json")))
+        XCTAssertEqual(saved.frontmost, windowB, "and persisted to the index")
     }
 }

@@ -139,10 +139,16 @@ extension AppActions {
         }
     }
 
-    /// Front and focus the window a recent-closed reopen restored into; the frontmost id is assigned here
-    /// because `raise` moves AppKit, not the model, and `focusActiveSession` reads `activeStore`.
+    /// Front and focus the window a recent-closed reopen restored into. The id is published here rather
+    /// than left to the key-window report, which `focusActiveSession` would otherwise outrun; publishing it
+    /// also has to save and post, because `WindowAccessor.reportFrontmost` gates both on the id having
+    /// changed and this assignment already made it equal.
     func revealRestoredWindow(_ id: WindowInfo.ID) {
-        library.frontmostWindowID = id
+        if library.frontmostWindowID != id {
+            library.frontmostWindowID = id
+            library.saveIndex()
+            NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)
+        }
         _ = WindowRegistry.shared.raise(id)
         focusActiveSession()
     }
