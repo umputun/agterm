@@ -244,18 +244,17 @@ final class CustomCommandRunner {
         spawn(command, context: context)
     }
 
-    /// The keybind fallback for a sessionless focused surface (quick terminal, overlay, scratch). The scratch
-    /// and the overlays belong to the ACTIVE session, so a chord from one runs against that session and reads
-    /// THAT surface's own selection — the read leg of `$AGT_PANE` → `session type --pane scratch`. The quick
-    /// terminal is nobody's pane and takes the plain palette path.
+    /// Resolve scratch and overlay ownership by surface identity, even while selection is ahead of focus.
+    /// The quick terminal has no session owner and keeps the active-session fallback.
     private func runFromSessionlessSurface(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
-        guard let store = library.activeStore, let session = store.activeSession,
-              let pane = sessionlessPane(of: focusedSurface, in: session) else {
-            runNoSurface(command)
+        for session in library.allOpenSessions() {
+            guard let pane = sessionlessPane(of: focusedSurface, in: session),
+                  let store = library.store(forSession: session.id) else { continue }
+            let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
+            spawn(command, context: context)
             return
         }
-        let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
-        spawn(command, context: context)
+        runNoSurface(command)
     }
 
     /// Which pane `session`'s sessionless surface reports as `$AGT_PANE`, nil when the surface is not one of

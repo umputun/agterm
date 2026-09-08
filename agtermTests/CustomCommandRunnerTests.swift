@@ -358,6 +358,90 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(written, "left \(session.id.uuidString)")
     }
 
+    func testScratchChordKeepsItsOwnerAfterSelectionChanges() throws {
+        for anotherWindow in [false, true] {
+            try assertSessionlessChordContext(surfaceKind: .scratch, selectedInAnotherWindow: anotherWindow)
+        }
+    }
+
+    func testSessionOverlayChordKeepsItsOwnerAfterSelectionChanges() throws {
+        for anotherWindow in [false, true] {
+            try assertSessionlessChordContext(surfaceKind: .overlay, selectedInAnotherWindow: anotherWindow)
+        }
+    }
+
+    func testPaneOverlayChordKeepsItsOwnerAfterSelectionChanges() throws {
+        for anotherWindow in [false, true] {
+            try assertSessionlessChordContext(surfaceKind: .paneOverlay, selectedInAnotherWindow: anotherWindow)
+        }
+    }
+
+    private enum SessionlessSurfaceKind: String {
+        case scratch, overlay, paneOverlay
+    }
+
+    private func assertSessionlessChordContext(surfaceKind: SessionlessSurfaceKind, selectedInAnotherWindow: Bool) throws {
+        let fix = try fixture()
+        let ownerWindow = try XCTUnwrap(library.activeWindowID)
+        let ownerWorkspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let ownerDir = stateDir.appendingPathComponent("owner-\(UUID().uuidString)")
+        let splitDir = ownerDir.appendingPathComponent("split")
+        try FileManager.default.createDirectory(at: splitDir, withIntermediateDirectories: true)
+        let owner = try XCTUnwrap(fix.store.addSession(toWorkspace: ownerWorkspace, cwd: ownerDir.path))
+        let surface = GhosttySurfaceView(workingDirectory: ownerDir.path, command: "/bin/cat")
+        defer {
+            surface.teardown()
+            surface.removeFromSuperview()
+        }
+        switch surfaceKind {
+        case .scratch:
+            owner.scratchActive = true
+            owner.scratchSurface = surface
+        case .overlay, .paneOverlay:
+            owner.splitSurface = GhosttySurfaceView(workingDirectory: splitDir.path)
+            owner.hasSplit = true
+            owner.isSplit = true
+            owner.splitFocused = true
+            owner.splitCwd = splitDir.path
+            if surfaceKind == .overlay {
+                owner.overlayActive = true
+                owner.overlaySurface = surface
+            } else {
+                owner.rightOverlay = PaneOverlay(command: "true")
+                owner.setPaneOverlaySurface(surface, pane: .right)
+            }
+        }
+        XCTAssertNil(surface.session)
+        surface.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(surface)
+        surface.createSurface()
+        XCTAssertTrue(surface.isRealized)
+        XCTAssertTrue(surface.inject(text: "owner-selection"))
+        let deadline = Date().addingTimeInterval(5)
+        while surface.readScreenText(all: false, lines: nil)?.contains("owner-selection") != true, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertTrue(surface.performBindingAction("select_all"))
+        let selection = try XCTUnwrap(surface.readSelection())
+        XCTAssertTrue(selection.contains("owner-selection"))
+
+        let selectedStore = selectedInAnotherWindow ? try XCTUnwrap(library.store(for: library.newWindow().id)) : fix.store
+        let selectedWorkspace = try XCTUnwrap(selectedStore.currentWorkspaceID)
+        let selected = try XCTUnwrap(selectedStore.addSession(toWorkspace: selectedWorkspace, cwd: stateDir.path))
+        selectedStore.selectSession(selected.id)
+        XCTAssertTrue(library.activeStore?.activeSession === selected)
+
+        let written = try XCTUnwrap(fired(fix.runner, from: surface,
+                                         writing: "\"$AGT_SESSION_ID|$AGT_SESSION_PWD|$AGT_PANE|$AGT_SELECTION|$AGT_WINDOW_ID|$AGT_WORKSPACE_ID|$PWD\""))
+        let fields = written.components(separatedBy: "|")
+        let cwd = surfaceKind == .scratch ? ownerDir : splitDir
+        XCTAssertEqual(Array(fields.prefix(6)), [owner.id.uuidString, cwd.path, surfaceKind == .scratch ? "scratch" : "right",
+                                                 selection, ownerWindow.uuidString, ownerWorkspace.uuidString],
+                       "\(surfaceKind), selected in another window: \(selectedInAnotherWindow)")
+        let actualCwd = URL(fileURLWithPath: try XCTUnwrap(fields.last)).resolvingSymlinksInPath()
+        XCTAssertEqual(actualCwd.path, cwd.resolvingSymlinksInPath().path)
+    }
+
     func testAChordFiredInSplitPaneResolvesSplitPaneWorkingDirectory() throws {
         let fix = try fixture()
         let leftDir = stateDir.appendingPathComponent("left-cwd")
