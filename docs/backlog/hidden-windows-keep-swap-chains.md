@@ -10,7 +10,7 @@ ordered out, or the app is hidden. Each hidden window therefore keeps the swap c
 session's on-screen hosts, including both panes of a shown split and a floating overlay or HUD. Its inactive
 sessions release normally.
 
-`observeWindowVisibilityChanges` at `GhosttySurfaceView.swift:406` subscribes to miniaturize,
+`GhosttySurfaceView.observeWindowVisibilityChanges` subscribes to miniaturize,
 deminiaturize, app hide and app unhide, but its callback only calls `postAccessibilityExposureChange()`.
 It never calls `updateRendererVisibility()`, so none of those signals currently updates renderer occlusion.
 

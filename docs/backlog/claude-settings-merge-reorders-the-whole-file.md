@@ -15,11 +15,11 @@ Today this fires once, on first install: a re-run finds the hooks already presen
 `existing` verbatim with `changed == false`, so nobody sees a second rewrite. Any future change that makes
 the merge report `changed` on an already-installed file turns it into a rewrite every affected user gets.
 
-Not worth fixing as it stands. `AgentHooksInstaller.swift:222` writes a `.bak` first, the write is atomic
-and preserves mode and symlinks, and the file is one the user asked the installer to manage. Preserving key
-order and numeric literals would mean a surgical text edit instead of a dict round-trip, which is a
-structural change to the same path that owns the malformed-JSON refusal and the backup logic - far more
-risk than the cosmetic effect justifies. Revisit if Claude Code ever adopts JSONC for `settings.json`,
-since the refusal path would then start declining ordinary files.
+Not worth fixing as it stands. `AgentHooksInstaller.mergeClaudeSettings` writes a `.bak` first, the write
+is atomic and preserves mode and symlinks, and the file is one the user asked the installer to manage.
+Preserving key order and numeric literals would mean a surgical text edit instead of a dict round-trip,
+which is a structural change to the same path that owns the malformed-JSON refusal and the backup logic -
+far more risk than the cosmetic effect justifies. Revisit if Claude Code ever adopts JSONC for
+`settings.json`, since the refusal path would then start declining ordinary files.
 
 Surfaced reviewing PR #461.

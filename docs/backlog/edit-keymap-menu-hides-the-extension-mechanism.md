@@ -7,7 +7,7 @@ added: 2026-08-20
 
 The seeded `keymap.conf` is the best explanation of custom commands anywhere in the project. It documents
 the `command` directive, the detached-no-TTY limit, the PATH rule, the context tokens, and ships the
-`agtermctl session overlay open 'zsh -lc lazygit'` pattern (`agtermCore/Sources/agtermCore/ConfigPaths.swift:39-116`).
+`agtermctl session overlay open 'zsh -lc lazygit'` pattern (`ConfigPaths.starterKeymapConf`).
 It is better than the public docs were before the `#extend` lesson, and a user reaches it only by opening
 a menu item named after key configuration.
 
