@@ -148,8 +148,7 @@ struct SessionTests {
     }
 
     @Test func whitespaceOnlyCustomNameFallsBackToAuto() {
-        // a whitespace-only customName can only arrive via a hand-edited snapshot — renameSession clears
-        // blanks to nil.
+        // a whitespace-only customName only arrives via a hand-edited snapshot; renameSession clears blanks to nil.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "   \t")
         #expect(session.displayName == "foo")
     }
@@ -195,8 +194,6 @@ struct SessionTests {
     }
 
     @Test func promotedSurvivorTitleNotMaskedByStaleSplitFocused() {
-        // a promoted survivor can momentarily carry `splitFocused == true` while it is the session's SOLE
-        // pane — the split factory's focus callback keeps firing on it.
         let session = Session(initialCwd: "/Users/user", customName: "web1")
         session.currentCwd = "/Users/user"
         session.oscTitle = "user@web1: ~"
@@ -267,8 +264,6 @@ struct SessionTests {
     }
 
     @Test func effectiveCwdFallsBackToInitialUntilPwdReport() {
-        // a restored session has no currentCwd until OSC 7 arrives, and the fallback is what lets git
-        // status refresh at launch.
         let session = Session(initialCwd: "/repo")
         #expect(session.effectiveCwd == "/repo")
     }
@@ -313,8 +308,7 @@ struct SessionTests {
     }
 
     @Test func hiddenSplitStillShowsFocusedSplitPane() {
-        // split hidden but the right pane is shown maximized + focused. The guard is splitFocused, not
-        // isSplit — closeSplit resets the flag, so it is true only while the pane exists.
+        // the guard is splitFocused, not isSplit: closeSplit resets the flag, so it is true only while the pane exists.
         let session = Session(initialCwd: "/repo")
         session.currentCwd = "/repo/sub"
         session.splitSurface = FakeSurface()
@@ -325,8 +319,7 @@ struct SessionTests {
     }
 
     @Test func focusedCwdFallsBackUntilSplitReports() {
-        // splitSurface must be set, else the split-existence guard short-circuits and this exercises the
-        // missing-surface branch instead of the `let cwd = splitCwd` nil fallback.
+        // splitSurface must be set or the existence guard short-circuits and this exercises the missing-surface branch.
         let session = Session(initialCwd: "/repo")
         session.currentCwd = "/repo/primary"
         session.isSplit = true
@@ -481,8 +474,7 @@ struct SessionTests {
     }
 
     @Test func onScreenSurfaceIsCoveringScratchElseFocusedPane() {
-        // an overlay falls back to the pane — search/text don't target the ephemeral overlay, matching
-        // AppActions.searchTarget.
+        // an overlay falls back to the pane: search/text never target the ephemeral overlay, matching AppActions.searchTarget.
         let session = Session(initialCwd: "/repo")
         let primary = FakeSurface(), split = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()
         session.surface = primary
@@ -500,8 +492,7 @@ struct SessionTests {
     }
 
     @Test func fullOverlayActiveOnlyForFullCoverageOverlay() {
-        // only the full-coverage overlay hides the panes AND scratch, so its translucent background
-        // reveals the window backing rather than the covered surfaces.
+        // only the full-coverage overlay hides the panes AND scratch, so its translucent background shows the window backing.
         let session = Session(initialCwd: "/repo")
         #expect(session.fullOverlayActive == false)
         session.overlayActive = true
@@ -544,8 +535,7 @@ struct SessionTests {
     }
 
     @Test func aSizelessHudStillCoversNothing() {
-        // openHud always sets a percent; the defensive term keeps a HUD out of the full-cover path anyway,
-        // since hiding the panes behind a message would defeat the passivity the whole feature is for.
+        // openHud always supplies a size percent.
         let session = Session(initialCwd: "/repo")
         session.overlayActive = true
         session.hudSpec = HudSpec(message: "working")
@@ -584,8 +574,7 @@ struct SessionTests {
     }
 
     @Test func paneRoleFollowsAPromotedSurvivorAndReSplit() {
-        // #199: a promoted survivor and the fresh helper that re-splits it were both baked with the SAME
-        // stale `right` role, so only the stable token disambiguates them.
+        // #199: survivor and re-split helper were both baked with the same stale right role; only the token disambiguates.
         let session = Session(initialCwd: "/repo")
         let survivor = FakeSurface(paneToken: "agent-tok")
         session.surface = survivor
@@ -614,8 +603,7 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideReturnsEmptyStringAsAValue() {
-        // "" is "pinned to nothing" — a real tri-state value the caller maps to a plain shell, so the
-        // first take must return it rather than collapsing it to nil.
+        // "" is "pinned to nothing", a real tri-state value the caller maps to a plain shell.
         let session = Session(initialCwd: "/repo")
         session.pendingRestoreCommand = ""
         session.pendingSplitRestoreCommand = ""
@@ -634,9 +622,7 @@ struct SessionTests {
     }
 
     @Test func clearPendingForegroundCommandsDropsBothCapturesAndKeepsTheRestorePins() {
-        // what restore.clear needs: the launch parks captures in the pending slots until each surface
-        // mounts, so clearing only the persisted fields would answer ok and still let them run. The
-        // session.restore pins are sticky and must survive.
+        // the launch parks captures in the pending slots until each surface mounts, so clearing the persisted fields alone leaves them armed.
         let session = Session(initialCwd: "/repo")
         session.pendingForegroundCommand = ["tee", "/tmp/m"]
         session.pendingSplitForegroundCommand = ["tail", "-f", "/var/log/x"]
@@ -651,9 +637,7 @@ struct SessionTests {
     }
 
     @Test func clearCapturedForegroundCommandsDropsThePersistedAndPendingPairsTogether() {
-        // what `restore.clear` and a non-last window close both need: the persisted pair is what a launch
-        // reads, the pending pair is what an already-started launch is holding, so dropping one leaves the
-        // other to replay. The session.restore pins are sticky and must survive.
+        // the persisted pair is what a launch reads and the pending pair what an already-started launch holds, so dropping one leaves the other to replay.
         let session = Session(initialCwd: "/repo")
         session.foregroundCommand = ["tee", "/tmp/m"]
         session.splitForegroundCommand = ["tail", "-f", "/var/log/x"]
@@ -672,8 +656,7 @@ struct SessionTests {
     }
 
     @Test func clearPendingRestoreOverridesDropsBothPayloadsAndKeepsThePins() {
-        // the same object comes back on undo, so an unconsumed payload must not survive the round trip —
-        // while the persisted pins stay, to fire on the next launch.
+        // the same object comes back on undo, so an unconsumed payload must not survive the round trip.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"
@@ -696,8 +679,6 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideLeavesThePersistedValueIntact() {
-        // STICKY: consuming this launch's payload must not clear the persisted field, or it would fire
-        // once and never again.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"
@@ -743,8 +724,7 @@ struct SessionTests {
     }
 
     @Test func rendersPaneIsLeftOnlyWithoutASplitSurface() {
-        // splitFocused without a split surface is the promoted-survivor window: the left pane is what
-        // sessionDetail lays out, so a right overlay would never realize.
+        // splitFocused without a split surface is the promoted-survivor window, where sessionDetail lays out the left pane.
         let session = Session(initialCwd: "/repo")
         session.splitFocused = true
         #expect(session.rendersPane(.left))
@@ -787,8 +767,7 @@ struct SessionTests {
         session.dropUnrealizedPaneOverlays()
         #expect(session.openPaneOverlays == [.left])
 
-        // a REALIZED overlay on an un-rendered pane keeps its program: the surface unmounts and a re-show
-        // remounts it.
+        // a realized overlay on an un-rendered pane keeps its program: the surface unmounts and a re-show remounts it.
         session.rightOverlay = PaneOverlay(command: "htop")
         session.rightOverlaySurface = realized
         session.dropUnrealizedPaneOverlays()
@@ -796,9 +775,7 @@ struct SessionTests {
         #expect(realized.teardownCount == 0)
     }
 
-    // the focus flip is the non-store way a pane stops being laid out: `session.focus left` on a hidden
-    // split un-renders the right pane, and an overlay opened there before its surface realized would sit
-    // active with no program forever.
+    // the focus flip is the non-store way a pane stops being laid out: focus left on a hidden split un-renders the right pane.
     @Test func dropUnrealizedPaneOverlaysCoversAFocusFlipOnAHiddenSplit() {
         let session = Session(initialCwd: "/repo")
         session.hasSplit = true
@@ -813,9 +790,7 @@ struct SessionTests {
         #expect(session.rightOverlay == nil)
     }
 
-    // the deck parks its view in the surface slot BEFORE libghostty creates the terminal, so an occupied slot
-    // is no proof a program started: that gap left `overlay result --pane` answering "overlay still running"
-    // forever.
+    // the deck parks its view in the surface slot before libghostty creates the terminal, so an occupied slot is no proof a program started.
     @Test func dropUnrealizedPaneOverlaysRetiresASlotWhoseTerminalWasNeverCreated() {
         let session = Session(initialCwd: "/repo")
         let parked = FakeSurface()
@@ -833,9 +808,7 @@ struct SessionTests {
         #expect(parked.teardownCount == 1)
     }
 
-    // the deck is not the only host: `overlay open --pane right` then `surface zoom show --target
-    // surface:<id>:overlay-right` then focusing away tore the SELECTED zoom target down before the zoom
-    // layer could mount and realize it, breaking the surfaces[]/surface zoom contract.
+    // a selected zoom target owns its slot before the zoom layer mounts.
     @Test func dropUnrealizedPaneOverlaysSparesASlotTerminalZoomIsHosting() {
         let session = Session(initialCwd: "/repo")
         let windowID = UUID()
@@ -927,8 +900,7 @@ struct SessionTests {
         #expect(session.focusedOverlayPane == .right)
     }
 
-    // pins the shape `session.split --mode on` leaves before the lazy right surface exists: the right pane is
-    // already laid out and focused, so the cover predicates must agree with what openPaneOverlay accepts.
+    // session.split --mode on leaves the right pane laid out and focused before its lazy surface exists.
     @Test func focusedOverlayPaneFollowsAShownSplitBeforeItsSurfaceRealizes() {
         let session = Session(initialCwd: "/repo")
         session.isSplit = true
@@ -965,8 +937,6 @@ struct SessionTests {
         #expect(session.paneOverlayRole(of: stranger) == nil)
     }
 
-    // the promotion regression: the right pane overlay's surface MOVES into the left slot without being
-    // rebuilt, so its callbacks must resolve `.left` from it or they act on a slot nothing occupies.
     @Test func promotePaneOverlayRetargetsTheMigratedSurfacesRole() {
         let session = Session(initialCwd: "/repo")
         let overlaySurface = FakeSurface()
@@ -986,8 +956,7 @@ struct SessionTests {
     }
 
     @Test func focusedOverlayPaneIsLeftAfterAPromotion() {
-        // the survivor moves into `surface` while `splitSurface` is nilled, so the migrated overlay reads
-        // as the left pane's even before splitFocused settles.
+        // the survivor moves into surface while splitSurface is nilled, so the migrated overlay reads as left before splitFocused settles.
         let session = Session(initialCwd: "/repo")
         session.splitFocused = true
         session.splitSurface = FakeSurface()
@@ -1066,8 +1035,7 @@ struct SessionTests {
         #expect(session.focusTarget(wantSplit: true) === scratch)
     }
 
-    // the passivity property one layer below the deck's exemptions: every app focus-routing site reads
-    // `topmostSurface`, so a HUD reachable through it takes first responder off the session it describes.
+    // every app focus-routing site reads topmostSurface, so a HUD reachable through it would steal first responder.
     @Test func topmostSurfaceSkipsAHudButNotTheProgramSharingItsSlot() {
         let session = Session(initialCwd: "/repo")
         let primary = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()
@@ -1126,8 +1094,7 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideNeverReadsThePersistedValue() {
-        // a persisted override with nothing armed (a mid-process window reload, a socket write during this
-        // run) must not fire — the factory path can only reach the transient payload.
+        // a persisted override with nothing armed arrives via a mid-process window reload or a socket write during this run.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"
