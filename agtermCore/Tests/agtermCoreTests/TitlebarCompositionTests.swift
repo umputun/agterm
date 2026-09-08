@@ -3,9 +3,10 @@ import Testing
 
 struct TitlebarCompositionTests {
     private func compose(session: String? = "alpha", window: String? = nil, context: String? = nil,
-                         detail: String = "/repo", mode: ToolbarMode) -> TitlebarComposition {
+                         detail: String = "/repo", host: String? = nil, mode: ToolbarMode) -> TitlebarComposition {
         TitlebarComposition.compose(
-            TitlebarComposition.Parts(sessionName: session, windowName: window, context: context, detail: detail),
+            TitlebarComposition.Parts(sessionName: session, windowName: window, context: context, detail: detail,
+                                      remoteHost: host),
             mode: mode
         )
     }
@@ -35,13 +36,15 @@ struct TitlebarCompositionTests {
 
     @Test func compactAppendsContextAfterTheIdentitySoTruncationEatsItFirst() {
         let composed = compose(window: "main", context: "PR #517", mode: .compact)
-        #expect(composed.title == "alpha — main · PR #517")
+        #expect(composed.title == "alpha — main")
+        #expect(composed.tail == " · PR #517")
         #expect(composed.subtitle == "")
     }
 
     @Test func compactShowsContextAloneWhenEveryIdentityPartIsHidden() {
         let composed = compose(session: nil, window: nil, context: "PR #517", mode: .compact)
-        #expect(composed.title == "PR #517")
+        #expect(composed.title == "")
+        #expect(composed.tail == "PR #517")
     }
 
     @Test func hiddenComposesNothingEvenWithAContext() {
@@ -59,5 +62,38 @@ struct TitlebarCompositionTests {
         let composed = compose(session: nil, window: nil, context: "PR #517", mode: .normal)
         #expect(composed.title == "")
         #expect(composed.subtitle == "PR #517")
+    }
+
+    @Test(arguments: [ToolbarMode.normal, .compact])
+    func remoteHostStaysOnLineOneAlongsideIdentityAndContext(mode: ToolbarMode) {
+        let host = "builder@long.internal.example.com"
+        let composed = compose(window: "main", context: "PR #517", host: host, mode: mode)
+        #expect(composed.title == "alpha — main")
+        #expect(composed.host == host)
+        #expect(composed.tail == (mode == .compact ? " · PR #517" : ""))
+        #expect(composed.subtitle == (mode == .normal ? "PR #517" : ""))
+    }
+
+    @Test(arguments: [ToolbarMode.normal, .compact])
+    func remoteHostCanStandAloneWithBothNamesHidden(mode: ToolbarMode) {
+        let composed = compose(session: nil, host: "buildbox", mode: mode)
+        #expect(composed.title.isEmpty)
+        #expect(composed.host == "buildbox")
+        #expect(composed.tail.isEmpty)
+    }
+
+    @Test func compactContextKeepsItsSeparatorAfterAHostAlone() {
+        let composed = compose(session: nil, context: "PR #517", host: "buildbox", mode: .compact)
+        #expect(composed.title.isEmpty)
+        #expect(composed.host == "buildbox")
+        #expect(composed.tail == " · PR #517")
+    }
+
+    @Test func hiddenModeDropsEveryRemotePart() {
+        let composed = compose(window: "main", context: "PR #517", host: "buildbox", mode: .hidden)
+        #expect(composed.title.isEmpty)
+        #expect(composed.host == nil)
+        #expect(composed.tail.isEmpty)
+        #expect(composed.subtitle.isEmpty)
     }
 }

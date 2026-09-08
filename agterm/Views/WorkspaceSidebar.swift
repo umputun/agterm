@@ -779,9 +779,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
         lazy var flaggedSplitSessionIcon = Self.rowIcon("rectangle.split.2x1.fill")
         lazy var flaggedHorizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2.fill")
-        lazy var remoteSessionIcon = Self.rowIcon("arrow.up.forward.bottomleading.rectangle")
-        lazy var remoteSplitSessionIcon = Self.rowIcon("arrow.up.forward.bottomleading.rectangle",
-                                                       weight: .bold)
+        lazy var remoteSessionIcon = Self.rowIcon("cloud")
+        lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)

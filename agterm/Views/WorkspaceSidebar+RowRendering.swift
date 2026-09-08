@@ -99,8 +99,8 @@ extension WorkspaceSidebar.Coordinator {
     /// A remote row takes its own glyph and keeps the split bit, not the flagged fill: a HIDDEN split is
     /// state nothing else reveals, while the fill is tree-mode decoration the flat flagged view already
     /// passes `flagged: false` for. It marks that split by WEIGHT, as the focused-workspace icon does,
-    /// because `.fill` on a `*.rectangle` symbol fills the frame and erases the arrow inside it. The axis
-    /// is not distinguished — no remote-looking symbol family carries both arrangements.
+    /// because `.fill` is what every other row icon spends on FLAGGED, so a filled cloud would read as a
+    /// flag. The axis is not distinguished — no cloud symbol carries both arrangements.
     private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool, remote: Bool) -> NSImage? {
         if remote { return split ? remoteSplitSessionIcon : remoteSessionIcon }
         switch (split, axis, flagged) {

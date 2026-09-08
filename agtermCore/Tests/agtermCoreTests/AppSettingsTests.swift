@@ -643,6 +643,15 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func remoteHostIsADistinctTitleBarInterfaceElement() {
+        #expect(InterfaceElement.remoteHost.section == .titleBar)
+        #expect(InterfaceElement.remoteHost.displayName == "Remote host")
+        let hidden = AppSettings(hiddenInterfaceElements: ["remoteHost"])
+        #expect(hidden.isInterfaceElementHidden(.remoteHost))
+        #expect(!hidden.isInterfaceElementHidden(.sessionName))
+        #expect(!AppSettings(hiddenInterfaceElements: ["sessionName"]).isInterfaceElementHidden(.remoteHost))
+    }
+
     @Test func workspaceAddSessionIsADistinctSidebarInterfaceElement() {
         // the workspace-row hover "+", a separate toggle from the footer newSession button.
         #expect(InterfaceElement.workspaceAddSession.section == .sidebar)
