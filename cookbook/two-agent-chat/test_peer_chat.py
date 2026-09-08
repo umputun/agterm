@@ -398,11 +398,64 @@ class SendPreflightTests(unittest.TestCase):
 
         type_body.assert_not_called()
 
-    def test_claude_draft_at_column_two_is_refused(self) -> None:
+    def test_claude_suggestion_at_column_two_allows_send(self) -> None:
+        suggestions = [
+            "Add a regression test for the parser",
+            "Add a regression test\nfor the parser",
+        ]
+        expected = "Chat from Codex: ping"
+        marker = COMPOSER_PROBE_MARKER(expected)
+
+        for suggestion in suggestions:
+            with self.subTest(suggestion=suggestion):
+                type_text = Mock()
+                replacements = {
+                    "pane_text": Mock(
+                        return_value=f"{RULE}\n❯ {suggestion}\n{RULE}"
+                    ),
+                    "cursor_column": Mock(return_value=2),
+                    "type_text": type_text,
+                    "wait_for_composer_change": Mock(
+                        side_effect=[(expected + marker, 37), (expected, 22)]
+                    ),
+                    "composer_state": Mock(return_value=(expected, 22)),
+                    "wait_for_accepted": Mock(return_value=True),
+                }
+
+                with patch.dict(SEND.__globals__, replacements):
+                    self.assertEqual(SEND("session-id", CLAUDE_PROFILE, "ping"), 4)
+
+                self.assertEqual(
+                    type_text.call_args_list,
+                    [
+                        call("session-id", CLAUDE_PROFILE, expected + marker, None),
+                        call("session-id", CLAUDE_PROFILE, "\x7f" * len(marker), None),
+                        call("session-id", CLAUDE_PROFILE, "\n", None),
+                    ],
+                )
+
+    def test_claude_text_past_column_two_is_refused(self) -> None:
         type_body = Mock()
         replacements = {
             "pane_text": Mock(
-                return_value=f"{RULE}\n❯ existing draft\n{RULE}"
+                return_value=f"{RULE}\n❯ Add a regression test for the parser\n{RULE}"
+            ),
+            "cursor_column": Mock(return_value=3),
+            "type_body": type_body,
+        }
+
+        with patch.dict(SEND.__globals__, replacements), self.assertRaisesRegex(
+            PROMPT_BLOCKED, "composer is not confirmably empty; nothing was typed"
+        ):
+            SEND("session-id", CLAUDE_PROFILE, "ping")
+
+        type_body.assert_not_called()
+
+    def test_codex_free_form_text_at_column_two_is_refused(self) -> None:
+        type_body = Mock()
+        replacements = {
+            "pane_text": Mock(
+                return_value=f"» Add a regression test for the parser\n{CODEX_FOOTER}"
             ),
             "cursor_column": Mock(return_value=2),
             "type_body": type_body,
@@ -411,7 +464,7 @@ class SendPreflightTests(unittest.TestCase):
         with patch.dict(SEND.__globals__, replacements), self.assertRaisesRegex(
             PROMPT_BLOCKED, "composer contains text; nothing was typed"
         ):
-            SEND("session-id", CLAUDE_PROFILE, "ping")
+            SEND("session-id", PROFILES["codex"], "ping")
 
         type_body.assert_not_called()
 

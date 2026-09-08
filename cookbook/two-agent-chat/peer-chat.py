@@ -519,7 +519,7 @@ def live_prompt_text(profile: Profile, text: str) -> str | None:
 
 
 def composer_is_empty(profile: Profile, content: str) -> bool:
-    """Recognise the empty input content instead of inferring it from the caret."""
+    """Recognise known empty-input content for cleanup, acceptance and Codex preflight."""
     joined = " ".join(content.splitlines())
     if profile.agent == "codex":
         return joined == CODEX_EMPTY_PROMPT
@@ -956,7 +956,8 @@ def send(
                 "input, a trailing modal or status row, or an unknown prompt glyph); "
                 "nothing was typed"
             )
-        if not composer_is_empty(profile, empty_text):
+        # Claude's free-form suggestions look like drafts in plain screen text.
+        if profile.agent == "codex" and not composer_is_empty(profile, empty_text):
             raise PromptBlocked(
                 "target composer contains text; nothing was typed"
             )

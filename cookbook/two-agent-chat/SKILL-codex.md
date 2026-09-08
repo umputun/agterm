@@ -110,7 +110,8 @@ owed.
 
 ## What you may not do
 
-The only thing you may put into that pane is text in a prompt the script has confirmed is empty.
+The only thing you may put into that pane is text in a prompt the script has checked before typing: a
+recognisable composer with its caret at column 2.
 
 Never answer anything on the user's behalf: not a chooser entry, not a trust prompt, not a
 permission or approval request, not a warning. Those answers carry the user's authority and are his
