@@ -155,7 +155,7 @@ jobs:
         shell: bash
         run: |
           app=build/DerivedData/Build/Products/Release/agterm.app
-          for name in agtermctl zmx; do
+          for name in agtermctl zmx agterm-session-host; do
             helper="$app/Contents/MacOS/$name"
             [ -f "$helper" ] || { echo "$name not found at $helper" >&2; exit 1; }
             codesign --verify --strict "$helper"

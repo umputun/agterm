@@ -128,8 +128,7 @@ targets:
           # Debug alone needs the three hardened-runtime exceptions; see the header of the file.
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-debug.entitlements
     postBuildScripts:
-      # Bundle both helper executables before Xcode's final app seal. agtermctl is built here; setup.sh
-      # stages the pinned zmx binary and license from source.
+      # Build the Swift helpers here; setup.sh stages the pinned zmx binary and license.
       - name: Bundle helper executables
         basedOnDependencyAnalysis: false
         script: |
@@ -142,8 +141,11 @@ targets:
           rm -rf "$CODESIGNING_FOLDER_PATH/Contents/Resources/AppIcon.icon"
           core="$SRCROOT/agtermCore"
           swift build --package-path "$core" -c release --product agtermctl
+          swift build --package-path "$core" -c release --product agterm-session-host
           src="$(swift build --package-path "$core" -c release --product agtermctl --show-bin-path)/agtermctl"
+          host_src="$(dirname "$src")/agterm-session-host"
           cli_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
+          host_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agterm-session-host"
           zmx_src="$SRCROOT/agterm/Resources/zmx/zmx"
           zmx_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/zmx"
           license_src="$SRCROOT/agterm/Resources/zmx/LICENSE"
@@ -152,12 +154,14 @@ targets:
           [ -f "$license_src" ] || { echo "zmx license not found at $license_src" >&2; exit 1; }
           mkdir -p "$(dirname "$cli_dest")" "$(dirname "$license_dest")"
           cp -f "$src" "$cli_dest"
+          cp -f "$host_src" "$host_dest"
           cp -f "$zmx_src" "$zmx_dest"
           cp -f "$license_src" "$license_dest"
           # ad-hoc sign the helpers + re-seal the app (Debug/normal builds). Developer ID signing for
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
           codesign --force --options runtime --sign - "$cli_dest"
+          codesign --force --options runtime --sign - "$host_dest"
           codesign --force --options runtime --sign - "$zmx_dest"
           # re-seal the whole app: this phase can run AFTER Xcode's own code-sign on incremental
           # builds, so adding the helper would otherwise break the seal. --deep because a clean

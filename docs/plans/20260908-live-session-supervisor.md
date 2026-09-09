@@ -324,8 +324,9 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 Implementation notes: the client probes the owner lock but leaves stale socket removal to the host,
 which already removes it only after acquiring its lifetime lock. Startup is bounded to 5 s,
 handshake to 2 s, and the ensure exchange to 12 s for the host's 10 s creation budget. A client
-without a readable terminal size uses 24 rows and 80 columns. Hosted fixtures copy the helper
-built by the package tests into temporary bundles; no additional app dependency is needed.
+without a readable terminal size uses 24 rows and 80 columns. Hosted fixtures initially copied the helper
+built by the package tests; task 7 switches them to the test host bundle. No additional app
+dependency is needed.
 
 Validated: 29 client/host package tests, five isolated hosted client tests, and `make lint`.
 The hosted tests also verify environment, physical cwd and 43×132 terminal size, and assert
@@ -378,19 +379,38 @@ Final process inspection found no fixture hosts, clients or daemons remaining.
 - Modify: `project.yml`
 - Modify: `scripts/release.sh`
 - Modify: `.github/workflows/ci.yml`
+- Modify: `.claude/rules/ci.md`
+- Modify: `.claude/rules/release.md`
+- Modify: `agtermTests/SessionHostClientTests.swift`
+- Modify: `agtermTests/SessionHostSeamTests.swift`
 
-- [ ] build the `agterm-session-host` product beside `agtermctl` in the "Bundle helper executables"
+- [x] build the `agterm-session-host` product beside `agtermctl` in the "Bundle helper executables"
       phase, copy to `Contents/MacOS/agterm-session-host`, codesign `--options runtime`, no entitlements
-- [ ] add the helper to both loops in `scripts/release.sh` that re-sign and check helpers
-- [ ] add the helper to CI's helper entitlement assertion
-- [ ] on a `scripts/build.sh` output, which is ad-hoc signed: verify the runtime flag and no
+- [x] add the helper to both loops in `scripts/release.sh` that re-sign and check helpers
+- [x] add the helper to CI's helper entitlement assertion
+- [x] on a `scripts/build.sh` output, which is ad-hoc signed: verify the runtime flag and no
       entitlements on the helper
-- [ ] produce a release-signed bundle WITHOUT running `scripts/release.sh`, which rewrites plugin
+- [x] produce a release-signed bundle WITHOUT running `scripts/release.sh`, which rewrites plugin
       versions and submits for notarization: build Release in the worktree, then apply the script's own
       inside-out timestamped `codesign` sequence by hand with the Developer ID identity present in the
       keychain; the first signing attempt may pause on keychain authentication, which needs Eugene
-- [ ] on that bundle: verify Developer ID identity, runtime flag, secure timestamp and no entitlements
+- [x] on that bundle: verify Developer ID identity, runtime flag, secure timestamp and no entitlements
       on the helper; task 9 uses this bundle
+
+Validated: `scripts/build.sh` succeeded using the matching staged libghostty and zmx artifacts.
+All three bundled helpers have valid ad-hoc signatures, hardened runtime and no entitlements.
+Both hosted fixture classes now copy the helper from `Bundle.main/Contents/MacOS`; all seven
+tests passed with the old SwiftPM debug helper temporarily moved aside and restored afterwards.
+The package server fixture retains its SwiftPM-built helper. Strict lint, release script syntax
+and whitespace checks passed; no fixture processes remained.
+
+The separate Developer ID signed copy for task 9 is
+`build/session-host-release-task7/agterm.app` in this worktree. Manual inside-out signing used
+`Developer ID Application: Brave Elk LLC (H7K73622CK)` with secure timestamps on every executable.
+All helpers have no entitlements; the outer app has exactly the shipping entitlement set and
+passes `codesign --verify --deep --strict`. No keychain interaction was needed.
+`scripts/release.sh` was not run, and the signed copy was not launched or submitted for notarization.
+Signature evidence: `/tmp/session-host-task7-signatures.log`.
 
 ### Task 8: Tree read-back of attribution, per pane
 

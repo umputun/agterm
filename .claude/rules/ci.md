@@ -19,7 +19,7 @@ paths:
   `coverage`, the only Swift-gated Linux job, downloads it for best-effort Coveralls.
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
 - `build` restores separate revision-keyed caches for libghostty and zmx, including each build stamp,
-  installs xcodegen, runs Release `scripts/build.sh`, asserts both helpers have valid signatures and no
+  installs xcodegen, runs Release `scripts/build.sh`, asserts all helpers have valid signatures and no
   entitlements, then Debug `scripts/test-app.sh`. A zmx pin change does not rebuild libghostty. Keep both
   app builds: Release exercises the whole-module optimizer and its SIL-deserializer failure. Debug provides
   `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not enable testability in the
@@ -28,7 +28,7 @@ paths:
   the built Release app. The first guards issue #396: `--deep` with `--entitlements` stamps the app's TCC
   entitlements onto bundled helpers. `scripts/release.sh` repeats it after its
   Developer ID re-sign, which runs after CI's copy and is not covered by it.
-  The helper check covers both `agtermctl` and zmx and also verifies their signatures. Use
+  The helper check covers `agtermctl`, zmx and `agterm-session-host` and also verifies their signatures. Use
   `codesign -d --entitlements -`; the `:-` spelling is deprecated and warns.
 - The second pins the app's own Release set to the seven TCC keys, so neither a Debug-only hardened-runtime
   exception nor a dropped TCC key can ship. It ignores `com.apple.security.get-task-allow`, which the

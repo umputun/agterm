@@ -105,7 +105,7 @@ final class SessionHostClientTests: XCTestCase {
                            "SHELL": "/bin/sh", "HOME": directory.path, "PATH": "/usr/bin:/bin", "TERM": "xterm-256color", "CLIENT_MARKER": "unique pane value"]
             try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
             let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            try FileManager.default.copyItem(at: repo.appendingPathComponent("agtermCore/.build/debug/agterm-session-host"), to: executable)
+            try FileManager.default.copyItem(at: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/agterm-session-host"), to: executable)
             try FileManager.default.copyItem(at: repo.appendingPathComponent("agterm/Resources/zmx/zmx"), to: zmx)
             let info = ["CFBundleIdentifier": "com.umputun.clienttest.\(UUID().uuidString)", "CFBundleExecutable": "agterm-session-host"]
             try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: bundle.appendingPathComponent("Contents/Info.plist"))

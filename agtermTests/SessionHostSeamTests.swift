@@ -79,7 +79,7 @@ final class SessionHostSeamTests: XCTestCase {
             try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: zdotdir, withIntermediateDirectories: true)
             let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            try FileManager.default.copyItem(at: repo.appendingPathComponent("agtermCore/.build/debug/agterm-session-host"), to: executable)
+            try FileManager.default.copyItem(at: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/agterm-session-host"), to: executable)
             try FileManager.default.copyItem(at: repo.appendingPathComponent("agterm/Resources/zmx/zmx"), to: zmx)
             try FileManager.default.copyItem(at: repo.appendingPathComponent("agterm/Resources/ghostty/shell-integration"), to: resources.appendingPathComponent("shell-integration"))
             let info = ["CFBundleIdentifier": "com.umputun.seamtest.\(UUID().uuidString)", "CFBundleExecutable": "agterm-session-host"]
