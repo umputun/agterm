@@ -28,7 +28,7 @@ final class SurfaceFactorySeedTests: XCTestCase {
     }
 
     private let configuration = ZmxSupport.Configuration(
-        command: "'/bin/zmx' 'attach' 'agterm-pane'",
+        executablePath: "/bin/zmx",
         environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
         daemonName: "agterm-pane",
         socketDirectory: "/tmp/zmx",

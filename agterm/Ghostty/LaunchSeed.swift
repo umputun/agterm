@@ -115,13 +115,12 @@ extension LaunchSeedProvider {
         }
     }
 
-    /// The seed for a view whose session is already gone: a plain shell, or a bare attach for a wrapped
-    /// pane, since the daemon name is the only thing left that can be honored.
+    /// A view whose session is gone can still create its named daemon, without a replay payload.
     private static func unownedSeed(disposition: ZmxLaunch.Disposition) -> LaunchSeed {
         guard case .wrapped(let configuration) = disposition else {
             return LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
         }
-        return LaunchSeed(command: configuration.command, initialInput: nil, waitAfterCommand: false)
+        return LaunchSeed(command: ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []), initialInput: nil, waitAfterCommand: false)
     }
 
     /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell command

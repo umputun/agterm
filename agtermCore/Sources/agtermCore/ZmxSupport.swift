@@ -25,10 +25,11 @@ public enum ZmxSupport {
         public let paneIdentity: UUID
         public let baseEnvironment: [String: String]
         public let inheritedZdotdir: String?
+        public let sessionHostExecutablePath: String?
 
         public init(zmxExecutablePath: String, passwordDatabaseShell: String?, resourcesDirectory: String?,
                     stateDirectory: String, paneIdentity: UUID, baseEnvironment: [String: String],
-                    inheritedZdotdir: String?) {
+                    inheritedZdotdir: String?, sessionHostExecutablePath: String? = nil) {
             self.zmxExecutablePath = zmxExecutablePath
             self.passwordDatabaseShell = passwordDatabaseShell
             self.resourcesDirectory = resourcesDirectory
@@ -36,19 +37,24 @@ public enum ZmxSupport {
             self.paneIdentity = paneIdentity
             self.baseEnvironment = baseEnvironment
             self.inheritedZdotdir = inheritedZdotdir
+            self.sessionHostExecutablePath = sessionHostExecutablePath
         }
     }
 
     public struct Configuration: Equatable, Sendable {
-        public let command: String
+        public let executablePath: String
+        public let sessionHostExecutablePath: String?
+        public var attachArguments: [String] { [executablePath, "attach", daemonName] }
+        public var command: String { CommandRestore.shellQuotedLine(attachArguments) }
         public let environment: [String: String]
         public let daemonName: String
         public let socketDirectory: String
         public let paneID: String
 
-        public init(command: String, environment: [String: String], daemonName: String,
-                    socketDirectory: String, paneID: String) {
-            self.command = command
+        public init(executablePath: String, environment: [String: String], daemonName: String,
+                    socketDirectory: String, paneID: String, sessionHostExecutablePath: String? = nil) {
+            self.executablePath = executablePath
+            self.sessionHostExecutablePath = sessionHostExecutablePath
             self.environment = environment
             self.daemonName = daemonName
             self.socketDirectory = socketDirectory
@@ -108,12 +114,18 @@ public enum ZmxSupport {
         environment["ZMX_SESSION_PREFIX"] = ""
         environment["ZMX_NO_DETACH_KEY"] = "1"
 
+        let host = inputs.sessionHostExecutablePath.flatMap { path -> String? in
+            guard (path as NSString).isAbsolutePath, FileManager.default.isExecutableFile(atPath: path) else { return nil }
+            return URL(fileURLWithPath: path).standardizedFileURL.path
+        }
+
         return .success(Configuration(
-            command: CommandRestore.shellQuotedLine([executable, "attach", daemonName]),
+            executablePath: executable,
             environment: environment,
             daemonName: daemonName,
             socketDirectory: socketDirectory,
-            paneID: paneID
+            paneID: paneID,
+            sessionHostExecutablePath: host
         ))
     }
 
@@ -126,15 +138,24 @@ public enum ZmxSupport {
 
     public static func attachCommand(_ configuration: Configuration, replaying argv: [String]?,
                                      creationCommand: String? = nil, denylist: Set<String>) -> String {
+        var arguments = configuration.attachArguments + creationArguments(configuration, replaying: argv, creationCommand: creationCommand, denylist: denylist)
+        if let host = configuration.sessionHostExecutablePath {
+            arguments = [host, "client", configuration.daemonName, "--"] + arguments
+        }
+        return CommandRestore.shellQuotedLine(arguments)
+    }
+
+    private static func creationArguments(_ configuration: Configuration, replaying argv: [String]?,
+                                          creationCommand: String?, denylist: Set<String>) -> [String] {
         guard let shell = configuration.environment["SHELL"],
               let integrationDirectory = configuration.environment["ZDOTDIR"] else {
-            return configuration.command
+            return []
         }
         let inheritedZdotdir = configuration.environment["GHOSTTY_ZSH_ZDOTDIR"]
         let script: String
         if let argv {
             guard CommandRestore.shouldRestore(argv: argv, denylist: denylist) else {
-                return configuration.command
+                return []
             }
             script = ZmxReplayScript.render(
                 argv: argv, integrationDirectory: integrationDirectory,
@@ -146,9 +167,9 @@ public enum ZmxSupport {
                 inheritedZdotdir: inheritedZdotdir, shell: shell
             )
         } else {
-            return configuration.command
+            return []
         }
-        return configuration.command + " " + CommandRestore.shellQuotedLine([shell, "-lic", script])
+        return [shell, "-lic", script]
     }
 
     public static func socketDirectory(forStateDirectory stateDirectory: String) -> String {

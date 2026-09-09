@@ -46,6 +46,14 @@ enum ZmxLaunch {
         return bundleURL.appendingPathComponent("Contents/MacOS/zmx").path
     }
 
+    static func sessionHostExecutablePath(bundleURL: URL, environment: [String: String],
+                                          allowDebugOverride: Bool) -> String {
+        if allowDebugOverride, let override = environment["AGTERM_SESSION_HOST_PATH"], !override.isEmpty {
+            return override
+        }
+        return bundleURL.appendingPathComponent("Contents/MacOS/agterm-session-host").path
+    }
+
     @MainActor
     static func liveUnavailableReason(
         bundleURL: URL = Bundle.main.bundleURL,
@@ -130,7 +138,9 @@ enum ZmxLaunch {
             stateDirectory: stateDirectory,
             paneIdentity: paneIdentity,
             baseEnvironment: baseEnvironment,
-            inheritedZdotdir: runtime.environment["ZDOTDIR"]
+            inheritedZdotdir: runtime.environment["ZDOTDIR"],
+            sessionHostExecutablePath: sessionHostExecutablePath(bundleURL: runtime.bundleURL, environment: runtime.environment,
+                                                                  allowDebugOverride: runtime.allowDebugOverride)
         ))
     }
 }

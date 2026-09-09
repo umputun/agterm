@@ -3,6 +3,53 @@ import Testing
 @testable import agtermCore
 
 struct ZmxSupportTests {
+    @Test func helperWrapsStructuredReplayWithoutChangingTheScript() {
+        let name = "agterm-pane"
+        let configuration = ZmxSupport.Configuration(executablePath: "/bundle's files/zmx", environment: [
+            "SHELL": "/bin/zsh", "ZDOTDIR": "/bundle resources/zsh", "GHOSTTY_ZSH_ZDOTDIR": "/user/zsh",
+        ], daemonName: name, socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: "/bundle's files/agterm-session-host")
+        let replay = ["printf", "%s", "two words", "single'quote", "$literal"]
+        let script = ZmxReplayScript.render(argv: replay, integrationDirectory: "/bundle resources/zsh", inheritedZdotdir: "/user/zsh", shell: "/bin/zsh")
+        let expected = ["/bundle's files/agterm-session-host", "client", name, "--", "/bundle's files/zmx", "attach", name, "/bin/zsh", "-lic", script]
+        #expect(ZmxSupport.attachCommand(configuration, replaying: replay, creationCommand: "do not run", denylist: []) == CommandRestore.shellQuotedLine(expected))
+    }
+
+    @Test func helperKeepsDurablePayloadAndRefusedReplayPrecedence() {
+        let configuration = ZmxSupport.Configuration(executablePath: "/bundle/zmx", environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
+                                                     daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: "/bundle/host")
+        let prefix = ["/bundle/host", "client", "agterm-pane", "--", "/bundle/zmx", "attach", "agterm-pane"]
+        let line = "printf '%s' 'two words' && echo done"
+        let script = ZmxReplayScript.render(commandLine: line, integrationDirectory: "/bundle/zsh", inheritedZdotdir: nil, shell: "/bin/zsh")
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, creationCommand: line, denylist: []) ==
+                CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", script]))
+        #expect(ZmxSupport.attachCommand(configuration, replaying: ["tmux"], creationCommand: line, denylist: ["tmux"]) == CommandRestore.shellQuotedLine(prefix))
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []) == CommandRestore.shellQuotedLine(prefix))
+    }
+
+    @Test(arguments: [nil, "relative/helper", "/no/such/session-host"])
+    func unavailableHelperKeepsBareAttach(_ helper: String?) throws {
+        let resources = try makeResources(withLoader: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+        let inputs = ZmxSupport.Inputs(zmxExecutablePath: "/bin/echo", passwordDatabaseShell: "/bin/zsh", resourcesDirectory: resources.path,
+                                      stateDirectory: "/tmp/task6", paneIdentity: UUID(), baseEnvironment: [:], inheritedZdotdir: nil,
+                                      sessionHostExecutablePath: helper)
+        let configuration = try #require(ZmxSupport.configuration(for: inputs).value)
+        #expect(configuration.sessionHostExecutablePath == nil)
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []) == configuration.command)
+    }
+
+    @Test func availableHelperIsCarriedFromInputsIntoTheCommand() throws {
+        let resources = try makeResources(withLoader: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+        let inputs = ZmxSupport.Inputs(zmxExecutablePath: "/bin/echo", passwordDatabaseShell: "/bin/zsh", resourcesDirectory: resources.path,
+                                      stateDirectory: "/tmp/task6", paneIdentity: UUID(), baseEnvironment: [:], inheritedZdotdir: nil,
+                                      sessionHostExecutablePath: "/bin/cat")
+        let configuration = try #require(ZmxSupport.configuration(for: inputs).value)
+        #expect(configuration.sessionHostExecutablePath == "/bin/cat")
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []) ==
+                CommandRestore.shellQuotedLine(["/bin/cat", "client", configuration.daemonName, "--", "/bin/echo", "attach", configuration.daemonName]))
+    }
+
     @Test func configurationUsesPasswordDatabaseZshAndFullPaneIdentity() throws {
         let resources = try makeResources(withLoader: true)
         defer { try? FileManager.default.removeItem(at: resources) }
@@ -109,7 +156,7 @@ struct ZmxSupportTests {
 
     @Test func launchDispositionKeepsLiveFallbackStateUnconsumed() {
         let configuration = ZmxSupport.Configuration(
-            command: "zmx attach session", environment: [:], daemonName: "session",
+            executablePath: "zmx", environment: [:], daemonName: "session",
             socketDirectory: "/tmp/zmx", paneID: "pane")
 
         #expect(ZmxSupport.launchDisposition(requested: .rerun, active: .rerun,
@@ -196,7 +243,7 @@ struct ZmxSupportTests {
 
     private func replayConfiguration() -> ZmxSupport.Configuration {
         .init(
-            command: "'/bin/zmx' 'attach' 'agterm-pane'",
+            executablePath: "/bin/zmx",
             environment: [
                 "SHELL": "/bin/zsh",
                 "ZDOTDIR": "/bundle resources/zsh",

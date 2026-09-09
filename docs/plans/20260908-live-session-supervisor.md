@@ -78,7 +78,7 @@ reported as such on the tree.
   responsible pid rather than assuming it equals its pid.
 - **differential test** for the client seam: environment, cwd, initial pty size and login-shell
   behavior of a pane started through the client versus today's bare `zmx attach`, including a custom
-  `ZDOTDIR`, must match
+  `ZDOTDIR`, must match; runtime-generated differences are measured and bounded in task 6
 - no XCUITest: nothing here is chrome
 
 ## Progress Tracking
@@ -102,8 +102,8 @@ execs plain `zmx attach <name>`, joining the daemon    │ poll `zmx list` for t
 Decisions, each answering a review finding:
 
 - **The client is the pane command; agterm never waits.** Waiting happens inside the pane after
-  libghostty has composed the environment, so the UI never blocks and the daemon gets exactly the
-  environment, cwd and winsize the pane itself has. `ZmxSupport` renders the pane command from a
+  libghostty has composed the environment, so the UI never blocks and the daemon gets the
+  environment, cwd and winsize captured by the client (see task 6 for the Foundation cache exception). `ZmxSupport` renders the pane command from a
   structured argv, never by splitting a rendered string; the `-lic` replay script and its creation-only
   semantics are preserved as the trailing argv the host uses for creation.
 - **Ensure is idempotent and host-side.** The host answers `existing` for a daemon already in
@@ -338,17 +338,39 @@ that fixture hosts exit during cleanup.
 - Modify: `agterm/Ghostty/ZmxLaunch.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ZmxSupportTests.swift`
 - Modify: `agtermTests/ZmxLaunchTests.swift`
+- Modify: `agtermTests/LaunchSeedTests.swift` (configuration initializer)
+- Modify: `agtermTests/SurfaceFactorySeedTests.swift` (configuration initializer)
+- Create: `agtermTests/SessionHostSeamTests.swift`
 
-- [ ] write failing tests that `ZmxSupport.attachCommand` renders `<helper> client <name> -- <zmx> attach
+- [x] write failing tests that `ZmxSupport.attachCommand` renders `<helper> client <name> -- <zmx> attach
       <name> [shell -lic script]` from a structured argv, preserving the replay script and the
       creation-only payload exactly as today
-- [ ] write a failing test that with the helper absent from the bundle the rendered command is today's
+- [x] write a failing test that with the helper absent from the bundle the rendered command is today's
       bare attach, and that a Re-run launch never renders the client at all
-- [ ] implement: structured attach argv, helper path resolution beside `ZmxLaunch.executablePath` with
+- [x] implement: structured attach argv, helper path resolution beside `ZmxLaunch.executablePath` with
       the same `AGTERM_*_PATH` Debug override, rendering through `shellQuotedLine`
-- [ ] write the differential hosted test: environment, cwd, initial winsize and login-shell behavior
+- [x] write the differential hosted test: environment, cwd, initial winsize and login-shell behavior
       of a pane through the client versus bare attach, with a custom `ZDOTDIR`
-- [ ] run the touched classes - must pass before task 7
+- [x] run the touched classes - must pass before task 7
+
+Implementation notes: `Configuration` now takes `executablePath` instead of a rendered `command`;
+`attachArguments` and the bare `command` are derived from that path and the daemon name.
+`Inputs.sessionHostExecutablePath` defaults to nil, and only an absolute executable helper is
+carried into configuration. `ZmxLaunch` supplies the bundled helper path or the Debug-only
+`AGTERM_SESSION_HOST_PATH` override. No command string is split.
+
+The differential uses real `GhosttySurfaceView` surfaces for plain login shells and creation
+payloads with a custom `ZDOTDIR`. Both arms match on cwd, initial winsize, login/interactive
+options and zsh startup markers. A prestarted host with an older environment receives the
+new pane environment. Full environment comparison excludes per-surface IDs and separately
+checks `__CF_USER_TEXT_ENCODING`: loading Foundation changes its UID field from `0x0` to the
+current UID (`0x1F6` on this machine), while the encoding fields match. A standalone C probe
+reproduced that change using only `dlopen(Foundation)`, before any client logic. This is a
+measured exception to byte-for-byte environment equality, not an omitted comparison.
+
+Validated: 17 `ZmxSupportTests`, 12 `LaunchSeedTests`, 13 `SurfaceFactorySeedTests`,
+12 `ZmxLaunchTests`, two `SessionHostSeamTests`, strict lint and whitespace checks.
+Final process inspection found no fixture hosts, clients or daemons remaining.
 
 ### Task 7: Bundling, signing and release
 

@@ -7,7 +7,7 @@ import agtermCore
 @MainActor
 final class LaunchSeedTests: XCTestCase {
     private let configuration = ZmxSupport.Configuration(
-        command: "'/bin/zmx' 'attach' 'agterm-pane'",
+        executablePath: "/bin/zmx",
         environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
         daemonName: "agterm-pane",
         socketDirectory: "/tmp/zmx",
@@ -90,6 +90,33 @@ final class LaunchSeedTests: XCTestCase {
     }
 
     // MARK: - wrapped
+
+    func testUnownedWrappedPaneUsesAvailableClientWithoutReplayingCreationState() throws {
+        for helper in [nil, "/bundle/agterm-session-host"] as [String?] {
+            let configuration = ZmxSupport.Configuration(
+                executablePath: "/bin/zmx", environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
+                daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: helper)
+            var session: Session? = restoredSession()
+            session?.initialCommand = "echo durable"
+            session?.pendingForegroundCommand = ["echo", "captured"]
+            weak var releasedSession = session
+            let provider = LaunchSeedProvider.pane(
+                session: try XCTUnwrap(session), pane: .left, disposition: .wrapped(configuration),
+                policy: .init(restoreEnabled: true, denylist: [], runningNames: nil))
+            session = nil
+            XCTAssertNil(releasedSession)
+
+            for pane in [StatusPane.left, .right] {
+                let seed = provider.resolve(pane)
+                let expected = if let helper {
+                    CommandRestore.shellQuotedLine([helper, "client", "agterm-pane", "--", "/bin/zmx", "attach", "agterm-pane"])
+                } else { configuration.command }
+                XCTAssertEqual(seed.command, expected)
+                XCTAssertNil(seed.initialInput)
+                XCTAssertFalse(seed.waitAfterCommand)
+            }
+        }
+    }
 
     func testWrappedPacesAnEligibleCaptureAndARestoredDurableCommand() {
         let captured = restoredSession()
