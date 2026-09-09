@@ -66,6 +66,48 @@ final class SessionHostClientTests: XCTestCase {
         XCTAssertNotEqual(host, 2147483647)
     }
 
+    func testClientQueuedBehindStalledPeersStillJoinsTheHost() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.startClient(name: fixture.names[0], terminal: true)
+        _ = try fixture.waitForLeaders(count: 1)
+        let host = try fixture.hostPID()
+        let stalls = [try fixture.connectRaw(), try fixture.connectRaw()]
+        defer { for fd in stalls { close(fd) } }
+        let start = Date()
+        try fixture.startClient(name: fixture.names[1], terminal: true)
+        let roots = try fixture.waitForLeaders(count: 2)
+        XCTAssertGreaterThan(Date().timeIntervalSince(start), 2)
+        XCTAssertEqual(roots, [host, host])
+        XCTAssertEqual(try fixture.hostPID(), host)
+    }
+
+    func testClientWaitingOnSpawnLockJoinsAHostPublishedMeanwhile() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let spawnLock = open(fixture.paths.spawnLock, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        XCTAssertGreaterThanOrEqual(spawnLock, 0)
+        guard spawnLock >= 0 else { return }
+        defer { close(spawnLock) }
+        XCTAssertEqual(flock(spawnLock, LOCK_EX | LOCK_NB), 0)
+        try fixture.startClient(name: fixture.names[0], terminal: true)
+        Thread.sleep(forTimeInterval: 0.5)
+        let host = try Responsibility.system.spawnDisclaimed(
+            executable: fixture.executable.path,
+            argv: [fixture.executable.path, "host", try XCTUnwrap(fixture.environment["ZMX_DIR"])], env: fixture.environment)
+        defer {
+            kill(host, SIGKILL)
+            var status: Int32 = 0
+            _ = waitpid(host, &status, 0)
+        }
+        let roots = try fixture.waitForLeaders(count: 1)
+        XCTAssertEqual(roots, [host])
+        XCTAssertEqual(try fixture.hostPID(), host)
+        XCTAssertEqual(flock(spawnLock, LOCK_UN), 0)
+    }
+
     func testClientCapturesPaneEnvironmentDirectoryAndTerminalSize() throws {
         try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
         let fixture = try Fixture()
@@ -153,6 +195,21 @@ final class SessionHostClientTests: XCTestCase {
         func hostPID() throws -> Int32 {
             let value = try String(contentsOfFile: paths.pidfile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             return try XCTUnwrap(Int32(value))
+        }
+
+        func connectRaw() throws -> Int32 {
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            guard fd >= 0 else { throw POSIXError(.EIO) }
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+            let bytes = paths.socket.utf8CString
+            withUnsafeMutableBytes(of: &address.sun_path) { buffer in bytes.withUnsafeBytes { buffer.copyMemory(from: $0) } }
+            let result = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            }
+            guard result == 0 else { let code = errno; close(fd); throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO) }
+            return fd
         }
 
         func lockInode() throws -> ino_t {

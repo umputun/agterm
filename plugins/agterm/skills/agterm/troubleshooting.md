@@ -202,8 +202,8 @@ Programs run in a session request Automation, Camera, Microphone, Contacts, Cale
 Location, Bluetooth, local network, speech recognition, system administration and system audio recording
 through agterm while macOS attributes them to it. The prompt names agterm and the answer applies to
 programs with that attribution. A dismissed prompt is never re-offered (`osascript` keeps returning
-"Not authorized to send Apple events"). The user changes the answer in System Settings > Privacy & Security
-under the matching service, for example Automation > agterm. This is macOS policy, not an agterm bug: do not file it.
+"Not authorized to send Apple events"). The user changes the answer in System Settings ▸ Privacy & Security
+under the matching service, for example Automation ▸ agterm. This is macOS policy, not an agterm bug: do not file it.
 
 ### "a command cannot read ~/Downloads, ~/Desktop or ~/Documents"
 
@@ -222,8 +222,9 @@ file it.
 
 Use `agtermctl tree --json` to read `liveAttribution` and `splitLiveAttribution`; see the
 [tree field definitions](reference.md#tree). The [App Data diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back)
-covers the permission guidance, including the verified microphone behavior through the production helper
-after restart, the untested App Data expectation, and Full Disk Access for `orphaned` and `app` panes.
+covers the permission guidance: which panes keep agterm's attribution after a relaunch, and Full Disk
+Access for `orphaned` and `app` panes. Needing the consent grant is macOS policy: do not file the consent
+prompt itself as an agterm bug.
 
 ### "The agent-status glyph does not update"
 

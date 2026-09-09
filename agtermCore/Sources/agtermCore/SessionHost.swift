@@ -221,12 +221,6 @@ public enum SessionHost {
                      log: directory.appendingPathComponent("session-host.log").path)
     }
 
-    public static func leaderPid(in listOutput: String, name: String) throws -> Int32? {
-        let matches = try ZmxListParser.parse(listOutput).filter { $0.name == name }
-        guard matches.count == 1, let record = matches.first, record.clients != nil else { return nil }
-        return record.leaderPID
-    }
-
     /// Compares protocol and bundle identity; the runtime must also verify the socket peer.
     public static func handshakeAccepts(local: Hello, remote: Hello) -> Bool {
         guard local.protocolVersion == protocolVersion, remote.protocolVersion == protocolVersion,

@@ -2,17 +2,17 @@ import Darwin
 import SessionHostTrampoline
 
 /// The parent owns these descriptors and must reap `pid`.
-public struct PTYProcess: Sendable {
-    public let pid: Int32
-    public let ptyFD: Int32
-    public let execErrorFD: Int32
+struct PTYProcess: Sendable {
+    let pid: Int32
+    let ptyFD: Int32
+    let execErrorFD: Int32
 
-    public enum SpawnError: Error, Equatable {
+    enum SpawnError: Error, Equatable {
         case invalidArguments
         case systemCall(Int32)
     }
 
-    public static func spawn(argv: [String], env: [String: String], cwd: String, rows: UInt16, cols: UInt16) throws -> PTYProcess {
+    static func spawn(argv: [String], env: [String: String], cwd: String, rows: UInt16, cols: UInt16) throws -> PTYProcess {
         guard !argv.isEmpty, !cwd.utf8.contains(0), argv.allSatisfy({ !$0.utf8.contains(0) }),
               env.allSatisfy({ !$0.key.isEmpty && !$0.key.contains("=") && !$0.key.utf8.contains(0) && !$0.value.utf8.contains(0) })
         else { throw SpawnError.invalidArguments }

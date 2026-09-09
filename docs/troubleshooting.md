@@ -283,10 +283,10 @@ the pane becomes `orphaned`; the same happens to panes whose session host dies. 
 repair this; create a new Live pane to replace it.
 
 For App Data prompts in `orphaned` or `app` panes, grant agterm Full Disk Access under
-System Settings > Privacy & Security > Full Disk Access; the
+System Settings ▸ Privacy & Security ▸ Full Disk Access; the
 [folder-access section](#a-command-cannot-read-downloads-desktop-or-documents) explains the scope of that grant.
 Full Disk Access does not grant the microphone. Its permission is controlled separately under
-System Settings > Privacy & Security > Microphone.
+System Settings ▸ Privacy & Security ▸ Microphone.
 
 ## Reporting a problem
 

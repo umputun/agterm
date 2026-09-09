@@ -70,7 +70,7 @@ final class HostEndpoint {
             }
             try hostCheck(bound)
             try hostCheck(chmod(paths.socket, 0o600))
-            try hostCheck(listen(listener, 16))
+            try hostCheck(listen(listener, 128))
             let pidFile = open(paths.pidfile, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
             try hostCheck(pidFile)
             defer { Darwin.close(pidFile) }

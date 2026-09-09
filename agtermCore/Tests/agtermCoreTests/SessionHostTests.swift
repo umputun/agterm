@@ -136,25 +136,6 @@ struct SessionHostTests {
         }
     }
 
-    @Test func readinessFindsOnlyTheExactLiveRecord() throws {
-        let output = "name=agterm-other\tpid=11\tclients=1\n→ name=agterm-test\tpid=42\tclients=0\n"
-        #expect(try SessionHost.leaderPid(in: output, name: "agterm-test") == 42)
-        #expect(try SessionHost.leaderPid(in: output, name: "agterm") == nil)
-        #expect(try SessionHost.leaderPid(in: "name=agterm-test\tclients=0\n", name: "agterm-test") == nil)
-        #expect(try SessionHost.leaderPid(in: "name=agterm-test\tpid=42\terr=TimedOut\n", name: "agterm-test") == nil)
-        #expect(try SessionHost.leaderPid(in: "", name: "agterm-test") == nil)
-        #expect(try SessionHost.leaderPid(in: output + output, name: "agterm-test") == nil)
-    }
-
-    @Test func malformedReadinessOutputIsNotTreatedAsAbsent() {
-        #expect(throws: ZmxListParser.ParseError.self) {
-            try SessionHost.leaderPid(in: "name=agterm-test\tpid=0\tclients=0\n", name: "agterm-test")
-        }
-        #expect(throws: ZmxListParser.ParseError.self) {
-            try SessionHost.leaderPid(in: "name=agterm-test\tpid=42\tclients=0\ninvalid\n", name: "agterm-test")
-        }
-    }
-
     @Test func acknowledgedEnsureUsesPlainAttach() {
         for state in [SessionHost.Ready.State.existing, .created] {
             let outcome = SessionHost.ClientOutcome.decide(phase: .afterDispatch, reply: .ok(.init(state: state, leaderPid: 42)))

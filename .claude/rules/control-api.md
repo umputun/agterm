@@ -757,7 +757,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `window.list` geometry, as `result.width`/`result.height`. Human output is `W H`.
 - Session nodes include foreground/split foreground argv, idle shell basenames, background spec, overlay
   size, pane overlays, split axis, split ratio, split focus, status fields, flag, unseen, restore pins,
-  surfaces, `realized`, `backedByZmx`, and `remoteHost`.
+  surfaces, `realized`, `backedByZmx`, `remoteHost`, and `liveAttribution`/`splitLiveAttribution`.
 - `foregroundShell`/`splitForegroundShell` name the RECOGNIZED shell HOLDING a pane's foreground, present
   exactly when that pane's `foreground` is absent because a shell holds it.
   For a pane that EXISTS, neither field means agterm could not determine the foreground state — a bare nil
@@ -779,6 +779,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `backedByZmx` on a session is true only when every existing primary/split pane is currently backed.
   Primary/split entries in `surfaces` report their own Boolean; scratch and overlays omit it. Older servers
   omit both levels. There is no sidebar indicator.
+- `liveAttribution`/`splitLiveAttribution` report the observed responsibility attribution of a local Live
+  pane's leader process, probed from `sessionLeaderPIDs`: `supervisor`, `app`, `orphaned` or `unknown`,
+  from `SessionHost.classify`. Omitted for a non-Live or remote pane; the split field covers a hidden
+  split. `windows.md` owns the host lifecycle behind them.
 - `realized` reports the MAIN pane's `TerminalSurface.isRealized`, populated host-free in
   `AppStore.controlTree` (no app closure — `isRealized` is on the protocol) and false for an empty slot, so
   only a server predating the field omits it. It exists because `session.new` answers `ok` for a model

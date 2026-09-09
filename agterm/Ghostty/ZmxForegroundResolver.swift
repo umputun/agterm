@@ -51,6 +51,8 @@ final class ZmxForegroundResolver {
         leaderProvider(timeout).map { Snapshot(leaders: $0, leaderProbe: leaderProbe) }
     }
 
+    /// A nil snapshot means the listing failed, and stale leaders are dropped rather than kept so no pane
+    /// reports a foreground from a daemon that may be gone. Accepting either counts as a refresh.
     func acceptLeaderSnapshot(_ snapshot: [String: pid_t]?) {
         leaders = snapshot ?? [:]
         refreshGate.noteLifecycleChange()

@@ -192,6 +192,9 @@ session drag are out of scope.
 - Keep all `responsibility_*` SPI lookups in the `AgtermResponsibility` target.
   If the SPI is unavailable, panes fall back to bare attach.
 - `SessionHostTrampoline` owns the `forkpty` child path through `execve`; no Swift runs there.
+- The host answers one client at a time.
+  A connected client waits up to 30 seconds for its turn before falling back to a bare attach,
+  so a long enough queue of creations still yields an `app` pane.
 - Fresh shells and Re-run never stop a live host.
 
 ## Attachment and cache

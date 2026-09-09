@@ -85,6 +85,5 @@ final class SessionHostAcceptanceTests: XCTestCase {
         let leader = try XCTUnwrap(newLeader)
         XCTAssertNotEqual(leader, oldLeader)
         XCTAssertEqual(Responsibility.system.responsibleProcess(of: leader), host)
-        print("acceptance race pane=\(pane.rawValue) state=\(fixture.directory.path) host=\(host) initialClient=\(initialClient) oldLeader=\(oldLeader) newLeader=\(leader)")
     }
 }

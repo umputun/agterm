@@ -10,12 +10,17 @@ final class ClientConnector {
     private let executable: String
     private let identity: SessionHost.Hello
     private let startupTimeout: TimeInterval
+    private let queueTimeout: TimeInterval
 
-    init(socketDirectory: String, environment: [String: String], startupTimeout: TimeInterval = 5) throws {
+    /// `startupTimeout` bounds finding or starting a host; `queueTimeout` bounds the wait for its hello
+    /// once connected, since the host answers one client at a time and each creation can take seconds.
+    init(socketDirectory: String, environment: [String: String], startupTimeout: TimeInterval = 5,
+         queueTimeout: TimeInterval = 30) throws {
         paths = try SessionHost.paths(socketDirectory: socketDirectory)
         self.socketDirectory = socketDirectory
         self.environment = environment
         self.startupTimeout = startupTimeout
+        self.queueTimeout = queueTimeout
         executable = try HostIdentity.executablePath(pid: getpid())
         identity = try HostIdentity.read(pid: getpid())
     }
@@ -23,13 +28,24 @@ final class ClientConnector {
     func ensureRunning() throws -> any ClientPeer {
         guard Responsibility.system.isAvailable else { throw HostFailure.invalidIdentity }
         let deadline = ProcessInfo.processInfo.systemUptime + startupTimeout
-        if let peer = try connectIfPresent(deadline: deadline) { return peer }
+        let connection = try open(deadline: deadline) ?? startHost(deadline: deadline)
+        return try handshake(connection, deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
+    }
+
+    /// Holds the spawn lock only until a socket is reachable, so the handshake wait never blocks
+    /// other clients from taking the lock, and a waiter joins a host published meanwhile.
+    private func startHost(deadline: TimeInterval) throws -> HostConnection {
         try HostEndpoint.privateDirectory(socketDirectory)
         try HostEndpoint.privateDirectory(URL(fileURLWithPath: paths.socket).deletingLastPathComponent().path)
         let spawnLock = try openLock(paths.spawnLock)
         defer { close(spawnLock) }
-        try takeLock(spawnLock, deadline: deadline)
-        if let peer = try connectIfPresent(deadline: deadline) { return peer }
+        while flock(spawnLock, LOCK_EX | LOCK_NB) != 0 {
+            if errno != EWOULDBLOCK && errno != EINTR { throw HostFailure.system(errno) }
+            if let connection = try open(deadline: deadline) { return connection }
+            guard ProcessInfo.processInfo.systemUptime < deadline else { throw HostFailure.timeout }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        if let connection = try open(deadline: deadline) { return connection }
         let ownerLock = try openLock(paths.ownerLock)
         defer { close(ownerLock) }
         var spawned: Int32?
@@ -37,7 +53,7 @@ final class ClientConnector {
             if let spawned { var status: Int32 = 0; _ = waitpid(spawned, &status, WNOHANG) }
         }
         while ProcessInfo.processInfo.systemUptime < deadline {
-            if let peer = try connectIfPresent(deadline: deadline) { return peer }
+            if let connection = try open(deadline: deadline) { return connection }
             if spawned == nil {
                 if flock(ownerLock, LOCK_EX | LOCK_NB) == 0 {
                     // The host removes its stale endpoint under its own lifetime lock.
@@ -56,7 +72,7 @@ final class ClientConnector {
     }
 
     private func openLock(_ path: String) throws -> Int32 {
-        let fd = open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        let fd = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
         try hostCheck(fd)
         var info = stat()
         guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_uid == geteuid(), fchmod(fd, 0o600) == 0 else {
@@ -66,15 +82,7 @@ final class ClientConnector {
         return fd
     }
 
-    private func takeLock(_ fd: Int32, deadline: TimeInterval) throws {
-        while flock(fd, LOCK_EX | LOCK_NB) != 0 {
-            if errno != EWOULDBLOCK && errno != EINTR { throw HostFailure.system(errno) }
-            guard ProcessInfo.processInfo.systemUptime < deadline else { throw HostFailure.timeout }
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-    }
-
-    private func connectIfPresent(deadline: TimeInterval) throws -> NativeClientPeer? {
+    private func open(deadline: TimeInterval) throws -> HostConnection? {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         try hostCheck(fd)
         var transferred = false
@@ -97,11 +105,17 @@ final class ClientConnector {
             try hostCheck(getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length))
             guard error == 0 else { throw HostFailure.system(error) }
         }
-        let handshakeDeadline = min(deadline, ProcessInfo.processInfo.systemUptime + 2)
-        let peer = try HostIdentity.peer(fd: fd)
+        transferred = true
+        return connection
+    }
+
+    private func handshake(_ connection: HostConnection, deadline: TimeInterval) throws -> NativeClientPeer {
+        var transferred = false
+        defer { if !transferred { close(connection.fd) } }
+        let peer = try HostIdentity.peer(fd: connection.fd)
         guard SessionHost.handshakeAccepts(local: identity, remote: peer) else { throw HostFailure.invalidIdentity }
-        try connection.writeFrame(SessionHost.encodeFrame(SessionHost.Request.hello(identity)), deadline: handshakeDeadline)
-        guard case .hello(let hello) = try connection.readResponse(deadline: handshakeDeadline),
+        try connection.writeFrame(SessionHost.encodeFrame(SessionHost.Request.hello(identity)), deadline: deadline)
+        guard case .hello(let hello) = try connection.readResponse(deadline: deadline),
               SessionHost.handshakeAccepts(local: identity, remote: hello), hello.pid == peer.pid,
               let pid = peer.pid, Responsibility.system.responsibleProcess(of: pid) == pid else { throw HostFailure.invalidIdentity }
         transferred = true

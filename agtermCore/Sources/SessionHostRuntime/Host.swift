@@ -148,9 +148,12 @@ public final class Host {
             var ready = pollfd(fd: endpoint.listener, events: Int16(POLLIN), revents: 0)
             let result = poll(&ready, 1, 100)
             if result == 0 || (result < 0 && errno == EINTR) { continue }
+            if result < 0 && errno == EAGAIN { pause(0.1); continue }
             try hostCheck(result)
             let connection = accept(endpoint.listener, nil, nil)
-            if connection < 0 && (errno == EAGAIN || errno == EINTR) { continue }
+            if connection < 0 && (errno == EAGAIN || errno == EINTR || errno == ECONNABORTED) { continue }
+            // descriptor exhaustion is transient; exiting here would orphan every daemon the host roots.
+            if connection < 0 && (errno == EMFILE || errno == ENFILE) { pause(0.1); continue }
             try hostCheck(connection)
             do { try handleConnection(connection) } catch { Self.log("connection rejected: \(error)") }
         }
