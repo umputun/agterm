@@ -465,19 +465,52 @@ the measured test process responsibility root as its app PID. No fixture process
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] in an isolated Release-signed instance with Live mode: create a pane, tree reads `supervisor`,
+- [x] in an isolated Release-signed instance with Live mode: create a pane, tree reads `supervisor`,
       quit, relaunch, same pane still `supervisor`, a new command in it resolves to the host, and a real
       AVFoundation microphone request from inside it is charged to the app bundle after the restart —
       this is the first grant test of the production helper, not the earlier C fixture
-- [ ] a pane whose daemon predates the host reads `app` this launch and `orphaned` after a restart
-- [ ] a daemon that dies after the launch inventory and before its surface is realized, primary and
+- [x] a pane whose daemon predates the host reads `app` this launch and `orphaned` after a restart
+- [x] a daemon that dies after the launch inventory and before its surface is realized, primary and
       split, is recreated through the host rather than by a bare attach
-- [ ] kill the host while a pane it created stays alive: the pane keeps running, the tree reads
+- [x] kill the host while a pane it created stays alive: the pane keeps running, the tree reads
       `orphaned` for it, and the next new pane gets a replacement host
-- [ ] `AGTERM_UITEST_ENABLE_ZMX` unset spawns no host and no client request
-- [ ] a remote session has no attribution fields and made no host request; `agtermctl zmx tree --json`
+- [x] `AGTERM_UITEST_ENABLE_ZMX` unset spawns no host and no client request
+- [x] a remote session has no attribution fields and made no host request; `agtermctl zmx tree --json`
       on the isolated socket still lists a host-created daemon as attachable
-- [ ] run full suites once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] run full suites once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+
+Acceptance evidence (2026-09-09, HEAD `31200c59`): rebuilt Release and manually signed
+`build/session-host-release-task9/agterm.app` with Developer ID, runtime and secure timestamps.
+No release script, notarization or deployed app was used.
+
+- Main state `/tmp/ag9dolx7a_v`: app `16067` then `19569`, persistent host `16093`.
+  The restored pane stayed `supervisor`; post-restart command `20799` resolved to `16093`.
+  AVFoundation requester `20808` returned `granted=true`. TCC logged its responsible process
+  as the production helper and `AUTHREQ_SUBJECT ... subject=com.umputun.agterm`. The existing
+  allowed bundle row was used; no helper/requester row or new user dialog was needed.
+- Removing host `16093` left the same shell/daemon alive and the old pane `orphaned`.
+  A new pane created replacement host `23501` and read `supervisor`.
+- Legacy state `/tmp/ag9h2jzvk23`: a separately signed helper-absent fixture created a bare
+  daemon under app `24098` and read `app`. After adding the helper and relaunching as
+  `25085`, the same legacy pane read `orphaned`.
+- UI-test state `/tmp/ag9_1tu9tyi`, app `21414`, had the UI-test sentinel but no Live opt-in:
+  no host directory, no wrapper and no attribution fields.
+- Remote state `/tmp/ag9e1maihsm`, app `26824`, used a private local SSH shim pointing at
+  the main fixture's existing daemon. Discovery and the real remote-session creation path
+  ran; the attacher remained live, the source showed two clients, and the remote instance
+  had no host directory or attribution fields. This tests the app boundary, not an external
+  network connection. The isolated `zmx tree --json` offered the host-created source.
+- Added `agtermTests/SessionHostAcceptanceTests.swift`: primary and split surfaces are
+  held at zero size after inventory, their daemon is removed, and realization creates a new
+  leader under the same host. The fixture first releases its original attach client so that
+  an unfinished initial ensure cannot race the new surface and invalidate the experiment.
+- Full gates ran exactly once each: `swift test` passed 3,148 tests; `make test-app` passed
+  606 tests; `make lint` passed. No boxes were blocked or skipped.
+
+All manually launched instances, hosts, daemons and commands were stopped, and a final
+process scan found no acceptance fixtures remaining. Detailed PIDs and saved trees are in
+`/tmp/agt9-record.json`; TCC evidence is `/tmp/agt9-tcc.log`; full gate logs are
+`/tmp/session-host-task9-full-{core,app,lint}.log`.
 
 ### Task 10: Update documentation
 
