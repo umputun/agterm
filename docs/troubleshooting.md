@@ -218,10 +218,12 @@ agterm's code signature carries seven resource-access entitlements: Automation (
 microphone, contacts, calendars, location and photos. agterm never touches any of them itself, and the
 `NSxxxUsageDescription` strings in `Info.plist` say so.
 
-They are there for the programs you run inside a session. macOS treats agterm as the *responsible app* for
-what it spawns, so when a command-line tool asks for the microphone, the request is charged to agterm. This
-is attribution, not inheritance: the entitlement has to sit on agterm precisely because the child does not
-get one of its own. Under hardened runtime, which agterm is signed with, a missing entitlement does not
+They are there for the programs you run inside a session. When macOS attributes a command-line tool to
+agterm, its permission requests are charged to agterm.
+The [Live pane diagnosis below](#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back)
+explains when that attribution can be lost. This is attribution, not inheritance: the entitlement has to
+sit on agterm precisely because the child does not get one of its own. Under hardened runtime, which
+agterm is signed with, a missing entitlement does not
 produce a denial. `tccd` refuses to prompt at all, records nothing, and agterm never appears in the matching
 Privacy pane, so there is no way to approve it by hand either. The tool just fails, with nothing pointing at
 the cause. Ghostty, kitty, iTerm2 and Macterm ship the same seven; WezTerm ships those plus Bluetooth.
@@ -265,27 +267,26 @@ the same wording for both.
 
 ## "agterm would like to access data from other apps" keeps coming back
 
-A command that reaches into another application's data raises a macOS dialog reading "Agterm.app would like
-to access data from other apps" — docker is the usual one. Allow works, and then the same dialog returns,
-sometimes on the very next command.
+macOS App Data consent belongs to a running process and has no separate entry in System Settings.
+If a Live pane loses its responsible process, commands in it can become responsible for themselves and
+repeat the consent request.
 
-This is a third mechanism, separate from both sections above. macOS calls it App Data, and the consent it
-records is held by a running process rather than stored as a setting: it lasts while that process lives and
-is gone once it exits. It is also the one family with no entry of its own in System Settings, so there is
-nothing to switch on ahead of time and nothing to revise afterwards.
+Read `liveAttribution` and `splitLiveAttribution` in `agtermctl tree --json`;
+the [tree reference](https://agterm.com/commands#tree) defines the values.
+A pane marked `supervisor` keeps microphone requests attributed to agterm after you quit and relaunch
+agterm. App Data is expected to behave the same, but has not been checked.
 
-Which process holds the consent decides how often the dialog appears. macOS charges the request to the
-responsible app, normally agterm, so a session the running agterm started is charged to agterm — one dialog
-per launch, then quiet. Live sessions mode is different, because it carries panes across a restart on their
-own daemons: a pane carried over that way was started by an agterm that has since exited, and from then on
-every process in it answers as its own responsible process, including each command it runs. The consent
-belongs to the command, which is a new process every time, so the dialog returns on the next one.
+A pane reads `app` when its daemon was created without the session host, either by an older agterm or
+because the host could not start; it remains attributed to the running agterm. When that agterm quits,
+the pane becomes `orphaned`; the same happens to panes whose session host dies. Commands in an
+`orphaned` pane remain responsible for themselves until the pane is replaced. Restarting agterm does not
+repair this; create a new Live pane to replace it.
 
-Full Disk Access is the only permanent answer. Add agterm under System Settings ▸ Privacy & Security ▸ Full
-Disk Access, which covers App Data as well as the folders above, at the cost that section describes; with it
-on, the App Data request is never made. In Live sessions mode, quitting and relaunching does not help on
-its own, since the same daemons are handed back. A launch in Fresh shells or Re-run commands mode does,
-because every session then starts under the running app.
+For App Data prompts in `orphaned` or `app` panes, grant agterm Full Disk Access under
+System Settings > Privacy & Security > Full Disk Access; the
+[folder-access section](#a-command-cannot-read-downloads-desktop-or-documents) explains the scope of that grant.
+Full Disk Access does not grant the microphone. Its permission is controlled separately under
+System Settings > Privacy & Security > Microphone.
 
 ## Reporting a problem
 

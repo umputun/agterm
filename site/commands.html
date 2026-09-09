@@ -459,6 +459,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">backedByZmx</span> (true only when every existing
                 primary/split pane is currently zmx-backed; each primary/split object in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">liveAttribution</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitLiveAttribution</span> (primary and split pane
+                attribution: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">supervisor</span> identifies the bundled
+                persistent host, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> the running agterm,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">orphaned</span> a self-responsible pane or a confirmed
+                dead responsible process, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> an
+                unavailable reading or an unrelated live responsible process; omitted for non-Live and remote panes;
+                the split field includes hidden splits and is omitted without a split; these describe attribution,
+                not permission grants),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (a second pane exists at all, shown or
                 hidden, omitted when there is none — read this rather than
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> to tell whether a session has a split),

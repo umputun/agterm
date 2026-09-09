@@ -3243,6 +3243,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 state as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">surfaces[].backedByZmx</span>
                 and a session-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">backedByZmx</span>,
                 which is true only when every existing primary or split pane is backed. The sidebar adds no separate indicator.
+                Microphone requests from Live panes created through the supervisor stay attributed to agterm across restarts;
+                see <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back"
+                style="color: #6d82f3">permission troubleshooting</a>.
                 Reattach restores usable text, TUI state, and normal colors, but its synthesized screen does not retain inline images,
                 earlier OSC 133 prompt markers, program-changed palette entries, or hyperlink metadata already attached to cells.
                 New output after reattach behaves normally. In live mode,

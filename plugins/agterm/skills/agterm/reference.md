@@ -123,6 +123,11 @@ nothing here. Poll this after creating a session unattended; `agtermctl tree` al
 `(not realized)`),
 `backedByZmx` (true only when every existing primary/split pane is currently zmx-backed; older servers omit
 it),
+`liveAttribution` and `splitLiveAttribution` (primary and split pane attribution: `supervisor` identifies
+the bundled persistent host, `app` the running agterm, `orphaned` a self-responsible pane or a confirmed
+dead responsible process, and `unknown` an unavailable reading or an unrelated live responsible process;
+omitted for non-Live and remote panes; the split field includes hidden splits and is omitted without a
+split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session, and never present after a relaunch because a remote session is never written to disk),
 `hasSplit` (whether a second pane exists at all, shown or hidden with ⌘D; omitted when there is none —

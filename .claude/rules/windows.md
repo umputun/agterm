@@ -184,6 +184,16 @@ session drag are out of scope.
   agterm, select the non-active window, confirm list marks it active and untargeted session creation lands
   there. XCUITest cannot deactivate without disturbing the user's Space.
 
+## Live session host
+
+- `agterm-session-host` is a persistent responsibility root for Live daemons in one state directory.
+  Reuse it across app restarts; host death leaves its panes orphaned and later panes can start a
+  replacement host.
+- Keep all `responsibility_*` SPI lookups in the `AgtermResponsibility` target.
+  If the SPI is unavailable, panes fall back to bare attach.
+- `SessionHostTrampoline` owns the `forkpty` child path through `execve`; no Swift runs there.
+- Fresh shells and Re-run never stop a live host.
+
 ## Attachment and cache
 
 - `window.new` is not ready when its store becomes open. Its `NSWindow` registers only after store

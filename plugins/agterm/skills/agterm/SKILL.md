@@ -232,6 +232,8 @@ created by a scheduled job overnight stays unrealized until the displays wake an
 Poll this after an unattended create),
 `backedByZmx` (true only when every existing primary/split pane is currently zmx-backed; primary/split
 entries in `surfaces` report their own Boolean, while scratch and overlays omit it),
+`liveAttribution` and `splitLiveAttribution` (local Live pane attribution, including hidden splits;
+[values and omission rules](reference.md#tree)),
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
 session, and never present after a relaunch because a remote session is not persisted),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this

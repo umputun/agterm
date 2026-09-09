@@ -514,16 +514,25 @@ process scan found no acceptance fixtures remaining. Detailed PIDs and saved tre
 
 ### Task 10: Update documentation
 
-- [ ] rewrite the App Data section of `docs/troubleshooting.md`: the loss is process attribution; the
+- [x] rewrite the App Data section of `docs/troubleshooting.md`: the loss is process attribution; the
       supervisor keeps new Live panes attributed to agterm, verified for the microphone; App Data is
       expected to follow but keeps Full Disk Access as the documented remedy for `orphaned` and `app`
       panes until tested; `liveAttribution` on the tree says which panes are which
-- [ ] `git rm docs/backlog/live-session-panes-lose-responsible-app-attribution.md` in the same commit
-- [ ] document the two fields in `site/commands.html` and `plugins/agterm/skills/agterm/`, and add one
+- [x] remove `docs/backlog/live-session-panes-lose-responsible-app-attribution.md` with plain `rm`;
+      Claude stages the deletion in the reviewed commit
+- [x] document the two fields in `site/commands.html` and `plugins/agterm/skills/agterm/`, and add one
       sentence to the Live sessions section of `site/docs.html`
-- [ ] add a `.claude/rules/windows.md` note: host lifecycle, the one-target SPI boundary, the
+- [x] add a `.claude/rules/windows.md` note: host lifecycle, the one-target SPI boundary, the
       no-Swift-after-fork rule, and that Fresh shells and Re-run never stop a live host
 - [ ] move this plan to `docs/plans/completed/`
+      Deferred to finalize; leave this plan in place during task review.
+
+Documentation keeps the verified microphone result and the untested App Data expectation in
+`docs/troubleshooting.md`, with Full Disk Access retained for `orphaned` and `app` panes.
+The installed skill links to that diagnosis; field definitions are mirrored in its reference
+and `site/commands.html`. Validation passed: 11 SkillInstallTests, writing-style lint on added
+prose, HTML tag balance, field/link checks and whitespace checks. No code or installed skill
+copies changed, and the index is empty.
 
 ## Post-Completion
 

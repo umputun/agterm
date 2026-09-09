@@ -200,11 +200,10 @@ posted and the suppressed case under the `NotificationManager` category.
 
 Programs run in a session request Automation, Camera, Microphone, Contacts, Calendars, Reminders, Photos,
 Location, Bluetooth, local network, speech recognition, system administration and system audio recording
-THROUGH agterm: macOS treats agterm as the responsible app, so the prompt names agterm and the answer is
-recorded against agterm, not the tool. One grant then covers every program in every session with no
-further prompt, and a dismissed prompt is never re-offered (`osascript` keeps returning "Not authorized
-to send Apple events"). The user changes the answer in System Settings ▸ Privacy & Security under the
-matching service, e.g. Automation ▸ agterm. This is macOS policy, not an agterm bug: do not file it.
+through agterm while macOS attributes them to it. The prompt names agterm and the answer applies to
+programs with that attribution. A dismissed prompt is never re-offered (`osascript` keeps returning
+"Not authorized to send Apple events"). The user changes the answer in System Settings > Privacy & Security
+under the matching service, for example Automation > agterm. This is macOS policy, not an agterm bug: do not file it.
 
 ### "a command cannot read ~/Downloads, ~/Desktop or ~/Documents"
 
@@ -221,15 +220,10 @@ file it.
 
 ### "agterm would like to access data from other apps, over and over"
 
-macOS App Data, a third mechanism after the two above. The consent is held by a running process rather than
-stored as a setting, and App Data has no entry of its own in System Settings. macOS charges the request to
-the responsible app, so a session the running agterm started costs one prompt per agterm launch. A pane
-carried across a restart by Live sessions mode was started by an agterm that has since exited, and every
-process in it then answers as its own responsible process, so the consent belongs to each command and the
-prompt returns on the next one. Full Disk Access is the only permanent answer and stops the request being
-made at all; in Live sessions mode relaunching does not help on its own, since the same daemons are handed
-back, while a Fresh shells or Re-run commands launch starts every session under the running app. Needing the
-grant is macOS policy: do not file the prompt itself as an agterm bug.
+Use `agtermctl tree --json` to read `liveAttribution` and `splitLiveAttribution`; see the
+[tree field definitions](reference.md#tree). The [App Data diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back)
+covers the permission guidance, including the verified microphone behavior through the production helper
+after restart, the untested App Data expectation, and Full Disk Access for `orphaned` and `app` panes.
 
 ### "The agent-status glyph does not update"
 
