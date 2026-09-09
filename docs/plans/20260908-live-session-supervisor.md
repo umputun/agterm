@@ -120,8 +120,8 @@ Decisions, each answering a review finding:
   forked, with bounded escalation. Re-run mode is unaffected: `wrapsLocally` wraps active Live mode only.
 - **One root owns the endpoint.** The host holds an exclusive `flock` on `session-host.lock` for its
   lifetime, the same pattern as `ControlServer`. A client that cannot connect takes `session-host.spawn.lock`,
-  re-checks, unlinks the SOCKET only when nobody holds the owner lock, spawns the host with disclaim, waits
-  for the handshake, and releases. Lock files are never unlinked, only closed: a waiter holding the old
+  re-checks and probes the owner lock, spawns the host with disclaim only when it is free, waits
+  for the handshake, and releases. The host removes a stale socket after acquiring its lifetime lock. Lock files are never unlinked, only closed: a waiter holding the old
   inode while another client creates and locks a replacement inode would defeat the singleton. Only the
   socket and pidfile are removed, and only by the owner while it still holds its lock. Concurrent clients
   yield one root. A busy socket is never treated as a dead owner, and a stale pidfile never authorizes a
@@ -300,22 +300,36 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 
 **Files:**
 - Create: `agtermCore/Sources/SessionHostRuntime/Client.swift`
+- Create: `agtermCore/Sources/SessionHostRuntime/ClientConnector.swift`
+- Modify: `agtermCore/Sources/SessionHostRuntime/HostSocket.swift`
+- Modify: `agtermCore/Sources/agterm-session-host/main.swift`
+- Create: `agtermCore/Tests/SessionHostRuntimeTests/SessionHostClientTests.swift`
 - Modify: `agtermCore/Tests/SessionHostRuntimeTests/SessionHostServerTests.swift`
 - Create: `agtermTests/SessionHostClientTests.swift`
 
-- [ ] write failing unit tests for `Client.run(name:argv:)` against a fake host: `existing` and
+- [x] write failing unit tests for `Client.run(name:argv:)` against a fake host: `existing` and
       `created` exec plain attach; no host, handshake timeout, handshake declined and `error(before)`
       exec the payload attach without touching the host further; `error(started)`, lost reply and
       post-dispatch deadline exec plain attach after writing the diagnostic line; a fast side-effecting
       creation command runs at most once across a lost reply
-- [ ] write a failing test that the client resolves its own bundle location from the process image with
+- [x] write a failing test that the client resolves its own bundle location from the process image with
       a dash-prefixed `argv[0]`, and that the endpoint comes from the pane's `ZMX_DIR`
-- [ ] write failing hosted tests for ensure-or-spawn in an isolated state dir: no host yields one
+- [x] write failing hosted tests for ensure-or-spawn in an isolated state dir: no host yields one
       disclaimed host; two clients racing yield one host; owner lock held but socket not listening is
       not treated as dead; a stale pidfile with a dead pid never signals anything; the spawned host's
       handshake pid resolves to itself through `responsibleProcess(of:)`
-- [ ] implement the client: capture `environ`, cwd and `TIOCGWINSZ`, ensure host, send, decide, `execve`
-- [ ] run both test classes - must pass before task 6
+- [x] implement the client: capture `environ`, cwd and `TIOCGWINSZ`, ensure host, send, decide, `execve`
+- [x] run both test classes - must pass before task 6
+
+Implementation notes: the client probes the owner lock but leaves stale socket removal to the host,
+which already removes it only after acquiring its lifetime lock. Startup is bounded to 5 s,
+handshake to 2 s, and the ensure exchange to 12 s for the host's 10 s creation budget. A client
+without a readable terminal size uses 24 rows and 80 columns. Hosted fixtures copy the helper
+built by the package tests into temporary bundles; no additional app dependency is needed.
+
+Validated: 29 client/host package tests, five isolated hosted client tests, and `make lint`.
+The hosted tests also verify environment, physical cwd and 43×132 terminal size, and assert
+that fixture hosts exit during cleanup.
 
 ### Task 6: Pane command and the seam in agterm
 

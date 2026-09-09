@@ -91,7 +91,7 @@ final class HostEndpoint {
         if owner >= 0 { Darwin.close(owner); owner = -1 }
     }
 
-    private static func privateDirectory(_ path: String) throws {
+    static func privateDirectory(_ path: String) throws {
         try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         var info = stat()
         guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == geteuid() else { throw HostFailure.invalidRequest }
@@ -112,11 +112,19 @@ final class HostConnection {
     }
 
     func readRequest(deadline: TimeInterval) throws -> SessionHost.Request {
+        try readFrame(SessionHost.Request.self, deadline: deadline)
+    }
+
+    func readResponse(deadline: TimeInterval) throws -> SessionHost.Response {
+        try readFrame(SessionHost.Response.self, deadline: deadline)
+    }
+
+    private func readFrame<Value: Decodable>(_ type: Value.Type, deadline: TimeInterval) throws -> Value {
         while true {
             if let newline = buffered.firstIndex(of: 0x0A) {
                 let frame = Data(buffered[...newline])
                 buffered.removeSubrange(...newline)
-                return try SessionHost.decodeFrame(SessionHost.Request.self, from: frame)
+                return try SessionHost.decodeFrame(type, from: frame)
             }
             guard buffered.count < SessionHost.maximumFrameBytes else { throw SessionHost.Rejection.frameTooLarge }
             try hostWait(fd, events: Int16(POLLIN), deadline: deadline)
@@ -129,7 +137,10 @@ final class HostConnection {
     }
 
     func writeResponse(_ response: SessionHost.Response, deadline: TimeInterval) throws {
-        let frame = try SessionHost.encodeFrame(response)
+        try writeFrame(SessionHost.encodeFrame(response), deadline: deadline)
+    }
+
+    func writeFrame(_ frame: Data, deadline: TimeInterval) throws {
         var offset = 0
         while offset < frame.count {
             try hostWait(fd, events: Int16(POLLOUT), deadline: deadline)

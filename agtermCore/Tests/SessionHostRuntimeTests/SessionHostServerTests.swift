@@ -171,6 +171,45 @@ struct SessionHostServerTests {
         #expect(try String(contentsOf: marker, encoding: .utf8) == "x")
     }
 
+    @Test func lostReplyAfterFastCommandDoesNotRunItsPayloadAgain() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let marker = directory.appendingPathComponent("count")
+        let context = try Context(realClock: true)
+        let command = ["/bin/sh", "-c", "printf x >> \"$1\"", "probe", marker.path]
+        context.backend.spawnOverride = { _ in
+            NativeHostChild(try PTYProcess.spawn(argv: command, env: [:], cwd: directory.path, rows: 24, cols: 80))
+        }
+        let request = SessionHost.Ensure(name: context.name, argv: context.request.argv + command, cwd: context.request.cwd,
+                                        env: context.request.env, rows: 24, cols: 80)
+        let peer = LostReplyPeer(host: context.host)
+        var events: [String] = []
+        let client = Client(connect: { peer }, diagnostic: { events.append($0) }, execute: { argv, _ in
+            events.append("attach")
+            #expect(argv == context.request.argv)
+            if argv.count > 3 {
+                let duplicate = NativeHostChild(try PTYProcess.spawn(argv: Array(argv.dropFirst(3)), env: [:], cwd: directory.path, rows: 24, cols: 80))
+                defer { try? duplicate.terminate(grace: 0.1) }
+                while duplicate.poll() == .running { Thread.sleep(forTimeInterval: 0.01) }
+            }
+        })
+        try client.run(request: request)
+        #expect(try String(contentsOf: marker, encoding: .utf8) == "x")
+        #expect(context.backend.spawns == 1)
+        #expect(events == [SessionHost.ClientOutcome.uncertain.diagnostic!, "attach"])
+    }
+
+    private final class LostReplyPeer: ClientPeer {
+        let host: SessionHostRuntime.Host
+        init(host: SessionHostRuntime.Host) { self.host = host }
+        func send(_ frame: Data, deadline: TimeInterval) throws {
+            guard case .ensure(let request) = try SessionHost.decodeFrame(SessionHost.Request.self, from: frame) else { throw HostFailure.invalidRequest }
+            _ = host.handle(ensure: request)
+        }
+        func receive(deadline: TimeInterval) throws -> SessionHost.Response { throw HostFailure.disconnected }
+        func close() {}
+    }
+
     @Test func descriptorPreparationFailureRetainsTheChildForCleanup() throws {
         let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: "/tmp", rows: 24, cols: 80)
         defer { close(process.ptyFD) }
