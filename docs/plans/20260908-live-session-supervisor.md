@@ -204,21 +204,21 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 - Create: `agtermCore/Sources/agtermCore/SessionHost.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/SessionHostTests.swift`
 
-- [ ] write failing tests for `hello`, `ensure`, `ok` and `error` round-tripping through JSON, including
+- [x] write failing tests for `hello`, `ensure`, `ok` and `error` round-tripping through JSON, including
       argv with spaces, an env value with a newline, and an oversized frame rejected at the 64 KiB cap
-- [ ] write failing tests for `SessionHost.paths(socketDirectory:)` (socket, owner lock, spawn lock,
+- [x] write failing tests for `SessionHost.paths(socketDirectory:)` (socket, owner lock, spawn lock,
       pidfile, log) and the 104-byte socket-path limit surfacing as a `Rejection`
-- [ ] write failing tests for `SessionHost.leaderPid(in:name:)` over `ZmxListParser`: present with pid,
+- [x] write failing tests for `SessionHost.leaderPid(in:name:)` over `ZmxListParser`: present with pid,
       present without, absent, unparseable
-- [ ] write failing tests for `SessionHost.ClientOutcome.decide(phase:reply:)`: `existing` and
+- [x] write failing tests for `SessionHost.ClientOutcome.decide(phase:reply:)`: `existing` and
       `created` yield plain attach; no host, handshake timeout, handshake declined and
       `error.stage == before` yield full attach with payload; `error.stage == started`, a lost reply and
       a deadline after dispatch yield plain attach plus the diagnostic line
-- [ ] write failing tests for `SessionHost.handshakeAccepts(local:remote:)`: same bundle id, canonical
+- [x] write failing tests for `SessionHost.handshakeAccepts(local:remote:)`: same bundle id, canonical
       location and protocol accepts, including a different app version; other bundle id, other location
       (a `/tmp` versus `/private/tmp` pair canonicalizes to the same and accepts), or a newer protocol
       declines
-- [ ] implement to make them pass; run `swift test --filter SessionHostTests` - must pass before task 2
+- [x] implement to make them pass; run `swift test --filter SessionHostTests` - must pass before task 2
 
 ### Task 2: Darwin-only responsibility SPI target
 
@@ -335,8 +335,12 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 - [ ] add the helper to CI's helper entitlement assertion
 - [ ] on a `scripts/build.sh` output, which is ad-hoc signed: verify the runtime flag and no
       entitlements on the helper
-- [ ] on a `scripts/release.sh` output: verify Developer ID identity, runtime flag, secure timestamp
-      and no entitlements on the helper, since only that path produces the notarizable artifact
+- [ ] produce a release-signed bundle WITHOUT running `scripts/release.sh`, which rewrites plugin
+      versions and submits for notarization: build Release in the worktree, then apply the script's own
+      inside-out timestamped `codesign` sequence by hand with the Developer ID identity present in the
+      keychain; the first signing attempt may pause on keychain authentication, which needs Eugene
+- [ ] on that bundle: verify Developer ID identity, runtime flag, secure timestamp and no entitlements
+      on the helper; task 9 uses this bundle
 
 ### Task 8: Tree read-back of attribution, per pane
 
