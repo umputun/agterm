@@ -161,11 +161,13 @@ Package layout in `agtermCore`:
   `responsibility_spawnattrs_setdisclaim` and `responsibility_get_pid_responsible_for_pid`,
   `isAvailable`, `spawnDisclaimed(executable:argv:env:)`, `responsibleProcess(of:)`. Products for both
   the app and the helper. Compiles to a stub with `isAvailable == false` on non-Darwin.
-- `SessionHostTrampoline` — C target: `sh_forkpty_exec(argv, envp, cwd, winsize, &master) -> pid`,
-  the only code that runs between `forkpty` and `execve`.
+- `SessionHostTrampoline` — C target: `sh_forkpty_exec(argv, envp, cwd, winsize, &master, &execError) -> pid`,
+  the only code that runs between `forkpty` and `execve`. The parent polls `execError` for a native errno
+  from a child setup/exec failure; EOF alone does not establish daemon readiness.
 - `SessionHostRuntime` — Darwin-only library target holding the host and client logic, sockets, locks
   and pty handling, depending on `agtermCore` for the protocol and `ZmxListParser` and on the two targets
   above; this is what the tests import, since `agtermCoreTests` depends on `agtermCore` alone.
+  `PTYProcess` prepares C buffers before the trampoline and returns the PID and two owned descriptors.
 - `agterm-session-host` — thin Swift executable over `SessionHostRuntime`: `host <socketDir>` and
   `client <name> -- <argv>` modes.
 - Every Darwin-only target, dependency and entry point is conditional in `Package.swift`, so the
@@ -242,18 +244,20 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 **Files:**
 - Create: `agtermCore/Sources/SessionHostTrampoline/include/trampoline.h`
 - Create: `agtermCore/Sources/SessionHostTrampoline/trampoline.c`
+- Create: `agtermCore/Sources/SessionHostRuntime/PTYProcess.swift`
 - Modify: `agtermCore/Package.swift`
 - Create: `agtermCore/Tests/SessionHostRuntimeTests/SessionHostTrampolineTests.swift`
 
-- [ ] add the Darwin-only `SessionHostTrampoline` C target, the Darwin-only `SessionHostRuntime`
+- [x] add the Darwin-only `SessionHostTrampoline` C target, the Darwin-only `SessionHostRuntime`
       library target depending on it, `AgtermResponsibility` and `agtermCore`, and a Darwin-only
       `SessionHostRuntimeTests` test target depending on `SessionHostRuntime`; all conditional so the
       Linux consumer and the existing `agtermCoreTests` path are unchanged
 
-- [ ] write failing tests: exec of `/bin/echo` with a given env and cwd reproduces both on the pty;
+- [x] write failing tests: exec of `/bin/echo` with a given env and cwd reproduces both on the pty;
       a missing executable returns a failure the parent can read; winsize is applied before exec
-- [ ] implement `sh_forkpty_exec`: `forkpty`, `chdir`, `execve`, `_exit(127)`; no allocation after fork
-- [ ] run `swift test --filter SessionHostTrampolineTests` - must pass before task 4
+- [x] implement `sh_forkpty_exec`: `forkpty`, `chdir`, `execve`, `_exit(127)`; no allocation after fork;
+      return close-on-exec PTY/error descriptors so the parent can poll setup failures without blocking
+- [x] run `swift test --filter SessionHostTrampolineTests` - must pass before task 4
 
 ### Task 4: The host mode
 

@@ -29,3 +29,11 @@ let package = Package(
     ],
     swiftLanguageModes: [.v6]
 )
+
+#if os(macOS)
+package.targets += [
+    .target(name: "SessionHostTrampoline"),
+    .target(name: "SessionHostRuntime", dependencies: ["SessionHostTrampoline", "AgtermResponsibility", "agtermCore"]),
+    .testTarget(name: "SessionHostRuntimeTests", dependencies: ["SessionHostRuntime"]),
+]
+#endif
