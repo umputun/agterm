@@ -220,6 +220,10 @@ jobs:
             diff <(echo "$expected") <(echo "$debug") >&2 || true
             exit 1
           fi
+      # ZmxSupport requires a zsh password-database shell. Configure the disposable runner so the
+      # plain-shell seam test runs.
+      - name: Give the runner account a zsh login shell
+        run: sudo dscl . -create "/Users/$(id -un)" UserShell /bin/zsh
       - name: Application-hosted unit tests
         run: scripts/test-app.sh
 

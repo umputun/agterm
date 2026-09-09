@@ -16,6 +16,17 @@ final class SessionHostSeamTests: XCTestCase {
         try assertMatchingPanes(creationPayload: false)
     }
 
+    func testEncodingFieldsCompareByValueNotSpelling() throws {
+        XCTAssertEqual(try numericEncoding("0"), try numericEncoding("0x0"))
+        XCTAssertEqual(try numericEncoding("16"), try numericEncoding("0x10"))
+        XCTAssertEqual(try numericEncoding("501"), 501)
+    }
+
+    private func numericEncoding(_ value: Substring) throws -> UInt32 {
+        let hex = value.hasPrefix("0x")
+        return try XCTUnwrap(UInt32(hex ? value.dropFirst(2) : value, radix: hex ? 16 : 10))
+    }
+
     private func assertMatchingPanes(creationPayload: Bool) throws {
         try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
         let fixture = try Fixture()
@@ -41,10 +52,6 @@ final class SessionHostSeamTests: XCTestCase {
         let mediatedEncoding = try XCTUnwrap(mediated.environment["__CF_USER_TEXT_ENCODING"]).split(separator: ":")
         XCTAssertEqual(bareEncoding.count, 3)
         XCTAssertEqual(mediatedEncoding.count, 3)
-        let numericEncoding = { (value: Substring) throws -> UInt32 in
-            let hex = value.hasPrefix("0x")
-            return try XCTUnwrap(UInt32(hex ? value.dropFirst(2) : value, radix: hex ? 16 : 10))
-        }
         XCTAssertEqual(try bareEncoding.dropFirst().map(numericEncoding), try mediatedEncoding.dropFirst().map(numericEncoding))
         // Foundation refreshes the UID in this cache when the Swift client loads.
         XCTAssertEqual(mediatedEncoding.first.map { UInt32($0.dropFirst(2), radix: 16) }, getuid())
