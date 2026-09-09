@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "agtermCore", targets: ["agtermCore"]),
+        .library(name: "AgtermResponsibility", targets: ["AgtermResponsibility"]),
         .executable(name: "agtermctl", targets: ["agtermctl"]),
     ],
     dependencies: [
@@ -14,6 +15,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "agtermCore", dependencies: [.product(name: "TOMLDecoder", package: "TOMLDecoder")]),
+        .target(name: "AgtermResponsibility"),
         .testTarget(name: "agtermCoreTests", dependencies: ["agtermCore"]),
         .target(
             name: "agtermctlKit",

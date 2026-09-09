@@ -227,15 +227,15 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 - Modify: `agtermCore/Package.swift`
 - Create: `agtermTests/ResponsibilitySPITests.swift`
 
-- [ ] add the `AgtermResponsibility` library target and product; on non-Darwin it compiles to
+- [x] add the `AgtermResponsibility` library target and product; on non-Darwin it compiles to
       `isAvailable == false`
-- [ ] write a failing hosted test that reads the test host's own responsible pid, spawns `/bin/sleep`
+- [x] write a failing hosted test that reads the test host's own responsible pid, spawns `/bin/sleep`
       plain and disclaimed, and asserts plain resolves to that pid while disclaimed resolves to itself;
       skip when `isAvailable` is false, FAIL on any other outcome
-- [ ] write a failing test that a missing symbol makes `spawnDisclaimed` throw `.unavailable` rather
+- [x] write a failing test that a missing symbol makes `spawnDisclaimed` throw `.unavailable` rather
       than spawn without the attribute
-- [ ] implement `dlsym` lookups, `spawnDisclaimed` via `posix_spawn`, and `responsibleProcess(of:)`
-- [ ] run `make test-app` scoped to `agtermTests/ResponsibilitySPITests` - must pass before task 3
+- [x] implement `dlsym` lookups, `spawnDisclaimed` via `posix_spawn`, and `responsibleProcess(of:)`
+- [x] run `make test-app` scoped to `agtermTests/ResponsibilitySPITests` - must pass before task 3
 
 ### Task 3: C fork/exec trampoline and the runtime test target
 

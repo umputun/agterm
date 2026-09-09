@@ -171,6 +171,8 @@ targets:
       - framework: GhosttyKit.xcframework
         embed: false
       - package: agtermCore
+      - package: agtermCore
+        product: AgtermResponsibility
       - sdk: AppKit.framework
       # libghostty calls Text Input Source Services (TISCopyCurrentKeyboard…)
       # which live in Carbon; required to link the prebuilt xcframework.
