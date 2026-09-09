@@ -11,6 +11,8 @@ final class SessionHostSeamTests: XCTestCase {
     }
 
     func testClientAndBareAttachMatchForPlainLoginShellWithCustomZdotdir() throws {
+        try XCTSkipUnless(ZmxLaunch.passwordDatabaseLoginShell().map(CommandRestore.basename) == "zsh",
+                          "The password-database login shell must be zsh")
         try assertMatchingPanes(creationPayload: false)
     }
 
@@ -39,7 +41,11 @@ final class SessionHostSeamTests: XCTestCase {
         let mediatedEncoding = try XCTUnwrap(mediated.environment["__CF_USER_TEXT_ENCODING"]).split(separator: ":")
         XCTAssertEqual(bareEncoding.count, 3)
         XCTAssertEqual(mediatedEncoding.count, 3)
-        XCTAssertEqual(bareEncoding.dropFirst(), mediatedEncoding.dropFirst())
+        let numericEncoding = { (value: Substring) throws -> UInt32 in
+            let hex = value.hasPrefix("0x")
+            return try XCTUnwrap(UInt32(hex ? value.dropFirst(2) : value, radix: hex ? 16 : 10))
+        }
+        XCTAssertEqual(try bareEncoding.dropFirst().map(numericEncoding), try mediatedEncoding.dropFirst().map(numericEncoding))
         // Foundation refreshes the UID in this cache when the Swift client loads.
         XCTAssertEqual(mediatedEncoding.first.map { UInt32($0.dropFirst(2), radix: 16) }, getuid())
         XCTAssertEqual(mediated.environment["SEAM_VALUE"], "two words; $literal 'quote'")
