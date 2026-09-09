@@ -31,9 +31,11 @@ let package = Package(
 )
 
 #if os(macOS)
+package.products.append(.executable(name: "agterm-session-host", targets: ["agterm-session-host"]))
 package.targets += [
     .target(name: "SessionHostTrampoline"),
     .target(name: "SessionHostRuntime", dependencies: ["SessionHostTrampoline", "AgtermResponsibility", "agtermCore"]),
-    .testTarget(name: "SessionHostRuntimeTests", dependencies: ["SessionHostRuntime"]),
+    .executableTarget(name: "agterm-session-host", dependencies: ["SessionHostRuntime"]),
+    .testTarget(name: "SessionHostRuntimeTests", dependencies: ["SessionHostRuntime", "agterm-session-host"]),
 ]
 #endif

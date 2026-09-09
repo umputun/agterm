@@ -83,6 +83,7 @@ public enum SessionHost {
     public enum Request: Codable, Equatable, Sendable {
         case hello(Hello)
         case ensure(Ensure)
+        case stop
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: MessageKey.self)
@@ -90,6 +91,9 @@ public enum SessionHost {
             switch container.allKeys.first {
             case .hello: self = .hello(try container.decode(Hello.self, forKey: .hello))
             case .ensure: self = .ensure(try container.decode(Ensure.self, forKey: .ensure))
+            case .stop:
+                _ = try container.decode(Empty.self, forKey: .stop)
+                self = .stop
             default: throw Rejection.invalidMessage
             }
         }
@@ -99,6 +103,7 @@ public enum SessionHost {
             switch self {
             case .hello(let hello): try container.encode(hello, forKey: .hello)
             case .ensure(let ensure): try container.encode(ensure, forKey: .ensure)
+            case .stop: try container.encode(Empty(), forKey: .stop)
             }
         }
     }
@@ -107,6 +112,7 @@ public enum SessionHost {
         case hello(Hello)
         case ok(Ready)
         case error(Failure)
+        case stopped
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: MessageKey.self)
@@ -115,6 +121,9 @@ public enum SessionHost {
             case .hello: self = .hello(try container.decode(Hello.self, forKey: .hello))
             case .ok: self = .ok(try container.decode(Ready.self, forKey: .ok))
             case .error: self = .error(try container.decode(Failure.self, forKey: .error))
+            case .stopped:
+                _ = try container.decode(Empty.self, forKey: .stopped)
+                self = .stopped
             default: throw Rejection.invalidMessage
             }
         }
@@ -125,6 +134,7 @@ public enum SessionHost {
             case .hello(let hello): try container.encode(hello, forKey: .hello)
             case .ok(let ready): try container.encode(ready, forKey: .ok)
             case .error(let failure): try container.encode(failure, forKey: .error)
+            case .stopped: try container.encode(Empty(), forKey: .stopped)
             }
         }
     }
@@ -155,7 +165,7 @@ public enum SessionHost {
             switch reply {
             case .ok: return .plainAttach
             case .error(let failure): return failure.stage == .before ? .fullAttach : .uncertain
-            case .hello, nil: return phase == .beforeDispatch ? .fullAttach : .uncertain
+            case .hello, .stopped, nil: return phase == .beforeDispatch ? .fullAttach : .uncertain
             }
         }
     }
@@ -177,7 +187,7 @@ public enum SessionHost {
 
     public static func paths(socketDirectory: String) throws -> Paths {
         guard (socketDirectory as NSString).isAbsolutePath else { throw Rejection.invalidSocketDirectory }
-        let directory = URL(fileURLWithPath: socketDirectory, isDirectory: true)
+        let directory = URL(fileURLWithPath: socketDirectory, isDirectory: true).appendingPathComponent("session-host", isDirectory: true)
         let socket = directory.appendingPathComponent("session-host.sock").path
         // Darwin's sun_path reserves one of its 104 bytes for the terminating NUL.
         guard socket.utf8.count < 104 else { throw Rejection.socketPathTooLong }
@@ -208,6 +218,8 @@ public enum SessionHost {
     }
 
     private enum MessageKey: String, CodingKey {
-        case hello, ensure, ok, error
+        case hello, ensure, ok, error, stop, stopped
     }
+
+    private struct Empty: Codable {}
 }

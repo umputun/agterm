@@ -143,6 +143,9 @@ Decisions, each answering a review finding:
   write and overall deadlines on both sides; readiness polls `zmx list` every 100 ms up to a bounded
   deadline while draining the temporary pty and having passed the pane's winsize. A live leader pid is
   process readiness, not a shell prompt, and is documented as such.
+- **The host has its own subdirectory.** All host files are under `<ZMX_DIR>/session-host/` through
+  `SessionHost.paths`. Stock zmx probes every Unix socket directly in `ZMX_DIR`, so placing the host
+  endpoint there would make readiness and inventory inspect the host as if it were a zmx daemon.
 - **Lifecycle.** One host per state directory. Fresh shells and Re-run launches leave a live host alone;
   killing it would orphan daemons another instance may still be serving. Host death is not repaired:
   a later ensure spawns a fresh host for future daemons and the tree reports the old ones. `stop` exists
@@ -263,28 +266,35 @@ or to a dead pid), `unknown` (lookup failed or SPI absent). Absent for non-Live 
 
 **Files:**
 - Create: `agtermCore/Sources/SessionHostRuntime/Host.swift`
+- Create: `agtermCore/Sources/SessionHostRuntime/HostBackend.swift`
+- Create: `agtermCore/Sources/SessionHostRuntime/HostIdentity.swift`
+- Create: `agtermCore/Sources/SessionHostRuntime/HostSocket.swift`
 - Create: `agtermCore/Sources/agterm-session-host/main.swift`
 - Modify: `agtermCore/Package.swift`
+- Modify: `agtermCore/Sources/agtermCore/SessionHost.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/SessionHostTests.swift`
 - Create: `agtermCore/Tests/SessionHostRuntimeTests/SessionHostServerTests.swift`
 
-- [ ] add the Darwin-only `agterm-session-host` executable target and product as a thin shell over
+- [x] add the Darwin-only `agterm-session-host` executable target and product as a thin shell over
       `SessionHostRuntime`
-- [ ] write failing tests for `Host.handle(ensure:)` with injected spawner and lister: daemon already
+- [x] write failing tests for `Host.handle(ensure:)` with injected spawner and lister: daemon already
       listed yields `existing` with no spawn; leader appears on the second poll yields `created`; leader
       never appears yields `error(started)` after the deadline and terminates only the forked client
       pid with bounded escalation; a client that exits early yields `error(started)`; a fast
       side-effecting creation command that finishes before the poll is reported, not re-run
-- [ ] write failing tests for framing: malformed, oversized, stalled peer past the deadline, disconnect
+      Startup exceptions without proof that execution never began are `started`, not permission to replay.
+- [x] write failing tests for framing: malformed, oversized, stalled peer past the deadline, disconnect
       mid-request; each closes that connection only
-- [ ] write a failing test that `stop` refuses while any rooted daemon is alive, refuses when the
+- [x] write a failing test that `stop` refuses while any rooted daemon is alive, refuses when the
       inventory cannot be read, and otherwise removes socket and pidfile while leaving both lock files
       in place; then a contending client starts a replacement host against the same lock inode
-- [ ] write a failing test that a daemon and shell created through the host hold none of the host's
+      Resolve and verify the shell's zmx parent: the shell may have adopted a different responsibility root.
+- [x] write a failing test that a daemon and shell created through the host hold none of the host's
       descriptors: kill the host, confirm the lock and listener are free, confirm a new host can start
-- [ ] implement: `setsid`, stdio to `/dev/null`, log to `session-host.log`, take the owner `flock`,
+- [x] implement: `setsid`, stdio to `/dev/null`, log to `session-host.log`, take the owner `flock`,
       owner-only socket dir and socket, pidfile, handshake tied to the peer, one request per connection,
       readiness loop draining the temporary pty; every host-private descriptor `FD_CLOEXEC`
-- [ ] run `swift test --filter SessionHostServerTests` - must pass before task 5
+- [x] run `swift test --filter SessionHostServerTests` - must pass before task 5
 
 ### Task 5: The client mode and its ensure-or-spawn
 

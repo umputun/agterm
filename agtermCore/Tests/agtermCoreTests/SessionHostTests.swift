@@ -97,15 +97,15 @@ struct SessionHostTests {
 
     @Test func pathsShareTheConfiguredSocketDirectory() throws {
         let paths = try SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test/")
-        #expect(paths.socket == "/tmp/agterm-zmx-test/session-host.sock")
-        #expect(paths.ownerLock == "/tmp/agterm-zmx-test/session-host.lock")
-        #expect(paths.spawnLock == "/tmp/agterm-zmx-test/session-host.spawn.lock")
-        #expect(paths.pidfile == "/tmp/agterm-zmx-test/session-host.pid")
-        #expect(paths.log == "/tmp/agterm-zmx-test/session-host.log")
+        #expect(paths.socket == "/tmp/agterm-zmx-test/session-host/session-host.sock")
+        #expect(paths.ownerLock == "/tmp/agterm-zmx-test/session-host/session-host.lock")
+        #expect(paths.spawnLock == "/tmp/agterm-zmx-test/session-host/session-host.spawn.lock")
+        #expect(paths.pidfile == "/tmp/agterm-zmx-test/session-host/session-host.pid")
+        #expect(paths.log == "/tmp/agterm-zmx-test/session-host/session-host.log")
     }
 
     @Test func socketPathLimitReservesTheTerminatingNUL() throws {
-        let suffix = "/session-host.sock"
+        let suffix = "/session-host/session-host.sock"
         let directory = "/" + String(repeating: "a", count: 103 - suffix.utf8.count - 1)
         #expect(try SessionHost.paths(socketDirectory: directory).socket.utf8.count == 103)
         #expect(throws: SessionHost.Rejection.socketPathTooLong) {
