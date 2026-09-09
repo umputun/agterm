@@ -524,8 +524,7 @@ process scan found no acceptance fixtures remaining. Detailed PIDs and saved tre
       sentence to the Live sessions section of `site/docs.html`
 - [x] add a `.claude/rules/windows.md` note: host lifecycle, the one-target SPI boundary, the
       no-Swift-after-fork rule, and that Fresh shells and Re-run never stop a live host
-- [ ] move this plan to `docs/plans/completed/`
-      Deferred to finalize; leave this plan in place during task review.
+- [x] move this plan to `docs/plans/completed/`
 
 Documentation keeps the verified microphone result and the untested App Data expectation in
 `docs/troubleshooting.md`, with Full Disk Access retained for `orphaned` and `app` panes.
