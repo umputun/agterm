@@ -149,6 +149,11 @@ jobs:
         run: brew install xcodegen
       - name: Build libghostty + app (Release)
         run: scripts/build.sh
+      # The session-host fixtures attach to a real zmx daemon, so they skip in the Unit tests job,
+      # which stages no artifacts. This job has them.
+      - name: Session host fixtures against the staged zmx
+        working-directory: agtermCore
+        run: swift test --filter SessionHostServerTests
       # Nested helpers are standalone executables. A deep app re-seal with entitlements can stamp the
       # app's TCC grants onto them while leaving the build green (issue #396).
       - name: Verify helper signatures and entitlements

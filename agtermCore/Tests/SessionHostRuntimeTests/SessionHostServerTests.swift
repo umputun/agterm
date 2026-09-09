@@ -5,6 +5,15 @@ import Testing
 import agtermCore
 @testable import SessionHostRuntime
 
+/// The repository's staged zmx, built by `scripts/setup.sh`. It is an ignored build artifact, so a
+/// checkout that has not run setup has no daemon for the fixtures below to attach to.
+private let stagedZmxPath = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    .deletingLastPathComponent().appendingPathComponent("agterm/Resources/zmx/zmx").path
+
+private let sessionHostFixtureReady = Responsibility.system.isAvailable
+    && FileManager.default.isExecutableFile(atPath: stagedZmxPath)
+
 struct SessionHostServerTests {
     @Test func existingDaemonDoesNotSpawnOrReplay() throws {
         let context = try Context()
@@ -220,7 +229,7 @@ struct SessionHostServerTests {
         #expect(child.hasExited)
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func hostSocketIsNotEnumeratedByStockZmx() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -230,7 +239,7 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func malformedOversizedAndPartialConnectionsDoNotStopTheHost() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -245,7 +254,7 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func stalledPeerHitsItsDeadlineAndOnlyThatConnectionCloses() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -257,7 +266,7 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func forgedHelloDoesNotOverrideTheActualPeerImage() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -269,7 +278,7 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func stopKeepsLockInodesForTheNextHost() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -293,7 +302,7 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
-    @Test(.enabled(if: Responsibility.system.isAvailable))
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func killedHostReleasesLockAndListenerWhileDaemonAndShellSurvive() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -428,7 +437,7 @@ struct SessionHostServerTests {
             try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
             let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             try FileManager.default.copyItem(at: package.appendingPathComponent(".build/debug/agterm-session-host"), to: executable)
-            try FileManager.default.copyItem(at: package.deletingLastPathComponent().appendingPathComponent("agterm/Resources/zmx/zmx"), to: zmx)
+            try FileManager.default.copyItem(atPath: stagedZmxPath, toPath: zmx.path)
             try FileManager.default.copyItem(atPath: "/usr/bin/nc", toPath: client.path)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: client.path)
             _ = try run(URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", client.path])
