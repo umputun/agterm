@@ -6,6 +6,73 @@ import Testing
 // reports. Split out of `AppStoreTests.swift` for the file size limit.
 @MainActor
 struct AppStoreTreeProjectionTests {
+    @Test(arguments: [SessionHost.Attribution.supervisor, .app, .orphaned, .unknown])
+    func liveAttributionProjectsBothPanesIncludingHiddenSplits(_ attribution: SessionHost.Attribution) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "live")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface(backedByZmx: true)
+        session.hasSplit = true
+        session.isSplit = false
+        session.splitPaneIdentity = UUID()
+        session.splitSurface = SpySurface(backedByZmx: true)
+        let tree = store.controlTree(paneForeground: { _ in nil }, liveAttribution: { _ in attribution })
+        let node = try #require(tree.workspaces.first?.sessions.first)
+        #expect(node.liveAttribution == attribution.rawValue)
+        #expect(node.splitLiveAttribution == attribution.rawValue)
+        #expect(!node.split)
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(tree))
+        #expect(decoded.workspaces.first?.sessions.first == node)
+    }
+
+    @Test func attributionIsOmittedForOrdinaryAndRemotePanes() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "ordinary")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "example"))
+        remote.surface = SpySurface(backedByZmx: true)
+        var lookups = 0
+        let tree = store.controlTree(paneForeground: { _ in nil }, liveAttribution: { _ in lookups += 1; return .supervisor })
+        #expect(lookups == 0)
+        let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
+        #expect(!json.contains("liveAttribution"))
+        #expect(!json.contains("splitLiveAttribution"))
+    }
+
+    @Test func attributionFollowsIdentityThroughSwapAndPromotion() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "live")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface(backedByZmx: true)
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitPaneIdentity = UUID()
+        session.splitSurface = SpySurface(backedByZmx: true)
+        let primary = session.paneIdentity
+        let split = try #require(session.splitPaneIdentity)
+        let values: [UUID: SessionHost.Attribution] = [primary: .supervisor, split: .orphaned]
+        func node() throws -> ControlSessionNode {
+            try #require(store.controlTree(paneForeground: { _ in nil }, liveAttribution: { values[$0] }).workspaces.first?.sessions.first)
+        }
+        #expect(try node().liveAttribution == "supervisor")
+        #expect(try node().splitLiveAttribution == "orphaned")
+        #expect(store.swapPanes(session.id) == nil)
+        #expect(try node().liveAttribution == "orphaned")
+        #expect(try node().splitLiveAttribution == "supervisor")
+        store.closePrimaryPane(session.id)
+        #expect(try node().liveAttribution == "supervisor")
+        #expect(try node().splitLiveAttribution == nil)
+    }
+
+    @Test func wrappedPaneWithoutAReadbackReportsUnknown() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "live")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface(backedByZmx: true)
+        #expect(store.controlTree().workspaces.first?.sessions.first?.liveAttribution == "unknown")
+    }
+
     @Test func terminalAskProjectionFollowsPaneIdentityAndOmitsResolvedAsks() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

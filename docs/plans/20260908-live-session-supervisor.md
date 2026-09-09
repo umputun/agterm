@@ -422,22 +422,46 @@ Signature evidence: `/tmp/session-host-task7-signatures.log`.
 - Modify: `agtermCore/Sources/agtermctlKit/SocketClient.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 - Modify: `agtermTests/ControlServerZmxTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/SessionHost.swift`
+- Modify: `agterm/Ghostty/ZmxForegroundResolver.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/SessionHostTests.swift`
+- Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
+- Modify: `agtermTests/SessionHostClientTests.swift` (shared fixture)
 
-- [ ] write failing projection tests for `liveAttribution` and `splitLiveAttribution`: absent for
+- [x] write failing projection tests for `liveAttribution` and `splitLiveAttribution`: absent for
       non-Live and remote sessions; `supervisor`, `app`, `orphaned`, `unknown` each; a hidden split
       still reported; pane identity followed through swap and promotion
-- [ ] add the two fields and `SessionHost.classify(leader:responsible:hostPid:appPid:)`, where
+- [x] add the two fields and `SessionHost.classify(leader:responsible:hostPid:appPid:)`, where
       `responsible == leader` is `orphaned`, `responsible == hostPid` is `supervisor`,
       `responsible == appPid` is `app`, a responsible pid positively identified as dead is `orphaned`,
       a failed or absent lookup is `unknown`, and a live responsible pid that is none of those is
       `unknown`, never `orphaned`
-- [ ] wire one leader snapshot per `buildTree` in `ControlServer.swift` through
+- [x] wire one leader snapshot per `buildTree` in `ControlServer.swift` through
       `ZmxClient.sessionLeaderPIDs` and `AgtermResponsibility.responsibleProcess(of:)`, probing each
       unique leader once, so the fields appear on every tree read and not only the zmx handlers
-- [ ] print both in the human tree beside the existing per-pane detail, only when present
-- [ ] write a failing hosted test: a pane through the client reads `supervisor`; after the host is
+- [x] print both in the human tree beside the existing per-pane detail, only when present
+- [x] write a failing hosted test: a pane through the client reads `supervisor`; after the host is
       killed it reads `orphaned`; a bare-attach pane created this launch reads `app`
-- [ ] run the touched classes - must pass before task 9
+- [x] run the touched classes - must pass before task 9
+
+Implementation notes: the classifier receives `ResponsibleProcess.live(pid)`, `.dead` or
+`.unknown` so host-free code does not confuse an absent lookup with a confirmed dead process.
+The app confirms liveness with `kill(pid, 0)`; only ESRCH becomes `.dead`. The optional string
+fields preserve decoding and initializer compatibility. Projection follows each local wrapped
+pane identity, including hidden splits; absent readings become `unknown`.
+
+`buildTree` takes a fresh `ZmxClient.sessionLeaderPIDs` map and shares it with the foreground
+resolver, avoiding its former second listing. A failed map clears stale foreground leaders.
+Responsibility results, including failures, are memoized only within the current tree build.
+The host PID is read from the endpoint's `SessionHost.paths`, checked against the sibling helper
+process image and verified as its own responsibility root. Readback never takes the owner lock.
+A stale PID naming another executable is rejected. No host connection or spawn occurs on reads.
+
+Validated: 120 host-free tests across SessionHostTests, AppStoreTreeProjectionTests and
+SocketClientTests; 57 hosted tests across ControlServerZmxTests, ZmxForegroundResolverTests
+and SessionHostClientTests; strict lint and whitespace checks. The real client/bare fixture
+proved `supervisor` to `orphaned` after host death while the bare pane remained `app`, using
+the measured test process responsibility root as its app PID. No fixture processes remained.
 
 ### Task 9: Verify acceptance criteria
 

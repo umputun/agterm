@@ -85,7 +85,7 @@ final class SessionHostClientTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), expected)
     }
 
-    private final class Fixture {
+    final class Fixture {
         let directory = URL(fileURLWithPath: "/tmp/shc-\(UUID().uuidString)")
         let names = ["agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "agterm-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
         let executable: URL
@@ -112,8 +112,10 @@ final class SessionHostClientTests: XCTestCase {
             try FileManager.default.createDirectory(at: URL(fileURLWithPath: paths.ownerLock).deletingLastPathComponent(), withIntermediateDirectories: true)
         }
 
-        func startClient(name: String, loginArgv: Bool = false, command: [String] = [], terminal: Bool = false) throws {
-            let arguments = [loginArgv ? "-agterm-session-host" : executable.path, "client", name, "--", zmx.path, "attach", name] + command
+        func startClient(name: String, loginArgv: Bool = false, command: [String] = [], terminal: Bool = false, mediated: Bool = true) throws {
+            let program = mediated ? executable.path : zmx.path
+            let prefix = mediated ? [loginArgv ? "-agterm-session-host" : executable.path, "client", name, "--"] : []
+            let arguments = prefix + [zmx.path, "attach", name] + command
             let argv = arguments.map { strdup($0) } + [nil]
             let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
             defer { for value in argv + envp { free(value) } }
@@ -141,7 +143,7 @@ final class SessionHostClientTests: XCTestCase {
             var pid: Int32 = 0
             let result = argv.withUnsafeBufferPointer { arguments in
                 envp.withUnsafeBufferPointer { environment in
-                    posix_spawn(&pid, executable.path, &actions, nil, arguments.baseAddress, environment.baseAddress)
+                    posix_spawn(&pid, program, &actions, nil, arguments.baseAddress, environment.baseAddress)
                 }
             }
             guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: result) ?? .EIO) }

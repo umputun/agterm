@@ -263,6 +263,7 @@ public final class AppStore {
     /// closure, so one here would leave a bare `controlTree()` ambiguous between the two.
     public func controlTree(paneForeground: (Session) -> CommandRestore.PaneForeground?,
                             splitPaneForeground: (Session) -> CommandRestore.PaneForeground? = { _ in nil },
+                            liveAttribution: (UUID) -> SessionHost.Attribution? = { _ in nil },
                             fontSize: (Session) -> Double? = { _ in nil },
                             splitFontSize: (Session) -> Double? = { _ in nil },
                             scratchFontSize: (Session) -> Double? = { _ in nil },
@@ -283,6 +284,11 @@ public final class AppStore {
                 // each closure inspects live processes, so call it once and split the answer in two.
                 let mainPane = paneForeground(session)
                 let splitPane = splitPaneForeground(session)
+                let local = session.remoteHost == nil
+                let mainAttribution: SessionHost.Attribution? = local && session.surface?.backedByZmx == true
+                    ? liveAttribution(session.paneIdentity) ?? .unknown : nil
+                let splitAttribution: SessionHost.Attribution? = local && session.hasSplit && session.splitSurface?.backedByZmx == true
+                    ? session.splitPaneIdentity.flatMap(liveAttribution) ?? .unknown : nil
                 let idle = session.agentIndicator.status == .idle
                 let status = idle ? nil : session.agentIndicator.status.rawValue
                 let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
@@ -332,7 +338,8 @@ public final class AppStore {
                                           // false, not omitted — "no terminal" either way to a caller.
                                           realized: session.surface?.isRealized ?? false,
                                           context: session.context, remoteHost: session.remoteHost,
-                                          splitCwd: session.hasSplit ? session.cwd(for: .right) : nil)
+                                          splitCwd: session.hasSplit ? session.cwd(for: .right) : nil,
+                                          liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

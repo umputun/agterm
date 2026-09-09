@@ -2,11 +2,102 @@ import AppKit
 import XCTest
 @testable import agterm
 import agtermCore
+import AgtermResponsibility
 
 /// Hosted coverage for the zmx group's app arms: the join against the live claim walk, and the refusals
 /// that must not read as an empty inventory.
 @MainActor
 final class ControlServerZmxTests: XCTestCase {
+    func testEveryTreeSharesOneLeaderSnapshotAndProbesEachUniqueLeaderOnce() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        session.splitSurface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        let names = [session.paneIdentity, try XCTUnwrap(session.splitPaneIdentity)].map(ZmxSupport.daemonName)
+        var lists = 0
+        var foregroundLists = 0
+        var lookups: [Int32: Int] = [:]
+        var root: Int32 = 100
+        var failedList = false
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in
+            lists += 1
+            if failedList { throw ZmxClient.CommandError.timedOut }
+            return names.map { "name=\($0)\tpid=200\tclients=0" }.joined(separator: "\n")
+        })
+        let resolver = ZmxForegroundResolver(leaderProvider: { _ in foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
+        let probe = LiveAttributionProbe(responsible: { pid in
+            lookups[pid, default: 0] += 1
+            return .live(pid == 100 ? 100 : root)
+        }, hostPID: { _ in 100 }, appPID: 300)
+        let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
+                                   identity: AppIdentity(version: "test", commit: "test"), zmxForegroundResolver: resolver, zmxClient: client,
+                                   liveAttributionProbe: probe, socketPath: stateDir.appendingPathComponent("tree.sock").path)
+        let first = server.controlTree(window: nil)
+        let node = try XCTUnwrap(first.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+        XCTAssertEqual(node.liveAttribution, "supervisor")
+        XCTAssertEqual(node.splitLiveAttribution, "supervisor")
+        XCTAssertEqual(lists, 1)
+        XCTAssertEqual(foregroundLists, 0)
+        XCTAssertEqual(lookups, [100: 1, 200: 1])
+        XCTAssertEqual(resolver.foregroundPID(sessionName: names[0]), 200)
+        root = 200
+        let next = server.controlTree(window: nil)
+        XCTAssertEqual(next.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.liveAttribution, "orphaned")
+        XCTAssertEqual(lists, 2)
+        XCTAssertEqual(lookups, [100: 2, 200: 2])
+        failedList = true
+        let unknown = server.controlTree(window: nil)
+        XCTAssertEqual(unknown.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.liveAttribution, "unknown")
+        XCTAssertNil(resolver.foregroundPID(sessionName: names[0]))
+        XCTAssertEqual(lists, 3)
+        XCTAssertEqual(foregroundLists, 0)
+        XCTAssertEqual(lookups, [100: 2, 200: 2])
+    }
+
+    func testRealClientPaneChangesFromSupervisorToOrphanedWhileBarePaneReadsApp() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        let fixture = try SessionHostClientTests.Fixture()
+        defer { fixture.cleanup() }
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        let supervised = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: fixture.directory.path))
+        let bare = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: fixture.directory.path))
+        supervised.paneIdentity = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        bare.paneIdentity = try XCTUnwrap(UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+        for session in [supervised, bare] { session.surface = GhosttySurfaceView(workingDirectory: fixture.directory.path, backedByZmx: true) }
+        try fixture.startClient(name: fixture.names[0], terminal: true)
+        try fixture.startClient(name: fixture.names[1], terminal: true, mediated: false)
+        _ = try fixture.waitForLeaders(count: 2)
+        let host = try fixture.hostPID()
+        let baseline = try XCTUnwrap(Responsibility.system.responsibleProcess(of: getpid()))
+        let client = ZmxClient(executablePath: fixture.zmx.path, socketDirectory: try XCTUnwrap(fixture.environment["ZMX_DIR"]))
+        let probe = LiveAttributionProbe(appPID: baseline)
+        XCTAssertEqual(probe.hostPID(client.endpoint), host)
+        do {
+            defer { try? String(host).write(toFile: fixture.paths.pidfile, atomically: false, encoding: .utf8) }
+            try String(getpid()).write(toFile: fixture.paths.pidfile, atomically: false, encoding: .utf8)
+            XCTAssertNil(probe.hostPID(client.endpoint))
+        }
+        let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
+                                   identity: AppIdentity(version: "test", commit: "test"), zmxClient: client,
+                                   liveAttributionProbe: probe, socketPath: stateDir.appendingPathComponent("real-tree.sock").path)
+        var nodes = server.buildTree(in: store).workspaces.flatMap(\.sessions)
+        XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveAttribution, "supervisor")
+        XCTAssertEqual(nodes.first { $0.id == bare.id.uuidString }?.liveAttribution, "app")
+        XCTAssertEqual(kill(host, SIGKILL), 0)
+        let deadline = Date().addingTimeInterval(3)
+        repeat {
+            nodes = server.buildTree(in: store).workspaces.flatMap(\.sessions)
+            if nodes.first(where: { $0.id == supervised.id.uuidString })?.liveAttribution == "orphaned" { break }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+        XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveAttribution, "orphaned")
+        XCTAssertEqual(nodes.first { $0.id == bare.id.uuidString }?.liveAttribution, "app")
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settingsModel: SettingsModel!

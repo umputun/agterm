@@ -1,11 +1,35 @@
 import AppKit
 import agtermCore
 import Foundation
+import AgtermResponsibility
+import Darwin
 
 /// The `zmx` command group: the daemon inventory and, later, the actions over it. Every command needs a
 /// running instance by design — only one can join the live stores, the pending-close records, the checked
 /// closed-window snapshots and the observed daemons into a single answer.
 extension ControlServer {
+    func liveAttributions(in sessions: [Session], leaders: [String: pid_t]?) -> [UUID: SessionHost.Attribution] {
+        let identities = Set(sessions.filter { $0.remoteHost == nil }.flatMap { session -> [UUID] in
+            var ids = session.surface?.backedByZmx == true ? [session.paneIdentity] : []
+            if session.hasSplit, session.splitSurface?.backedByZmx == true, let split = session.splitPaneIdentity { ids.append(split) }
+            return ids
+        })
+        guard !identities.isEmpty, let leaders else { return [:] }
+        var probes: [pid_t: SessionHost.ResponsibleProcess] = [:]
+        func responsible(_ pid: pid_t) -> SessionHost.ResponsibleProcess {
+            if let cached = probes[pid] { return cached }
+            let result = liveAttributionProbe.responsible(pid)
+            probes[pid] = result
+            return result
+        }
+        let candidate = zmxClient.flatMap { liveAttributionProbe.hostPID($0.endpoint) }
+        let host = candidate.flatMap { responsible($0) == .live($0) ? $0 : nil }
+        return Dictionary(uniqueKeysWithValues: identities.map { identity in
+            let leader = leaders[ZmxSupport.daemonName(for: identity)]
+            return (identity, SessionHost.classify(leader: leader, responsible: leader.map(responsible), hostPid: host, appPid: liveAttributionProbe.appPID))
+        })
+    }
+
     /// Observed daemons joined against the panes that claim them, with the restore status as a header.
     ///
     /// A failed listing is an error rather than an empty inventory: an empty namespace is a real answer and
@@ -330,4 +354,28 @@ public enum ControlZmxError {
     public static let unavailable = "zmx is unavailable in this instance"
     public static let incompleteInventory =
         "the pane inventory is incomplete or has conflicting owners, so no daemon can be safely pruned"
+}
+
+struct LiveAttributionProbe {
+    var responsible: (pid_t) -> SessionHost.ResponsibleProcess = LiveAttributionProbe.lookup
+    var hostPID: (ControlZmxEndpoint) -> pid_t? = LiveAttributionProbe.host
+    var appPID: pid_t = getpid()
+
+    private static func lookup(_ leader: pid_t) -> SessionHost.ResponsibleProcess {
+        guard Responsibility.system.isAvailable, let pid = Responsibility.system.responsibleProcess(of: leader) else { return .unknown }
+        if kill(pid, 0) == 0 || errno == EPERM { return .live(pid) }
+        return errno == ESRCH ? .dead : .unknown
+    }
+
+    private static func host(_ endpoint: ControlZmxEndpoint) -> pid_t? {
+        guard let paths = try? SessionHost.paths(socketDirectory: endpoint.socketDirectory) else { return nil }
+        guard let value = try? String(contentsOfFile: paths.pidfile, encoding: .utf8),
+              let pid = pid_t(value.trimmingCharacters(in: .whitespacesAndNewlines)), pid > 0 else { return nil }
+        let expected = URL(fileURLWithPath: endpoint.executable).deletingLastPathComponent().appendingPathComponent("agterm-session-host")
+        guard let path = realpath(expected.path, nil) else { return nil }
+        defer { free(path) }
+        var bytes = [UInt8](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &bytes, UInt32(bytes.count)) > 0 else { return nil }
+        return String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self) == String(cString: path) ? pid : nil
+    }
 }

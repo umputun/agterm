@@ -136,6 +136,7 @@ final class ControlServer {
     /// detached daemons are left over. Nil only in hosted tests, where the commands answer that the
     /// backend is unavailable rather than pretending an empty listing.
     let zmxClient: ZmxClient?
+    let liveAttributionProbe: LiveAttributionProbe
 
     /// Runs the ssh invocations behind the remote commands. Injectable so hosted tests drive them against
     /// a fake instead of a second Mac.
@@ -148,6 +149,7 @@ final class ControlServer {
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
+         liveAttributionProbe: LiveAttributionProbe = LiveAttributionProbe(),
          remoteRunner: (any RemoteCommandRunner)? = nil,
          socketPath: String? = nil) {
         self.remoteRunner = remoteRunner ?? RemoteCommandProcessRunner()
@@ -157,6 +159,7 @@ final class ControlServer {
         self.launchRestoreMode = launchRestoreMode
         self.zmxForegroundResolver = zmxForegroundResolver
         self.zmxClient = zmxClient
+        self.liveAttributionProbe = liveAttributionProbe
         self.identity = identity
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
@@ -718,9 +721,16 @@ final class ControlServer {
     func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         let sessions = store.workspaces.flatMap(\.sessions)
-        if ZmxForegroundRefreshPolicy.hasWrappedPane(in: sessions) {
-            zmxForegroundResolver?.refreshIfNeeded()
+        var leaders: [String: pid_t]?
+        if ZmxForegroundRefreshPolicy.hasWrappedPane(in: sessions.filter { $0.remoteHost == nil }) {
+            if let zmxClient {
+                leaders = zmxClient.sessionLeaderPIDs()
+                zmxForegroundResolver?.acceptLeaderSnapshot(leaders)
+            } else {
+                zmxForegroundResolver?.refreshIfNeeded()
+            }
         }
+        let attributions = liveAttributions(in: sessions, leaders: leaders)
         // the projected window owns its quick terminal; find its id by store identity to read the live
         // QuickTerminalController.isVisible (a nil controller — never opened, or tearing down — reads false).
         let windowID = library.windowID(for: store)
@@ -740,6 +750,7 @@ final class ControlServer {
                                               zmxResolver: zmxForegroundResolver)
                 }
             },
+            liveAttribution: { attributions[$0] },
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },

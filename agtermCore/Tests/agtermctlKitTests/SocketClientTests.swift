@@ -859,6 +859,18 @@ struct SocketClientTests {
         #expect(result["height"] as? Int == 800)
     }
 
+    @Test func formatTreeIncludesBothAttributionsWhenPresent() throws {
+        let data = Data(#"""
+        {"id":"s","name":"shell","cwd":"/main","active":true,"split":false,"hasSplit":true,
+         "overlay":false,"scratch":false,"flagged":false,"liveAttribution":"supervisor","splitLiveAttribution":"orphaned"}
+        """#.utf8)
+        let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true, sessions: [session])])
+        let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        #expect(output.contains("live attribution: supervisor"))
+        #expect(output.contains("split live attribution: orphaned"))
+    }
+
     @Test func formatResponseTree() {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true)
         let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])

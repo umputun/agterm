@@ -116,6 +116,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let hasSplit: Bool?
     /// True only when every existing primary/split pane is currently zmx-backed; nil on older servers.
     public let backedByZmx: Bool?
+    /// Process attribution for each local Live pane; this does not describe permission grants.
+    public let liveAttribution: String?
+    public let splitLiveAttribution: String?
     /// Divider direction for a live split (`vertical`=left/right, `horizontal`=top/bottom); nil without one.
     public let splitAxis: String?
     /// The primary-pane fraction (0.05...0.95) of the pane area below the titlebar band, for a session that
@@ -256,7 +259,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
-                context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil) {
+                context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
+                liveAttribution: String? = nil, splitLiveAttribution: String? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -299,6 +303,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.realized = realized
         self.splitCwd = splitCwd
         self.remoteHost = remoteHost
+        self.liveAttribution = liveAttribution
+        self.splitLiveAttribution = splitLiveAttribution
     }
 }
 

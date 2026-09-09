@@ -2,6 +2,29 @@ import Foundation
 
 /// Portable messages and launch decisions for the Live session host.
 public enum SessionHost {
+    public enum Attribution: String, Codable, Sendable, CaseIterable {
+        case supervisor, app, orphaned, unknown
+    }
+
+    public enum ResponsibleProcess: Equatable, Sendable {
+        case live(Int32)
+        case dead
+        case unknown
+    }
+
+    public static func classify(leader: Int32?, responsible: ResponsibleProcess?, hostPid: Int32?, appPid: Int32?) -> Attribution {
+        guard let leader, leader > 0 else { return .unknown }
+        switch responsible {
+        case .dead: return .orphaned
+        case .live(let pid) where pid > 0:
+            if pid == leader { return .orphaned }
+            if pid == hostPid { return .supervisor }
+            if pid == appPid { return .app }
+            return .unknown
+        default: return .unknown
+        }
+    }
+
     public static let protocolVersion = 1
     /// Includes the newline terminator.
     public static let maximumFrameBytes = 64 * 1024

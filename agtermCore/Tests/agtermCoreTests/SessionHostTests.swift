@@ -3,6 +3,19 @@ import Testing
 @testable import agtermCore
 
 struct SessionHostTests {
+    @Test func classificationDistinguishesDeadFromUnreadableAndUnrelatedProcesses() {
+        let cases: [(Int32?, SessionHost.ResponsibleProcess?, SessionHost.Attribution)] = [
+            (10, .live(10), .orphaned), (10, .live(20), .supervisor), (10, .live(30), .app),
+            (10, .dead, .orphaned), (10, .unknown, .unknown), (10, nil, .unknown),
+            (10, .live(40), .unknown), (nil, .live(20), .unknown), (0, .live(20), .unknown), (10, .live(-1), .unknown),
+        ]
+        for (leader, responsible, expected) in cases {
+            #expect(SessionHost.classify(leader: leader, responsible: responsible, hostPid: 20, appPid: 30) == expected)
+        }
+        #expect(SessionHost.classify(leader: 20, responsible: .live(20), hostPid: 20, appPid: 30) == .orphaned)
+        #expect(SessionHost.classify(leader: 10, responsible: .live(20), hostPid: nil, appPid: nil) == .unknown)
+    }
+
     private let hello = SessionHost.Hello(bundleID: "com.umputun.agterm", bundlePath: "/Applications/agterm.app")
 
     @Test func helloUsesTheDocumentedWireKeys() throws {

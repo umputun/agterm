@@ -51,6 +51,12 @@ final class ZmxForegroundResolver {
         leaderProvider(timeout).map { Snapshot(leaders: $0, leaderProbe: leaderProbe) }
     }
 
+    func acceptLeaderSnapshot(_ snapshot: [String: pid_t]?) {
+        leaders = snapshot ?? [:]
+        refreshGate.noteLifecycleChange()
+        _ = refreshGate.shouldRefresh(now: Date())
+    }
+
     func foregroundPID(sessionName: String) -> pid_t? {
         guard let leader = leaders[sessionName] else {
             refreshGate.noteLifecycleChange()
