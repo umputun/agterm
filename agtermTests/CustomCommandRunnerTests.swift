@@ -533,7 +533,48 @@ final class CustomCommandRunnerTests: XCTestCase {
         session.isSplit = true
         session.splitFocused = true
 
-        let written = try fired(fix.runner, from: split, writing: "\"$AGT_SESSION_PWD\"")
-        XCTAssertEqual(written, rightDir.path)
+        let written = try fired(fix.runner, from: split, writing: "\"$AGT_SESSION_PWD|$AGT_SESSION_HOST|$PWD\"")
+        let fields = try XCTUnwrap(written).components(separatedBy: "|")
+        XCTAssertEqual(Array(fields.prefix(2)), [rightDir.path, ""])
+        XCTAssertEqual(URL(fileURLWithPath: fields[2]).resolvingSymlinksInPath().path,
+                       rightDir.resolvingSymlinksInPath().path)
+    }
+
+    private func firedFromRemoteSession(reportedCwd: String) throws -> [String] {
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(),
+                                                         remoteHost: "user@box"))
+        session.currentCwd = reportedCwd
+        let surface = GhosttySurfaceView(workingDirectory: NSHomeDirectory())
+        surface.session = session
+        session.surface = surface
+        let written = try fired(fix.runner, from: surface, writing: "\"$AGT_SESSION_PWD|$AGT_SESSION_HOST|$PWD\"")
+        var fields = try XCTUnwrap(written).components(separatedBy: "|")
+        fields[2] = URL(fileURLWithPath: fields[2]).resolvingSymlinksInPath().path
+        return fields
+    }
+
+    func testARemoteSessionWhoseReportedPathExistsLocallyRunsTheCommandThere() throws {
+        let twin = stateDir.appendingPathComponent("twin")
+        try FileManager.default.createDirectory(at: twin, withIntermediateDirectories: true)
+        let fields = try firedFromRemoteSession(reportedCwd: twin.path)
+        XCTAssertEqual(fields, [twin.path, "user@box", twin.resolvingSymlinksInPath().path])
+    }
+
+    func testARemoteSessionWhoseReportedPathIsMissingLocallyRunsTheCommandInHome() throws {
+        let missing = stateDir.appendingPathComponent("only-on-the-remote").path
+        let fields = try firedFromRemoteSession(reportedCwd: missing)
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        XCTAssertEqual(fields, [missing, "user@box", home])
+    }
+
+    func testARemoteSessionWhoseReportedPathIsALocalFileRunsTheCommandInHome() throws {
+        let file = stateDir.appendingPathComponent("plain.txt")
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try Data().write(to: file)
+        let fields = try firedFromRemoteSession(reportedCwd: file.path)
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        XCTAssertEqual(fields, [file.path, "user@box", home])
     }
 }

@@ -928,6 +928,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   lifecycle and no remote daemon ownership, so closing locally tears the surface down, ssh dies, and the
   far-side daemon survives. No command asks the remote zmx to kill anything. `Session.remoteHost` is model
   metadata, and persistence, ownership, icon and factory routing all read it.
+- A remote pane's reported cwd can be remote, so the local launches that inherit it go through
+  `Session.localWorkingDirectory`: the reported path when it exists here as a directory, else HOME.
+  Those are custom commands (execution cwd only; `AGT_SESSION_PWD` stays the reported path and
+  `AGT_SESSION_HOST` carries the destination), scratch, the overlay default, the quick terminal and a
+  split created after the attach-time split closes. The attach surface itself still starts in HOME
+  without the helper. `keymap.md` owns the token contract.
+- When another client leads at a different terminal size, local cursor and screen-text reads can
+  disagree with the application's layout; automation relying on those reads, the chat transport
+  included, is unsupported in that state. `docs/backlog/attached-pane-content-is-laid-out-for-the-leaders-grid.md`
+  carries the zmx mechanism.
 - `zmx list` carries the `endpoint` header — the zmx executable and its `ZMX_DIR` — because neither is
   guessable from another machine. It is INJECTED from `ZmxClient` through the restored runtime, never
   recomputed from the process environment, which would duplicate runtime selection and break hosted tests

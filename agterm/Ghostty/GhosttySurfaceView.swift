@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "GhosttyS
 final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
 
-    private let workingDirectory: String
+    let workingDirectory: String
 
     /// The command run as the surface's process instead of the login shell, nil for the login shell; read in
     /// `createSurface`. The overlay uses it to run one program (e.g. a TUI) whose exit closes the overlay.

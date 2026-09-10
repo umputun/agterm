@@ -1697,7 +1697,7 @@
                 color: #cbc6bc;
               "
             >
-              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
+              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}&nbsp;&nbsp;&nbsp;{AGT_SESSION_HOST}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Tokens expand at fire time (also exported as
@@ -2492,6 +2492,18 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.ssh/config</span>, which both paths read.
               Use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--window</span> to choose an open local window without bringing it forward; otherwise the
               session opens in the frontmost window after discovery.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              The pane reports the far side's working directory, and the local launches that would inherit it — a custom
+              command, the scratch terminal, an overlay opened without
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cwd</span>, the quick terminal, a split
+              opened after the attach-time split is closed — starts in that path when it exists here as a directory, else in your
+              home. A custom command still sees the reported path in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_PWD</span> and the
+              destination in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_HOST</span>,
+              empty for a local session, so it can reach the remote directory itself. When another client leads at a different
+              terminal size, local cursor and screen-text reads can disagree with the application's layout; automation relying on
+              those reads is unsupported in that state.
             </p>
             <div
               style="

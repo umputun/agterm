@@ -37,6 +37,9 @@ public struct CommandContext: Equatable, Sendable {
     public var sessionID: String
     public var sessionName: String
     public var sessionPWD: String
+    /// The SSH destination a `zmx attach` session came from, empty for a local session. Marks only
+    /// agterm's own remote attachment: an `ssh` typed into a local session leaves it empty.
+    public var sessionHost: String
     public var workspaceID: String
     public var workspaceName: String
     public var windowID: String
@@ -53,11 +56,13 @@ public struct CommandContext: Equatable, Sendable {
     public var socket: String
 
     public init(sessionID: String = "", sessionName: String = "", sessionPWD: String = "",
-                workspaceID: String = "", workspaceName: String = "", windowID: String = "",
-                windowName: String = "", pane: Pane = .left, selection: String = "", socket: String = "") {
+                sessionHost: String = "", workspaceID: String = "", workspaceName: String = "",
+                windowID: String = "", windowName: String = "", pane: Pane = .left, selection: String = "",
+                socket: String = "") {
         self.sessionID = sessionID
         self.sessionName = sessionName
         self.sessionPWD = sessionPWD
+        self.sessionHost = sessionHost
         self.workspaceID = workspaceID
         self.workspaceName = workspaceName
         self.windowID = windowID
@@ -74,6 +79,7 @@ public struct CommandContext: Equatable, Sendable {
         [("AGT_SESSION_ID", sessionID),
          ("AGT_SESSION_NAME", sessionName),
          ("AGT_SESSION_PWD", sessionPWD),
+         ("AGT_SESSION_HOST", sessionHost),
          ("AGT_WORKSPACE_ID", workspaceID),
          ("AGT_WORKSPACE_NAME", workspaceName),
          ("AGT_WINDOW_ID", windowID),

@@ -260,6 +260,97 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertFalse(registry.pacer.isPassthrough, "the armed primary still waits its turn")
     }
 
+    private func scratchSurface(for session: Session) -> GhosttySurfaceView {
+        agtermApp.makeScratchSurface(for: session, store: store, env: [:], suppressAutoFocus: true,
+                                     actions: AppActions(library: library))
+    }
+
+    private func overlaySurface(for session: Session) -> GhosttySurfaceView {
+        agtermApp.makeOverlaySurface(for: session, store: store, pane: nil, env: [:])
+    }
+
+    private func remoteSession(reportedCwd: String) -> Session {
+        let session = Session(initialCwd: NSHomeDirectory(), remoteHost: "user@box")
+        session.currentCwd = reportedCwd
+        return session
+    }
+
+    func testLocalShellFactoriesOnARemoteSessionSeedHomeWhenTheReportedPathIsMissing() {
+        let session = remoteSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
+        XCTAssertEqual(scratchSurface(for: session).workingDirectory, NSHomeDirectory())
+        XCTAssertEqual(overlaySurface(for: session).workingDirectory, NSHomeDirectory())
+        XCTAssertEqual(splitSurface(for: session).workingDirectory, NSHomeDirectory())
+    }
+
+    func testLocalShellFactoriesOnARemoteSessionSeedTheReportedPathWhenItExistsLocally() throws {
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let session = remoteSession(reportedCwd: stateDir.path)
+        XCTAssertEqual(scratchSurface(for: session).workingDirectory, stateDir.path)
+        XCTAssertEqual(overlaySurface(for: session).workingDirectory, stateDir.path)
+        XCTAssertEqual(splitSurface(for: session).workingDirectory, stateDir.path)
+    }
+
+    func testARestoredSplitPathOnARemoteSessionStillFollowsTheLocalRule() {
+        let session = remoteSession(reportedCwd: NSHomeDirectory())
+        session.initialSplitCwd = stateDir.appendingPathComponent("split-only-on-the-remote").path
+        XCTAssertEqual(splitSurface(for: session).workingDirectory, NSHomeDirectory())
+    }
+
+    func testAnExplicitOverlayCwdIsKeptOnARemoteSession() {
+        let session = remoteSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
+        session.overlayCwd = "/nowhere/explicit"
+        XCTAssertEqual(overlaySurface(for: session).workingDirectory, "/nowhere/explicit")
+    }
+
+    func testLocalSessionFactoriesKeepTheirInheritedPaths() {
+        let session = Session(initialCwd: "/nowhere")
+        session.currentCwd = "/nowhere/primary"
+        session.initialSplitCwd = "/nowhere/restored-split"
+        XCTAssertEqual(scratchSurface(for: session).workingDirectory, "/nowhere/primary")
+        XCTAssertEqual(overlaySurface(for: session).workingDirectory, "/nowhere/primary")
+        XCTAssertEqual(splitSurface(for: session).workingDirectory, "/nowhere/restored-split")
+    }
+
+    func testASplitCreatedAfterClosingTheAttachTimeSplitIsALocalLoginShell() throws {
+        let workspace = store.addWorkspace(name: "remote")
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: NSHomeDirectory(),
+                                                     command: "ssh -tt box zmx attach primary",
+                                                     remoteHost: "box"))
+        session.splitInitialCommand = "ssh -tt box zmx attach split"
+        session.currentCwd = stateDir.appendingPathComponent("only-on-the-remote").path
+        session.hasSplit = true
+        session.isSplit = true
+
+        XCTAssertEqual(splitSurface(for: session).resolveLaunchSeed().command, "ssh -tt box zmx attach split")
+        XCTAssertEqual(splitSurface(for: session).resolveLaunchSeed().command, "ssh -tt box zmx attach split",
+                       "the attach seed is durable across a re-created split surface")
+
+        store.closeSplit(session.id)
+
+        let fresh = splitSurface(for: session)
+        XCTAssertNil(fresh.resolveLaunchSeed().command)
+        XCTAssertEqual(fresh.workingDirectory, NSHomeDirectory())
+    }
+
+    func testTheQuickTerminalStartsWhereTheActiveSessionsLocalRuleSays() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let activeStore = try XCTUnwrap(library.activeStore)
+        let local = try XCTUnwrap(activeStore.activeSession)
+        local.currentCwd = "/nowhere/primary"
+        XCTAssertEqual(agtermApp.quickTerminalCwd(library: library), "/nowhere/primary")
+
+        let workspace = try XCTUnwrap(activeStore.currentWorkspaceID)
+        let remote = try XCTUnwrap(activeStore.addSession(toWorkspace: workspace, cwd: home, remoteHost: "box"))
+        activeStore.selectSession(remote.id)
+        remote.currentCwd = stateDir.appendingPathComponent("only-on-the-remote").path
+        XCTAssertEqual(agtermApp.quickTerminalCwd(library: library), home)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        remote.currentCwd = stateDir.path
+        XCTAssertEqual(agtermApp.quickTerminalCwd(library: library), stateDir.path)
+
+        XCTAssertEqual(agtermApp.quickTerminalCwd(library: nil), home)
+    }
+
     func testThePolicyCarriesTheReapsRunningNames() {
         let context = agtermApp.LaunchSpawnContext()
         context.runningNames = ["agterm-alive"]

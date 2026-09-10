@@ -224,9 +224,7 @@ final class CustomCommandRunner {
         // promoted survivor sits in the `surface` slot with both nil/false, so `.left`.
         let onSplit = session.splitFocused && session.splitSurface != nil
         let selectionSurface = (onSplit ? session.splitSurface : session.surface) as? GhosttySurfaceView
-        let context = self.context(for: session, in: store, selectionSurface: selectionSurface,
-                                   pane: onSplit ? .right : .left)
-        spawn(command, context: context)
+        spawn(command, for: session, in: store, selectionSurface: selectionSurface, pane: onSplit ? .right : .left)
     }
 
     /// Run a command fired by KEYBIND: context from the surface that had focus at key-down, so a chord from a
@@ -240,8 +238,7 @@ final class CustomCommandRunner {
         // the pane is the surface's identity, not the focus flag, so a chord reports the pane it was typed in
         // even before the flag catches up.
         let pane: CommandContext.Pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? .right : .left
-        let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
-        spawn(command, context: context)
+        spawn(command, for: session, in: store, selectionSurface: focusedSurface, pane: pane)
     }
 
     /// The open store holding `session` itself. Matched by object identity rather than through
@@ -262,8 +259,7 @@ final class CustomCommandRunner {
             guard let store = library.store(for: windowID) else { continue }
             for session in store.workspaces.flatMap(\.sessions) {
                 guard let pane = sessionlessPane(of: focusedSurface, in: session) else { continue }
-                let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
-                spawn(command, context: context)
+                spawn(command, for: session, in: store, selectionSurface: focusedSurface, pane: pane)
                 return
             }
         }
@@ -307,12 +303,21 @@ final class CustomCommandRunner {
             logger.notice("custom command \"\(command.name, privacy: .public)\" references session context but no session is active; ignored")
             return
         }
-        spawn(command, context: sessionlessContext())
+        spawn(command, context: sessionlessContext(), cwd: nil)
     }
 
-    /// Resolve every `{AGT_X}` token for the given session: ids + cwd from the model, names from the owning
-    /// workspace/window, the selection from `selectionSurface`, the fired-from pane from the caller
-    /// (`left`|`right`|`scratch`), the socket from the control server.
+    /// Spawn for a session pane: the context carries the pane's reported cwd raw, while the process starts
+    /// where `Session.localWorkingDirectory` says, which differs on a remote session whose path is not here.
+    private func spawn(_ command: CustomCommand, for session: Session, in store: AppStore,
+                       selectionSurface: GhosttySurfaceView?, pane: CommandContext.Pane) {
+        let context = self.context(for: session, in: store, selectionSurface: selectionSurface, pane: pane)
+        let cwd = session.localWorkingDirectory(reported: context.sessionPWD, homeDirectory: NSHomeDirectory())
+        spawn(command, context: context, cwd: cwd)
+    }
+
+    /// Resolve every `{AGT_X}` token for the given session: ids + cwd + remote host from the model, names
+    /// from the owning workspace/window, the selection from `selectionSurface`, the fired-from pane from the
+    /// caller (`left`|`right`|`scratch`), the socket from the control server.
     private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
                          pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
@@ -322,6 +327,7 @@ final class CustomCommandRunner {
             sessionID: session.id.uuidString,
             sessionName: session.displayName,
             sessionPWD: session.cwd(for: pane),
+            sessionHost: TerminalText.sanitized(session.remoteHost ?? ""),
             workspaceID: workspace?.id.uuidString ?? "",
             workspaceName: workspace?.name ?? "",
             windowID: windowID?.uuidString ?? "",
@@ -342,10 +348,10 @@ final class CustomCommandRunner {
     }
 
     /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` over the app environment and
-    /// running in the session's cwd. `PATH` is widened first (`CommandPath`): the app's own is launchd's, and
-    /// `sh -c` runs no profile, so a bare `agtermctl` would exit 127. A spawn error or non-zero exit posts a
-    /// failure banner; no output capture, no success banner.
-    private func spawn(_ command: CustomCommand, context: CommandContext) {
+    /// running in `cwd` (nil for a sessionless launch, which inherits the app's). `PATH` is widened first
+    /// (`CommandPath`): the app's own is launchd's, and `sh -c` runs no profile, so a bare `agtermctl` would
+    /// exit 127. A spawn error or non-zero exit posts a failure banner; no output capture, no success banner.
+    private func spawn(_ command: CustomCommand, context: CommandContext, cwd: String?) {
         let line = context.expand(command.command)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -359,8 +365,8 @@ final class CustomCommandRunner {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        if !context.sessionPWD.isEmpty {
-            process.currentDirectoryURL = URL(fileURLWithPath: context.sessionPWD, isDirectory: true)
+        if let cwd, !cwd.isEmpty {
+            process.currentDirectoryURL = URL(fileURLWithPath: cwd, isDirectory: true)
         }
         let name = command.name
         process.terminationHandler = { proc in

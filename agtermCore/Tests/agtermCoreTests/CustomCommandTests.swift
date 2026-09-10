@@ -5,8 +5,21 @@ import Testing
 struct CustomCommandTests {
     private func sampleContext() -> CommandContext {
         CommandContext(sessionID: "sess-1", sessionName: "shell", sessionPWD: "/tmp/work",
-                       workspaceID: "ws-1", workspaceName: "main", windowID: "win-1",
-                       windowName: "work", pane: .right, selection: "hello", socket: "/tmp/agt.sock")
+                       sessionHost: "user@box", workspaceID: "ws-1", workspaceName: "main",
+                       windowID: "win-1", windowName: "work", pane: .right, selection: "hello",
+                       socket: "/tmp/agt.sock")
+    }
+
+    @Test func sessionHostFollowsThePwdTokenAndDefaultsEmpty() {
+        let ctx = sampleContext()
+        #expect(ctx.expand("ssh {AGT_SESSION_HOST}") == "ssh user@box")
+        #expect(ctx.environment()["AGT_SESSION_HOST"] == "user@box")
+        #expect(CommandContext().expand("[{AGT_SESSION_HOST}]") == "[]")
+        #expect(CommandContext().environment()["AGT_SESSION_HOST"] == "")
+        let names = CommandContext.tokenNames
+        let pwd = names.firstIndex(of: "AGT_SESSION_PWD")
+        #expect(pwd.map { names[$0 + 1] } == "AGT_SESSION_HOST")
+        #expect(CommandContext.referencesSessionScopedContext(#"ssh "$AGT_SESSION_HOST" uptime"#))
     }
 
     @Test func expandSubstitutesKnownTokens() {
@@ -54,6 +67,7 @@ struct CustomCommandTests {
         #expect(env["AGT_SESSION_ID"] == "sess-1")
         #expect(env["AGT_SESSION_NAME"] == "shell")
         #expect(env["AGT_SESSION_PWD"] == "/tmp/work")
+        #expect(env["AGT_SESSION_HOST"] == "user@box")
         #expect(env["AGT_WORKSPACE_ID"] == "ws-1")
         #expect(env["AGT_WORKSPACE_NAME"] == "main")
         #expect(env["AGT_WINDOW_ID"] == "win-1")
@@ -61,7 +75,7 @@ struct CustomCommandTests {
         #expect(env["AGT_PANE"] == "right")
         #expect(env["AGT_SELECTION"] == "hello")
         #expect(env["AGT_SOCKET"] == "/tmp/agt.sock")
-        #expect(env.count == 10)
+        #expect(env.count == 11)
     }
 
     @Test func paneDefaultsToLeft() {
@@ -98,7 +112,7 @@ struct CustomCommandTests {
             #expect(!ctx.expand("{\(key)}").contains("{"))
         }
         let expected: Set<String> = ["AGT_SESSION_ID", "AGT_SESSION_NAME", "AGT_SESSION_PWD",
-                                     "AGT_WORKSPACE_ID", "AGT_WORKSPACE_NAME", "AGT_WINDOW_ID",
+                                     "AGT_SESSION_HOST", "AGT_WORKSPACE_ID", "AGT_WORKSPACE_NAME", "AGT_WINDOW_ID",
                                      "AGT_WINDOW_NAME", "AGT_PANE", "AGT_SELECTION", "AGT_SOCKET"]
         #expect(envKeys == expected)
     }

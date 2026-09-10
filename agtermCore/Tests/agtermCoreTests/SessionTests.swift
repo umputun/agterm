@@ -354,6 +354,28 @@ struct SessionTests {
         #expect(session.cwd(for: .right) == "/repo/primary")
     }
 
+    @Test func localWorkingDirectoryKeepsAnyPathForALocalSession() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.localWorkingDirectory(reported: "/nowhere/primary", homeDirectory: "/home") == "/nowhere/primary")
+        #expect(session.localWorkingDirectory(reported: "/nowhere/split", homeDirectory: "/home") == "/nowhere/split")
+    }
+
+    @Test func localWorkingDirectoryOnARemoteSessionFallsBackToHomeUnlessThePathIsALocalDirectory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-session-tests-\(UUID().uuidString)", isDirectory: true)
+        let directory = root.appendingPathComponent("twin", isDirectory: true)
+        let file = root.appendingPathComponent("plain.txt")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let session = Session(initialCwd: "/home", remoteHost: "user@box")
+        #expect(session.localWorkingDirectory(reported: directory.path, homeDirectory: "/home") == directory.path)
+        let missing = root.appendingPathComponent("missing").path
+        #expect(session.localWorkingDirectory(reported: missing, homeDirectory: "/home") == "/home")
+        #expect(session.localWorkingDirectory(reported: file.path, homeDirectory: "/home") == "/home")
+    }
+
     @Test func agentIndicatorDefaultsToIdle() {
         let session = Session(initialCwd: "/repo")
         #expect(session.agentIndicator == AgentIndicator())

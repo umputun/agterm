@@ -522,7 +522,9 @@ struct agtermApp: App {
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
                                                 active: ghostty.launchRestoreMode, configuration: zmx)
         if disposition.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
-        let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
+        let cwd = session.localWorkingDirectory(reported: session.initialSplitCwd ?? session.effectiveCwd,
+                                                homeDirectory: NSHomeDirectory())
+        let view = GhosttySurfaceView(workingDirectory: cwd,
                                       fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
@@ -573,8 +575,8 @@ struct agtermApp: App {
     /// and captures no exit status, since it is a message the app painted rather than a program the caller
     /// ran. Its body file is the helper's only input, deleted with the surface like the exit-code file.
     @MainActor
-    private static func makeOverlaySurface(for session: Session, store: AppStore, pane: OverlayPane?,
-                                           env: [String: String]) -> GhosttySurfaceView {
+    static func makeOverlaySurface(for session: Session, store: AppStore, pane: OverlayPane?,
+                                   env: [String: String]) -> GhosttySurfaceView {
         let sessionID = session.id
         let spec = Self.overlaySpec(for: session, pane: pane)
         // the session-wide slot's occupant decides passivity; the body file is what that occupant needs
@@ -585,7 +587,10 @@ struct agtermApp: App {
         overlayEnv[OverlayCapture.cmdEnvKey] = spec.command
         overlayEnv[OverlayCapture.codeEnvKey] = codeFile
         if let hudFile { overlayEnv[HudLayout.fileEnvKey] = hudFile }
-        let view = GhosttySurfaceView(workingDirectory: spec.cwd ?? session.effectiveCwd,
+        // an explicit `--cwd` is the caller's local choice; only the inherited default follows the remote rule.
+        let cwd = spec.cwd ?? session.localWorkingDirectory(reported: session.effectiveCwd,
+                                                             homeDirectory: NSHomeDirectory())
+        let view = GhosttySurfaceView(workingDirectory: cwd,
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
                                       waitAfterCommand: spec.wait, autoFocus: !isHud, env: overlayEnv)
         view.overlayCodeFile = codeFile
@@ -651,13 +656,14 @@ struct agtermApp: App {
     /// RUN-ONCE. `autoFocus` grabs first responder on show (winning the SwiftUI/AppKit responder race); the
     /// shell's `exit` runs `closeScratch`, hiding + tearing down so the next show is fresh.
     @MainActor
-    private static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
-                                           suppressAutoFocus: Bool, actions: AppActions) -> GhosttySurfaceView {
+    static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
+                                   suppressAutoFocus: Bool, actions: AppActions) -> GhosttySurfaceView {
         // re-shows are focused via the `scratchActive` onChange (which also defers to those covers).
         // scratchCommand is run-once: read it for this spawn, then clear so a post-exit respawn is a shell.
         let command = session.scratchCommand
         session.scratchCommand = nil
-        let view = GhosttySurfaceView(workingDirectory: session.effectiveCwd,
+        let cwd = session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: NSHomeDirectory())
+        let view = GhosttySurfaceView(workingDirectory: cwd,
                                       fontSize: session.fontSize.map(Float.init),
                                       command: command,
                                       autoFocus: !suppressAutoFocus, env: env)
@@ -713,16 +719,21 @@ struct agtermApp: App {
                                          programVersion: Self.terminalProgramVersion)
     }
 
+    /// The quick terminal's start directory: the active session's, through the remote rule, else HOME.
+    @MainActor
+    static func quickTerminalCwd(library: WindowLibrary?) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        guard let session = library?.activeStore?.activeSession else { return home }
+        return session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: home)
+    }
+
     /// Bind the app's one quick terminal to the library. Every provider resolves through `activeStore` at
     /// call time rather than capturing a window, the panel outliving any particular one; `canShow` is what
     /// keeps it from being summoned into an app with no window left to return to.
     @MainActor
     func wireQuickTerminal(library: WindowLibrary) {
         let controller = QuickTerminalController.shared
-        controller.cwdProvider = { [weak library] in
-            library?.activeStore?.activeSession?.effectiveCwd
-                ?? FileManager.default.homeDirectoryForCurrentUser.path
-        }
+        controller.cwdProvider = { [weak library] in Self.quickTerminalCwd(library: library) }
         controller.envProvider = { [self] in quickTerminalEnv() }
         // typing counts as activity, so an idle auto-follow fire can't reshuffle the active window's
         // selection behind the panel while the user types (mirrors the overlay/scratch).

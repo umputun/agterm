@@ -550,6 +550,16 @@ public final class Session: Identifiable {
         }
     }
 
+    /// Where a LOCAL process for this session starts, given the pane path it would inherit: that path on a
+    /// local session; on a remote one, only when it exists here as a directory, else `homeDirectory`. The
+    /// reported path itself stays what `cwd(for:)` and `AGT_SESSION_PWD` carry.
+    public func localWorkingDirectory(reported path: String, homeDirectory: String) -> String {
+        guard remoteHost != nil else { return path }
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        return exists && isDirectory.boolValue ? path : homeDirectory
+    }
+
     /// The focused pane's surface: the split (right) while it has focus and exists, else the primary. With the
     /// split hidden the detail pane maximizes this one and focus helpers target it, so typing always reaches
     /// the visible pane.
