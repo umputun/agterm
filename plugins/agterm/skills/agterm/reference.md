@@ -1484,9 +1484,10 @@ The pane reports the far side's working directory, and the local launches that w
 their start directory by one rule: the reported path when it exists here as a directory, else local
 HOME. Those launches are a custom command (its `$AGT_SESSION_PWD` keeps the reported path and
 `$AGT_SESSION_HOST` names the destination), the scratch terminal, an overlay opened without `--cwd`,
-the quick terminal, and a split opened after the attach-time split is closed. An explicit overlay
-`--cwd` is used as given. Quote both variables; an existing local path is not checked to be the same
-repository as the remote one.
+the quick terminal, a local split (the first one on a remote session that arrived without a split, or
+one opened after the attach-time split is closed), Duplicate Session, and New Session when it is set
+to open in the current session's directory. An explicit overlay `--cwd` is used as given. Quote both
+variables; an existing local path is not checked to be the same repository as the remote one.
 
 When another client leads at a different terminal size, local cursor and screen-text reads can disagree
 with the application's layout; automation relying on those reads, including the chat transport, is

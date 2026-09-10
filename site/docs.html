@@ -2496,9 +2496,10 @@
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               The pane reports the far side's working directory, and the local launches that would inherit it — a custom
               command, the scratch terminal, an overlay opened without
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cwd</span>, the quick terminal, a split
-              opened after the attach-time split is closed — starts in that path when it exists here as a directory, else in your
-              home. A custom command still sees the reported path in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cwd</span>, the quick terminal, a local
+              split (the first on a session that arrived without one, or one opened after the attach-time split is closed),
+              Duplicate Session, and New Session when set to open in the current session's directory — start in that path when it
+              exists here as a directory, else in your home. A custom command still sees the reported path in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_PWD</span> and the
               destination in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_HOST</span>,
               empty for a local session, so it can reach the remote directory itself. When another client leads at a different

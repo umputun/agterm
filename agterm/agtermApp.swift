@@ -513,7 +513,9 @@ struct agtermApp: App {
     static func makeSplitSurface(for session: Session, store: AppStore, env: [String: String],
                                  services: SurfaceServices) -> GhosttySurfaceView {
         // cwd is the persisted `initialSplitCwd` (a restored split keeps its own directory), else the session's
-        // effectiveCwd. Font size matches the primary; env inherits the parent's window/workspace/session ids.
+        // effectiveCwd, both through `Session.localWorkingDirectory`: the directory is the LOCAL launch's,
+        // whether that is a shell or the attach-time ssh client. Font size matches the primary; env inherits
+        // the parent's window/workspace/session ids.
         // Creation, capture and override precedence matches the primary.
         let ghostty = GhosttyApp.shared
         let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)

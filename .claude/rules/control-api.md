@@ -931,9 +931,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A remote pane's reported cwd can be remote, so the local launches that inherit it go through
   `Session.localWorkingDirectory`: the reported path when it exists here as a directory, else HOME.
   Those are custom commands (execution cwd only; `AGT_SESSION_PWD` stays the reported path and
-  `AGT_SESSION_HOST` carries the destination), scratch, the overlay default, the quick terminal and a
-  split created after the attach-time split closes. The primary SSH surface still starts in HOME
-  without the helper. `keymap.md` owns the token contract.
+  `AGT_SESSION_HOST` carries the destination), scratch, the overlay default, the quick terminal, a
+  local split (the first on an unsplit remote session, or one created after the attach-time split
+  closes), Duplicate Session and a new session under the current-directory setting. The primary SSH
+  surface still starts in HOME without the helper. `keymap.md` owns the token contract.
 - When another client leads at a different terminal size, local cursor and screen-text reads can
   disagree with the application's layout; automation relying on those reads, the chat transport
   included, is unsupported in that state. `docs/backlog/attached-pane-content-is-laid-out-for-the-leaders-grid.md`

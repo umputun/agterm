@@ -129,8 +129,8 @@ final class AppActions {
     /// isn't wired. Read as the `addSession` argument, so it captures the cwd BEFORE the new session exists.
     func resolvedNewSessionCwd() -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return settingsModel?.settings.resolveNewSessionCwd(
-            currentSessionCwd: store?.activeSession?.focusedCwd, home: home) ?? home
+        let current = store?.activeSession.map { $0.localWorkingDirectory(reported: $0.focusedCwd, homeDirectory: home) }
+        return settingsModel?.settings.resolveNewSessionCwd(currentSessionCwd: current, home: home) ?? home
     }
 
     func openDirectory() {
