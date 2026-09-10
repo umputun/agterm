@@ -26,7 +26,7 @@ final class StatusSoundPlayerTests: XCTestCase {
     }
 
     func testStartingAClipLeavesTheMainThread() throws {
-        // #575: the first NSSound.play() of a process spent ~0.7s starting CoreAudio on the main actor
+        // #575: the first NSSound.play() of a process took ~0.9s, on the main actor
         let fixture = try registerRecordingSound()
         let action = try XCTUnwrap(player.action(for: fixture.name))
 

@@ -16,9 +16,9 @@ final class StatusSoundPlayer {
 
     private var cache: [String: NSSound] = [:]
 
-    /// Playback runs here, never on the main actor: the first `NSSound.play()` in a process spins up
-    /// CoreAudio and held the main queue for ~0.7s (#575), which stalls keystroke delivery in every session.
-    /// Serial, so one clip's `stop()`/`play()` pair can't interleave with another's on the same instance.
+    /// Playback runs here, never on the main actor: the first `NSSound.play()` in a process is slow enough
+    /// to stall keystroke delivery in every session, measured at ~0.9s in #575 (the cause inside AppKit was
+    /// never established). Serial, so one clip's `stop()`/`play()` pair can't interleave with another's.
     private static let playQueue = DispatchQueue(label: "com.umputun.agterm.status-sound", qos: .userInitiated)
 
     /// De-bounce identical replays so a rapid run of `session.status --sound` (or repeated `blocked`
