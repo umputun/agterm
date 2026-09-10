@@ -35,6 +35,7 @@ final class FullScreenChordTests: XCTestCase {
                                          settings: SettingsModel(library: library,
                                                                  settingsStore: SettingsStore(directory: stateDir)),
                                          actions: AppActions(library: library),
+                                         usage: CustomCommandUsageStore(directory: stateDir),
                                          socketProvider: { "" })
             // `NSWindow` defaults isReleasedWhenClosed to true; see the hosted-test rule in ui-tests.md.
             window = RecordingWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
@@ -84,7 +85,8 @@ final class FullScreenChordTests: XCTestCase {
         settings.setConfigDirectory(configDir.path)
         let actions = AppActions(library: library)
         actions.settingsModel = settings
-        return CustomCommandRunner(library: library, settings: settings, actions: actions, socketProvider: { "" })
+        return CustomCommandRunner(library: library, settings: settings, actions: actions,
+                                   usage: CustomCommandUsageStore(directory: stateDir), socketProvider: { "" })
     }
 
     func testShippedChordTogglesFullScreenAndIsConsumed() throws {

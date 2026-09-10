@@ -710,9 +710,10 @@ private func splitMapAlternatives(_ parsed: Alternatives, line: Int,
     return (menuChord, alternatives)
 }
 
-/// Parse the remainder of a `command` line (after the verb): `"<name>" [chord] <shell...>`. On any failure
-/// it appends a diagnostic and leaves `commandLines` untouched. The kept alternatives ride alongside the
-/// command; `applySurvivingShortcuts` is what turns them back into `CustomCommand.shortcut`.
+/// Parse the remainder of a `command` line (after the verb): `"<name>" [chord] <shell...>`. On any failure,
+/// a name already taken included, it appends a diagnostic and leaves `commandLines` untouched. The kept
+/// alternatives ride alongside the command; `applySurvivingShortcuts` is what turns them back into
+/// `CustomCommand.shortcut`.
 private func parseCommandLine(_ rest: String, line: Int, commandLines: inout [ParsedCommandLine],
                               diagnostics: inout [KeymapDiagnostic]) {
     guard rest.first == "\"", let closeQuote = rest.dropFirst().firstIndex(of: "\"") else {
@@ -752,6 +753,13 @@ private func parseCommandLine(_ rest: String, line: Int, commandLines: inout [Pa
     // an empty shell line (just a name, or a name + chord with no command) is a no-op binding; skip it.
     guard !shellLine.trimmingCharacters(in: .whitespaces).isEmpty else {
         diagnostics.append(KeymapDiagnostic(line: line, message: "command '\(name)' has no shell line"))
+        return
+    }
+
+    // the name is the identity a run count is stored under, so a second definition cannot share it.
+    guard !commandLines.contains(where: { $0.command.name == name }) else {
+        diagnostics.append(KeymapDiagnostic(line: line,
+            message: "command '\(name)' is already defined; command skipped"))
         return
     }
 

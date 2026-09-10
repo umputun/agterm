@@ -237,6 +237,18 @@ struct KeymapTests {
         #expect(command.command == "./deploy.sh")
     }
 
+    @Test func parseCommandDuplicateNameKeepsTheFirstDefinition() {
+        let (keymap, diagnostics) = parseKeymap("""
+        command "Deploy" cmd+shift+d ./deploy.sh
+        command "Deploy" ./deploy.sh --prod
+        command "Other" ./other.sh
+        """)
+        #expect(keymap.commands.map(\.name) == ["Deploy", "Other"])
+        #expect(keymap.commands[0].command == "./deploy.sh")
+        #expect(keymap.commands[0].shortcut == "cmd+shift+d")
+        #expect(diagnostics == [KeymapDiagnostic(line: 2, message: "command 'Deploy' is already defined; command skipped")])
+    }
+
     @Test func parseCommandBareKeyRejectedAsShortcut() {
         // a bare key would shadow that key in the terminal, so it is never consumed as a shortcut.
         let (keymap, diagnostics) = parseKeymap("command \"X\" a echo hi")

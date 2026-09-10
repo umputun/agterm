@@ -3,9 +3,13 @@ import AppKit
 import SwiftUI
 
 /// Title-bar custom-commands button and its popover, the mouse form of the ⌃⇧O palette (#570): every
-/// `keymap.conf` command as a clickable row with its chord, in file order so a row never moves under a
-/// learned mouse position. Split out of `WindowContentView` like `+RecentSessions`, whose button it mirrors.
+/// `keymap.conf` command as a clickable row with its chord, the most-run ones grouped on top. Both groups
+/// keep file order; usage changes only which commands sit in the top group. Split out of
+/// `WindowContentView` like `+RecentSessions`, whose button it mirrors.
 extension WindowContentView {
+    /// How many most-run commands lead the list, and the command count above which that section appears.
+    static let mostUsedCommandLimit = 5
+
     /// Title-bar button opening the custom-commands popover. Disabled/dimmed with no parsed command or no
     /// active session: the runner ignores a command fired without one, so every row would silently no-op.
     /// Opening a popover is interactive-only, so it is control-API keep-in-sync exempt like the clock and bell.
@@ -37,14 +41,28 @@ extension WindowContentView {
         }
     }
 
-    /// The popover body: the commands in keymap order, in a list that scrolls past a cap since the keymap
-    /// has none, as wide as its longest row between a floor and the recent-sessions popover's width. Tinted
-    /// like that popover.
+    /// The popover body: the most-run commands (only once the keymap holds more than the limit) above a
+    /// separator, then the rest, in a list that scrolls past a cap since the keymap has none, as wide as its
+    /// longest row between a floor and the recent-sessions popover's width. Counts decide only which rows
+    /// lead; both groups keep keymap order, so usage changes which commands sit on top and nothing else.
+    /// Tinted like the recent-sessions popover. The counts are read on every open, so runs from a chord or
+    /// the palette count too.
     private func customCommandsPopover(_ commands: [CustomCommand]) -> some View {
         let metrics = GhosttyApp.shared.interfaceMetrics
+        let mostUsed = commands.count > Self.mostUsedCommandLimit
+            ? actions.customCommandRunner?.usage.load().mostUsed(of: commands, limit: Self.mostUsedCommandLimit) ?? []
+            : []
+        let leadingIDs = Set(mostUsed.map(\.id))
+        let leading = commands.filter { leadingIDs.contains($0.id) }
+        let rest = commands.filter { !leadingIDs.contains($0.id) }
         return ScrollView {
             VStack(spacing: 2) {
-                ForEach(commands) { customCommandRow($0) }
+                ForEach(leading) { customCommandRow($0, accessibilityID: "custom-command-top-row") }
+                if !leading.isEmpty {
+                    Rectangle().fill(chromeText.opacity(0.25)).frame(height: 1)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                }
+                ForEach(rest) { customCommandRow($0, accessibilityID: "custom-command-row") }
             }
             .padding(6)
         }
@@ -54,9 +72,10 @@ extension WindowContentView {
         .presentationBackground(terminalColor)
     }
 
-    private func customCommandRow(_ command: CustomCommand) -> some View {
+    private func customCommandRow(_ command: CustomCommand, accessibilityID: String) -> some View {
         CustomCommandPopoverRow(title: command.name, shortcut: command.shortcut.isEmpty ? nil : command.shortcut,
-                                foreground: chromeText, hoverColor: popoverHoverColor) { runFromPopover(command) }
+                                foreground: chromeText, hoverColor: popoverHoverColor,
+                                accessibilityID: accessibilityID) { runFromPopover(command) }
     }
 
     /// Commit a row click: note activity (so auto-follow can't pull the selection away), run the command
@@ -78,6 +97,7 @@ private struct CustomCommandPopoverRow: View {
     let shortcut: String?
     let foreground: Color
     let hoverColor: Color
+    let accessibilityID: String
     let onSelect: () -> Void
     @State private var hovering = false
     private let metrics = GhosttyApp.shared.interfaceMetrics
@@ -128,6 +148,6 @@ private struct CustomCommandPopoverRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityIdentifier("custom-command-row")
+        .accessibilityIdentifier(accessibilityID)
     }
 }

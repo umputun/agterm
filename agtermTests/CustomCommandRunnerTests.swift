@@ -77,7 +77,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         let actions = AppActions(library: library)
         actions.settingsModel = settings
         let runner = CustomCommandRunner(library: library, settings: settings, actions: actions,
-                                         socketProvider: { "" })
+                                         usage: CustomCommandUsageStore(directory: stateDir), socketProvider: { "" })
         runner.start()
         started.append(runner)
         let store = try XCTUnwrap(library.activeStore)

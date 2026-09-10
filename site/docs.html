@@ -642,10 +642,13 @@
               <strong style="color: #e6e1d7">Navigate &#9656; Custom Commands</strong> palette,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;o</span> is the chord that
               fires it &mdash; Ctrl-A, then O &mdash; and everything after that is an ordinary shell line. The chord is
-              optional: leave it out and the action exists in the palette only. For a mouse path, turn on the
+              optional: leave it out and the action exists in the palette only. Names are unique: a second
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> line with a
+              name already taken is skipped with a diagnostic. For a mouse path, turn on the
               <strong style="color: #e6e1d7">Custom commands</strong> title-bar button in Settings &#9656; Interface: it
-              lists the same commands with their chords in a popover, in the order of the file, so put the ones
-              you reach for most first.
+              lists the same commands with their chords in a popover, in the order of the file. Once there are more than
+              five, the five you run most are grouped on top, still in file order; use changes only which commands
+              sit in that group.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               The building block is <strong style="color: #e6e1d7">session context</strong>. Every custom command is handed the

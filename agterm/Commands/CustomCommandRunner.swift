@@ -30,11 +30,15 @@ final class CustomCommandRunner {
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
     private static let leaderTimeout: TimeInterval = 1.5
 
-    init(library: WindowLibrary, settings: SettingsModel, actions: AppActions,
+    /// Run counts behind the title-bar popover's most-used section; every spawn path records into it.
+    let usage: CustomCommandUsageStore
+
+    init(library: WindowLibrary, settings: SettingsModel, actions: AppActions, usage: CustomCommandUsageStore,
          socketProvider: @escaping () -> String) {
         self.library = library
         self.settings = settings
         self.actions = actions
+        self.usage = usage
         self.socketProvider = socketProvider
     }
 
@@ -377,6 +381,7 @@ final class CustomCommandRunner {
         }
         do {
             try process.run()
+            usage.record(command)
         } catch {
             logger.error("custom command \"\(name, privacy: .public)\" failed to spawn: \(error.localizedDescription, privacy: .public)")
             NotificationManager.shared.notifyCommandFailure(name: name, detail: error.localizedDescription)
