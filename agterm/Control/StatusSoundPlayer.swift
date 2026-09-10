@@ -26,9 +26,9 @@ final class StatusSoundPlayer {
     /// never established). Serial, so one clip's `stop()`/`play()` pair can't interleave with another's.
     private static let playQueue = DispatchQueue(label: "com.umputun.agterm.status-sound", qos: .userInitiated)
 
-    /// Lookup I/O gets its own queue so a slow name never occupies `playQueue`. Serial, because parallel
-    /// lookups buy nothing here and `NSSound(named:)` reads a shared registry with no documented
-    /// concurrency guarantee.
+    /// Lookup I/O gets its own queue so a slow name never occupies `playQueue`. Serial by choice: parallel
+    /// lookups would let a slow blocked default overlap a later command's first lookup, but `NSSound(named:)`
+    /// reads a shared registry with no documented concurrency guarantee, and that is the worse bet.
     private static let resolveQueue = DispatchQueue(label: "com.umputun.agterm.status-sound.resolve", qos: .userInitiated)
 
     /// Suppress rapid repeats of the same status sound to avoid stuttering; Settings previews bypass this.
