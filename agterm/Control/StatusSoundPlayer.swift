@@ -26,6 +26,11 @@ final class StatusSoundPlayer {
     /// never established). Serial, so one clip's `stop()`/`play()` pair can't interleave with another's.
     private static let playQueue = DispatchQueue(label: "com.umputun.agterm.status-sound", qos: .userInitiated)
 
+    /// Lookup I/O gets its own queue so a slow name never occupies `playQueue`. Serial, because parallel
+    /// lookups buy nothing here and `NSSound(named:)` reads a shared registry with no documented
+    /// concurrency guarantee.
+    private static let resolveQueue = DispatchQueue(label: "com.umputun.agterm.status-sound.resolve", qos: .userInitiated)
+
     /// Suppress rapid repeats of the same status sound to avoid stuttering; Settings previews bypass this.
     private var throttle = SoundThrottle(window: .milliseconds(200))
 
@@ -36,12 +41,12 @@ final class StatusSoundPlayer {
 
     /// Resolve a `session.status` sound value to its one-shot play action, or nil when a named sound can't
     /// be found. `default`/`beep` plays the system alert sound; anything else plays the named system sound.
-    /// Cache misses resolve on the playback queue; cache hits never wait for that queue.
+    /// Cache misses use the resolution queue; cache hits return without queueing.
     func action(for name: String) async -> (() -> Void)? {
         if name == "default" || name == "beep" { return { Self.playQueue.async { NSSound.beep() } } }
         if let cached = cache[name] { return Self.playAction(for: cached) }
         let resolved = await withCheckedContinuation { continuation in
-            Self.playQueue.async { [resolve] in
+            Self.resolveQueue.async { [resolve] in
                 continuation.resume(returning: resolve(name))
             }
         }
@@ -67,7 +72,7 @@ final class StatusSoundPlayer {
 
     /// Preview only while its selection still applies, bypassing status throttling.
     func preview(_ name: String, ifCurrent: () -> Bool) async {
-        guard let action = await action(for: name), !Task.isCancelled, ifCurrent() else { return }
+        guard let action = await action(for: name), ifCurrent() else { return }
         action()
     }
 

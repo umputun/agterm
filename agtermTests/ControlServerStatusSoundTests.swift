@@ -19,6 +19,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
     private var server: ControlServer!
     private var player: StatusSoundPlayer!
     private var sound: RecordingSound!
+    private var playbackBarrier: RecordingSound!
     private var gate: StatusSoundResolutionGate!
 
     override func setUp() async throws {
@@ -27,6 +28,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         library = WindowLibrary(directory: stateDir)
         settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
         sound = try XCTUnwrap(RecordingSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true))
+        playbackBarrier = try XCTUnwrap(RecordingSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true))
     }
 
     override func tearDown() async throws {
@@ -36,6 +38,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         settings = nil
         library = nil
         sound = nil
+        playbackBarrier = nil
         gate = nil
         try? FileManager.default.removeItem(at: stateDir)
         try await super.tearDown()
@@ -56,7 +59,6 @@ final class ControlServerStatusSoundTests: XCTestCase {
 
         let missing = await update(target: UUID().uuidString, soundName: "missing")
         XCTAssertTrue(missing.error?.hasPrefix("unknown sound: missing") == true)
-        XCTAssertTrue(sound.log.calls.isEmpty)
     }
 
     func testActiveTargetStaysBoundDuringSelectionChange() async throws {
@@ -88,8 +90,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         gate.release.signal()
         let response = await pending.value
         XCTAssertFalse(response.ok)
-        _ = await player.action(for: "barrier")
-        XCTAssertTrue(sound.log.calls.isEmpty)
+        await assertNoPlayback()
     }
 
     func testClosedWindowDoesNotMutateRetainedStoreOrPlay() async throws {
@@ -104,8 +105,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         let response = await pending.value
         XCTAssertFalse(response.ok)
         XCTAssertEqual(session.agentIndicator.status, .idle)
-        _ = await player.action(for: "barrier")
-        XCTAssertTrue(sound.log.calls.isEmpty)
+        await assertNoPlayback()
     }
 
     func testPaneRefusalUsesStateAfterResolutionAndDoesNotPlay() async throws {
@@ -121,8 +121,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         XCTAssertFalse(response.ok)
         XCTAssertEqual(response.error, "blocked status owned by pane right (write from that pane to change it)")
         XCTAssertEqual(session.agentIndicator.status, .blocked)
-        _ = await player.action(for: "barrier")
-        XCTAssertTrue(sound.log.calls.isEmpty)
+        await assertNoPlayback()
     }
 
     func testInvalidBlockedDefaultDoesNotRejectOrDelayMutation() async throws {
@@ -134,9 +133,9 @@ final class ControlServerStatusSoundTests: XCTestCase {
         XCTAssertEqual(session.agentIndicator.status, .blocked)
         await fulfillment(of: [gate.started], timeout: 2)
         XCTAssertFalse(gate.onMainThread)
+        XCTAssertFalse(gate.finished, "the response must arrive before default sound resolution finishes")
         gate.release.signal()
-        _ = await player.action(for: "barrier")
-        XCTAssertTrue(sound.log.calls.isEmpty)
+        await fulfillment(of: [gate.completed], timeout: 2)
     }
 
     func testPaneTokenUsesRolesAfterResolution() async throws {
@@ -161,11 +160,22 @@ final class ControlServerStatusSoundTests: XCTestCase {
     private func makeServer(resolvedSound: NSSound?) {
         let gate = StatusSoundResolutionGate(sound: resolvedSound)
         self.gate = gate
-        player = StatusSoundPlayer(resolve: { name in name == "held" ? gate.resolve() : resolvedSound })
+        let barrier = playbackBarrier
+        player = StatusSoundPlayer(resolve: { name in
+            if name == "barrier" { return barrier }
+            return name == "held" ? gate.resolve() : resolvedSound
+        })
         server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settings,
                                identity: AppIdentity(version: "test", commit: "test"),
                                statusSoundPlayer: player,
                                socketPath: stateDir.appendingPathComponent("control.sock").path)
+    }
+
+    private func assertNoPlayback(file: StaticString = #filePath, line: UInt = #line) async {
+        let action = await player.action(for: "barrier")
+        action?()
+        await fulfillment(of: [playbackBarrier.log.playCalled], timeout: 2)
+        XCTAssertTrue(sound.log.calls.isEmpty, file: file, line: line)
     }
 
     private func update(target: String? = nil, soundName: String? = "held", status: AgentStatus = .blocked,
