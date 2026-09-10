@@ -80,15 +80,16 @@ extension WindowContentView {
                 statusColorHex: nil,
                 statusShape: nil,
                 foreground: chromeText,
-                hoverColor: recentSelectionColor,
+                hoverColor: popoverHoverColor,
                 accessibilityID: "recent-session-row"
             ) { selectRecent(id) }
         }
     }
 
-    /// The hover-highlight color for a popover row: the terminal theme's selection background (the color the
-    /// selected sidebar row uses), or a subtle wash of the foreground when the theme sets no selection color.
-    private var recentSelectionColor: Color {
+    /// The hover-highlight color for a title-bar popover row: the terminal theme's selection background (the
+    /// color the selected sidebar row uses), or a subtle wash of the foreground when the theme sets no
+    /// selection color. Shared with the custom-commands popover.
+    var popoverHoverColor: Color {
         if let sel = GhosttyApp.shared.terminalSelectionBackgroundColor {
             return Color(nsColor: sel).opacity(0.5)
         }
@@ -158,7 +159,7 @@ extension WindowContentView {
                     statusColorHex: session.agentIndicator.color,
                     statusShape: session.agentIndicator.shape,
                     foreground: chromeText,
-                    hoverColor: recentSelectionColor,
+                    hoverColor: popoverHoverColor,
                     accessibilityID: "attention-session-row"
                 ) { selectAttention(session.id) }
             }

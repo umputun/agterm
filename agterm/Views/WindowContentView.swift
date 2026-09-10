@@ -87,6 +87,9 @@ struct WindowContentView: View {
     /// Whether the attention popover (the mouse equivalent of the ⌃⇧I attention palette) is shown, anchored
     /// on the title-bar bell. Non-private so the `+RecentSessions` extension's bell/rows can toggle it.
     @State var attentionPopoverShown = false
+    /// Whether the custom-commands popover (the mouse form of the ⌃⇧O palette) is shown, anchored on its
+    /// title-bar button. Non-private so the `+CustomCommands` extension's button/rows can toggle it.
+    @State var customCommandsShown = false
     /// Sidebar width and visibility live on the per-window `AppStore`, persisted in `Snapshot` and shared
     /// with the toolbar button, View menu, palette and the `sidebar` control command.
     /// Height of the custom titlebar row: title + cwd normal, one short line compact, zero hidden (an
@@ -192,14 +195,15 @@ struct WindowContentView: View {
         // return first responder to this window's terminal after every resolution path.
         .onChange(of: pick.modalPending) { old, new in
             if !old, new, !pickSuppressesAutoFollow {
-                // a socket-driven picker may arrive with either title-bar popover already open; dismiss
-                // both so no second interactive surface remains above the modal picker. The quick-terminal
+                // a socket-driven picker may arrive with a title-bar popover already open; dismiss them
+                // all so no second interactive surface remains above the modal picker. The quick-terminal
                 // panel is now exactly that surface and the worst of them: it floats above every window and
                 // holds key, so the picker would open under it with neither the screen nor the keyboard.
                 // `canShow` stops the reverse order; this is the same class from the other direction.
                 QuickTerminalController.shared.hide()
                 recentSessionsShown = false
                 attentionPopoverShown = false
+                customCommandsShown = false
                 store.suppressAutoFollow()
                 pickSuppressesAutoFollow = true
             } else if old, !new, pickSuppressesAutoFollow {

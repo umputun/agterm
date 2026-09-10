@@ -230,8 +230,10 @@ paths:
   close and sidebar row close; skip under XCUITest. Control `session.close` must never prompt.
 - `hiddenInterfaceElements` stores raw names and preserves unknown values while toggling known ones; empty
   maps nil. Titlebar cases are `sidebarToggle`, `sessionName`, `windowName`, `remoteHost`, `sessionContext`,
-  `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`; sidebar cases are `newWorkspace`,
-  `newSession`, `flaggedView`, `focusFilter`, and row-level `workspaceAddSession`. Attention has its
+  `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`; sidebar cases are
+  `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level `workspaceAddSession`.
+  A `hiddenByDefault` case (`customCommands` alone) is governed by `shownInterfaceElements` instead, the
+  same shape with the opposite sense, and its name in the hidden list is ignored. Attention has its
   separate default-off setting.
 - `InterfaceElement` owns section/display name; the tab iterates `allCases`. Mutate the raw set, then push
   resolved known values to `GhosttyApp`. SwiftUI gates with `shows(_:)`; the AppKit row "+" checks the

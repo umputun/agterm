@@ -255,9 +255,15 @@ final class SettingsModel {
     /// window re-gates live. Mutates the RAW string set: `resolvedHiddenInterfaceElements` drops unknown
     /// names, which would erase an element a newer build hid.
     func setInterfaceElementVisible(_ element: InterfaceElement, visible: Bool) {
-        var hidden = Set(settings.hiddenInterfaceElements ?? [])
-        if visible { hidden.remove(element.rawValue) } else { hidden.insert(element.rawValue) }
-        settings.hiddenInterfaceElements = hidden.isEmpty ? nil : hidden.sorted()
+        if element.hiddenByDefault {
+            var shown = Set(settings.shownInterfaceElements ?? [])
+            if visible { shown.insert(element.rawValue) } else { shown.remove(element.rawValue) }
+            settings.shownInterfaceElements = shown.isEmpty ? nil : shown.sorted()
+        } else {
+            var hidden = Set(settings.hiddenInterfaceElements ?? [])
+            if visible { hidden.remove(element.rawValue) } else { hidden.insert(element.rawValue) }
+            settings.hiddenInterfaceElements = hidden.isEmpty ? nil : hidden.sorted()
+        }
         persistAndApply()
     }
 

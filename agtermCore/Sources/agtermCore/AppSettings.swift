@@ -21,9 +21,10 @@ public enum DockBounce: String, Codable, Sendable, CaseIterable {
     case untilFocused
 }
 
-/// A toggleable title-bar or sidebar chrome element, persisted by raw name in
-/// `AppSettings.hiddenInterfaceElements` (an unknown stored name is dropped, not fatal). Shown by
-/// default; hiding adds its raw name.
+/// A toggleable title-bar or sidebar chrome element, persisted by raw name (an unknown stored name is
+/// dropped, not fatal). Shown by default, and hiding adds its raw name to
+/// `AppSettings.hiddenInterfaceElements`; a `hiddenByDefault` element inverts that, and showing it adds
+/// its raw name to `AppSettings.shownInterfaceElements`.
 public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     // title bar
     case sidebarToggle
@@ -36,6 +37,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case split
     case dashboard
     case quickTerminal
+    case customCommands
     // sidebar
     case newWorkspace
     case newSession
@@ -54,6 +56,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// Whether the element starts hidden, so its toggle reads off until the user opts in.
+    public var hiddenByDefault: Bool { self == .customCommands }
+
     /// The human-facing toggle label shown in the Interface settings tab.
     public var displayName: String {
         switch self {
@@ -67,6 +72,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .split: return "Split view"
         case .dashboard: return "Dashboard"
         case .quickTerminal: return "Quick terminal"
+        case .customCommands: return "Custom commands"
         case .newWorkspace: return "New workspace"
         case .newSession: return "New session"
         case .flaggedView: return "Flagged view"
@@ -76,8 +82,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     }
 
     /// Which of the two title-bar trailing-cluster separators to draw, from each group's visible button
-    /// count (A = recent-sessions + attention, B = scratch + split, C = dashboard + quick-terminal): one
-    /// sits ONLY where two groups that each still show 2+ buttons meet. Host-free so it is unit-testable.
+    /// count (A = recent-sessions + attention, B = scratch + split, C = dashboard + quick-terminal +
+    /// custom-commands): one sits ONLY where two groups that each still show 2+ buttons meet. Host-free so
+    /// it is unit-testable.
     public static func titlebarGroupDividers(countA: Int, countB: Int, countC: Int) -> (afterA: Bool, afterB: Bool) {
         let afterA = countA >= 2 && countB >= 2
         let afterB = (countB >= 2 && countC >= 2) || (countA >= 2 && countC >= 2 && countB == 0)
@@ -290,9 +297,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The share of the focused screen the quick-terminal panel takes, as a percentage; nil keeps the
     /// built-in size. `QuickTerminalMetrics.panelSize` resolves and clamps it.
     public var quickTerminalSizePercent: Int?
-    /// Raw names of the chrome elements the user has HIDDEN (see `InterfaceElement`); nil/empty shows
-    /// everything. Unknown names are dropped by `resolvedHiddenInterfaceElements`.
+    /// Raw names of the default-shown chrome elements the user has HIDDEN (see `InterfaceElement`);
+    /// nil/empty shows them all. Unknown names are dropped by `resolvedHiddenInterfaceElements`.
     public var hiddenInterfaceElements: [String]?
+    /// Raw names of the `hiddenByDefault` chrome elements the user has SHOWN; nil/empty keeps them hidden.
+    public var shownInterfaceElements: [String]?
     /// Whether, with more than one window open, only the frontmost shows its sidebar and every other
     /// collapses its own; nil = off. Visibility then follows window focus, so a manual per-window hide is
     /// transient — the frontmost window re-shows its sidebar on refocus.
@@ -322,7 +331,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
-                hiddenInterfaceElements: [String]? = nil,
+                hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
@@ -366,6 +375,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.interfaceFontSize = interfaceFontSize
         self.quickTerminalSizePercent = quickTerminalSizePercent
         self.hiddenInterfaceElements = hiddenInterfaceElements
+        self.shownInterfaceElements = shownInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.welcomeShown = welcomeShown
     }
@@ -383,10 +393,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// The hidden chrome elements, unknown (future-written) raw names dropped. The single read point.
     public var resolvedHiddenInterfaceElements: Set<InterfaceElement> {
-        Set((hiddenInterfaceElements ?? []).compactMap(InterfaceElement.init(rawValue:)))
+        let hidden = Set((hiddenInterfaceElements ?? []).compactMap(InterfaceElement.init(rawValue:)))
+        let shown = Set((shownInterfaceElements ?? []).compactMap(InterfaceElement.init(rawValue:)))
+        return Set(InterfaceElement.allCases.filter { $0.hiddenByDefault ? !shown.contains($0) : hidden.contains($0) })
     }
 
-    /// Whether a chrome element is hidden; anything absent from the persisted list reads as visible.
+    /// Whether a chrome element is hidden; an element absent from both persisted lists is at its default.
     public func isInterfaceElementHidden(_ element: InterfaceElement) -> Bool {
         resolvedHiddenInterfaceElements.contains(element)
     }

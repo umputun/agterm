@@ -42,8 +42,8 @@ extension WindowContentView {
 
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's trailing
     /// edge (by the divider), the title at the terminal's start, and the trailing cluster (recent-sessions /
-    /// attention popovers, divider, scratch / split controls, divider, dashboard / quick terminal). Positions
-    /// track `sidebarWidth`; the left inset clears the system traffic lights.
+    /// attention popovers, divider, scratch / split controls, divider, dashboard / quick terminal / custom
+    /// commands). Positions track `sidebarWidth`; the left inset clears the system traffic lights.
     private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
@@ -87,9 +87,10 @@ extension WindowContentView {
     }
 
     /// The title bar's trailing action cluster, each button gated by its Interface toggle: recent-sessions /
-    /// attention popovers, per-session scratch / split controls, window-overlay dashboard / quick terminal.
-    /// A separator sits ONLY where two groups that each still show 2+ buttons meet, so a group reduced to one
-    /// button flows in unbracketed and an empty group lets its neighbors meet directly.
+    /// attention popovers, per-session scratch / split controls, window-overlay dashboard / quick terminal
+    /// and the custom-commands popover. A separator sits ONLY where two groups that each still show 2+
+    /// buttons meet, so a group reduced to one button flows in unbracketed and an empty group lets its
+    /// neighbors meet directly.
     private var titlebarTrailingActions: some View {
         let showRecent = shows(.recentSessions)
         let showAttention = attentionButtonEnabled // the bell keeps its own separate Notifications setting
@@ -97,9 +98,10 @@ extension WindowContentView {
         let showSplit = shows(.split)
         let showDashboard = shows(.dashboard)
         let showQuick = shows(.quickTerminal)
+        let showCustom = shows(.customCommands)
         let countA = (showRecent ? 1 : 0) + (showAttention ? 1 : 0)
         let countB = (showScratch ? 1 : 0) + (showSplit ? 1 : 0)
-        let countC = (showDashboard ? 1 : 0) + (showQuick ? 1 : 0)
+        let countC = (showDashboard ? 1 : 0) + (showQuick ? 1 : 0) + (showCustom ? 1 : 0)
         // a separator only between two 2+-button groups (the host-free rule, unit-tested in agtermCore).
         let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
         return HStack(spacing: 14) {
@@ -111,6 +113,7 @@ extension WindowContentView {
             if dividers.afterB { titlebarDivider }
             if showDashboard { dashboardButton.labelStyle(.iconOnly) }
             if showQuick { quickTerminalButton.labelStyle(.iconOnly) }
+            if showCustom { customCommandsButton.labelStyle(.iconOnly) }
         }
         .padding(.trailing, 14)
     }
