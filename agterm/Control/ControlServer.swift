@@ -21,6 +21,7 @@ final class ControlServer {
     let library: WindowLibrary
     let actions: AppActions
     let settingsModel: SettingsModel
+    let statusSoundPlayer: StatusSoundPlayer
     let launchRestoreMode: RestoreMode
     let zmxForegroundResolver: ZmxForegroundResolver?
     private let socketPath: String
@@ -151,11 +152,13 @@ final class ControlServer {
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
          liveAttributionProbe: LiveAttributionProbe = LiveAttributionProbe(),
          remoteRunner: (any RemoteCommandRunner)? = nil,
+         statusSoundPlayer: StatusSoundPlayer = .shared,
          socketPath: String? = nil) {
         self.remoteRunner = remoteRunner ?? RemoteCommandProcessRunner()
         self.library = library
         self.actions = actions
         self.settingsModel = settingsModel
+        self.statusSoundPlayer = statusSoundPlayer
         self.launchRestoreMode = launchRestoreMode
         self.zmxForegroundResolver = zmxForegroundResolver
         self.zmxClient = zmxClient

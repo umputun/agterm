@@ -15,14 +15,18 @@ final class StatusSoundPlayer {
     static let shared = StatusSoundPlayer()
 
     private var cache: [String: NSSound] = [:]
+    private let resolve: @Sendable (String) -> NSSound?
+
+    init(resolve: @escaping @Sendable (String) -> NSSound? = { NSSound(named: NSSound.Name($0)) }) {
+        self.resolve = resolve
+    }
 
     /// Playback runs here, never on the main actor: the first `NSSound.play()` in a process is slow enough
     /// to stall keystroke delivery in every session, measured at ~0.9s in #575 (the cause inside AppKit was
     /// never established). Serial, so one clip's `stop()`/`play()` pair can't interleave with another's.
     private static let playQueue = DispatchQueue(label: "com.umputun.agterm.status-sound", qos: .userInitiated)
 
-    /// De-bounce identical replays so a rapid run of `session.status --sound` (or repeated `blocked`
-    /// transitions) doesn't stutter the same clip; the Settings preview bypasses this and always sounds.
+    /// Suppress rapid repeats of the same status sound to avoid stuttering; Settings previews bypass this.
     private var throttle = SoundThrottle(window: .milliseconds(200))
 
     /// The standard macOS system sound names: the Settings sound pickers' option list (blocked-status and
@@ -32,24 +36,39 @@ final class StatusSoundPlayer {
 
     /// Resolve a `session.status` sound value to its one-shot play action, or nil when a named sound can't
     /// be found. `default`/`beep` plays the system alert sound; anything else plays the named system sound.
-    func action(for name: String) -> (() -> Void)? {
+    /// Cache misses resolve on the playback queue; cache hits never wait for that queue.
+    func action(for name: String) async -> (() -> Void)? {
         if name == "default" || name == "beep" { return { Self.playQueue.async { NSSound.beep() } } }
         if let cached = cache[name] { return Self.playAction(for: cached) }
-        guard let sound = NSSound(named: NSSound.Name(name)) else { return nil }
+        let resolved = await withCheckedContinuation { continuation in
+            Self.playQueue.async { [resolve] in
+                continuation.resume(returning: resolve(name))
+            }
+        }
+        guard let sound = resolved else { return nil }
         cache[name] = sound
         return Self.playAction(for: sound)
     }
 
-    /// Resolve and play `name`, suppressing a replay of the SAME sound within the throttle window so a burst
-    /// of rapid status sets doesn't machine-gun an identical clip. Returns false ONLY when the name can't be
-    /// resolved (so the caller can surface `unknown sound`); a throttled replay returns true — resolvable,
-    /// just intentionally silent. The control server plays through this; the Settings picker preview calls
-    /// `action(for:)` directly so a deliberate click always sounds.
+    /// Resolve and play `name`, suppressing identical replays within the throttle window.
+    /// False lets callers report an unknown name; true includes a valid sound intentionally silenced by
+    /// throttling, so a suppressed replay is not mistaken for a resolution failure.
     @discardableResult
-    func play(_ name: String) -> Bool {
-        guard let action = action(for: name) else { return false }
-        if throttle.allow(name, at: ContinuousClock().now) { action() }
+    func play(_ name: String) async -> Bool {
+        guard let action = await action(for: name) else { return false }
+        play(name, using: action)
         return true
+    }
+
+    /// Submit an already validated action without another resolution or suspension after the status write.
+    func play(_ name: String, using action: () -> Void) {
+        if throttle.allow(name, at: ContinuousClock().now) { action() }
+    }
+
+    /// Preview only while its selection still applies, bypassing status throttling.
+    func preview(_ name: String, ifCurrent: () -> Bool) async {
+        guard let action = await action(for: name), !Task.isCancelled, ifCurrent() else { return }
+        action()
     }
 
     private static func playAction(for sound: NSSound) -> () -> Void {

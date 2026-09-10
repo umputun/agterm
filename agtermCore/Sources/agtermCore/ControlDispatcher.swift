@@ -36,7 +36,7 @@ public protocol ControlActions {
     /// means clear.
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
-    func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
+    func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) async -> ControlResponse
     /// Write a pane's PERSISTED restore-command override (consumed on the NEXT launch, never this run).
     /// The host resolves the target session and the live pane slot, then stores the tri-state value; it
     /// also owns the pane rejections that need a session (`scratch`, `right` without a split, an
@@ -182,7 +182,7 @@ public struct ControlDispatcher {
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionSeen, .sessionStatus,
                 .sessionRestore:
-            return dispatchSessionCommand(request)
+            return await dispatchSessionCommand(request)
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionScratch, .sessionFocus, .sessionResize,
                 .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
@@ -255,7 +255,7 @@ public struct ControlDispatcher {
         return actions.readEvents(ControlEventReadOptions(cursor: cursor, kinds: kinds, limit: limit))
     }
 
-    private func dispatchSessionCommand(_ request: ControlRequest) -> ControlResponse {
+    private func dispatchSessionCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
         case .sessionNew:
             let args = request.args
@@ -385,7 +385,7 @@ public struct ControlDispatcher {
                                                     sound: request.args?.sound, color: request.args?.color,
                                                     shape: shape,
                                                     pane: pane, paneID: request.args?.paneID)
-            return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
+            return await actions.setSessionStatus(request.target, window: request.args?.window, update: update)
         case .sessionRestore:
             return dispatchSessionRestore(request)
         default:

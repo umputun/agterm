@@ -579,7 +579,11 @@ private struct NotificationsSettingsView: View {
                 set: { name in
                     let value = name == "None" ? nil : name
                     model.setNotificationSoundName(value)
-                    if let value { StatusSoundPlayer.shared.action(for: value)?() }
+                    if let value {
+                        Task {
+                            await StatusSoundPlayer.shared.preview(value, ifCurrent: { model.settings.notificationSoundName == value })
+                        }
+                    }
                 })
     }
 
@@ -749,7 +753,11 @@ private struct AgentStatusSettingsView: View {
                 set: { name in
                     let value = name == "None" ? nil : name
                     model.setBlockedStatusSoundName(value)
-                    if let value { StatusSoundPlayer.shared.action(for: value)?() }
+                    if let value {
+                        Task {
+                            await StatusSoundPlayer.shared.preview(value, ifCurrent: { model.settings.blockedStatusSoundName == value })
+                        }
+                    }
                 })
     }
 

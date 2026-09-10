@@ -398,34 +398,47 @@ extension ControlServer: ControlActions {
     /// While a session is blocked, a write from ANOTHER pane that is neither `blocked` nor `idle` is refused
     /// whole (`AppStore.applyControlStatus`) with a `blocked status owned by pane` error and no sound — one
     /// pane's `active`/`completed` must not erase the other's block.
-    func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse {
-        // validated before any mutation; an empty value counts as none, matching `AgentStatus.effectiveSound`.
-        if let sound = update.sound, !sound.isEmpty, StatusSoundPlayer.shared.action(for: sound) == nil {
-            let hint = StatusSoundPlayer.standardNames.joined(separator: ", ")
-            return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default', 'beep', or one of: \(hint))")
-        }
-        return resolver.resolveSession(target, window: window) { store, id in
-            let session = store.session(withID: id)
-            // capture the status BEFORE mutating so the Settings default plays only on a real transition.
-            let wasBlocked = session?.agentIndicator.status == .blocked
-            // `--pane-id` resolves against the LIVE surfaces and overrides the stale role `--pane`, so a
-            // promoted-then-re-split pane lands on its CURRENT slot (#199); absent/unknown falls back to it.
-            let resolvedPane = update.paneID.flatMap { session?.paneRole(forToken: $0) } ?? update.pane
-            let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false,
-                                           autoReset: update.autoReset ?? false,
-                                           color: update.color, shape: update.shape, statusPane: resolvedPane)
-            // a refusal returns BEFORE the sound: the write did not happen, so it must make no noise either.
-            if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
-                return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
-                    "(write from that pane to change it)")
+    func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) async -> ControlResponse {
+        // bind active/prefix targets before suspension, but preserve unknown-sound error precedence.
+        let captured = resolver.resolveSessionTarget(target, window: window)
+        var prepared: (() -> Void)?
+        // empty per-call sounds fall through to the default, matching AgentStatus.effectiveSound.
+        if let sound = update.sound, !sound.isEmpty {
+            prepared = await statusSoundPlayer.action(for: sound)
+            guard prepared != nil else {
+                let hint = StatusSoundPlayer.standardNames.joined(separator: ", ")
+                return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default', 'beep', or one of: \(hint))")
             }
-            // per-call sound wins on any status; the Settings default plays only on a NEW entry into `blocked`.
-            let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
-            if let name = update.status.effectiveSound(perCall: update.sound, blockedDefault: blockedDefault) {
-                StatusSoundPlayer.shared.play(name)
-            }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+        let store: AppStore
+        let id: UUID
+        switch captured {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        guard library.windowID(for: store) != nil, let session = store.session(withID: id) else {
+            return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+        }
+        let wasBlocked = session.agentIndicator.status == .blocked
+        // pane tokens and blocked ownership use the live state after resolution, with no further await.
+        // #199: promotion followed by another split can put a pane token in a different role.
+        let resolvedPane = update.paneID.flatMap { session.paneRole(forToken: $0) } ?? update.pane
+        let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false,
+                                       autoReset: update.autoReset ?? false,
+                                       color: update.color, shape: update.shape, statusPane: resolvedPane)
+        // rejected writes must return before playback: no status change means no sound.
+        if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
+            return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
+                "(write from that pane to change it)")
+        }
+        if let name = update.sound, let prepared {
+            statusSoundPlayer.play(name, using: prepared)
+        } else if let name = update.status.effectiveSound(perCall: nil,
+                                                         blockedDefault: wasBlocked ? nil : settingsModel.settings.blockedStatusSoundName) {
+            // a configured default is best-effort and must not delay or reject the status update.
+            Task { await statusSoundPlayer.play(name) }
+        }
+        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
     }
 
     /// Pin (or unpin) the target pane's restore-command override — the per-pane shell line that wins over
