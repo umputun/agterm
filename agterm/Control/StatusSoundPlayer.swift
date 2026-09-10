@@ -9,9 +9,6 @@ import agtermCore
 /// indicator and surface an `unknown sound` error; `NSSound(named:)` also resolves `~/Library/Sounds`.
 /// Resolved sounds are cached, so they are retained for the app's lifetime — skipping a reload, and dodging
 /// the AppKit gotcha where a locally-scoped `NSSound` is deallocated mid-play and the clip is cut off.
-///
-/// Resolution stays on the main actor because `session.status` must answer `unknown sound` before it mutates
-/// anything; only playback leaves it, on `playQueue`.
 @MainActor
 final class StatusSoundPlayer {
     /// Shared so every caller reuses one `NSSound` cache.
@@ -55,8 +52,6 @@ final class StatusSoundPlayer {
         return true
     }
 
-    /// The one-shot play action for an already-resolved sound, hopping to `playQueue` so the caller's thread
-    /// — the main actor, for every caller here — never waits on audio startup.
     private static func playAction(for sound: NSSound) -> () -> Void {
         { playQueue.async { sound.stop(); sound.play() } }
     }
