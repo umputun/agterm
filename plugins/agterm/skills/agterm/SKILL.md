@@ -308,10 +308,12 @@ omitted when expanded).
 - `session duplicate [--target]` — create a fresh session (a plain login shell) in the target's workspace, right
   after it, rooted at the target's focused-pane cwd; selects + focuses it and returns the new id. ONLY the
   directory carries over — no custom name, command, split, scratch, status, flag, font size, or background.
-  Equivalent to `session new --cwd <source cwd> --after <source>` in one round-trip. Read it back from
-  `tree`: the new node sits directly after its source carrying the source's focused-pane cwd (equal to the
-  source node's `tree.cwd` unless the source is a split focused off its primary pane, where `tree.cwd`
-  reports the primary).
+  Equivalent to `session new --cwd <source cwd> --after <source>` in one round-trip, except that a remote
+  source's cwd goes through the local rule first (an existing local directory is kept, anything else
+  becomes home). Read it back from `tree`: the new node sits directly after its source carrying the
+  source's focused-pane cwd (equal to the source node's `tree.cwd` unless the source is a split focused
+  off its primary pane, where `tree.cwd` reports the primary, or a remote session, where it can read as
+  home).
 - `session close [--target T ...]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo.
 - `session select` · `session rename <name>` · `session reveal` (select the focused pane's cwd in Finder).

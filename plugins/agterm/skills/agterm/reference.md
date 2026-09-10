@@ -399,7 +399,9 @@ buys nothing. A caller with no tree uses `version`.
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
   returns its id. There are NO other options — the target session names both the destination workspace
   and the cwd — and `--target` defaults to `active`. It is equivalent to
-  `session new --cwd <source cwd> --after <source>` in ONE atomic round-trip.
+  `session new --cwd <source cwd> --after <source>` in ONE atomic round-trip, except that a remote
+  source's cwd goes through the local rule first (see Remote sessions): an existing local directory is
+  kept, anything else becomes home.
   ONLY the directory carries over: the duplicate is a plain login shell with the auto basename, and it
   does NOT inherit the source's custom name, `--command`, split, scratch, status, flag, font size, or
   background — it is "new session seeded with the source's cwd", not a clone of state. Errors: the usual
@@ -408,7 +410,8 @@ buys nothing. A caller with no tree uses `version`.
   directly after its source, carrying the source's focused-pane cwd. That equals the source node's
   `tree.cwd` for a non-split session (and a split focused on its primary pane); for a split focused off its
   primary the source node's `tree.cwd` reports the primary pane while the duplicate carries the focused
-  pane's directory. It is the control half of the sidebar row's **Duplicate Session** context-menu item
+  pane's directory, and for a remote source it is that cwd after the local rule, so it can read as home.
+  It is the control half of the sidebar row's **Duplicate Session** context-menu item
   (single-selection only).
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped

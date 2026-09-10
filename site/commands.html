@@ -981,7 +981,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span> (equal to the source node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.cwd</span> unless the source is a split
                 focused off its primary pane, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.cwd</span>
-                reports the primary).
+                reports the primary, or a remote session, whose cwd goes through the local rule first — an existing local
+                directory is kept, anything else becomes home — so the duplicate can read as home).
               </p>
             </div>
 

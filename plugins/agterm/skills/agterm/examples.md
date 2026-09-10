@@ -198,8 +198,10 @@ agtermctl session new --cwd "$HOME/project" --no-select
 `session duplicate` creates a fresh session — a plain login shell — in the SAME workspace as the target,
 directly AFTER it, rooted at the target's focused-pane cwd, then selects + focuses it and prints the new
 id. ONLY the directory carries over: no custom name, `--command`, split, scratch, status, flag, font size,
-or background. It is `session new --cwd <source cwd> --after <source>` in one atomic round-trip, and the
-control half of the sidebar row's **Duplicate Session** context-menu item.
+or background. It is `session new --cwd <source cwd> --after <source>` in one atomic round-trip, except
+that a remote source's cwd goes through the local rule first (an existing local directory is kept,
+anything else becomes home), and the control half of the sidebar row's **Duplicate Session**
+context-menu item.
 
 ```bash
 agtermctl session duplicate                                    # a second shell beside the current session, same cwd
@@ -211,7 +213,8 @@ Read it back off `tree` — there is no new tree field: the duplicate's node app
 source, carrying the source's focused-pane cwd. That equals the source node's `tree.cwd` for a non-split
 session (and a split focused on its primary pane); for a split focused off its primary the source node's
 `tree.cwd` reports the primary while the duplicate carries the focused pane's directory, so compare against
-the pane you duplicated from.
+the pane you duplicated from; for a remote source the duplicate carries that cwd after the local rule, so
+it can read as home.
 
 ## Build a small layout
 
