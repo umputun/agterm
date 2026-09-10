@@ -9,12 +9,20 @@ import agtermCore
 /// indicator and surface an `unknown sound` error; `NSSound(named:)` also resolves `~/Library/Sounds`.
 /// Resolved sounds are cached, so they are retained for the app's lifetime — skipping a reload, and dodging
 /// the AppKit gotcha where a locally-scoped `NSSound` is deallocated mid-play and the clip is cut off.
+///
+/// Resolution stays on the main actor because `session.status` must answer `unknown sound` before it mutates
+/// anything; only playback leaves it, on `playQueue`.
 @MainActor
 final class StatusSoundPlayer {
     /// Shared so every caller reuses one `NSSound` cache.
     static let shared = StatusSoundPlayer()
 
     private var cache: [String: NSSound] = [:]
+
+    /// Playback runs here, never on the main actor: the first `NSSound.play()` in a process spins up
+    /// CoreAudio and held the main queue for ~0.7s (#575), which stalls keystroke delivery in every session.
+    /// Serial, so one clip's `stop()`/`play()` pair can't interleave with another's on the same instance.
+    private static let playQueue = DispatchQueue(label: "com.umputun.agterm.status-sound", qos: .userInitiated)
 
     /// De-bounce identical replays so a rapid run of `session.status --sound` (or repeated `blocked`
     /// transitions) doesn't stutter the same clip; the Settings preview bypasses this and always sounds.
@@ -28,11 +36,11 @@ final class StatusSoundPlayer {
     /// Resolve a `session.status` sound value to its one-shot play action, or nil when a named sound can't
     /// be found. `default`/`beep` plays the system alert sound; anything else plays the named system sound.
     func action(for name: String) -> (() -> Void)? {
-        if name == "default" || name == "beep" { return { NSSound.beep() } }
-        if let cached = cache[name] { return { cached.stop(); cached.play() } }
+        if name == "default" || name == "beep" { return { Self.playQueue.async { NSSound.beep() } } }
+        if let cached = cache[name] { return Self.playAction(for: cached) }
         guard let sound = NSSound(named: NSSound.Name(name)) else { return nil }
         cache[name] = sound
-        return { sound.stop(); sound.play() }
+        return Self.playAction(for: sound)
     }
 
     /// Resolve and play `name`, suppressing a replay of the SAME sound within the throttle window so a burst
@@ -45,5 +53,11 @@ final class StatusSoundPlayer {
         guard let action = action(for: name) else { return false }
         if throttle.allow(name, at: ContinuousClock().now) { action() }
         return true
+    }
+
+    /// The one-shot play action for an already-resolved sound, hopping to `playQueue` so the caller's thread
+    /// — the main actor, for every caller here — never waits on audio startup.
+    private static func playAction(for sound: NSSound) -> () -> Void {
+        { playQueue.async { sound.stop(); sound.play() } }
     }
 }
