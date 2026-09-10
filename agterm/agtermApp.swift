@@ -490,17 +490,20 @@ struct agtermApp: App {
     }
 
     /// Wires the pane-scoped keystroke-clear: `keyDown` fires `onUserInputClearsStatus` unconditionally, and this
-    /// closure clears to idle only when host-free `AgentIndicator.clearedBy(pane:isInterrupt:)` says the keystroke's
-    /// OWN pane owns the status, so a block set from a background pane survives typing elsewhere. Main/split read
+    /// closure clears to idle only when host-free `AgentIndicator.clearedBy(pane:keystroke:reset:)` says the
+    /// keystroke's OWN pane owns the status under the Status reset setting, read live from `GhosttyApp` so a
+    /// Settings change applies to the next key. A block set from a background pane survives typing elsewhere. Main/split read
     /// the LIVE `isSplitPane` at keystroke time, so a promoted survivor clears as `.left`, matching its migrated
     /// status identity and `tree` addressing; a captured `.right` would clear the wrong pane and leave both panes
     /// `.right`-wired after a re-split. The scratch passes `fixedPane: .scratch`: never promoted, no `view.session`.
     @MainActor
     private static func wireStatusClear(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
                                         fixedPane: StatusPane? = nil) {
-        view.onUserInputClearsStatus = { [weak view] isInterrupt in
+        view.onUserInputClearsStatus = { [weak view] keystroke in
             let pane = fixedPane ?? ((view?.isSplitPane ?? false) ? .right : .left)
-            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: pane, isInterrupt: isInterrupt) == true {
+            let reset = GhosttyApp.shared.statusReset
+            if store.session(withID: sessionID)?.agentIndicator
+                .clearedBy(pane: pane, keystroke: keystroke, reset: reset) == true {
                 store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
             }
         }

@@ -1792,7 +1792,7 @@ struct AppStorePaneTests {
         store.closePrimaryPane(session.id) // primary exits → survivor promoted, hasSplit/splitSurface cleared
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
         #expect(session.agentIndicator.statusPane == .left)                      // coerced — no live split
-        #expect(session.agentIndicator.clearedBy(pane: .left, isInterrupt: false))  // the sole (left) pane clears it
+        #expect(session.agentIndicator.clearedBy(pane: .left, keystroke: .other, reset: .firstKey))  // the sole (left) pane clears it
         // and the tree agrees: split:false with statusPane "left", never the contradictory "right".
         let node = store.controlTree().workspaces[0].sessions.first
         #expect(node?.split == false)
@@ -1823,7 +1823,7 @@ struct AppStorePaneTests {
         #expect(session.agentIndicator.statusPane == .right)                  // kept — the split is coming up
         // once the deck realizes the surface, the block is exactly where the right pane can clear it.
         session.splitSurface = SpySurface()
-        #expect(session.agentIndicator.clearedBy(pane: .right, isInterrupt: false))
+        #expect(session.agentIndicator.clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
         let node = store.controlTree().workspaces[0].sessions.first
         #expect(node?.split == true)
         #expect(node?.statusPane == "right")

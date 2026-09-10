@@ -29,6 +29,35 @@ struct InterruptKeystrokeTests {
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "j", modifiers: [.control]))
     }
 
+    @Test func returnWithoutModifiersSubmits() {
+        #expect(InterruptKeystroke.isSubmit(keyCode: InterruptKeystroke.returnKeyCode, modifiers: []))
+        #expect(InterruptKeystroke.isSubmit(keyCode: InterruptKeystroke.keypadEnterKeyCode, modifiers: []))
+        // shift-return and option-return insert a newline in claude code and codex
+        #expect(!InterruptKeystroke.isSubmit(keyCode: InterruptKeystroke.returnKeyCode, modifiers: [.shift]))
+        #expect(!InterruptKeystroke.isSubmit(keyCode: InterruptKeystroke.returnKeyCode, modifiers: [.option]))
+        #expect(!InterruptKeystroke.isSubmit(keyCode: InterruptKeystroke.returnKeyCode, modifiers: [.command]))
+        #expect(!InterruptKeystroke.isSubmit(keyCode: 0, modifiers: []))
+    }
+
+    @Test func classifyOrdersInterruptBeforeSubmitBeforeOther() {
+        #expect(InterruptKeystroke.classify(keyCode: Self.escKey, character: "\u{1b}", modifiers: []) == .interrupt)
+        #expect(InterruptKeystroke.classify(keyCode: Self.cKey, character: "c", modifiers: [.control]) == .interrupt)
+        #expect(InterruptKeystroke.classify(keyCode: InterruptKeystroke.returnKeyCode, character: "\r", modifiers: []) == .submit)
+        #expect(InterruptKeystroke.classify(keyCode: InterruptKeystroke.returnKeyCode, character: "\r", modifiers: [.shift]) == .other)
+        #expect(InterruptKeystroke.classify(keyCode: 0, character: "a", modifiers: []) == .other)
+    }
+
+    @Test func classifyTextSubmitsOnlyWithANewline() {
+        #expect(InterruptKeystroke.classify(text: "a") == .other)
+        #expect(InterruptKeystroke.classify(text: "yes\n") == .submit)
+        #expect(InterruptKeystroke.classify(text: "\r") == .submit)
+        // crlf is a single character in swift, equal to neither lf nor cr
+        #expect(InterruptKeystroke.classify(text: "yes\r\n") == .submit)
+        #expect(InterruptKeystroke.classify(text: "\r\n") == .submit)
+        #expect(InterruptKeystroke.classify(text: "a\u{2028}b") == .other)
+        #expect(InterruptKeystroke.classify(text: "\u{1b}") == .other)
+    }
+
     @Test func nonInterruptKeystrokesDoNotClear() {
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: []))
         #expect(!InterruptKeystroke.isInterrupt(keyCode: 0, character: "a", modifiers: []))

@@ -594,7 +594,8 @@ private struct NotificationsSettingsView: View {
 }
 
 /// Agent Status tab: Colors and Shapes (a row per state — active/blocked/completed — with that glyph's color
-/// well and shape picker), Sound, Auto-follow (idle timeout + stay-on-active), and a Reset clearing all three.
+/// well and shape picker), Sound, Typing (which keystroke clears a blocked/completed glyph), Auto-follow (idle
+/// timeout + stay-on-active), and a Reset clearing the first three.
 private struct AgentStatusSettingsView: View {
     /// Gap between a glyph row's color well and its shape picker.
     private static let controlSpacing: CGFloat = 8
@@ -621,6 +622,16 @@ private struct AgentStatusSettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings-status-blocked-sound")
+            }
+
+            Section("Typing") {
+                Picker("Status reset", selection: statusReset) {
+                    Text("On first key").tag(StatusReset.firstKey)
+                    Text("On Enter").tag(StatusReset.enter)
+                    Text("Disabled").tag(StatusReset.never)
+                }
+                .accessibilityIdentifier("settings-status-clear")
+                SettingHint("When typing into a blocked or completed session clears its status.")
             }
 
             Section("Auto-follow") {
@@ -748,6 +759,12 @@ private struct AgentStatusSettingsView: View {
     }
 
     // the sound played when a session enters `blocked`; selecting one previews it, like the notification sound
+    /// Default first key; the default maps to nil so it never lands in the file.
+    private var statusReset: Binding<StatusReset> {
+        Binding(get: { model.settings.effectiveStatusReset },
+                set: { model.setStatusReset($0 == .firstKey ? nil : $0) })
+    }
+
     private var blockedStatusSound: Binding<String> {
         Binding(get: { model.settings.blockedStatusSoundName ?? "None" },
                 set: { name in

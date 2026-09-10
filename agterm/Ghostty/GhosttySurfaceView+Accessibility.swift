@@ -279,12 +279,12 @@ extension GhosttySurfaceView {
     /// dictating user counts as idle (`onUserInput` is what resets the window's auto-follow timer, so
     /// auto-follow would yank the selection to a blocked session MID-sentence and deliver the rest of the
     /// text to the wrong terminal) and a session's stale agent-status glyph survives a dictated reply
-    /// (`onUserInputClearsStatus`). `isInterrupt` is always false: an AX insert carries text, never the
-    /// Escape/Ctrl-C keystroke that clears an ACTIVE glyph, so it clears blocked/completed only — the same
-    /// answer `isInterruptKeystroke` gives for an ordinary printable key.
+    /// (`onUserInputClearsStatus`). Always plain typing: a multi-line insert lands as a paste, not as Return,
+    /// and an AX insert is never the Escape/Ctrl-C interrupt that clears an ACTIVE glyph, so it clears
+    /// blocked/completed only, and only when the Status reset setting clears on the first key.
     private func insertFromAccessibility(_ text: String) {
         onUserInput?()
-        onUserInputClearsStatus?(false)
+        onUserInputClearsStatus?(.other)
         // ends any live composition BEFORE either branch. `insertPasted` commits for itself now, so the
         // paste branch's second call is a no-op against the `hasMarkedText()` guard; the `insertText`
         // branch has no commit of its own (it IS the commit path), so the call has to happen here.

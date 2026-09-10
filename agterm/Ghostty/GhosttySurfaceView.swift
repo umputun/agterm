@@ -123,14 +123,14 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// whose focus report is suppressed though the user is looking at it. Set by the main/split factories.
     var onClearUnseen: (() -> Void)?
 
-    /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key interrupts the
-    /// agent (Escape or Ctrl-C). The factory decides per pane via `AgentIndicator.clearedBy(pane:isInterrupt:)`:
-    /// clear the glyph to idle only when THIS surface's pane owns a clearable status — `blocked`/`completed`
-    /// on any key, `active` only on an interrupt — so foreground typing cannot wipe a background pane's block.
-    /// Passing the pane rather than reading `view.session` lets the scratch, which has none, self-clear.
-    /// Status is otherwise control-driven; this is the one input-driven clear, for the decline case Claude
-    /// Code fires no hook for.
-    var onUserInputClearsStatus: ((Bool) -> Void)?
+    /// Called on the main actor on EVERY keystroke into this surface, carrying what the key means to the glyph
+    /// (`InterruptKeystroke.classify`: interrupt, submit or plain typing). The factory decides per pane via
+    /// `AgentIndicator.clearedBy(pane:keystroke:reset:)`: clear the glyph to idle only when THIS surface's pane
+    /// owns a clearable status — `blocked`/`completed` as the Status reset setting says, `active` only on an
+    /// interrupt — so foreground typing cannot wipe a background pane's block. Passing the pane rather than
+    /// reading `view.session` lets the scratch, which has none, self-clear. Status is otherwise
+    /// control-driven; this is the one input-driven clear, for the decline case Claude Code fires no hook for.
+    var onUserInputClearsStatus: ((StatusKeystroke) -> Void)?
 
     /// Called on the main actor on EVERY keystroke to stamp user activity and reset the window's auto-follow
     /// idle timer. Fires unconditionally, unlike `onUserInputClearsStatus`: ordinary typing in an idle

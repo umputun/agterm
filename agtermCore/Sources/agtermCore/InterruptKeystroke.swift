@@ -18,6 +18,28 @@ public enum InterruptKeystroke {
     public static let cKeyCode: UInt16 = 8
     /// The Escape key (macOS `kVK_Escape`).
     public static let escapeKeyCode: UInt16 = 53
+    /// The Return key and the keypad Enter (macOS `kVK_Return`, `kVK_ANSI_KeypadEnter`).
+    public static let returnKeyCode: UInt16 = 36
+    public static let keypadEnterKeyCode: UInt16 = 76
+
+    /// What the keystroke means to a status glyph: interrupt first, then submit, else plain typing.
+    public static func classify(keyCode: UInt16, character: String?, modifiers: KeyModifiers) -> StatusKeystroke {
+        if isInterrupt(keyCode: keyCode, character: character, modifiers: modifiers) { return .interrupt }
+        return isSubmit(keyCode: keyCode, modifiers: modifiers) ? .submit : .other
+    }
+
+    /// What injected text (`session type`) means to a status glyph: an LF or CR anywhere submits, since the
+    /// injector types Return for each; anything else is plain typing. Never an interrupt. Scalars, not
+    /// characters: CRLF is one `Character` equal to neither, and Unicode separators are typed as text.
+    public static func classify(text: String) -> StatusKeystroke {
+        text.unicodeScalars.contains(where: { $0 == "\n" || $0 == "\r" }) ? .submit : .other
+    }
+
+    /// Whether the keystroke submits the line: Return or keypad Enter with NO modifier. Shift-Return and
+    /// Option-Return insert a newline in Claude Code and Codex, so they stay plain typing.
+    public static func isSubmit(keyCode: UInt16, modifiers: KeyModifiers) -> Bool {
+        (keyCode == returnKeyCode || keyCode == keypadEnterKeyCode) && modifiers.isEmpty
+    }
 
     /// Whether the keystroke interrupts the agent. `character` is the layout's base letter for the key
     /// (`NSEvent.charactersIgnoringModifiers`); matching it covers Latin layouts including Dvorak, where the

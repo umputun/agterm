@@ -1,3 +1,19 @@
+/// StatusReset is which keystroke clears a `blocked` or `completed` glyph: the first key, a submit (Return),
+/// or none. Raw-stored in `AppSettings.statusReset`, resolved by `effectiveStatusReset`.
+public enum StatusReset: String, Codable, Sendable, CaseIterable {
+    case firstKey
+    case enter
+    case never
+}
+
+/// StatusKeystroke is what one keystroke means to the glyph: an interrupt (Escape or Ctrl-C), a submit
+/// (Return with no modifier, or injected text carrying a newline), or plain typing.
+public enum StatusKeystroke: Sendable, Equatable {
+    case interrupt
+    case submit
+    case other
+}
+
 /// AgentStatus is the per-session agent state driven over the control channel (`session.status`).
 /// `idle` means nothing is shown; the other cases each render a tinted sidebar glyph.
 public enum AgentStatus: String, Codable, Sendable, CaseIterable {
@@ -8,15 +24,21 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     public var needsAttention: Bool { self == .blocked || self == .completed }
 
     /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and
-    /// `completed` clear on ANY key (you've engaged with the prompt / the finished result); `active` clears ONLY
-    /// on an interrupt (Escape or Ctrl-C), so typing while the agent works keeps the "working" glyph. That
-    /// covers the quick-cancel case: a pending question can still read `active` when you cancel it (Claude
-    /// Code's `blocked` notification lands seconds later) and the interrupt fires no hook, so nothing else
-    /// drops the stale value.
-    func clearedByKeystroke(isInterrupt: Bool) -> Bool {
+    /// `completed` clear as `reset` says: on any key (you've engaged with the prompt / the finished result),
+    /// on a submit only (the reply is sent, so a half-typed one keeps the glyph), or never. `active` clears
+    /// ONLY on an interrupt (Escape or Ctrl-C) in every mode, so typing while the agent works keeps the
+    /// "working" glyph. That covers the quick-cancel case: a pending question can still read `active` when
+    /// you cancel it (Claude Code's `blocked` notification lands seconds later) and the interrupt fires no
+    /// hook, so nothing else drops the stale value.
+    func clearedBy(keystroke: StatusKeystroke, reset: StatusReset) -> Bool {
         switch self {
-        case .blocked, .completed: return true
-        case .active: return isInterrupt
+        case .blocked, .completed:
+            switch reset {
+            case .firstKey: return true
+            case .enter: return keystroke == .submit
+            case .never: return false
+            }
+        case .active: return keystroke == .interrupt
         case .idle: return false
         }
     }
@@ -125,9 +147,10 @@ public struct AgentIndicator: Equatable, Sendable {
     }
 
     /// clearedBy: a keystroke from `pane` clears this indicator only when that pane owns the current status and
-    /// `clearedByKeystroke` allows it, so foreground typing can't wipe a background pane's status.
-    public func clearedBy(pane: StatusPane, isInterrupt: Bool) -> Bool {
-        (statusPane ?? .left) == pane && status.clearedByKeystroke(isInterrupt: isInterrupt)
+    /// `AgentStatus.clearedBy(keystroke:reset:)` allows it, so foreground typing can't wipe a background
+    /// pane's status.
+    public func clearedBy(pane: StatusPane, keystroke: StatusKeystroke, reset: StatusReset) -> Bool {
+        (statusPane ?? .left) == pane && status.clearedBy(keystroke: keystroke, reset: reset)
     }
 
     /// normalizedPane: the tag as the store keeps it — a `.right` tag on a splitless session folds to `.left`,

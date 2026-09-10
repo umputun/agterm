@@ -55,6 +55,31 @@ final class SettingsUITests: XCTestCase {
                       "turning notifications off should persist notificationsEnabled=false")
     }
 
+    func testStatusResetPickerPersists() throws {
+        let picker = settingsControl(tab: "Agent Status", control: "settings-status-clear")
+
+        picker.click()
+        let onEnter = app.menuItems["On Enter"]
+        XCTAssertTrue(onEnter.waitForExistence(timeout: 5), "the status-reset picker should offer 'On Enter'")
+        onEnter.click()
+        XCTAssertTrue(poll { self.settingsValue("statusReset") == "enter" },
+                      "selecting 'On Enter' should persist statusReset=enter to settings.json")
+
+        picker.click()
+        let disabled = app.menuItems["Disabled"]
+        XCTAssertTrue(disabled.waitForExistence(timeout: 5), "the status-reset picker should offer 'Disabled'")
+        disabled.click()
+        XCTAssertTrue(poll { self.settingsValue("statusReset") == "never" },
+                      "selecting 'Disabled' should persist statusReset=never to settings.json")
+
+        picker.click()
+        let firstKey = app.menuItems["On first key"]
+        XCTAssertTrue(firstKey.waitForExistence(timeout: 5), "the status-reset picker should offer 'On first key'")
+        firstKey.click()
+        XCTAssertTrue(poll { self.settingsObject()?["statusReset"] == nil },
+                      "the default 'On first key' should remove statusReset from settings.json")
+    }
+
     func testDockBouncePickerPersists() throws {
         let picker = settingsControl(tab: "Notifications", control: "settings-dock-bounce")
 

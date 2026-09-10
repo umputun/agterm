@@ -26,16 +26,45 @@ struct AgentStatusTests {
         #expect(!AgentStatus.active.needsAttention)
     }
 
-    @Test func clearedByKeystrokeClearsAttentionAlwaysAndActiveOnlyOnInterrupt() {
-        #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: false))
-        #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: true))
-        #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: false))
-        #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: true))
-        // isInterrupt = Esc or Ctrl-C; ordinary typing leaves the glyph
-        #expect(!AgentStatus.active.clearedByKeystroke(isInterrupt: false))
-        #expect(AgentStatus.active.clearedByKeystroke(isInterrupt: true))
-        #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: false))
-        #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: true))
+    @Test(arguments: [
+        // (status, keystroke, reset, cleared)
+        (AgentStatus.blocked, StatusKeystroke.other, StatusReset.firstKey, true),
+        (AgentStatus.completed, StatusKeystroke.other, StatusReset.firstKey, true),
+        (AgentStatus.completed, StatusKeystroke.submit, StatusReset.firstKey, true),
+        (AgentStatus.completed, StatusKeystroke.interrupt, StatusReset.firstKey, true),
+        (AgentStatus.blocked, StatusKeystroke.other, StatusReset.enter, false),
+        (AgentStatus.completed, StatusKeystroke.other, StatusReset.enter, false),
+        (AgentStatus.completed, StatusKeystroke.submit, StatusReset.enter, true),
+        (AgentStatus.blocked, StatusKeystroke.submit, StatusReset.enter, true),
+        (AgentStatus.completed, StatusKeystroke.interrupt, StatusReset.enter, false),
+        (AgentStatus.blocked, StatusKeystroke.other, StatusReset.never, false),
+        (AgentStatus.completed, StatusKeystroke.submit, StatusReset.never, false),
+        (AgentStatus.completed, StatusKeystroke.interrupt, StatusReset.never, false),
+        // active clears on an interrupt alone, whatever the setting
+        (AgentStatus.active, StatusKeystroke.other, StatusReset.firstKey, false),
+        (AgentStatus.active, StatusKeystroke.submit, StatusReset.firstKey, false),
+        (AgentStatus.active, StatusKeystroke.interrupt, StatusReset.firstKey, true),
+        (AgentStatus.active, StatusKeystroke.interrupt, StatusReset.enter, true),
+        (AgentStatus.active, StatusKeystroke.interrupt, StatusReset.never, true),
+        (AgentStatus.idle, StatusKeystroke.interrupt, StatusReset.firstKey, false),
+        (AgentStatus.idle, StatusKeystroke.submit, StatusReset.enter, false),
+    ])
+    func clearedByKeystrokeFollowsTheResetModeForAttentionAndInterruptForActive(
+        status: AgentStatus, keystroke: StatusKeystroke, reset: StatusReset, cleared: Bool
+    ) {
+        #expect(status.clearedBy(keystroke: keystroke, reset: reset) == cleared)
+    }
+
+    @Test func indicatorClearsOnlyFromTheOwningPaneUnderTheResetMode() {
+        let right = AgentIndicator(status: .completed, statusPane: .right)
+        #expect(right.clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
+        #expect(!right.clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
+        #expect(!right.clearedBy(pane: .right, keystroke: .other, reset: .enter))
+        #expect(right.clearedBy(pane: .right, keystroke: .submit, reset: .enter))
+        #expect(!right.clearedBy(pane: .right, keystroke: .submit, reset: .never))
+        let untagged = AgentIndicator(status: .blocked)
+        #expect(untagged.clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
+        #expect(!untagged.clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
     }
 
     @Test func indicatorDefaults() {
@@ -88,27 +117,27 @@ struct AgentStatusTests {
     }
 
     @Test func clearedByMatchingPaneFollowsClearedByKeystroke() {
-        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
-        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
-        #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, isInterrupt: false))
-        #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
-        #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
-        #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, keystroke: .interrupt, reset: .firstKey))
+        #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, keystroke: .other, reset: .firstKey))
+        #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
+        #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, keystroke: .interrupt, reset: .firstKey))
+        #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, keystroke: .interrupt, reset: .firstKey))
     }
 
     @Test func clearedByNonMatchingPaneNeverClears() {
-        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: false))
-        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: true))
-        #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, isInterrupt: false))
-        #expect(!AgentIndicator(status: .active, statusPane: .scratch).clearedBy(pane: .right, isInterrupt: true))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, keystroke: .interrupt, reset: .firstKey))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
+        #expect(!AgentIndicator(status: .active, statusPane: .scratch).clearedBy(pane: .right, keystroke: .interrupt, reset: .firstKey))
     }
 
     @Test func clearedByNilStatusPaneTreatedAsLeft() {
-        #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, isInterrupt: false))
-        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, isInterrupt: false))
-        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, isInterrupt: true))
-        #expect(AgentIndicator(status: .active).clearedBy(pane: .left, isInterrupt: true))
-        #expect(!AgentIndicator(status: .active).clearedBy(pane: .left, isInterrupt: false))
+        #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, keystroke: .other, reset: .firstKey))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, keystroke: .interrupt, reset: .firstKey))
+        #expect(AgentIndicator(status: .active).clearedBy(pane: .left, keystroke: .interrupt, reset: .firstKey))
+        #expect(!AgentIndicator(status: .active).clearedBy(pane: .left, keystroke: .other, reset: .firstKey))
     }
 
     @Test func indicatorEquatableEqual() {

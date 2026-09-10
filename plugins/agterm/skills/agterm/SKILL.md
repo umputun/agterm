@@ -334,7 +334,9 @@ omitted when expanded).
   open runs in the hidden shell and is invisible until it closes. There is no write twin of
   `session overlay text`: an overlay runs the caller's own program, so nothing types into one. Typing is the
   input a waiting agent asked for, so it clears that pane's `blocked`/`completed` glyph exactly as a
-  keystroke does; another pane's glyph, an `active` one, and an empty payload are left alone.
+  keystroke does, under Settings ▸ Agent Status ▸ Status reset: on the first key by default, only when the
+  text carries a newline under On Enter, never when Disabled; another pane's glyph, an `active` one, and an
+  empty payload are left alone.
 - `session copy` — print the session's selected text (does NOT touch the system clipboard).
 - `session paste` — paste the system clipboard into the session (the socket analogue of ⌘V; read it back with
   `session text`). `--pane left|right|scratch` picks the pane, with the usual role and position aliases;

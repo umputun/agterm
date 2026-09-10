@@ -1479,9 +1479,10 @@
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and shapes, the blocked-session
-                sound, and an idle timeout to auto-follow blocked sessions. A
-                <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, and sound back to the
-                shipped values.
+                sound, a <strong style="color: #e6e1d7">Status reset</strong> choice for when typing into a blocked or completed
+                session clears its glyph (on the first key, on Enter, or disabled), and an idle timeout to auto-follow blocked
+                sessions. A <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, sound, and
+                status reset back to the shipped values.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -2954,8 +2955,12 @@
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >completed</span
               >
-              session clears its status; an interrupt keystroke, Esc or Ctrl-C, interrupts an
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> one and clears it too.
+              session clears its status, on the first key by default.
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Status reset</strong> can move that to Enter, so a reply
+              you started and walked away from keeps the glyph until you send it, or disable it, leaving the status to the
+              agent's next hook or Clear Status. An interrupt keystroke, Esc or Ctrl-C, interrupts an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> one and clears it
+              whatever the setting.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               When the sidebar is hidden the glyphs go with it, so an optional

@@ -94,7 +94,10 @@ paths:
   Multiple Windows and the quick terminal's panel size, which sits there rather than under Appearance's
   Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
-  auto-follow, and Reset. Key Mapping holds config directory, diagnostics, and Reload.
+  status reset, auto-follow, and Reset. Key Mapping holds config directory, diagnostics, and Reload.
+- `statusReset` stores a raw `StatusReset` (`firstKey`|`enter`|`never`), nil for the default `firstKey`,
+  resolved by `effectiveStatusReset` and mirrored to `GhosttyApp.statusReset`, which the surface factories'
+  keystroke-clear closure reads at keystroke time. Reset to defaults clears it with the glyph settings.
 - Keep titlebar construction in `WindowContentView+Titlebar.swift` so `WindowContentView.swift` remains
   below the 1000-line limit.
 - Keep Agent Status shape pickers in a trailing-aligned 80-point column wider than the 64.5...68-point

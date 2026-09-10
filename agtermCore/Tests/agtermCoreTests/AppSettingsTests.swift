@@ -699,6 +699,18 @@ struct AppSettingsTests {
         #expect(hidden.resolvedHiddenInterfaceElements == [.customCommands, .dashboard])
     }
 
+    @Test func statusResetDefaultsToFirstKeyAndResolvesKnownRawValues() throws {
+        #expect(AppSettings().statusReset == nil)
+        #expect(AppSettings().effectiveStatusReset == .firstKey)
+        #expect(AppSettings(statusReset: "enter").effectiveStatusReset == .enter)
+        #expect(AppSettings(statusReset: "never").effectiveStatusReset == .never)
+        #expect(AppSettings(statusReset: "teleporter").effectiveStatusReset == .firstKey)
+        let original = AppSettings(statusReset: "enter")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func unknownInterfaceElementDecodesTolerantly() throws {
         // forward-compat rule: an unknown name is dropped from the resolved set and must not fail the
         // whole decode.

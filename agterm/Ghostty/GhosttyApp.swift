@@ -55,6 +55,9 @@ final class GhosttyApp {
     /// Whether the sidebar draws the red unseen-notification count badge. The sidebar Coordinator reads it
     /// (gating the count to 0 when off); settings-mirrored like `toolbarMode`.
     private(set) var notificationBadgeEnabled: Bool = true
+    /// Which keystroke clears a blocked or completed glyph; read at keystroke time by the surface factories'
+    /// status-clear closure. Settings-mirrored like `toolbarMode`.
+    private(set) var statusReset: StatusReset = .firstKey
     /// Whether a click anywhere on a sidebar workspace row toggles its expansion; on by default. The sidebar
     /// Coordinator reads it in `handleSingleClick`, and the disclosure triangle ignores it because AppKit
     /// toggles that natively. Settings-mirrored like `toolbarMode`.
@@ -211,6 +214,10 @@ final class GhosttyApp {
 
     func setAttentionButtonEnabled(_ enabled: Bool) {
         attentionButtonEnabled = enabled
+    }
+
+    func setStatusReset(_ mode: StatusReset) {
+        statusReset = mode
     }
 
     func setHiddenInterfaceElements(_ elements: Set<InterfaceElement>) {
