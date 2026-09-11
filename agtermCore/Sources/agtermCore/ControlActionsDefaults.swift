@@ -38,6 +38,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.kill"))
     }
 
+    func resetLiveSessions() -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.reset"))
+    }
+
     func remoteTree(host _: String?) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.tree"))
     }

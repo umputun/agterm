@@ -174,4 +174,17 @@ struct ZmxCommandsTests {
         #expect(rendered.contains("inventory incomplete"))
         #expect(rendered.contains("no daemons"))
     }
+
+    @Test func resetEncodesForce() throws {
+        let request = try Zmx.Reset.parse(["--force"]).makeRequest()
+
+        #expect(request.cmd == .zmxReset)
+        #expect(request.args?.force == true)
+        #expect(request.target == nil, "the reset is app-global and takes no target")
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: JSONEncoder().encode(request)) == request)
+    }
+
+    @Test func resetRefusesWithoutForce() {
+        #expect(throws: (any Error).self) { try Zmx.Reset.parse([]) }
+    }
 }

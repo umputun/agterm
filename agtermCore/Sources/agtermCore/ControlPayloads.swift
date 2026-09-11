@@ -169,14 +169,44 @@ public struct ControlZmxInventory: Codable, Sendable, Equatable {
     /// Header rather than per row: one instance has one zmx and one socket directory. Optional so a
     /// remote reader can tell an older server apart from one that reports nothing to attach to.
     public let endpoint: ControlZmxEndpoint?
+    /// The Live sessions reset state, repeated from the tree top level; omitted when nothing is pending
+    /// and no launch has consumed a marker.
+    public let liveReset: ControlLiveResetReadback?
     public let entries: [ControlZmxEntry]
 
     public init(restore: ControlRestoreStatus, result: ZmxInventoryResult,
-                endpoint: ControlZmxEndpoint? = nil) {
+                endpoint: ControlZmxEndpoint? = nil, liveReset: ControlLiveResetReadback? = nil) {
         self.restore = restore
         inventoryComplete = result.inventoryComplete
         self.endpoint = endpoint
+        self.liveReset = liveReset
         entries = result.rows.map(ControlZmxEntry.init(row:))
+    }
+}
+
+/// `zmx.reset`'s acknowledgement: what was confirmed for the next launch. `pending` is true once the
+/// app holds the set and is about to quit.
+public struct ControlLiveResetStatus: Codable, Sendable, Equatable {
+    public let sessions: Int
+    public let panes: Int
+    public let pending: Bool
+
+    public init(sessions: Int, panes: Int, pending: Bool) {
+        self.sessions = sessions
+        self.panes = panes
+        self.pending = pending
+    }
+}
+
+/// The reset's read-back on the tree top level and the `zmx list` header. `pending` is the confirmed pane
+/// count held in memory until the quit; `last` is the outcome of the launch that consumed a marker.
+public struct ControlLiveResetReadback: Codable, Sendable, Equatable {
+    public let pending: Int?
+    public let last: LiveReset.Outcome?
+
+    public init(pending: Int?, last: LiveReset.Outcome?) {
+        self.pending = pending
+        self.last = last
     }
 }
 

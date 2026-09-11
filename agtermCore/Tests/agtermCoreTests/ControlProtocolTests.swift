@@ -1953,4 +1953,47 @@ struct ControlProtocolTests {
         #expect(!encoded.contains("commit"))
         #expect(try JSONDecoder().decode(AppIdentity.self, from: Data(encoded.utf8)) == commitless)
     }
+
+    private static let liveResetOutcome = LiveReset.Outcome(
+        panes: LiveReset.PaneCounts(confirmed: 3, killed: 2, gone: 0, skipped: 0), unconfirmed: [UUID()],
+        sessions: LiveReset.SessionCounts(affected: 2, reset: 1, partial: 1, unconfirmed: 1), inventoryFailed: false)
+
+    @Test func liveResetStatusRoundTrips() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(
+            text: "2 live sessions will be reset.", liveReset: ControlLiveResetStatus(sessions: 2, panes: 3, pending: true)))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.liveReset?.pending == true)
+    }
+
+    @Test func liveResetReadbackRoundTrips() throws {
+        let readback = ControlLiveResetReadback(pending: 3, last: Self.liveResetOutcome)
+        let tree = ControlTree(workspaces: [], liveReset: readback)
+        let inventory = ControlZmxInventory(
+            restore: ControlRestoreStatus(configured: .live, requestedAtLaunch: .live, active: .live, unavailableReason: nil),
+            result: ZmxInventoryResult(rows: [], inventoryComplete: true), liveReset: readback)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: tree, zmx: inventory))
+
+        let decoded = try roundTrip(response)
+
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.liveReset == readback)
+        #expect(decoded.result?.zmx?.liveReset == readback)
+    }
+
+    @Test func liveResetOutcomeRoundTrips() throws {
+        let data = try JSONEncoder().encode(Self.liveResetOutcome)
+        #expect(try JSONDecoder().decode(LiveReset.Outcome.self, from: data) == Self.liveResetOutcome)
+    }
+
+    @Test func liveResetIsOmittedWhenNil() throws {
+        let tree = try JSONEncoder().encode(ControlTree(workspaces: []))
+        let inventory = try JSONEncoder().encode(ControlZmxInventory(
+            restore: ControlRestoreStatus(configured: .live, requestedAtLaunch: .live, active: .live, unavailableReason: nil),
+            result: ZmxInventoryResult(rows: [], inventoryComplete: true)))
+        let result = try JSONEncoder().encode(ControlResult(text: "x"))
+        for encoded in [tree, inventory, result] {
+            #expect(!String(decoding: encoded, as: UTF8.self).contains("liveReset"))
+        }
+    }
 }

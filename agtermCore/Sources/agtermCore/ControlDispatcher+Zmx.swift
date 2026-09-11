@@ -56,6 +56,11 @@ extension ControlDispatcher {
                 return ControlResponse(ok: false, error: "zmx.kill requires --force")
             }
             return actions.killZmxDaemon(target: target, window: request.args?.window, pane: pane)
+        case .zmxReset:
+            guard request.args?.force == true else {
+                return ControlResponse(ok: false, error: "zmx.reset requires --force")
+            }
+            return actions.resetLiveSessions()
 
         default:
             preconditionFailure("unexpected zmx command: \(request.cmd.rawValue)")

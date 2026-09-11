@@ -375,18 +375,18 @@ App target:
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/ZmxCommandsTests.swift`
 
-- [ ] write failing dispatcher tests `resetRefusesWithoutForce` (refused by name, action never called)
+- [x] write failing dispatcher tests `resetRefusesWithoutForce` (refused by name, action never called)
       and `resetWithForceReachesAction`; the unsupported default answers the standard message
-- [ ] write failing protocol tests `liveResetStatusRoundTrips`, `liveResetReadbackRoundTrips`,
+- [x] write failing protocol tests `liveResetStatusRoundTrips`, `liveResetReadbackRoundTrips`,
       `liveResetOutcomeRoundTrips` and `liveResetIsOmittedWhenNil` for both the tree and the zmx list
       header
-- [ ] write failing CLI tests `resetEncodesForce` and `resetRefusesWithoutForce` in `ZmxCommandsTests`,
+- [x] write failing CLI tests `resetEncodesForce` and `resetRefusesWithoutForce` in `ZmxCommandsTests`,
       with the same wording as `zmx kill`
-- [ ] add the command, the payloads and read-back fields, the action protocol method and default, and
+- [x] add the command, the payloads and read-back fields, the action protocol method and default, and
       the dispatch case with the `--force` refusal first; keep `ControlDispatcher.swift` under 1000 lines
-- [ ] add the `Reset` subcommand with an abstract and discussion that avoid zmx internals beyond the
+- [x] add the `Reset` subcommand with an abstract and discussion that avoid zmx internals beyond the
       group name, and print `result.text`
-- [ ] run `swift test --filter 'ControlDispatcherZmxTests/reset|ControlProtocolTests/liveReset|ZmxCommandsTests/reset'`
+- [x] run `swift test --filter 'ControlDispatcherZmxTests/reset|ControlProtocolTests/liveReset|ZmxCommandsTests/reset'`
       - must pass before task 3
 
 ### Task 3: Session records, batched kill and group liveness polling

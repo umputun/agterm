@@ -346,4 +346,27 @@ struct ControlDispatcherZmxTests {
         // requirement ships a default returning this rather than breaking that build
         #expect(ControlActionsUnsupported.message("zmx.list") == "zmx.list is not supported on this platform")
     }
+
+    @Test func resetRefusesWithoutForce() async throws {
+        let actions = MockControlActions()
+
+        let response = try #require(await dispatch(ControlRequest(cmd: .zmxReset), actions))
+
+        #expect(!response.ok)
+        #expect(response.error == "zmx.reset requires --force")
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func resetWithForceReachesAction() async throws {
+        let actions = MockControlActions()
+        actions.nextZmxResetResponse = ControlResponse(
+            ok: true, result: ControlResult(text: "2 live sessions will be reset.",
+                                            liveReset: ControlLiveResetStatus(sessions: 2, panes: 3, pending: true)))
+
+        let response = try #require(await dispatch(ControlRequest(cmd: .zmxReset, args: ControlArgs(force: true)), actions))
+
+        #expect(response.ok)
+        #expect(actions.calls == [.zmxReset])
+        #expect(response.result?.liveReset == ControlLiveResetStatus(sessions: 2, panes: 3, pending: true))
+    }
 }

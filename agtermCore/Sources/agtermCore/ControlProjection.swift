@@ -413,6 +413,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// agent already reading the tree gets its version floor without a second round-trip; `version` answers
     /// the same question for a caller that has no tree, no window, and no JSON parser.
     public let app: AppIdentity?
+    /// The Live sessions reset state: app-global like `app`, omitted when nothing is pending and no launch
+    /// has consumed a marker. The read side of `zmx.reset`.
+    public let liveReset: ControlLiveResetReadback?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, sidebarWidth: Double? = nil, workspaceFilter: Bool? = nil,
@@ -420,8 +423,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil, pickPending: String? = nil, askPending: String? = nil,
-                app: AppIdentity? = nil) {
+                app: AppIdentity? = nil, liveReset: ControlLiveResetReadback? = nil) {
         self.workspaces = workspaces
+        self.liveReset = liveReset
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible

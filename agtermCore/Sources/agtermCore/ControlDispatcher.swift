@@ -153,6 +153,9 @@ public protocol ControlActions {
     /// Destroy ONE pane's daemon. The host resolves the owner against the inventory rather than the open
     /// stores, since this reaches closed and unindexed claims the target resolver cannot see.
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse
+    /// Confirm the Live sessions reset without the dialog: the host selects the panes, refuses outside Live
+    /// or on an incomplete inventory, answers, and quits only after this reply is written.
+    func resetLiveSessions() -> ControlResponse
     /// Another machine's attachable sessions. Async because it runs ssh: a blocking wait here would hold
     /// the main actor for the whole network deadline.
     func remoteTree(host: String?) async -> ControlResponse
@@ -197,7 +200,7 @@ public struct ControlDispatcher {
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
                 .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
-        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxTree, .zmxAttach:
+        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach:
             return await dispatchZmxCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
