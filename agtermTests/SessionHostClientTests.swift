@@ -192,9 +192,20 @@ final class SessionHostClientTests: XCTestCase {
             clients.append(pid)
         }
 
+        /// The host's pid, waiting for it to appear. The host writes the pidfile from its own process after
+        /// the client that started it returns, so a bare read races it — `waitForLeaders` proves the zmx
+        /// daemons are up, which is a different event. Unloaded the file is already there; under a full-suite
+        /// run it is not, and the read failed with ENOENT rather than waiting.
         func hostPID() throws -> Int32 {
-            let value = try String(contentsOfFile: paths.pidfile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-            return try XCTUnwrap(Int32(value))
+            let deadline = Date().addingTimeInterval(10)
+            while true {
+                if let value = try? String(contentsOfFile: paths.pidfile, encoding: .utf8),
+                   let pid = Int32(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    return pid
+                }
+                guard Date() < deadline else { throw POSIXError(.ETIMEDOUT) }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
         }
 
         func connectRaw() throws -> Int32 {
