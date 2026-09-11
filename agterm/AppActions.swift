@@ -407,67 +407,6 @@ final class AppActions {
         reloadGhosttyConfig()
     }
 
-    /// Step the selection prev/next/first/last in the sidebar's flattened visual order, through shared
-    /// `navigateSession` so GUI, palette and control can't drift, then `selectSession`
-    /// (recency/badge/persist/workspace) and first responder into the moved-to session's focused pane. Notes
-    /// the manual nav as user activity for the full idle grace against auto-follow; control `session.go`
-    /// drives `navigateSession` directly and stays silent. A step landing on the ALREADY-selected session only
-    /// re-focuses (next/previous wrap inside the filtered set, first/last repeat at that end): `selectSession`
-    /// still returns an indicator for a same-target select, and revealing on it would clear `splitFocused` and
-    /// yank first responder onto the primary pane, off the split being typed in. Attention nav DOES reveal.
-    private func navigatePlain(_ direction: SessionNavigation) {
-        guard uiActionsEnabled else { return }
-        store?.noteUserActivity()
-        let before = store?.selectedSessionID
-        // no live-indicator fallback (unlike attention nav): a plain direction returns nil only when
-        // `navigableSessions` is EMPTY, and then nothing was selected, which the moved-check below catches.
-        let indicator = store?.navigateSession(direction)
-        guard store?.selectedSessionID != before else { focusActiveSession(); return }
-        revealActiveBlockedPane(captured: indicator)
-    }
-
-    func selectNextSession() { navigatePlain(.next) }
-    func selectPreviousSession() { navigatePlain(.previous) }
-    func selectFirstSession() { navigatePlain(.first) }
-    func selectLastSession() { navigatePlain(.last) }
-
-    /// Step the CURRENT workspace prev/next through the sidebar's visible order and select its first session,
-    /// through shared `navigateWorkspace` so the menu, the palette and `workspace.go` can't drift. Notes the
-    /// step as user activity like session nav, then routes pane reveal off the step's captured indicator —
-    /// the same treatment plain session nav gives, so where focus lands does not depend on which keystroke
-    /// got you there. A step with nowhere to go (flagged mode, one visible workspace) leaves focus alone.
-    private func navigateWorkspace(_ direction: WorkspaceNavigation) {
-        guard uiActionsEnabled else { return }
-        store?.noteUserActivity()
-        guard let step = store?.navigateWorkspace(direction) else { return }
-        revealActiveBlockedPane(captured: step.indicator)
-    }
-
-    func selectNextWorkspace() { navigateWorkspace(.next) }
-    func selectPreviousWorkspace() { navigateWorkspace(.previous) }
-
-    /// Step to the next/previous session needing attention (`blocked`/`completed`), wrapping and skipping
-    /// idle/active, through `navigateSession` shared with the palette and `session.go next-attention|prev-attention`.
-    /// Notes user activity like plain nav, then `revealActiveBlockedPane` focuses the split/scratch pane that
-    /// SET the status. Unlike plain nav this DOES reveal on a selection no-op, and only the
-    /// `?? activeSession?.agentIndicator` fallback makes it: `attentionTarget` EXCLUDES the current session,
-    /// so when the sole session needing attention is the selected one, `navigateSession` selects nothing.
-    /// Without the fallback the reveal degrades to plain `focusActiveSession` and ⌃⌥↑/↓ stops landing on that
-    /// session's tagged pane — constant for an agent, since a pane-scoped block is not cleared by typing in
-    /// the OTHER pane. Keep it.
-    func selectNextAttentionSession() {
-        guard uiActionsEnabled else { return }
-        store?.noteUserActivity()
-        let indicator = store?.navigateSession(.nextAttention) ?? store?.activeSession?.agentIndicator
-        revealActiveBlockedPane(captured: indicator)
-    }
-    func selectPreviousAttentionSession() {
-        guard uiActionsEnabled else { return }
-        store?.noteUserActivity()
-        let indicator = store?.navigateSession(.previousAttention) ?? store?.activeSession?.agentIndicator
-        revealActiveBlockedPane(captured: indicator)
-    }
-
     /// Delete a workspace and all its sessions from `store`'s window. Confirms while it still has sessions
     /// (the delete ends their shells), no prompt when empty, no-op when only one workspace remains — one is
     /// always kept. The row's "Delete Workspace" passes its OWN window-local store: the frontmost one would

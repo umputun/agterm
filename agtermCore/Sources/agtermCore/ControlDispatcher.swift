@@ -116,6 +116,7 @@ public protocol ControlActions {
     func windowNew(name: String?, minimized: Bool) async -> ControlResponse
     func windowList() -> ControlResponse
     func windowSelect(_ target: String?) async -> ControlResponse
+    func windowGo(direction: WorkspaceNavigation) -> ControlResponse
     func windowClose(_ target: String?) async -> ControlResponse
     func windowRename(_ target: String?, name: String) -> ControlResponse
     func windowDelete(_ target: String?) -> ControlResponse
@@ -204,7 +205,7 @@ public struct ControlDispatcher {
             return await dispatchZmxCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
-        case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
+        case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,
                 .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize:
             return await dispatchWindowCommand(request)
         case .dashboard:
@@ -895,6 +896,11 @@ public struct ControlDispatcher {
             return actions.windowList()
         case .windowSelect:
             return await actions.windowSelect(request.target)
+        case .windowGo:
+            guard let dir = (request.args?.to).flatMap(WorkspaceNavigation.init(wire:)) else {
+                return ControlResponse(ok: false, error: "window.go requires --to next|prev")
+            }
+            return actions.windowGo(direction: dir)
         case .windowClose:
             return await actions.windowClose(request.target)
         case .windowRename:

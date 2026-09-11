@@ -21,6 +21,10 @@ public struct PaletteContext: Sendable, Equatable {
     /// `navigateWorkspace` no-ops below that, so without this term the menu item and the mapped key stay
     /// live while provably doing nothing.
     public let canStepWorkspaces: Bool
+    /// Whether more than one window is OPEN, i.e. whether a window step has anywhere to go. `WindowLibrary`,
+    /// not the store: window stepping is app-global, so this is the one term here that outlives the frontmost
+    /// window's own state.
+    public let canStepWindows: Bool
     public let activeSessionHasSplit: Bool
     public let activeSplitAxis: SplitAxis?
     public let hasPendingClose: Bool
@@ -47,6 +51,7 @@ public struct PaletteContext: Sendable, Equatable {
                 activeWorkspaceMarked: Bool = false,
                 activeWorkspaceCollapsed: Bool = false,
                 canStepWorkspaces: Bool = false,
+                canStepWindows: Bool = false,
                 activeSessionHasSplit: Bool = false,
                 activeSplitAxis: SplitAxis? = nil,
                 hasPendingClose: Bool = false,
@@ -65,6 +70,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.activeWorkspaceMarked = activeWorkspaceMarked
         self.activeWorkspaceCollapsed = activeWorkspaceCollapsed
         self.canStepWorkspaces = canStepWorkspaces
+        self.canStepWindows = canStepWindows
         self.activeSessionHasSplit = activeSessionHasSplit
         self.activeSplitAxis = activeSplitAxis
         self.hasPendingClose = hasPendingClose
@@ -83,6 +89,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
+    case previousWindow, nextWindow
     case firstSession, lastSession, showAttention
     case toggleSplit, toggleHorizontalSplit, closeSplit, swapPanes, toggleScratch, toggleTerminalZoom
     case toggleSidebar, toggleFlag, focusWorkspace
@@ -112,6 +119,9 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousWorkspace, .nextWorkspace:
             // a step needs somewhere to go, so a lone visible workspace disables rather than no-ops
             return context.hasCurrentWorkspace && context.canStepWorkspaces
+        case .previousWindow, .nextWindow:
+            // same rule one level up: a single open window has nowhere to step to
+            return context.canStepWindows
         default:
             return true
         }
@@ -198,6 +208,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .nextAttentionSession: return "Next Attention Session"
         case .previousWorkspace: return "Previous Workspace"
         case .nextWorkspace: return "Next Workspace"
+        case .previousWindow: return "Previous Window"
+        case .nextWindow: return "Next Window"
         case .firstSession: return "First Session"
         case .lastSession: return "Last Session"
         case .showAttention: return "Show Attention"
@@ -253,6 +265,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousAttentionSession: return .previousAttentionSession
         case .nextAttentionSession: return .nextAttentionSession
         case .previousWorkspace: return .previousWorkspace
+        case .previousWindow: return .previousWindow
+        case .nextWindow: return .nextWindow
         case .nextWorkspace: return .nextWorkspace
         case .toggleWorkspaceCollapse: return .toggleWorkspaceCollapse
         case .firstSession: return .firstSession

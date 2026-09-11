@@ -200,6 +200,13 @@ paths:
   captured indicator exactly as plain session nav does. **Collapse is not a navigation filter** —
   `navigableSessions` and `navigateWorkspace` both ignore `isExpanded`, and adding a term to either would
   silently rewrite where every existing keystroke, `session.go` call and Ctrl-Tab candidate lands.
+- Previous/Next Window are the level above THAT, and the only navigation pair keyed on the library rather
+  than a store: `WindowLibrary.navigateWindow` steps the open windows in library order, wrapping, and raises
+  the target. Keyless, and live in either sidebar mode — a window has no sidebar row for flagged mode to
+  hide. `PaletteContext.canStepWindows` is the enablement term, so one open window disables rather than
+  no-ops. Menu, palette and `window.go` share the one step. The raise and the frontmost publication follow
+  [[windows]]: `WindowRegistry.raise` directly, never the `openWindow` hub, and `takeFrontmost` explicitly,
+  because the key monitor fires this from the quick terminal with agterm inactive.
 - When selection moves, GUI callers reveal a captured blocked/completed pane; unchanged plain navigation
   only refocuses, preventing a one-item wrap from resetting split focus. Modal focus guards still apply.
 - Attention navigation defaults to Control-Option-Up/Down, includes blocked/completed only, wraps, and

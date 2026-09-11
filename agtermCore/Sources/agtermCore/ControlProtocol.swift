@@ -66,6 +66,7 @@ public enum Command: String, Codable, Sendable {
     case windowNew = "window.new"
     case windowList = "window.list"
     case windowSelect = "window.select"
+    case windowGo = "window.go"
     case windowClose = "window.close"
     case windowRename = "window.rename"
     case windowDelete = "window.delete"

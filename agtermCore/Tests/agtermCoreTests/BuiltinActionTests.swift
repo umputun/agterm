@@ -33,7 +33,9 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.previousWorkspace.rawValue == "previous_workspace")
         #expect(BuiltinAction.nextWorkspace.rawValue == "next_workspace")
         #expect(BuiltinAction.toggleWorkspaceCollapse.rawValue == "toggle_workspace_collapse")
-        #expect(BuiltinAction.allCases.count == 46)
+        #expect(BuiltinAction.previousWindow.rawValue == "previous_window")
+        #expect(BuiltinAction.nextWindow.rawValue == "next_window")
+        #expect(BuiltinAction.allCases.count == 48)
     }
 
     @Test func rejectsUnknownName() {
@@ -109,6 +111,8 @@ struct BuiltinActionTests {
             .previousWorkspace: nil,
             .nextWorkspace: nil,
             .toggleWorkspaceCollapse: nil,
+            .previousWindow: nil,
+            .nextWindow: nil,
             .focusLeftPane: Chord(mods: [.command, .option], key: "left"),
             .focusRightPane: Chord(mods: [.command, .option], key: "right"),
             .previousSession: Chord(mods: [.command, .option], key: "up"),
@@ -180,6 +184,7 @@ struct BuiltinActionTests {
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
+            .previousWindow, .nextWindow,
         ]
         for action in keyless {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")

@@ -6,8 +6,8 @@ import agtermCore
 struct Window: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Window commands.",
-        subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self,
-                      Zoom.self, Fullscreen.self, Minimize.self]
+        subcommands: [New.self, List.self, Select.self, Go.self, Close.self, Rename.self, Delete.self, Resize.self,
+                      Move.self, Zoom.self, Fullscreen.self, Minimize.self]
     )
 
     struct New: RequestCommand {
@@ -36,6 +36,18 @@ struct Window: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowSelect, target: id) }
+    }
+
+    /// `agtermctl window go --to next|prev` — raises the next/previous OPEN window, wrapping. Deliberately
+    /// no id argument: it is relative to the active window, the shape `workspace go` takes, and a closed
+    /// entry is not a step candidate — `select` is the verb that opens one.
+    struct Go: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "go",
+            abstract: "Navigate open windows: next|prev.")
+        @Option(name: .long, help: "Direction: next or prev.") var to: String
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowGo, args: ControlArgs(to: to)) }
     }
 
     struct Close: RequestCommand {

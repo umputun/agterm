@@ -234,6 +234,8 @@ struct SocketClientTests {
             new_window                  cmd+opt+n
             rename_window               -
             delete_window               -
+            previous_window             -
+            next_window                 -
             new_workspace               cmd+shift+n
             rename_workspace            -
             delete_workspace            -

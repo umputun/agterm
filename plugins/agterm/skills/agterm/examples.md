@@ -1037,6 +1037,7 @@ agtermctl window zoom "$w"                 # maximize-to-screen toggle (call aga
 agtermctl window fullscreen "$w"           # native macOS full screen toggle (⌃⌘F / green button)
 agtermctl window minimize "$w" on          # park it in the Dock (off restores, toggle flips)
 agtermctl window select "$w"               # raise it, un-minimizing if it was parked
+agtermctl window go --to next              # raise the next OPEN window, wrapping (next|prev)
 ```
 
 `window new` returns only once the window is really on screen, so the `window resize` above works on the

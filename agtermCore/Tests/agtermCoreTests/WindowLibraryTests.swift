@@ -834,6 +834,56 @@ final class WindowLibraryTests {
         #expect(library.openIDs() == [library.windows[0].id])
     }
 
+    @Test func windowStepWrapsBothWaysInLibraryOrder() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let second = library.newWindow(name: "second").id
+        let third = library.newWindow(name: "third").id
+        #expect(library.canStepWindows)
+
+        library.frontmostWindowID = first
+        #expect(library.navigateWindow(.next) == second)
+        #expect(library.navigateWindow(.previous) == third)
+        library.frontmostWindowID = third
+        #expect(library.navigateWindow(.next) == first)
+        #expect(library.navigateWindow(.previous) == second)
+    }
+
+    @Test func windowStepSkipsClosedEntries() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let middle = library.newWindow(name: "middle").id
+        let last = library.newWindow(name: "last").id
+        library.closeWindow(middle)
+
+        library.frontmostWindowID = first
+        #expect(library.navigateWindow(.next) == last)
+        #expect(library.navigateWindow(.previous) == last)
+    }
+
+    @Test func windowStepIsNilWithOneOpenWindow() {
+        let library = WindowLibrary(directory: directory)
+        let extra = library.newWindow(name: "extra").id
+        library.closeWindow(extra)
+        #expect(!library.canStepWindows)
+        #expect(library.navigateWindow(.next) == nil)
+        #expect(library.navigateWindow(.previous) == nil)
+    }
+
+    @Test func windowStepStartsFromTheResolvedActiveWindowWhenFrontmostIsClosed() {
+        // `activeWindowID` falls back to the first OPEN window, so a step after the frontmost closed
+        // leaves from that survivor rather than returning nil.
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let second = library.newWindow(name: "second").id
+        let third = library.newWindow(name: "third").id
+        library.frontmostWindowID = third
+        library.closeWindow(third)
+
+        #expect(library.activeWindowID == first)
+        #expect(library.navigateWindow(.next) == second)
+    }
+
     @Test func closeUnknownWindowIsNoOp() {
         let library = WindowLibrary(directory: directory)
         let before = library.openIDs()

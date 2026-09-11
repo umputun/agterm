@@ -156,7 +156,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `quick`, `quick.type`, `quick.text`
 - `sidebar`, `sidebar.mode`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`, `notify`
 - `font.inc`, `font.dec`, `font.reset`
-- `window.new`, `.list`, `.select`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
+- `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
   `restore.clear`, `restore.mode`, `version`

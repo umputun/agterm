@@ -20,6 +20,8 @@ struct PaletteCatalogTests {
             "Next Attention Session",
             "Previous Workspace",
             "Next Workspace",
+            "Previous Window",
+            "Next Window",
             "First Session",
             "Last Session",
             "Show Attention",
@@ -59,7 +61,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 51)
+        #expect(PaletteCommand.allCases.count == 53)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -115,6 +117,23 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.toggleWorkspaceCollapse.isEnabled(in: alone))
     }
 
+    // the same rule one level up, on the LIBRARY rather than the store: one open window has nowhere to step.
+    // unlike the workspace pair these stay live in flagged mode, windows having no sidebar rows to render.
+    @Test func windowStepsDisableWithOneOpenWindow() {
+        let alone = PaletteContext(canStepWindows: false)
+        let several = PaletteContext(canStepWindows: true)
+        for command in [PaletteCommand.previousWindow, .nextWindow] {
+            #expect(!command.isEnabled(in: alone))
+            #expect(command.isEnabled(in: several))
+            #expect(command.isVisible(in: alone), "still listed, just inert")
+            #expect(command.isEnabled(in: PaletteContext(canStepWindows: true, hasActiveSession: false,
+                                                         hasCurrentWorkspace: false)),
+                    "app-global: no session or workspace of its own to require")
+            #expect(!command.isEnabled(in: PaletteContext(canStepWindows: true, terminalZoomActive: true)),
+                    "an ordinary modal cover still blocks it")
+        }
+    }
+
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
         #expect(!PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: false)))
         #expect(PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: true)))
@@ -160,6 +179,7 @@ struct PaletteCatalogTests {
     private static let live = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                              sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                              canStepWorkspaces: true,
+                                             canStepWindows: true,
                                              activeSessionHasSplit: true, hasPendingClose: true,
                                              hasRecentClosed: true, hasActiveSession: true,
                                              hasCurrentWorkspace: true)
@@ -187,6 +207,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: false,
                                      hasCurrentWorkspace: true)
@@ -199,6 +220,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: false)
@@ -213,6 +235,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, terminalZoomActive: true)
@@ -226,6 +249,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, pickerActive: true)
@@ -241,6 +265,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, pickerActive: controller.modalPending)
@@ -257,6 +282,7 @@ struct PaletteCatalogTests {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
+                                     canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
                                      hasCurrentWorkspace: true, dashboardOpen: true)

@@ -219,13 +219,24 @@ session drag are out of scope.
 
 ## Control catalog
 
-- Commands are `window.new`, `window.list`, `window.select`, `window.close`, `window.rename`,
+- Commands are `window.new`, `window.list`, `window.select`, `window.go`, `window.close`, `window.rename`,
   `window.delete`, `window.resize`, `window.move`, `window.zoom`, `window.fullscreen`, and
   `window.minimize`. Keep their protocol cases, dispatch/actions, CLI mappings, and tests synchronized
   per the repository-wide control contract.
 - `window.list` returns ID/name/open/active plus open-store auto-follow/sidebar state and live
   geometry/fullscreen/zoom/minimize. Closed-window live fields are omitted. Geometry is top-left,
   display-relative, y-down, matching move/resize.
+- `window.go --to next|prev` steps the OPEN windows in library order, wrapping, through host-free
+  `WindowLibrary.navigateWindow`, which the `previous_window`/`next_window` built-ins share. A CLOSED entry
+  is not a candidate: `window.select` is the verb that opens one, and a step that silently opened a window
+  would make the wrap length depend on the library rather than on what is on screen. It takes no target and
+  no `--window`, being app-global, and errors `no other open window to navigate to` below two open windows.
+  BOTH it and the GUI twins raise through `WindowRegistry.raise`, never `AppActions.openWindow`: that hub
+  falls back to `enqueueClaim` plus a fresh scene when a raise fails, and the failure case for a step is an
+  OPEN window still attaching, so one store would get two scenes. `enqueueClaim` dedups only PENDING claims,
+  so a popped claim does not protect it. Control refuses out loud; the GUI drops the step. Both then publish
+  frontmost themselves — `WindowAccessor.reportFrontmost` rides `didBecomeKey`, which never arrives while the
+  app is inactive, the state a step from the quick terminal raises in. Read back `window.list`'s `active`.
 - Delete enforces at least one library entry without GUI confirmation. `window.select` raises or opens.
   Window ID resolution accepts active, exact ID, unique prefix, ambiguity, and not found; most library
   commands can address closed entries.

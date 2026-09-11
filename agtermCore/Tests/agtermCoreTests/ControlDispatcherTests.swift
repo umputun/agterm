@@ -1580,6 +1580,40 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func windowGoRoutesBothDirectionsThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextWindowGoResponse = ControlResponse(ok: true, result: ControlResult(id: "win-b"))
+
+        let next = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(to: "next")))
+        let prev = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(to: "prev")))
+        let spelled = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(to: "previous")))
+
+        #expect(next == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
+        #expect(prev == next)
+        #expect(spelled == next)
+        #expect(actions.calls == [.windowGo(.next), .windowGo(.previous), .windowGo(.previous)])
+    }
+
+    @Test func windowGoIgnoresAWindowArgumentAndRejectsABadDirection() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // app-global: there is no per-window scope to carry, so `--window` cannot narrow the step
+        let scoped = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(window: "win", to: "next")))
+        #expect(actions.calls == [.windowGo(.next)])
+
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .windowGo))
+        let unknown = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(to: "sideways")))
+        let sessionOnly = await dispatcher.dispatch(ControlRequest(cmd: .windowGo, args: ControlArgs(to: "first")))
+
+        #expect(scoped == ControlResponse(ok: true))
+        #expect(missing == ControlResponse(ok: false, error: "window.go requires --to next|prev"))
+        #expect(unknown == missing)
+        #expect(sessionOnly == missing)
+        #expect(actions.calls == [.windowGo(.next)])
+    }
+
     @Test func windowCommandsRouteParsedInputsAndKeepActionResponses() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

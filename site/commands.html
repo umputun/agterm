@@ -1938,7 +1938,8 @@
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               These take the window selector as a positional argument (default
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>, the frontmost). A window need not be open
-              to be a target.
+              to be a target. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window go</span> is the
+              exception: it is relative to the active window and takes no selector.
             </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -1997,6 +1998,24 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.select</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">Raise the window if open, else open it.</p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl window go --to next|prev
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.go</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Raise the next or previous open window, wrapping at both ends. Relative to the active window, so unlike its
+                neighbours it takes no window selector. Returns the id of the window it landed on.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Only open windows are stepped through — a closed bundle is not a stop on the way round, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window select</span> is what opens one. With a single window open it
+                errors with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other open window to navigate to</span>. The GUI twins are Navigate ▸
+                Previous/Next Window and the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">previous_window</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">next_window</span>
+                keymap actions, which ship with no key of their own.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">

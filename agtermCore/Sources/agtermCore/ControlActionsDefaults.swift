@@ -76,6 +76,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
     }
 
+    func windowGo(direction _: WorkspaceNavigation) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.go"))
+    }
+
     /// `agterm-linux` may implement the original session-wide HUD methods. New dispatchers preserve that
     /// behavior when the host has not adopted pane placement yet.
     func openHud(_ target: String?, window: String?, spec: HudSpec,

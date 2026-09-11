@@ -534,7 +534,7 @@ final class ControlServer {
                 .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize,
                 .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText,
                 .sessionBackground, .sessionText, .quick, .quickType, .quickText,
-                .windowNew, .windowList, .windowSelect,
+                .windowNew, .windowList, .windowSelect, .windowGo,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,

@@ -382,6 +382,20 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .nextWorkspace))
                 .disabled(!PaletteCommand.nextWorkspace.isEnabled(in: context))
+                // step between OPEN windows, wrapping and raising each in turn — a CLOSED entry is not a
+                // candidate, File > Open Window being the surface that opens one. keyless, rebindable via
+                // previous_window/next_window; control window.go. horizontal chevrons, since the vertical
+                // ones are taken by the two levels inside a window.
+                Button { actions.selectPreviousWindow() } label: {
+                    Label("Previous Window", systemImage: "chevron.left.2")
+                }
+                .keyboardShortcut(shortcut(for: .previousWindow))
+                .disabled(!PaletteCommand.previousWindow.isEnabled(in: context))
+                Button { actions.selectNextWindow() } label: {
+                    Label("Next Window", systemImage: "chevron.right.2")
+                }
+                .keyboardShortcut(shortcut(for: .nextWindow))
+                .disabled(!PaletteCommand.nextWindow.isEnabled(in: context))
                 Divider()
                 let topBottom = library.activeStore?.activeSession?.splitAxis == .topBottom
                 Button { actions.focusPane(.main) } label: {

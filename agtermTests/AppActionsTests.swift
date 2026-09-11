@@ -34,6 +34,23 @@ final class AppActionsTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // a window step must never reach the `openWindow` hub: for a target still attaching its raise fails, the
+    // hub falls back to enqueueClaim + a fresh scene, and one store ends up with two windows. No NSWindow is
+    // registered under XCTest, so every raise here fails — the state the guard exists for.
+    func testWindowStepNeverOpensASceneForAnUnattachedTarget() throws {
+        _ = library.newWindow(name: "second")
+        XCTAssertTrue(library.canStepWindows, "two open windows are needed for a step to have a target")
+        let before = library.frontmostWindowID
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.selectNextWindow()
+        actions.selectPreviousWindow()
+
+        XCTAssertEqual(opened, [], "an unraisable step must drop, not spawn a second scene for the store")
+        XCTAssertEqual(library.frontmostWindowID, before, "a step that did not raise must not move frontmost")
+    }
+
     private var home: String { FileManager.default.homeDirectoryForCurrentUser.path }
 
     private func remoteActiveSession(reportedCwd: String) throws -> Session {

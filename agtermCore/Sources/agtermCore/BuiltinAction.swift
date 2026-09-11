@@ -4,6 +4,7 @@
 /// `.commands`; `defaultChord` is the single source of truth for those shortcuts, read via `equivalent(for:)`.
 public enum BuiltinAction: String, CaseIterable, Sendable {
     case newWindow = "new_window", renameWindow = "rename_window", deleteWindow = "delete_window"
+    case previousWindow = "previous_window", nextWindow = "next_window"
     case newWorkspace = "new_workspace", renameWorkspace = "rename_workspace", deleteWorkspace = "delete_workspace"
     case newSession = "new_session", openDirectory = "open_directory", renameSession = "rename_session"
     case duplicateSession = "duplicate_session"
@@ -63,7 +64,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .nextAttentionSession: return Chord(mods: [.control, .option], key: "down")
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
-             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse:
+             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
+             .previousWindow, .nextWindow:
             return nil
         }
     }

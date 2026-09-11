@@ -68,6 +68,22 @@ extension ControlServer {
         }
     }
 
+    /// Raise the next/previous OPEN window, wrapping, through the `library.navigateWindow` the menu and the
+    /// palette share. Errors rather than silently no-opping with one window open, as `workspace.go` does with
+    /// one workspace. `raise` directly, NOT the hub's opener `window.select` uses: the step target is open by
+    /// construction, and the opener would spawn a second scene window for a store whose NSWindow is still
+    /// attaching. `takeFrontmost` is explicit because an inactive app receives no AppKit key handoff.
+    func windowGo(direction: WorkspaceNavigation) -> ControlResponse {
+        guard let id = library.navigateWindow(direction) else {
+            return ControlResponse(ok: false, error: "no other open window to navigate to")
+        }
+        guard WindowRegistry.shared.raise(id) else {
+            return ControlResponse(ok: false, error: "window not on screen yet — retry")
+        }
+        takeFrontmost(id)
+        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+    }
+
     /// Resolve a window id and close its on-screen window (the registry's `performClose` runs the standard
     /// teardown + `closeWindow` path, asynchronously). Bounded-polls for the library to mark it closed, so an
     /// immediate follow-up sees it closed. An already-closed window still reports ok. Returns the id.

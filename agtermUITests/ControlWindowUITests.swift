@@ -1,7 +1,7 @@
 import Darwin
 import XCTest
 
-/// Control-channel e2e for the window commands (window.new/list/select/close/resize/move/zoom) and
+/// Control-channel e2e for the window commands (window.new/list/select/go/close/resize/move/zoom) and
 /// the title-bar double-click / drag gestures, plus the window-scoped `tree`/list oracles. Subclass
 /// of `ControlAPITestCase`.
 @MainActor
@@ -493,6 +493,42 @@ final class ControlWindowUITests: ControlAPITestCase {
             return open.count == 1 && active.count == 1 && (open.first?["id"] as? String) == (active.first?["id"] as? String)
         }
         XCTAssertTrue(settled, "the remaining open window should become the single active window after closing the frontmost")
+    }
+
+    // the step arithmetic (three windows, wrapping, skipping closed entries) is pinned host-free in
+    // `WindowLibraryTests`; this proves the wiring — the target is really raised and reads back active.
+    func testWindowGoRaisesTheOtherOpenWindow() throws {
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"go-peer"}}"#)
+        let windowB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new should return the new id")
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.count == 2 }, "the second window should appear")
+        XCTAssertTrue(selectWindowUntilActive(windowB, timeout: 30), "the created window should become active")
+
+        let stepped = try sendCommand(#"{"cmd":"window.go","args":{"to":"next"}}"#)
+        XCTAssertEqual(stepped["ok"] as? Bool, true, "window.go should succeed with two windows open: \(stepped)")
+        let landed = try XCTUnwrap((stepped["result"] as? [String: Any])?["id"] as? String,
+                                   "window.go should return the window it landed on")
+        XCTAssertNotEqual(landed.lowercased(), windowB.lowercased(), "a step must leave the window it started on")
+        XCTAssertTrue(pollWindowList(timeout: 10) { list in
+            list.first(where: { ($0["id"] as? String)?.lowercased() == landed.lowercased() })?["active"] as? Bool == true
+        }, "the window it landed on should read back active")
+
+        let back = try sendCommand(#"{"cmd":"window.go","args":{"to":"prev"}}"#)
+        XCTAssertEqual(((back["result"] as? [String: Any])?["id"] as? String)?.lowercased(), windowB.lowercased(),
+                       "stepping back should return to the window it came from: \(back)")
+    }
+
+    func testWindowGoRefusesWithOneWindowAndOnABadDirection() throws {
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.filter { ($0["open"] as? Bool) == true }.count == 1 },
+                      "should start with the one seeded window open")
+
+        let alone = try sendCommand(#"{"cmd":"window.go","args":{"to":"next"}}"#)
+        XCTAssertEqual(alone["ok"] as? Bool, false, "one open window has nowhere to step: \(alone)")
+        XCTAssertEqual(alone["error"] as? String, "no other open window to navigate to")
+
+        let sideways = try sendCommand(#"{"cmd":"window.go","args":{"to":"sideways"}}"#)
+        XCTAssertEqual(sideways["error"] as? String, "window.go requires --to next|prev", "\(sideways)")
+        let missing = try sendCommand(#"{"cmd":"window.go"}"#)
+        XCTAssertEqual(missing["error"] as? String, "window.go requires --to next|prev", "\(missing)")
     }
 
     // MARK: - Window oracles

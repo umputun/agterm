@@ -230,6 +230,22 @@ public final class WindowLibrary {
         windows.map(\.id).filter { stores[$0] != nil }
     }
 
+    /// Whether more than one window is open, i.e. whether a window step has anywhere to go. Closed entries
+    /// are not candidates — a step must not silently open a window the way `window.select` does.
+    public var canStepWindows: Bool {
+        openIDs().count > 1
+    }
+
+    /// The next/previous OPEN window in library order, WRAPPING from `activeWindowID`; the caller raises it.
+    /// Closed entries are skipped for the reason `canStepWindows` gives. Nil below two open windows, where a
+    /// step would only re-raise the one it is on. Backs `next_window`/`previous_window` and `window.go`.
+    public func navigateWindow(_ direction: WorkspaceNavigation) -> WindowInfo.ID? {
+        let ids = openIDs()
+        guard ids.count > 1, let current = activeWindowID, let i = ids.firstIndex(of: current) else { return nil }
+        let step = direction == .next ? 1 : -1
+        return ids[((i + step) % ids.count + ids.count) % ids.count]
+    }
+
     /// Every session across all open windows, flattened — the walk the per-session sweeps share
     /// (restore-running-command capture + `restore.clear`).
     public func allOpenSessions() -> [Session] {

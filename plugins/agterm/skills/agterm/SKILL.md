@@ -479,7 +479,10 @@ omitted when expanded).
   and `surface zoom` will not address it. `session hud update`/`session hud close` with none up answer `no hud`. Read it
   back from the tree node's `hud` object; nothing announces it as an event, so poll `tree`.
 
-**window** — `window new [name] [--minimized]` · `window list` · `window select <id>` · `window close <id>` ·
+**window** — `window new [name] [--minimized]` · `window list` · `window select <id>` ·
+`window go --to next|prev` (raise the next/previous OPEN window, wrapping; relative, so it takes no id, and a
+closed bundle is not a stop — `window select` opens one. Errors with one window open. GUI twins: Navigate ▸
+Previous/Next Window and the keyless `previous_window`/`next_window` keymap actions) · `window close <id>` ·
 `window rename <id> <name>` ·
 `window delete <id>` · `window resize <id> --width W --height H` · `window move <id> --x X --y Y [--display N]` ·
 `window zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·

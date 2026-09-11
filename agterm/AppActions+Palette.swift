@@ -31,6 +31,7 @@ extension AppActions {
             activeWorkspaceMarked: activeStore?.isCurrentWorkspaceFocusMember == true,
             activeWorkspaceCollapsed: activeStore?.isCurrentWorkspaceCollapsed == true,
             canStepWorkspaces: activeStore?.canStepWorkspaces == true,
+            canStepWindows: library.canStepWindows,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             activeSplitAxis: activeStore?.activeSession?.splitAxis,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
@@ -81,6 +82,8 @@ extension AppActions {
         case .nextAttentionSession: selectNextAttentionSession()
         case .previousWorkspace: selectPreviousWorkspace()
         case .nextWorkspace: selectNextWorkspace()
+        case .previousWindow: selectPreviousWindow()
+        case .nextWindow: selectNextWindow()
         case .firstSession: selectFirstSession()
         case .lastSession: selectLastSession()
         case .showAttention: openAttentionPalette()
