@@ -397,17 +397,17 @@ App target:
 - Create: `agtermTests/ZmxClientLiveResetTests.swift`
 - Create: `agtermTests/ControlServerLiveResetTests.swift`
 
-- [ ] write failing hosted tests `testSessionRecordsKeepUnreadableRows` and
+- [x] write failing hosted tests `testSessionRecordsKeepUnreadableRows` and
       `testSessionRecordsNilOnFailedListing` with the fake runner
-- [ ] write failing hosted tests `testKillBatchSendsOneInvocationUnderTimeout` and
+- [x] write failing hosted tests `testKillBatchSendsOneInvocationUnderTimeout` and
       `testKillBatchReportsFailure` (the Bool is logged by the consumer, never used to skip polling)
-- [ ] write failing hosted tests `testLeadersExitedReturnsEmptyWhenAllExit` and
-      `testLeadersExitedReturnsSurvivorsAtDeadline` with an injected test clock and `isAlive`, no real
-      sleep
-- [ ] write a failing hosted test `testLiveResetSelectionJoinsClaimsAndRecords` in
+- [x] write failing hosted tests `testLeadersExitedReturnsEmptyWhenAllExit` and
+      `testLeadersExitedReturnsSurvivorsAtDeadline` with an injected `LeaderPoll` (now and sleep
+      closures) and `isAlive`, no real sleep
+- [x] write a failing hosted test `testLiveResetSelectionJoinsClaimsAndRecords` in
       `ControlServerLiveResetTests` for `ControlServer.liveResetSelection()` with injected records and probe
-- [ ] add `sessionRecords`, `killBatch`, the generic `leadersExited` and `liveResetSelection()`
-- [ ] run `-only-testing:agtermTests/ZmxClientLiveResetTests -only-testing:agtermTests/ControlServerLiveResetTests/testLiveResetSelectionJoinsClaimsAndRecords`
+- [x] add `sessionRecords`, `killBatch`, the synchronous `leadersExited` and `liveResetSelection()`
+- [x] run `-only-testing:agtermTests/ZmxClientLiveResetTests -only-testing:agtermTests/ControlServerLiveResetTests/testLiveResetSelectionJoinsClaimsAndRecords`
       - must pass before task 4
 
 ### Task 4: Confirm path, reply-before-quit, quit ordering and relauncher

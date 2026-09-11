@@ -102,11 +102,41 @@ final class ZmxClient {
     }
 
     func sessionLeaderPIDs(timeout: TimeInterval? = nil) -> [String: pid_t]? {
+        sessionRecords(timeout: timeout).map(ZmxLeaderMap.leaders(in:))
+    }
+
+    /// The parsed listing, unreadable rows included, so a caller can tell an absent daemon from one zmx
+    /// could not read. Nil when the listing itself failed.
+    func sessionRecords(timeout: TimeInterval? = nil) -> [ZmxSessionRecord]? {
         do {
-            return ZmxLeaderMap.leaders(in: try ZmxListParser.parse(invoke(["list"], timeout: timeout)))
+            return try ZmxListParser.parse(invoke(["list"], timeout: timeout))
         } catch {
-            Self.logger.error("zmx leader refresh failed: \(String(describing: error), privacy: .public)")
+            Self.logger.error("zmx list failed: \(String(describing: error), privacy: .public)")
             return nil
+        }
+    }
+
+    /// One `zmx kill … --force` for every name. The result is diagnostic only: zmx handles the names in
+    /// order, so a failure part-way has already reached some daemons, and the caller confirms each by
+    /// leader exit rather than by this Bool.
+    func killBatch(names: [String], timeout: TimeInterval) -> Bool {
+        kill(names: names, timeout: timeout)
+    }
+
+    struct LeaderPoll {
+        var now: () -> ContinuousClock.Instant = { .now }
+        var sleep: (Duration) -> Void = { Thread.sleep(forTimeInterval: Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18) }
+        var every: Duration = .milliseconds(100)
+    }
+
+    /// Polls the group until every leader is gone or the deadline passes; returns the pids still alive.
+    nonisolated static func leadersExited(_ pids: Set<pid_t>, deadline: ContinuousClock.Instant, poll: LeaderPoll,
+                                          isAlive: (pid_t) -> Bool) -> Set<pid_t> {
+        var pending = pids
+        while true {
+            pending = pending.filter(isAlive)
+            if pending.isEmpty || poll.now() >= deadline { return pending }
+            poll.sleep(poll.every)
         }
     }
 
@@ -166,12 +196,12 @@ final class ZmxClient {
         }
     }
 
-    private func kill(names: [String]) -> Bool {
+    private func kill(names: [String], timeout: TimeInterval? = nil) -> Bool {
         var seen: Set<String> = []
         let unique = names.filter { seen.insert($0).inserted }
         guard !unique.isEmpty else { return true }
         do {
-            _ = try invoke(["kill"] + unique + ["--force"])
+            _ = try invoke(["kill"] + unique + ["--force"], timeout: timeout)
             return true
         } catch {
             Self.logger.error("zmx kill failed for \(unique.joined(separator: ","), privacy: .public): \(String(describing: error), privacy: .public)")

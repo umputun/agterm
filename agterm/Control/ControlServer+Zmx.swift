@@ -22,12 +22,34 @@ extension ControlServer {
             probes[pid] = result
             return result
         }
-        let candidate = zmxClient.flatMap { liveAttributionProbe.hostPID($0.endpoint) }
-        let host = candidate.flatMap { responsible($0) == .live($0) ? $0 : nil }
+        let host = liveHostPID(responsible: responsible)
         return Dictionary(uniqueKeysWithValues: identities.map { identity in
             let leader = leaders[ZmxSupport.daemonName(for: identity)]
             return (identity, SessionHost.classify(leader: leader, responsible: leader.map(responsible), hostPid: host, appPid: liveAttributionProbe.appPID))
         })
+    }
+
+    /// The session host's pid when its pidfile names a live host, else nil.
+    private func liveHostPID(responsible: (pid_t) -> SessionHost.ResponsibleProcess) -> pid_t? {
+        guard let candidate = zmxClient.flatMap({ liveAttributionProbe.hostPID($0.endpoint) }) else { return nil }
+        return responsible(candidate) == .live(candidate) ? candidate : nil
+    }
+
+    /// The panes Help ▸ Reset Live Sessions… would reset: every claim, open or saved, whose daemon leader
+    /// is orphaned or attributed to this app. Nil when the listing failed, which refuses the action.
+    func liveResetSelection() -> LiveReset.Selection? {
+        guard let zmxClient, let records = zmxClient.sessionRecords() else { return nil }
+        var probes: [pid_t: SessionHost.ResponsibleProcess] = [:]
+        func responsible(_ pid: pid_t) -> SessionHost.ResponsibleProcess {
+            if let cached = probes[pid] { return cached }
+            let result = liveAttributionProbe.responsible(pid)
+            probes[pid] = result
+            return result
+        }
+        let host = liveHostPID(responsible: responsible)
+        return LiveReset.select(claims: library.paneClaims(), records: records) { _, leader in
+            SessionHost.classify(leader: leader, responsible: responsible(leader), hostPid: host, appPid: liveAttributionProbe.appPID)
+        }
     }
 
     /// Observed daemons joined against the panes that claim them, with the restore status as a header.
