@@ -39,7 +39,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 540, height: 640)
+        .frame(width: 540, height: 680)
         // without this a process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale
         // Settings window on its last tab, stealing key focus from the real launch window.
         .background(NonRestorableWindow())
@@ -446,7 +446,7 @@ private struct AppearanceSettingsView: View {
 }
 
 /// Interface tab: per-element title-bar and sidebar chrome visibility, grouped by surface, two toggles per
-/// row so the tab keeps fitting the fixed 540×640 window as the element set grows, plus the quick terminal's
+/// row so the tab keeps fitting the fixed 540×680 window as the element set grows, plus the quick terminal's
 /// panel size — that panel belongs to no window, so it is not a Window setting. Everything shows by
 /// default; a toggle off adds it to `AppSettings.hiddenInterfaceElements` and live-applies — title-bar and
 /// footer elements re-gate in open windows on `.agtermAppearanceChanged`, the add-session "+" on hover.
@@ -631,7 +631,6 @@ private struct AgentStatusSettingsView: View {
                     Text("Disabled").tag(StatusReset.never)
                 }
                 .accessibilityIdentifier("settings-status-clear")
-                SettingHint("When typing into a blocked or completed session clears its status.")
             }
 
             Section("Auto-follow") {
