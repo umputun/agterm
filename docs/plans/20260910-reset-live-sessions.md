@@ -340,26 +340,26 @@ App target:
 - Create: `agtermCore/Sources/agtermCore/LiveReset.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/LiveResetTests.swift` (swift-testing)
 
-- [ ] write failing tests for `select`: orphaned and app claims selected, supervisor and unknown
+- [x] write failing tests for `select`: orphaned and app claims selected, supervisor and unknown
       excluded, a claim whose record has no leader pid excluded, a claim with no record excluded, split
       panes counted as their own target, `sessionCount` counts a split session once, `inventoryComplete`
       mirrors the walk
-- [ ] write failing tests for `narrow`: same name and leader still orphaned is `kill`; no record is
+- [x] write failing tests for `narrow`: same name and leader still orphaned is `kill`; no record is
       `gone`; unclaimed, changed leader, unreadable row, supervisor, app or unknown is `skipped`; nil
       records yields no kills and `inventoryFailed`; nil claims yields no kills; a daemon absent from the
       marker is never added even when orphaned
-- [ ] write failing tests for `LiveResetMarkerStore` in a temporary directory: write then consume returns
+- [x] write failing tests for `LiveResetMarkerStore` in a temporary directory: write then consume returns
       the marker and leaves only the consumed file; a second consume returns nil; an undecodable marker is
       removed and reported invalid; a version mismatch is invalid; `removeConsumed` deletes only the
       consumed file; `remove` clears both files
-- [ ] write failing tests for `outcome`: a session whose every target was confirmed or gone counts as
+- [x] write failing tests for `outcome`: a session whose every target was confirmed or gone counts as
       reset; a session with one confirmed and one surviving pane counts as partial once; two surviving
       panes in one session count as one partial session; survivors are the `unconfirmed` pane identities
-- [ ] write failing tests for `dialogText` (one session, several, a split session counted once),
+- [x] write failing tests for `dialogText` (one session, several, a split session counted once),
       `notificationText` (nil when every session reset; partial with and without unconfirmed; the
       split-session partial case; inventory failed) and `menuVisible` (true only for live/live)
-- [ ] implement `LiveReset` and `LiveResetMarkerStore` per Technical Details
-- [ ] run `swift test --filter LiveResetTests` - must pass before task 2
+- [x] implement `LiveReset` and `LiveResetMarkerStore` per Technical Details
+- [x] run `swift test --filter LiveResetTests` - must pass before task 2
 
 ### Task 2: Protocol, payloads, dispatcher and CLI for `zmx.reset`
 
