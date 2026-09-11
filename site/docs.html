@@ -3250,6 +3250,13 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 Deleting a session, workspace, split, or window kills the corresponding daemon after any undo grace expires.
                 Switching to Fresh shells or Re-run commands and restarting ends every detached live process in this state directory.
                 A launch that still requests Live sessions but cannot use it preserves those processes for a later eligible launch.
+                A live session created before the session host existed keeps its own macOS permission identity, so a tool in it
+                asks for the microphone again after every update. <strong style="color: #e6e1d7">Help ▸ Reset Live Sessions…</strong>
+                replaces every such session at once: the dialog says how many it resets, agterm quits and reopens itself with the
+                same sessions and layout, and each captured command starts again where possible. Other work running in those
+                sessions stops, and agent conversations may need to be resumed by hand. Sessions already under the host are left
+                alone, and a notification afterwards says how many sessions the reset covered.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx reset --force</span> does the same without the dialog.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx list</span> shows every daemon and the pane that claims it,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx prune</span> clears the ones nothing claims, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx kill</span> destroys a single pane's daemon. A closed window's panes stay

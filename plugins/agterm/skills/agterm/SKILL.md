@@ -595,6 +595,10 @@ refusing outright on an incomplete or conflicted inventory, and reporting each d
 stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --force` - destroy one pane's
 daemon and the process in it; all three are required because this kills a backend process that reaches a
 pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace ·
+`zmx reset --force` - Help ▸ Reset Live Sessions… without the dialog: ends every live session this app
+does not supervise at the next launch and recreates it under the session host, quitting and reopening
+agterm right after the reply; refused outside Live mode, on an incomplete inventory, and with nothing to
+reset ·
 `zmx tree [HOST]` - attachable sessions across EVERY open window, on another Mac with a HOST or this app
 without one (the bare form is exactly what the remote call runs on the far side). Each row carries the id
 `zmx attach` takes plus `windowID`/`windowName`, `workspaceID`/`workspaceName` (show the names, group by

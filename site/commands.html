@@ -3071,6 +3071,21 @@
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx reset --force
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.reset</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Reset the live sessions this app does not supervise, then quit and reopen agterm. Help ▸ Reset Live Sessions… without the dialog.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A live session created before the session host keeps its own macOS permission identity, so every new version of a tool in it asks for the microphone again. The reset ends those sessions' processes at the next launch and recreates them under the host, starting their captured commands again where possible; sessions already supervised are left alone. agterm quits and reopens itself right after answering, so running work in the affected sessions stops, agent conversations may need to be resumed by hand, and a call from inside one of those sessions kills its own shell. Refused outside Live sessions mode, while a mode change waits for a restart, on an incomplete pane inventory, and when nothing needs resetting.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.liveReset</span> with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">panes</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span>. The next launch re-checks every session and only ever resets fewer than confirmed; the tree's top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace">liveReset</span> and the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx list</span> header report <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span> until the quit and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">last</span> for the launch that consumed the reset.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl zmx tree [HOST]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.tree</div>

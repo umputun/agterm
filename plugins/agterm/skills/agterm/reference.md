@@ -1444,6 +1444,18 @@ three-second undo. It refuses a daemon already gone, one zmx could not read (for
 live daemon's socket and leave it running unreachable), and a session inside its undo window. Killing the
 daemon of the pane you are typing in can kill the calling `agtermctl` before it reads the reply.
 
+`agtermctl zmx reset --force` — Help ▸ Reset Live Sessions… without the dialog. A live session created
+before the session host existed keeps its own macOS permission identity, so every new version of a tool in
+it asks for the microphone again; the reset ends those sessions' processes at the next launch and recreates
+them under the host, starting their captured commands again where possible. agterm quits and reopens itself
+right after answering, so running work in the affected sessions stops and agent conversations may need to be
+resumed by hand; run from inside one of those sessions it kills the calling shell. Sessions already
+supervised are left alone. It refuses outside Live sessions mode, while a mode change waits for a restart,
+on an incomplete pane inventory, and when nothing needs resetting. The reply carries `result.liveReset`
+with the session and pane counts; the next launch re-checks every session and only ever resets fewer than
+confirmed, and the tree's top-level `liveReset` reports `pending` until the quit and `last` for the launch
+that consumed the reset.
+
 `--window ID` scopes the search to one window's claims, for a session prefix claimed in more than one.
 Omit it to search every window, closed and unindexed ones included; `active` is not accepted, and neither
 is it for `--target`. Without it an ambiguous prefix reports `no left pane daemon for session ID`, the

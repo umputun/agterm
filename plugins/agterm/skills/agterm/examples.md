@@ -62,6 +62,14 @@ attached to it:
 agtermctl zmx kill --target 3f2a --pane left --force
 ```
 
+To move every live session created before the session host under it, so a tool's microphone permission
+stops being asked per version, reset them. agterm quits and reopens itself right after the reply, so run
+this from outside the sessions it affects, or expect the calling shell to end:
+
+```bash
+agtermctl zmx reset --force
+```
+
 ## Attach a session running on another Mac
 
 List what the other machine offers across every open window, then open one here by its ID. The far side

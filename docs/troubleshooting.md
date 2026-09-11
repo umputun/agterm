@@ -280,7 +280,15 @@ A pane reads `app` when its daemon was created without the session host, either 
 because the host could not start; it remains attributed to the running agterm. When that agterm quits,
 the pane becomes `orphaned`; the same happens to panes whose session host dies. Commands in an
 `orphaned` pane remain responsible for themselves until the pane is replaced. Restarting agterm does not
-repair this; create a new Live pane to replace it.
+repair this.
+
+Help ▸ Reset Live Sessions… replaces every `orphaned` and `app` pane at once. The dialog says how many
+live sessions it resets; on Reset, agterm quits, ends those sessions' processes at the next launch and
+reopens itself with the same sessions and layout, starting each captured command again where possible.
+Other work running in those sessions stops, and agent conversations may need to be resumed by hand.
+Sessions already marked `supervisor` are left alone. A notification afterwards says how many sessions
+the reset covered; a session whose old process could not be confirmed gone gets no command restarted,
+and the reset can be run again. `agtermctl zmx reset --force` does the same without the dialog.
 
 For App Data prompts in `orphaned` or `app` panes, grant agterm Full Disk Access under
 System Settings ▸ Privacy & Security ▸ Full Disk Access; the

@@ -160,7 +160,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
-- `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.tree`, `zmx.attach`
+- `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`
 
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
@@ -924,6 +924,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   already gone. The suppression is gated on `backedByZmx`: a requested-live launch that fell back keeps its
   claimed daemons while each pane runs a plain shell, so an ungated kill would close a pane that never
   attached to what it destroyed.
+- `zmx.reset` is Help ▸ Reset Live Sessions… without the dialog, and both run `LiveResetCoordinator`.
+  The dispatcher refuses without `--force` before the host; the coordinator then refuses, in order, when
+  Live is not both the configured and the launched mode, when the listing failed, when the claim walk is
+  incomplete or claims a pane twice, and when no pane is orphaned or app-attributed.
+  `LiveReset.select` in agtermCore joins `paneClaims()` to the listing; the dialog counts distinct sessions
+  and the reply carries `result.liveReset` (sessions, panes, pending) plus the dialog body as `text`.
+  The connection thread quits only after it has written the reply to THAT request, decided from the
+  request being `zmx.reset` and the response being ok, never from shared state: remote workers write
+  other replies in parallel and must not quit the app. A reply that could not be written leaves the reset
+  pending for the menu or a later request.
+  The quit writes `live-reset.json` in the state directory only after the exit capture ran and the
+  checked snapshot save succeeded, then spawns the relauncher; a relauncher that cannot start removes the
+  marker. The next launch consumes the marker before any kill and only NARROWS it: a target is killed when
+  it is still claimed, still listed with the same leader pid and still orphaned; gone restores normally;
+  anything else is skipped. Every selected leader is polled whatever the batched kill reported, and a
+  survivor's pane gets neither its replay nor its durable command at that launch.
+  Read-back is `liveReset` on the tree top level and the `zmx list` header, omitted when nothing is
+  pending and no launch consumed a marker. XCUITest exemption: the command quits the app, so its
+  coverage is hosted and package tests plus the isolated acceptance run, like `restore.mode`.
 
 ## Remote sessions
 

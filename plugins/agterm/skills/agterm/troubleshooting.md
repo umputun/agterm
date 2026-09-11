@@ -129,6 +129,12 @@ Check these in order:
   or promotes a primary rather than leaving a daemon to recreate. To check what was captured, read
   `foregroundCommand` in `windows/<id>.json` while agterm is STOPPED: the next launch moves it into memory
   and rewrites the file with nil, so a running app always shows null there.
+- **A tool asks for the microphone again after every update.** The pane was created before the session
+  host and reads `orphaned` in `agtermctl tree --json`, so macOS charges each tool version separately. Help ▸
+  Reset Live Sessions… (or `agtermctl zmx reset --force`) ends those sessions' processes at the next launch
+  and recreates them under the host; agterm quits and reopens itself, captured commands start again where
+  possible, and the notification afterwards says how many sessions were covered. A session whose old process
+  could not be confirmed gone gets no command restarted and the reset can be run again.
 - **Switching modes ends detached live processes.** Selecting Fresh shells or Re-run commands and restarting
   reaps the live daemons in this state directory. An unavailable launch that still requests Live sessions
   preserves its claimed daemons for a later eligible launch.
