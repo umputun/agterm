@@ -407,6 +407,12 @@ extension agtermApp {
                 Button("Install Command Line Tool…") { CLIInstaller.run() }
                 Button("Install Agent Status Hooks…") { AgentHooksInstaller.run() }
                 Button("Install Agent Skill…") { SkillInstaller.run() }
+                if liveReset.menuVisible {
+                    Divider()
+                    Button("Reset Live Sessions…") {
+                        if case .confirmed = liveReset.request(confirmed: false) { liveReset.terminateIfPending() }
+                    }
+                }
             }
     }
 

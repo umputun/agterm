@@ -154,6 +154,8 @@ final class ControlServer {
 
     /// The Live sessions reset's confirm path; nil refuses `zmx.reset` as unsupported.
     var liveReset: LiveResetCoordinator?
+    /// The last launch's reset outcome for the read-back; injectable so a hosted test stages one.
+    var liveResetOutcome: () -> LiveReset.Outcome? = { GhosttyApp.shared.liveResetOutcome }
 
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
@@ -809,7 +811,8 @@ final class ControlServer {
                 case .untouched: return "untouched"
                 }
             },
-            app: identity
+            app: identity,
+            liveReset: liveResetReadback()
         )
     }
 

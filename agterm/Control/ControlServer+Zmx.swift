@@ -35,6 +35,15 @@ extension ControlServer {
         return responsible(candidate) == .live(candidate) ? candidate : nil
     }
 
+    /// The reset's read-back for the tree top level and the `zmx list` header: nil when nothing is pending
+    /// and no launch consumed a marker, so an untouched instance shows no field at all.
+    func liveResetReadback() -> ControlLiveResetReadback? {
+        let pending = liveReset?.pending.map(\.targets.count)
+        let last = liveResetOutcome()
+        guard pending != nil || last != nil else { return nil }
+        return ControlLiveResetReadback(pending: pending, last: last)
+    }
+
     /// `zmx.reset`: the dialog's confirm path without the dialog. The quit is not requested here; the
     /// connection thread requests it once this reply is written.
     func resetLiveSessions() -> ControlResponse {
@@ -76,7 +85,7 @@ extension ControlServer {
         let result = ZmxInventory.join(observed: observed, claims: walk.claims,
                                        inventoryComplete: walk.complete)
         let inventory = ControlZmxInventory(restore: restoreStatus(), result: result,
-                                            endpoint: client.endpoint)
+                                            endpoint: client.endpoint, liveReset: liveResetReadback())
         return ControlResponse(ok: true, result: ControlResult(zmx: inventory))
     }
 }
@@ -134,7 +143,7 @@ extension ControlServer {
                                             result: ZmxInventory.join(observed: observed,
                                                                       claims: walk.claims,
                                                                       inventoryComplete: walk.complete),
-                                            endpoint: client.endpoint)
+                                            endpoint: client.endpoint, liveReset: liveResetReadback())
         // a live store IS the open-window test, the same one `openCounts` uses: a closed window has no
         // store, and its panes are not attachable from here anyway
         let windows = library.windows.compactMap { entry in

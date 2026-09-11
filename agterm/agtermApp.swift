@@ -21,7 +21,7 @@ struct agtermApp: App {
     @State private var globalHotkey: GlobalHotkey
     @State var settingsModel: SettingsModel
     @State private var controlServer: ControlServer
-    @State private var liveReset: LiveResetCoordinator
+    @State var liveReset: LiveResetCoordinator
     @State private var customCommandRunner: CustomCommandRunner
     @State private var appearanceObserver: SystemAppearanceObserver
     @State private var accessibilityObserver: SystemAccessibilityObserver

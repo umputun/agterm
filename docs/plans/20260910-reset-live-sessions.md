@@ -488,11 +488,12 @@ App target:
 - Modify: `agterm/Control/ControlServer+Zmx.swift` (`zmx list` header)
 - Modify: `agtermTests/ControlServerLiveResetTests.swift`
 
-- [ ] write failing hosted tests `testTreeLiveResetReadback` (pending after a confirmed reset, last after
+- [x] write failing hosted tests `testTreeLiveResetReadback` (pending after a confirmed reset, last after
       a recorded outcome, omitted with neither) and `testZmxListLiveResetReadback`
-- [ ] add the item after a divider in the Help group behind `LiveReset.menuVisible`, and wire the
-      read-back
-- [ ] run `-only-testing:agtermTests/ControlServerLiveResetTests/testTreeLiveResetReadback -only-testing:agtermTests/ControlServerLiveResetTests/testZmxListLiveResetReadback`
+- [x] add the item after a divider in the Help group behind the coordinator's `menuVisible`, and wire the
+      read-back through `AppStore.controlTree` and both `zmx list` header sites, with the last outcome
+      read through an injectable source on `ControlServer`
+- [x] run `-only-testing:agtermTests/ControlServerLiveResetTests/testTreeLiveResetReadback -only-testing:agtermTests/ControlServerLiveResetTests/testZmxListLiveResetReadback`
       - must pass before task 7
 
 ### Task 7: Verify acceptance criteria

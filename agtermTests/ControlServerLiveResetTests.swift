@@ -264,6 +264,37 @@ final class ControlServerLiveResetTests: XCTestCase {
         XCTAssertEqual(terminated.log.count, 1)
     }
 
+    private static let lastOutcome = LiveReset.Outcome(
+        panes: LiveReset.PaneCounts(confirmed: 2, killed: 1, gone: 0, skipped: 1), unconfirmed: [],
+        sessions: LiveReset.SessionCounts(affected: 2, reset: 1, partial: 1, unconfirmed: 0), inventoryFailed: false)
+
+    func testTreeLiveResetReadback() throws {
+        let fixture = try addOrphanedSession()
+        let liveReset = makeCoordinator()
+        let server = makeServer(liveReset: liveReset, runner: { _ in fixture.rows })
+        server.liveResetOutcome = { nil }
+
+        XCTAssertNil(server.controlTree(window: nil).result?.tree?.liveReset, "an untouched instance shows no field")
+
+        server.liveResetOutcome = { Self.lastOutcome }
+        XCTAssertEqual(server.controlTree(window: nil).result?.tree?.liveReset, ControlLiveResetReadback(pending: nil, last: Self.lastOutcome))
+
+        XCTAssertEqual(liveReset.request(confirmed: true), .confirmed(try XCTUnwrap(server.liveResetSelection())))
+        XCTAssertEqual(server.controlTree(window: nil).result?.tree?.liveReset, ControlLiveResetReadback(pending: 1, last: Self.lastOutcome))
+    }
+
+    func testZmxListLiveResetReadback() throws {
+        let fixture = try addOrphanedSession()
+        let liveReset = makeCoordinator()
+        let server = makeServer(liveReset: liveReset, runner: { _ in fixture.rows })
+        server.liveResetOutcome = { nil }
+
+        XCTAssertNil(try XCTUnwrap(server.listZmxDaemons().result?.zmx).liveReset)
+
+        _ = liveReset.request(confirmed: true)
+        XCTAssertEqual(try XCTUnwrap(server.listZmxDaemons().result?.zmx).liveReset, ControlLiveResetReadback(pending: 1, last: nil))
+    }
+
     func testFailedReplyWriteDoesNotTerminate() async throws {
         let fixture = try addOrphanedSession()
         let liveReset = makeCoordinator()
