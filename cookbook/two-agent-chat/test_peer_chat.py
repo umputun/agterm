@@ -256,6 +256,53 @@ class CodexLivePromptTextTests(unittest.TestCase):
         self.assertEqual(content, "Ask Codex to do\nanything")
         self.assertTrue(COMPOSER_IS_EMPTY(PROFILES["codex"], content))
 
+    def test_idle_animation_above_the_prompt_is_ignored(self) -> None:
+        screen = (
+            "  \u2801   \u2808         \u2804          \u2840  \u2808\n"
+            "\u203a\u2801Ask Codex to do anything\u2840  \u2808     \u2801\n"
+            "       \u2840         \u2804                \u2802\n"
+            f"{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        self.assertIsNotNone(content)
+        self.assertTrue(COMPOSER_IS_EMPTY(PROFILES["codex"], content))
+
+    def test_idle_animation_does_not_hide_a_draft(self) -> None:
+        screen = (
+            "  \u2801      \u2808\n"
+            "\u203aChat from Claude: ping\n"
+            f"{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        self.assertEqual(content, "Chat from Claude: ping")
+        self.assertFalse(COMPOSER_IS_EMPTY(PROFILES["codex"], content))
+
+    def test_composer_content_keeps_every_typed_character(self) -> None:
+        screen = f"\u203aChat from Claude: explain \u2801 please\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        self.assertEqual(content, "Chat from Claude: explain \u2801 please")
+
+    def test_foreign_character_beside_owned_text_is_not_owned(self) -> None:
+        screen = f"\u203aChat from Claude: ping\u2801\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping"
+
+        self.assertFalse(COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned))
+
+    def test_idle_animation_over_a_dialog_is_refused(self) -> None:
+        screen = (
+            "\u203a\u2801Ask Codex to do anything\u2840   \u2808\n"
+            "1. yes\u2801\n"
+            "2. no\n"
+            f"{CODEX_FOOTER}"
+        )
+
+        self.assertIsNone(LIVE_PROMPT_TEXT(PROFILES["codex"], screen))
+
     def test_shell_mode_is_not_a_prompt(self) -> None:
         screen = f"! ls -la\n{CODEX_FOOTER}"
 

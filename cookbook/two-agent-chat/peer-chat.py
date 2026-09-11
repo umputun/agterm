@@ -42,6 +42,12 @@ RULE_RE = re.compile(r"^\s*[─\u2014-]{10,}(?:\s+[^─\u2014-].*?\s+[─\u2014-
 CODEX_PROMPT_RE = re.compile(r"^[›»][\s ]*(.*?)\s*$")
 CODEX_SHELL_PROMPT_RE = re.compile(r"^![\s ]*(.*?)\s*$")
 CODEX_CHOICE_RE = re.compile(r"^\d+\.\s")
+# Codex sprays an idle animation of braille particles (U+2800-U+28FF) across the composer
+# box, prompt row included. Particles are tolerated in exactly two places: rows that hold
+# nothing else are dropped so they cannot hide the prompt row, and the empty-placeholder
+# comparison ignores them. Composer content itself stays verbatim, so ownership checks,
+# cleanup and delivery verification still see every character a person typed.
+CODEX_PARTICLE_RE = re.compile(r"[\u2800-\u28FF]")
 CODEX_EMPTY_PROMPT = "Ask Codex to do anything"
 # Codex prefixes footer rows with two spaces. Only the final row is stripped: a
 # multi-row shortcut overlay is indistinguishable from indented modal choices and
@@ -477,6 +483,9 @@ def codex_live_prompt_text(text: str) -> str | None:
     block = trailing_input_block(text)
     if not block or any(CODEX_SHELL_PROMPT_RE.match(line) for line in block):
         return None
+    block = [line for line in block if CODEX_PARTICLE_RE.sub(" ", line).strip()]
+    if not block:
+        return None
     match = CODEX_PROMPT_RE.match(block[0])
     if (
         not match
@@ -522,7 +531,7 @@ def composer_is_empty(profile: Profile, content: str) -> bool:
     """Recognise known empty-input content for cleanup, acceptance and Codex preflight."""
     joined = " ".join(content.splitlines())
     if profile.agent == "codex":
-        return joined == CODEX_EMPTY_PROMPT
+        return " ".join(CODEX_PARTICLE_RE.sub(" ", joined).split()) == CODEX_EMPTY_PROMPT
     return joined in CLAUDE_EMPTY_PROMPTS or bool(
         CLAUDE_STARTUP_HINT_RE.fullmatch(joined)
     )
