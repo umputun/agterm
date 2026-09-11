@@ -26,8 +26,8 @@ final class LiveResetCoordinator {
             switch self {
             case .notLive: "Reset Live Sessions needs Live sessions mode for this launch and the next."
             case .listingFailed: "The live session list could not be read. Nothing was reset."
-            case .inventoryIncomplete: "Not every saved window could be read, so nothing was reset."
-            case .nothingToReset: "Every live session is already supervised. There is nothing to reset."
+            case .inventoryIncomplete: "The saved sessions could not be verified. Nothing was reset."
+            case .nothingToReset: "No live sessions could be selected for reset."
             }
         }
     }
