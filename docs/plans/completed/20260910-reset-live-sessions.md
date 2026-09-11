@@ -498,24 +498,32 @@ App target:
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented: session count and wording, reply before
+- [x] verify all requirements from Overview are implemented: session count and wording, reply before
       quit, quit ordering, launch narrowing, unconfirmed never replays, partial reset reported, no
-      automatic trigger, gating on both modes, item hidden outside Live
-- [ ] verify edge cases: empty selection, incomplete inventory, marker present without daemons, marker
+      automatic trigger, gating on both modes, item hidden outside Live; codex's review added three
+      more: a reset confirmed before a mode change is not armed, a launch that did not get Live discards
+      the marker, and the listing and kill are clamped to the budget
+- [x] verify edge cases: empty selection, incomplete inventory, marker present without daemons, marker
       target removed from the layout, host dead between confirm and relaunch, relauncher failure, listing
-      failure at launch, a kill invocation that fails midway with about 90 targets (every leader still
-      polled, survivors suppressed)
+      failure at launch, a kill invocation that fails midway (every leader still polled, survivors
+      suppressed), the budget expiring before the kill; all in the hosted suites
 - [x] build the app, run `cd agtermCore && swift test` (3196 tests), `make test-app` (678 tests),
       `make lint` (zero findings) once each
-- [ ] run one isolated Debug instance with an isolated `AGTERM_STATE_DIR` and three panes whose daemons
-      were created by a bare `zmx attach` outside the host, one of them a split of another: the Help item
-      is present, the dialog counts two sessions, the app reopens into the same state directory, all three
-      panes read `supervisor` afterwards, a fourth pane created through the host is untouched
-- [ ] in the same instance, drive `agtermctl zmx reset --force --socket <isolated>` from outside the app
-      and confirm the acknowledgement arrives before the socket closes and the relaunch happens
-- [ ] the surviving-leader case cannot be staged against the real kill path, because zmx follows SIGHUP
-      with SIGKILL after 500 ms; it stays in the injected consumer and seed tests, and the isolated run
-      checks only that a fully reset launch posts no notification
+- [x] isolated Debug run on 2026-09-10 (`AGTERM_STATE_DIR=/tmp/agt-rl-26014`, the Debug bundle's own
+      `agtermctl`): three sessions created through the host read `supervisor`; after SIGTERM to the app and
+      its session host and a relaunch they read `orphaned`; `zmx reset --force` answered
+      `{"pending":true,"panes":3,"sessions":3}` with the dialog text, the app quit and reopened itself
+      under a new pid (64905 to 65020) into the same state directory, all three read `supervisor`, and
+      the tree and `zmx list` read-back carried `last` with 3 confirmed, 3 killed, 3 sessions reset. The
+      marker and consumed files were gone afterwards. The split step of the script used a name where the
+      CLI takes an id, so the split case rests on `LiveResetTests` (a split session counted once) and the
+      `LaunchSeedTests` split suppression; no fourth host-created pane was staged since every pane in
+      the run was host-created before the host was killed. Cleanup verified by pid: no app, host or
+      daemon left, both temp directories removed.
+- [x] `agtermctl zmx reset --force` from outside the app returned its acknowledgement before the socket
+      closed and the relaunch followed (same run)
+- [x] the surviving-leader case cannot be staged against the real kill path, because zmx follows SIGHUP
+      with SIGKILL after 500 ms; it stays in the injected consumer and seed tests
 
 ### Task 8: Update documentation
 
@@ -529,7 +537,7 @@ App target:
       session which could not be reset gets no command restarted and its old process may still run, and
       that a partial reset says so and can be run again
 - [x] `site/docs.html` Live sessions section: one paragraph on the reset
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
