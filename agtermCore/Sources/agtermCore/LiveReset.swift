@@ -34,7 +34,7 @@ public enum LiveReset {
     }
 
     /// What the dialog offers: the panes whose process is not supervised, and whether the walk that
-    /// found them was complete. An incomplete walk forbids the action.
+    /// found them was complete. An incomplete walk, or one pane claimed twice, forbids the action.
     public struct Selection: Equatable, Sendable {
         public let targets: [Target]
         public let inventoryComplete: Bool
@@ -45,7 +45,10 @@ public enum LiveReset {
     public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord],
                               classify: (String, Int32) -> SessionHost.Attribution) -> Selection {
         let leaders = ZmxLeaderMap.leaders(in: records)
+        var seen: Set<UUID> = []
+        var conflicted = false
         let targets = claims.claims.compactMap { claim -> Target? in
+            guard seen.insert(claim.paneIdentity).inserted else { conflicted = true; return nil }
             let name = ZmxSupport.daemonName(for: claim.paneIdentity)
             guard let leader = leaders[name] else { return nil }
             switch classify(name, leader) {
@@ -55,7 +58,7 @@ public enum LiveReset {
                 return nil
             }
         }
-        return Selection(targets: targets, inventoryComplete: claims.complete)
+        return Selection(targets: targets, inventoryComplete: claims.complete && !conflicted)
     }
 
     public enum Disposition: String, Codable, Equatable, Sendable {
@@ -81,7 +84,7 @@ public enum LiveReset {
     public static func narrow(marker: Marker, claimed: Set<UUID>?, records: [ZmxSessionRecord]?,
                               classify: (String, Int32) -> SessionHost.Attribution) -> Narrowed {
         guard let records, let claimed else {
-            let skipped = Dictionary(uniqueKeysWithValues: marker.targets.map { ($0, Disposition.skipped) })
+            let skipped = Dictionary(marker.targets.map { ($0, Disposition.skipped) }, uniquingKeysWith: { first, _ in first })
             return Narrowed(dispositions: skipped, inventoryFailed: records == nil)
         }
         let byName = Dictionary(records.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
@@ -191,9 +194,9 @@ public enum LiveReset {
         var text = "The reset covered \(outcome.sessions.reset) of \(outcome.sessions.affected) live sessions. "
             + "Run Help ▸ Reset Live Sessions… again for the rest."
         if outcome.sessions.unconfirmed > 0 {
-            let one = outcome.sessions.unconfirmed == 1
-            text += " Previous processes in \(outcome.sessions.unconfirmed) \(one ? "session" : "sessions") may still be "
-                + "running, and commands in \(one ? "that session" : "those sessions") were not restarted."
+            let noun = outcome.sessions.unconfirmed == 1 ? "session" : "sessions"
+            text += " Some previous processes in \(outcome.sessions.unconfirmed) \(noun) may still be running; "
+                + "those commands were not restarted."
         }
         return text
     }

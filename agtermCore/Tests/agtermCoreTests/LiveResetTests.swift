@@ -28,8 +28,6 @@ struct LiveResetTests {
         { name, _ in table[name] ?? .unknown }
     }
 
-    // MARK: select
-
     @Test func selectKeepsOrphanedAndAppPanesOnly() {
         let paneC = UUID(), paneD = UUID()
         let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA), Self.claim(Self.paneB, session: Self.sessionB),
@@ -69,7 +67,15 @@ struct LiveResetTests {
         #expect(selection.sessionCount == 1)
     }
 
-    // MARK: narrow
+    @Test func selectRejectsAPaneClaimedTwice() {
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA), Self.claim(Self.paneA, session: Self.sessionB)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10)]
+
+        let selection = LiveReset.select(claims: claims, records: records, classify: { _, _ in .orphaned })
+
+        #expect(selection.targets == [Self.target(Self.paneA, leader: 10)])
+        #expect(!selection.inventoryComplete)
+    }
 
     private static func marker(_ targets: [LiveReset.Target]) -> LiveReset.Marker {
         LiveReset.Marker(targets: targets, createdAt: Date(timeIntervalSince1970: 0))
@@ -120,6 +126,15 @@ struct LiveResetTests {
         #expect(narrowed.dispositions[target] == .skipped)
     }
 
+    @Test func narrowWithoutAListingToleratesADuplicatedMarkerTarget() {
+        let target = Self.target(Self.paneA, leader: 10)
+        let narrowed = LiveReset.narrow(marker: Self.marker([target, target]), claimed: [Self.paneA], records: nil,
+                                        classify: { _, _ in .orphaned })
+
+        #expect(narrowed.inventoryFailed)
+        #expect(narrowed.dispositions == [target: .skipped])
+    }
+
     @Test func narrowWithoutClaimsKillsNothing() {
         let target = Self.target(Self.paneA, leader: 10)
         let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: nil,
@@ -138,8 +153,6 @@ struct LiveResetTests {
         #expect(narrowed.kill == [target])
         #expect(narrowed.dispositions.count == 1)
     }
-
-    // MARK: outcome
 
     @Test func outcomeCountsASessionResetWhenEveryPaneIsConfirmedOrGone() {
         let a = Self.target(Self.paneA, leader: 10)
@@ -178,8 +191,6 @@ struct LiveResetTests {
         #expect(outcome.sessions == LiveReset.SessionCounts(affected: 2, reset: 0, partial: 2, unconfirmed: 1))
         #expect(outcome.panes.skipped == 1)
     }
-
-    // MARK: marker store
 
     private func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-live-reset-\(UUID().uuidString)")
@@ -233,8 +244,6 @@ struct LiveResetTests {
         #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(LiveReset.consumedFilename).path))
     }
 
-    // MARK: text and menu
-
     @Test(arguments: [(1, "1 live session will be reset."), (2, "2 live sessions will be reset.")])
     func dialogTextCountsSessions(count: Int, opening: String) {
         let text = LiveReset.dialogText(sessionCount: count)
@@ -263,7 +272,19 @@ struct LiveResetTests {
                                         sessions: .init(affected: 2, reset: 1, partial: 1, unconfirmed: 1), inventoryFailed: false)
         let text = LiveReset.notificationText(outcome: outcome)
         #expect(text == "The reset covered 1 of 2 live sessions. Run Help ▸ Reset Live Sessions… again for the rest. "
-            + "Previous processes in 1 session may still be running, and commands in that session were not restarted.")
+            + "Some previous processes in 1 session may still be running; those commands were not restarted.")
+    }
+
+    @Test func notificationForAMixedSessionDoesNotClaimEveryCommandStayedDown() {
+        let a = Self.target(Self.paneA, leader: 10)
+        let split = Self.target(Self.paneASplit, leader: 20)
+        let narrowed = LiveReset.Narrowed(dispositions: [a: .kill, split: .kill], inventoryFailed: false)
+        let outcome = LiveReset.outcome(narrowed: narrowed, survivors: [20], inventoryFailed: false)
+
+        let text = LiveReset.notificationText(outcome: outcome)
+
+        #expect(text == "The reset covered 0 of 1 live sessions. Run Help ▸ Reset Live Sessions… again for the rest. "
+            + "Some previous processes in 1 session may still be running; those commands were not restarted.")
     }
 
     @Test func notificationReportsAnUnreadableSessionList() {
