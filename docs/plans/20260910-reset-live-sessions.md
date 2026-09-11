@@ -505,7 +505,8 @@ App target:
       target removed from the layout, host dead between confirm and relaunch, relauncher failure, listing
       failure at launch, a kill invocation that fails midway with about 90 targets (every leader still
       polled, survivors suppressed)
-- [ ] build the app, run `cd agtermCore && swift test`, `make test-app`, `make lint` once each
+- [x] build the app, run `cd agtermCore && swift test` (3196 tests), `make test-app` (678 tests),
+      `make lint` (zero findings) once each
 - [ ] run one isolated Debug instance with an isolated `AGTERM_STATE_DIR` and three panes whose daemons
       were created by a bare `zmx attach` outside the host, one of them a split of another: the Help item
       is present, the dialog counts two sessions, the app reopens into the same state directory, all three
@@ -518,16 +519,16 @@ App target:
 
 ### Task 8: Update documentation
 
-- [ ] `.claude/rules/control-api.md`: `zmx.reset` in the catalog, refusal order, the read-back fields,
+- [x] `.claude/rules/control-api.md`: `zmx.reset` in the catalog, refusal order, the read-back fields,
       the reply-before-quit rule, the launch-narrowing rule, and the XCUITest exemption
-- [ ] `.claude/rules/windows.md`: the quit-confirmation bypass, the marker ordering and the launch
-      orchestration seam
-- [ ] `site/commands.html` and `plugins/agterm/skills/agterm/{SKILL,reference,examples}.md`: the command
-- [ ] `docs/troubleshooting.md` and `plugins/agterm/skills/agterm/troubleshooting.md`: replace "create a
+- [x] `.claude/rules/windows.md`: the quit-confirmation bypass, the marker ordering and the launch
+      orchestration seam; `CLAUDE.md` names the consumer as the one path that ends claimed daemons
+- [x] `site/commands.html` and `plugins/agterm/skills/agterm/{SKILL,reference,examples}.md`: the command
+- [x] `docs/troubleshooting.md` and `plugins/agterm/skills/agterm/troubleshooting.md`: replace "create a
       new Live pane to replace it" with Help ▸ Reset Live Sessions… and what it does, including that a
       session which could not be reset gets no command restarted and its old process may still run, and
       that a partial reset says so and can be run again
-- [ ] `site/docs.html` Live sessions section: one paragraph on the reset
+- [x] `site/docs.html` Live sessions section: one paragraph on the reset
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
