@@ -29,6 +29,9 @@ struct LaunchSeedPolicy {
     let restoreEnabled: Bool
     let denylist: Set<String>
     let runningNames: Set<String>?
+    /// Daemons whose reset could not be confirmed at this launch: the pane attaches with neither its
+    /// captured replay nor its durable command, so a process that may still be running is not started twice.
+    var suppressedDaemons: Set<String> = []
 }
 
 extension LaunchSeedProvider {
@@ -50,9 +53,10 @@ extension LaunchSeedProvider {
     private static func seed(session: Session, pane: StatusPane, disposition: ZmxLaunch.Disposition,
                              policy: LaunchSeedPolicy) -> LaunchSeed {
         switch disposition {
-        case .wrapped:
+        case .wrapped(let configuration):
             guard let seed = ZmxLaunch.surfaceSeed(disposition: disposition, session: session, pane: pane,
-                                                   denylist: policy.denylist)
+                                                   denylist: policy.denylist,
+                                                   suppressed: policy.suppressedDaemons.contains(configuration.daemonName))
             else { preconditionFailure("wrapped zmx disposition has no surface seed") }
             return LaunchSeed(command: seed.command, initialInput: seed.initialInput, waitAfterCommand: false)
         case .ordinary:
@@ -94,6 +98,7 @@ extension LaunchSeedProvider {
         case .wrapped(let configuration):
             // an observed daemon is attached to, which runs no program.
             if policy.runningNames?.contains(configuration.daemonName) == true { return false }
+            if policy.suppressedDaemons.contains(configuration.daemonName) { return false }
             // the pending `session.restore` pin is deliberately absent: `surfaceSeed` never reads it.
             if let capture = peekCapture(session: session, pane: pane) {
                 return CommandRestore.shouldRestore(argv: capture, denylist: policy.denylist)

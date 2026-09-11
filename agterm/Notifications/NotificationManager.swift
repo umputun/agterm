@@ -162,6 +162,19 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
+    /// Post a banner when the launch's Live sessions reset left sessions behind. App-level like the
+    /// diagnostics banners; silent when every session was reset.
+    func notifyLiveResetOutcome(_ outcome: LiveReset.Outcome) {
+        guard bannersEnabled, let body = LiveReset.notificationText(outcome: outcome) else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Live Sessions"
+        content.body = body
+        let request = UNNotificationRequest(identifier: "live-reset", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("live-reset banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     /// Post a banner when the ghostty config reloaded with problems (parse errors or invalid keys), visible
     /// without digging through the log. The count spans ALL config sources (bundled defaults, global
     /// `~/.config/ghostty/config`, agterm-scoped `ghostty.conf`, the UI settings conf) — libghostty

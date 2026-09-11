@@ -57,17 +57,8 @@ extension ControlServer {
     /// is orphaned or attributed to this app. Nil when the listing failed, which refuses the action.
     func liveResetSelection() -> LiveReset.Selection? {
         guard let zmxClient, let records = zmxClient.sessionRecords() else { return nil }
-        var probes: [pid_t: SessionHost.ResponsibleProcess] = [:]
-        func responsible(_ pid: pid_t) -> SessionHost.ResponsibleProcess {
-            if let cached = probes[pid] { return cached }
-            let result = liveAttributionProbe.responsible(pid)
-            probes[pid] = result
-            return result
-        }
-        let host = liveHostPID(responsible: responsible)
-        return LiveReset.select(claims: library.paneClaims(), records: records) { _, leader in
-            SessionHost.classify(leader: leader, responsible: responsible(leader), hostPid: host, appPid: liveAttributionProbe.appPID)
-        }
+        return LiveReset.select(claims: library.paneClaims(), records: records,
+                                classify: liveAttributionProbe.classifier(endpoint: zmxClient.endpoint))
     }
 
     /// Observed daemons joined against the panes that claim them, with the restore status as a header.
@@ -400,6 +391,21 @@ struct LiveAttributionProbe {
     var responsible: (pid_t) -> SessionHost.ResponsibleProcess = LiveAttributionProbe.lookup
     var hostPID: (ControlZmxEndpoint) -> pid_t? = LiveAttributionProbe.host
     var appPID: pid_t = getpid()
+
+    /// A classifier over daemon leaders that resolves the host once and probes each pid once.
+    func classifier(endpoint: ControlZmxEndpoint) -> (String, Int32) -> SessionHost.Attribution {
+        var probes: [pid_t: SessionHost.ResponsibleProcess] = [:]
+        func probed(_ pid: pid_t) -> SessionHost.ResponsibleProcess {
+            if let cached = probes[pid] { return cached }
+            let result = responsible(pid)
+            probes[pid] = result
+            return result
+        }
+        let host = hostPID(endpoint).flatMap { probed($0) == .live($0) ? $0 : nil }
+        return { _, leader in
+            SessionHost.classify(leader: leader, responsible: probed(leader), hostPid: host, appPid: appPID)
+        }
+    }
 
     private static func lookup(_ leader: pid_t) -> SessionHost.ResponsibleProcess {
         guard Responsibility.system.isAvailable, let pid = Responsibility.system.responsibleProcess(of: leader) else { return .unknown }

@@ -30,4 +30,10 @@ public struct RestoreLaunchDecision: Equatable, Sendable {
     public let requested: RestoreMode
     public let active: RestoreMode
     public let liveUnavailableReason: String?
+
+    public init(requested: RestoreMode, active: RestoreMode, liveUnavailableReason: String?) {
+        self.requested = requested
+        self.active = active
+        self.liveUnavailableReason = liveUnavailableReason
+    }
 }

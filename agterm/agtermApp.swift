@@ -234,6 +234,10 @@ struct agtermApp: App {
                         if !library.hasReopened, GhosttyApp.shared.lastConfigDiagnosticsCount > 0 {
                             NotificationManager.shared.notifyConfigDiagnostics(count: GhosttyApp.shared.lastConfigDiagnosticsCount)
                         }
+                        // same for the Live sessions reset, recorded by `restoredRuntime` before any window
+                        if !library.hasReopened, let outcome = GhosttyApp.shared.liveResetOutcome {
+                            NotificationManager.shared.notifyLiveResetOutcome(outcome)
+                        }
                         // runs once via the library latch — the .task fires per window.
                         reopenWindows()
                         appDelegate.scheduleRestoredWindowReconciliation(reason: "scene-task")
@@ -276,6 +280,10 @@ struct agtermApp: App {
     @MainActor
     final class LaunchSpawnContext {
         var runningNames: Set<String>?
+        /// The claimed pane identities the library inventoried during bootstrap; nil when incomplete.
+        var launchInventory: Set<UUID>?
+        /// Panes whose reset could not be confirmed: they attach with no replay and no durable command.
+        var suppressedLaunchPayloads: Set<UUID> = []
     }
 
     /// Builds the window library and zmx foreground resolver for the state directory. Bootstrap
@@ -299,14 +307,19 @@ struct agtermApp: App {
                 _ = client.kill(paneIdentities: $0)
                 foregroundResolver.noteLifecycleChange()
             },
-            launchInventorySink: {
-                context.runningNames = client.reap(knownPaneIdentities: $0,
-                                                   launchDecision: ghostty.restoreLaunchDecision).runningNames
-                foregroundResolver.noteLifecycleChange()
-            },
+            launchInventorySink: { context.launchInventory = $0 },
             launchPaneDrop: { identities in
                 for identity in identities { pacer.discard(identity) }
             })
+        // the reap waits for the library so a confirmed Live sessions reset can narrow its marker against the
+        // current claims first; both finish before any window mounts
+        let consumer = LiveResetConsumer.Dependencies(markerStore: LiveResetMarkerStore(directory: stateDirectory),
+                                                      probe: LiveAttributionProbe())
+        let launch = LaunchOrchestration.Inputs(library: library, client: client, resolver: foregroundResolver,
+                                                context: context, launchDecision: ghostty.restoreLaunchDecision)
+        if let outcome = LaunchOrchestration.run(launch, consumer: consumer) {
+            ghostty.recordLiveResetOutcome(outcome)
+        }
         return RestoredRuntime(library: library, foregroundResolver: foregroundResolver, zmxClient: client,
                                spawnContext: context)
     }
@@ -439,7 +452,8 @@ struct agtermApp: App {
     @MainActor
     static func launchSeedPolicy(_ ghostty: GhosttyApp, context: LaunchSpawnContext) -> LaunchSeedPolicy {
         LaunchSeedPolicy(restoreEnabled: ghostty.restoreRunningCommand, denylist: ghostty.restoreDenylist,
-                         runningNames: context.runningNames)
+                         runningNames: context.runningNames,
+                         suppressedDaemons: Set(context.suppressedLaunchPayloads.map(ZmxSupport.daemonName(for:))))
     }
 
     /// A wrapped pane's shell environment is zmx's own; every other disposition inherits the pane env.

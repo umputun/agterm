@@ -204,13 +204,18 @@ final class ControlServerLiveResetTests: XCTestCase {
         let liveReset = makeCoordinator()
         let terminated = expectTermination(of: liveReset)
         let gate = DispatchSemaphore(value: 0)
+        defer { gate.signal() }
+        let writerEntered = expectation(description: "reset writer held")
         makeServer(liveReset: liveReset, runner: { _ in fixture.rows }, responseWriter: { conn, response in
-            if response.result?.liveReset != nil { gate.wait() }
+            if response.result?.liveReset != nil {
+                writerEntered.fulfill()
+                gate.wait()
+            }
             return ControlServer.writeResponse(conn, response)
         }).start()
 
         let reply = sendTask(ControlRequest(cmd: .zmxReset, args: ControlArgs(force: true)))
-        try await Task.sleep(for: .milliseconds(300))
+        await fulfillment(of: [writerEntered], timeout: 2)
         XCTAssertEqual(terminated.log.count, 0, "the quit must wait for the reply frame")
         gate.signal()
         let replied = await reply.value
@@ -226,19 +231,29 @@ final class ControlServerLiveResetTests: XCTestCase {
         let liveReset = makeCoordinator()
         let terminated = expectTermination(of: liveReset)
         let resetGate = DispatchSemaphore(value: 0)
-        let remote = HeldRemoteRunner()
+        let remoteEntered = expectation(description: "remote runner held")
+        let remote = HeldRemoteRunner(onEnter: { remoteEntered.fulfill() })
+        defer {
+            resetGate.signal()
+            remote.release()
+        }
+        let writerEntered = expectation(description: "reset writer held")
         makeServer(liveReset: liveReset, runner: { _ in fixture.rows }, remoteRunner: remote, responseWriter: { conn, response in
-            if response.result?.liveReset != nil { resetGate.wait() }
+            if response.result?.liveReset != nil {
+                writerEntered.fulfill()
+                resetGate.wait()
+            }
             return ControlServer.writeResponse(conn, response)
         }).start()
 
         let tree = sendTask(ControlRequest(cmd: .zmxTree, args: ControlArgs(host: "buildbox")))
-        try await Task.sleep(for: .milliseconds(200))
+        await fulfillment(of: [remoteEntered], timeout: 2)
         let reset = sendTask(ControlRequest(cmd: .zmxReset, args: ControlArgs(force: true)))
-        try await Task.sleep(for: .milliseconds(300))
+        await fulfillment(of: [writerEntered], timeout: 2)
         remote.release()
-        _ = await tree.value
-        try await Task.sleep(for: .milliseconds(200))
+        let treeReplied = await tree.value
+        let treeResponse = try XCTUnwrap(treeReplied, "the unrelated reply must be written while the reset reply is held")
+        XCTAssertFalse(treeResponse.ok)
         XCTAssertEqual(terminated.log.count, 0, "another reply finishing must not quit the app")
         resetGate.signal()
         let replied = await reset.value
@@ -269,12 +284,18 @@ final class ControlServerLiveResetTests: XCTestCase {
 private final class HeldRemoteRunner: RemoteCommandRunner, @unchecked Sendable {
     private let lock = NSLock()
     private var released = false
+    private let onEnter: @Sendable () -> Void
+
+    init(onEnter: @escaping @Sendable () -> Void) {
+        self.onEnter = onEnter
+    }
 
     func release() {
         lock.withLock { released = true }
     }
 
     func run(_: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
+        onEnter()
         while !lock.withLock({ released }) {
             try? await Task.sleep(for: .milliseconds(20))
         }

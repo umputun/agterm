@@ -20,6 +20,13 @@ final class GhosttyApp {
     /// libghostty attributes none to a file. `reloadConfig` surfaces it for the Reload Config /
     /// `config.reload` warning; the Console log names the offending line.
     private(set) var lastConfigDiagnosticsCount = 0
+    /// What the launch's Live sessions reset did, recorded before any window mounts and posted from the
+    /// window task once notifications are registered; nil when no marker was consumed.
+    private(set) var liveResetOutcome: LiveReset.Outcome?
+
+    func recordLiveResetOutcome(_ outcome: LiveReset.Outcome) {
+        liveResetOutcome = outcome
+    }
     /// Terminal background from the resolved config; tints the window so the title bar blends with the
     /// terminal instead of the default titlebar material. Nil when unread.
     private(set) var terminalBackgroundColor: NSColor?

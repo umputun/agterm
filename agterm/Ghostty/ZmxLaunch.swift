@@ -97,12 +97,15 @@ enum ZmxLaunch {
         ZmxSupport.launchDisposition(requested: requested, active: active, configuration: configuration)
     }
 
+    /// `suppressed` consumes the pending replay without using it and withholds the durable command: the
+    /// pane's old process may still be running, and the attach must not start a second copy.
     @MainActor
     static func surfaceSeed(disposition: Disposition, session: Session, pane: StatusPane,
-                            denylist: Set<String>) -> SurfaceSeed? {
+                            denylist: Set<String>, suppressed: Bool = false) -> SurfaceSeed? {
         guard case .wrapped(let configuration) = disposition else { return nil }
-        let replay = session.takePendingForegroundCommand(pane: pane)
-        let creationCommand: String? = if replay == nil {
+        let captured = session.takePendingForegroundCommand(pane: pane)
+        let replay = suppressed ? nil : captured
+        let creationCommand: String? = if replay == nil, !suppressed {
             switch pane {
             case .left: session.initialCommand
             case .right: session.splitInitialCommand

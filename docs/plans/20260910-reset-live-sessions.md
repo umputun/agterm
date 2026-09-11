@@ -458,24 +458,26 @@ App target:
 - Create: `agtermTests/LiveResetConsumerTests.swift`
 - Modify: `agtermTests/LaunchSeedTests.swift`
 
-- [ ] write failing hosted tests in `LiveResetConsumerTests` against `LaunchOrchestration.run` with a fake
-      `ZmxClient` runner, injected probe, test clock and `isAlive`: `testMarkerConsumedBeforeFirstKill`,
-      `testOnlyNarrowedTargetsKilledInOneInvocation`, `testUnclaimedTargetSkipped`,
-      `testChangedLeaderSkipped`, `testFailedListingKillsNothing`,
-      `testFailedBatchStillPollsEveryLeader` (the batch returns false, one leader exited and restores
-      normally, the other survives and is suppressed with neither replay nor durable payload),
-      `testSurvivingLeaderIsUnconfirmedAndSuppressed`, `testInvalidMarkerRemovedAndKillsNothing`,
+- [x] write failing hosted tests in `LiveResetConsumerTests` against `LiveResetConsumer.run` and
+      `LaunchOrchestration.run` with a fake `ZmxClient` runner, injected probe, fake clock and `isAlive`:
+      `testMarkerConsumedBeforeFirstKill`, `testOnlyNarrowedTargetsKilledInOneInvocation` (an unclaimed
+      and a changed-leader target skipped in the same run), `testFailedListingKillsNothing`,
+      `testFailedBatchStillPollsEveryLeader` (the batch throws, one leader exited and restores normally,
+      the other survives and is suppressed), `testSurvivingLeaderIsUnconfirmedAndSuppressed` (the fake
+      clock reaches the 15 s budget), `testInvalidMarkerRemovedAndKillsNothing`,
       `testNoMarkerMeansNoZmxInvocation`, `testConsumedMarkerDeletedAfterOutcome`,
-      `testOrderingInventoryThenConsumerThenReap` (reap runs with the stored inventory and
-      `noteLifecycleChange` follows it, no seed resolved before the consumer)
-- [ ] write failing seed tests in `LaunchSeedTests`: `testSuppressedPrimaryAttachesWithoutReplayOrCommand`
+      `testOrderingInventoryThenConsumerThenReap` (inventory stored, consumer list and kill, then the
+      ordinary reap's listing, `runningNames` filled afterwards)
+- [x] write failing seed tests in `LaunchSeedTests`: `testSuppressedPrimaryAttachesWithoutReplayOrCommand`
       (captured argv AND non-nil `initialCommand`), `testSuppressedSplitAttachesWithoutReplayOrCommand`
       (`splitInitialCommand`), `testSuppressionConsumesReplayAndKeepsDurableCommand`,
       `testConfirmedPaneKeepsReplayInSameRun`
-- [ ] implement the app-side sink closure, `LaunchOrchestration.run`, its call in `restoredRuntime`, the
-      suppression set on `LaunchSpawnContext`, the `surfaceSeed` change, the outcome on
-      `GhosttyApp.shared`, and the deferred notification in the window task behind the `hasReopened` gate
-- [ ] run `-only-testing:agtermTests/LiveResetConsumerTests -only-testing:agtermTests/LaunchSeedTests/testSuppressedPrimaryAttachesWithoutReplayOrCommand -only-testing:agtermTests/LaunchSeedTests/testSuppressedSplitAttachesWithoutReplayOrCommand -only-testing:agtermTests/LaunchSeedTests/testSuppressionConsumesReplayAndKeepsDurableCommand -only-testing:agtermTests/LaunchSeedTests/testConfirmedPaneKeepsReplayInSameRun`
+- [x] implement the app-side sink closure, `LaunchOrchestration.run`, its call in `restoredRuntime`, the
+      suppression set on `LaunchSpawnContext` mapped to `LaunchSeedPolicy.suppressedDaemons`, the
+      `surfaceSeed` change, `LiveAttributionProbe.classifier` shared with `liveResetSelection`, the
+      outcome on `GhosttyApp.shared`, and the deferred notification in the window task behind the
+      `hasReopened` gate; `RestoreLaunchDecision` gains a public initializer for the ordering test
+- [x] run `-only-testing:agtermTests/LiveResetConsumerTests -only-testing:agtermTests/LaunchSeedTests/testSuppressedPrimaryAttachesWithoutReplayOrCommand -only-testing:agtermTests/LaunchSeedTests/testSuppressedSplitAttachesWithoutReplayOrCommand -only-testing:agtermTests/LaunchSeedTests/testSuppressionConsumesReplayAndKeepsDurableCommand -only-testing:agtermTests/LaunchSeedTests/testConfirmedPaneKeepsReplayInSameRun`
       - must pass before task 6
 
 ### Task 6: Help menu item and read-back population

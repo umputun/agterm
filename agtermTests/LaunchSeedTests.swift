@@ -239,9 +239,57 @@ final class LaunchSeedTests: XCTestCase {
     }
 
     private func wrappedProvider(session: Session, pane: StatusPane, denylist: Set<String> = [],
-                                 runningNames: Set<String>? = nil) -> LaunchSeedProvider {
+                                 runningNames: Set<String>? = nil, suppressed: Bool = false) -> LaunchSeedProvider {
         LaunchSeedProvider.pane(
             session: session, pane: pane, disposition: .wrapped(configuration),
-            policy: .init(restoreEnabled: true, denylist: denylist, runningNames: runningNames))
+            policy: .init(restoreEnabled: true, denylist: denylist, runningNames: runningNames,
+                          suppressedDaemons: suppressed ? [configuration.daemonName] : []))
+    }
+
+    func testSuppressedPrimaryAttachesWithoutReplayOrCommand() throws {
+        let session = restoredSession()
+        session.pendingForegroundCommand = ["npm", "run", "dev"]
+        session.initialCommand = "htop"
+
+        let provider = wrappedProvider(session: session, pane: .left, suppressed: true)
+
+        XCTAssertFalse(provider.shouldPace)
+        let command = try XCTUnwrap(provider.resolve(.left).command)
+        XCTAssertFalse(command.contains("npm"))
+        XCTAssertFalse(command.contains("htop"))
+    }
+
+    func testSuppressedSplitAttachesWithoutReplayOrCommand() throws {
+        let session = restoredSession()
+        session.pendingSplitForegroundCommand = ["tail", "-f", "log"]
+        session.splitInitialCommand = "htop"
+
+        let provider = wrappedProvider(session: session, pane: .right, suppressed: true)
+
+        XCTAssertFalse(provider.shouldPace)
+        let command = try XCTUnwrap(provider.resolve(.right).command)
+        XCTAssertFalse(command.contains("tail"))
+        XCTAssertFalse(command.contains("htop"))
+    }
+
+    func testSuppressionConsumesReplayAndKeepsDurableCommand() {
+        let session = restoredSession()
+        session.pendingForegroundCommand = ["npm", "run", "dev"]
+        session.initialCommand = "htop"
+
+        _ = wrappedProvider(session: session, pane: .left, suppressed: true).resolve(.left)
+
+        XCTAssertNil(session.pendingForegroundCommand, "a suppressed replay is consumed, never left armed for a later spawn")
+        XCTAssertEqual(session.initialCommand, "htop", "the user's durable command survives the suppression")
+    }
+
+    func testConfirmedPaneKeepsReplayInSameRun() throws {
+        let session = restoredSession()
+        session.pendingForegroundCommand = ["npm", "run", "dev"]
+
+        let provider = wrappedProvider(session: session, pane: .left)
+
+        XCTAssertTrue(provider.shouldPace)
+        XCTAssertTrue(try XCTUnwrap(provider.resolve(.left).command).contains("npm"))
     }
 }
