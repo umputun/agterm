@@ -2,8 +2,6 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// The three client primitives the Live sessions reset consumer is built on: a listing that keeps
-/// unreadable rows, one batched kill, and a group poll on leader pids that never sleeps for real here.
 @MainActor
 final class ZmxClientLiveResetTests: XCTestCase {
     private func client(_ runner: @escaping ZmxClient.Runner) -> ZmxClient {

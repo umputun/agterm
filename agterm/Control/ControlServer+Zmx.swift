@@ -35,6 +35,24 @@ extension ControlServer {
         return responsible(candidate) == .live(candidate) ? candidate : nil
     }
 
+    /// `zmx.reset`: the dialog's confirm path without the dialog. The quit is not requested here; the
+    /// connection thread requests it once this reply is written.
+    func resetLiveSessions() -> ControlResponse {
+        guard let liveReset else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.reset"))
+        }
+        switch liveReset.request(confirmed: true) {
+        case .refused(let refusal):
+            return ControlResponse(ok: false, error: refusal.message)
+        case .cancelled:
+            return ControlResponse(ok: false, error: "zmx.reset was cancelled")
+        case .confirmed(let selection):
+            let status = ControlLiveResetStatus(sessions: selection.sessionCount, panes: selection.targets.count, pending: true)
+            return ControlResponse(ok: true, result: ControlResult(text: LiveReset.dialogText(sessionCount: selection.sessionCount).body,
+                                                                    liveReset: status))
+        }
+    }
+
     /// The panes Help ▸ Reset Live Sessions… would reset: every claim, open or saved, whose daemon leader
     /// is orphaned or attributed to this app. Nil when the listing failed, which refuses the action.
     func liveResetSelection() -> LiveReset.Selection? {

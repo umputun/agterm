@@ -39,6 +39,11 @@ public enum LiveReset {
         public let targets: [Target]
         public let inventoryComplete: Bool
 
+        public init(targets: [Target], inventoryComplete: Bool) {
+            self.targets = targets
+            self.inventoryComplete = inventoryComplete
+        }
+
         public var sessionCount: Int { Set(targets.map(\.sessionID)).count }
     }
 

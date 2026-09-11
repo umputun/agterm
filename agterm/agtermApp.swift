@@ -21,6 +21,7 @@ struct agtermApp: App {
     @State private var globalHotkey: GlobalHotkey
     @State var settingsModel: SettingsModel
     @State private var controlServer: ControlServer
+    @State private var liveReset: LiveResetCoordinator
     @State private var customCommandRunner: CustomCommandRunner
     @State private var appearanceObserver: SystemAppearanceObserver
     @State private var accessibilityObserver: SystemAccessibilityObserver
@@ -38,6 +39,9 @@ struct agtermApp: App {
     /// what arms it.
     private let spawnRegistry: SpawnRegistry
     private let launchContext: LaunchSpawnContext
+    /// The one-shot marker for a confirmed Live sessions reset, in the state directory; handed to the
+    /// delegate on scene appear because the quit path is the only writer.
+    private let liveResetMarkerStore: LiveResetMarkerStore
 
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
@@ -64,6 +68,7 @@ struct agtermApp: App {
     init() {
         let stateDirectory = ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? PersistenceStore.defaultDirectory
+        liveResetMarkerStore = LiveResetMarkerStore(directory: stateDirectory)
         // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
         // window and saves it, which a later read would see as evidence of an earlier launch.
         let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)
@@ -92,6 +97,10 @@ struct agtermApp: App {
                                           zmxForegroundResolver: restored.foregroundResolver,
                                           zmxClient: restored.zmxClient)
         _controlServer = State(initialValue: controlServer)
+        let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
+                                             selection: { [weak controlServer] in controlServer?.liveResetSelection() })
+        controlServer.liveReset = liveReset
+        _liveReset = State(initialValue: liveReset)
         _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
         _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
         _undoCloseShortcut = State(initialValue: UndoCloseShortcut(actions: actions))
@@ -190,6 +199,8 @@ struct agtermApp: App {
                         // `.agtermKeymapChanged`, removed on terminate via the delegate reference.
                         appDelegate.customCommandRunner = customCommandRunner
                         appDelegate.settingsModel = settingsModel
+                        appDelegate.liveResetMarkerStore = liveResetMarkerStore
+                        appDelegate.liveReset = liveReset
                         // hand the delegate the action hub and drain folders `open -a agterm /path` queued
                         // before the window store resolved.
                         appDelegate.actions = actions

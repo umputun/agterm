@@ -1,10 +1,13 @@
 import agtermCore
 import AppKit
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     typealias ForegroundCommandReader = (GhosttySurfaceView, String?, ZmxForegroundResolver.Snapshot?) -> [String]?
     typealias ExitCapture = @MainActor @Sendable ([Session]) -> Int
+
+    private static let logger = Logger(subsystem: "com.umputun.agterm", category: "AppDelegate")
 
     // Leaves 150 ms after the refresh's 350 ms worst case for the per-pane kernel reads.
     private static let exitCaptureBudget: Duration = .milliseconds(500)
@@ -26,6 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Injected exit policy; the configured mode is evaluated when the exit happens.
     var captureOnExit: ExitCapture?
+
+    /// The one-shot marker store for a confirmed Live sessions reset, in the state directory; set on scene
+    /// appear. Nil leaves a pending reset unarmed, and the quit proceeds as an ordinary quit.
+    var liveResetMarkerStore: LiveResetMarkerStore?
+
+    /// Holds the confirmed reset between the dialog or `zmx.reset` and the quit; set on scene appear.
+    var liveReset: LiveResetCoordinator?
 
     /// Strongly retains the current Dock menu's target objects so nil-sender dispatch never depends on
     /// AppKit's target lifetime; replaced whenever the Dock asks for a fresh menu.
@@ -303,6 +313,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
         if QuitReason.isSystemQuit(NSAppleEventManager.shared().currentAppleEvent) { return .terminateNow }
+        if liveReset?.pending != nil { return .terminateNow }
         let counts = library.openCounts()
         guard counts.windows > 0 else { return .terminateNow }
         let alert = NSAlert()
@@ -327,14 +338,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // mark terminating so per-window willClose can't zero the open-set during quit — it must survive
         // for the next launch's reopen-all.
         library?.isTerminating = true
-        if let library { _ = captureOnExit?(library.allOpenSessions()) }
-        library?.finalizeAllPendingCloses()
-        // flush the stores + index: cwd changes since the last structural mutation aren't auto-persisted.
-        library?.saveAllOpen()
+        if let library {
+            // flush the stores + index: cwd changes since the last structural mutation aren't auto-persisted.
+            Self.exitFlush(pending: liveReset?.pending, steps: ExitFlushSteps(
+                capture: { _ = self.captureOnExit?(library.allOpenSessions()) },
+                finalize: { library.finalizeAllPendingCloses() },
+                saveChecked: { library.saveAllOpenChecked() },
+                save: { library.saveAllOpen() },
+                arm: { selection in
+                    guard let store = self.liveResetMarkerStore else { return false }
+                    return Self.armLiveReset(selection, store: store) {
+                        LiveResetRelauncher().spawn(pid: getpid(), bundle: Bundle.main.bundleURL,
+                                                    stateDirectory: ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"])
+                    }
+                }))
+        }
         library?.saveIndex()
         // flush pending debounced settings writes (a keyboard-driven opacity/blur change holds a ~0.3s save
         // no drag-end commit fires) so they survive ⌘Q.
         settingsModel?.flushPendingSaves()
+    }
+
+    struct ExitFlushSteps {
+        let capture: () -> Void
+        let finalize: () -> Void
+        let saveChecked: () -> Bool
+        let save: () -> Void
+        let arm: (LiveReset.Selection) -> Bool
+    }
+
+    /// The exit flush in its fixed order: capture, finalize pending closes, then save. A pending Live
+    /// sessions reset takes the CHECKED save and arms only when it reports every snapshot written; capture
+    /// is invoked, not judged, since its count is best effort. Returns whether a reset was armed.
+    @discardableResult
+    static func exitFlush(pending: LiveReset.Selection?, steps: ExitFlushSteps) -> Bool {
+        steps.capture()
+        steps.finalize()
+        guard let pending else {
+            steps.save()
+            return false
+        }
+        guard steps.saveChecked() else {
+            logger.error("live sessions reset not armed: a window snapshot did not save")
+            return false
+        }
+        return steps.arm(pending)
+    }
+
+    /// Writes the marker, then spawns the relauncher; a relauncher that cannot start takes the marker with
+    /// it, so a reset is never armed for a launch nobody triggers.
+    static func armLiveReset(_ selection: LiveReset.Selection, store: LiveResetMarkerStore, spawn: () -> Bool) -> Bool {
+        do {
+            try store.write(LiveReset.Marker(targets: selection.targets))
+        } catch {
+            logger.error("live sessions reset not armed: marker write failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        guard spawn() else {
+            store.remove()
+            logger.error("live sessions reset not armed: the relauncher did not start")
+            return false
+        }
+        return true
     }
 
     /// Keep the exit policy live so a mode selected after launch governs the next launch.

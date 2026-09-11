@@ -422,23 +422,28 @@ App target:
 - Create: `agtermTests/LiveResetRelauncherTests.swift`
 - Modify: `agtermTests/ControlServerLiveResetTests.swift`
 
-- [ ] write failing hosted tests in `LiveResetQuitTests` with an injected capture, checked save and
+- [x] write failing hosted tests in `LiveResetQuitTests` with an injected capture, checked save and
       spawner: `testCaptureRunsBeforeCheckedSave`, `testMarkerWrittenOnlyAfterCheckedSave`,
       `testNoMarkerWhenSaveFails`, `testMarkerRemovedWhenSpawnerFails`, `testOrdinaryQuitWritesNothing`
-- [ ] write failing hosted tests in `LiveResetRelauncherTests` using a disposable `/bin/sleep` child as
-      the old app and a fake `open` script that records its argv and environment to a temp file:
-      `testLaunchWaitsForChildExit`, `testLaunchCarriesBundleAndStateEnv`, `testNoLaunchOnTimeout`,
-      `testWaiterSurvivesSpawnerExit`
-- [ ] write failing hosted tests in `ControlServerLiveResetTests` through the real socket:
-      `testResetRefusedOutsideLive` (configured or launched), `testResetRefusedOnIncompleteInventory`,
-      `testResetRefusedWhenEmpty`, `testResetReplyCarriesCountsAndText`,
-      `testTerminationWaitsForReplyWrite` with a held write, `testUnrelatedReplyDuringHeldWriteDoesNotTerminate`
-      (a `zmx.tree` worker completes while the reset reply is held), `testFailedReplyWriteDoesNotTerminate`
-      leaving `pendingLiveReset` set
-- [ ] implement `resetLiveSessions(confirmed:)`, the `quitConfirmed` bypass, the pending set on
-      `AppDelegate`, `writeResponse` reporting the write, the request-specific post-write
-      `terminateForLiveReset` hop, the checked-save branch in `applicationWillTerminate`, and the relauncher
-- [ ] run `-only-testing:agtermTests/LiveResetQuitTests -only-testing:agtermTests/LiveResetRelauncherTests -only-testing:agtermTests/ControlServerLiveResetTests`
+- [x] write failing hosted tests in `LiveResetRelauncherTests` using a disposable `/bin/sleep` child as
+      the old app and a fake `open` script that records its argv to a temp file:
+      `testLaunchWaitsForChildExit` (argv carries `-n`, the bundle and `--env AGTERM_STATE_DIR=…`),
+      `testLaunchWithoutAStateDirectoryPassesNoEnv`, `testNoLaunchOnTimeout`, `testSpawnFailureIsReported`.
+      Survival of the waiter past its spawner cannot be shown while the spawner is the test host; task 7's
+      isolated relaunch records the old pid exiting, a different new pid and the same state directory.
+- [x] write failing hosted tests in `ControlServerLiveResetTests` through the real socket:
+      `testResetRefusedOutsideLive` (configured or launched), `testResetRefusedWhenTheListingFails`,
+      `testResetRefusedOnIncompleteInventory`, `testResetRefusedWhenEmpty`,
+      `testResetReplyCarriesCountsAndText`, `testTerminationWaitsForReplyWrite` with a held write,
+      `testUnrelatedReplyDuringHeldWriteDoesNotTerminate` (a `zmx.tree` worker completes while the reset
+      reply is held), `testFailedReplyWriteDoesNotTerminate` leaving `pendingLiveReset` set
+- [x] implement `LiveResetCoordinator` (`agterm/LiveResetCoordinator.swift`: refusal order, dialog,
+      `pending`, injectable active mode and terminate) held by `AppDelegate` and `ControlServer` and
+      built by the app with the server's selection, the quit-alert bypass and checked-save branch on
+      `AppDelegate` with the marker store wired from the app, `writeResponse` reporting the write, the
+      request-specific post-write `terminateIfPending` hop, and the relauncher. The action hub file is
+      untouched: its stored properties would have crossed the 1000-line lint limit.
+- [x] run `-only-testing:agtermTests/LiveResetQuitTests -only-testing:agtermTests/LiveResetRelauncherTests -only-testing:agtermTests/ControlServerLiveResetTests`
       - must pass before task 5
 
 ### Task 5: Launch orchestration, consumer and seed suppression

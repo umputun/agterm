@@ -147,13 +147,23 @@ final class ControlServer {
     /// handshake, so this is what covers a remote agterm that never answers.
     static let remoteTreeDeadline: TimeInterval = 10
 
+    /// Writes one reply frame and reports whether all of it went out. Injectable so a hosted test can hold
+    /// or fail the `zmx.reset` reply and watch what the quit does.
+    typealias ResponseWriter = @Sendable (Int32, ControlResponse) -> Bool
+    nonisolated let responseWriter: ResponseWriter
+
+    /// The Live sessions reset's confirm path; nil refuses `zmx.reset` as unsupported.
+    var liveReset: LiveResetCoordinator?
+
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
          liveAttributionProbe: LiveAttributionProbe = LiveAttributionProbe(),
          remoteRunner: (any RemoteCommandRunner)? = nil,
          statusSoundPlayer: StatusSoundPlayer = .shared,
-         socketPath: String? = nil) {
+         socketPath: String? = nil,
+         responseWriter: @escaping ResponseWriter = ControlServer.writeResponse) {
+        self.responseWriter = responseWriter
         self.remoteRunner = remoteRunner ?? RemoteCommandProcessRunner()
         self.library = library
         self.actions = actions
@@ -377,7 +387,7 @@ final class ControlServer {
         setsockopt(conn, SOL_SOCKET, SO_SNDTIMEO, &writeTimeout, socklen_t(MemoryLayout<timeval>.size))
 
         guard let line = readLine(conn) else {
-            writeResponse(conn, ControlResponse(ok: false, error: "request too large or read failed"))
+            _ = server.responseWriter(conn, ControlResponse(ok: false, error: "request too large or read failed"))
             return
         }
 
@@ -389,14 +399,14 @@ final class ControlServer {
             // the context names the rejected `cmd`, telling a caller its agterm is older than its agtermctl,
             // and only for a command added after THIS code shipped, since an older server returns the generic.
             let detail = (error as? DecodingError).map(Self.decodeDetail) ?? error.localizedDescription
-            writeResponse(conn, ControlResponse(ok: false, error: "invalid request: \(detail)"))
+            _ = server.responseWriter(conn, ControlResponse(ok: false, error: "invalid request: \(detail)"))
             return
         }
 
         // answer read-only window queries from the cache without a main-actor hop: a window close briefly
         // stalls the main thread (surface teardown / re-render), wedging the accept loop against polls.
         if let cached = server.fastPathResponse(for: request) {
-            writeResponse(conn, cached)
+            _ = server.responseWriter(conn, cached)
             return
         }
 
@@ -406,7 +416,7 @@ final class ControlServer {
             handedOff = true
             let worker = Thread {
                 defer { close(conn) }
-                writeResponse(conn, runBlocking { await server.dispatch(request) })
+                _ = server.responseWriter(conn, runBlocking { await server.dispatch(request) })
             }
             worker.name = "com.umputun.agterm.control.remote"
             worker.start()
@@ -416,7 +426,17 @@ final class ControlServer {
         // hop to the main actor, blocking this background thread. dispatch refreshes the window cache in that
         // same execution, so the fast path sees this command's mutations without a second, stallable hop.
         let response = runBlocking { await server.dispatch(request) }
-        writeResponse(conn, response)
+        let written = server.responseWriter(conn, response)
+        // the quit after a confirmed reset waits for THIS reply to be on the wire, decided from this request
+        // and this response so a remote worker finishing another reply in parallel can never trigger it
+        guard request.cmd == .zmxReset, response.ok else { return }
+        guard written else {
+            logger.error("zmx.reset reply was not written; the reset stays pending for a later quit")
+            return
+        }
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { server.liveReset?.terminateIfPending() }
+        }
     }
 
     /// Commands whose dispatch awaits an ssh round trip. `zmx.attach` re-resolves the remote first, so it
@@ -446,23 +466,24 @@ final class ControlServer {
     }
 
     /// Encode `response` and write it back as a single newline-terminated line.
-    nonisolated private static func writeResponse(_ conn: Int32, _ response: ControlResponse) {
-        guard var data = try? JSONEncoder().encode(response) else { return }
+    nonisolated static func writeResponse(_ conn: Int32, _ response: ControlResponse) -> Bool {
+        guard var data = try? JSONEncoder().encode(response) else { return false }
         data.append(UInt8(ascii: "\n"))
-        data.withUnsafeBytes { raw in
+        return data.withUnsafeBytes { raw in
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             let deadline = DispatchTime.now() + .seconds(writeDeadlineSeconds)
             while offset < data.count {
-                if DispatchTime.now() > deadline { return }
+                if DispatchTime.now() > deadline { return false }
                 let n = write(conn, base + offset, data.count - offset)
                 if n < 0 {
                     if errno == EINTR { continue } // retry an interrupted write
-                    return
+                    return false
                 }
-                if n == 0 { return }
+                if n == 0 { return false }
                 offset += n
             }
+            return true
         }
     }
 
