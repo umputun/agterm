@@ -10,6 +10,8 @@ final class LiveResetConsumerTests: XCTestCase {
     private var context: agtermApp.LaunchSpawnContext!
     private var store: LiveResetMarkerStore!
     private var invocations: [[String]] = []
+    private var timeouts: [String: TimeInterval] = [:]
+    private var listDelay: Duration = .zero
     private var rows: [String] = []
     private var listFails = false
     private var killFails = false
@@ -26,6 +28,8 @@ final class LiveResetConsumerTests: XCTestCase {
             library = WindowLibrary(directory: stateDir, paneFinalizer: nil, launchInventorySink: { context.launchInventory = $0 })
             store = LiveResetMarkerStore(directory: stateDir)
             invocations = []
+            timeouts = [:]
+            listDelay = .zero
             rows = []
             listFails = false
             killFails = false
@@ -45,8 +49,10 @@ final class LiveResetConsumerTests: XCTestCase {
         let marker = stateDir.appendingPathComponent(LiveReset.markerFilename)
         return ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { [self] invocation in
             invocations.append(invocation.arguments)
+            timeouts[invocation.arguments[0]] = invocation.timeout
             switch invocation.arguments.first {
             case "list":
+                clock = clock.advanced(by: listDelay)
                 if listFails { throw ZmxClient.CommandError.timedOut }
                 return rows.joined(separator: "\n")
             case "kill":
@@ -179,6 +185,58 @@ final class LiveResetConsumerTests: XCTestCase {
 
         XCTAssertNotNil(run())
 
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stateDir.appendingPathComponent(LiveReset.consumedFilename).path))
+    }
+
+    func testBudgetClampsListingAndKill() throws {
+        let session = try addSession()
+        rows = [row(session, leader: 10)]
+        listDelay = .milliseconds(1500)
+        try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
+        var deps = dependencies()
+        deps.budget = .seconds(2)
+
+        let outcome = try XCTUnwrap(LiveResetConsumer.run(deps, library: library, client: makeClient(), context: context))
+
+        XCTAssertEqual(outcome.panes.killed, 1)
+        XCTAssertEqual(timeouts["list"], 2)
+        XCTAssertEqual(try XCTUnwrap(timeouts["kill"]), 0.5, accuracy: 0.01)
+    }
+
+    func testExpiredBudgetSkipsTheBatchAndSuppresses() throws {
+        let session = try addSession()
+        rows = [row(session, leader: 10)]
+        listDelay = .seconds(3)
+        try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
+        var deps = dependencies()
+        deps.budget = .seconds(2)
+
+        let outcome = try XCTUnwrap(LiveResetConsumer.run(deps, library: library, client: makeClient(), context: context))
+
+        XCTAssertTrue(kills.isEmpty, "a batch never starts after the budget expired")
+        XCTAssertEqual(outcome.unconfirmed, [session.paneIdentity])
+        XCTAssertEqual(context.suppressedLaunchPayloads, [session.paneIdentity])
+    }
+
+    func testFallbackLaunchDiscardsTheMarkerWithoutKilling() throws {
+        let seeded = try addSession()
+        library.saveAllOpen()
+        library.saveIndex()
+        let context = context!
+        library = WindowLibrary(directory: stateDir, paneFinalizer: nil, launchInventorySink: { context.launchInventory = $0 })
+        let session = try XCTUnwrap(library.activeStore?.workspaces.flatMap(\.sessions).first { $0.paneIdentity == seeded.paneIdentity })
+        rows = [row(session, leader: 10)]
+        try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
+        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let launch = LaunchOrchestration.Inputs(library: library, client: makeClient(), resolver: resolver, context: context,
+                                                launchDecision: RestoreLaunchDecision(requested: .live, active: .rerun, liveUnavailableReason: "unsupported shell"))
+
+        let outcome = LaunchOrchestration.run(launch, consumer: dependencies())
+
+        XCTAssertNil(outcome)
+        XCTAssertEqual(invocations.map(\.[0]), ["list"], "only the ordinary reap listed; the consumer never ran")
+        XCTAssertTrue(context.suppressedLaunchPayloads.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stateDir.appendingPathComponent(LiveReset.markerFilename).path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: stateDir.appendingPathComponent(LiveReset.consumedFilename).path))
     }
 

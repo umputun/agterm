@@ -409,9 +409,7 @@ extension agtermApp {
                 Button("Install Agent Skill…") { SkillInstaller.run() }
                 if liveReset.menuVisible {
                     Divider()
-                    Button("Reset Live Sessions…") {
-                        if case .confirmed = liveReset.request(confirmed: false) { liveReset.terminateIfPending() }
-                    }
+                    Button("Reset Live Sessions…") { liveReset.runFromMenu() }
                 }
             }
     }

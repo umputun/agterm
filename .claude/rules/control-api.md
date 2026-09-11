@@ -940,6 +940,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   it is still claimed, still listed with the same leader pid and still orphaned; gone restores normally;
   anything else is skipped. Every selected leader is polled whatever the batched kill reported, and a
   survivor's pane gets neither its replay nor its durable command at that launch.
+  A confirmed reset arms and skips the quit alert only while Live is still both modes
+  (`armablePending`): a mode change after confirmation leaves the next launch unable to suppress a
+  survivor's ordinary seed. A launch that did not get Live discards a marker it finds without killing.
+  The listing and the batched kill are clamped to the remaining budget, and a batch that cannot start
+  before the budget expires leaves every selected pane suppressed. The Help item shows a refusal in user
+  words through `presentRefusal`; only a cancel is silent.
   Read-back is `liveReset` on the tree top level and the `zmx list` header, omitted when nothing is
   pending and no launch consumed a marker. XCUITest exemption: the command quits the app, so its
   coverage is hosted and package tests plus the isolated acceptance run, like `restore.mode`.

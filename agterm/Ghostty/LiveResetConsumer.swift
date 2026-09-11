@@ -17,6 +17,7 @@ enum LiveResetConsumer {
         var poll = ZmxClient.LeaderPoll()
         var isAlive: (pid_t) -> Bool = { Darwin.kill($0, 0) == 0 || errno == EPERM }
         var budget: Duration = .seconds(15)
+        var listTimeout: TimeInterval = 3
         var killTimeout: TimeInterval = 5
     }
 
@@ -32,18 +33,30 @@ enum LiveResetConsumer {
             return nil
         }
         let deadline = deps.poll.now().advanced(by: deps.budget)
+        func remaining() -> TimeInterval {
+            let left = deps.poll.now().duration(to: deadline)
+            return max(0, Double(left.components.seconds) + Double(left.components.attoseconds) / 1e18)
+        }
         let claims = library.paneClaims()
         let claimed: Set<UUID>? = claims.complete ? Set(claims.claims.map(\.paneIdentity)) : nil
-        let records = client.sessionRecords()
+        let records = client.sessionRecords(timeout: min(deps.listTimeout, max(remaining(), 0.1)))
         let narrowed = LiveReset.narrow(marker: marker, claimed: claimed, records: records,
                                         classify: deps.probe.classifier(endpoint: client.endpoint))
         let kill = narrowed.kill
         var survivors: Set<pid_t> = []
         if !kill.isEmpty {
-            if !client.killBatch(names: kill.map(\.daemon), timeout: deps.killTimeout) {
-                logger.error("live sessions reset: the batched kill did not complete; polling every leader anyway")
+            // a batch that could not start before the budget ran out is treated like one whose result is
+            // unknown: every selected leader stays suppressed rather than restored
+            let timeout = min(deps.killTimeout, remaining())
+            if timeout <= 0 {
+                logger.error("live sessions reset: the budget expired before the kill; leaving every selected pane suppressed")
+                survivors = Set(kill.map(\.leaderPID))
+            } else {
+                if !client.killBatch(names: kill.map(\.daemon), timeout: timeout) {
+                    logger.error("live sessions reset: the batched kill did not complete; polling every leader anyway")
+                }
+                survivors = ZmxClient.leadersExited(Set(kill.map(\.leaderPID)), deadline: deadline, poll: deps.poll, isAlive: deps.isAlive)
             }
-            survivors = ZmxClient.leadersExited(Set(kill.map(\.leaderPID)), deadline: deadline, poll: deps.poll, isAlive: deps.isAlive)
         }
         let outcome = LiveReset.outcome(narrowed: narrowed, survivors: survivors, inventoryFailed: narrowed.inventoryFailed)
         context.suppressedLaunchPayloads = Set(outcome.unconfirmed)
@@ -65,9 +78,16 @@ enum LaunchOrchestration {
         let launchDecision: RestoreLaunchDecision
     }
 
+    /// A launch that did not get Live cannot suppress a survivor's ordinary seed, so a marker found by it
+    /// is discarded rather than consumed: nothing is killed and the panes restore as that mode restores them.
     static func run(_ inputs: Inputs, consumer: LiveResetConsumer.Dependencies?) -> LiveReset.Outcome? {
-        let outcome = consumer.flatMap {
-            LiveResetConsumer.run($0, library: inputs.library, client: inputs.client, context: inputs.context)
+        let live = inputs.launchDecision.requested == .live && inputs.launchDecision.active == .live
+        let outcome: LiveReset.Outcome? = consumer.flatMap {
+            guard live else {
+                $0.markerStore.remove()
+                return nil
+            }
+            return LiveResetConsumer.run($0, library: inputs.library, client: inputs.client, context: inputs.context)
         }
         inputs.context.runningNames = inputs.client.reap(knownPaneIdentities: inputs.context.launchInventory,
                                                          launchDecision: inputs.launchDecision).runningNames

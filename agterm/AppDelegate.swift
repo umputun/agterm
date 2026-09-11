@@ -313,7 +313,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
         if QuitReason.isSystemQuit(NSAppleEventManager.shared().currentAppleEvent) { return .terminateNow }
-        if liveReset?.pending != nil { return .terminateNow }
+        if liveReset?.armablePending != nil { return .terminateNow }
         let counts = library.openCounts()
         guard counts.windows > 0 else { return .terminateNow }
         let alert = NSAlert()
@@ -340,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         library?.isTerminating = true
         if let library {
             // flush the stores + index: cwd changes since the last structural mutation aren't auto-persisted.
-            Self.exitFlush(pending: liveReset?.pending, steps: ExitFlushSteps(
+            Self.exitFlush(pending: liveReset?.armablePending, steps: ExitFlushSteps(
                 capture: { _ = self.captureOnExit?(library.allOpenSessions()) },
                 finalize: { library.finalizeAllPendingCloses() },
                 saveChecked: { library.saveAllOpenChecked() },
