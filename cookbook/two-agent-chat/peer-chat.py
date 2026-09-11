@@ -13,8 +13,9 @@ import sys
 import tempfile
 import time
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -39,15 +40,21 @@ RULE_RE = re.compile(r"^\s*[─\u2014-]{10,}(?:\s+[^─\u2014-].*?\s+[─\u2014-
 # the glyph to `»` (codex-rs/tui/src/bottom_pane/effort_ignition.rs). Both prompt patterns
 # are anchored at column zero so prompt-shaped output cannot be mistaken for live input.
 # Shell mode shows `!` and is deliberately not matched, so nothing is ever typed there.
-CODEX_PROMPT_RE = re.compile(r"^[›»][\s ]*(.*?)\s*$")
+CODEX_PROMPT_RE = re.compile(r"^[›»][\s \u2800-\u28FF]?[\s ]*(.*?)\s*$")
 CODEX_SHELL_PROMPT_RE = re.compile(r"^![\s ]*(.*?)\s*$")
 CODEX_CHOICE_RE = re.compile(r"^\d+\.\s")
 # Codex sprays an idle animation of braille particles (U+2800-U+28FF) across the composer
-# box, prompt row included. Particles are tolerated in exactly two places: rows that hold
-# nothing else are dropped so they cannot hide the prompt row, and the empty-placeholder
-# comparison ignores them. Composer content itself stays verbatim, so ownership checks,
-# cleanup and delivery verification still see every character a person typed.
+# box, prompt row included, and a single particle can sit in one cell for seconds, so no
+# burst of reads sees the text underneath. For the Codex pane only: rows that hold nothing
+# but particles count as blank, so they neither hide the prompt row nor glue a notice to
+# it; the cell after the prompt marker and the two-cell indent of wrapped rows are
+# decoration; everywhere else a particle stands for the one cell it covers, or for an
+# empty cell when it trails the text (row_matches, trailing_particle_variants), and the
+# empty placeholder is read the same way. A particle can hide a wrong character until it
+# moves, which is why send() verifies the whole body again just before Return. Claude's
+# composer shows no animation and is compared verbatim.
 CODEX_PARTICLE_RE = re.compile(r"[\u2800-\u28FF]")
+CODEX_INDENT_RE = re.compile(r"^[\s\u2800-\u28FF]{0,2}")
 CODEX_EMPTY_PROMPT = "Ask Codex to do anything"
 # Codex prefixes footer rows with two spaces. Only the final row is stripped: a
 # multi-row shortcut overlay is indistinguishable from indented modal choices and
@@ -381,6 +388,8 @@ def _pane_text_unchecked(
     )
 
 
+
+
 def cursor_column(
     sid: str, profile: Profile, window: str | None = None
 ) -> int:
@@ -465,16 +474,21 @@ def composer_probe_marker(text: str) -> str:
         index += 1
 
 
+def codex_row_is_blank(line: str) -> bool:
+    """A row holding nothing but whitespace and idle-animation particles."""
+    return not CODEX_PARTICLE_RE.sub(" ", line).strip()
+
+
 def trailing_input_block(text: str) -> list[str]:
     lines = text.splitlines()[-BOX_LINES:]
-    while lines and not lines[-1].strip():
+    while lines and codex_row_is_blank(lines[-1]):
         lines.pop()
     if lines and CODEX_FOOTER_RE.match(lines[-1]):
         lines.pop()
-        while lines and not lines[-1].strip():
+        while lines and codex_row_is_blank(lines[-1]):
             lines.pop()
     start = len(lines)
-    while start and lines[start - 1].strip():
+    while start and not codex_row_is_blank(lines[start - 1]):
         start -= 1
     return lines[start:]
 
@@ -483,17 +497,28 @@ def codex_live_prompt_text(text: str) -> str | None:
     block = trailing_input_block(text)
     if not block or any(CODEX_SHELL_PROMPT_RE.match(line) for line in block):
         return None
-    block = [line for line in block if CODEX_PARTICLE_RE.sub(" ", line).strip()]
+    block = [line for line in block if not codex_row_is_blank(line)]
     if not block:
         return None
     match = CODEX_PROMPT_RE.match(block[0])
     if (
         not match
         or CODEX_CHOICE_RE.match(match.group(1))
-        or any(not line[:1].isspace() for line in block[1:])
+        or any(
+            not (line[:1].isspace() or CODEX_PARTICLE_RE.match(line[:1]))
+            for line in block[1:]
+        )
     ):
         return None
-    content = [match.group(1), *(line.strip() for line in block[1:])]
+    # Wrapped rows carry a two-cell indent, and whatever the animation drew there is
+    # decoration. A particle on the first text cell may cover a character, so it stays
+    # for row_matches to judge, and trailing particles stay for the same reason. A row
+    # whose only character is covered looks like an animation row and is dropped, so
+    # such a send fails closed until the particle moves; nothing tells the two apart.
+    content = [
+        match.group(1),
+        *(CODEX_INDENT_RE.sub("", line).strip() for line in block[1:]),
+    ]
     return "\n".join(part for part in content if part)
 
 
@@ -527,11 +552,39 @@ def live_prompt_text(profile: Profile, text: str) -> str | None:
     return claude_live_prompt_text(text)
 
 
+def codex_placeholder_shown(content: str) -> bool:
+    """The empty-composer placeholder, read through the idle animation.
+
+    Rows are joined with the space that wrapping consumed. A particle may stand for
+    the placeholder character under it or for an empty cell beside the text, so the
+    walk lets every particle take either role and every other cell must match.
+    """
+    shown = " ".join(row.strip() for row in content.splitlines())
+    expected = CODEX_EMPTY_PROMPT
+    reached = {0}
+    for char in shown:
+        advanced = set()
+        for index in reached:
+            if CODEX_PARTICLE_RE.match(char):
+                advanced.add(index)
+                if index < len(expected):
+                    advanced.add(index + 1)
+            elif index < len(expected) and expected[index] == char:
+                advanced.add(index + 1)
+            elif index == len(expected) and char == " ":
+                # Spaces between the particles that trail the placeholder.
+                advanced.add(index)
+        reached = advanced
+        if not reached:
+            return False
+    return len(expected) in reached
+
+
 def composer_is_empty(profile: Profile, content: str) -> bool:
     """Recognise known empty-input content for cleanup, acceptance and Codex preflight."""
-    joined = " ".join(content.splitlines())
     if profile.agent == "codex":
-        return " ".join(CODEX_PARTICLE_RE.sub(" ", joined).split()) == CODEX_EMPTY_PROMPT
+        return codex_placeholder_shown(content)
+    joined = " ".join(content.splitlines())
     return joined in CLAUDE_EMPTY_PROMPTS or bool(
         CLAUDE_STARTUP_HINT_RE.fullmatch(joined)
     )
@@ -555,19 +608,36 @@ def wait_for_composer_change(
     previous: tuple[str, int],
     settle_delay: float,
     window: str | None = None,
+    matches: Callable[[str], bool] | None = None,
 ) -> tuple[str, int] | None:
-    """Wait for a changed composer state to remain stable."""
+    """Wait for a changed composer state to remain stable.
+
+    With ``matches`` the composer counts as settled once the predicate has held
+    for ``settle_delay``, whatever the idle animation does to the text meanwhile.
+    Without it, a state that differs from ``previous`` has to stay the same for
+    that long, a particle on either side standing for the cell it covers.
+    """
     deadline = time.monotonic() + PROBE_TIMEOUT
+    tolerant = profile.agent == "codex"
     stable_state: tuple[str, int] | None = None
     stable_since: float | None = None
     while True:
         state = composer_state(sid, profile, window)
         now = time.monotonic()
-        if state is not None and state != previous:
-            if state != stable_state:
+        if matches is not None:
+            good = state is not None and matches(state[0])
+        else:
+            good = state is not None and not same_composer_state(
+                state, previous, tolerant
+            )
+        if good:
+            if stable_since is None or (
+                matches is None
+                and not same_composer_state(state, stable_state, tolerant)
+            ):
                 stable_state = state
                 stable_since = now
-            elif stable_since is not None and now - stable_since >= settle_delay:
+            elif now - stable_since >= settle_delay:
                 return state
         else:
             stable_state = None
@@ -589,6 +659,7 @@ def type_body(
     if progress is None:
         progress = BodyProgress()
     marker = composer_probe_marker(text)
+    tolerant = profile.agent == "codex"
     chunks = text_chunks(text, TYPE_CHUNK_BYTES - len(marker.encode("utf-8")))
     state = initial
     expected = ""
@@ -600,7 +671,17 @@ def type_body(
             try:
                 type_text(sid, profile, chunk + marker, window)
                 changed = wait_for_composer_change(
-                    sid, profile, state, CHUNK_SETTLE_DELAY, window
+                    sid,
+                    profile,
+                    state,
+                    CHUNK_SETTLE_DELAY,
+                    window,
+                    matches=partial(
+                        chunk_is_visible,
+                        expected=marked,
+                        chunk=chunk + marker,
+                        tolerant=tolerant,
+                    ),
                 )
                 if changed is None:
                     raise ComposerDirty(
@@ -609,7 +690,7 @@ def type_body(
                         marked,
                     )
                 if not composer_has_expected_tail(
-                    changed[0], marked, chunk + marker
+                    changed[0], marked, chunk + marker, tolerant
                 ):
                     raise ComposerDirty(
                         f"message chunk {index + 1}/{len(chunks)} is incomplete in "
@@ -623,7 +704,18 @@ def type_body(
                     else CHUNK_SETTLE_DELAY
                 )
                 unmarked = wait_for_composer_change(
-                    sid, profile, changed, settle_delay, window
+                    sid,
+                    profile,
+                    changed,
+                    settle_delay,
+                    window,
+                    matches=partial(
+                        chunk_is_visible,
+                        expected=attempted,
+                        chunk=chunk,
+                        tolerant=tolerant,
+                        marker=marker,
+                    ),
                 )
                 if unmarked is None or marker in unmarked[0]:
                     raise ComposerDirty(
@@ -631,7 +723,9 @@ def type_body(
                         "not confirmably removed; submit withheld",
                         marked,
                     )
-                if not composer_has_expected_tail(unmarked[0], attempted, chunk):
+                if not composer_has_expected_tail(
+                    unmarked[0], attempted, chunk, tolerant
+                ):
                     raise ComposerDirty(
                         f"message chunk {index + 1}/{len(chunks)} changed during "
                         "marker removal; submit withheld",
@@ -663,20 +757,107 @@ def type_body(
     return state
 
 
+def trailing_particle_variants(row: str) -> list[str]:
+    """The row as shown, then with one more trailing particle removed each time.
+
+    A trailing particle may cover the last typed character or an empty cell beside
+    the text, and only the source text tells which, so every reading is offered.
+    """
+    row = row.rstrip()
+    variants = [row]
+    while row and CODEX_PARTICLE_RE.match(row[-1]):
+        # Particles drawn beyond the text sit after the spaces of empty cells.
+        row = row[:-1].rstrip()
+        variants.append(row)
+    return variants
+
+
+def row_readings(row: str, tolerant: bool) -> list[str]:
+    return trailing_particle_variants(row) if tolerant else [row]
+
+
+def row_matches(expected: str, row: str, tolerant: bool = False) -> bool:
+    """Compare one screen row with source text of the same length.
+
+    Codex draws its idle animation over the composer, so with ``tolerant`` a braille
+    particle stands for the one cell it covers; every other cell must match exactly,
+    and a row of the wrong length never matches. Claude's composer shows no
+    animation, so its rows are compared verbatim.
+    """
+    if not tolerant:
+        return expected == row
+    if len(expected) != len(row):
+        return False
+    return all(
+        wanted == seen or CODEX_PARTICLE_RE.match(seen) is not None
+        for wanted, seen in zip(expected, row)
+    )
+
+
+def same_composer_text(first: str, second: str, tolerant: bool = False) -> bool:
+    """Equal composer text; with ``tolerant`` a particle on either side is its cell."""
+    if not tolerant:
+        return first == second
+    rows_first = first.splitlines() or [first]
+    rows_second = second.splitlines() or [second]
+    if len(rows_first) != len(rows_second):
+        return False
+    return all(
+        any(
+            len(one) == len(other)
+            and all(
+                left == right
+                or CODEX_PARTICLE_RE.match(left) is not None
+                or CODEX_PARTICLE_RE.match(right) is not None
+                for left, right in zip(one, other)
+            )
+            for one in trailing_particle_variants(row_one)
+            for other in trailing_particle_variants(row_other)
+        )
+        for row_one, row_other in zip(rows_first, rows_second)
+    )
+
+
+def same_composer_state(
+    first: tuple[str, int] | None,
+    second: tuple[str, int] | None,
+    tolerant: bool = False,
+) -> bool:
+    if first is None or second is None:
+        return first is second
+    return first[1] == second[1] and same_composer_text(first[0], second[0], tolerant)
+
+
+def chunk_is_visible(
+    content: str,
+    expected: str,
+    chunk: str,
+    tolerant: bool = False,
+    marker: str = "",
+) -> bool:
+    """The typed chunk shows in the composer, without a marker that should be gone."""
+    if marker and marker in content:
+        return False
+    return composer_has_expected_tail(content, expected, chunk, tolerant)
+
+
 def composer_has_expected_tail(
     content: str,
     expected: str,
     chunk: str,
+    tolerant: bool = False,
 ) -> bool:
     """Match a source suffix while allowing visual line wrapping."""
     positions = {len(expected)}
     rows = content.splitlines() or [content]
     for index in range(len(rows) - 1, -1, -1):
-        row = rows[index]
+        readings = row_readings(rows[index], tolerant)
         matched = {
             end - len(row)
             for end in positions
-            if end >= len(row) and expected[end - len(row) : end] == row
+            for row in readings
+            if end >= len(row)
+            and row_matches(expected[end - len(row) : end], row, tolerant)
         }
         if not matched:
             return False
@@ -723,7 +904,10 @@ def chunk_tail_is_ambiguous(expected: str, chunk: str) -> bool:
 
 
 def composer_owned_spans(
-    content: str, owned_text: str, allowed_ends: set[int]
+    content: str,
+    owned_text: str,
+    allowed_ends: set[int],
+    tolerant: bool = False,
 ) -> set[tuple[int, int]]:
     """Locate visible contiguous owned text ending at an allowed prefix boundary."""
     if not content:
@@ -739,12 +923,13 @@ def composer_owned_spans(
     )
     rows = content.splitlines() or [content]
     for index in range(len(rows) - 1, -1, -1):
-        row = rows[index]
+        readings = row_readings(rows[index], tolerant)
         matched = {
             (position - len(row), end)
             for position, end in positions
+            for row in readings
             if position >= len(row)
-            and owned_text[position - len(row) : position] == row
+            and row_matches(owned_text[position - len(row) : position], row, tolerant)
         }
         if not matched:
             return set()
@@ -770,9 +955,8 @@ def wait_for_cleanup_state(
 ) -> tuple[tuple[str, int], set[tuple[int, int]]] | None:
     """Wait for a backspace batch to reach a stable observable state."""
     deadline = time.monotonic() + PROBE_TIMEOUT
-    stable: tuple[
-        tuple[str, int] | None, frozenset[tuple[int, int]]
-    ] | None = None
+    tolerant = profile.agent == "codex"
+    stable: tuple[int | None, frozenset[tuple[int, int]]] | None = None
     stable_since: float | None = None
     while True:
         state = composer_state(sid, profile, window)
@@ -784,15 +968,17 @@ def wait_for_cleanup_state(
         if is_empty and accept_empty:
             return state, set()
         spans = (
-            composer_owned_spans(state[0], owned_text, allowed_ends)
+            composer_owned_spans(state[0], owned_text, allowed_ends, tolerant)
             if state is not None
             else set()
         )
-        if state == previous or (is_empty and not accept_empty):
+        if same_composer_state(state, previous, tolerant) or (
+            is_empty and not accept_empty
+        ):
             stable = None
             stable_since = None
         else:
-            candidate = state, frozenset(spans)
+            candidate = (state[1] if state is not None else None), frozenset(spans)
             if candidate != stable:
                 stable = candidate
                 stable_since = now
@@ -875,7 +1061,6 @@ def wait_for_accepted(
 ) -> bool:
     """Wait until submission clears the composed state and restores column 2."""
     deadline = time.monotonic() + PROBE_TIMEOUT
-    stable_state: tuple[str, int] | None = None
     stable_since: float | None = None
     while True:
         state = composer_state(sid, profile, window)
@@ -887,16 +1072,11 @@ def wait_for_accepted(
             and composer_is_empty(profile, state[0])
         )
         if accepted:
-            if state != stable_state:
-                stable_state = state
+            if stable_since is None:
                 stable_since = now
-            elif (
-                stable_since is not None
-                and now - stable_since >= CHUNK_SETTLE_DELAY
-            ):
+            elif now - stable_since >= CHUNK_SETTLE_DELAY:
                 return True
         else:
-            stable_state = None
             stable_since = None
         if now >= deadline:
             return False
@@ -995,8 +1175,24 @@ def send(
             composed = type_body(
                 sid, profile, typed, initial, window, progress
             )
+            # A particle can hide a wrong character until it moves, so the visible
+            # body is verified against the intended text once more with the latest
+            # reading. A long body may have scrolled its beginning out of the
+            # composer, so the check asks for the visible suffix the final chunk
+            # needed, no more.
             before_submit = composer_state(sid, profile, window)
-            if before_submit != composed:
+            tolerant = profile.agent == "codex"
+            final_chunk = text_chunks(
+                typed,
+                TYPE_CHUNK_BYTES
+                - len(composer_probe_marker(typed).encode("utf-8")),
+            )[-1]
+            if before_submit is None or not (
+                same_composer_state(before_submit, composed, tolerant)
+                and composer_has_expected_tail(
+                    before_submit[0], typed, final_chunk, tolerant
+                )
+            ):
                 raise ComposerDirty(
                     "target composer changed before submit; submit withheld",
                     typed,

@@ -20,6 +20,7 @@ CHUNK_VERIFY_OVERLAP = SCRIPT["CHUNK_VERIFY_OVERLAP"]
 CLEAR_COMPOSER = SCRIPT["clear_composer"]
 COMPOSER_DIRTY = SCRIPT["ComposerDirty"]
 COMPOSER_HAS_EXPECTED_TAIL = SCRIPT["composer_has_expected_tail"]
+COMPOSER_OWNED_SPANS = SCRIPT["composer_owned_spans"]
 COMPOSER_IS_EMPTY = SCRIPT["composer_is_empty"]
 COMPOSER_PROBE_MARKER = SCRIPT["composer_probe_marker"]
 COMPOSER_STATE = SCRIPT["composer_state"]
@@ -39,6 +40,7 @@ TYPE_BODY = SCRIPT["type_body"]
 TYPE_CHUNK_BYTES = SCRIPT["TYPE_CHUNK_BYTES"]
 WAIT_FOR_ACCEPTED = SCRIPT["wait_for_accepted"]
 WAIT_FOR_COMPOSER_CHANGE = SCRIPT["wait_for_composer_change"]
+WAIT_FOR_CLEANUP_STATE = SCRIPT["wait_for_cleanup_state"]
 CLAUDE_PROFILE = PROFILES["claude"]
 PARSE_ARGS = SCRIPT["parse_args"]
 PREPARE_MESSAGE = SCRIPT["prepare_message"]
@@ -48,6 +50,7 @@ RESOLVE_TARGET = SCRIPT["resolve_target"]
 RUN_MAIN = SCRIPT["run_main"]
 TARGET_PROFILE = SCRIPT["target_profile"]
 PANE_TEXT = SCRIPT["pane_text"]
+NORMALIZE = SCRIPT["normalize"]
 TREE = SCRIPT["tree"]
 TYPE_TEXT = SCRIPT["type_text"]
 RULE = "─" * 40
@@ -256,11 +259,44 @@ class CodexLivePromptTextTests(unittest.TestCase):
         self.assertEqual(content, "Ask Codex to do\nanything")
         self.assertTrue(COMPOSER_IS_EMPTY(PROFILES["codex"], content))
 
+    def test_placeholder_is_read_through_particles(self) -> None:
+        for shown in (
+            "Ask Co\u2801ex to do anything",
+            "Ask Codex to do anything\u2801",
+            "\u2801sk Codex to do anything",
+            "Ask\u2802Codex to do anything",
+            "Ask Codex to do\u2801\nanything",
+            "Ask Codex to d\u2801\nanything",
+        ):
+            self.assertTrue(COMPOSER_IS_EMPTY(PROFILES["codex"], shown), shown)
+        for shown in (
+            "Ask Codex to do anythin",
+            "Ask Codex to do anything!",
+            "Ask Codex to do\u2801\nanythin",
+            "Chat from Claude: ping",
+        ):
+            self.assertFalse(COMPOSER_IS_EMPTY(PROFILES["codex"], shown), shown)
+
     def test_idle_animation_above_the_prompt_is_ignored(self) -> None:
         screen = (
             "  \u2801   \u2808         \u2804          \u2840  \u2808\n"
             "\u203a\u2801Ask Codex to do anything\u2840  \u2808     \u2801\n"
             "       \u2840         \u2804                \u2802\n"
+            f"{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        self.assertIsNotNone(content)
+        self.assertTrue(COMPOSER_IS_EMPTY(PROFILES["codex"], content))
+
+    def test_particle_rows_separate_the_prompt_from_a_queue_notice(self) -> None:
+        screen = (
+            "\u2022 Messages to be submitted after next tool call\n"
+            "  \u21b3 Chat from Claude: Review done\n"
+            "    \u2026\n"
+            "    \u2808        \u2801   \u2840\n"
+            "\u203a\u2801Ask Codex to do anything\u2840  \u2808\n"
+            "       \u2840         \u2804\n"
             f"{CODEX_FOOTER}"
         )
         content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
@@ -286,12 +322,144 @@ class CodexLivePromptTextTests(unittest.TestCase):
         self.assertEqual(content, "Chat from Claude: explain \u2801 please")
 
     def test_foreign_character_beside_owned_text_is_not_owned(self) -> None:
-        screen = f"\u203aChat from Claude: ping\u2801\n{CODEX_FOOTER}"
+        screen = f"\u203aChat from Claude: ping!\n{CODEX_FOOTER}"
         content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
 
         owned = "Chat from Claude: ping"
 
         self.assertFalse(COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned))
+
+    def test_particle_beside_owned_text_is_decoration(self) -> None:
+        screen = f"\u203aChat from Claude: ping\u2801\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping"
+
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+        self.assertEqual(
+            COMPOSER_OWNED_SPANS(content, owned, {len(owned)}, tolerant=True),
+            {(0, len(owned))},
+        )
+
+    def test_space_separated_trailing_particles_are_decoration(self) -> None:
+        owned = "Chat from Claude: ping"
+        for shown in (
+            f"\u203aChat from Claude: ping \u2801\n{CODEX_FOOTER}",
+            f"\u203aChat from Claude: ping\u2801  \u2802\n{CODEX_FOOTER}",
+            f"\u203aChat from Claude: pin\u2801  \u2802\n{CODEX_FOOTER}",
+        ):
+            content = LIVE_PROMPT_TEXT(PROFILES["codex"], shown)
+            self.assertTrue(
+                COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True), shown
+            )
+            self.assertEqual(
+                COMPOSER_OWNED_SPANS(content, owned, {len(owned)}, tolerant=True),
+                {(0, len(owned))},
+                shown,
+            )
+
+    def test_particle_beyond_the_row_end_is_decoration(self) -> None:
+        screen = (
+            f"\u203aChat from Claude: a long reply that wraps onto\n"
+            f"  a second row [peer-check:0]        \u2808\n{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        marked = "Chat from Claude: a long reply that wraps onto a second row [peer-check:0]"
+
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, marked, marked, tolerant=True)
+        )
+        self.assertEqual(
+            COMPOSER_OWNED_SPANS(content, marked, {len(marked)}, tolerant=True),
+            {(0, len(marked))},
+        )
+
+    def test_particle_over_the_last_typed_character_still_verifies(self) -> None:
+        screen = f"\u203aChat from Claude: pin\u2801\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping"
+
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+
+    def test_particle_over_a_typed_character_still_verifies(self) -> None:
+        screen = f"\u203aChat from Cl\u2801ude: ping\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping"
+
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+        self.assertEqual(
+            COMPOSER_OWNED_SPANS(content, owned, {len(owned)}, tolerant=True),
+            {(0, len(owned))},
+        )
+
+    def test_wrong_character_under_no_particle_still_fails(self) -> None:
+        screen = f"\u203aChat from Claude: pinf\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping"
+
+        self.assertFalse(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+        self.assertEqual(
+            COMPOSER_OWNED_SPANS(content, owned, {len(owned)}, tolerant=True), set()
+        )
+
+    def test_particle_cannot_hide_a_missing_character(self) -> None:
+        screen = f"\u203aChat from Claude: pin\u2801\n{CODEX_FOOTER}"
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: ping!"
+
+        self.assertFalse(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+
+    def test_claude_rows_are_compared_verbatim(self) -> None:
+        content = "Chat from Codex: p\u2801ng"
+        owned = "Chat from Codex: ping"
+
+        self.assertFalse(COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned))
+        self.assertEqual(COMPOSER_OWNED_SPANS(content, owned, {len(owned)}), set())
+
+    def test_particles_in_the_prompt_gap_and_indent_are_ignored(self) -> None:
+        screen = (
+            "\u203a\u2801Chat from Claude: a long\n"
+            "\u2810 line here\u2802\n"
+            f"{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: a long line here"
+
+        self.assertEqual(content, "Chat from Claude: a long\nline here\u2802")
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
+
+    def test_particle_on_the_first_wrapped_cell_still_verifies(self) -> None:
+        screen = (
+            "\u203a \u2801hat from Claude: a long\n"
+            "  \u2810ine here\n"
+            f"{CODEX_FOOTER}"
+        )
+        content = LIVE_PROMPT_TEXT(PROFILES["codex"], screen)
+
+        owned = "Chat from Claude: a long line here"
+
+        self.assertEqual(content, "\u2801hat from Claude: a long\n\u2810ine here")
+        self.assertTrue(
+            COMPOSER_HAS_EXPECTED_TAIL(content, owned, owned, tolerant=True)
+        )
 
     def test_idle_animation_over_a_dialog_is_refused(self) -> None:
         screen = (
@@ -970,6 +1138,67 @@ class SendPreflightTests(unittest.TestCase):
         ):
             SEND("session-id", CLAUDE_PROFILE, "body")
 
+    def test_clipped_composer_before_submit_still_submits(self) -> None:
+        body = " ".join(f"word{index}" for index in range(120))
+        typed = NORMALIZE(CLAUDE_PROFILE, body)
+        visible = typed[-300:]
+        type_text = Mock()
+        replacements = {
+            "pane_text": Mock(return_value=f"{RULE}\n\u276f \n{RULE}"),
+            "cursor_column": Mock(return_value=2),
+            "type_body": Mock(return_value=(visible, 2)),
+            "composer_state": Mock(return_value=(visible, 2)),
+            "type_text": type_text,
+            "wait_for_accepted": Mock(return_value=True),
+        }
+
+        with patch.dict(SEND.__globals__, replacements):
+            self.assertEqual(SEND("session-id", CLAUDE_PROFILE, body), len(body))
+
+        type_text.assert_called_once_with(
+            "session-id", CLAUDE_PROFILE, CLAUDE_PROFILE.submit, None
+        )
+
+    def test_clipped_cyrillic_composer_needs_only_the_final_chunk(self) -> None:
+        body = " ".join(f"слово{index}" for index in range(90))
+        typed = NORMALIZE(PROFILES["codex"], body)
+        visible = typed[-150:]
+        type_text = Mock()
+        replacements = {
+            "pane_text": Mock(return_value=f"» Ask Codex to do anything\n{CODEX_FOOTER}"),
+            "cursor_column": Mock(return_value=2),
+            "type_body": Mock(return_value=(visible, 2)),
+            "composer_state": Mock(return_value=(visible, 2)),
+            "type_text": type_text,
+            "wait_for_accepted": Mock(return_value=True),
+        }
+
+        with patch.dict(SEND.__globals__, replacements):
+            self.assertEqual(SEND("session-id", PROFILES["codex"], body), len(body))
+
+        type_text.assert_called_once_with(
+            "session-id", PROFILES["codex"], PROFILES["codex"].submit, None
+        )
+
+    def test_wrong_character_revealed_before_submit_withholds_return(self) -> None:
+        typed = NORMALIZE(PROFILES["codex"], "ping")
+        type_text = Mock()
+        replacements = {
+            "pane_text": Mock(return_value=f"» Ask Codex to do anything\n{CODEX_FOOTER}"),
+            "cursor_column": Mock(return_value=2),
+            "type_body": Mock(return_value=(typed.replace("ping", "p\u2801ng"), 23)),
+            "composer_state": Mock(return_value=(typed.replace("ping", "pong"), 23)),
+            "clear_composer": Mock(return_value=True),
+            "type_text": type_text,
+        }
+
+        with patch.dict(SEND.__globals__, replacements), self.assertRaisesRegex(
+            COMPOSER_DIRTY, "changed before submit"
+        ):
+            SEND("session-id", PROFILES["codex"], "ping")
+
+        type_text.assert_not_called()
+
     def test_changed_composer_before_submit_withholds_return(self) -> None:
         type_text = Mock()
         replacements = {
@@ -1112,6 +1341,141 @@ class ComposerTransitionTests(unittest.TestCase):
                     "session-id", CLAUDE_PROFILE, ("Chat from Codex: body", 25)
                 )
             )
+
+
+class TypeBodyThroughParticlesTests(unittest.TestCase):
+    def test_codex_chunk_verifies_and_unmarks_under_particles(self) -> None:
+        marker = COMPOSER_PROBE_MARKER("ping")
+        typed = "Chat from Claude: ping"
+        marked_seen = f"Chat from Cl\u2801ude: ping{marker}"
+        unmarked_seen = "Chat from Claude: p\u2802ng"
+        replacements = {
+            "type_text": Mock(),
+            "wait_for_composer_change": Mock(
+                side_effect=[(marked_seen, 40), (unmarked_seen, 23)]
+            ),
+        }
+
+        with patch.dict(TYPE_BODY.__globals__, replacements):
+            self.assertEqual(
+                TYPE_BODY("session-id", PROFILES["codex"], typed, ("", 2)),
+                (unmarked_seen, 23),
+            )
+
+    def test_claude_chunk_keeps_strict_verification(self) -> None:
+        marker = COMPOSER_PROBE_MARKER("ping")
+        typed = "Chat from Codex: ping"
+        replacements = {
+            "type_text": Mock(),
+            "clear_composer": Mock(return_value=True),
+            "wait_for_composer_change": Mock(
+                return_value=(f"Chat from C\u2801dex: ping{marker}", 40)
+            ),
+        }
+
+        with patch.dict(TYPE_BODY.__globals__, replacements), self.assertRaisesRegex(
+            COMPOSER_DIRTY, "incomplete"
+        ):
+            TYPE_BODY("session-id", CLAUDE_PROFILE, typed, ("", 2))
+
+
+class IdleAnimationStabilityTests(unittest.TestCase):
+    OWNED = "Chat from Claude: ping"
+    FRAMES = (
+        ("Chat from Cl\u2801ude: ping", 23),
+        ("Chat from Claude: p\u2802ng", 23),
+        ("Chat fr\u2804m Claude: ping", 23),
+        ("Chat from Claude: ping\u2808", 23),
+    )
+
+    def test_matching_change_settles_through_moving_particles(self) -> None:
+        composer_state = Mock(side_effect=self.FRAMES)
+        replacements = {"composer_state": composer_state, "time": stepping_time()}
+
+        with patch.dict(WAIT_FOR_COMPOSER_CHANGE.__globals__, replacements):
+            settled = WAIT_FOR_COMPOSER_CHANGE(
+                "session-id",
+                PROFILES["codex"],
+                ("", 2),
+                CHUNK_SETTLE_DELAY,
+                matches=lambda content: COMPOSER_HAS_EXPECTED_TAIL(
+                    content, self.OWNED, self.OWNED, tolerant=True
+                ),
+            )
+
+        self.assertEqual(settled, self.FRAMES[1])
+
+    def test_matching_change_does_not_settle_on_a_wrong_body(self) -> None:
+        composer_state = Mock(return_value=("Chat from Claude: pinf", 23))
+        clock = Mock(monotonic=Mock(side_effect=[0.0, 0.1, 3.1]), sleep=Mock())
+        replacements = {"composer_state": composer_state, "time": clock}
+
+        with patch.dict(WAIT_FOR_COMPOSER_CHANGE.__globals__, replacements):
+            self.assertIsNone(
+                WAIT_FOR_COMPOSER_CHANGE(
+                    "session-id",
+                    PROFILES["codex"],
+                    ("", 2),
+                    CHUNK_SETTLE_DELAY,
+                    matches=lambda content: COMPOSER_HAS_EXPECTED_TAIL(
+                        content, self.OWNED, self.OWNED, tolerant=True
+                    ),
+                )
+            )
+
+    def test_unchanged_text_under_moving_particles_is_no_change(self) -> None:
+        composer_state = Mock(side_effect=self.FRAMES)
+        clock = Mock(
+            monotonic=Mock(side_effect=[0.0, 0.1, 0.2, 0.3, 3.1]), sleep=Mock()
+        )
+        replacements = {"composer_state": composer_state, "time": clock}
+
+        with patch.dict(WAIT_FOR_COMPOSER_CHANGE.__globals__, replacements):
+            self.assertIsNone(
+                WAIT_FOR_COMPOSER_CHANGE(
+                    "session-id", PROFILES["codex"], self.FRAMES[0], CHUNK_SETTLE_DELAY
+                )
+            )
+
+    def test_acceptance_settles_through_particles_over_the_placeholder(self) -> None:
+        composer_state = Mock(
+            side_effect=[
+                ("Ask Codex to do\u2801anything", 2),
+                ("Ask\u2802Codex to do anything", 2),
+                ("Ask Codex to do anything \u2804", 2),
+            ]
+        )
+        replacements = {"composer_state": composer_state, "time": stepping_time()}
+
+        with patch.dict(WAIT_FOR_ACCEPTED.__globals__, replacements):
+            self.assertTrue(
+                WAIT_FOR_ACCEPTED("session-id", PROFILES["codex"], (self.OWNED, 23))
+            )
+
+        self.assertEqual(composer_state.call_count, 2)
+
+    def test_cleanup_state_settles_on_owned_spans_through_particles(self) -> None:
+        composer_state = Mock(
+            side_effect=[
+                ("Chat from Claude: p\u2802ng", 23),
+                ("Chat from Cl\u2801ude: p", 20),
+                ("Chat fr\u2804m Claude: p", 20),
+                ("Chat from Claude: p", 20),
+            ]
+        )
+        replacements = {"composer_state": composer_state, "time": stepping_time()}
+
+        with patch.dict(WAIT_FOR_CLEANUP_STATE.__globals__, replacements):
+            settled = WAIT_FOR_CLEANUP_STATE(
+                "session-id",
+                PROFILES["codex"],
+                self.FRAMES[0],
+                self.OWNED,
+                {19, 20, 21},
+            )
+
+        self.assertEqual(settled, (("Chat fr\u2804m Claude: p", 20), {(0, 19)}))
+        self.assertEqual(composer_state.call_count, 3)
 
 
 class ComposerCleanupTests(unittest.TestCase):
@@ -1785,6 +2149,7 @@ class TypeBodyTests(unittest.TestCase):
                     ("", 2),
                     CHUNK_SETTLE_DELAY,
                     None,
+                    matches=ANY,
                 ),
                 call.type_text(
                     "session-id",
@@ -1798,6 +2163,7 @@ class TypeBodyTests(unittest.TestCase):
                     first_marked,
                     CHUNK_SETTLE_DELAY,
                     None,
+                    matches=ANY,
                 ),
                 call.type_text(
                     "session-id", CLAUDE_PROFILE, chunks[1] + marker, None
@@ -1808,6 +2174,7 @@ class TypeBodyTests(unittest.TestCase):
                     first_unmarked,
                     CHUNK_SETTLE_DELAY,
                     None,
+                    matches=ANY,
                 ),
                 call.type_text(
                     "session-id",
@@ -1821,6 +2188,7 @@ class TypeBodyTests(unittest.TestCase):
                     final_marked,
                     COMPOSER_SETTLE_DELAY,
                     None,
+                    matches=ANY,
                 ),
             ],
         )
