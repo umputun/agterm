@@ -18,6 +18,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [project-launcher](project-launcher/) | pick a project anywhere — or type "project + prompt" — and get a session in its workspace | 0.19.0, jq |
 | [project-switcher](project-switcher/) | show only one project's workspaces in the sidebar | 0.18.0, jq |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
+| [window-switcher](window-switcher/) | jump to a window by number, or pick one with its waiting sessions in view | 0.28.0, jq |
 | [workspace-sets](workspace-sets/) | switch the sidebar between named groups of workspaces, one chord each | 0.18.0, jq |
 
 ### Sessions across restarts
