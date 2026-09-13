@@ -1022,7 +1022,7 @@ them, so without `--select` the first item is the one Return runs on open.
 by match score and so does not preserve the supplied order; the seeded text opens selected, so the first
 keystroke replaces it rather than appending. `--select ID` opens with that item highlighted and scrolled
 into view, so Return on an untouched picker runs it and Up/Down read relative to it; the id must name a
-supplied item (`pick select must name an item id` otherwise, including with an empty list), and a
+supplied item (`pick select must name an item id` otherwise, an `--allow-custom` empty list included), and a
 `--query` that filters it out leaves the first visible row highlighted. The seed is consumed at open and
 has no tree read-back; the result's `id` and `index` report what was picked. `--allow-custom` adds a row for a nonmatching
 query and returns it as a custom result; with an empty item list that row is the only possible one, and it

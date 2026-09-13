@@ -555,7 +555,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Optional subtitle/prompt/query/custom/follow; `query` prefills the field so the picker opens filtered.
   Optional `selection` (CLI `--select ID`, its own field because `ControlArgs.select` is the Bool behind
   `session.type --select`) must name a supplied item, refused `pick select must name an item id`
-  otherwise, an empty list included. The palette seeds its highlight from it ONCE, against the first
+  otherwise, an `allowCustom` empty list included (without `allowCustom` the at-least-one-item guard
+  answers first). The palette seeds its highlight from it ONCE, against the first
   filtered list, so a `query` prefill that hides the item leaves the first visible row; later query
   edits keep the reset-to-zero behavior. Consumed at open like `query`, so it has no tree read-back: the
   result's `id`/`index` report what was picked, and `ControlPickUITests` pins that a far-down row is
