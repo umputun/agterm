@@ -79,8 +79,15 @@ public final class WindowLibrary {
     /// "none open"; sites that only compare or reassign the raw id are unaffected either way.
     public var frontmostWindowID: UUID?
 
-    /// Live per-window stores. `@ObservationIgnored`: read imperatively (scene/control), never by a view.
-    @ObservationIgnored private var stores: [UUID: AppStore]
+    /// Live per-window stores. `@ObservationIgnored`: read imperatively (scene/control); a view reaches
+    /// them only through `store(for:)`, `isOpen` and `attentionAcrossWindows`, whose `openSetVersion` read
+    /// carries the observation.
+    @ObservationIgnored var stores: [UUID: AppStore]
+
+    /// Bumped on every open-set change, the observable stand-in for `stores` membership: a background
+    /// window opening or closing changes neither `windows` nor (necessarily) `frontmostWindowID`, so a
+    /// view reading the attention list or a row's eligibility would otherwise keep its stale answer.
+    private(set) var openSetVersion = 0
 
     /// The state directory (AGTERM_STATE_DIR-aware): the index here, per-window files in `windows/`.
     @ObservationIgnored private let directory: URL
@@ -148,7 +155,10 @@ public final class WindowLibrary {
 
     // MARK: - Lookup
 
+    /// The open window's store, nil for a closed or unknown id. Reads `openSetVersion` so a view deciding
+    /// on membership re-renders when a background window opens or closes.
     public func store(for id: UUID?) -> AppStore? {
+        _ = openSetVersion
         guard let id else { return nil }
         return stores[id]
     }
@@ -169,7 +179,7 @@ public final class WindowLibrary {
     }
 
     public func isOpen(_ id: UUID) -> Bool {
-        stores[id] != nil
+        store(for: id) != nil
     }
 
     /// Auto-hide-inactive-sidebars driver: the frontmost open window shows its sidebar, every OTHER open one
@@ -368,6 +378,7 @@ public final class WindowLibrary {
         store.addSession(toWorkspace: workspace.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
         windows.append(info)
         stores[info.id] = store
+        openSetVersion += 1
         // mark frontmost now so the window-keyed seams target it immediately instead of waiting on its
         // first `didBecomeKey` — which loses to the File-menu focus returning to the previous window.
         frontmostWindowID = info.id
@@ -391,6 +402,7 @@ public final class WindowLibrary {
         let snapshot = loadSnapshotForStore(persistence)
         store.restore(from: snapshot, launchRestore: launchRestore)
         stores[id] = store
+        openSetVersion += 1
         let carriedCaptures = snapshot.workspaces.contains { workspace in
             workspace.sessions.contains { $0.foregroundCommand != nil || $0.splitForegroundCommand != nil }
         }
@@ -461,6 +473,7 @@ public final class WindowLibrary {
         }
         store.scheduleTreeChanged()
         stores[id] = nil
+        openSetVersion += 1
         // the persisted `frontmost` is what the next launch's `reopen` fallback picks, and nil there
         // sends it to `windows.first`. Pin unconditionally on the close that empties the open set, so a
         // frontmost left nil or stale by `removeWindow` still reopens the exit window; otherwise hand it
@@ -520,6 +533,7 @@ public final class WindowLibrary {
             WatermarkStorage.removeRenderedText(sessionID: sessionID, stateDir: directory)
         }
         stores[id] = nil
+        openSetVersion += 1
         windows.remove(at: index)
         if frontmostWindowID == id { frontmostWindowID = nil }
         // best-effort: a missing/never-written per-window file is fine to "fail" to remove.
@@ -686,6 +700,7 @@ public final class WindowLibrary {
         store.save()
         windows = [info]
         stores[info.id] = store
+        openSetVersion += 1
         frontmostWindowID = info.id
         saveIndex()
         return true

@@ -216,8 +216,8 @@ struct SessionSwitcherOverlay: View {
 }
 
 /// Carries the measured row-stack height out of the scroll content, so the panel can size to its rows
-/// instead of to the height it is offered.
-private struct RowsHeightKey: PreferenceKey {
+/// instead of to the height it is offered. Shared with the title-bar attention popover.
+struct RowsHeightKey: PreferenceKey {
     static let defaultValue: Double = 0
     static func reduce(value: inout Double, nextValue: () -> Double) { value = max(value, nextValue()) }
 }

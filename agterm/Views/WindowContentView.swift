@@ -87,6 +87,9 @@ struct WindowContentView: View {
     /// Whether the attention popover (the mouse equivalent of the ⌃⇧I attention palette) is shown, anchored
     /// on the title-bar bell. Non-private so the `+RecentSessions` extension's bell/rows can toggle it.
     @State var attentionPopoverShown = false
+    /// The attention popover's measured row-stack height, 0 until its preference lands; the popover sizes to
+    /// it up to a cap so a long cross-window list scrolls instead of running off the screen.
+    @State var attentionRowsHeight: Double = 0
     /// Whether the custom-commands popover (the mouse form of the ⌃⇧O palette) is shown, anchored on its
     /// title-bar button. Non-private so the `+CustomCommands` extension's button/rows can toggle it.
     @State var customCommandsShown = false

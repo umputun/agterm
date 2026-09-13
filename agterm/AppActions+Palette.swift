@@ -225,27 +225,34 @@ extension AppActions {
         return store.navigableSessions.map { paletteItem(for: $0, in: store) }
     }
 
-    /// The window's non-idle sessions as palette items (`.attention` mode), each row carrying the session's
-    /// agent-status glyph. `store.attentionSessions` orders blocked→active→completed, newest status-change
-    /// first, so the empty-query order matches; choosing one selects it. Subtitle as in `paletteSessions()`.
+    /// Every open window's non-idle sessions as palette items (`.attention` mode), in the library's order so
+    /// the empty query keeps it. Enablement asks the OWNING window, not the frontmost one, and the run
+    /// defers `selectAttention` past the palette's close and focus-restore so a raise never competes with
+    /// the dismissal.
     func paletteAttention() -> [PaletteItem] {
-        guard let store else { return [] }
-        return store.attentionSessions.map {
-            paletteItem(for: $0, in: store, status: $0.agentIndicator.status,
-                        statusColor: $0.agentIndicator.color, statusShape: $0.agentIndicator.shape)
+        library.attentionAcrossWindows.map { entry in
+            let windowID = entry.window.id
+            let sessionID = entry.session.id
+            let indicator = entry.session.agentIndicator
+            return PaletteItem(id: sessionID.uuidString, title: entry.session.displayName,
+                               subtitle: library.attentionSubtitle(entry), status: indicator.status,
+                               statusColor: indicator.color, statusShape: indicator.shape,
+                               isEnabled: { [weak self] in
+                self?.canSelectAttention(windowID: windowID, sessionID: sessionID) ?? false
+            },
+                               run: { [weak self] in
+                DispatchQueue.main.async { self?.selectAttention(windowID: windowID, sessionID: sessionID) }
+            })
         }
     }
 
     /// Maps one session to a palette row — title `displayName`, subtitle "`workspace` · `subtitleDetail`", run
-    /// selects it. Shared by `paletteSessions()` (status nil) and `paletteAttention()`, where a set status makes
-    /// `CommandPalette.row` render the leading `StatusGlyph` in the per-call `statusColor`/`statusShape`.
-    private func paletteItem(for session: Session, in store: AppStore, status: AgentStatus? = nil,
-                             statusColor: String? = nil, statusShape: StatusShape? = nil) -> PaletteItem {
+    /// selects it.
+    private func paletteItem(for session: Session, in store: AppStore) -> PaletteItem {
         let id = session.id
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
-                           status: status, statusColor: statusColor, statusShape: statusShape) { [weak self] in
+        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle) { [weak self] in
             guard self?.uiActionsEnabled == true else { return }
             // a palette pick is user-initiated: note activity so it buys the full idle grace before
             // auto-follow can pull the selection back.
