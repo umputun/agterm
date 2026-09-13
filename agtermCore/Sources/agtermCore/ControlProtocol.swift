@@ -286,6 +286,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var query: String?
     /// Whether `pick.open` accepts the current query as a custom result.
     public var allowCustom: Bool?
+    /// The item id `pick.open` highlights on open; distinct from `select`, the Bool behind
+    /// `session.type --select`.
+    public var selection: String?
     /// buttons are the caller-ordered choices for ask.open.
     public var buttons: [ControlAskButton]?
     /// defaultButton identifies the initially highlighted ask button.
@@ -351,7 +354,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
-                query: String? = nil, allowCustom: Bool? = nil,
+                query: String? = nil, allowCustom: Bool? = nil, selection: String? = nil,
                 buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
                 destructiveButton: String? = nil, style: String? = nil, align: String? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
@@ -393,6 +396,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.prompt = prompt
         self.query = query
         self.allowCustom = allowCustom
+        self.selection = selection
         self.buttons = buttons
         self.defaultButton = defaultButton
         self.style = style

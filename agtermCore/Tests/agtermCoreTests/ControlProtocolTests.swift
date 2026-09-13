@@ -127,7 +127,7 @@ struct ControlProtocolTests {
             ControlRequest(
                 cmd: .pickOpen,
                 args: ControlArgs(follow: true, items: items, prompt: "Choose one",
-                                  query: "prefilled", allowCustom: true, window: "window-id")
+                                  query: "prefilled", allowCustom: true, selection: "second", window: "window-id")
             ),
             ControlRequest(cmd: .pickResult, target: "pick-id"),
             ControlRequest(cmd: .pickCancel, target: "pick-id"),

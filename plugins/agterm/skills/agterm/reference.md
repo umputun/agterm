@@ -1000,7 +1000,7 @@ Invalid invocations error (rejected at the CLI and re-checked server-side): `--f
 
 ## pick
 
-`agtermctl pick [--prompt TEXT] [--query TEXT] [--allow-custom] [--follow] [--window W] [--no-block]`
+`agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--follow] [--window W] [--no-block]`
 reads choices from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open
 subcommand, so `agtermctl pick open` is not required. Stdin is read unconditionally, so a call that supplies
 no items needs `< /dev/null` or it blocks.
@@ -1016,11 +1016,15 @@ list it parsed, empty or not.
 
 The query matches item labels only; a subtitle is displayed but never searched, so consequence text on one
 row cannot filter out its safer neighbour. An empty query lists the items in the order the caller supplied
-them, so the first item is the one Return runs on open.
+them, so without `--select` the first item is the one Return runs on open.
 
 `--prompt` sets the query field's placeholder text. `--query` prefills it and filters on open, which ranks
 by match score and so does not preserve the supplied order; the seeded text opens selected, so the first
-keystroke replaces it rather than appending. `--allow-custom` adds a row for a nonmatching
+keystroke replaces it rather than appending. `--select ID` opens with that item highlighted and scrolled
+into view, so Return on an untouched picker runs it and Up/Down read relative to it; the id must name a
+supplied item (`pick select must name an item id` otherwise, an `--allow-custom` empty list included), and a
+`--query` that filters it out leaves the first visible row highlighted. The seed is consumed at open and
+has no tree read-back; the result's `id` and `index` report what was picked. `--allow-custom` adds a row for a nonmatching
 query and returns it as a custom result; with an empty item list that row is the only possible one, and it
 appears as soon as the query is nonblank, prefilled or typed; whitespace and newlines are trimmed first.
 A background `--window` target is raised only with `--follow`. Pick shares its window modal slot with

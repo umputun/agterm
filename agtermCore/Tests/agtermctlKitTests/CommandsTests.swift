@@ -1372,7 +1372,7 @@ struct CommandsTests {
 
     @Test func pickOpenMapsEveryOptionToRequest() throws {
         let command = try Pick.Open.parse([
-            "--prompt", "Choose one", "--query", "on", "--allow-custom", "--follow",
+            "--prompt", "Choose one", "--query", "on", "--allow-custom", "--select", "One", "--follow",
             "--window", "w1", "--no-block"
         ])
         let items = [ControlPickItem(id: "One", label: "One")]
@@ -1380,7 +1380,7 @@ struct CommandsTests {
             cmd: .pickOpen,
             args: ControlArgs(
                 follow: true, items: items, prompt: "Choose one", query: "on",
-                allowCustom: true, window: "w1"
+                allowCustom: true, selection: "One", window: "w1"
             )
         )
 
