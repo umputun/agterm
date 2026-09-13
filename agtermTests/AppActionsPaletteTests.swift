@@ -145,4 +145,48 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(viaPalette.isDisjoint(with: paletteLess), "an action must have exactly one dispatch path")
         XCTAssertEqual(viaPalette.union(paletteLess), Set(BuiltinAction.allCases))
     }
+
+    func testAttentionRowsNameTheirWindowAndFollowItsCover() throws {
+        let front = try XCTUnwrap(library.activeWindowID)
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        let session = try XCTUnwrap(backStore.addSession(toWorkspace: backStore.workspaces[0].id, cwd: NSHomeDirectory(),
+                                                         select: false))
+        backStore.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+
+        let row = try XCTUnwrap(actions.paletteAttention().first { $0.id == session.id.uuidString })
+        XCTAssertEqual(row.subtitle?.hasPrefix("back · "), true)
+        XCTAssertEqual(row.status, .blocked)
+        XCTAssertTrue(row.isEnabled())
+
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(back.id, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(back.id) }
+        zoom.set(.on, target: .session(session.id, .primary))
+        XCTAssertFalse(row.isEnabled(), "the row asks the owning window's cover, not the frontmost one's")
+    }
+
+    func testAnAttentionRowGoesInertWhenItsWindowClosesUnderThePalette() throws {
+        let front = try XCTUnwrap(library.activeWindowID)
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        let session = try XCTUnwrap(backStore.addSession(toWorkspace: backStore.workspaces[0].id, cwd: NSHomeDirectory(),
+                                                         select: false))
+        backStore.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        let row = try XCTUnwrap(actions.paletteAttention().first { $0.id == session.id.uuidString })
+        let invalidated = expectation(description: "the row's enablement is invalidated by the close")
+        withObservationTracking {
+            XCTAssertTrue(row.isEnabled())
+        } onChange: {
+            invalidated.fulfill()
+        }
+
+        library.closeWindow(back.id)
+
+        wait(for: [invalidated], timeout: 1)
+        XCTAssertFalse(row.isEnabled())
+        XCTAssertFalse(row.runIfEnabled())
+    }
 }

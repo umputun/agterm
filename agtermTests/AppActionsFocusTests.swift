@@ -91,4 +91,123 @@ final class AppActionsFocusTests: XCTestCase {
                                              from: Data(contentsOf: stateDir.appendingPathComponent("windows.json")))
         XCTAssertEqual(saved.frontmost, windowB, "and persisted to the index")
     }
+
+    private struct Pair {
+        let library: WindowLibrary
+        let actions: AppActions
+        let front: WindowInfo.ID
+        let back: WindowInfo.ID
+        let backStore: AppStore
+        let hostBack: NSWindow
+    }
+
+    private func makePair() throws -> Pair {
+        let library = WindowLibrary(directory: stateDir)
+        let front = try XCTUnwrap(library.activeWindowID)
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        _ = registerWindow(front)
+        let hostBack = registerWindow(back.id)
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        return Pair(library: library, actions: AppActions(library: library), front: front, back: back.id,
+                    backStore: backStore, hostBack: hostBack)
+    }
+
+    private func addSession(to store: AppStore, _ indicator: AgentIndicator) throws -> Session {
+        let session = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: NSTemporaryDirectory(),
+                                                     select: false))
+        store.setAgentIndicator(indicator, forSession: session.id)
+        return session
+    }
+
+    func testAttentionPickRaisesTheOwningWindowAndSelectsThere() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked))
+        var posted = 0
+        let token = NotificationCenter.default.addObserver(forName: .agtermWindowFrontmostChanged,
+                                                          object: nil, queue: .main) { _ in posted += 1 }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertEqual(pair.library.frontmostWindowID, pair.back)
+        XCTAssertTrue(pair.hostBack.isVisible)
+        XCTAssertEqual(pair.backStore.activeSession?.id, session.id)
+        XCTAssertEqual(posted, 1)
+    }
+
+    func testAttentionPickRevealsAHiddenScratchInTheOtherWindow() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked, statusPane: .scratch))
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertTrue(session.scratchActive)
+    }
+
+    func testAttentionPickHidesAShownScratchCoveringAMainTarget() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked, statusPane: .left))
+        pair.backStore.toggleScratch(session.id)
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertFalse(session.scratchActive)
+    }
+
+    func testAttentionPickKeepsTheCapturedPaneAfterAnAutoResetClears() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore,
+                                     AgentIndicator(status: .completed, autoReset: true, statusPane: .scratch))
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertEqual(session.agentIndicator.status, .idle)
+        XCTAssertTrue(session.scratchActive)
+    }
+
+    func testAttentionPickLeavesAnActiveSessionsPanesAlone() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .active, statusPane: .left))
+        pair.backStore.toggleScratch(session.id)
+        session.splitFocused = true
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertEqual(pair.backStore.activeSession?.id, session.id)
+        XCTAssertTrue(session.scratchActive)
+        XCTAssertTrue(session.splitFocused)
+    }
+
+    func testAttentionPickDropsWhenTheOwningWindowCannotBeRaised() throws {
+        let library = WindowLibrary(directory: stateDir)
+        let front = try XCTUnwrap(library.activeWindowID)
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        _ = registerWindow(front)
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        let before = backStore.activeSession?.id
+        let session = try addSession(to: backStore, AgentIndicator(status: .blocked))
+
+        AppActions(library: library).selectAttention(windowID: back.id, sessionID: session.id)
+
+        XCTAssertEqual(library.frontmostWindowID, front)
+        XCTAssertEqual(backStore.activeSession?.id, before)
+    }
+
+    func testAttentionPickRefusesATargetUnderTerminalZoom() throws {
+        let pair = try makePair()
+        let before = pair.backStore.activeSession?.id
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked, statusPane: .scratch))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(pair.back, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(pair.back) }
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertEqual(pair.library.frontmostWindowID, pair.front)
+        XCTAssertEqual(pair.backStore.activeSession?.id, before)
+        XCTAssertFalse(session.scratchActive)
+    }
 }

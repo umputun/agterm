@@ -1189,8 +1189,9 @@ For agentic attention (waiting on input, or a finished result), prefer `session 
 and OSC 9/777. The two overlap, either can raise an "I need you" signal, but a notification is a
 one-shot banner and badge with no lasting state, while `session status` is a typed, persistent state
 (`active`/`blocked`/`completed`) that stays on the row until acted on, is more precise, and drives the
-attention list, the title-bar bell, and attention navigation (`session go --to next-attention`). Keep
-`notify` for a one-off nudge that needs no follow-up.
+attention list, the title-bar bell, and attention navigation (`session go --to next-attention`). The list
+and the bell span every open window; attention navigation steps within the window. Keep `notify` for a
+one-off nudge that needs no follow-up.
 
 ## font
 

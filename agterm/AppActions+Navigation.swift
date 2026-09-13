@@ -62,7 +62,7 @@ extension AppActions {
     /// `didBecomeKey` and a step from the quick terminal raises with agterm INACTIVE — leaving the id stale,
     /// so every later step recomputes from the same origin. The control twin omits the post below, its
     /// dispatch refreshing that cache inline.
-    private func takeFrontmost(_ id: WindowInfo.ID) {
+    func takeFrontmost(_ id: WindowInfo.ID) {
         guard library.frontmostWindowID != id else { return }
         library.frontmostWindowID = id
         library.saveIndex()

@@ -74,24 +74,26 @@ extension AppStore {
         )
     }
 
-    /// The window-wide non-idle sessions, the single source of truth for the titlebar attention icon and the
-    /// `.attention` palette. Spans ALL workspaces (`workspaces.flatMap(\.sessions)`) and deliberately IGNORES
-    /// the focus/flagged sidebar filter (unlike `navigableSessions`) — the point is window-wide visibility even
-    /// when the sidebar is hidden. Sorted by `attentionRank` ascending (blocked → active → completed) then
-    /// `statusChangedAt` DESCENDING (newest first; a nil stamp sorts last within its rank group).
+    /// The window's non-idle sessions across ALL workspaces, ignoring the focus/flagged sidebar filter
+    /// (unlike `navigableSessions`) so they stay visible with the sidebar hidden. Ordered by `attentionPrecedes`.
     public var attentionSessions: [Session] {
         workspaces.flatMap(\.sessions)
             .filter { $0.agentIndicator.status != .idle }
-            .sorted { lhs, rhs in
-                let lrank = lhs.agentIndicator.status.attentionRank
-                let rrank = rhs.agentIndicator.status.attentionRank
-                if lrank != rrank { return lrank < rrank }
-                switch (lhs.statusChangedAt, rhs.statusChangedAt) {
-                case let (l?, r?): return l > r // newest change first within the rank group
-                case (_?, nil): return true     // a stamped session sorts before an unstamped one
-                case (nil, _?): return false
-                case (nil, nil): return false
-                }
-            }
+            .sorted(by: Self.attentionPrecedes)
+    }
+
+    /// The attention order every attention list shares, so the per-window and cross-window lists cannot
+    /// drift: `attentionRank` ascending (blocked → active → completed), then `statusChangedAt` DESCENDING
+    /// (newest first; a nil stamp sorts last within its rank group).
+    public static func attentionPrecedes(_ lhs: Session, _ rhs: Session) -> Bool {
+        let lrank = lhs.agentIndicator.status.attentionRank
+        let rrank = rhs.agentIndicator.status.attentionRank
+        if lrank != rrank { return lrank < rrank }
+        switch (lhs.statusChangedAt, rhs.statusChangedAt) {
+        case let (l?, r?): return l > r
+        case (_?, nil): return true
+        case (nil, _?): return false
+        case (nil, nil): return false
+        }
     }
 }

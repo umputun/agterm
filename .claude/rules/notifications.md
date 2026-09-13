@@ -146,13 +146,21 @@ paths:
 ## Titlebar attention
 
 - With `attentionButtonEnabled` off by default, `customTitlebar` places a bell after recent sessions and
-  before scratch/split/quick-terminal controls. It derives live state from all non-idle
-  `AppStore.attentionSessions`: empty is disabled `bell` at about 0.35 opacity; non-blocked is enabled
-  `bell` in `chromeText`; any blocked is enabled `bell.fill` in `blockedStatusColor`. There is no count
-  or pulse.
+  before scratch/split/quick-terminal controls. It derives live state from
+  `WindowLibrary.attentionAcrossWindows`, every open window's non-idle sessions in one
+  `AppStore.attentionPrecedes` order: empty is disabled `bell` at about 0.35 opacity; non-blocked is
+  enabled `bell` in `chromeText`; any blocked is enabled `bell.fill` in `blockedStatusColor`. There is no
+  count or pulse. That getter reads a private open-set version the library bumps on every store load and
+  drop, because `stores` is observation-ignored and a background window closing changes neither
+  `windows` nor `frontmostWindowID`.
 - Clicking opens the mouse popover of `SessionPopoverRow`s with `StatusGlyph`, ordered
-  blocked, active, completed; selection reveals the tagged blocked pane. Ctrl-Shift-I, Navigate > Go to
-  Attention, and Show Attention in the palette retain the searchable keyboard surface.
+  blocked, active, completed, subtitled by `attentionSubtitle` (window name first once more than one
+  window is open). Selection closes the popover, then `AppActions.selectAttention` on the next turn:
+  it rechecks the owning window's modal gate, raises it through `WindowRegistry.raise` plus
+  `takeFrontmost` when it is not the active one, and reveals the tagged blocked pane through
+  `revealActiveBlockedPane` exactly as the per-window path does. Ctrl-Shift-I, Navigate > Go to
+  Attention, and Show Attention in the palette retain the searchable keyboard surface over the same
+  list. The Dock menu stays scoped to its captured window.
 - The button ID is `attention-button`, with help and value `none`, `attention`, or `blocked`.
   `WindowContentView` mirrors `GhosttyApp.attentionButtonEnabled` into state and refreshes on
   `.agtermAppearanceChanged`, not `model.settings`. This mouse form of controllable attention selection is

@@ -2980,13 +2980,15 @@
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               When the sidebar is hidden the glyphs go with it, so an optional
               <strong style="color: #e6e1d7">title-bar bell</strong> (Settings ▸ Notifications ▸ Show attention indicator, off by
-              default) reflects the window: dimmed when nothing needs you, plain when a session is active or completed, filled
-              amber when any is blocked. Clicking it opens a <strong style="color: #e6e1d7">popover</strong> of this window's non-idle
-              sessions, sorted blocked → active → completed, that you hover to highlight and click to jump to the session.
+              default) reflects every open window: dimmed when nothing needs you, plain when a session is active or completed,
+              filled amber when any is blocked. Clicking it opens a <strong style="color: #e6e1d7">popover</strong> of the non-idle
+              sessions across all open windows, sorted blocked → active → completed and newest first within each, that you
+              hover to highlight and click to jump to the session. With more than one window open each row names its window,
+              and picking a session in another window brings that window forward first.
               A blocked or completed row also reveals the pane that set its status; an active row keeps the existing pane selection.
               ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>, or the action
               palette's "Show Attention" opens the same <strong style="color: #e6e1d7">attention list</strong> as a searchable
-              palette. Right-clicking agterm's Dock icon exposes the last-active window's same ordered list under
+              palette. Right-clicking agterm's Dock icon exposes the last-active window's own ordered list under
               <strong style="color: #e6e1d7">Sessions Needing Attention</strong>, alongside its recent sessions. Over the control channel,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
               each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> and

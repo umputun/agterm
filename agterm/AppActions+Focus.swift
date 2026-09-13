@@ -139,6 +139,27 @@ extension AppActions {
         }
     }
 
+    /// Whether an attention row can be acted on right now: its window open and not under a cover, its
+    /// session still there. Asked at render and again at the pick, since a row outlives all three.
+    func canSelectAttention(windowID: WindowInfo.ID, sessionID: UUID) -> Bool {
+        uiActionsEnabled(for: windowID) && library.store(for: windowID)?.session(withID: sessionID) != nil
+    }
+
+    /// Select a row of the cross-window attention list and reveal its pane, raising its window first when it
+    /// is not the active one so `store` resolves there. A raise that fails (the window still attaching)
+    /// drops the pick as a window step does.
+    func selectAttention(windowID: WindowInfo.ID, sessionID: UUID) {
+        guard canSelectAttention(windowID: windowID, sessionID: sessionID),
+              let target = library.store(for: windowID) else { return }
+        if windowID != library.activeWindowID {
+            guard WindowRegistry.shared.raise(windowID) else { return }
+            takeFrontmost(windowID)
+        }
+        target.noteUserActivity()
+        let indicator = target.selectSession(sessionID)
+        revealActiveBlockedPane(captured: indicator)
+    }
+
     /// Front and focus the window a recent-closed reopen restored into. The id is published here rather
     /// than left to the key-window report, which `focusActiveSession` would otherwise outrun; publishing it
     /// also has to save and post, because `WindowAccessor.reportFrontmost` gates both on the id having
