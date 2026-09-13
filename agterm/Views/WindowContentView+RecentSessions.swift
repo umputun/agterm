@@ -147,28 +147,46 @@ extension WindowContentView {
     /// The attention popover body: every open window's sessions needing attention as full-row
     /// `SessionPopoverRow`s with a leading status glyph — the mouse form of the ⌃⇧I attention palette. A row
     /// whose window sits under a cover renders disabled, as the palette's does, rather than dismissing into
-    /// a no-op.
+    /// a no-op. The rows are measured so short lists stay compact and long lists scroll at
+    /// `attentionRowsCap`, for the reason `measuredPanelHeight` gives.
     private var attentionPopover: some View {
-        VStack(spacing: 2) {
-            ForEach(library.attentionAcrossWindows) { entry in
-                SessionPopoverRow(
-                    title: entry.session.displayName,
-                    subtitle: library.attentionSubtitle(entry),
-                    status: entry.session.agentIndicator.status,
-                    statusColorHex: entry.session.agentIndicator.color,
-                    statusShape: entry.session.agentIndicator.shape,
-                    foreground: chromeText,
-                    hoverColor: popoverHoverColor,
-                    accessibilityID: "attention-session-row",
-                    isEnabled: actions.canSelectAttention(windowID: entry.window.id, sessionID: entry.session.id)
-                ) { selectAttention(entry) }
+        let metrics = GhosttyApp.shared.interfaceMetrics
+        return ScrollView {
+            VStack(spacing: 2) {
+                ForEach(library.attentionAcrossWindows) { entry in
+                    SessionPopoverRow(
+                        title: entry.session.displayName,
+                        subtitle: library.attentionSubtitle(entry),
+                        status: entry.session.agentIndicator.status,
+                        statusColorHex: entry.session.agentIndicator.color,
+                        statusShape: entry.session.agentIndicator.shape,
+                        foreground: chromeText,
+                        hoverColor: popoverHoverColor,
+                        accessibilityID: "attention-session-row",
+                        isEnabled: actions.canSelectAttention(windowID: entry.window.id, sessionID: entry.session.id)
+                    ) { selectAttention(entry) }
+                }
             }
+            .background(
+                GeometryReader { rows in
+                    Color.clear.preference(key: RowsHeightKey.self, value: rows.size.height)
+                }
+            )
+        }
+        .frame(height: metrics.measuredPanelHeight(rowsHeight: attentionRowsHeight,
+                                                   maxRowsHeight: metrics.scaled(Self.attentionRowsCap)).map { CGFloat($0) })
+        .scrollBounceBehavior(.basedOnSize)
+        .onPreferenceChange(RowsHeightKey.self) { height in
+            attentionRowsHeight = height
         }
         .padding(6)
-        .frame(width: GhosttyApp.shared.interfaceMetrics.scaled(320))
+        .frame(width: metrics.scaled(320))
         .background(terminalColor)
         .presentationBackground(terminalColor)
     }
+
+    /// The attention popover's row-stack cap at the default interface size, about ten rows.
+    static let attentionRowsCap: Double = 440
 
     /// Commit an attention popover row click. The popover closes first and the select runs on the next turn,
     /// so a raise of another window never competes with this popover's dismissal; the action rechecks the
