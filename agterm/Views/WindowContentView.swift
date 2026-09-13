@@ -502,8 +502,8 @@ struct WindowContentView: View {
         GhosttyApp.shared.hiddenInterfaceElements
     }
 
-    /// Whether a title-bar / sidebar-footer chrome element should be drawn. Everything is shown unless the
-    /// user hid it in Settings ▸ Interface.
+    /// Whether a title-bar / sidebar-footer chrome element should be drawn, per Settings ▸ Interface and
+    /// each element's `hiddenByDefault`.
     func shows(_ element: InterfaceElement) -> Bool {
         !hiddenInterfaceElements.contains(element)
     }

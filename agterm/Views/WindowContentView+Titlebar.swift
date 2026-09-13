@@ -3,16 +3,16 @@ import AppKit
 import SwiftUI
 
 /// The custom title-bar row and its label/buttons, split out of `WindowContentView` for the file size limit.
-/// Owns the title text (session / window name, gated by the Interface toggles), the row layout, and the
+/// Owns the title text (workspace / session / window name, gated by the Interface toggles), the row layout, and the
 /// per-session chrome buttons; recent-sessions / attention / dashboard buttons live in their own extensions.
 extension WindowContentView {
     /// The window title at the terminal's leading edge, shared with the zoom titlebar. A child view, so its
     /// session-name reads register on its own body and an OSC title tick never invalidates this one (#516).
     var titleLabel: TitlebarLabel {
         TitlebarLabel(store: store, library: library, windowID: windowID, toolbarMode: toolbarMode,
-                      chromeText: chromeText, showsSessionName: shows(.sessionName),
-                      showsWindowName: shows(.windowName), showsContext: shows(.sessionContext),
-                      showsRemoteHost: shows(.remoteHost))
+                      chromeText: chromeText, showsWorkspaceName: shows(.workspaceName),
+                      showsSessionName: shows(.sessionName), showsWindowName: shows(.windowName),
+                      showsContext: shows(.sessionContext), showsRemoteHost: shows(.remoteHost))
     }
 
     /// Feeds the OS window title to `WindowAccessor` from its own body, for the same reason as `titleLabel`.
@@ -220,7 +220,7 @@ struct WindowTitleSync: View {
     }
 }
 
-/// Both title-bar lines: the session / window name, and in normal mode the session's `context` when one is
+/// Both title-bar lines: the workspace / session / window name, and in normal mode the session's `context` when one is
 /// set and shown, else the focused pane's `subtitleDetail`. The Interface toggles are resolved into `Parts`
 /// here, so `TitlebarComposition` never sees the settings.
 struct TitlebarLabel: View {
@@ -229,6 +229,7 @@ struct TitlebarLabel: View {
     let windowID: WindowInfo.ID
     let toolbarMode: ToolbarMode
     let chromeText: Color
+    let showsWorkspaceName: Bool
     let showsSessionName: Bool
     let showsWindowName: Bool
     let showsContext: Bool
@@ -274,8 +275,13 @@ struct TitlebarLabel: View {
     }
 
     private var composition: TitlebarComposition {
-        TitlebarComposition.compose(
+        // the workspace is looked up from the ACTIVE SESSION, not `currentWorkspaceID`: selecting an
+        // empty workspace makes it current while the previous session stays selected, and the title
+        // names the session's home.
+        let workspace = showsWorkspaceName ? store.activeSession.flatMap { store.workspace(forSession: $0.id) } : nil
+        return TitlebarComposition.compose(
             TitlebarComposition.Parts(
+                workspaceName: workspace?.name,
                 sessionName: showsSessionName ? (store.activeSession?.displayName ?? "Agterm") : nil,
                 windowName: showsWindowName ? library.customWindowName(for: windowID) : nil,
                 context: showsContext ? store.activeSession?.context : nil,

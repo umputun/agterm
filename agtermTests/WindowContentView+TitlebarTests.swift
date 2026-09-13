@@ -109,6 +109,37 @@ final class WindowContentViewTitlebarTests: XCTestCase {
         }
     }
 
+    func testWorkspaceNameLeadsTheTitleAndFollowsTheActiveSession() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        store.renameWorkspace(workspace, to: "backend")
+        store.sidebarVisible = false
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/repo", name: "build"))
+        let scale = Int(window.backingScaleFactor)
+        let titleStart = 110 * scale
+        let titleEnd = (640 - 225) * scale
+        let shown = try renderTitlebar(mode: .compact, width: 640)
+        let hidden = try renderTitlebar(mode: .compact, width: 640, hidden: [.workspaceName])
+        XCTAssertGreaterThan(differentPixels(shown, hidden, from: titleStart, to: titleEnd), 20)
+        XCTAssertEqual(differentPixels(shown, hidden, from: titleEnd, to: 640 * scale), 0)
+
+        store.renameWorkspace(workspace, to: "frontend")
+        let renamed = try renderTitlebar(mode: .compact, width: 640)
+        XCTAssertGreaterThan(differentPixels(shown, renamed, from: titleStart, to: titleEnd), 20)
+
+        let other = store.addWorkspace(name: "ops", revealNewWorkspace: false)
+        store.moveSession(session.id, toWorkspace: other.id)
+        XCTAssertEqual(store.activeSession?.id, session.id)
+        let moved = try renderTitlebar(mode: .compact, width: 640)
+        XCTAssertGreaterThan(differentPixels(renamed, moved, from: titleStart, to: titleEnd), 20)
+
+        store.selectSession(nil)
+        let noSession = try renderTitlebar(mode: .compact, width: 640)
+        let noSessionHidden = try renderTitlebar(mode: .compact, width: 640, hidden: [.workspaceName])
+        XCTAssertEqual(differentPixels(noSession, noSessionHidden, from: titleStart, to: titleEnd), 0)
+        attach(moved, name: "workspace-compact-640")
+    }
+
     func testRemoteCloudSplitWeightRemainsVisibleAtSidebarSize() throws {
         let store = try XCTUnwrap(library.activeStore)
         let coordinator = WorkspaceSidebar.Coordinator(store: store, actions: AppActions(library: library))

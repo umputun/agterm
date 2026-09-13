@@ -628,7 +628,7 @@ struct AppSettingsTests {
         let settings = AppSettings()
         #expect(settings.hiddenInterfaceElements == nil)
         #expect(settings.shownInterfaceElements == nil)
-        #expect(settings.resolvedHiddenInterfaceElements == [.customCommands])
+        #expect(settings.resolvedHiddenInterfaceElements == [.customCommands, .workspaceName])
         for element in InterfaceElement.allCases {
             #expect(settings.isInterfaceElementHidden(element) == element.hiddenByDefault)
         }
@@ -651,6 +651,20 @@ struct AppSettingsTests {
         #expect(hidden.isInterfaceElementHidden(.remoteHost))
         #expect(!hidden.isInterfaceElementHidden(.sessionName))
         #expect(!AppSettings(hiddenInterfaceElements: ["sessionName"]).isInterfaceElementHidden(.remoteHost))
+    }
+
+    @Test func workspaceNameIsAnOptInTitleBarInterfaceElement() throws {
+        #expect(InterfaceElement.workspaceName.section == .titleBar)
+        #expect(InterfaceElement.workspaceName.displayName == "Workspace name")
+        #expect(InterfaceElement.workspaceName.hiddenByDefault)
+        #expect(AppSettings().isInterfaceElementHidden(.workspaceName))
+        #expect(AppSettings(hiddenInterfaceElements: ["workspaceName"]).isInterfaceElementHidden(.workspaceName))
+        let shown = AppSettings(shownInterfaceElements: ["workspaceName"])
+        #expect(!shown.isInterfaceElementHidden(.workspaceName))
+        #expect(shown.isInterfaceElementHidden(.customCommands))
+        #expect(!shown.isInterfaceElementHidden(.sessionName))
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(shown))
+        #expect(!decoded.isInterfaceElementHidden(.workspaceName))
     }
 
     @Test func workspaceAddSessionIsADistinctSidebarInterfaceElement() {
@@ -685,18 +699,18 @@ struct AppSettingsTests {
     @Test func customCommandsIsAHiddenByDefaultTitleBarInterfaceElement() throws {
         #expect(InterfaceElement.customCommands.section == .titleBar)
         #expect(InterfaceElement.customCommands.displayName == "Custom commands")
-        #expect(InterfaceElement.allCases.filter(\.hiddenByDefault) == [.customCommands])
+        #expect(InterfaceElement.allCases.filter(\.hiddenByDefault) == [.workspaceName, .customCommands])
         let shown = AppSettings(shownInterfaceElements: ["customCommands"])
         #expect(!shown.isInterfaceElementHidden(.customCommands))
         #expect(!shown.isInterfaceElementHidden(.dashboard))
-        #expect(shown.resolvedHiddenInterfaceElements.isEmpty)
+        #expect(shown.resolvedHiddenInterfaceElements == [.workspaceName])
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(shown))
         #expect(decoded == shown)
         // the shown list alone governs a hidden-by-default element; an unknown name there is dropped too.
         let hidden = AppSettings(hiddenInterfaceElements: ["customCommands", "dashboard"], shownInterfaceElements: ["teleporter"])
         #expect(hidden.isInterfaceElementHidden(.customCommands))
         #expect(hidden.isInterfaceElementHidden(.dashboard))
-        #expect(hidden.resolvedHiddenInterfaceElements == [.customCommands, .dashboard])
+        #expect(hidden.resolvedHiddenInterfaceElements == [.workspaceName, .customCommands, .dashboard])
     }
 
     @Test func statusResetDefaultsToFirstKeyAndResolvesKnownRawValues() throws {
@@ -718,7 +732,7 @@ struct AppSettingsTests {
             AppSettings.self,
             from: Data(#"{ "hiddenInterfaceElements": ["scratch", "teleporter"], "fontSize": 16 }"#.utf8))
         #expect(decoded.fontSize == 16)
-        #expect(decoded.resolvedHiddenInterfaceElements == [.scratch, .customCommands])
+        #expect(decoded.resolvedHiddenInterfaceElements == [.workspaceName, .scratch, .customCommands])
         #expect(decoded.isInterfaceElementHidden(.scratch))
     }
 

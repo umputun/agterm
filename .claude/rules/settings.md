@@ -232,12 +232,18 @@ paths:
 - `confirmCloseSession` defaults off and is read on demand, without a mirror. Prompt only for GUI active
   close and sidebar row close; skip under XCUITest. Control `session.close` must never prompt.
 - `hiddenInterfaceElements` stores raw names and preserves unknown values while toggling known ones; empty
-  maps nil. Titlebar cases are `sidebarToggle`, `sessionName`, `windowName`, `remoteHost`, `sessionContext`,
-  `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`; sidebar cases are
-  `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level `workspaceAddSession`.
-  A `hiddenByDefault` case (`customCommands` alone) is governed by `shownInterfaceElements` instead, the
-  same shape with the opposite sense, and its name in the hidden list is ignored. Attention has its
-  separate default-off setting.
+  maps nil. Titlebar cases are `sidebarToggle`, `workspaceName`, `sessionName`, `windowName`, `remoteHost`,
+  `sessionContext`, `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`;
+  sidebar cases are `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level
+  `workspaceAddSession`.
+  A `hiddenByDefault` case (`workspaceName` and `customCommands`) is governed by `shownInterfaceElements`
+  instead, the same shape with the opposite sense, and its name in the hidden list is ignored. Attention
+  has its separate default-off setting.
+  `workspaceName` leads the identity as `workspace — session — window`, looked up from the ACTIVE SESSION
+  (`workspace(forSession:)`, never `currentWorkspaceID`, which an empty workspace can hold while the old
+  session stays selected). `TitlebarComposition` caps it at `workspaceNameLimit` characters with an
+  ellipsis, display only, because the identity is one tail-truncated text and an uncapped prefix would
+  push the session name off the bar. The OS window title (`WindowTitleSync`) does not carry it.
 - `InterfaceElement` owns section/display name; the tab iterates `allCases`. Mutate the raw set, then push
   resolved known values to `GhosttyApp`. SwiftUI gates with `shows(_:)`; the AppKit row "+" checks the
   mirror on hover. Titlebar group dividers appear only between adjacent groups that each retain at least
