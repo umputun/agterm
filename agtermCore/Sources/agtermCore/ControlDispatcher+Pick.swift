@@ -30,13 +30,20 @@ extension ControlDispatcher {
             }) else {
                 return ControlResponse(ok: false, error: "item text must not contain control characters")
             }
+            // checked against the caller's items, not the rows a `query` prefill leaves visible: a hidden
+            // selection falls back to the first visible row in the palette rather than refusing the open
+            let selection = request.args?.selection
+            if let selection, !items.contains(where: { $0.id == selection }) {
+                return ControlResponse(ok: false, error: "pick select must name an item id")
+            }
 
             let pick = PendingPick(
                 id: UUID().uuidString,
                 items: items,
                 prompt: request.args?.prompt,
                 query: request.args?.query,
-                allowCustom: allowCustom
+                allowCustom: allowCustom,
+                selection: selection
             )
             return actions.openPick(
                 pick,

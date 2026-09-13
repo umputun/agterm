@@ -212,6 +212,44 @@ struct ControlDispatcherPickTests {
         #expect(withoutQuery.query == nil)
     }
 
+    @Test func openPassesSelectionThroughAndLeavesItNilWhenOmitted() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let items = [ControlPickItem(id: "one", label: "One"), ControlPickItem(id: "two", label: "Two")]
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .pickOpen, args: ControlArgs(items: items, selection: "two")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .pickOpen, args: ControlArgs(items: items)))
+
+        #expect(actions.calls.count == 2)
+        guard case let .pickOpen(seeded, _, _) = try #require(actions.calls.first),
+              case let .pickOpen(omitted, _, _) = try #require(actions.calls.last) else {
+            Issue.record("expected two pick.open host calls")
+            return
+        }
+        #expect(seeded.selection == "two")
+        #expect(omitted.selection == nil)
+    }
+
+    @Test func openRejectsASelectionNamingNoItemWithoutCallingHost() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let items = [ControlPickItem(id: "one", label: "One")]
+
+        let unknown = await dispatcher.dispatch(ControlRequest(
+            cmd: .pickOpen,
+            args: ControlArgs(items: items, selection: "two")
+        ))
+        let itemless = await dispatcher.dispatch(ControlRequest(
+            cmd: .pickOpen,
+            args: ControlArgs(items: [], allowCustom: true, selection: "one")
+        ))
+
+        let expected = ControlResponse(ok: false, error: "pick select must name an item id")
+        #expect(unknown == expected)
+        #expect(itemless == expected, "a text prompt has no rows to open on")
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func resultRoutesTargetAndReturnsNestedPickResponse() async {
         let actions = MockControlActions()
         let pick = ControlPickResult(result: .picked, id: "two", label: "Two", index: 1)

@@ -8,14 +8,17 @@ public struct PendingPick: Equatable, Sendable {
     /// Text the query field opens with; a non-empty value filters immediately.
     public let query: String?
     public let allowCustom: Bool
+    /// The item id the picker opens highlighted on, already validated against `items`.
+    public let selection: String?
 
     public init(id: String, items: [ControlPickItem], prompt: String? = nil, query: String? = nil,
-                allowCustom: Bool = false) {
+                allowCustom: Bool = false, selection: String? = nil) {
         self.id = id
         self.items = items
         self.prompt = prompt
         self.query = query
         self.allowCustom = allowCustom
+        self.selection = selection
     }
 }
 

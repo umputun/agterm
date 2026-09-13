@@ -1951,10 +1951,16 @@
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               Typing matches item labels only; a subtitle is shown but never searched, so consequence text on one row cannot filter
-              out its safer neighbour. An empty query lists the items in the order they were supplied, so the caller's first item is
-              the one Return runs on open.
+              out its safer neighbour. An empty query lists the items in the order they were supplied, so without
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--select</span> the caller's first item
+              is the one Return runs on open.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query TEXT</span> prefills the field
-              and filters immediately, which ranks by match score and therefore does not preserve that order. With
+              and filters immediately, which ranks by match score and therefore does not preserve that order.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--select ID</span> opens with that item
+              highlighted and scrolled into view, so a picker listing windows or sessions can start on the current one and
+              Return on an untouched list stays put; a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query</span> that filters the item
+              out leaves the first visible row highlighted. With
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--allow-custom</span> the item list may
               be empty, which turns the picker into a plain text prompt: the custom row appears as soon as the query is nonblank,
               whether prefilled by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query</span> or
