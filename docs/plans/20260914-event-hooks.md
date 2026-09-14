@@ -341,17 +341,17 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlEventProtocolTests.swift` (`Command` and `ControlResult` round trips)
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] write failing tests: `Command` round-trips the two raw values; `ControlResult.hooks` encodes with nil
+- [x] write failing tests: `Command` round-trips the two raw values; `ControlResult.hooks` encodes with nil
       omission
-- [ ] write failing dispatcher tests: both commands reach `ControlActions.reloadHooks()` / `listHooks()`,
+- [x] write failing dispatcher tests: both commands reach `ControlActions.reloadHooks()` / `listHooks()`,
       reject a target and `--window`, never fall through to the nil switch; a conformer relying on the
       defaults gets the unsupported error
-- [ ] write failing CLI tests: `agtermctl hooks reload` and `hooks list` build the right requests; `list`
+- [x] write failing CLI tests: `agtermctl hooks reload` and `hooks list` build the right requests; `list`
       prints a human table (kind, command, running, pending, dropped, last failure) and `--json` passes the
       result through; error text on a failed response
-- [ ] implement the `Command` cases, `ControlResult.hooks`, the dispatcher extension, `ControlActions`
+- [x] implement the `Command` cases, `ControlResult.hooks`, the dispatcher extension, `ControlActions`
       requirements with defaults, CLI subcommands
-- [ ] run the changed test classes; must pass before task 5
+- [x] run the changed test classes; must pass before task 5
 
 ### Task 5: Process runner in the app target
 

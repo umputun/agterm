@@ -18,6 +18,14 @@ public extension ControlActions {
 
     /// Defaults keep outside conformers building when the shared protocol grows. Mac-only commands refuse
     /// by name rather than answering an empty success; compatibility overloads delegate to the older form.
+    func reloadHooks() -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.reload"))
+    }
+
+    func listHooks() -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.list"))
+    }
+
     func readRestoreMode() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("restore.mode"))
     }

@@ -850,6 +850,39 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.keymapList])
     }
 
+    @Test func hooksReloadAndListRouteToActionsAndKeepPayloads() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let payload = ControlHooks(path: "/tmp/hooks.conf", diagnostics: [],
+                                   hooks: [ControlHookEntry(kind: "status", command: "~/s.sh", line: 1)])
+        actions.nextHooksReloadResponse = ControlResponse(ok: true, result: ControlResult(count: 1))
+        actions.nextHooksListResponse = ControlResponse(ok: true, result: ControlResult(hooks: payload))
+
+        let reload = await dispatcher.dispatch(ControlRequest(cmd: .hooksReload))
+        let list = await dispatcher.dispatch(ControlRequest(cmd: .hooksList))
+
+        #expect(reload == ControlResponse(ok: true, result: ControlResult(count: 1)))
+        #expect(list == ControlResponse(ok: true, result: ControlResult(hooks: payload)))
+        #expect(actions.calls == [.hooksReload, .hooksList])
+    }
+
+    @Test func hooksCommandsRefuseATargetOrWindowBeforeAnyAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let targeted = await dispatcher.dispatch(ControlRequest(cmd: .hooksReload, target: "active"))
+        let windowed = await dispatcher.dispatch(ControlRequest(cmd: .hooksList, args: ControlArgs(window: "w1")))
+
+        #expect(targeted == ControlResponse(ok: false, error: "hooks.reload takes no target or --window"))
+        #expect(windowed == ControlResponse(ok: false, error: "hooks.list takes no target or --window"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func unsupportedMessageNamesTheHooksCommand() {
+        #expect(ControlActionsUnsupported.message("hooks.reload") == "hooks.reload is not supported on this platform")
+        #expect(ControlActionsUnsupported.message("hooks.list") == "hooks.list is not supported on this platform")
+    }
+
     @Test func versionRoutesToActionsAndKeepsTheIdentity() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

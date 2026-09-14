@@ -66,6 +66,9 @@ public protocol ControlActions {
     func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse
     func reloadKeymap() -> ControlResponse
     func listKeymap() -> ControlResponse
+    /// `hooks.reload` / `hooks.list`, app-global like the keymap pair.
+    func reloadHooks() -> ControlResponse
+    func listHooks() -> ControlResponse
     func appIdentity() -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
@@ -203,6 +206,8 @@ public struct ControlDispatcher {
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach:
             return await dispatchZmxCommand(request)
+        case .hooksReload, .hooksList:
+            return dispatchHooksCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,

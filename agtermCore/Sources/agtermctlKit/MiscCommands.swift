@@ -35,6 +35,36 @@ struct Keymap: ParsableCommand {
     }
 }
 
+// MARK: - hooks
+
+struct Hooks: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Event hook commands.",
+        subcommands: [Reload.self, List.self]
+    )
+
+    struct Reload: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Re-read and apply hooks.conf (prints the diagnostic count).")
+        // app-global like the keymap commands, so no `--window`.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .hooksReload) }
+    }
+
+    struct List: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Show every hook with its running child, queue depth, dropped count and last failure.",
+            discussion: "One row per `on <kind> <shell...>` line in file order, then any hook removed from the file "
+                + "whose child is still running, marked retired. `running` is the child's pid and elapsed seconds "
+                + "while a hook is busy; `pending` is how many events wait behind it and `dropped` how many the "
+                + "bounded queue discarded; `last failure` stays until the hook's next clean run (a reload keeps it)."
+        )
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .hooksList) }
+    }
+}
+
 // MARK: - config
 
 struct Config: ParsableCommand {

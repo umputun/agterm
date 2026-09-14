@@ -47,6 +47,8 @@ final class MockControlActions: ControlActions {
         case font(target: String?, window: String?, pane: StatusPane?, String)
         case keymapReload
         case keymapList
+        case hooksReload
+        case hooksList
         case version
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
@@ -130,6 +132,8 @@ final class MockControlActions: ControlActions {
     var nextFontResponse = ControlResponse(ok: true)
     var nextNotifyResponse = ControlResponse(ok: true)
     var nextKeymapListResponse = ControlResponse(ok: true)
+    var nextHooksReloadResponse = ControlResponse(ok: true)
+    var nextHooksListResponse = ControlResponse(ok: true)
     var nextVersionResponse = ControlResponse(ok: true)
     var nextKeymapResponse = ControlResponse(ok: true)
     var nextConfigResponse = ControlResponse(ok: true)
@@ -392,6 +396,16 @@ final class MockControlActions: ControlActions {
     func listKeymap() -> ControlResponse {
         calls.append(.keymapList)
         return nextKeymapListResponse
+    }
+
+    func reloadHooks() -> ControlResponse {
+        calls.append(.hooksReload)
+        return nextHooksReloadResponse
+    }
+
+    func listHooks() -> ControlResponse {
+        calls.append(.hooksList)
+        return nextHooksListResponse
     }
 
     func appIdentity() -> ControlResponse {

@@ -208,6 +208,9 @@ struct SocketClient {
         if let keymap = response.result?.keymap {
             return formatKeymap(keymap)
         }
+        if let hooks = response.result?.hooks {
+            return formatHooks(hooks)
+        }
         if let remote = response.result?.remote {
             return formatRemoteTree(remote)
         }
@@ -337,6 +340,31 @@ struct SocketClient {
         guard sync else { return body }
         let header = "syncing with macOS appearance — light: \(light ?? "default ghostty"), dark: \(dark ?? "default ghostty")"
         return header + "\n" + body
+    }
+
+    /// Render the `hooks.list` payload: one row per hook in file order, then parse diagnostics.
+    static func formatHooks(_ hooks: ControlHooks) -> String {
+        var lines = ["hooks: \(hooks.path)"]
+        if hooks.hooks.isEmpty {
+            lines.append("  (no hooks)")
+        }
+        for hook in hooks.hooks {
+            var row = "  line \(hook.line): on \(hook.kind) \(hook.command)"
+            if let pid = hook.runningPid {
+                row += "  running pid \(pid)"
+                if let elapsed = hook.elapsedSeconds { row += " for \(Int(elapsed))s" }
+            }
+            if hook.pending > 0 { row += "  pending \(hook.pending)" }
+            if hook.dropped > 0 { row += "  dropped \(hook.dropped)" }
+            if let failure = hook.lastFailure { row += "  last failure: \(failure)" }
+            if hook.retired == true { row += "  (retired, removed from the file)" }
+            lines.append(row)
+        }
+        if !hooks.diagnostics.isEmpty {
+            lines.append(contentsOf: ["", "diagnostics:"])
+            lines.append(contentsOf: hooks.diagnostics.map { "    line \($0.line): \($0.message)" })
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Render the `keymap.list` payload as sections: the resolved built-ins, then custom commands, parse

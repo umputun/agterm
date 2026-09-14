@@ -1629,6 +1629,16 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["keymap", "list", "--window", "w1"]) }
     }
 
+    @Test func hooksReloadAndList() throws {
+        #expect(try request(["hooks", "reload"]) == ControlRequest(cmd: .hooksReload))
+        #expect(try request(["hooks", "list"]) == ControlRequest(cmd: .hooksList))
+    }
+
+    @Test func hooksCommandsRejectWindowSelector() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["hooks", "reload", "--window", "w1"]) }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["hooks", "list", "--window", "w1"]) }
+    }
+
     @Test func configReload() throws {
         #expect(try request(["config", "reload"]) == ControlRequest(cmd: .configReload))
     }

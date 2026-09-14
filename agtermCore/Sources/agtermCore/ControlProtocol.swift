@@ -77,6 +77,8 @@ public enum Command: String, Codable, Sendable {
     case windowMinimize = "window.minimize"
     case keymapReload = "keymap.reload"
     case keymapList = "keymap.list"
+    case hooksReload = "hooks.reload"
+    case hooksList = "hooks.list"
     case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
@@ -512,6 +514,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var events: ControlEventBatch?
     /// The resolved keymap plus the live menu key equivalents, for `keymap.list`.
     public var keymap: ControlKeymap?
+    /// The hook definitions and their live state, for `hooks.list`.
+    public var hooks: ControlHooks?
     /// The current or terminal picker outcome for `pick.result`.
     public var pick: ControlPickResult?
     /// ask is the current or terminal dialog outcome for ask.result.
@@ -536,7 +540,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sidebarWidth: Double? = nil, pane: String? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
-                events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
+                events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil, hooks: ControlHooks? = nil,
                 pick: ControlPickResult? = nil, ask: ControlAskResult? = nil, cursor: ControlCursor? = nil,
                 app: AppIdentity? = nil, restore: ControlRestoreStatus? = nil,
                 zmx: ControlZmxInventory? = nil, remote: ControlRemoteTree? = nil,
@@ -565,6 +569,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.dark = dark
         self.events = events
         self.keymap = keymap
+        self.hooks = hooks
         self.pick = pick
         self.ask = ask
         self.cursor = cursor

@@ -139,6 +139,34 @@ struct SocketClientTests {
         }
     }
 
+    @Test func formatsHooksRowsAndDiagnostics() {
+        let payload = ControlHooks(
+            path: "/tmp/hooks.conf",
+            diagnostics: [ControlKeymapDiagnostic(line: 9, message: "unknown verb 'map'")],
+            hooks: [
+                ControlHookEntry(kind: "status", command: "~/s.sh", line: 1),
+                ControlHookEntry(kind: "notify", command: "echo x | cat", line: 4, runningPid: 4242,
+                                 elapsedSeconds: 12.7, pending: 3, dropped: 1, lastFailure: "exit 2"),
+                ControlHookEntry(kind: "status", command: "~/old.sh", line: 2, runningPid: 77, elapsedSeconds: 0.2,
+                                 retired: true),
+            ])
+
+        let out = SocketClient.formatHooks(payload)
+
+        #expect(out == """
+        hooks: /tmp/hooks.conf
+          line 1: on status ~/s.sh
+          line 4: on notify echo x | cat  running pid 4242 for 12s  pending 3  dropped 1  last failure: exit 2
+          line 2: on status ~/old.sh  running pid 77 for 0s  (retired, removed from the file)
+
+        diagnostics:
+            line 9: unknown verb 'map'
+        """)
+        #expect(SocketClient.formatHooks(ControlHooks(path: "/p", diagnostics: [], hooks: [])) == "hooks: /p\n  (no hooks)")
+        let response = ControlResponse(ok: true, result: ControlResult(hooks: payload))
+        #expect(SocketClient.formatResponse(response, json: false).hasPrefix("hooks: /tmp/hooks.conf"))
+    }
+
     @Test func formatsKeymapWithEveryActionAndTheLiveMenu() {
         let keymap = Keymap(builtinOverrides: [.closeSession: Chord(mods: [.command], key: "e")], commands: [])
         let payload = ControlKeymap.project(
