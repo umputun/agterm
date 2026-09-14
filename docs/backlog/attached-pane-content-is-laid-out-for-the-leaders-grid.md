@@ -4,7 +4,8 @@ added: 2026-09-10
 ---
 # attached pane content is laid out for the leader's grid
 
-Pinned zmx (`fb1b6b6`) keeps one leader per pane and sizes the daemon pty to the leader alone. Once
+zmx at `fb1b6b6`, the pin when this was written and the revision every line number below refers to,
+keeps one leader per pane and sizes the daemon pty to the leader alone. Once
 another Mac attaches and types, its client leads: the daemon resizes to that grid and broadcasts the
 program's redraw unchanged to every client, so this Mac's libghostty core, still at its own grid, holds
 rows laid out for the other one. Followers get no size or role message (`src/loop.zig:806-812` sends
