@@ -258,18 +258,18 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlEventProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/EventCommandsTests.swift`
 
-- [ ] write failing tests: `status` event carries `previous` equal to the prior status; a shape-only change
+- [x] write failing tests: `status` event carries `previous` equal to the prior status; a shape-only change
       emits `previous == status`; a refused write emits nothing
-- [ ] write failing tests: `pane.split` emits `shown`/`hidden` from `setSplitVisibility`, `closeSplit`,
+- [x] write failing tests: `pane.split` emits `shown`/`hidden` from `setSplitVisibility`, `closeSplit`,
       `closePrimaryPane`; `closeSplitPane` emits exactly once; nothing for an axis change while shown, a
       repeated set-to-shown, or teardown/promotion of an already hidden split
-- [ ] write failing tests: `pane.scratch` emits from `toggleScratch` and `closeScratch`; nothing on
+- [x] write failing tests: `pane.scratch` emits from `toggleScratch` and `closeScratch`; nothing on
       `closeScratch` with no surface or on a scratch shell exit while already hidden
-- [ ] write failing tests: `ControlEventKind` round-trips the two new raw values; `events.read --kind`
+- [x] write failing tests: `ControlEventKind` round-trips the two new raw values; `events.read --kind`
       validation accepts them; `EventFormatter.human` renders both kinds and `previous`
-- [ ] add the kinds and `previous`, emit at the state setters (one emission helper per pane kind in
+- [x] add the kinds and `previous`, emit at the state setters (one emission helper per pane kind in
       `AppStore+Events.swift`, gated on the actual transition), extend the formatter
-- [ ] run the changed test classes only; must pass before task 2
+- [x] run the changed test classes only; must pass before task 2
 
 ### Task 2: `hooks.conf` model, parser, paths, starter text
 

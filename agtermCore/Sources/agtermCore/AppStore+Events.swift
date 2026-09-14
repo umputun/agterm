@@ -25,6 +25,12 @@ extension AppStore {
         scheduleTreeChanged()
     }
 
+    /// `pane.split` / `pane.scratch` carry `shown`/`hidden`; callers emit only on a real transition.
+    func emitPaneVisibility(_ kind: ControlEventKind, session: Session, shown: Bool) {
+        emitControlEvent(kind, workspace: workspace(forSession: session.id)?.id, session: session.id,
+                         payload: ControlEventPayload(name: session.displayName, status: shown ? "shown" : "hidden"))
+    }
+
     func emitSessionClosed(_ session: Session, workspace: UUID) {
         emitControlEvent(.sessionClosed, workspace: workspace, session: session.id,
                          payload: ControlEventPayload(name: session.displayName))

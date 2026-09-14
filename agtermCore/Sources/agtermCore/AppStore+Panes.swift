@@ -62,6 +62,7 @@ extension AppStore {
     }
 
     private func setSplitVisibility(_ session: Session, shown: Bool) {
+        let wasShown = session.isSplit
         // hiding a shown split unmounts its right host, so the pacer must stop expecting that key
         if !shown, session.isSplit, let split = session.splitPaneIdentity { launchPaneDrop?([split]) }
         session.isSplit = shown
@@ -81,6 +82,7 @@ extension AppStore {
         // hiding the split un-renders a pane, so an overlay opened on it that has not realized yet would sit
         // active with no surface and no program forever.
         session.dropUnrealizedPaneOverlays()
+        if wasShown != shown { emitPaneVisibility(.paneSplit, session: session, shown: shown) }
         save()
     }
 
@@ -185,6 +187,7 @@ extension AppStore {
             paneFinalizer?([splitPaneIdentity])
         }
         if let split = session.splitPaneIdentity { launchPaneDrop?([split]) }
+        let wasShown = session.isSplit
         session.isSplit = false
         session.hasSplit = false
         session.splitFocused = false
@@ -211,6 +214,7 @@ extension AppStore {
         session.clearSearch()
         // the departing right pane owned any `.right`-tagged block, which no survivor can keystroke-clear.
         clearIndicatorOwnedByPane(.right, of: session)
+        if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
         save()
     }
 
@@ -237,6 +241,7 @@ extension AppStore {
         session.splitSurface = nil
         session.paneIdentity = session.splitPaneIdentity ?? UUID()
         session.splitPaneIdentity = nil
+        let wasShown = session.isSplit
         session.isSplit = false
         session.hasSplit = false
         session.splitFocused = false
@@ -287,6 +292,7 @@ extension AppStore {
             case .scratch: break
             }
         }
+        if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
         save()
     }
 
@@ -458,6 +464,7 @@ extension AppStore {
     public func toggleScratch(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.scratchActive.toggle()
+        emitPaneVisibility(.paneScratch, session: session, shown: session.scratchActive)
     }
 
     /// Closes the scratch terminal: hides it AND tears down its surface, so a later show starts a fresh
@@ -465,7 +472,9 @@ extension AppStore {
     /// scratch surface.
     @discardableResult public func closeScratch(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), let scratch = session.scratchSurface else { return false }
+        let wasShown = session.scratchActive
         session.scratchActive = false
+        if wasShown { emitPaneVisibility(.paneScratch, session: session, shown: false) }
         // a search bar pinned to the scratch being torn down would stay stuck; guarded on identity so a
         // search owned by the main/split pane survives.
         if session.searchSurface === scratch { session.clearSearch() }

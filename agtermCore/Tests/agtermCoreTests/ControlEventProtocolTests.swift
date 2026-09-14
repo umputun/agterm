@@ -17,6 +17,12 @@ struct ControlEventProtocolTests {
             ControlEvent(seq: 4, ts: 4.5, kind: .sessionClosed, window: "win", workspace: "work",
                          session: "closed", payload: ControlEventPayload(name: "old")),
             ControlEvent(seq: 5, ts: 5.5, kind: .treeChanged, window: "win"),
+            ControlEvent(seq: 6, ts: 6.5, kind: .paneSplit, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "shown")),
+            ControlEvent(seq: 7, ts: 7.5, kind: .paneScratch, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "hidden")),
+            ControlEvent(seq: 8, ts: 8.5, kind: .status, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "blocked", previous: "active")),
         ]
 
         let data = try JSONEncoder().encode(events)
@@ -41,6 +47,12 @@ struct ControlEventProtocolTests {
             ControlEvent(seq: 4, ts: 4.5, kind: .sessionClosed, window: "win", workspace: "work",
                          session: "closed", payload: ControlEventPayload(name: "old")),
             ControlEvent(seq: 5, ts: 5.5, kind: .treeChanged, window: "win"),
+            ControlEvent(seq: 6, ts: 6.5, kind: .paneSplit, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "shown")),
+            ControlEvent(seq: 7, ts: 7.5, kind: .paneScratch, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "hidden")),
+            ControlEvent(seq: 8, ts: 8.5, kind: .status, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "api", status: "blocked", previous: "active")),
         ]
         let expected = [
             ##"{"kind":"status","payload":{"blink":true,"color":"#aabbcc","name":"api","pane":"right","##
@@ -49,6 +61,9 @@ struct ControlEventProtocolTests {
             ##"{"kind":"session.created","payload":{"name":"new"},"seq":3,"session":"created","ts":3.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"session.closed","payload":{"name":"old"},"seq":4,"session":"closed","ts":4.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"tree.changed","payload":{},"seq":5,"ts":5.5,"window":"win"}"##,
+            ##"{"kind":"pane.split","payload":{"name":"api","status":"shown"},"seq":6,"session":"sess","ts":6.5,"window":"win","workspace":"work"}"##,
+            ##"{"kind":"pane.scratch","payload":{"name":"api","status":"hidden"},"seq":7,"session":"sess","ts":7.5,"window":"win","workspace":"work"}"##,
+            ##"{"kind":"status","payload":{"name":"api","previous":"active","status":"blocked"},"seq":8,"session":"sess","ts":8.5,"window":"win","workspace":"work"}"##,
         ]
 
         #expect(try events.map(canonicalJSON) == expected)
@@ -66,6 +81,7 @@ struct ControlEventProtocolTests {
 
         let plainJSON = String(decoding: try JSONEncoder().encode(plain), as: UTF8.self)
         #expect(!plainJSON.contains("shape"), "a nil shape must be omitted from the payload; got \(plainJSON)")
+        #expect(!plainJSON.contains("previous"), "a nil previous must be omitted from the payload; got \(plainJSON)")
     }
 
     @Test func optionalEventAndPayloadFieldsAreOmitted() throws {

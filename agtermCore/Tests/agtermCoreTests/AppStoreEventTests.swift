@@ -435,6 +435,99 @@ final class AppStoreEventTests {
         #expect(batch.items.map(\.kind) == [.sessionClosed, .sessionCreated])
     }
 
+    @Test func statusEventsCarryThePreviousStatus() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: session.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
+        store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.status], limit: 100
+        )))
+        #expect(batch.items.map { $0.payload.status } == ["active", "blocked", "blocked", "idle"])
+        #expect(batch.items.map { $0.payload.previous } == ["idle", "active", "blocked", "blocked"])
+    }
+
+    @Test func splitEventsFollowRealVisibilityTransitionsOnly() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let workspace = try #require(store.workspaces.first)
+        let session = try #require(store.activeSession)
+        session.surface = SpySurface()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.setSplitVisibility(session.id, shown: true)
+        session.splitSurface = SpySurface()
+        store.setSplitVisibility(session.id, shown: true)
+        store.toggleSplit(session.id, axis: .topBottom)
+        store.setSplitVisibility(session.id, shown: false)
+        store.closeSplit(session.id)
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        store.closeSplitPane(session.id)
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        store.closePrimaryPane(session.id)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneSplit], limit: 100
+        )))
+        #expect(batch.items.map { $0.payload.status } == ["shown", "hidden", "shown", "hidden", "shown", "hidden"])
+        #expect(batch.items.allSatisfy { $0.session == session.id.uuidString })
+        #expect(batch.items.allSatisfy { $0.workspace == workspace.id.uuidString })
+        #expect(batch.items.allSatisfy { $0.payload.name == session.displayName })
+    }
+
+    @Test func promotingTheSurvivorOfAHiddenSplitEmitsNoSplitEvent() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        session.surface = SpySurface()
+        store.setSplitVisibility(session.id, shown: true)
+        let survivor = SpySurface()
+        session.splitSurface = survivor
+        store.setSplitVisibility(session.id, shown: false)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.closePrimaryPane(session.id)
+
+        #expect(session.surface === survivor)
+        #expect(session.splitSurface == nil)
+        #expect(!session.hasSplit)
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneSplit], limit: 100
+        )))
+        #expect(batch.items.isEmpty)
+    }
+
+    @Test func scratchEventsFollowRealVisibilityTransitionsOnly() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(!store.closeScratch(session.id))
+        store.toggleScratch(session.id)
+        session.scratchSurface = SpySurface()
+        store.toggleScratch(session.id)
+        #expect(store.closeScratch(session.id))
+        store.toggleScratch(session.id)
+        session.scratchSurface = SpySurface()
+        #expect(store.closeScratch(session.id))
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneScratch], limit: 100
+        )))
+        #expect(batch.items.map { $0.payload.status } == ["shown", "hidden", "shown", "hidden"])
+        #expect(batch.items.allSatisfy { $0.session == session.id.uuidString })
+    }
+
     private func eventBatch(_ response: ControlResponse) throws -> ControlEventBatch {
         #expect(response.ok)
         return try #require(response.result?.events)
