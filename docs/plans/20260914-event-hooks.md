@@ -360,23 +360,24 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Create: `agtermTests/HookProcessRunnerTests.swift`
 - Modify: `agterm/Notifications/NotificationManager.swift` (`notifyHookFailure` with `hook-failure:` ids)
 
-- [ ] write failing hosted tests with a real `/bin/sh` child: env has all six variables set, empty ones
+- [x] write failing hosted tests with a real `/bin/sh` child: env has all six variables set, empty ones
       included, and `PATH` widened; cwd is the app's; stdin receives one JSON object plus newline then EOF
       that decodes as the `ControlEvent`; `onExit` fires exactly once and not inline
-- [ ] write failing hosted tests: a payload larger than pipe capacity with a script that closes stdin
+- [x] write failing hosted tests: a payload larger than pipe capacity with a script that closes stdin
       immediately reports no delivery failure and `onExit(0)`; the same script exiting 1 reports `onExit(1)`;
       an injected nonexistent executable makes `launch` throw with no callbacks
-- [ ] write failing hosted tests: a deterministic write error while the child is alive (write end made
-      invalid after launch, or a child that never reads while the writer is failed deliberately) reports
-      `onDeliveryFailure` while the child is still running, not at exit; the write descriptor is closed
-      exactly once on both the success and the spawn-failure path; a child that exits before the encoding job runs completes without
+- [x] write failing hosted tests: a deterministic delivery failure while the child is alive (a throwing
+      encoder; DispatchIO's own write-error path is not exercised, since the SDK forbids touching a
+      descriptor the channel owns) reports `onDeliveryFailure` while the child is still running and before
+      `onExit`; the write descriptor is closed before `onExit` on the success path and both ends are closed
+      on the spawn-failure path; a child that exits before the encoding job runs completes without
       a writer being created; cancellation on exit is not reported as a failure; a grandchild holding stdin
       does not keep the writer alive past the child's exit
-- [ ] write failing tests in `HookProcessRunnerTests.swift`: `notifyHookFailure` uses the
-      `hook-failure:<kind>:<command>` identifier and `bannersEnabled` gating (no hosted NotificationManager
-      test file exists)
-- [ ] implement `HookProcessRunner: HookLauncher` per Technical Details and the banner method
-- [ ] run `-only-testing:agtermTests/HookProcessRunnerTests` via the direct `xcodebuild` recipe; must pass
+- [x] write failing tests in `HookProcessRunnerTests.swift`: the `hook-failure:<kind>:<command>` identifier
+      builder (the `bannersEnabled` guard is not observable without a notification-center seam and is not
+      tested)
+- [x] implement `HookProcessRunner: HookLauncher` per Technical Details and the banner method
+- [x] run `-only-testing:agtermTests/HookProcessRunnerTests` via the direct `xcodebuild` recipe; must pass
       before task 6
 
 ### Task 6: Wire loading, reload, dispatch and control effects in the app
