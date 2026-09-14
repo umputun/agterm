@@ -1307,6 +1307,12 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - `{AGT_PANE}` / `$AGT_PANE` — the pane the command fired from: `left` (main), `right` (split), or
   `scratch` (the session's scratch terminal). Feed it back as `session type --pane "$AGT_PANE"` to type
   into the very pane the shortcut was pressed in.
+- `{AGT_PANE_ID}` / `$AGT_PANE_ID` — that pane's stable token, the value its shell holds as
+  `AGTERM_PANE_ID`. `{AGT_PANE}` is the role at fire time and a swap or promotion changes it; the token
+  follows the terminal, so feed it to `--pane-id` (`session text` and `session status` take any pane;
+  `session restore`, `hud open` and `ask open` take a left or right token only, never the scratch) when
+  the command must find the same shell later. A chord fired inside an overlay carries the token of the
+  pane the overlay covers, the one `{AGT_PANE}` names. Empty for a launcher fired with no session.
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,

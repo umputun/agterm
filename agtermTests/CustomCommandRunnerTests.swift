@@ -326,13 +326,15 @@ final class CustomCommandRunnerTests: XCTestCase {
         let fix = try fixture()
         let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
         let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
-        session.scratchSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        let scratch = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": "scratch-tok"])
+        session.scratchSurface = scratch
         session.scratchActive = true
+        XCTAssertEqual(try fired(fix.runner, from: scratch, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "scratch scratch-tok")
 
         let sessionWide = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         session.overlaySurface = sessionWide
         session.overlayActive = true
-        XCTAssertEqual(try fired(fix.runner, from: sessionWide, writing: "\"$AGT_PANE\""), "scratch")
+        XCTAssertEqual(try fired(fix.runner, from: sessionWide, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "scratch scratch-tok")
 
         session.overlaySurface = nil
         session.overlayActive = false
@@ -356,6 +358,77 @@ final class CustomCommandRunnerTests: XCTestCase {
         let written = try fired(fix.runner, from: stray, writing: "\"$AGT_PANE $AGT_SESSION_ID\"")
 
         XCTAssertEqual(written, "left \(session.id.uuidString)")
+    }
+
+    private func tokenedSplitSession(_ fix: Fixture) throws -> (session: Session, main: GhosttySurfaceView, split: GhosttySurfaceView) {
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let main = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": "main-tok"])
+        main.session = session
+        session.surface = main
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": "split-tok"])
+        split.session = session
+        session.splitSurface = split
+        session.hasSplit = true
+        session.isSplit = true
+        return (session, main, split)
+    }
+
+    // #602: the role names the slot, the token names the terminal, and only the token survives a swap.
+    func testAChordCarriesTheTokenOfTheTerminalItFiredInAcrossASwap() throws {
+        let fix = try fixture()
+        let (session, main, split) = try tokenedSplitSession(fix)
+        XCTAssertEqual(try fired(fix.runner, from: split, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "right split-tok")
+        XCTAssertEqual(try fired(fix.runner, from: main, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "left main-tok")
+
+        XCTAssertNil(fix.store.swapPanes(session.id))
+
+        XCTAssertEqual(try fired(fix.runner, from: split, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "left split-tok")
+        XCTAssertEqual(try fired(fix.runner, from: main, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "right main-tok")
+    }
+
+    func testAChordFromAPromotedSurvivorReportsLeftWithItsOwnToken() throws {
+        let fix = try fixture()
+        let (session, _, split) = try tokenedSplitSession(fix)
+
+        fix.store.closePrimaryPane(session.id)
+
+        XCTAssertTrue(session.surface === split)
+        XCTAssertEqual(try fired(fix.runner, from: split, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "left split-tok")
+    }
+
+    func testAChordFiredInsideAPaneOverlayCarriesTheCoveredPanesToken() throws {
+        let fix = try fixture()
+        let (session, _, _) = try tokenedSplitSession(fix)
+        session.splitFocused = true
+        XCTAssertNil(fix.store.openPaneOverlay(session.id, pane: .left, command: "true"))
+        let overlay = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        session.setPaneOverlaySurface(overlay, pane: .left)
+        XCTAssertEqual(overlay.paneToken, "", "the overlay itself has no token to leak")
+
+        XCTAssertEqual(try fired(fix.runner, from: overlay, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "left main-tok")
+    }
+
+    func testAPaletteRunWithAFocusedButUnrealizedSplitCarriesThePrimaryToken() throws {
+        let fix = try fixture()
+        let (session, _, _) = try tokenedSplitSession(fix)
+        fix.store.selectSession(session.id)
+        session.splitFocused = true
+        XCTAssertEqual(try firedFromPalette(fix.runner, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "right split-tok")
+
+        session.splitSurface = nil
+        XCTAssertEqual(try firedFromPalette(fix.runner, writing: "\"$AGT_PANE $AGT_PANE_ID\""), "left main-tok")
+    }
+
+    private func firedFromPalette(_ runner: CustomCommandRunner, writing body: String) throws -> String? {
+        let probe = stateDir.appendingPathComponent("probe-\(UUID().uuidString).txt")
+        runner.run(CustomCommand(name: "probe", command: "printf '%s' \(body) > \(probe.path)", shortcut: ""))
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            if let written = try? String(contentsOf: probe, encoding: .utf8), !written.isEmpty { return written }
+        }
+        return nil
     }
 
     func testScratchChordKeepsItsOwnerAfterSelectionChanges() throws {

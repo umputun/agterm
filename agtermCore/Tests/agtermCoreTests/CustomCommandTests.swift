@@ -6,8 +6,8 @@ struct CustomCommandTests {
     private func sampleContext() -> CommandContext {
         CommandContext(sessionID: "sess-1", sessionName: "shell", sessionPWD: "/tmp/work",
                        sessionHost: "user@box", workspaceID: "ws-1", workspaceName: "main",
-                       windowID: "win-1", windowName: "work", pane: .right, selection: "hello",
-                       socket: "/tmp/agt.sock")
+                       windowID: "win-1", windowName: "work", pane: .right, paneID: "pane-tok",
+                       selection: "hello", socket: "/tmp/agt.sock")
     }
 
     @Test func sessionHostFollowsThePwdTokenAndDefaultsEmpty() {
@@ -73,9 +73,19 @@ struct CustomCommandTests {
         #expect(env["AGT_WINDOW_ID"] == "win-1")
         #expect(env["AGT_WINDOW_NAME"] == "work")
         #expect(env["AGT_PANE"] == "right")
+        #expect(env["AGT_PANE_ID"] == "pane-tok")
         #expect(env["AGT_SELECTION"] == "hello")
         #expect(env["AGT_SOCKET"] == "/tmp/agt.sock")
-        #expect(env.count == 11)
+        #expect(env.count == 12)
+    }
+
+    @Test func paneIDDefaultsEmptyAndExpandsBesideThePane() {
+        #expect(CommandContext().paneID == "")
+        #expect(CommandContext().environment()["AGT_PANE_ID"] == "")
+        #expect(CommandContext().expand("[{AGT_PANE_ID}]") == "[]")
+        let ctx = CommandContext(pane: .right, paneID: "pane-tok")
+        #expect(ctx.expand("--pane {AGT_PANE} --pane-id {AGT_PANE_ID}") == "--pane right --pane-id pane-tok")
+        #expect(!CommandContext.referencesSessionScopedContext(#"agtermctl session text --pane-id "$AGT_PANE_ID""#))
     }
 
     @Test func paneDefaultsToLeft() {
@@ -113,7 +123,7 @@ struct CustomCommandTests {
         }
         let expected: Set<String> = ["AGT_SESSION_ID", "AGT_SESSION_NAME", "AGT_SESSION_PWD",
                                      "AGT_SESSION_HOST", "AGT_WORKSPACE_ID", "AGT_WORKSPACE_NAME", "AGT_WINDOW_ID",
-                                     "AGT_WINDOW_NAME", "AGT_PANE", "AGT_SELECTION", "AGT_SOCKET"]
+                                     "AGT_WINDOW_NAME", "AGT_PANE", "AGT_PANE_ID", "AGT_SELECTION", "AGT_SOCKET"]
         #expect(envKeys == expected)
     }
 

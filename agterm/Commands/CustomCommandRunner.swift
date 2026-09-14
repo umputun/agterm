@@ -321,7 +321,9 @@ final class CustomCommandRunner {
 
     /// Resolve every `{AGT_X}` token for the given session: ids + cwd + remote host from the model, names
     /// from the owning workspace/window, the selection from `selectionSurface`, the fired-from pane from the
-    /// caller (`left`|`right`|`scratch`), the socket from the control server.
+    /// caller (`left`|`right`|`scratch`) with the token of the surface in that slot, the socket from the
+    /// control server. The token is read from the slot, not from `selectionSurface`: for an overlay chord
+    /// that view is the overlay itself, which has no token, while `pane` names the terminal underneath.
     private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
                          pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
@@ -337,6 +339,7 @@ final class CustomCommandRunner {
             windowID: windowID?.uuidString ?? "",
             windowName: windowName,
             pane: pane,
+            paneID: session.paneToken(for: pane),
             selection: selectionSurface?.readSelection() ?? "",
             socket: socketProvider()
         )

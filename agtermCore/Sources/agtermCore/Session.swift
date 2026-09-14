@@ -550,6 +550,19 @@ public final class Session: Identifiable {
         }
     }
 
+    /// The stable token of the surface currently in `pane`'s slot (`TerminalSurface.paneToken`), the inverse
+    /// of `paneRole(forToken:)`; empty while the slot holds no surface.
+    public func paneToken(for pane: CommandContext.Pane) -> String {
+        switch pane {
+        case .left:
+            return surface?.paneToken ?? ""
+        case .right:
+            return splitSurface?.paneToken ?? ""
+        case .scratch:
+            return scratchSurface?.paneToken ?? ""
+        }
+    }
+
     /// Where a LOCAL process for this session starts, given the pane path it would inherit: that path on a
     /// local session; on a remote one, only when it exists here as a directory, else `homeDirectory`. The
     /// reported path itself stays what `cwd(for:)` and `AGT_SESSION_PWD` carry.

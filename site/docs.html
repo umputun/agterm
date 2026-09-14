@@ -1706,7 +1706,7 @@
                 color: #cbc6bc;
               "
             >
-              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}&nbsp;&nbsp;&nbsp;{AGT_SESSION_HOST}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
+              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}&nbsp;&nbsp;&nbsp;{AGT_SESSION_HOST}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_PANE_ID}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Tokens expand at fire time (also exported as
@@ -1720,6 +1720,18 @@
               >
               (a remote host can set these via OSC) — prefer the matching quoted env var, e.g.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">"$AGT_SELECTION"</span>.
+
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_PANE}</span> names the
+              pane's current role, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">right</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scratch</span>, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_PANE_ID}</span> the same
+              stable token that pane's shell holds as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE_ID</span>, so a
+              command can keep addressing that terminal with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id</span> after a swap or a
+              promotion has changed its role. A chord pressed inside an overlay carries the token of the pane
+              underneath, the one the role names. It is empty for a launcher fired with no session.
             </p>
             <div
               style="

@@ -595,6 +595,24 @@ struct SessionTests {
         #expect(session.paneRole(forToken: "no-such-tok") == nil)
     }
 
+    @Test func paneTokenForPaneReadsTheSlotAndEmptiesWithIt() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.paneToken(for: .left) == "")
+        #expect(session.paneToken(for: .right) == "")
+        #expect(session.paneToken(for: .scratch) == "")
+
+        session.surface = FakeSurface(paneToken: "main-tok")
+        session.splitSurface = FakeSurface(paneToken: "split-tok")
+        session.scratchSurface = FakeSurface(paneToken: "scratch-tok")
+        #expect(session.paneToken(for: .left) == "main-tok")
+        #expect(session.paneToken(for: .right) == "split-tok")
+        #expect(session.paneToken(for: .scratch) == "scratch-tok")
+        #expect(session.paneRole(forToken: session.paneToken(for: .right)) == .right)
+
+        session.splitSurface = nil
+        #expect(session.paneToken(for: .right) == "")
+    }
+
     @Test func paneRoleFollowsAPromotedSurvivorAndReSplit() {
         // #199: survivor and re-split helper were both baked with the same stale right role; only the token disambiguates.
         let session = Session(initialCwd: "/repo")
