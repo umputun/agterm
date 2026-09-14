@@ -84,6 +84,22 @@ struct ControlEventProtocolTests {
         #expect(!plainJSON.contains("previous"), "a nil previous must be omitted from the payload; got \(plainJSON)")
     }
 
+    @Test func hooksReadBackRoundTripsAndOmitsIdleFields() throws {
+        let idle = ControlHookEntry(kind: "status", command: "~/s.sh", line: 3)
+        let busy = ControlHookEntry(kind: "notify", command: "echo x | cat", line: 5, runningPid: 4242,
+                                    elapsedSeconds: 1.5, pending: 2, dropped: 7, lastFailure: "exit 1")
+        let hooks = ControlHooks(path: "/cfg/hooks.conf",
+                                 diagnostics: [ControlKeymapDiagnostic(line: 9, message: "unknown verb 'x'")],
+                                 hooks: [idle, busy])
+
+        let data = try JSONEncoder().encode(hooks)
+        #expect(try JSONDecoder().decode(ControlHooks.self, from: data) == hooks)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let idleJSON = String(decoding: try encoder.encode(idle), as: UTF8.self)
+        #expect(idleJSON == ##"{"command":"~/s.sh","dropped":0,"kind":"status","line":3,"pending":0}"##)
+    }
+
     @Test func optionalEventAndPayloadFieldsAreOmitted() throws {
         let event = ControlEvent(seq: 1, ts: 10, kind: .treeChanged, window: "win")
         let data = try JSONEncoder().encode(event)

@@ -299,31 +299,31 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Create: `agtermCore/Tests/agtermCoreTests/HookSchedulerTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlEventProtocolTests.swift` (wire round-trip of the new structs)
 
-- [ ] write failing tests: `ControlHooks`/`ControlHookEntry` encode/decode with nil omission for
+- [x] write failing tests: `ControlHooks`/`ControlHookEntry` encode/decode with nil omission for
       `runningPid`, `elapsedSeconds`, `lastFailure`
-- [ ] write failing tests with a fake `HookLauncher`: an event fans out to every matching entry; each entry
+- [x] write failing tests with a fake `HookLauncher`: an event fans out to every matching entry; each entry
       has an independent queue and running child; a non-matching kind launches nothing; callbacks are never
       invoked inline from `launch`
-- [ ] write failing tests: FIFO order across a burst; second event waits for the first child; cap 256
+- [x] write failing tests: FIFO order across a burst; second event waits for the first child; cap 256
       pending excluding the running one; overflow drops the oldest and increments `dropped`
-- [ ] write failing tests: `launch` throwing advances the queue, records `lastFailure`, calls `onFailure`;
+- [x] write failing tests: `launch` throwing advances the queue, records `lastFailure`, calls `onFailure`;
       a delivery failure on a live run records one failure, calls `onFailure` once, shows in `status` before
       exit and across a reload, leaves the next event pending until `onExit`, and survives that run's exit 0
       without being erased; exit 0 on a later run clears `lastFailure` and re-arms the banner; exit non-zero
       calls `onFailure` once until success or reload
-- [ ] write failing reload tests: `apply` after inserting comments and reordering definitions keeps the same
+- [x] write failing reload tests: `apply` after inserting comments and reordering definitions keeps the same
       child, pending queue, drop count and failure state while updating line numbers and file order; reload
       re-arms the banner independently of queue preservation
-- [ ] write failing retire tests: a removed entry drops pending, accepts no events, stays occupied until its
+- [x] write failing retire tests: a removed entry drops pending, accepts no events, stays occupied until its
       child exits, and that exit starts nothing; a changed command is a new identity running alongside the
       retired one
-- [ ] write failing reattach tests: re-add before exit reattaches and waits, and the original child's exit
+- [x] write failing reattach tests: re-add before exit reattaches and waits, and the original child's exit
       then starts exactly the first newly queued event; an injected older run token cannot release the new
       child
-- [ ] write failing tests: `status` reports pid, elapsed from the injected clock, pending, dropped, last
+- [x] write failing tests: `status` reports pid, elapsed from the injected clock, pending, dropped, last
       failure per entry, in file order
-- [ ] implement `ControlHooks`, `ControlHookEntry`, `HookScheduler`, `HookLauncher`
-- [ ] run `HookSchedulerTests` and the protocol tests; must pass before task 4
+- [x] implement `ControlHooks`, `ControlHookEntry`, `HookScheduler`, `HookLauncher`
+- [x] run `HookSchedulerTests` and the protocol tests; must pass before task 4
 
 ### Task 4: Control protocol, dispatcher and CLI for `hooks.reload` / `hooks.list`
 
