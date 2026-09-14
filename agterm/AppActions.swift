@@ -380,8 +380,9 @@ final class AppActions {
     /// `editKeymap`; exiting reloads the hooks.
     func editHooks() {
         guard uiActionsEnabled else { return }
-        guard let store, let id = store.selectedSessionID, let path = settingsModel?.hooksPath else { return }
-        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
+        guard let store, let id = store.selectedSessionID, let settingsModel else { return }
+        settingsModel.ensureStarterHooks()
+        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: settingsModel.hooksPath), sizePercent: 95) {
             hooksEditOverlaySession = id
         }
     }

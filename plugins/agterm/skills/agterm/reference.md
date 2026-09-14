@@ -1339,7 +1339,8 @@ by a newline and EOF, plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_SESSION_ID
 detached in the app's working directory with the widened `PATH` a custom command gets; pass
 `--socket "$AGT_SOCKET"` to any `agtermctl` call. One process per line at a time; further events queue
 in order up to 256, then the oldest is dropped and counted. No timeout. A non-zero exit, a failed spawn
-or an undelivered event banners once per hook until its next success or a reload. A hook whose command
+or an event that could not be handed to a running script banners once per hook until its next success
+or a reload; a script that ignores stdin is fine, only its exit status counts. A hook whose command
 emits another event of its own kind triggers itself again; the queue bounds concurrency, nothing detects
 the loop.
 
@@ -1354,7 +1355,7 @@ counters, comments and reordering included; a removed line drops its queue and f
 - `hooks[]` — one row per line in file order, then any removed line whose child still runs, marked
   `retired: true`: `kind`, `command`, `line`, `runningPid` and `elapsedSeconds` while a child runs,
   `pending` (events waiting behind it), `dropped` (events the bounded queue discarded), and
-  `lastFailure`, kept until the hook next succeeds or the file is reloaded.
+  `lastFailure`, kept until the hook next succeeds (a reload keeps it).
 
 Both are app-global and refuse a target or `--window`.
 

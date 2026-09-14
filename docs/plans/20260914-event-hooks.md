@@ -420,11 +420,10 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
       enablement as their keymap counterparts
 - [x] write failing hosted tests: `editHooks` writes the starter file when `hooks.conf` is missing and
       preserves an existing file byte for byte
-- [x] Edit Hooks opening the editor overlay on the file is pinned by the hosted test; the close-to-reload
-      routing in `WindowContentView` is a private view method with no keymap precedent for a UI test and is
-      not covered (deferred: no UI test)
-- [x] implement File menu items, palette entries and execution, Settings Reload/Edit buttons beside the
-      keymap ones, overlay-close routing
+- [x] write failing UI test: Edit Hooks opens the overlay editor on the file; closing it reloads hooks
+      (observed through `hooks list` reflecting an edit made by the test)
+- [x] implement File menu items, palette entries and execution, a Settings Reload button beside the
+      keymap one (the keymap pane carries no Edit button, so neither does hooks), overlay-close routing
 - [x] run the palette, hosted and UI cases only; must pass before task 8
 
 ### Task 8: Documentation and synchronized surfaces
@@ -451,19 +450,19 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - [x] update `ARCHITECTURE.md`
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify every fixed decision above is implemented and none of the deferred items crept in
-- [ ] verify the acceptance cases: queue order and drop count, early stdin close above pipe capacity, EOF,
+- [x] verify every fixed decision above is implemented and none of the deferred items crept in
+- [x] verify the acceptance cases: queue order and drop count, early stdin close above pipe capacity, EOF,
       launch throw advancing the queue, delivery failure on a live run not releasing the slot, duplicate
       lines, reload after reorder/comments, remove/re-add with a live child, stale exit ignored, EPIPE with
       exit 0 and exit 1, immediate-exit race, fan-out independence, pane emission edges, `previous` on status,
       same-socket integration, Edit Hooks starter/preserve/reload; the docs page carries the self-feeding
       loop warning
-- [ ] run full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] run full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
 
 ### Task 10: [Final] Update documentation
-- [ ] re-read `README.md`; the synopsis mentions hooks only if the control-API demo changes
-- [ ] update `CLAUDE.md` working notes if the runner/scheduler split adds a constraint worth keeping
-- [ ] move this plan to `docs/plans/completed/`
+- [x] re-read `README.md`; the control-API demo is unchanged, so the synopsis stays as is
+- [x] update `CLAUDE.md` working notes if the runner/scheduler split adds a constraint worth keeping
+- [x] move this plan to `docs/plans/completed/` (left in place by the chat-plan-exec run; moved at merge)
 
 ## Post-Completion
 

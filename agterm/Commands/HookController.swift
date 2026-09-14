@@ -10,9 +10,10 @@ final class HookController {
     private let settings: SettingsModel
     private var observer: NSObjectProtocol?
 
-    init(library: WindowLibrary, settings: SettingsModel, socketProvider: @escaping () -> String) {
+    init(library: WindowLibrary, settings: SettingsModel, socketProvider: @escaping () -> String,
+         launcher: HookLauncher? = nil) {
         self.settings = settings
-        scheduler = HookScheduler(launcher: HookProcessRunner(socketProvider: socketProvider))
+        scheduler = HookScheduler(launcher: launcher ?? HookProcessRunner(socketProvider: socketProvider))
         scheduler.onFailure = { entry, detail in
             NotificationManager.shared.notifyHookFailure(kind: entry.kind.rawValue, command: entry.command, detail: detail)
         }

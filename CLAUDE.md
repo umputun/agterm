@@ -183,6 +183,9 @@ C-boundary concurrency before changing the bridge.
   `GHOSTTY_ACTION_RENDER`, so agterm handles no draw action. Never restore the rejected continuous 120Hz
   poll or use `assumeIsolated`. See [[libghostty]] before advancing `GHOSTTY_REV`.
 - `close_surface_cb` only recovers the view and dispatches; it never frees synchronously.
+- A libdispatch callback closure written inside a `@MainActor` method inherits main-actor isolation, and
+  libdispatch running it on another queue aborts under `dispatch_assert_queue`. Declare such closures
+  `@Sendable` explicitly (`HookProcessRunner`'s `DispatchIO` cleanup and write handlers).
 - The session-wide overlay slot holds either a caller's program or a HUD. Raw `overlayActive` answers only
   "the slot is occupied"; every layer asking "is a program covering this session" reads
   `Session.programOverlayActive` instead. Deck gates, focus routing, zoom, and scratch focus all turn on

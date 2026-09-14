@@ -438,18 +438,23 @@ final class SettingsModel {
 
     private func loadHooks() {
         let url = ConfigPaths.hooksPath(configDirectory: configDirectoryURL())
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+        do {
+            let parsed = parseHooksConf(try String(contentsOf: url, encoding: .utf8))
+            hooks = parsed.hooks
+            hooksDiagnostics = parsed.diagnostics
+        } catch {
+            // a missing file means no hooks; an existing file that cannot be read must not read as clean,
+            // or a reload would silently retire every hook
             hooks = Hooks()
-            hooksDiagnostics = []
-            return
+            hooksDiagnostics = FileManager.default.fileExists(atPath: url.path)
+                ? [KeymapDiagnostic(line: 0, message: "could not read hooks.conf: \(error.localizedDescription)")]
+                : []
         }
-        let parsed = parseHooksConf(text)
-        hooks = parsed.hooks
-        hooksDiagnostics = parsed.diagnostics
     }
 
-    /// Write the commented starter `hooks.conf` (and its directory) when none exists.
-    private func ensureStarterHooks() {
+    /// Write the commented starter `hooks.conf` (and its directory) when none exists. Also the Edit Hooks
+    /// entry point: the file can be missing after a config-directory change or a manual delete.
+    func ensureStarterHooks() {
         let url = ConfigPaths.hooksPath(configDirectory: configDirectoryURL())
         if FileManager.default.fileExists(atPath: url.path) { return }
         do {

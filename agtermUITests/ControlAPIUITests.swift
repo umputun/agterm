@@ -1768,9 +1768,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(rows[0]["runningPid"], "an idle hook carries no pid: \(rows[0])")
     }
 
-    // a hook that calls agtermctl on the same socket queues behind the request that emitted its event; both
-    // must complete. The hook filters to the blocked status so the launch's own status writes never fire it,
-    // and its effect is a notify ring event the test polls for. The bundled CLI sits first on the widened PATH.
+    // the hook's agtermctl call queues behind the request that fired it; both must complete
     func testHookCallingTheSameSocketCompletesWithTheOriginalRequest() throws {
         try relaunch(withHooks: #"on status [ "$AGT_EVENT_STATUS" = blocked ] || exit 0; agtermctl notify "hook ran" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET""# + "\n")
         let seeded = try activeSessionID()
@@ -1798,6 +1796,32 @@ final class ControlAPIUITests: ControlAPITestCase {
         }
         XCTAssertTrue(sawNotify, "the hook's notify should reach the ring through the same socket")
         XCTAssertTrue(quiescent, "the hook should finish with no running child, no pending work and no failure")
+    }
+
+    func testEditHooksOverlayCloseReloadsTheFile() throws {
+        let seeded = try activeSessionID()
+        app.menuBars.menuBarItems["File"].click()
+        let item = app.menuItems["Edit Hooks…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "File menu should list Edit Hooks")
+        item.click()
+        XCTAssertTrue(poll(until: (try? sessionNodeIfPresent(id: seeded))??["overlay"] as? Bool == true, timeout: 10),
+                      "Edit Hooks should open an overlay on the active session")
+
+        let file = stateDir.appendingPathComponent("config", isDirectory: true).appendingPathComponent("hooks.conf")
+        let handle = try FileHandle(forWritingTo: file)
+        handle.seekToEndOfFile()
+        handle.write(Data("on notify true\n".utf8))
+        try handle.close()
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(seeded)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "closing the editor overlay should succeed: \(close)")
+
+        var rows: [[String: Any]] = []
+        let reloaded = poll(until: {
+            let list = (try? sendCommand(#"{"cmd":"hooks.list"}"#)) ?? [:]
+            rows = ((list["result"] as? [String: Any])?["hooks"] as? [String: Any])?["hooks"] as? [[String: Any]] ?? []
+            return rows.contains { $0["kind"] as? String == "notify" && $0["command"] as? String == "true" }
+        }(), timeout: 10)
+        XCTAssertTrue(reloaded, "closing the editor overlay should reload hooks.conf: \(rows)")
     }
 
     // MARK: - Keymap

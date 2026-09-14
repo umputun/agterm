@@ -191,10 +191,8 @@ extension agtermApp {
                 // re-read keymap.conf and apply — menu shortcuts, runner and palette rebuild. keyless.
                 Button { actions.reloadKeymap() } label: { Label("Reload Keymap", systemImage: "keyboard") }
                     .disabled(!PaletteCommand.reloadKeymap.isEnabled(in: context))
-                // open hooks.conf in $EDITOR in a 95% overlay; reloads when the editor exits. keyless.
                 Button { actions.editHooks() } label: { Label("Edit Hooks…", systemImage: "pencil.and.list.clipboard") }
                     .disabled(!PaletteCommand.editHooks.isEnabled(in: context))
-                // re-read hooks.conf and apply it to the scheduler. keyless.
                 Button { actions.reloadHooks() } label: { Label("Reload Hooks", systemImage: "bolt.horizontal") }
                     .disabled(!PaletteCommand.reloadHooks.isEnabled(in: context))
                 // open the agterm-scoped ghostty.conf in $EDITOR in a 95% overlay; reloads on editor exit.

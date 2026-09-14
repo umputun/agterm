@@ -21,14 +21,17 @@ final class HookProcessRunnerTests: XCTestCase {
     private struct Outcome {
         var deliveryFailures: [String] = []
         var exits: [Int32] = []
-        var writeEndClosedAtExit: Bool?
         var failureBeforeExit: Bool?
     }
 
     private final class OutcomeBox: @unchecked Sendable {
         var outcome = Outcome()
         var exitedInline = true
+    }
+
+    private final class Probe: @unchecked Sendable {
         var writeEnd: Int32?
+        var closedAtExit: Bool?
     }
 
     private func openDescriptors() -> Set<Int32> {
@@ -42,29 +45,39 @@ final class HookProcessRunnerTests: XCTestCase {
         let box = OutcomeBox()
         let exited = expectation(description: "exit")
         let entry = HookEntry(identity: HookIdentity(kind: event.kind, command: command), line: 1)
-        let before = openDescriptors()
         let pid = try runner.launch(
             entry: entry, event: event,
             onDeliveryFailure: { box.outcome.deliveryFailures.append($0) },
             onExit: { status in
                 box.outcome.exits.append(status)
                 box.outcome.failureBeforeExit = !box.outcome.deliveryFailures.isEmpty
-                if let fd = box.writeEnd {
-                    box.outcome.writeEndClosedAtExit = fcntl(fd, F_GETFD) == -1 && errno == EBADF
-                }
                 exited.fulfill()
             })
-        // the read end is closed inside launch, so the one descriptor it leaves open is the pipe's write end;
-        // onExit is delivered through the main actor and cannot run before this method suspends.
-        let opened = openDescriptors().subtracting(before)
-        XCTAssertEqual(opened.count, 1, "launch should leave exactly the write end open: \(opened)")
-        box.writeEnd = opened.first
         box.exitedInline = !box.outcome.exits.isEmpty
         await fulfillment(of: [exited], timeout: timeout)
         XCTAssertFalse(box.exitedInline, "onExit must never run inline from launch")
         XCTAssertEqual(box.outcome.exits.count, 1)
-        XCTAssertEqual(box.outcome.writeEndClosedAtExit, true, "the write end must be closed before onExit")
         return (box.outcome, pid)
+    }
+
+    func testTheWriteEndIsClosedBeforeExitIsReported() async throws {
+        // 300 KB into a child that holds stdin open without reading keeps the write, and the descriptor, alive until exit
+        let runner = HookProcessRunner(socketProvider: { "" })
+        let entry = HookEntry(identity: HookIdentity(kind: .notify, command: "sleep 0.5; exit 0"), line: 1)
+        let exited = expectation(description: "exit")
+        let probe = Probe()
+        let before = openDescriptors()
+
+        _ = try runner.launch(entry: entry, event: largeEvent(), onDeliveryFailure: { _ in }, onExit: { _ in
+            if let fd = probe.writeEnd { probe.closedAtExit = fcntl(fd, F_GETFD) == -1 && errno == EBADF }
+            exited.fulfill()
+        })
+        let opened = openDescriptors().subtracting(before)
+        XCTAssertEqual(opened.count, 1, "the blocked write keeps exactly the pipe's write end open: \(opened)")
+        probe.writeEnd = opened.first
+
+        await fulfillment(of: [exited], timeout: 10)
+        XCTAssertEqual(probe.closedAtExit, true, "the write end must be closed before onExit")
     }
 
     private func largeEvent() -> ControlEvent {

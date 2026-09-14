@@ -3,8 +3,18 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// The starter file and the Edit Hooks action, against a settings model rooted in an isolated config
-/// directory so the scheme's shared `AGTERM_STATE_DIR` config is never touched.
+@MainActor
+final class RecordingHookLauncher: HookLauncher {
+    var launched: [(HookEntry, ControlEvent)] = []
+
+    func launch(entry: HookEntry, event: ControlEvent,
+                onDeliveryFailure _: @escaping @MainActor @Sendable (String) -> Void,
+                onExit _: @escaping @MainActor @Sendable (Int32) -> Void) throws -> Int32 {
+        launched.append((entry, event))
+        return Int32(launched.count)
+    }
+}
+
 @MainActor
 final class HooksEditTests: XCTestCase {
     private var stateDir: URL!
@@ -53,6 +63,19 @@ final class HooksEditTests: XCTestCase {
         XCTAssertEqual(settings.hooksDiagnostics.map(\.line), [2])
     }
 
+    func testAnUnreadableHooksFileIsADiagnosticNotAnEmptyConfiguration() throws {
+        try "on status ~/s.sh\n".write(to: hooksFile, atomically: true, encoding: .utf8)
+        let settings = makeSettings()
+        XCTAssertEqual(settings.hooks.entries.count, 1)
+
+        try Data([0x6f, 0x6e, 0x20, 0xff, 0xfe, 0x0a]).write(to: hooksFile)
+        settings.reloadHooks()
+
+        XCTAssertTrue(settings.hooks.entries.isEmpty)
+        XCTAssertEqual(settings.hooksDiagnostics.map(\.line), [0])
+        XCTAssertTrue(settings.hooksDiagnostics[0].message.hasPrefix("could not read hooks.conf"))
+    }
+
     func testReloadRereadsTheFileAndPostsTheChangeNotification() throws {
         let settings = makeSettings()
         let posted = expectation(forNotification: .agtermHooksChanged, object: nil)
@@ -77,5 +100,43 @@ final class HooksEditTests: XCTestCase {
         XCTAssertTrue(session.overlayActive)
         XCTAssertEqual(session.overlayCommand, ConfigPaths.editorCommand(forPath: hooksFile.path))
         XCTAssertNil(actions.keymapEditOverlaySession, "the hooks editor never marks the keymap slot")
+    }
+
+    func testEditHooksAfterAConfigDirectoryChangeWritesTheStarterAndKeepsAnExistingFile() throws {
+        let settings = makeSettings()
+        let actions = AppActions(library: library)
+        actions.settingsModel = settings
+        let moved = stateDir.appendingPathComponent("moved", isDirectory: true)
+        try FileManager.default.createDirectory(at: moved, withIntermediateDirectories: true)
+        settings.setConfigDirectory(moved.path)
+        let movedFile = moved.appendingPathComponent("hooks.conf")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: movedFile.path))
+
+        actions.editHooks()
+
+        XCTAssertEqual(try String(contentsOf: movedFile, encoding: .utf8), ConfigPaths.starterHooksConf())
+        XCTAssertEqual(library.activeStore?.activeSession?.overlayCommand,
+                       ConfigPaths.editorCommand(forPath: movedFile.path))
+
+        try "on status ~/kept.sh\n".write(to: movedFile, atomically: true, encoding: .utf8)
+        library.activeStore?.closeOverlay(try XCTUnwrap(library.activeStore?.activeSession?.id))
+        actions.editHooks()
+        XCTAssertEqual(try String(contentsOf: movedFile, encoding: .utf8), "on status ~/kept.sh\n")
+    }
+
+    func testAStartedControllerSeesASessionCreatedByADirectoryOpen() throws {
+        try "on session.created true\n".write(to: hooksFile, atomically: true, encoding: .utf8)
+        let settings = makeSettings()
+        let actions = AppActions(library: library)
+        actions.settingsModel = settings
+        let launcher = RecordingHookLauncher()
+        let controller = HookController(library: library, settings: settings, socketProvider: { "" }, launcher: launcher)
+        controller.start()
+
+        XCTAssertTrue(actions.openSession(atDirectory: stateDir.path))
+
+        XCTAssertEqual(launcher.launched.map { $0.1.kind }, [.sessionCreated])
+        XCTAssertEqual(launcher.launched.map { $0.0.command }, ["true"])
+        XCTAssertEqual(launcher.launched.first?.1.session, library.activeStore?.activeSession?.id.uuidString)
     }
 }

@@ -210,10 +210,11 @@ struct agtermApp: App {
                         // hand the delegate the action hub and drain folders `open -a agterm /path` queued
                         // before the window store resolved.
                         appDelegate.actions = actions
+                        // hooks apply BEFORE the drain: a queued `open -a agterm /path` creates a session, and a
+                        // session.created hook must already be scheduled to see it (idempotent).
+                        hookController.start()
                         appDelegate.drainPendingOpenDirectories()
                         customCommandRunner.start()
-                        // applies hooks.conf to the scheduler and re-applies on `.agtermHooksChanged` (idempotent).
-                        hookController.start()
                         // wire the keymap + runner into the action hub for the command palette's custom
                         // commands; both are built after `actions`, so not in `init`.
                         actions.settingsModel = settingsModel
