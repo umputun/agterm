@@ -65,13 +65,10 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertEqual(ZmxClient.outcome(of: "killed session \(name)\n", name: name), .killed)
         XCTAssertEqual(ZmxClient.outcome(of: "cleaned up stale session \(name)\n", name: name), .staleSocket)
 
-        // zmx exits ZERO here too, after merely reporting it could not reach the daemon
-        let unresponsive = """
-        session \(name) is unresponsive (Timeout)
-        daemon may be busy: try again, add `--force` flag, or kill the process directly
-        """
+        // zmx exits zero here too, after merely reporting on stderr it could not reach the daemon
+        let unresponsive = "failed to kill session=\(name): SessionUnresponsive\n"
         XCTAssertEqual(ZmxClient.outcome(of: unresponsive, name: name),
-                       .failed("session \(name) is unresponsive (Timeout)"))
+                       .failed("failed to kill session=\(name): SessionUnresponsive"))
 
         // a broken pipe after the kill was sent returns with nothing printed
         XCTAssertEqual(ZmxClient.outcome(of: "", name: name), .failed("no output"))
@@ -82,6 +79,33 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertEqual(ZmxClient.outcome(of: "killed session agterm-other\n", name: name),
                        .failed("killed session agterm-other"),
                        "another daemon's confirmation is not this one's")
+    }
+
+    func testKillInvocationsMergeStderrAndListDoesNot() {
+        var invocations: [ZmxClient.Invocation] = []
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") {
+            invocations.append($0)
+            return ""
+        }
+
+        _ = client.listSessions()
+        _ = client.killObservedOrphan(names: ["agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"])
+        _ = client.killConfirmed(name: "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        client.kill(paneIdentities: [UUID()])
+
+        let byCommand = Dictionary(grouping: invocations, by: { $0.arguments.first ?? "" })
+        XCTAssertEqual(byCommand["list"]?.map(\.mergesStderr), [false])
+        XCTAssertEqual(byCommand["kill"]?.map(\.mergesStderr), [true, true, true])
+    }
+
+    func testRunAppendsStderrOnlyWhenTheInvocationAsksForIt() throws {
+        func invocation(mergesStderr: Bool) -> ZmxClient.Invocation {
+            ZmxClient.Invocation(executablePath: "/bin/sh", arguments: ["-c", "echo notice >&2; echo row"],
+                                 environment: [:], timeout: 5, mergesStderr: mergesStderr)
+        }
+
+        XCTAssertEqual(try ZmxClient.run(invocation(mergesStderr: false)), "row\n")
+        XCTAssertEqual(try ZmxClient.run(invocation(mergesStderr: true)), "row\nnotice\n")
     }
 
     func testLiveReapListsThenKillsOnlyUnclaimedZeroClientNames() {

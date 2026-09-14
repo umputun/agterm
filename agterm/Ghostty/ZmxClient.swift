@@ -15,6 +15,8 @@ final class ZmxClient {
         let arguments: [String]
         let environment: [String: String]
         let timeout: TimeInterval
+        // kill needs stderr diagnostics; list must exclude stderr notices.
+        let mergesStderr: Bool
     }
 
     enum CommandError: Error {
@@ -160,7 +162,7 @@ final class ZmxClient {
         var outcomes: [String: KillOutcome] = [:]
         for name in Set(names) {
             do {
-                outcomes[name] = Self.outcome(of: try invoke(["kill", name]), name: name)
+                outcomes[name] = Self.outcome(of: try invoke(["kill", name], mergesStderr: true), name: name)
             } catch {
                 Self.logger.error("zmx kill failed for \(name, privacy: .public): \(String(describing: error), privacy: .public)")
                 outcomes[name] = .failed(String(describing: error))
@@ -169,11 +171,7 @@ final class ZmxClient {
         return outcomes
     }
 
-    /// Classifies a kill by EXACT output line, because zmx exits zero on more than the two happy answers:
-    /// a non-refused connect failure prints `is unresponsive` and succeeds, and a broken pipe after the
-    /// kill was sent returns with nothing printed at all. Anything unrecognized is a failure, so a daemon
-    /// whose fate is unknown is never reported as gone — and a substring test would let a line merely
-    /// CONTAINING `killed session <name>` count as a confirmation.
+    /// Exit zero can mean an unreachable daemon; require an exact confirmation line.
     static func outcome(of output: String, name: String) -> KillOutcome {
         let lines = output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
         if lines.contains("killed session \(name)") { return .killed }
@@ -189,7 +187,7 @@ final class ZmxClient {
     /// zero after merely unlinking a socket it could not reach, and that daemon may still be running.
     func killConfirmed(name: String) -> KillOutcome {
         do {
-            return Self.outcome(of: try invoke(["kill", name, "--force"]), name: name)
+            return Self.outcome(of: try invoke(["kill", name, "--force"], mergesStderr: true), name: name)
         } catch {
             Self.logger.error("zmx kill failed for \(name, privacy: .public): \(String(describing: error), privacy: .public)")
             return .failed(String(describing: error))
@@ -201,7 +199,7 @@ final class ZmxClient {
         let unique = names.filter { seen.insert($0).inserted }
         guard !unique.isEmpty else { return true }
         do {
-            _ = try invoke(["kill"] + unique + ["--force"], timeout: timeout)
+            _ = try invoke(["kill"] + unique + ["--force"], timeout: timeout, mergesStderr: true)
             return true
         } catch {
             Self.logger.error("zmx kill failed for \(unique.joined(separator: ","), privacy: .public): \(String(describing: error), privacy: .public)")
@@ -209,16 +207,17 @@ final class ZmxClient {
         }
     }
 
-    private func invoke(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil) throws -> String {
+    private func invoke(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
+                        mergesStderr: Bool = false) throws -> String {
         var environment = ProcessInfo.processInfo.environment
         environment["ZMX_DIR"] = socketDirectory
         environment.removeValue(forKey: "ZMX_SESSION")
         environment.removeValue(forKey: "ZMX_SESSION_PREFIX")
-        return try runner(Invocation(executablePath: executablePath, arguments: arguments,
-                                     environment: environment, timeout: timeoutOverride ?? timeout))
+        return try runner(Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
+                                     timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr))
     }
 
-    private nonisolated static func run(_ invocation: Invocation) throws -> String {
+    nonisolated static func run(_ invocation: Invocation) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: invocation.executablePath)
         process.arguments = invocation.arguments
@@ -243,6 +242,6 @@ final class ZmxClient {
         guard process.terminationStatus == 0 else {
             throw CommandError.failed(process.terminationStatus, stdout + stderr)
         }
-        return stdout
+        return invocation.mergesStderr ? stdout + stderr : stdout
     }
 }
