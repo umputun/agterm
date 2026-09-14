@@ -19,6 +19,8 @@ final class SettingsModel {
     private(set) var keymap: Keymap = Keymap(builtinOverrides: [:], commands: [])
     /// Problems found while parsing the keymap file, surfaced read-only in the Key Mapping settings tab.
     private(set) var keymapDiagnostics: [KeymapDiagnostic] = []
+    private(set) var hooks = Hooks()
+    private(set) var hooksDiagnostics: [KeymapDiagnostic] = []
 
     /// Coalesces a burst of `previewTheme` calls into one `apply()` instead of rebuilding + reloading every
     /// surface per arrow keypress. `commitTheme` flushes it; `revertThemePreview` drops it.
@@ -74,6 +76,8 @@ final class SettingsModel {
         applyAutoHideSidebarInactiveWindows()
         ensureStarterKeymap()
         loadKeymap()
+        ensureStarterHooks()
+        loadHooks()
         ensureStarterGhosttyConfig()
         ensureStarterRestoreDenylist()
         loadRestoreDenylist()
@@ -415,7 +419,46 @@ final class SettingsModel {
         settings.configDirectory = value
         try? settingsStore.save(settings)
         reloadKeymap()
+        reloadHooks()
         reloadGhosttyConfig()
+    }
+
+    /// Re-read `hooks.conf` and post `.agtermHooksChanged` so the scheduler applies it; diagnostics surface as
+    /// a banner like the keymap's.
+    func reloadHooks() {
+        loadHooks()
+        NotificationCenter.default.post(name: .agtermHooksChanged, object: nil)
+        if !hooksDiagnostics.isEmpty {
+            NotificationManager.shared.notifyHooksDiagnostics(count: hooksDiagnostics.count)
+        }
+    }
+
+    /// The resolved `hooks.conf` path: `<config dir>/hooks.conf`, beside `keymap.conf`.
+    var hooksPath: String { ConfigPaths.hooksPath(configDirectory: configDirectoryURL()).path }
+
+    private func loadHooks() {
+        let url = ConfigPaths.hooksPath(configDirectory: configDirectoryURL())
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            hooks = Hooks()
+            hooksDiagnostics = []
+            return
+        }
+        let parsed = parseHooksConf(text)
+        hooks = parsed.hooks
+        hooksDiagnostics = parsed.diagnostics
+    }
+
+    /// Write the commented starter `hooks.conf` (and its directory) when none exists.
+    private func ensureStarterHooks() {
+        let url = ConfigPaths.hooksPath(configDirectory: configDirectoryURL())
+        if FileManager.default.fileExists(atPath: url.path) { return }
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try ConfigPaths.starterHooksConf().write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            logger.notice("could not write starter hooks at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Re-read `keymap.conf` and post `.agtermKeymapChanged` so the custom-command runner and action palette

@@ -20,6 +20,7 @@ struct agtermApp: App {
     @State private var undoCloseShortcut: UndoCloseShortcut
     @State private var globalHotkey: GlobalHotkey
     @State var settingsModel: SettingsModel
+    @State private var hookController: HookController
     @State private var controlServer: ControlServer
     @State var liveReset: LiveResetCoordinator
     @State private var customCommandRunner: CustomCommandRunner
@@ -111,6 +112,11 @@ struct agtermApp: App {
             library: library, settings: settingsModel, actions: actions,
             usage: CustomCommandUsageStore(directory: stateDirectory),
             socketProvider: { controlServer.resolvedSocketPath }))
+        // hooks.conf scripts: fed by the library's post-append observer, applied from the settings model.
+        let hookController = HookController(library: library, settings: settingsModel,
+                                            socketProvider: { controlServer.resolvedSocketPath })
+        controlServer.hookStatus = { hookController.scheduler.status }
+        _hookController = State(initialValue: hookController)
         // follows macOS light/dark via KVO on NSApp.effectiveAppearance; dependency-free, started in `.task`.
         _appearanceObserver = State(initialValue: SystemAppearanceObserver())
         // follows Reduce Motion / Reduce Transparency via NSWorkspace's accessibility-display notification,
@@ -206,6 +212,8 @@ struct agtermApp: App {
                         appDelegate.actions = actions
                         appDelegate.drainPendingOpenDirectories()
                         customCommandRunner.start()
+                        // applies hooks.conf to the scheduler and re-applies on `.agtermHooksChanged` (idempotent).
+                        hookController.start()
                         // wire the keymap + runner into the action hub for the command palette's custom
                         // commands; both are built after `actions`, so not in `init`.
                         actions.settingsModel = settingsModel

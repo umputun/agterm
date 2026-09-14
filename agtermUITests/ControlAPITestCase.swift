@@ -182,6 +182,10 @@ class ControlAPITestCase: XCTestCase {
         try relaunch(writing: keymap, toConfigFile: "keymap.conf")
     }
 
+    func relaunch(withHooks hooks: String) throws {
+        try relaunch(writing: hooks, toConfigFile: "hooks.conf")
+    }
+
     /// Terminate the running app, write `config` to `<stateDir>/config/ghostty.conf`, and relaunch with the
     /// same isolated state dir + socket.
     func relaunch(withGhosttyConfig config: String) throws {

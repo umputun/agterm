@@ -136,6 +136,18 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
+    /// Post a banner for `hooks.conf` parse diagnostics, mirroring the keymap one.
+    func notifyHooksDiagnostics(count: Int) {
+        guard bannersEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Hooks"
+        content.body = "\(count) issue\(count == 1 ? "" : "s") — see Settings ▸ Key Mapping"
+        let request = UNNotificationRequest(identifier: "hooks-diagnostics", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("hooks-diagnostics banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     /// The banner identifier for one hook, so repeated failures of the same line coalesce and never collide
     /// with a custom command's `command-failure:` space.
     static func hookFailureIdentifier(kind: String, command: String) -> String {

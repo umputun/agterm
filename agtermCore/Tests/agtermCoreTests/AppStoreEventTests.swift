@@ -435,6 +435,27 @@ final class AppStoreEventTests {
         #expect(batch.items.map(\.kind) == [.sessionClosed, .sessionCreated])
     }
 
+    @Test func observerSeesEverySequencedEventIncludingDebouncedTreeChanges() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        library.flushTreeEvents()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+        var observed: [ControlEvent] = []
+        library.onControlEvent = { observed.append($0) }
+
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: session.id)
+        _ = store.addWorkspace(name: "one")
+        #expect(observed.map(\.kind) == [.status])
+        library.flushTreeEvents()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: nil, limit: 100
+        )))
+        #expect(observed == batch.items)
+        #expect(observed.map(\.kind) == [.status, .treeChanged])
+    }
+
     @Test func statusEventsCarryThePreviousStatus() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let store = try #require(library.activeStore)

@@ -95,6 +95,18 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(keymap: payload))
     }
 
+    func reloadHooks() -> ControlResponse {
+        settingsModel.reloadHooks()
+        return ControlResponse(ok: true, result: ControlResult(count: settingsModel.hooksDiagnostics.count))
+    }
+
+    /// The read side of `hooks.reload`: the file, its diagnostics, and every hook's live state.
+    func listHooks() -> ControlResponse {
+        let diagnostics = settingsModel.hooksDiagnostics.map { ControlKeymapDiagnostic(line: $0.line, message: $0.message) }
+        let payload = ControlHooks(path: settingsModel.hooksPath, diagnostics: diagnostics, hooks: hookStatus())
+        return ControlResponse(ok: true, result: ControlResult(hooks: payload))
+    }
+
     /// Which app is serving this socket. App-global: no target, no `--window`, and no window needs to be
     /// open, which is what makes it usable as a preflight from a keymap-launched script — those inherit the
     /// app's launchd environment and so carry no `TERM_PROGRAM_VERSION`.

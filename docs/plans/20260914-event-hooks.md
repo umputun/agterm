@@ -391,17 +391,17 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlEventRingTests.swift` (or `WindowLibrary` tests)
 - Modify: `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] write failing test: `WindowLibrary` invokes an `onControlEvent` observer with the sequenced event
+- [x] write failing test: `WindowLibrary` invokes an `onControlEvent` observer with the sequenced event
       after each ring append, including debounced `tree.changed`, never during bootstrap
-- [ ] write failing UI tests beside `testKeymapReload…`: `hooks reload` returns the diagnostic count for a
+- [x] write failing UI tests beside `testKeymapReload…`: `hooks reload` returns the diagnostic count for a
       clean and for a broken isolated `hooks.conf`; `hooks list` reports path, diagnostics and entries
-- [ ] write failing UI integration test with a finite fixture: a `hooks.conf` line on `status` that exits
+- [x] write failing UI integration test with a finite fixture: a `hooks.conf` line on `status` that exits
       unless the event names session A, then runs `agtermctl notify --socket "$AGT_SOCKET"`; drive
       `session status --target A blocked`; assert the response returns, the notify ring event appears, and
       `hooks list` reaches no running and no pending work within a deadline
-- [ ] implement: SettingsModel loads `hooks.conf` on start and `reloadHooks` posts `.agtermHooksChanged`;
+- [x] implement: SettingsModel loads `hooks.conf` on start and `reloadHooks` posts `.agtermHooksChanged`;
       scheduler `apply` on load/reload; observer feeds `dispatch`; control effects mirror the keymap ones
-- [ ] run the new UI methods only with `-only-testing:`; must pass before task 7
+- [x] run the new UI methods only with `-only-testing:`; must pass before task 7
 
 ### Task 7: Menu, palette and Settings actions
 

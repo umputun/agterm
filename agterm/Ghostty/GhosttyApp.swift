@@ -712,4 +712,6 @@ extension Notification.Name {
     /// and the action palette re-reads the custom commands. The data-driven menu shortcuts re-render on their
     /// own from the `@Observable` keymap.
     static let agtermKeymapChanged = Notification.Name("agterm.keymapChanged")
+    /// Posted after `hooks.conf` is (re)loaded and reparsed, so the hook scheduler applies the new definitions.
+    static let agtermHooksChanged = Notification.Name("agterm.hooksChanged")
 }

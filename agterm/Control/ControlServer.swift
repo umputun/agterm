@@ -154,6 +154,8 @@ final class ControlServer {
 
     /// The Live sessions reset's confirm path; nil refuses `zmx.reset` as unsupported.
     var liveReset: LiveResetCoordinator?
+    /// The scheduler's rows for `hooks.list`, wired by `agtermApp` once the controller exists.
+    var hookStatus: () -> [ControlHookEntry] = { [] }
     /// The last launch's reset outcome for the read-back; injectable so a hosted test stages one.
     var liveResetOutcome: () -> LiveReset.Outcome? = { GhosttyApp.shared.liveResetOutcome }
 

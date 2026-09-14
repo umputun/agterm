@@ -94,6 +94,8 @@ public final class WindowLibrary {
     @ObservationIgnored let recentClosedStore: RecentClosedStore
     /// One bounded run-identified ring shared by every window store for this library/app lifetime.
     @ObservationIgnored private let controlEventRing: ControlEventRing
+    /// Every event after the ring sequences it, debounced `tree.changed` included: what `events.read` will show.
+    @ObservationIgnored public var onControlEvent: ((ControlEvent) -> Void)?
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
@@ -728,13 +730,11 @@ public final class WindowLibrary {
                     self.scheduleTreeChanged(for: windowID)
                     return
                 }
-                self.controlEventRing.append(ControlEventDraft(
-                    kind: draft.kind,
-                    window: windowID.uuidString,
-                    workspace: draft.workspace,
-                    session: draft.session,
-                    payload: draft.payload
-                ))
+                // two steps: optional chaining on the observer would skip the append itself when it is nil
+                let event = self.controlEventRing.append(ControlEventDraft(
+                    kind: draft.kind, window: windowID.uuidString, workspace: draft.workspace,
+                    session: draft.session, payload: draft.payload))
+                self.onControlEvent?(event)
             },
             paneFinalizer: paneFinalizer,
             launchPaneDrop: launchPaneDrop
@@ -982,7 +982,9 @@ public final class WindowLibrary {
         let debouncer = treeEventDebouncers[windowID] ?? Debouncer()
         treeEventDebouncers[windowID] = debouncer
         debouncer.schedule(after: 0.1) { [weak self] in
-            self?.controlEventRing.append(ControlEventDraft(kind: .treeChanged, window: windowID.uuidString))
+            guard let self else { return }
+            let event = self.controlEventRing.append(ControlEventDraft(kind: .treeChanged, window: windowID.uuidString))
+            self.onControlEvent?(event)
         }
     }
 
