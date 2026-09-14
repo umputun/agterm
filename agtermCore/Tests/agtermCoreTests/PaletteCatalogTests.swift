@@ -44,6 +44,8 @@ struct PaletteCatalogTests {
             "Select Theme…",
             "Edit Keymap",
             "Reload Keymap",
+            "Edit Hooks",
+            "Reload Hooks",
             "Edit ghostty.conf",
             "Reload Config",
             "Delete Workspace",
@@ -61,7 +63,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 53)
+        #expect(PaletteCommand.allCases.count == 55)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -186,9 +188,20 @@ struct PaletteCatalogTests {
 
     /// The commands whose menu item carries no `modalActive` term at all.
     private static let coverProof: Set<PaletteCommand> = [
-        .closeSession, .reloadKeymap, .reloadConfig,
+        .closeSession, .reloadKeymap, .reloadHooks, .reloadConfig,
         .increaseFontSize, .decreaseFontSize, .resetFontSize, .toggleTerminalZoom,
     ]
+
+    @Test func hookCommandsMirrorTheirKeymapCounterparts() {
+        #expect(PaletteCommand.editHooks.title(in: Self.live) == "Edit Hooks")
+        #expect(PaletteCommand.reloadHooks.title(in: Self.live) == "Reload Hooks")
+        #expect(PaletteCommand.editHooks.builtinAction == nil)
+        #expect(PaletteCommand.reloadHooks.builtinAction == nil)
+        for context in [Self.live, PaletteContext()] {
+            #expect(PaletteCommand.editHooks.isEnabled(in: context) == PaletteCommand.editKeymap.isEnabled(in: context))
+            #expect(PaletteCommand.reloadHooks.isEnabled(in: context) == PaletteCommand.reloadKeymap.isEnabled(in: context))
+        }
+    }
 
     private static let needSession: Set<PaletteCommand> = [
         .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,

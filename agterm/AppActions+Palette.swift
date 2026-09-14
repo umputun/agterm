@@ -106,6 +106,8 @@ extension AppActions {
         case .selectTheme: openThemePalette()
         case .editKeymap: editKeymap()
         case .reloadKeymap: reloadKeymap()
+        case .editHooks: editHooks()
+        case .reloadHooks: reloadHooks()
         case .editGhosttyConfig: editGhosttyConfig()
         case .reloadConfig: reloadGhosttyConfig()
         case .deleteWorkspace: deleteActiveWorkspace()

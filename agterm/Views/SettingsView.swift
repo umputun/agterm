@@ -825,7 +825,7 @@ private struct KeyMappingSettingsView: View {
                             .accessibilityIdentifier("settings-keymap-default")
                     }
                 }
-                Text("The directory holding keymap.conf. Changing it reloads the keymap.")
+                Text("The directory holding keymap.conf and hooks.conf. Changing it reloads both.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -853,9 +853,37 @@ private struct KeyMappingSettingsView: View {
                 Button("Reload") { model.reloadKeymap() }
                     .accessibilityIdentifier("settings-keymap-reload")
             }
+
+            Section("Hooks") {
+                if model.hooksDiagnostics.isEmpty {
+                    Text("No issues.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("settings-hooks-diagnostics")
+                        .accessibilityValue(hooksDiagnosticsSummary)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(model.hooksDiagnostics.enumerated()), id: \.offset) { _, diagnostic in
+                            Text(diagnosticLine(diagnostic))
+                                .font(.system(size: 12).monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("settings-hooks-diagnostics")
+                    .accessibilityValue(hooksDiagnosticsSummary)
+                }
+                Button("Reload") { model.reloadHooks() }
+                    .accessibilityIdentifier("settings-hooks-reload")
+            }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private var hooksDiagnosticsSummary: String {
+        model.hooksDiagnostics.isEmpty ? "No issues." : model.hooksDiagnostics.map(diagnosticLine).joined(separator: " | ")
     }
 
     /// A diagnostic as one line, "line N: message"; a whole-file/cross-section one (line 0) shows the message.

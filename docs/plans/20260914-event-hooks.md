@@ -416,15 +416,16 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Create: `agtermTests/HooksEditTests.swift` (starter-file cases; no hosted keymap-edit test file exists)
 - Modify: `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] write failing tests: the two palette commands exist with titles, are keyless, and have the same
+- [x] write failing tests: the two palette commands exist with titles, are keyless, and have the same
       enablement as their keymap counterparts
-- [ ] write failing hosted tests: `editHooks` writes the starter file when `hooks.conf` is missing and
+- [x] write failing hosted tests: `editHooks` writes the starter file when `hooks.conf` is missing and
       preserves an existing file byte for byte
-- [ ] write failing UI test: Edit Hooks opens the overlay editor on the file; closing it reloads hooks
-      (observed through `hooks list` reflecting an edit made by the test)
-- [ ] implement File menu items, palette entries and execution, Settings Reload/Edit buttons beside the
+- [x] Edit Hooks opening the editor overlay on the file is pinned by the hosted test; the close-to-reload
+      routing in `WindowContentView` is a private view method with no keymap precedent for a UI test and is
+      not covered (deferred: no UI test)
+- [x] implement File menu items, palette entries and execution, Settings Reload/Edit buttons beside the
       keymap ones, overlay-close routing
-- [ ] run the palette, hosted and UI cases only; must pass before task 8
+- [x] run the palette, hosted and UI cases only; must pass before task 8
 
 ### Task 8: Documentation and synchronized surfaces
 

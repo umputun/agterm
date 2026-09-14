@@ -95,7 +95,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
-    case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
+    case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
     case addWorkspaceToFocus, toggleWorkspaceFilter
     case expandWorkspaces, collapseWorkspaces, toggleWorkspaceCollapse, focusLeftPane, focusRightPane
@@ -133,7 +133,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     private func isCoveredByModal(_ context: PaletteContext) -> Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize,
-             .reloadKeymap, .reloadConfig, .toggleTerminalZoom, .closeSession:
+             .reloadKeymap, .reloadHooks, .reloadConfig, .toggleTerminalZoom, .closeSession:
             return false
         case .dashboard:
             return context.terminalZoomActive || context.pickerActive
@@ -232,6 +232,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .selectTheme: return "Select Theme…"
         case .editKeymap: return "Edit Keymap"
         case .reloadKeymap: return "Reload Keymap"
+        case .editHooks: return "Edit Hooks"
+        case .reloadHooks: return "Reload Hooks"
         case .editGhosttyConfig: return "Edit ghostty.conf"
         case .reloadConfig: return "Reload Config"
         case .deleteWorkspace: return "Delete Workspace"
@@ -292,7 +294,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleWorkspaceFilter: return .toggleWorkspaceFilter
         case .focusLeftPane: return .focusLeftPane
         case .focusRightPane: return .focusRightPane
-        case .editKeymap, .reloadKeymap, .editGhosttyConfig, .reloadConfig,
+        case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,
              .clearFlagged, .clearFocus, .addWorkspaceToFocus, .expandWorkspaces, .collapseWorkspaces,
              .closeSplit, .swapPanes:
             return nil

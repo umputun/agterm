@@ -267,6 +267,10 @@ struct WindowContentView: View {
             actions.keymapEditOverlaySession = nil
             actions.reloadKeymap()
         }
+        if let id = actions.hooksEditOverlaySession, closed.contains(id) {
+            actions.hooksEditOverlaySession = nil
+            actions.reloadHooks()
+        }
         if let id = actions.ghosttyEditOverlaySession, closed.contains(id) {
             // the reload is skipped when the file is unchanged, so a no-op editor session keeps its font zoom.
             actions.ghosttyEditOverlaySession = nil
