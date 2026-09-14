@@ -445,10 +445,10 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Modify: `.claude/rules/keymap.md` (pointer: `hooks.conf` shares paths and diagnostics, not the parser)
 - Modify: `ARCHITECTURE.md` (scheduler/runner split and the main-actor contract)
 
-- [ ] write the user-facing contract once in `site/docs.html#hooks`; commands page covers CLI and read-back
-- [ ] update the skill reference and commands page; no surface states a command count
-- [ ] update the two rules files with implementation constraints only, cross-referencing the docs page
-- [ ] update `ARCHITECTURE.md`
+- [x] write the user-facing contract once in `site/docs.html#hooks`; commands page covers CLI and read-back
+- [x] update the skill reference and commands page; no surface states a command count
+- [x] update the two rules files with implementation constraints only, cross-referencing the docs page
+- [x] update `ARCHITECTURE.md`
 
 ### Task 9: Verify acceptance criteria
 - [ ] verify every fixed decision above is implemented and none of the deferred items crept in

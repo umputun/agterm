@@ -7,8 +7,8 @@ description: >
   and read its exit status; post a HUD panel or a desktop notification; show a native picker with
   caller-supplied choices or a question dialog with named buttons; display an image inline; type into a
   session, copy its selection or search its scrollback; manage windows; change font size; set the theme;
-  reload or edit the keymap and the agterm-scoped ghostty config; subscribe to status, notification,
-  lifecycle and tree-change events.
+  reload or edit the keymap, the event hooks and the agterm-scoped ghostty config; subscribe to status,
+  notification, lifecycle, pane-visibility and tree-change events.
   Covers the window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees,
   attaching a session running on another Mac, the cookbook recipes, the running version, and diagnosing
   problems or filing an agterm bug or feature request.
@@ -27,8 +27,8 @@ allowed-tools: Bash(agtermctl *)
 agterm is a native macOS terminal. It exposes a programmatic control channel over a local unix
 socket, driven by the companion CLI `agtermctl`. Use it to build and steer terminal layouts, run
 programs in overlays, type into sessions, notify the user in the exact session you are working in,
-and subscribe to control events. Events cover status, notifications, session lifecycle, and
-structural tree changes. They do not stream terminal output; use `session text` to read a buffer.
+and subscribe to control events. Events cover status, notifications, session lifecycle, split and
+scratch pane visibility, and structural tree changes; `hooks.conf` runs a shell line on any of them. They do not stream terminal output; use `session text` to read a buffer.
 
 ## Am I inside agterm?
 
@@ -262,7 +262,7 @@ that window, omitted when no pick is pending.
 
 **events**: continuously print control events, subscribing from the current tail when no cursor is
 given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
-`--kind status|notify|session.created|session.closed|tree.changed`; resume with paired
+`--kind status|notify|session.created|session.closed|tree.changed|pane.split|pane.scratch`; resume with paired
 `--run RUN --after SEQ`; and set page size with `--limit 1...1000`. The app retains 4,096 events for
 one process run. Cursor run changes, expiry, and ahead-of-tail errors are fatal and are never silently
 rebaselined. There is no terminal-output event stream.
@@ -578,6 +578,8 @@ Visibility/mode act on the frontmost window; `sidebar expand`/`collapse`/`width`
 **font** — `font inc|dec|reset [--pane left|right|scratch]` — change a session pane's font size (omitted/`left` = main pane, `right` = the split pane, `scratch` = the scratch terminal). Read the resulting size back from `tree` (`fontSize`/`splitFontSize`/`scratchFontSize` per pane).
 
 **keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count). `keymap list` — show the resolved keymap AND the live menu key equivalents: every built-in with its current binds (the menu chord first, then any `|`-separated alternatives a key monitor delivers), the custom commands, the parse diagnostics, and what the menu bar is actually dispatching. Use it to check a rebind took effect, to find a free chord, or to spot a chord the keymap resolved but the menu is not carrying.
+
+**hooks** — `hooks reload` — re-read `hooks.conf` (prints the parse-diagnostic count); `hooks list` — every `on <kind> <shell...>` line with its running pid and elapsed seconds, pending and dropped counts, last failure, and a retired marker for a removed line whose script still runs. A hook gets the event JSON on stdin plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_SESSION_ID`, `AGT_WORKSPACE_ID`, `AGT_WINDOW_ID` and `AGT_SOCKET`; one process per line at a time with a 256-deep queue behind it. Both commands are app-global and refuse a target or `--window`.
 
 **config** - `config reload` - re-read the agterm-scoped `ghostty.conf` (prints the diagnostic count).
 

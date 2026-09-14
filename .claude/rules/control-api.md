@@ -158,7 +158,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
-- `keymap.reload`, `keymap.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
+- `keymap.reload`, `keymap.list`, `hooks.reload`, `hooks.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
 - `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`
 
@@ -710,6 +710,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Host-free projection names arrow/return; represent AppKit globe as `fn+` even though grammar lacks it.
 - `config.reload` shares GUI/Edit-overlay reload and returns Ghostty diagnostic count. Keymap and config are
   app-global and take no window.
+- `hooks.reload` / `hooks.list` refuse a target or `--window` before any action. The user contract (file
+  format, stdin/env delivery, queue, failures, reload) lives in `site/docs.html#hooks` and the read-back in
+  `site/commands.html`; these are the implementation constraints. Hook identity is kind plus command text,
+  never the line number, so `HookScheduler.apply` keeps an unchanged entry's child, queue and counters.
+  Only process exit releases a hook's slot: a stdin delivery failure is recorded and bannered on the live
+  run and never starts a second child, and `HookProcessRunner` reports `onExit` only after the child has
+  terminated AND the `DispatchIO` cleanup handler has closed the write end. The scheduler's `onFailure`
+  sink is the only banner source, one per hook until success or reload. `WindowLibrary.onControlEvent`
+  fires after the ring append, so hooks and `events.read` see the same events; dispatch never waits on a
+  hook, which is what makes a hook's own same-socket `agtermctl` call safe.
 - `theme.set` operates on light and dark slots. Name/light aliases conflict; setting light preserves dark.
   Nil/empty means Ghostty built-in, while bare set clears both and disables sync. Dark enables sync,
   seeding missing light from current or Builtin Light; reserved `none` clears dark and sync but preserves

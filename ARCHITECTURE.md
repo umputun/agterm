@@ -19,6 +19,7 @@
 - `TerminalSurface` (`@MainActor protocol`, `AnyObject`): the minimal surface contract (`teardown()`) that `Session` owns. The concrete conformer lives in the app target, which keeps `agtermCore` free of GhosttyKit.
 - `Snapshot` and friends (`Codable, Equatable, Sendable` value types): the persisted form of the tree.
 - `PersistenceStore`: JSON load/save at `~/Library/Application Support/agterm/workspaces.json`, with the storage directory injectable for tests.
+- `Hooks` / `parseHooksConf` and `HookScheduler`: the `hooks.conf` model and the host-free scheduler that runs one child per hook with a bounded queue behind it, driving an injected `HookLauncher`. The launcher contract is throw-or-pid with exactly one exit callback; only exit releases a slot, and `WindowLibrary.onControlEvent` feeds the scheduler after each ring append.
 
 ### App target (XcodeGen project)
 
@@ -35,6 +36,8 @@ The programmatic control channel (`agtermctl` over a unix socket) follows the sa
 - **`agtermCore`** holds the wire protocol (`ControlProtocol.swift`: `Command`, `ControlArgs`, `ControlRequest`/`ControlResponse`, the tree node types) and the pure resolvers (`ControlResolve.swift`: the target resolver and the socket-path resolver). The `agtermCore` *library* target stays dependency-free.
 - **`agtermctlKit` + `agtermctl`** are separate targets in the same SwiftPM package. `agtermctlKit` is the testable library (the `swift-argument-parser` `ParsableCommand` tree plus the socket client); `agtermctl` is the thin executable. Only these CLI targets link `ArgumentParser`, so they build and test with `swift build`/`swift test` and never touch Xcode or GhosttyKit.
 - **`ControlServer`** (`agterm/Control/ControlServer.swift`) lives in the app target. It owns the POSIX unix socket, decodes each request, and dispatches it onto the existing `AppActions`/`AppStore` seam (and `GhosttySurfaceView.inject(text:)` for input). It is the only piece that touches the live surfaces, keeping the protocol and the CLI host-free. The flat command dispatch is split for size across sibling extension files (`ControlServer+SessionActions`/`+SurfaceIO`/`+WindowCommands`/`+AppCommands`, the last holding the app-global arms — the tree projection, sidebar, keymap/config reload, themes, and the quick terminal), and target resolution (frontmost/cross-window store scoping, id/prefix matching, the pinned wire-error strings) lives in a small injected `ControlTargetResolver`.
+
+- **`HookProcessRunner` and `HookController`** (`agterm/Commands/`) are the app side of hooks: the runner implements `HookLauncher` with a posix pipe whose write end one `DispatchIO` channel owns, encoding and writing the event off the main actor and reporting exit only after the channel is cleaned up; the controller owns the scheduler, applies `hooks.conf` on start and reload, and routes failures to `NotificationManager`.
 
 See `CLAUDE.md` for the socket lifecycle, addressing, command catalog, and the keep-in-sync convention.
 

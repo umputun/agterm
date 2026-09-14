@@ -32,10 +32,11 @@ With no cursor, the first read subscribes from now: it returns an empty batch an
 tail, and the CLI prints only later events. The app keeps a non-destructive ring of the latest 4,096
 events for its current process run. Independent readers do not consume one another's events.
 
-The five event kinds and payloads are:
+The event kinds and payloads are:
 
-- `status`: `name`, normalized `status` (`idle`|`active`|`blocked`|`completed`), a `blink` boolean,
-  and optional `pane`, `color` and `shape` (the last two being the per-call `--color`/`--shape`
+- `status`: `name`, normalized `status` (`idle`|`active`|`blocked`|`completed`), `previous` (the
+  status before the write, equal to `status` when only blink, pane, color or shape changed), a `blink`
+  boolean, and optional `pane`, `color` and `shape` (the last two being the per-call `--color`/`--shape`
   overrides). An event fires whenever the whole indicator changes, not just the state name — so a
   change to `blink`, `pane`, `color` or `shape` alone is a real event you can watch, while re-asserting
   an identical indicator emits nothing. Clearing emits `idle`.
@@ -47,6 +48,9 @@ The five event kinds and payloads are:
 - `tree.changed`: an empty payload and the affected window id. Name, membership, and ordering changes
   are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value.
   Read `tree --json` for the current snapshot.
+- `pane.split` / `pane.scratch`: session `name` and a `status` of `shown` or `hidden`, emitted only on a
+  real visibility change: showing or hiding the split or scratch, closing the split, the primary pane
+  exiting with a split promoted, or the scratch shell exiting. An axis change while shown emits nothing.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -1323,6 +1327,36 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `previous_window`, `next_window`, `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
+
+## hooks
+
+`hooks.conf`, beside `keymap.conf`, binds a shell line to an event kind: `on <kind> <shell...>`, one per
+line, blank and `#` lines ignored, the remainder after the kind passed to `/bin/sh -c` untouched.
+Several lines per kind are independent hooks; an identical kind+command line is skipped with a
+diagnostic. The script gets the event as one JSON object on stdin (the `events --json` shape) followed
+by a newline and EOF, plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_SESSION_ID`, `AGT_WORKSPACE_ID`,
+`AGT_WINDOW_ID` and `AGT_SOCKET`, each set explicitly and empty when the event lacks the field. It runs
+detached in the app's working directory with the widened `PATH` a custom command gets; pass
+`--socket "$AGT_SOCKET"` to any `agtermctl` call. One process per line at a time; further events queue
+in order up to 256, then the oldest is dropped and counted. No timeout. A non-zero exit, a failed spawn
+or an undelivered event banners once per hook until its next success or a reload. A hook whose command
+emits another event of its own kind triggers itself again; the queue bounds concurrency, nothing detects
+the loop.
+
+`agtermctl hooks reload` — re-read and apply `hooks.conf`; returns `result.count` = the number of
+parse diagnostics (0 = clean). A hook whose line is unchanged keeps its running child, queue and
+counters, comments and reordering included; a removed line drops its queue and finishes its child.
+
+`agtermctl hooks list` — returns `result.hooks`:
+
+- `path` — the `hooks.conf` this came from.
+- `diagnostics[]` — `line` + `message` per parse problem.
+- `hooks[]` — one row per line in file order, then any removed line whose child still runs, marked
+  `retired: true`: `kind`, `command`, `line`, `runningPid` and `elapsedSeconds` while a child runs,
+  `pending` (events waiting behind it), `dropped` (events the bounded queue discarded), and
+  `lastFailure`, kept until the hook next succeeds or the file is reloaded.
+
+Both are app-global and refuse a target or `--window`.
 
 ## config
 

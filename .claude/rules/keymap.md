@@ -235,3 +235,6 @@ paths:
   optional fish, VISUAL precedence, rc sourcing, and quoting.
   Overlay close reloads only the recorded edit session. No control command is needed because scripts can
   compose `session overlay open "$EDITOR <path>" --size-percent 95`.
+- `hooks.conf` shares `ConfigPaths`, `KeymapDiagnostic` and the Edit/Reload UX, not the parser:
+  `parseHooksConf` keeps the shell remainder verbatim with no inline-comment stripping. Its contract is
+  in [[control-api]].

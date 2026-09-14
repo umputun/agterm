@@ -198,6 +198,7 @@
             <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9"
               >Custom commands &amp; keys</a
             >
+            <a href="#hooks" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Event hooks</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
             <a href="#agtermctl" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">agtermctl reference</a>
@@ -1863,6 +1864,100 @@
                 >), alternatives still joined by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                   >|</span
                 >.
+              </li>
+            </ul>
+          </section>
+
+          <!-- HOOKS -->
+          <section id="hooks" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Event hooks
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              A hook is a shell line agterm runs when a control event fires: an agent status change, a notification, a session
+              created or closed, a split or scratch pane shown or hidden, or the sidebar tree changing. Nothing has to stay running
+              to react. Hooks live in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/hooks.conf</span>,
+              beside <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>; a commented starter is written on first launch, and
+              <strong style="color: #e6e1d7">File &#9656; Edit Hooks&hellip;</strong> and
+              <strong style="color: #e6e1d7">File &#9656; Reload Hooks</strong> (or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl hooks reload</span>) edit and apply it. One verb; blank lines and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comment lines are ignored.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >
+<span style="color: #6b727a"># on &lt;kind&gt; &lt;shell...&gt;</span>
+<span style="color: #5ea1f2">on</span> status           ~/.config/agterm/hooks/status.sh
+<span style="color: #5ea1f2">on</span> session.closed   echo "$(date +%T) closed $AGT_SESSION_ID" &gt;&gt; ~/.local/state/agterm/sessions.log
+<span style="color: #5ea1f2">on</span> pane.scratch     ~/.config/agterm/hooks/scratch-layout.sh
+<span style="color: #5ea1f2">on</span> tree.changed     ~/.config/agterm/hooks/sync-outline.sh</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              The redirection in the second line does not create its directory:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mkdir -p ~/.local/state/agterm</span> first. A status script that reacts to one status must
+              exit 0 for the others, or every idle event reports a failure:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                margin-top: 12px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >
+<span style="color: #6b727a">#!/bin/sh</span>
+[ "$AGT_EVENT_STATUS" = blocked ] || exit 0
+afplay /System/Library/Sounds/Glass.aiff &amp;
+agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"</div>
+            <ul style="list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 10px">
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Kinds.</strong> <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.created</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.closed</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree.changed</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane.split</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane.scratch</span>. The two pane kinds carry <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shown</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hidden</span> and fire only on a real change, closing a split or the scratch shell exiting included. The same kinds <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events</span> prints; a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> event also carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">previous</span>, the status before the write, so a script sees the transition without keeping state.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Several lines per kind.</strong> Each line is its own hook with its own queue and child; they start together with no ordering between them. An identical kind and command twice is skipped with a diagnostic.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">What the script gets.</strong> The event as one JSON object on stdin followed by a newline and end of file, the shape <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events --json</span> prints, plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_EVENT_KIND</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_EVENT_STATUS</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_SESSION_ID</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_WORKSPACE_ID</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_WINDOW_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_SOCKET</span>, each set explicitly and empty when the event has no such field. The line runs detached through <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/bin/sh -c</span> in the app's working directory with the same widened <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">PATH</span> a custom command gets, so a bare <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> resolves; pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket "$AGT_SOCKET"</span> so it reaches the instance that fired the hook.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">One process per line at a time.</strong> While a hook's script runs, further events for that line queue in order, up to 256; past that the oldest is dropped and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl hooks list</span> shows the count. Nothing waits on a script: a slow or hung one holds only its own queue, and there is no timeout.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Failures.</strong> A non-zero exit, a script that could not be started, or an event that could not be delivered posts one banner per hook until that hook next succeeds or the file is reloaded; <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks list</span> keeps the last failure.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Reload.</strong> A hook whose line is unchanged keeps its running script, queue and counters across a reload, comments and reordering included. A removed line accepts no more events and finishes its running script, which <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks list</span> still shows marked retired until it exits.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Loops.</strong> A hook whose command emits another event of the kind it listens to triggers itself again. The queue bounds how many processes run; it does not detect the loop.
               </li>
             </ul>
           </section>

@@ -12,12 +12,12 @@ agterm is a native macOS terminal, built on libghostty (Ghostty's engine), with 
 - Installable agent skill that teaches Claude Code and Codex the control model and the full agtermctl command set
 - Surfaces per session: split panes (two shells), a per-session scratch terminal, and floating/full overlays; plus one app-wide quick terminal in a floating panel, summonable by a system-wide hotkey
 - Multi-window: a library of windows (e.g. "work" and "personal"), one per screen, restored on next launch
-- 512 bundled themes with a live-preview picker, fully rebindable kitty-flavored keymap.conf, and full session persistence
+- 512 bundled themes with a live-preview picker, fully rebindable kitty-flavored keymap.conf, event hooks in hooks.conf that run a shell line on status, session, pane and tree events, and full session persistence
 - In-terminal search, fuzzy command palettes, and a Ctrl-Tab MRU session switcher
 
 ## Docs
 
-- [Documentation](https://agterm.com/docs): full reference — install, keybindings, keymap.conf, ghostty config, themes, control API
+- [Documentation](https://agterm.com/docs): full reference — install, keybindings, keymap.conf, hooks.conf, ghostty config, themes, control API
 - [Control API commands](https://agterm.com/commands): the complete agtermctl command catalog
 - [README](https://github.com/umputun/agterm/blob/master/README.md): the project synopsis, with install, the model, and the control-API demo
 - [Architecture](https://github.com/umputun/agterm/blob/master/ARCHITECTURE.md): module split, surface ownership, and the libghostty C boundary
