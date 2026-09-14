@@ -206,6 +206,7 @@
             <a href="#config" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">config</a>
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
             <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
+            <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
             <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
@@ -3216,6 +3217,42 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Pinned zmx has a single leader, and an attach joins as a follower, so the remote arrives at the <em>other</em> machine's window size and ignores input until the first <em>classified</em> key — a printable character, Return, Tab or Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side, so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Leadership is per pane, so typing in one half of a split leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something else resizes it.
+              </p>
+            </div>
+          </section>
+
+          <section id="terminfo" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              terminfo
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Local-only: this group never opens the control socket, so it has no protocol command, no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span>, and needs no running agterm.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl terminfo install DESTINATION [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]
+              </div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Install the bundled <span style="font-family: &quot;JetBrains Mono&quot;, monospace">xterm-ghostty</span> terminfo entry on a remote host. agterm's shells run with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TERM=xterm-ghostty</span>, and a host without that entry makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">less</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">vim</span> and other full-screen programs warn that the terminal is not fully functional. This dumps the entry with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">infocmp</span> and compiles it into the remote account's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.terminfo</span> with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tic</span>, over one ssh connection. Run it once per host and account; nothing is cached and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ssh</span> itself is untouched.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">DESTINATION</span> is what ssh takes: a host, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">user@host</span>, or an alias from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.ssh/config</span>. The connection is interactive, so a password or host-key prompt is answered on this terminal. Only the four options shown pass through to ssh; other connection settings belong in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.ssh/config</span> under a host alias, because an unchecked ssh argument could print the config and claim success or never run <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tic</span> at all. The settings that decide how the command itself runs are the installer's, and win over the config: no pty, stdin kept, a plain session, no fork after authentication, and no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">RemoteCommand</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The remote needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tic</span>, which comes with ncurses, and says so when it is missing. Exits with ssh's status; a failure before the connection, such as no entry next to this <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>, is reported without opening one.
               </p>
             </div>
           </section>

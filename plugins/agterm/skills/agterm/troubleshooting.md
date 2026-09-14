@@ -34,8 +34,10 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   `ssh-env` and `ssh-terminfo` for `shell-integration-features`. Ghostty implements them by replacing
   `ssh` with a wrapper calling a `ghostty` CLI absent from agterm's bundle, so agterm forces both off
   after reading the config and keeps every other flag. Setting either is by design a no-op, reports no
-  diagnostic, and is NOT a bug. For remote terminfo, install the entry manually with
-  `infocmp -x xterm-ghostty | ssh <host> 'tic -x -'`.
+  diagnostic, and is NOT a bug. For remote terminfo, install the entry once per host and account with
+  `agtermctl terminfo install <host>` (local-only, no socket; `-p`, `-i`, `-J`, `-F` pass through, other
+  connection settings belong in `~/.ssh/config`, and the execution settings are the installer's own). The symptom it fixes is `less`, `vim` or `apt` on the remote
+  warning that the terminal is not fully functional, because `TERM=xterm-ghostty` is unknown there.
 - **Logs** (unified logging, subsystem `com.umputun.agterm`):
   ```bash
   log show --predicate 'subsystem == "com.umputun.agterm"' --info --last 30m

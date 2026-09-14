@@ -162,6 +162,12 @@ renumbering. Do not reintroduce a count anywhere.
   `restore.clear`, `restore.mode`, `version`
 - `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`
 
+`terminfo install` is a CLI-only command with no protocol counterpart, the one exemption from the
+protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
+nothing for the app to dispatch or read back. `TerminfoInstall` in `agtermCore` owns the argv and the
+pipeline; the CLI owns the typed option surface, deliberately narrower than ssh's so `-G`, `-N`, `-n` and
+`-f` cannot fake a success or hang the install.
+
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.

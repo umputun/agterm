@@ -1587,6 +1587,34 @@ For a PER-SESSION, per-pane override that pins (or suppresses) what a pane resto
 denylist, and is what a `SessionStart` hook rewrites to reattach a non-idempotent command. `restore clear`
 here is app-global and touches only the captured commands, not those overrides.
 
+## terminfo
+
+`agtermctl terminfo install DESTINATION [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — install the bundled
+`xterm-ghostty` terminfo entry into a remote account's `~/.terminfo`. Local-only: it never opens the
+control socket, takes no `--socket`, `--window` or `--json`, and needs no running agterm. It dumps the
+entry with `infocmp -x` from the database next to the running `agtermctl` (falling back to `TERMINFO`
+from the environment outside a bundle), then runs the remote `tic -x -o "$HOME/.terminfo" -` over one
+ssh connection with the source on stdin. Nothing is cached; run it once per host and account.
+
+- `DESTINATION` — as ssh takes it: host, `user@host`, or an alias from `~/.ssh/config`. Refused when it
+  starts with `-` or contains whitespace or a control character.
+- `-p`, `-i` (repeatable), `-J`, `-F` — passed through to ssh. No other ssh option passes; other
+  connection settings go in `~/.ssh/config`. The execution settings are the installer's and override the
+  config: `-T`, `StdinNull=no`, `SessionType=default`, `ForkAfterAuthentication=no`, `RemoteCommand=none`.
+- The connection is interactive: a password, passphrase or host-key prompt is answered on this terminal.
+  Do not run it from a hook or a non-interactive script unless key auth already works for the host.
+
+Human output on success is `installed xterm-ghostty on DESTINATION`. It exits with ssh's status (128 plus
+the signal when ssh was killed), and 64 for a usage error. Failures before the connection open none:
+
+- `no xterm-ghostty terminfo entry next to this agtermctl; looked in <dirs>` — no database found.
+- `infocmp exited N: <stderr>` — the local dump failed.
+- `could not start ssh: <call> failed with <reason>` — the spawn failed.
+- `agterm: tic is not installed on this host, install ncurses first` — printed by the remote and followed
+  by `ssh exited 3; xterm-ghostty was not installed`.
+- `ssh exited N; xterm-ghostty was not installed` — any other remote failure; ssh's own stderr above it
+  says what happened.
+
 ## version
 
 `agtermctl version` — which agterm is serving this socket. App-global: no target, no `--window`, and no

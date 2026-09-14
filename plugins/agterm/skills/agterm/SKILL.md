@@ -624,6 +624,15 @@ never restored after a relaunch. Both run ssh non-interactively, so key-based au
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm
 has no CLI an ssh command can find. Every zmx command needs a running agterm.
 
+**terminfo** — `terminfo install DESTINATION [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — install the
+bundled `xterm-ghostty` terminfo entry into a remote account's `~/.terminfo` over one interactive ssh
+connection, the fix for `less`/`vim` on that host warning that the terminal is not fully functional. Run
+once per host and account; nothing is cached and `ssh` itself is untouched. Local-only: no socket, no
+`--json`, no running agterm needed, and it exits with ssh's status. Only those four ssh options pass
+through; other connection settings belong in `~/.ssh/config` under a host alias, while the execution
+settings (no pty, stdin kept, plain session, no fork, no `RemoteCommand`) are the installer's and win
+over the config. The remote needs `tic` (ncurses) and says so when it is missing.
+
 **version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
 `commit` when the build recorded one). App-global: no target, no `--window`, no window need be open, so it
 works as a preflight from a keymap-launched script, which has no `$TERM_PROGRAM_VERSION`. Address the
