@@ -16,7 +16,7 @@ Outside agterm (`$AGTERM_SESSION_ID` unset), `agst` `exec`s the command directly
 
 ## Requirements
 
-- agterm 0.7.1 or later, which shipped `session status --auto-reset`.
+- agterm 0.17.0 or later, which shipped `session status --shape`.
 - `agtermctl` on your `PATH`, or set `AGTERMCTL` to its full path.
 
 ## Setup
@@ -57,3 +57,5 @@ Nothing destructive: the wrapper only posts status for its own session.
 - A command that backgrounds itself and returns exit 0 reports `completed` while the real work is still going.
 - `active` is set once, before the command starts, and not re-asserted.
 - Status calls are best-effort: if `agtermctl` is missing or the socket is closed, the command runs unaffected.
+- Ctrl-C kills the wrapper along with the command, so the end status is never posted and the row stays `active` until a later call clears it.
+- While the command runs, `agtermctl tree` reports the pane's foreground as the `sh` wrapper's argv, not the wrapped command's.

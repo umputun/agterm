@@ -15,6 +15,9 @@
 #
 # Environment:
 #   AGTERM_SESSION_ID  the session to update (set by agterm).
+#   AGTERM_PANE        the pane role (left|right|scratch); forwarded when set.
+#   AGTERM_PANE_ID     stable pane token; forwarded when set, overrides a stale role.
+#   AGTERM_SOCKET      the control socket; an explicit --socket wins.
 #   AGTERMCTL          override the agtermctl binary (default: agtermctl).
 
 set -u
@@ -26,22 +29,24 @@ usage() {
 }
 
 # Collect our own flags off the front; the rest is the command.
-# end_opts (--blink, --sound) apply to completed/blocked only.
-# all_opts (--shape, --socket) also apply to active.
-end_opts=
-all_opts=
+# blink and sound apply to completed/blocked only; shape and socket to every call.
+blink=
+sound=
+shape=
+socket=${AGTERM_SOCKET:-}
 while [ $# -gt 0 ]; do
   case "$1" in
-    --blink) end_opts="$end_opts --blink"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --blink) blink=1; shift ;;
     --sound)
       [ $# -ge 2 ] || { usage; exit 2; }
-      end_opts="$end_opts --sound $2"; shift 2 ;;
+      sound=$2; shift 2 ;;
     --shape)
       [ $# -ge 2 ] || { usage; exit 2; }
-      all_opts="$all_opts --shape $2"; shift 2 ;;
+      shape=$2; shift 2 ;;
     --socket)
       [ $# -ge 2 ] || { usage; exit 2; }
-      all_opts="$all_opts --socket $2"; shift 2 ;;
+      socket=$2; shift 2 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -57,22 +62,34 @@ if [ -z "${AGTERM_SESSION_ID:-}" ]; then
   exec "$@"
 fi
 
+# set -- inside the function touches only its own positional parameters, so the
+# caller's $@ (the command) survives the active call. Pane markers forward only
+# when the app injected them, never empty, matching the stock status wrapper.
 status() {
-  "$AGTERMCTL" session status "$@" --target "$AGTERM_SESSION_ID" >/dev/null 2>&1 || :
+  # $1 = state, $2 = end (nonempty for completed/blocked)
+  _end=${2:-}
+  set -- "$1"
+  [ -n "$_end" ] && set -- "$@" --auto-reset
+  set -- "$@" --target "$AGTERM_SESSION_ID"
+  [ -n "${AGTERM_PANE:-}" ] && set -- "$@" --pane "$AGTERM_PANE"
+  [ -n "${AGTERM_PANE_ID:-}" ] && set -- "$@" --pane-id "$AGTERM_PANE_ID"
+  [ -n "$shape" ] && set -- "$@" --shape "$shape"
+  [ -n "$socket" ] && set -- "$@" --socket "$socket"
+  [ -n "$_end" ] && [ -n "$blink" ] && set -- "$@" --blink
+  [ -n "$_end" ] && [ -n "$sound" ] && set -- "$@" --sound "$sound"
+  "$AGTERMCTL" session status "$@" >/dev/null 2>&1 || :
 }
 
-# set -u: $all_opts and $end_opts are always defined (initialized above), so
-# unquoted expansion is safe even when empty.
-status active $all_opts
+status active ''
 
 # Capture the exit code without -e so the status still gets set on failure.
 rc=0
 "$@" || rc=$?
 
 if [ "$rc" -eq 0 ]; then
-  status completed --auto-reset $all_opts $end_opts
+  status completed end
 else
-  status blocked --auto-reset $all_opts $end_opts
+  status blocked end
 fi
 
 exit "$rc"
