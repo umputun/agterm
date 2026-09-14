@@ -1,7 +1,9 @@
 import Foundation
 
 // Default `ControlActions` implementations, kept out of `ControlDispatcher.swift` so that file stays
-// inside the 1000-line limit.
+// inside the 1000-line limit. They keep outside conformers building when the shared protocol grows:
+// Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
+// delegate to the older form.
 public extension ControlActions {
     func openAsk(_: PendingAsk, target _: String?, window _: String?,
                  placement _: ControlAskPlacement, follow _: Bool) -> ControlResponse {
@@ -16,8 +18,6 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("ask.cancel"))
     }
 
-    /// Defaults keep outside conformers building when the shared protocol grows. Mac-only commands refuse
-    /// by name rather than answering an empty success; compatibility overloads delegate to the older form.
     func reloadHooks() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.reload"))
     }

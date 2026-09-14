@@ -320,9 +320,13 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false, error: "invalid scratch mode: \(mode ?? "toggle")")
             }
             let want = parsedMode.desiredValue(current: session.scratchActive)
+            // replacing a visible scratch's command ends in the same shown state it started in, so neither
+            // the close nor the re-show below may emit pane.scratch; a hidden one still emits its single shown.
+            let respawningVisible = want && session.scratchActive && session.scratchSurface != nil
+                && !(command ?? "").isEmpty
             if want, let command, !command.isEmpty {
                 // closeScratch clears scratchActive, so the toggle below re-shows it and the factory uses it.
-                if session.scratchSurface != nil { store.closeScratch(id) }
+                if session.scratchSurface != nil { store.closeScratch(id, emitVisibility: !respawningVisible) }
                 session.scratchCommand = command
             }
             if want, store.selectedSessionID != id {
@@ -331,7 +335,7 @@ extension ControlServer: ControlActions {
                 store.selectSession(id)
             }
             if want != session.scratchActive {
-                store.toggleScratch(id)
+                store.toggleScratch(id, emitVisibility: !respawningVisible)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

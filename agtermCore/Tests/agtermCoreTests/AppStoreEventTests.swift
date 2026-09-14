@@ -505,6 +505,24 @@ final class AppStoreEventTests {
         #expect(batch.items.allSatisfy { $0.payload.name == session.displayName })
     }
 
+    @Test func scratchTeardownAndReshowCanSuppressTheirVisibilityEvents() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        store.toggleScratch(session.id)
+        session.scratchSurface = SpySurface()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.closeScratch(session.id, emitVisibility: false))
+        store.toggleScratch(session.id, emitVisibility: false)
+        #expect(session.scratchActive)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneScratch], limit: 100
+        )))
+        #expect(batch.items.isEmpty)
+    }
+
     @Test func promotingTheSurvivorOfAHiddenSplitEmitsNoSplitEvent() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let store = try #require(library.activeStore)

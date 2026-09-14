@@ -238,6 +238,9 @@ struct agtermApp: App {
                         if !library.hasReopened, !settingsModel.keymapDiagnostics.isEmpty {
                             NotificationManager.shared.notifyKeymapDiagnostics(count: settingsModel.keymapDiagnostics.count)
                         }
+                        if !library.hasReopened, !settingsModel.hooksDiagnostics.isEmpty {
+                            NotificationManager.shared.notifyHooksDiagnostics(count: settingsModel.hooksDiagnostics.count)
+                        }
                         // same for ghostty config diagnostics, recorded at boot by GhosttyApp.loadConfig
                         // (applicationDidFinishLaunching, before registration): same `hasReopened` gate.
                         if !library.hasReopened, GhosttyApp.shared.lastConfigDiagnosticsCount > 0 {

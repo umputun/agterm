@@ -369,8 +369,9 @@ final class AppActions {
         }
     }
 
-    /// Re-read `hooks.conf` and apply it to the scheduler. Shared by the File menu, the palette, the Edit
-    /// Hooks overlay close and `hooks.reload`; no-op before the model wires.
+    /// Re-read `hooks.conf` and apply it to the scheduler. Shared by the File menu, the palette and the Edit
+    /// Hooks overlay close (`hooks.reload` reaches the model directly, like `keymap.reload`); no-op before
+    /// the model wires.
     func reloadHooks() { settingsModel?.reloadHooks() }
 
     /// The session whose open overlay is the hooks editor, so its close reloads the hooks. Nil when none.

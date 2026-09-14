@@ -761,6 +761,42 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertNil(session.hudPaneIdentity)
     }
 
+    func testRespawningAVisibleScratchWithACommandEmitsNoVisibilityEvents() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        store.toggleScratch(session.id)
+        session.scratchSurface = SessionRestoreTestSurface(paneToken: "scratch-token")
+        let anchor = try XCTUnwrap(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)).result?.events)
+
+        let response = server.scratchSession(session.id.uuidString, window: nil, mode: "on", command: "top")
+
+        XCTAssertTrue(response.ok, "\(response)")
+        XCTAssertTrue(session.scratchActive)
+        XCTAssertEqual(session.scratchCommand, "top")
+        XCTAssertNil(session.scratchSurface, "the respawn tears the old surface down")
+        let events = try XCTUnwrap(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneScratch], limit: 100
+        )).result?.events)
+        XCTAssertEqual(events.items.count, 0, "a scratch that never left the screen emits nothing: \(events.items)")
+
+        store.toggleScratch(session.id)
+        session.scratchSurface = SessionRestoreTestSurface(paneToken: "scratch-token")
+        let hiddenAnchor = try XCTUnwrap(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)).result?.events)
+        XCTAssertTrue(server.scratchSession(session.id.uuidString, window: nil, mode: "on", command: "top").ok)
+        let shown = try XCTUnwrap(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: hiddenAnchor.run, after: hiddenAnchor.next), kinds: [.paneScratch], limit: 100
+        )).result?.events)
+        XCTAssertEqual(shown.items.map { $0.payload.status }, ["shown"], "a hidden scratch respawn still shows once")
+
+        session.scratchSurface = SessionRestoreTestSurface(paneToken: "scratch-token")
+        let offAnchor = try XCTUnwrap(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)).result?.events)
+        XCTAssertTrue(server.scratchSession(session.id.uuidString, window: nil, mode: "off", command: "top").ok)
+        let hidden = try XCTUnwrap(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: offAnchor.run, after: offAnchor.next), kinds: [.paneScratch], limit: 100
+        )).result?.events)
+        XCTAssertEqual(hidden.items.map { $0.payload.status }, ["hidden"], "off from visible still hides once")
+    }
+
     func testScratchPaneIDCannotAnchorAHud() throws {
         let (_, session) = try makeHudSession()
         session.scratchSurface = SessionRestoreTestSurface(paneToken: "scratch-token")
