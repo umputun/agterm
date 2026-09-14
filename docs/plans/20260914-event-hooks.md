@@ -279,17 +279,17 @@ one-process-per-line note, stdin JSON note) followed by commented example lines.
 - Modify: `agtermCore/Sources/agtermCore/ConfigPaths.swift`
 - Modify: the test file that pins `ConfigPaths.keymapPath`
 
-- [ ] write failing parser tests: valid lines for every kind; multiple lines per kind kept in file order;
+- [x] write failing parser tests: valid lines for every kind; multiple lines per kind kept in file order;
       blank and whole-line `#` ignored; CRLF; spacing variants between `on` and kind give one identity;
       identity ignores the line number
-- [ ] write failing parser tests for the shell remainder preserved verbatim: quoted `#`, escaped quotes,
+- [x] write failing parser tests for the shell remainder preserved verbatim: quoted `#`, escaped quotes,
       pipes, redirection, `$(...)`, tilde, `$VAR`; only outer whitespace trimmed
-- [ ] write failing diagnostic tests: unknown verb, unknown kind, missing kind, empty command, identical
+- [x] write failing diagnostic tests: unknown verb, unknown kind, missing kind, empty command, identical
       kind+command duplicate skipped with first kept; later lines still parse; line numbers correct
-- [ ] write failing tests: `ConfigPaths.hooksPath` is `<config dir>/hooks.conf`; `starterHooksConf` has
+- [x] write failing tests: `ConfigPaths.hooksPath` is `<config dir>/hooks.conf`; `starterHooksConf` has
       only comment/blank lines and parses to zero entries and zero diagnostics
-- [ ] implement `HookIdentity`, `HookEntry`, `Hooks`, `parseHooksConf`, `hooksPath`, `starterHooksConf`
-- [ ] run `HooksTests` and the paths tests; must pass before task 3
+- [x] implement `HookIdentity`, `HookEntry`, `Hooks`, `parseHooksConf`, `hooksPath`, `starterHooksConf`
+- [x] run `HooksTests` and the paths tests; must pass before task 3
 
 ### Task 3: Hook scheduler and read-back types (host-free)
 

@@ -30,6 +30,31 @@ struct ConfigPathsTests {
         #expect(ConfigPaths.keymapPath(configDirectory: dir).path == "/Users/test/.config/agterm/keymap.conf")
     }
 
+    @Test func hooksPathIsHooksConfInDir() {
+        let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
+        #expect(ConfigPaths.hooksPath(configDirectory: dir).path == "/Users/test/.config/agterm/hooks.conf")
+    }
+
+    @Test func starterHooksConfIsCommentedListsKindsAndParsesToNothing() {
+        let starter = ConfigPaths.starterHooksConf()
+        #expect(starter.contains("on <kind> <shell...>"))
+        #expect(starter.contains("AGT_EVENT_KIND"))
+        #expect(starter.contains("AGT_SOCKET"))
+        #expect(starter.contains("agtermctl events --json"))
+        #expect(starter.contains("mkdir -p ~/.local/state/agterm"))
+        // a status filter must exit 0 for the statuses it ignores, or every idle event banners a failure
+        #expect(starter.contains(#"[ "$AGT_EVENT_STATUS" = blocked ] || exit 0; afplay"#))
+        for kind in ControlEventKind.allCases {
+            #expect(starter.contains(kind.rawValue))
+        }
+        for line in starter.split(separator: "\n") {
+            #expect(line.trimmingCharacters(in: .whitespaces).hasPrefix("#") || line.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        let (hooks, diagnostics) = parseHooksConf(starter)
+        #expect(hooks.entries.isEmpty)
+        #expect(diagnostics.isEmpty)
+    }
+
     @Test func starterKeymapConfIsCommentedAndListsActions() {
         let starter = ConfigPaths.starterKeymapConf()
         #expect(starter.contains("agterm keymap — a kitty-flavored config"))
