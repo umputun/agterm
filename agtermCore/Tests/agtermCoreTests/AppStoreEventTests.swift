@@ -567,6 +567,81 @@ final class AppStoreEventTests {
         #expect(batch.items.allSatisfy { $0.session == session.id.uuidString })
     }
 
+    @Test func remoteRowEdgesRideCreatedAndClosedForRemoteSessionsOnly() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let workspace = try #require(store.workspaces.first)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "local"))
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "far",
+                                                   remoteHost: "buildbox"))
+
+        #expect(store.softCloseSession(remote.id, grace: 60))
+        #expect(store.undoPendingClose())
+        #expect(store.softCloseSession(remote.id, grace: 60))
+        store.finalizeAllPendingCloses()
+        store.closeSession(local.id)
+
+        let all = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: nil, limit: 100
+        )))
+        let remoteEdges = all.items.filter { $0.kind == .remoteOpened || $0.kind == .remoteClosed }
+        #expect(remoteEdges.map(\.kind) == [.remoteOpened, .remoteClosed, .remoteOpened, .remoteClosed])
+        #expect(remoteEdges.allSatisfy { $0.session == remote.id.uuidString && $0.workspace == workspace.id.uuidString })
+        #expect(remoteEdges.allSatisfy { $0.payload.name == "far" && $0.payload.host == "buildbox" })
+        for edge in remoteEdges {
+            let sessionEdge = try #require(all.items.first { $0.seq == edge.seq - 1 })
+            #expect(sessionEdge.kind == (edge.kind == .remoteOpened ? .sessionCreated : .sessionClosed))
+            #expect(sessionEdge.session == remote.id.uuidString)
+        }
+        #expect(all.items.filter { $0.session == local.id.uuidString }.allSatisfy { $0.payload.host == nil })
+    }
+
+    @Test func remoteWorkspaceUndoThroughRecentClosedReopensTheRow() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        _ = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/tmp", name: "local"))
+        let remote = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/tmp", name: "far",
+                                                   remoteHost: "buildbox"))
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let recent = try #require(library.recentClosedItems.first { $0.workspace?.snapshot.id == doomed.id })
+        #expect(library.reopenRecentClosed(recent.id, into: store))
+        #expect(store.session(withID: remote.id)?.remoteHost == "buildbox")
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next),
+            kinds: [.remoteOpened, .remoteClosed], limit: 100
+        )))
+        #expect(batch.items.map(\.kind) == [.remoteClosed, .remoteOpened])
+        #expect(batch.items.allSatisfy { $0.session == remote.id.uuidString && $0.payload.host == "buildbox" })
+    }
+
+    @Test func closingARemoteSplitAloneEmitsNoRemoteEdge() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let workspace = try #require(store.workspaces.first)
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "far",
+                                                   remoteHost: "buildbox"))
+        remote.surface = SpySurface()
+        store.setSplitVisibility(remote.id, shown: true)
+        remote.splitSurface = SpySurface()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.setSplitVisibility(remote.id, shown: false)
+        store.closeSplit(remote.id)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next),
+            kinds: [.remoteOpened, .remoteClosed], limit: 100
+        )))
+        #expect(batch.items.isEmpty)
+        #expect(store.session(withID: remote.id) != nil)
+    }
+
     private func eventBatch(_ response: ControlResponse) throws -> ControlEventBatch {
         #expect(response.ok)
         return try #require(response.result?.events)

@@ -629,7 +629,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.scratch</span> (a
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span> of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">shown</span> or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hidden</span>, emitted only on a real change). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hidden</span>, emitted only on a real change), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.closed</span> (a local row created by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> entered or
+                left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>; they ride the
+                created/closed edges, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span>, and they say nothing
+                about whether ssh is still connected). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
                 comma-separated; an unknown kind errors. Every event carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">seq</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ts</span>,

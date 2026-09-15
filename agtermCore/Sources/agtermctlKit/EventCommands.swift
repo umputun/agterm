@@ -79,6 +79,8 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name)"
         case .paneSplit, .paneScratch:
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.status ?? "")"
+        case .remoteOpened, .remoteClosed:
+            return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
         }
     }
 }

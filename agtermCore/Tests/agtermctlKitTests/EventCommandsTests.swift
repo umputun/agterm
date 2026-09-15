@@ -159,6 +159,8 @@ struct EventCommandsTests {
             ControlEvent(seq: 9, ts: 0, kind: .paneScratch, payload: ControlEventPayload(name: "api", status: "hidden")),
             ControlEvent(seq: 10, ts: 0, kind: .status,
                          payload: ControlEventPayload(name: "api", status: "blocked", pane: "left", previous: "active")),
+            ControlEvent(seq: 11, ts: 0, kind: .remoteOpened, payload: ControlEventPayload(name: "far", host: "buildbox")),
+            ControlEvent(seq: 12, ts: 0, kind: .remoteClosed, payload: ControlEventPayload(name: "far", host: "buildbox")),
         ]
         let human = events.map { EventFormatter.human($0, timeZone: TimeZone(secondsFromGMT: 0)!) }
         #expect(human[0] == "00:00:00 status api blocked pane=right blink")
@@ -171,6 +173,8 @@ struct EventCommandsTests {
         #expect(human[7] == "00:00:00 pane.split api shown")
         #expect(human[8] == "00:00:00 pane.scratch api hidden")
         #expect(human[9] == "00:00:00 status api blocked previous=active pane=left")
+        #expect(human[10] == "00:00:00 remote.opened far host=buildbox")
+        #expect(human[11] == "00:00:00 remote.closed far host=buildbox")
 
         for event in events {
             let line = try EventFormatter.json(event)

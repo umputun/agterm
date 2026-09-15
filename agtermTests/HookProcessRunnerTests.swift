@@ -113,13 +113,33 @@ final class HookProcessRunnerTests: XCTestCase {
     func testMissingFieldsAreExportedEmptyNotInherited() async throws {
         let env = scratch.appendingPathComponent("env").path
         setenv("AGT_SESSION_ID", "inherited-and-wrong", 1)
-        defer { unsetenv("AGT_SESSION_ID") }
-        let script = "printf '[%s][%s][%s]' \"$AGT_EVENT_STATUS\" \"$AGT_SESSION_ID\" \"$AGT_WINDOW_ID\" > '\(env)'"
+        setenv("AGT_EVENT_HOST", "inherited-and-wrong", 1)
+        defer {
+            unsetenv("AGT_SESSION_ID")
+            unsetenv("AGT_EVENT_HOST")
+        }
+        let script = "printf '[%s][%s][%s][%s]' \"$AGT_EVENT_STATUS\" \"$AGT_SESSION_ID\" \"$AGT_WINDOW_ID\" \"$AGT_EVENT_HOST\" > '\(env)'"
 
         let (outcome, _) = try await run(script, event: ControlEvent(seq: 1, ts: 1, kind: .treeChanged))
 
         XCTAssertEqual(outcome.exits, [0])
-        XCTAssertEqual(try String(contentsOfFile: env, encoding: .utf8), "[][][]")
+        XCTAssertEqual(try String(contentsOfFile: env, encoding: .utf8), "[][][][]")
+    }
+
+    func testRemoteEdgeExportsTheHostAndCarriesItOnStdin() async throws {
+        let stdin = scratch.appendingPathComponent("stdin").path
+        let env = scratch.appendingPathComponent("env").path
+        let event = ControlEvent(seq: 4, ts: 4.5, kind: .remoteOpened, window: "win-1", workspace: "ws-1",
+                                 session: "sess-1", payload: ControlEventPayload(name: "far", host: "buildbox"))
+        let script = "cat > '\(stdin)'; printf '%s' \"$AGT_EVENT_HOST\" > '\(env)'"
+
+        let (outcome, _) = try await run(script, event: event)
+
+        XCTAssertEqual(outcome.exits, [0])
+        XCTAssertEqual(try String(contentsOfFile: env, encoding: .utf8), "buildbox")
+        let raw = try String(contentsOfFile: stdin, encoding: .utf8)
+        XCTAssertEqual(try JSONDecoder().decode(ControlEvent.self, from: Data(raw.utf8)), event)
+        XCTAssertTrue(raw.contains(#""host":"buildbox""#))
     }
 
     func testEarlyStdinCloseWithALargePayloadIsNotADeliveryFailure() async throws {

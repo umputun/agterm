@@ -114,6 +114,7 @@ final class HookProcessRunner: HookLauncher {
         var environment = ProcessInfo.processInfo.environment
         environment["AGT_EVENT_KIND"] = event.kind.rawValue
         environment["AGT_EVENT_STATUS"] = event.payload.status ?? ""
+        environment["AGT_EVENT_HOST"] = event.payload.host ?? ""
         environment["AGT_SESSION_ID"] = event.session ?? ""
         environment["AGT_WORKSPACE_ID"] = event.workspace ?? ""
         environment["AGT_WINDOW_ID"] = event.window ?? ""

@@ -1099,6 +1099,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   keymap custom command the user supplies. There is NO timer, notification or session-wide coalescing;
   returning false dispatches no app callback, so app code does not learn ssh exited until the keypress, and
   each pane holding and closing on its own is also right when one half of a split dies.
+- `remote.opened` / `remote.closed` are emitted by `emitSessionCreated` / `emitSessionClosed` themselves,
+  gated on `remoteHost`, never from `zmx.attach`: the attach inserts the row before ssh starts, and a
+  soft close emits `session.closed` while the pane is still alive for undo, whose `session.created` never
+  passes through the attach path. So the pair means row visibility only, every producer of those edges
+  gets it, and no kind claims the ssh connection's state, which the app cannot observe under the hold
+  prompt. A host-side pair (`client.attached` / `client.detached`) is the backlog item, not these kinds.
 - `Session.remoteHost` is immutable and set at construction, because `addSession` saves: a marker written
   afterwards would let one snapshot reach disk carrying the ssh command. `isPersistable` gates every
   producer — the launch snapshot, the Recent Closed session record, and a closed workspace's record, whose

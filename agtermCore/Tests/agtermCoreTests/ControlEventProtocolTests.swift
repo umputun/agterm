@@ -23,6 +23,10 @@ struct ControlEventProtocolTests {
                          payload: ControlEventPayload(name: "api", status: "hidden")),
             ControlEvent(seq: 8, ts: 8.5, kind: .status, window: "win", workspace: "work", session: "sess",
                          payload: ControlEventPayload(name: "api", status: "blocked", previous: "active")),
+            ControlEvent(seq: 9, ts: 9.5, kind: .remoteOpened, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "far", host: "buildbox")),
+            ControlEvent(seq: 10, ts: 10.5, kind: .remoteClosed, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "far", host: "buildbox")),
         ]
 
         let data = try JSONEncoder().encode(events)
@@ -53,6 +57,10 @@ struct ControlEventProtocolTests {
                          payload: ControlEventPayload(name: "api", status: "hidden")),
             ControlEvent(seq: 8, ts: 8.5, kind: .status, window: "win", workspace: "work", session: "sess",
                          payload: ControlEventPayload(name: "api", status: "blocked", previous: "active")),
+            ControlEvent(seq: 9, ts: 9.5, kind: .remoteOpened, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "far", host: "buildbox")),
+            ControlEvent(seq: 10, ts: 10.5, kind: .remoteClosed, window: "win", workspace: "work", session: "sess",
+                         payload: ControlEventPayload(name: "far", host: "buildbox")),
         ]
         let expected = [
             ##"{"kind":"status","payload":{"blink":true,"color":"#aabbcc","name":"api","pane":"right","##
@@ -64,6 +72,8 @@ struct ControlEventProtocolTests {
             ##"{"kind":"pane.split","payload":{"name":"api","status":"shown"},"seq":6,"session":"sess","ts":6.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"pane.scratch","payload":{"name":"api","status":"hidden"},"seq":7,"session":"sess","ts":7.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"status","payload":{"name":"api","previous":"active","status":"blocked"},"seq":8,"session":"sess","ts":8.5,"window":"win","workspace":"work"}"##,
+            ##"{"kind":"remote.opened","payload":{"host":"buildbox","name":"far"},"seq":9,"session":"sess","ts":9.5,"window":"win","workspace":"work"}"##,
+            ##"{"kind":"remote.closed","payload":{"host":"buildbox","name":"far"},"seq":10,"session":"sess","ts":10.5,"window":"win","workspace":"work"}"##,
         ]
 
         #expect(try events.map(canonicalJSON) == expected)

@@ -51,6 +51,11 @@ The event kinds and payloads are:
 - `pane.split` / `pane.scratch`: session `name` and a `status` of `shown` or `hidden`, emitted only on a
   real visibility change: showing or hiding the split or scratch, closing the split, the primary pane
   exiting with a split promoted, or the scratch shell exiting. An axis change while shown emits nothing.
+- `remote.opened` / `remote.closed`: session `name` and the ssh destination of a local row created by
+  `zmx attach` as `host`, emitted beside `session.created` / `session.closed` for that session only. They describe the row's
+  presence in the local tree, never the ssh connection: undo re-emits `remote.opened`, and an ssh that
+  died leaves the row holding its exit line until it is closed. Closing a remote split pane alone emits
+  neither.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -1334,8 +1339,8 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 line, blank and `#` lines ignored, the remainder after the kind passed to `/bin/sh -c` untouched.
 Several lines per kind are independent hooks; an identical kind+command line is skipped with a
 diagnostic. The script gets the event as one JSON object on stdin (the `events --json` shape) followed
-by a newline and EOF, plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_SESSION_ID`, `AGT_WORKSPACE_ID`,
-`AGT_WINDOW_ID` and `AGT_SOCKET`, each set explicitly and empty when the event lacks the field. It runs
+by a newline and EOF, plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_EVENT_HOST`, `AGT_SESSION_ID`,
+`AGT_WORKSPACE_ID`, `AGT_WINDOW_ID` and `AGT_SOCKET`, each set explicitly and empty when the event lacks the field. It runs
 detached in the app's working directory with the widened `PATH` a custom command gets; pass
 `--socket "$AGT_SOCKET"` to any `agtermctl` call. One process per line at a time; further events queue
 in order up to 256, then the oldest is dropped and counted. No timeout. A non-zero exit, a failed spawn

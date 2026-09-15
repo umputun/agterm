@@ -22,7 +22,16 @@ extension AppStore {
     func emitSessionCreated(_ session: Session, workspace: UUID) {
         emitControlEvent(.sessionCreated, workspace: workspace, session: session.id,
                          payload: ControlEventPayload(name: session.displayName))
+        emitRemoteVisibility(.remoteOpened, session: session, workspace: workspace)
         scheduleTreeChanged()
+    }
+
+    /// `remote.opened` / `remote.closed` describe the row's visibility, undo included, never the ssh
+    /// connection's state, which the app cannot observe under the hold prompt.
+    private func emitRemoteVisibility(_ kind: ControlEventKind, session: Session, workspace: UUID) {
+        guard let host = session.remoteHost else { return }
+        emitControlEvent(kind, workspace: workspace, session: session.id,
+                         payload: ControlEventPayload(name: session.displayName, host: host))
     }
 
     /// `pane.split` / `pane.scratch` carry `shown`/`hidden`; callers emit only on a real transition.
@@ -34,6 +43,7 @@ extension AppStore {
     func emitSessionClosed(_ session: Session, workspace: UUID) {
         emitControlEvent(.sessionClosed, workspace: workspace, session: session.id,
                          payload: ControlEventPayload(name: session.displayName))
+        emitRemoteVisibility(.remoteClosed, session: session, workspace: workspace)
         scheduleTreeChanged()
     }
 
