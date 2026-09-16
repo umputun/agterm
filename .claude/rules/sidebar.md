@@ -17,6 +17,12 @@ paths:
 - `WorkspaceSidebar` is an AppKit `NSOutlineView`, chosen over SwiftUI `List` for native
   cross-workspace drag-and-drop. Its `@MainActor` Coordinator caches reference-type `SidebarNode`s so
   reloads retain identity, expansion, and selection.
+- macOS 27 reserves a wider leading strip than the disclosure triangle occupies, stranding the row icon
+  mid-gap. `SidebarOutlineView.frameOfCell` trims the surplus, gated on that version; its doc comment owns
+  the reasoning. Leave `frameOfOutlineCell` alone: the triangle keeps its place and `handleSingleClick`
+  reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27 and up, the
+  indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only below the
+  gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
 
 ## Drag and row actions
 

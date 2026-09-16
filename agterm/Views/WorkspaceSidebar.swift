@@ -810,6 +810,28 @@ final class SidebarOutlineView: NSOutlineView {
     // extra repaint that flicks the selection pill on every click. Programmatic selection never bounces.
     override var acceptsFirstResponder: Bool { false }
 
+    /// Where a row's content belongs: the level-0 disclosure triangle ends at 14pt, and the cell's own 2pt
+    /// icon inset supplies the gap after it.
+    private static let contentX: CGFloat = 14
+
+    /// macOS 27 reserves a wider leading strip than the triangle occupies — a level-0 cell starts at 26
+    /// against a triangle ending at 14 — leaving the row icon stranded mid-gap. Trim the surplus, computed
+    /// from the frame rather than fixed so a release that lays out at `contentX` keeps its own geometry,
+    /// and gated on the version because the earlier layout is already tight and cannot be tested here.
+    /// `frameOfOutlineCell` stays untouched: the triangle keeps its place, and `handleSingleClick` reads
+    /// that frame to keep a row click from double-toggling expansion.
+    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
+        var frame = super.frameOfCell(atColumn: column, row: row)
+        guard #available(macOS 27.0, *), !frame.isEmpty, tableColumns.indices.contains(column),
+              tableColumns[column] === outlineTableColumn else { return frame }
+        let level = level(forRow: row)
+        guard level >= 0 else { return frame }
+        let trim = max(0, frame.minX - (Self.contentX + CGFloat(level) * indentationPerLevel))
+        frame.origin.x -= trim
+        frame.size.width += trim
+        return frame
+    }
+
     override func draggingExited(_ sender: NSDraggingInfo?) {
         super.draggingExited(sender)
         (delegate as? WorkspaceSidebar.Coordinator)?.finishDraggingSequence()
