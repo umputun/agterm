@@ -41,9 +41,11 @@ private struct StderrFile: @unchecked Sendable {
         guard let reader = try? FileHandle(forReadingFrom: url) else { return [] }
         defer { try? reader.close() }
         let size = (try? reader.seekToEnd()) ?? 0
-        let limit = UInt64(CommandFailure.tailLimit)
-        try? reader.seek(toOffset: size > limit ? size - limit : 0)
-        return [UInt8]((try? reader.readToEnd()) ?? Data())
+        // read the sampled interval, not to the end: a descendant appending between the two would otherwise
+        // hand back everything it wrote as well.
+        let wanted = min(size, UInt64(CommandFailure.tailLimit))
+        try? reader.seek(toOffset: size - wanted)
+        return [UInt8]((try? reader.read(upToCount: Int(wanted))) ?? Data())
     }
 }
 
