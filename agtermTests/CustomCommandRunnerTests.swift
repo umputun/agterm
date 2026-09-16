@@ -261,6 +261,169 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
     }
 
+    /// Records what the runner would put on screen for a failed command, and the auto-closes it arms.
+    private final class HudRecorder: @unchecked Sendable {
+        var posts: [(session: String, message: String, detail: String?)] = []
+        var closes = 0
+        var pending: [(delay: TimeInterval, body: @MainActor () -> Void)] = []
+        var refuse = false
+
+        var hud: FailureHud {
+            FailureHud(open: { [self] session, message, detail in
+                posts.append((session, message, detail))
+                guard !refuse else { return nil }
+                return { [self] in closes += 1 }
+            })
+        }
+
+        @MainActor func fireTimers() {
+            let due = pending
+            pending = []
+            for timer in due { timer.body() }
+        }
+    }
+
+    /// A runner wired to `recorder`, plus a session for its commands to fire in.
+    private func failureFixture(_ recorder: HudRecorder) throws -> (runner: CustomCommandRunner, session: Session) {
+        try write(keymap: CustomCommandRunnerTests.sidebarKeymap)
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        settings.setConfigDirectory(configDir.path)
+        let actions = AppActions(library: library)
+        actions.settingsModel = settings
+        let runner = CustomCommandRunner(library: library, settings: settings, actions: actions,
+                                         usage: CustomCommandUsageStore(directory: stateDir),
+                                         socketProvider: { "" }, failureHud: recorder.hud,
+                                         schedule: { delay, body in recorder.pending.append((delay, body)) })
+        runner.start()
+        started.append(runner)
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(session.id)
+        return (runner, session)
+    }
+
+    /// Spins the run loop until `body` is true or the deadline passes, since the spawn, its exit and the
+    /// stderr drain all land asynchronously.
+    private func wait(upTo seconds: TimeInterval = 5, until body: () -> Bool) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline, !body() {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+    }
+
+    func testAFailedCommandPostsThePanelWithItsLastStderrLine() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        fix.runner.run(CustomCommand(name: "probe", command: "echo first >&2; echo boom >&2; exit 3",
+                                     shortcut: "ctrl+a>p"))
+
+        wait { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(recorder.posts.count, 1)
+        XCTAssertEqual(recorder.posts.first?.session, fix.session.id.uuidString)
+        XCTAssertEqual(recorder.posts.first?.message, "probe: exit 3")
+        XCTAssertEqual(recorder.posts.first?.detail, "boom")
+    }
+
+    func testTheTimerRunsTheCloseThePostHandedBack() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 1", shortcut: "ctrl+a>p"))
+
+        wait { !recorder.posts.isEmpty }
+        XCTAssertEqual(recorder.pending.map(\.delay), [CustomCommandRunner.failureHudSeconds])
+        XCTAssertEqual(recorder.closes, 0, "nothing closes before the delay is up")
+        recorder.fireTimers()
+
+        XCTAssertEqual(recorder.closes, 1)
+    }
+
+    // the second command only starts failing after the first has run to its last statement, so the post it
+    // produces bounds how long the successful one had to say something.
+    func testACommandThatSucceedsPostsNothingEvenWhenItWroteToStderr() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        let marker = stateDir.appendingPathComponent("quiet-\(UUID().uuidString).done")
+        fix.runner.run(CustomCommand(name: "quiet", command: "echo noise >&2; : > \(marker.path); exit 0",
+                                     shortcut: "ctrl+a>p"))
+        fix.runner.run(CustomCommand(name: "loud",
+                                     command: "while [ ! -f \(marker.path) ]; do sleep 0.02; done; "
+                                         + "echo boom >&2; exit 2",
+                                     shortcut: "ctrl+a>l"))
+
+        wait { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(recorder.posts.count, 1, "exit 0 is a success whatever it printed")
+        XCTAssertEqual(recorder.posts.first?.message, "loud: exit 2")
+    }
+
+    func testADescendantKeepsWritingToStderrAfterTheCommandExits() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        let marker = stateDir.appendingPathComponent("late-\(UUID().uuidString).ok")
+        // the subshell outlives its parent holding the same stderr. Its marker is written only if that late
+        // write SUCCEEDED, so a capture that closed the read end early fails this test rather than passing it.
+        fix.runner.run(CustomCommand(name: "orphan",
+                                     command: "( sleep 0.6; echo late >&2 && : > \(marker.path) ) & "
+                                         + "echo boom >&2; exit 5",
+                                     shortcut: "ctrl+a>p"))
+
+        wait { !recorder.posts.isEmpty }
+        XCTAssertEqual(recorder.posts.first?.message, "orphan: exit 5")
+        XCTAssertEqual(recorder.posts.first?.detail, "boom", "the report belongs to the command, not its child")
+
+        wait { FileManager.default.fileExists(atPath: marker.path) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path),
+                      "the descendant's write must reach a live pipe, not a closed one")
+        XCTAssertEqual(recorder.posts.count, 1, "a late write reports nothing of its own")
+    }
+
+    func testStderrPastThePipeBufferDoesNotWedgeTheCommandAndKeepsItsLastLine() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        // 512 KiB is well past the 64 KiB pipe buffer: a capture that only read at exit would deadlock here.
+        fix.runner.run(CustomCommand(name: "flood",
+                                     command: "for i in $(seq 1 8192); do "
+                                         + "printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\n' >&2; "
+                                         + "done; echo 'final line' >&2; exit 1",
+                                     shortcut: "ctrl+a>p"))
+
+        wait(upTo: 20) { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(recorder.posts.first?.detail, "final line")
+    }
+
+    func testACommandExitingWithMoreBufferedThanTheTailKeepsItsFinalLine() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        // 48 KiB lands in the pipe and the command exits at once: a final drain budgeted at the 16 KiB tail
+        // would keep the oldest of it and lose the line below.
+        fix.runner.run(CustomCommand(name: "burst",
+                                     command: "head -c 49152 /dev/zero | tr '\\0' 'x' >&2; printf '\\n' >&2; "
+                                         + "echo 'final line' >&2; exit 7",
+                                     shortcut: "ctrl+a>b"))
+
+        wait(upTo: 20) { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(recorder.posts.first?.message, "burst: exit 7")
+        XCTAssertEqual(recorder.posts.first?.detail, "final line")
+    }
+
+    func testARefusedPanelArmsNoAutoClose() throws {
+        let recorder = HudRecorder()
+        recorder.refuse = true
+        let fix = try failureFixture(recorder)
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 4", shortcut: "ctrl+a>p"))
+
+        wait { !recorder.posts.isEmpty }
+        recorder.fireTimers()
+
+        XCTAssertEqual(recorder.posts.count, 1, "a refusal still tries once")
+        XCTAssertTrue(recorder.pending.isEmpty, "a refusal arms no timer")
+        XCTAssertEqual(recorder.closes, 0, "nothing was shown, so nothing may be taken down")
+    }
+
     /// Runs `command` from `surface` and returns what it wrote, or nil if it never wrote anything. The spawn
     /// is a detached `/bin/sh`, so the file is the only channel back.
     private func fired(_ runner: CustomCommandRunner, from surface: GhosttySurfaceView,

@@ -81,8 +81,17 @@ paths:
   `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
 - `CustomCommandRunner` uses an app-wide local `.keyDown` monitor. Its `KeybindMatcher` supports simple
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.
-  `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; non-zero exit calls
-  `notifyCommandFailure`. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
+  `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; stdin and stdout go to
+  `/dev/null` while stderr is drained live into a 16 KiB tail (`CommandFailure`), since reading it only at
+  exit deadlocks once the pipe fills. A spawn error or non-zero exit calls `notifyCommandFailure` AND posts
+  a HUD over the firing session through the injected `FailureHud`, carrying the name, the exit status or
+  launch error, and the last nonblank stderr line; the banner obeys the notifications setting, so with
+  banners off the panel is the only report. It clears itself after `failureHudSeconds` through the injected
+  `schedule`, running the close operation the open handed back; `FailureHudOwner` holds that panel's session
+  WEAKLY beside its `overlaySlotGeneration`, so neither a HUD posted since nor a restored session wearing the
+  same id — same UUID, fresh object, generation counted from zero — is taken down by a stale timer. A program
+  overlay owning the slot refuses the open, which is logged and never evicts the program. Exit 0 reports
+  nothing whatever it printed. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
   `PaletteCommand.allCases` on `builtinAction`, falling
   back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND

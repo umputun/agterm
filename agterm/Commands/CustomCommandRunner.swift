@@ -4,6 +4,120 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCommandRunner")
 
+/// How the runner shows a failed command. `open` posts the panel and answers the operation that takes THAT
+/// panel down, or nil when the slot holds a running program, which is never evicted for a message. The
+/// ownership test lives behind that operation (`FailureHudOwner`), so the runner cannot close someone else's.
+struct FailureHud {
+    let open: (_ sessionID: String, _ message: String, _ detail: String?) -> (@MainActor () -> Void)?
+}
+
+/// Captures a command's stderr and hands over the last `CommandFailure.tailLimit` bytes once it fails.
+///
+/// One serial queue owns the fd, the tail and the delivery, so a read can never land after the hand-over it
+/// raced. Reading only at exit would deadlock as soon as the pipe fills, so a read source drains from the
+/// start; the child's exit adds a final drain of what is still buffered before delivering. The reader then
+/// keeps draining and DISCARDING until EOF rather than closing the fd: a backgrounded descendant inherits the
+/// write end, and closing it early would kill that descendant with SIGPIPE on its next write.
+private final class StderrCapture: @unchecked Sendable {
+    let pipe = Pipe()
+    private let queue = DispatchQueue(label: "com.umputun.agterm.command-stderr")
+    private let handle: FileHandle
+    private var source: DispatchSourceRead?
+    /// Keeps the drain alive until EOF, so a descendant that inherited stderr still writes into a live pipe
+    /// after the process and the delivery have let go. Cleared by the cancel handler, which ends the cycle.
+    private var retained: StderrCapture?
+    private var tail: [UInt8] = []
+    private var delivered = false
+    private var finished = false
+
+    /// Most bytes one read takes before yielding the queue. A descendant refilling the pipe as fast as it is
+    /// drained would otherwise hold the loop and delay the delivery it is racing.
+    private static let readBudget = 64 * 1024
+
+    init() {
+        handle = pipe.fileHandleForReading
+    }
+
+    /// Starts draining, answering whether it could: a descriptor that will not go nonblocking would park the
+    /// queue on the first empty pipe, so the caller sends stderr elsewhere instead.
+    func start() -> Bool {
+        let flags = fcntl(handle.fileDescriptor, F_GETFL)
+        guard flags != -1, fcntl(handle.fileDescriptor, F_SETFL, flags | O_NONBLOCK) != -1 else {
+            try? handle.close()
+            finished = true
+            return false
+        }
+        let source = DispatchSource.makeReadSource(fileDescriptor: handle.fileDescriptor, queue: queue)
+        source.setEventHandler { self.drain(budget: Self.readBudget) }
+        // the descriptor is closed HERE, through the FileHandle that owns it: `cancel()` is asynchronous, and
+        // closing a borrowed fd before the source has let go can shut an unrelated one that reused the number.
+        source.setCancelHandler {
+            try? self.handle.close()
+            self.retained = nil
+        }
+        self.source = source
+        retained = self
+        source.resume()
+        return true
+    }
+
+    /// Delivers the tail exactly once, after a bounded drain of what the child left behind. Ordered behind
+    /// every queued read because both run on `queue`, so a last line cannot arrive after the hand-over.
+    func deliver(_ body: @escaping ([UInt8]) -> Void) {
+        queue.async {
+            guard !self.delivered else { return }
+            // the pipe's capacity, not the 16 KiB tail: a tail-sized drain here would keep the oldest
+            // buffered bytes and lose the line the command exited on.
+            self.drain(budget: Self.pipeCapacity)
+            self.delivered = true
+            body(self.tail)
+            self.tail = []
+        }
+    }
+
+    /// What a pipe holds at most (`BIG_PIPE_SIZE`), so one pass takes everything buffered when the command
+    /// exited. A descendant writing after that refills it, which the reader picks up and discards.
+    private static let pipeCapacity = 64 * 1024
+
+    /// Drops a capture whose child never started: nothing inherited the write end, so the drain can end now.
+    func cancel() {
+        queue.async {
+            self.delivered = true
+            self.tail = []
+            self.finish()
+        }
+    }
+
+    /// Reads up to `budget` bytes, keeping the bounded tail until it has been delivered and discarding after.
+    /// A zero-length read means every writer is gone, which ends the drain.
+    private func drain(budget: Int) {
+        guard !finished else { return }
+        var buffer = [UInt8](repeating: 0, count: 8 * 1024)
+        var remaining = budget
+        while remaining > 0 {
+            let count = buffer.withUnsafeMutableBytes { raw -> Int in
+                read(handle.fileDescriptor, raw.baseAddress, min(raw.count, remaining))
+            }
+            if count > 0 {
+                if !delivered { CommandFailure.append(Array(buffer[0..<count]), to: &tail) }
+                remaining -= count
+                continue
+            }
+            if count == 0 { finish() }
+            // EAGAIN means the pipe is empty for now and the source calls back; any other error ends it.
+            if count < 0, errno != EAGAIN, errno != EINTR { finish() }
+            return
+        }
+    }
+
+    private func finish() {
+        guard !finished else { return }
+        finished = true
+        source?.cancel()
+        source = nil
+    }
+}
+
 /// Drives user-defined custom commands: an app-wide `NSEvent` local key monitor turns key presses into
 /// chords, a `CustomCommandEngine` resolves them (simple chords and leader sequences like `ctrl+a > g`), and
 /// a fired command runs detached as `/bin/sh -c` with the session's context in `{AGT_X}` tokens and `$AGT_X`
@@ -20,6 +134,13 @@ final class CustomCommandRunner {
     private let settings: SettingsModel
     private let actions: AppActions
     private let socketProvider: () -> String
+    /// Posts the failure panel over the session a command fired in, and takes it down again. Injected rather
+    /// than reached for: the control server owns the HUD path, and a test supplies its own recorder.
+    private let failureHud: FailureHud?
+
+    /// Runs `body` after `delay`; injected so a test can fire the failure panel's auto-close instead of
+    /// waiting out the real one.
+    private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
 
     private var commandEngine = CustomCommandEngine(commands: [])
 
@@ -30,16 +151,29 @@ final class CustomCommandRunner {
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
     private static let leaderTimeout: TimeInterval = 1.5
 
+    /// How long a failure panel stays up. Long enough to read a line, short enough that the slot a script's
+    /// own HUD wants is free again.
+    static let failureHudSeconds: TimeInterval = 10
+
     /// Run counts behind the title-bar popover's most-used section; every spawn path records into it.
     let usage: CustomCommandUsageStore
 
     init(library: WindowLibrary, settings: SettingsModel, actions: AppActions, usage: CustomCommandUsageStore,
-         socketProvider: @escaping () -> String) {
+         socketProvider: @escaping () -> String, failureHud: FailureHud? = nil,
+         schedule: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = CustomCommandRunner.afterDelay) {
         self.library = library
         self.settings = settings
         self.actions = actions
         self.usage = usage
         self.socketProvider = socketProvider
+        self.failureHud = failureHud
+        self.schedule = schedule
+    }
+
+    /// The real clock behind `schedule`. Not isolated to the main actor itself: it is a default argument, and
+    /// an isolated function value cannot be converted to the plain closure type the parameter takes.
+    nonisolated static func afterDelay(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated(body) }
     }
 
     /// Install the local `.keyDown` monitor (idempotent), build the keybind map, observe `.agtermKeymapChanged`.
@@ -368,26 +502,59 @@ final class CustomCommandRunner {
                                                   bundledCLIDirectory: CLIInstaller.bundledTool?
                                                       .deletingLastPathComponent().path)
         process.environment = environment
-        // fire-and-forget: pin stdio to /dev/null rather than inherit the app's fds, which vary by launch.
+        // fire-and-forget: pin stdin and stdout to /dev/null rather than inherit the app's fds, which vary by
+        // launch. stderr is captured instead: it carries the one line that says why a command failed.
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let capture = StderrCapture()
+        let capturing = capture.start()
+        process.standardError = capturing ? capture.pipe : FileHandle.nullDevice
+        if !capturing {
+            logger.error("custom command \"\(command.name, privacy: .public)\": stderr capture unavailable")
+        }
         if let cwd, !cwd.isEmpty {
             process.currentDirectoryURL = URL(fileURLWithPath: cwd, isDirectory: true)
         }
         let name = command.name
+        let sessionID = context.sessionID
         process.terminationHandler = { proc in
-            guard proc.terminationStatus != 0 else { return }
             let status = proc.terminationStatus
-            // the handler fires on an arbitrary queue; hop to the main actor to post the banner.
-            DispatchQueue.main.async { NotificationManager.shared.notifyCommandFailure(name: name, detail: "exit \(status)") }
+            // the handlers fire on arbitrary queues; hop to the main actor to post.
+            let post: @Sendable (String?) -> Void = { detail in
+                guard status != 0 else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self.report(name: name, reason: "exit \(status)", detail: detail, sessionID: sessionID)
+                    }
+                }
+            }
+            guard capturing else { return post(nil) }
+            capture.deliver { tail in post(CommandFailure.detail(fromTail: tail)) }
         }
         do {
             try process.run()
             usage.record(command)
         } catch {
+            capture.cancel()
             logger.error("custom command \"\(name, privacy: .public)\" failed to spawn: \(error.localizedDescription, privacy: .public)")
-            NotificationManager.shared.notifyCommandFailure(name: name, detail: error.localizedDescription)
+            // a command that never started has no exit status and no output of its own, so the launch error
+            // is the whole diagnosis.
+            report(name: name, reason: error.localizedDescription, detail: nil, sessionID: sessionID)
         }
+    }
+
+    /// Surface a failed command: the macOS banner as before, plus a panel over the session it fired in. The
+    /// banner obeys the notifications setting, so with banners off the panel is the only thing the user sees.
+    /// A sessionless launch and a session that has since closed have nowhere to put one.
+    private func report(name: String, reason: String, detail: String?, sessionID: String) {
+        NotificationManager.shared.notifyCommandFailure(name: name, detail: reason)
+        guard let failureHud, !sessionID.isEmpty else { return }
+        guard let close = failureHud.open(sessionID, CommandFailure.message(name: name, reason: reason),
+                                          detail) else {
+            logger.notice("custom command \"\(name, privacy: .public)\" failed (\(reason, privacy: .public)); no panel: the session is gone or a program overlay holds the slot")
+            return
+        }
+        // the panel clears itself through the operation the post handed back, which knows which panel it was.
+        schedule(Self.failureHudSeconds, close)
     }
 }
