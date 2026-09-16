@@ -363,7 +363,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         let fix = try failureFixture(recorder)
         let marker = stateDir.appendingPathComponent("late-\(UUID().uuidString).ok")
         // the subshell outlives its parent holding the same stderr. Its marker is written only if that late
-        // write SUCCEEDED, so a capture that closed the read end early fails this test rather than passing it.
+        // write SUCCEEDED: a capture a background process can be killed by fails this test, not passes it.
         fix.runner.run(CustomCommand(name: "orphan",
                                      command: "( sleep 0.6; echo late >&2 && : > \(marker.path) ) & "
                                          + "echo boom >&2; exit 5",

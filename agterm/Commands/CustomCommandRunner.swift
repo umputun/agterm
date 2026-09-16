@@ -11,110 +11,39 @@ struct FailureHud {
     let open: (_ sessionID: String, _ message: String, _ detail: String?) -> (@MainActor () -> Void)?
 }
 
-/// Captures a command's stderr and hands over the last `CommandFailure.tailLimit` bytes once it fails.
+/// A command's stderr, captured to a temp file so a failure can say what it printed.
 ///
-/// One serial queue owns the fd, the tail and the delivery, so a read can never land after the hand-over it
-/// raced. Reading only at exit would deadlock as soon as the pipe fills, so a read source drains from the
-/// start; the child's exit adds a final drain of what is still buffered before delivering. The reader then
-/// keeps draining and DISCARDING until EOF rather than closing the fd: a backgrounded descendant inherits the
-/// write end, and closing it early would kill that descendant with SIGPIPE on its next write.
-private final class StderrCapture: @unchecked Sendable {
-    let pipe = Pipe()
-    private let queue = DispatchQueue(label: "com.umputun.agterm.command-stderr")
-    private let handle: FileHandle
-    private var source: DispatchSourceRead?
-    /// Keeps the drain alive until EOF, so a descendant that inherited stderr still writes into a live pipe
-    /// after the process and the delivery have let go. Cleared by the cancel handler, which ends the cycle.
-    private var retained: StderrCapture?
-    private var tail: [UInt8] = []
-    private var delivered = false
-    private var finished = false
+/// A FILE rather than a pipe: a pipe's read end lives only as long as agterm, so a background process a
+/// chord started would take SIGPIPE on its next write once the app quit, where inheriting `/dev/null` let it
+/// run on. A file also needs no reader, so nothing can block on a full buffer and nothing of ours outlives
+/// the command.
+private struct StderrFile: @unchecked Sendable {
+    let url: URL
+    let handle: FileHandle
 
-    /// Most bytes one read takes before yielding the queue. A descendant refilling the pipe as fast as it is
-    /// drained would otherwise hold the loop and delay the delivery it is racing.
-    private static let readBudget = 64 * 1024
-
-    init() {
-        handle = pipe.fileHandleForReading
+    /// Nil when the file cannot be created; the caller then sends stderr to `/dev/null` as before.
+    init?() {
+        url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-command-\(UUID().uuidString).err")
+        guard FileManager.default.createFile(atPath: url.path, contents: nil),
+              let handle = try? FileHandle(forWritingTo: url) else { return nil }
+        self.handle = handle
     }
 
-    /// Starts draining, answering whether it could: a descriptor that will not go nonblocking would park the
-    /// queue on the first empty pipe, so the caller sends stderr elsewhere instead.
-    func start() -> Bool {
-        let flags = fcntl(handle.fileDescriptor, F_GETFL)
-        guard flags != -1, fcntl(handle.fileDescriptor, F_SETFL, flags | O_NONBLOCK) != -1 else {
+    /// The last `CommandFailure.tailLimit` bytes the command wrote, after which the file is removed. The cap
+    /// is on the READ: the file itself holds everything written to it, and a background descendant that
+    /// inherited it keeps growing the unlinked inode, whose space returns only when that process exits.
+    func consume() -> [UInt8] {
+        defer {
             try? handle.close()
-            finished = true
-            return false
+            try? FileManager.default.removeItem(at: url)
         }
-        let source = DispatchSource.makeReadSource(fileDescriptor: handle.fileDescriptor, queue: queue)
-        source.setEventHandler { self.drain(budget: Self.readBudget) }
-        // the descriptor is closed HERE, through the FileHandle that owns it: `cancel()` is asynchronous, and
-        // closing a borrowed fd before the source has let go can shut an unrelated one that reused the number.
-        source.setCancelHandler {
-            try? self.handle.close()
-            self.retained = nil
-        }
-        self.source = source
-        retained = self
-        source.resume()
-        return true
-    }
-
-    /// Delivers the tail exactly once, after a bounded drain of what the child left behind. Ordered behind
-    /// every queued read because both run on `queue`, so a last line cannot arrive after the hand-over.
-    func deliver(_ body: @escaping ([UInt8]) -> Void) {
-        queue.async {
-            guard !self.delivered else { return }
-            // the pipe's capacity, not the 16 KiB tail: a tail-sized drain here would keep the oldest
-            // buffered bytes and lose the line the command exited on.
-            self.drain(budget: Self.pipeCapacity)
-            self.delivered = true
-            body(self.tail)
-            self.tail = []
-        }
-    }
-
-    /// What a pipe holds at most (`BIG_PIPE_SIZE`), so one pass takes everything buffered when the command
-    /// exited. A descendant writing after that refills it, which the reader picks up and discards.
-    private static let pipeCapacity = 64 * 1024
-
-    /// Drops a capture whose child never started: nothing inherited the write end, so the drain can end now.
-    func cancel() {
-        queue.async {
-            self.delivered = true
-            self.tail = []
-            self.finish()
-        }
-    }
-
-    /// Reads up to `budget` bytes, keeping the bounded tail until it has been delivered and discarding after.
-    /// A zero-length read means every writer is gone, which ends the drain.
-    private func drain(budget: Int) {
-        guard !finished else { return }
-        var buffer = [UInt8](repeating: 0, count: 8 * 1024)
-        var remaining = budget
-        while remaining > 0 {
-            let count = buffer.withUnsafeMutableBytes { raw -> Int in
-                read(handle.fileDescriptor, raw.baseAddress, min(raw.count, remaining))
-            }
-            if count > 0 {
-                if !delivered { CommandFailure.append(Array(buffer[0..<count]), to: &tail) }
-                remaining -= count
-                continue
-            }
-            if count == 0 { finish() }
-            // EAGAIN means the pipe is empty for now and the source calls back; any other error ends it.
-            if count < 0, errno != EAGAIN, errno != EINTR { finish() }
-            return
-        }
-    }
-
-    private func finish() {
-        guard !finished else { return }
-        finished = true
-        source?.cancel()
-        source = nil
+        guard let reader = try? FileHandle(forReadingFrom: url) else { return [] }
+        defer { try? reader.close() }
+        let size = (try? reader.seekToEnd()) ?? 0
+        let limit = UInt64(CommandFailure.tailLimit)
+        try? reader.seek(toOffset: size > limit ? size - limit : 0)
+        return [UInt8]((try? reader.readToEnd()) ?? Data())
     }
 }
 
@@ -151,8 +80,8 @@ final class CustomCommandRunner {
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
     private static let leaderTimeout: TimeInterval = 1.5
 
-    /// How long a failure panel stays up. Long enough to read a line, short enough that the slot a script's
-    /// own HUD wants is free again.
+    /// How long a failure panel stays up: long enough to read a line, short enough that a message about a
+    /// command that has already finished is not still sitting over the session minutes later.
     static let failureHudSeconds: TimeInterval = 10
 
     /// Run counts behind the title-bar popover's most-used section; every spawn path records into it.
@@ -491,7 +420,7 @@ final class CustomCommandRunner {
     /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` over the app environment and
     /// running in `cwd` (nil for a sessionless launch, which inherits the app's). `PATH` is widened first
     /// (`CommandPath`): the app's own is launchd's, and `sh -c` runs no profile, so a bare `agtermctl` would
-    /// exit 127. A spawn error or non-zero exit posts a failure banner; no output capture, no success banner.
+    /// exit 127. stderr goes to a temp file the failure report reads; a clean exit reports nothing.
     private func spawn(_ command: CustomCommand, context: CommandContext, cwd: String?) {
         let line = context.expand(command.command)
         let process = Process()
@@ -506,10 +435,9 @@ final class CustomCommandRunner {
         // launch. stderr is captured instead: it carries the one line that says why a command failed.
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
-        let capture = StderrCapture()
-        let capturing = capture.start()
-        process.standardError = capturing ? capture.pipe : FileHandle.nullDevice
-        if !capturing {
+        let capture = StderrFile()
+        process.standardError = capture?.handle ?? FileHandle.nullDevice
+        if capture == nil {
             logger.error("custom command \"\(command.name, privacy: .public)\": stderr capture unavailable")
         }
         if let cwd, !cwd.isEmpty {
@@ -519,23 +447,21 @@ final class CustomCommandRunner {
         let sessionID = context.sessionID
         process.terminationHandler = { proc in
             let status = proc.terminationStatus
-            // the handlers fire on arbitrary queues; hop to the main actor to post.
-            let post: @Sendable (String?) -> Void = { detail in
-                guard status != 0 else { return }
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        self.report(name: name, reason: "exit \(status)", detail: detail, sessionID: sessionID)
-                    }
+            // read and remove the file whatever the status, or a successful command leaks one per run.
+            let detail = capture.map { CommandFailure.detail(fromTail: $0.consume()) } ?? nil
+            guard status != 0 else { return }
+            // the handler fires on an arbitrary queue; hop to the main actor to post.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.report(name: name, reason: "exit \(status)", detail: detail, sessionID: sessionID)
                 }
             }
-            guard capturing else { return post(nil) }
-            capture.deliver { tail in post(CommandFailure.detail(fromTail: tail)) }
         }
         do {
             try process.run()
             usage.record(command)
         } catch {
-            capture.cancel()
+            _ = capture?.consume()
             logger.error("custom command \"\(name, privacy: .public)\" failed to spawn: \(error.localizedDescription, privacy: .public)")
             // a command that never started has no exit status and no output of its own, so the launch error
             // is the whole diagnosis.

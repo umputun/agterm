@@ -3,21 +3,6 @@ import Testing
 @testable import agtermCore
 
 struct CommandFailureTests {
-    @Test func appendKeepsTheNewestBytesWithinTheLimit() {
-        var tail: [UInt8] = []
-        CommandFailure.append(Array("abcdef".utf8), to: &tail, limit: 4)
-        #expect(String(decoding: tail, as: UTF8.self) == "cdef")
-        CommandFailure.append(Array("gh".utf8), to: &tail, limit: 4)
-        #expect(String(decoding: tail, as: UTF8.self) == "efgh")
-    }
-
-    @Test func appendKeepsEverythingUnderTheLimit() {
-        var tail: [UInt8] = []
-        CommandFailure.append(Array("ab".utf8), to: &tail, limit: 8)
-        CommandFailure.append(Array("cd".utf8), to: &tail, limit: 8)
-        #expect(String(decoding: tail, as: UTF8.self) == "abcd")
-    }
-
     @Test func detailTakesTheLastNonblankLine() {
         let tail = Array("first failure\nsecond failure\n\n   \n".utf8)
         #expect(CommandFailure.detail(fromTail: tail) == "second failure")

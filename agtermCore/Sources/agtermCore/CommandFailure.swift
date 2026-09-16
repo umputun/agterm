@@ -9,13 +9,6 @@ public enum CommandFailure {
     /// a command that writes megabytes must not grow the buffer with it.
     public static let tailLimit = 16 * 1024
 
-    /// Appends `chunk` to `tail`, dropping the oldest bytes past `tailLimit`. The drain runs while the child
-    /// is alive, so the buffer is trimmed as it grows rather than at exit.
-    public static func append(_ chunk: [UInt8], to tail: inout [UInt8], limit: Int = tailLimit) {
-        tail.append(contentsOf: chunk)
-        if tail.count > limit { tail.removeFirst(tail.count - limit) }
-    }
-
     /// The last usable line of a captured tail, as HUD detail. Decoding is lenient because a cut tail can
     /// split a scalar. Lines are cleaned BEFORE one is chosen: a command whose last write was a bare colour
     /// reset would otherwise show an empty panel instead of the diagnostic above it. Nil when nothing usable

@@ -82,8 +82,12 @@ paths:
 - `CustomCommandRunner` uses an app-wide local `.keyDown` monitor. Its `KeybindMatcher` supports simple
   chords and leaders such as `ctrl+a>g`, ignores repeats, and times leaders out after 1.5 seconds.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; stdin and stdout go to
-  `/dev/null` while stderr is drained live into a 16 KiB tail (`CommandFailure`), since reading it only at
-  exit deadlocks once the pipe fills. A spawn error or non-zero exit calls `notifyCommandFailure` AND posts
+  `/dev/null` while stderr goes to a temp FILE, whose last 16 KiB the termination handler reads before
+  removing it (`StderrFile`, `CommandFailure`). A pipe would be wrong here in both directions: its read end
+  dies with agterm, so a background process a chord started would take SIGPIPE where `/dev/null` let it run
+  on, and it needs a live reader or a full buffer blocks the command. The accepted cost is disk: the 16 KiB
+  is a READ cap, so a command that logs heavily writes all of it, and a descendant that inherited the file
+  goes on growing the unlinked inode until it exits. `/dev/null` grew nothing. A spawn error or non-zero exit calls `notifyCommandFailure` AND posts
   a HUD over the firing session through the injected `FailureHud`, carrying the name, the exit status or
   launch error, and the last nonblank stderr line; the banner obeys the notifications setting, so with
   banners off the panel is the only report. It clears itself after `failureHudSeconds` through the injected
