@@ -65,6 +65,12 @@ extension ControlDispatcher {
             return .rejected(ControlResponse(ok: false,
                                              error: "\(request.cmd.rawValue): --size-percent must be 1...100"))
         }
+        // rejected rather than clamped: a caller who asked for a duration nothing can schedule gets told so,
+        // instead of a panel that hides after some number he never chose.
+        if let hideAfter = args?.hideAfter, !HudSpec.isValidHideAfter(hideAfter) {
+            return .rejected(ControlResponse(
+                ok: false, error: "\(request.cmd.rawValue): --hide-after must be a finite number of seconds, 0 or more"))
+        }
         // `parse` takes the `top`/`bottom` aliases beside the nine anchors, and the rejection lists them for
         // the same reason the spinner's does: naming only the canonical set would refuse values this accepts.
         var position = HudPosition.defaultPosition

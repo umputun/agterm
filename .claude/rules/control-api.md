@@ -406,6 +406,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and session close tear a HUD down. `overlay.result` refuses with `OverlayHudError.noResult` because
   `overlayActive` alone would answer the misleading "overlay still running", and `overlay.resize` takes a
   percent but refuses `--full` (`OverlayHudError.fullResize`), which would cover the session it describes.
+- `--hide-after SECONDS` takes the panel down by itself; omitted or 0 leaves it up, which is what every HUD
+  did before. Finite and nonnegative, REJECTED rather than clamped, by one predicate
+  (`HudSpec.isValidHideAfter`) the CLI and the dispatcher share. Each SUCCESSFUL open or update restarts the
+  full interval and an omitted value cancels it, which is `hud.update`'s replace-whole-spec rule rather than
+  an exception to it; a rejected write never touches timer state, so the panel on screen keeps the deadline
+  that came with it. The clock is elapsed lifetime, not viewing time: it runs while the session is
+  unselected, its pane hidden or its window minimized, and expiry closes the panel without selecting
+  anything. `ControlServer.armHudAutoHide` owns it, carrying a per-session REVISION because `updateHud`
+  must not bump `overlaySlotGeneration` (that identity re-creates the surface), so the revision is what makes
+  a superseded callback inert. Cancellation hangs off `Session.onHudDiscarded`, which `discardHudBody` calls,
+  so every teardown routing through it — `closeOverlay`, session and workspace teardown, pending-close
+  finalization, window teardown — takes the timer with the panel. A SOFT close is the one place that closes a
+  panel early: `AppStore.closeTimedHud` takes down a TIMED HUD before its session leaves the tree, since an
+  expiry could not resolve it there and undo would restore a panel whose time was up; a panel with no
+  auto-hide keeps the undo behaviour it always had. `tree`'s `hud.hideAfter` reads back the CONFIGURED
+  seconds, 0 for persistent, never a countdown.
 - `hud.open` and `hud.update` accept `--pane` plus `--pane-id` with `session.restore`'s resolution rule: a
   live stable token wins over the role fallback, while an unknown token without a fallback errors. The
   resolved pane identity is stored, so swap and promotion move the HUD with its shell. A hidden target keeps

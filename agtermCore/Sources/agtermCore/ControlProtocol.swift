@@ -280,6 +280,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// style or nothing and the dispatcher has one thing to validate.
     /// The box reserves the glyph's cells either way, so toggling it cannot rewrap the message.
     public var spinner: String?
+    /// Seconds after which a HUD takes itself down, for `session.hud.open`/`.update`; nil/omitted or 0 leaves
+    /// it up until something closes it. Each successful open or update restarts the interval, so an update
+    /// that omits it cancels the previous one, exactly as omitting `detail` drops the second line.
+    public var hideAfter: Double?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
@@ -355,6 +359,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 text: String? = nil, select: Bool? = nil, mode: String? = nil, axis: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
+                hideAfter: Double? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, selection: String? = nil,
                 buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
@@ -394,6 +399,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.message = message
         self.detail = detail
         self.spinner = spinner
+        self.hideAfter = hideAfter
         self.items = items
         self.prompt = prompt
         self.query = query

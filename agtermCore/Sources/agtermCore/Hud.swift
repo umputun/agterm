@@ -19,15 +19,29 @@ public struct HudSpec: Codable, Equatable, Sendable {
     /// message. There is no height counterpart — `HudLayout.heightPercent` owns why.
     public let sizePercent: Int?
     public let position: HudPosition
+    /// Seconds after which the panel takes itself down, nil or 0 for one that stays until something closes
+    /// it. Elapsed lifetime rather than viewing time: the clock runs while the session is unselected, its
+    /// pane hidden or its window minimized, and expiry closes the panel without selecting anything.
+    public let hideAfter: Double?
 
     /// Cap on `message` and `detail` each, enforced by the dispatcher in `HudLayout.textLength`'s unit. The
     /// panel wraps at `HudLayout.maxColumns` and is clamped to `HudLayout.maxSizePercent`, so longer text
     /// cannot be shown.
     public static let maxTextLength = 256
 
+    /// Whether `seconds` can be scheduled. Rejected rather than clamped, so a caller who asked for something
+    /// impossible hears about it instead of getting a duration nobody chose.
+    public static func isValidHideAfter(_ seconds: Double) -> Bool { seconds.isFinite && seconds >= 0 }
+
+    /// The panel's own auto-hide, 0 when it stays. The one spelling of "is this panel timed", so the arming
+    /// side and the read-back cannot disagree about what nil means.
+    public var effectiveHideAfter: Double { hideAfter ?? 0 }
+
     public init(message: String, detail: String? = nil, spinner: HudSpinner? = nil,
                 backgroundColor: String? = nil, textColor: String? = nil,
-                sizePercent: Int? = nil, position: HudPosition = .defaultPosition) {
+                sizePercent: Int? = nil, position: HudPosition = .defaultPosition,
+                hideAfter: Double? = nil) {
+        self.hideAfter = hideAfter
         self.message = message
         self.detail = detail
         self.spinner = spinner
@@ -38,7 +52,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case message, detail, spinner, backgroundColor, textColor, sizePercent, position
+        case message, detail, spinner, backgroundColor, textColor, sizePercent, position, hideAfter
     }
 
     /// A copy carrying `color` in place of this spec's own background. `AppStore.updateHud` holds the LIVE
@@ -47,7 +61,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
     /// held this way — it rides the header the helper re-reads, so an update's own value is what paints.
     func withBackgroundColor(_ color: String?) -> HudSpec {
         HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: color,
-                textColor: textColor, sizePercent: sizePercent, position: position)
+                textColor: textColor, sizePercent: sizePercent, position: position, hideAfter: hideAfter)
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,6 +73,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
         textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
         sizePercent = try c.decodeIfPresent(Int.self, forKey: .sizePercent)
         position = try c.decodeIfPresent(HudPosition.self, forKey: .position) ?? .defaultPosition
+        hideAfter = try c.decodeIfPresent(Double.self, forKey: .hideAfter)
     }
 }
 

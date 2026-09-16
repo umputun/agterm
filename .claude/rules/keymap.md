@@ -90,12 +90,10 @@ paths:
   goes on growing the unlinked inode until it exits. `/dev/null` grew nothing. A spawn error or non-zero exit calls `notifyCommandFailure` AND posts
   a HUD over the firing session through the injected `FailureHud`, carrying the name, the exit status or
   launch error, and the last nonblank stderr line; the banner obeys the notifications setting, so with
-  banners off the panel is the only report. It clears itself after `failureHudSeconds` through the injected
-  `schedule`, running the close operation the open handed back; `FailureHudOwner` holds that panel's session
-  WEAKLY beside its `overlaySlotGeneration`, so neither a HUD posted since nor a restored session wearing the
-  same id — same UUID, fresh object, generation counted from zero — is taken down by a stale timer. A program
-  overlay owning the slot refuses the open, which is logged and never evicts the program. Exit 0 reports
-  nothing whatever it printed. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
+  banners off the panel is the only report. It clears itself through the HUD's own `--hide-after`, posted
+  with `failureHudSeconds`, so the runner holds no clock and no close of its own; [[control-api]] owns that
+  contract and the ownership question with it. A program overlay owning the slot refuses the open, which is
+  logged and never evicts the program. Exit 0 reports nothing whatever it printed. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
   `PaletteCommand.allCases` on `builtinAction`, falling
   back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND

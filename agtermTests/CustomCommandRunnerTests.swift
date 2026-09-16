@@ -261,25 +261,16 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
     }
 
-    /// Records what the runner would put on screen for a failed command, and the auto-closes it arms.
+    /// Records what the runner would put on screen for a failed command.
     private final class HudRecorder: @unchecked Sendable {
         var posts: [(session: String, message: String, detail: String?)] = []
-        var closes = 0
-        var pending: [(delay: TimeInterval, body: @MainActor () -> Void)] = []
         var refuse = false
 
         var hud: FailureHud {
             FailureHud(open: { [self] session, message, detail in
                 posts.append((session, message, detail))
-                guard !refuse else { return nil }
-                return { [self] in closes += 1 }
+                return !refuse
             })
-        }
-
-        @MainActor func fireTimers() {
-            let due = pending
-            pending = []
-            for timer in due { timer.body() }
         }
     }
 
@@ -292,8 +283,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         actions.settingsModel = settings
         let runner = CustomCommandRunner(library: library, settings: settings, actions: actions,
                                          usage: CustomCommandUsageStore(directory: stateDir),
-                                         socketProvider: { "" }, failureHud: recorder.hud,
-                                         schedule: { delay, body in recorder.pending.append((delay, body)) })
+                                         socketProvider: { "" }, failureHud: recorder.hud)
         runner.start()
         started.append(runner)
         let store = try XCTUnwrap(library.activeStore)
@@ -324,19 +314,6 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(recorder.posts.first?.session, fix.session.id.uuidString)
         XCTAssertEqual(recorder.posts.first?.message, "probe: exit 3")
         XCTAssertEqual(recorder.posts.first?.detail, "boom")
-    }
-
-    func testTheTimerRunsTheCloseThePostHandedBack() throws {
-        let recorder = HudRecorder()
-        let fix = try failureFixture(recorder)
-        fix.runner.run(CustomCommand(name: "probe", command: "exit 1", shortcut: "ctrl+a>p"))
-
-        wait { !recorder.posts.isEmpty }
-        XCTAssertEqual(recorder.pending.map(\.delay), [CustomCommandRunner.failureHudSeconds])
-        XCTAssertEqual(recorder.closes, 0, "nothing closes before the delay is up")
-        recorder.fireTimers()
-
-        XCTAssertEqual(recorder.closes, 1)
     }
 
     // the second command only starts failing after the first has run to its last statement, so the post it
@@ -417,11 +394,8 @@ final class CustomCommandRunnerTests: XCTestCase {
         fix.runner.run(CustomCommand(name: "probe", command: "exit 4", shortcut: "ctrl+a>p"))
 
         wait { !recorder.posts.isEmpty }
-        recorder.fireTimers()
 
         XCTAssertEqual(recorder.posts.count, 1, "a refusal still tries once")
-        XCTAssertTrue(recorder.pending.isEmpty, "a refusal arms no timer")
-        XCTAssertEqual(recorder.closes, 0, "nothing was shown, so nothing may be taken down")
     }
 
     /// Runs `command` from `surface` and returns what it wrote, or nil if it never wrote anything. The spawn

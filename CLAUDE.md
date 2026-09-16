@@ -9,6 +9,11 @@ C-boundary concurrency before changing the bridge.
 
 - For nonstandard or risky UI requests, first explain the AppKit/SwiftUI cost and offer the standard
   alternative. Proceed if the user still prefers the custom behavior.
+- Judge any change that can leave a long-standing visual artifact by what the user is left looking at,
+  never by whether the mechanism is sound. A panel, badge, marker or overlay that outlives the thing it
+  describes is a defect however correct the code that posted it. Give it a way to clear itself, and put
+  that in the control API rather than in a private timer inside one caller, or every other caller ships
+  the same artifact.
 - For every new capability, propose useful control API/CLI coverage: protocol command and arguments,
   dispatch, `agtermctl`, read-back, and tests. Control-native features count; skip only chrome with nothing
   meaningful to drive.

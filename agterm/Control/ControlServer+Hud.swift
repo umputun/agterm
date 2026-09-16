@@ -3,10 +3,45 @@ import CoreText
 import Foundation
 import agtermCore
 
+/// A session's live auto-hide timer and the revision that armed it. The revision is what makes a superseded
+/// callback inert: an update restarts the interval without bumping `Session.overlaySlotGeneration`, which
+/// would recreate the panel's surface.
+struct HudAutoHide {
+    let revision: Int
+    let task: Task<Void, Never>
+}
+
 /// App-side host for `session.hud.*`. Validation, error text and response shape stay in
 /// `ControlDispatcher+Hud`; this layer supplies the three things agtermCore cannot resolve — the bundled
 /// helper's path, the terminal font's cell size, and live geometry, plus the body file the helper reads.
 extension ControlServer {
+    /// Arms `spec`'s auto-hide for `session`, replacing whatever was armed before, and registers the
+    /// cancellation the store calls from `discardHudBody`. A spec with no auto-hide only cancels.
+    ///
+    /// Called after the body write succeeds, never before: a rejected open or update must leave the panel
+    /// that is actually on screen with the deadline it actually has.
+    func armHudAutoHide(_ session: Session, spec: HudSpec) {
+        let id = session.id
+        let revision = (hudAutoHide[id]?.revision ?? 0) + 1
+        hudAutoHide[id]?.task.cancel()
+        hudAutoHide[id] = nil
+        let seconds = spec.effectiveHideAfter
+        guard seconds > 0 else { return }
+        let task = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled, let self, self.hudAutoHide[id]?.revision == revision else { return }
+            self.hudAutoHide[id] = nil
+            // through the store, so the body file goes with the panel and the deck sees the slot empty.
+            self.library.store(forSession: id)?.closeHud(id)
+        }
+        hudAutoHide[id] = HudAutoHide(revision: revision, task: task)
+        session.onHudDiscarded = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.hudAutoHide[id]?.task.cancel()
+                self?.hudAutoHide[id] = nil
+            }
+        }
+    }
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
         openHud(target, window: window, spec: spec, placement: ControlHudPlacement())
     }
@@ -47,6 +82,7 @@ extension ControlServer {
                 store.closeHud(id)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
+            self.armHudAutoHide(session, spec: spec)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -82,11 +118,14 @@ extension ControlServer {
             store.updateHud(id, spec: spec, size: HudLayout.panelSize(for: spec, pane: metrics),
                             paneIdentity: paneIdentity)
             guard self.writeHudBody(session, pane: metrics) else {
+                // the panel still paints the old message, so it keeps the deadline that came with it: the
+                // arm below is the only thing that touches timer state, and it never ran.
                 store.updateHud(id, spec: previous,
                                 size: HudPanelSize(widthPercent: previousSize, heightPercent: previousHeight),
                                 paneIdentity: previousPaneIdentity)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
+            self.armHudAutoHide(session, spec: spec)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

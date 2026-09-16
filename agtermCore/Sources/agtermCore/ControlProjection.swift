@@ -63,11 +63,16 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     public let position: String
     /// The pane currently carrying the stable HUD target, nil/omitted for session-wide placement.
     public let pane: String?
+    /// The panel's auto-hide in seconds, 0 for one that stays until something closes it. The CONFIGURED
+    /// duration rather than the time left: each successful open or update restarts it, so a caller who wants
+    /// a countdown holds its own clock from the call it made.
+    public let hideAfter: Double
 
     public init(message: String, detail: String? = nil, spinner: String = HudSpinner.noneName,
                 backgroundColor: String? = nil, textColor: String? = nil,
                 sizePercent: Int? = nil, heightPercent: Int? = nil, position: String,
-                pane: String? = nil) {
+                pane: String? = nil, hideAfter: Double = 0) {
+        self.hideAfter = hideAfter
         self.message = message
         self.detail = detail
         self.spinner = spinner

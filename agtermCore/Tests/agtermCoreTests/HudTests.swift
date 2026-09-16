@@ -3,6 +3,37 @@ import Testing
 @testable import agtermCore
 
 struct HudTests {
+    @Test func hideAfterSurvivesARoundTripAndDefaultsToPersistent() throws {
+        let timed = try JSONDecoder().decode(
+            HudSpec.self, from: JSONEncoder().encode(HudSpec(message: "deploying", hideAfter: 10)))
+        let persistent = try JSONDecoder().decode(
+            HudSpec.self, from: JSONEncoder().encode(HudSpec(message: "waiting")))
+
+        #expect(timed.hideAfter == 10)
+        #expect(timed.effectiveHideAfter == 10)
+        #expect(persistent.hideAfter == nil)
+        #expect(persistent.effectiveHideAfter == 0, "a panel with no auto-hide reads back as 0, never nil")
+    }
+
+    // the live panel's color is held across an update; the auto-hide has to ride along or a recolor would
+    // silently make a timed panel permanent.
+    @Test func holdingTheBackgroundColorKeepsTheAutoHide() {
+        let held = HudSpec(message: "deploying", hideAfter: 10).withBackgroundColor("#101010")
+
+        #expect(held.hideAfter == 10)
+        #expect(held.backgroundColor == "#101010")
+    }
+
+    @Test(arguments: [-0.5, Double.nan, Double.infinity, -Double.infinity])
+    func unschedulableDurationsAreRejected(_ seconds: Double) {
+        #expect(!HudSpec.isValidHideAfter(seconds))
+    }
+
+    @Test(arguments: [0.0, 0.25, 10.0])
+    func schedulableDurationsAreAccepted(_ seconds: Double) {
+        #expect(HudSpec.isValidHideAfter(seconds))
+    }
+
     @Test func shortMessageBoxIsContentPlusPadding() {
         let box = HudLayout.box(for: HudSpec(message: "gathering options"))
 

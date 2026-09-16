@@ -118,14 +118,9 @@ struct agtermApp: App {
             // panel something else has posted since.
             failureHud: FailureHud(
                 open: { [weak controlServer] sessionID, message, detail in
-                    let spec = HudSpec(message: message, detail: detail, position: .bottomRight)
-                    guard controlServer?.openHud(sessionID, window: nil, spec: spec).ok == true,
-                          let session = Self.failureHudSession(sessionID, in: library) else { return nil }
-                    let owner = FailureHudOwner(session: session)
-                    return { [weak controlServer] in
-                        guard owner.owns(Self.failureHudSession(sessionID, in: library)) else { return }
-                        _ = controlServer?.closeHud(sessionID, window: nil)
-                    }
+                    let spec = HudSpec(message: message, detail: detail, position: .bottomRight,
+                                       hideAfter: CustomCommandRunner.failureHudSeconds)
+                    return controlServer?.openHud(sessionID, window: nil, spec: spec).ok == true
                 })))
         // hooks.conf scripts: fed by the library's post-append observer, applied from the settings model.
         let hookController = HookController(library: library, settings: settingsModel,
@@ -150,13 +145,6 @@ struct agtermApp: App {
             }
             logger.debug("launch spawn queue armed with \(plan.order.count) panes, \(plan.burst.count) in the burst")
         }
-    }
-
-    /// The session a failure panel targets, by the id the runner captured when the command fired. Looked up
-    /// through the library rather than kept, so a session closed meanwhile simply answers nil.
-    private static func failureHudSession(_ sessionID: String, in library: WindowLibrary) -> Session? {
-        guard let id = UUID(uuidString: sessionID) else { return nil }
-        return library.store(forSession: id)?.session(withID: id)
     }
 
     var body: some Scene {

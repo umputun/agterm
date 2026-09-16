@@ -1244,6 +1244,45 @@ struct AppStorePaneTests {
         #expect(session.hudSpec == nil)
     }
 
+    @Test func softClosingASessionTakesDownAPanelThatWasCountingItselfOut() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "deploying", hideAfter: 10),
+                      file: "/tmp/body", size: HudPanelSize(widthPercent: 20, heightPercent: 9))
+
+        #expect(store.softCloseSession(session.id))
+
+        #expect(!session.hudActive, "an expiry could not resolve it once the session leaves the tree")
+    }
+
+    @Test func softClosingASessionKeepsAPanelWithNoAutoHide() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "waiting"),
+                      file: "/tmp/body", size: HudPanelSize(widthPercent: 20, heightPercent: 9))
+
+        #expect(store.softCloseSession(session.id))
+
+        #expect(session.hudActive, "undo restores the session exactly as it was")
+    }
+
+    @Test func discardingAHudCancelsWhateverArmedItsAutoHide() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "deploying", hideAfter: 10),
+                      file: "/tmp/body", size: HudPanelSize(widthPercent: 20, heightPercent: 9))
+        var cancelled = 0
+        session.onHudDiscarded = { cancelled += 1 }
+
+        store.closeHud(session.id)
+
+        #expect(cancelled == 1)
+        #expect(session.onHudDiscarded == nil, "a second discard must not call a hook the first one spent")
+    }
+
     @Test func overlaySlotGenerationTracksOpensOnly() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

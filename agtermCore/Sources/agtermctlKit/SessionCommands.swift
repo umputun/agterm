@@ -743,6 +743,14 @@ struct Session: ParsableCommand {
             }
         }
 
+        /// Rejects what cannot be scheduled rather than clamping it, matching the dispatcher so the same value
+        /// fails the same way over a raw socket.
+        static func validateHideAfter(_ seconds: Double?) throws {
+            if let seconds, !HudSpec.isValidHideAfter(seconds) {
+                throw ValidationError("hide-after must be a finite number of seconds, 0 or more")
+            }
+        }
+
         /// The one spinner value the socket carries, from the two ways to ask for one: `--spinner-style`
         /// names it and turns it on by itself, so the bare `--spinner` flag is only needed for the default.
         /// Nil when neither is given, which is the static panel.
@@ -788,6 +796,11 @@ struct Session: ParsableCommand {
             var pane: String?
             @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves.")
             var paneID: String?
+            @Option(name: .customLong("hide-after"), help: """
+                Take the panel down by itself after SECONDS; omit or 0 to leave it up until something closes \
+                it. The clock runs whether or not the session is on screen.
+                """)
+            var hideAfter: Double?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -798,6 +811,7 @@ struct Session: ParsableCommand {
                 try Hud.validateTextColor(textColor)
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
+                try Hud.validateHideAfter(hideAfter)
                 try Session.validateSizePercent(sizePercent)
                 try Overlay.validatePane(pane)
             }
@@ -807,6 +821,7 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   hideAfter: hideAfter,
                                    pane: pane, paneID: paneID, color: backgroundColor,
                                    textColor: textColor, position: position)))
             }
@@ -840,6 +855,11 @@ struct Session: ParsableCommand {
             var pane: String?
             @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); repeat it on update to keep pane scope.")
             var paneID: String?
+            @Option(name: .customLong("hide-after"), help: """
+                Restart the panel's auto-hide at SECONDS; omit or 0 to cancel it, like every other option \
+                an update replaces rather than patches.
+                """)
+            var hideAfter: Double?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -847,6 +867,7 @@ struct Session: ParsableCommand {
                 try Hud.validateTextColor(textColor)
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
+                try Hud.validateHideAfter(hideAfter)
                 try Session.validateSizePercent(sizePercent)
                 try Overlay.validatePane(pane)
             }
@@ -856,6 +877,7 @@ struct Session: ParsableCommand {
                                args: options.withWindow(ControlArgs(
                                    sizePercent: sizePercent, message: message, detail: detail,
                                    spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   hideAfter: hideAfter,
                                    pane: pane, paneID: paneID, textColor: textColor, position: position)))
             }
         }

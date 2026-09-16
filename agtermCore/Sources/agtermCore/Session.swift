@@ -406,11 +406,18 @@ public final class Session: Identifiable {
     /// leave it there. Deleting it also stops a helper still running against it.
     public func discardHudBody() {
         if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
+        let cancelTimer = onHudDiscarded
+        onHudDiscarded = nil
         hudSpec = nil
         hudPaneIdentity = nil
         hudFile = nil
         hudHeightPercent = nil
+        cancelTimer?()
     }
+
+    /// Cancels the app's auto-hide timer for this panel; `discardHudBody` calls and clears it. Every teardown
+    /// that drops a HUD already routes through that one method, which is why the hook hangs there.
+    public var onHudDiscarded: (() -> Void)?
 
     /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
     /// two occupants, so the deck's passivity exemptions and the program-overlay questions below cannot

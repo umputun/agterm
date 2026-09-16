@@ -4,11 +4,10 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCommandRunner")
 
-/// How the runner shows a failed command. `open` posts the panel and answers the operation that takes THAT
-/// panel down, or nil when the slot holds a running program, which is never evicted for a message. The
-/// ownership test lives behind that operation (`FailureHudOwner`), so the runner cannot close someone else's.
+/// How the runner shows a failed command: posts the panel, answering false when the slot holds a running
+/// program, which is never evicted for a message. Taking it down again is the panel's own auto-hide.
 struct FailureHud {
-    let open: (_ sessionID: String, _ message: String, _ detail: String?) -> (@MainActor () -> Void)?
+    let open: (_ sessionID: String, _ message: String, _ detail: String?) -> Bool
 }
 
 /// A command's stderr, captured to a temp file so a failure can say what it printed.
@@ -65,13 +64,9 @@ final class CustomCommandRunner {
     private let settings: SettingsModel
     private let actions: AppActions
     private let socketProvider: () -> String
-    /// Posts the failure panel over the session a command fired in, and takes it down again. Injected rather
-    /// than reached for: the control server owns the HUD path, and a test supplies its own recorder.
+    /// Posts the failure panel over the session a command fired in; the panel's own auto-hide takes it down.
+    /// Injected rather than reached for: the control server owns the HUD path, and a test supplies a recorder.
     private let failureHud: FailureHud?
-
-    /// Runs `body` after `delay`; injected so a test can fire the failure panel's auto-close instead of
-    /// waiting out the real one.
-    private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
 
     private var commandEngine = CustomCommandEngine(commands: [])
 
@@ -90,21 +85,13 @@ final class CustomCommandRunner {
     let usage: CustomCommandUsageStore
 
     init(library: WindowLibrary, settings: SettingsModel, actions: AppActions, usage: CustomCommandUsageStore,
-         socketProvider: @escaping () -> String, failureHud: FailureHud? = nil,
-         schedule: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = CustomCommandRunner.afterDelay) {
+         socketProvider: @escaping () -> String, failureHud: FailureHud? = nil) {
         self.library = library
         self.settings = settings
         self.actions = actions
         self.usage = usage
         self.socketProvider = socketProvider
         self.failureHud = failureHud
-        self.schedule = schedule
-    }
-
-    /// The real clock behind `schedule`. Not isolated to the main actor itself: it is a default argument, and
-    /// an isolated function value cannot be converted to the plain closure type the parameter takes.
-    nonisolated static func afterDelay(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated(body) }
     }
 
     /// Install the local `.keyDown` monitor (idempotent), build the keybind map, observe `.agtermKeymapChanged`.
@@ -477,12 +464,9 @@ final class CustomCommandRunner {
     private func report(name: String, reason: String, detail: String?, sessionID: String) {
         NotificationManager.shared.notifyCommandFailure(name: name, detail: reason)
         guard let failureHud, !sessionID.isEmpty else { return }
-        guard let close = failureHud.open(sessionID, CommandFailure.message(name: name, reason: reason),
-                                          detail) else {
+        guard failureHud.open(sessionID, CommandFailure.message(name: name, reason: reason), detail) else {
             logger.notice("custom command \"\(name, privacy: .public)\" failed (\(reason, privacy: .public)); no panel: the session is gone or a program overlay holds the slot")
             return
         }
-        // the panel clears itself through the operation the post handed back, which knows which panel it was.
-        schedule(Self.failureHudSeconds, close)
     }
 }

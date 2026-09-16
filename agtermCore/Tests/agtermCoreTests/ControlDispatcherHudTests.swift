@@ -18,6 +18,42 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [-1.0, Double.nan, Double.infinity])
+    func openRejectsAHideAfterNothingCanSchedule(_ seconds: Double) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "working", hideAfter: seconds)))
+
+        #expect(response == ControlResponse(
+            ok: false, error: "session.hud.open: --hide-after must be a finite number of seconds, 0 or more"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func updateRejectsANegativeHideAfterAndLeavesTheLivePanelAlone() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudUpdate, args: ControlArgs(message: "working", hideAfter: -0.5)))
+
+        #expect(response == ControlResponse(
+            ok: false, error: "session.hud.update: --hide-after must be a finite number of seconds, 0 or more"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func zeroHideAfterReachesTheHostAsAPanelThatStays() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "working", hideAfter: 0)))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls.count == 1)
+    }
+
     // `HudLayout.wrap` drops whitespace-only text, so a blank message would paint an empty frame while
     // `tree` reported a live HUD.
     @Test func openRejectsAWhitespaceOnlyMessage() async {
