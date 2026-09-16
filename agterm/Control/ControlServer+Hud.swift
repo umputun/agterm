@@ -25,7 +25,9 @@ extension ControlServer {
         let revision = (hudAutoHide[id]?.revision ?? 0) + 1
         hudAutoHide[id]?.task.cancel()
         hudAutoHide[id] = nil
-        let seconds = spec.effectiveHideAfter
+        // clamped as well as validated: the conversion below traps on a large enough Double, and a raw-socket
+        // caller reaching here past a validation that drifted must not take the app with it.
+        let seconds = min(spec.effectiveHideAfter, HudSpec.maxHideAfter)
         guard seconds > 0 else { return }
         let task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))

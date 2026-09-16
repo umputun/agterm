@@ -786,7 +786,7 @@ error keeps those names for compatibility.
   (default `center`), the same anchors `session background` takes; every anchor off center holds a fixed
   margin off that pane edge on each axis it names, so a panel at the largest allowed size never overhangs.
   `--hide-after SECONDS` makes the panel take itself down; omitted or 0 leaves it up until something closes
-  it. Every successful open or update restarts the interval and an omitted value cancels it, like every other
+  it, and anything outside `0...86400` is refused rather than clamped. Every successful open or update restarts the interval and an omitted value cancels it, like every other
   option an update replaces rather than patches, while a refused write leaves the live panel's own deadline
   alone. The clock is elapsed lifetime rather than viewing time: it runs while the session is unselected, its
   pane hidden or its window minimized, and expiry closes the panel without selecting anything. A session

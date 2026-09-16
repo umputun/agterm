@@ -24,12 +24,14 @@ struct HudTests {
         #expect(held.backgroundColor == "#101010")
     }
 
-    @Test(arguments: [-0.5, Double.nan, Double.infinity, -Double.infinity])
+    // 1e12 seconds is finite and positive and still traps the scheduler's nanosecond conversion, so finite
+    // and nonnegative is not the same question as schedulable.
+    @Test(arguments: [-0.5, Double.nan, Double.infinity, -Double.infinity, 1e12, HudSpec.maxHideAfter + 0.5])
     func unschedulableDurationsAreRejected(_ seconds: Double) {
         #expect(!HudSpec.isValidHideAfter(seconds))
     }
 
-    @Test(arguments: [0.0, 0.25, 10.0])
+    @Test(arguments: [0.0, 0.25, 10.0, HudSpec.maxHideAfter])
     func schedulableDurationsAreAccepted(_ seconds: Double) {
         #expect(HudSpec.isValidHideAfter(seconds))
     }

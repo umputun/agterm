@@ -407,8 +407,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `overlayActive` alone would answer the misleading "overlay still running", and `overlay.resize` takes a
   percent but refuses `--full` (`OverlayHudError.fullResize`), which would cover the session it describes.
 - `--hide-after SECONDS` takes the panel down by itself; omitted or 0 leaves it up, which is what every HUD
-  did before. Finite and nonnegative, REJECTED rather than clamped, by one predicate
-  (`HudSpec.isValidHideAfter`) the CLI and the dispatcher share. Each SUCCESSFUL open or update restarts the
+  did before. `0...HudSpec.maxHideAfter` (86400 seconds), REJECTED rather than clamped, by one predicate
+  (`HudSpec.isValidHideAfter`) the CLI and the dispatcher share — the ceiling is the scheduler's own, since
+  `seconds * 1_000_000_000` into a `UInt64` traps on a large enough Double, and `armHudAutoHide` clamps to it
+  as well so a raw-socket caller cannot reach that conversion past a validation that drifted. Each SUCCESSFUL open or update restarts the
   full interval and an omitted value cancels it, which is `hud.update`'s replace-whole-spec rule rather than
   an exception to it; a rejected write never touches timer state, so the panel on screen keeps the deadline
   that came with it. The clock is elapsed lifetime, not viewing time: it runs while the session is

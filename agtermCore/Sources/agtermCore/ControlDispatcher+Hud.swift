@@ -69,7 +69,8 @@ extension ControlDispatcher {
         // instead of a panel that hides after some number he never chose.
         if let hideAfter = args?.hideAfter, !HudSpec.isValidHideAfter(hideAfter) {
             return .rejected(ControlResponse(
-                ok: false, error: "\(request.cmd.rawValue): --hide-after must be a finite number of seconds, 0 or more"))
+                ok: false,
+                error: "\(request.cmd.rawValue): --hide-after must be 0...\(Int(HudSpec.maxHideAfter)) seconds"))
         }
         // `parse` takes the `top`/`bottom` aliases beside the nine anchors, and the rejection lists them for
         // the same reason the spinner's does: naming only the canonical set would refuse values this accepts.
@@ -93,6 +94,7 @@ extension ControlDispatcher {
         }
         return .spec(HudSpec(message: message, detail: args?.detail, spinner: spinner,
                              backgroundColor: args?.color, textColor: args?.textColor,
-                             sizePercent: args?.sizePercent, position: position))
+                             sizePercent: args?.sizePercent, position: position,
+                             hideAfter: args?.hideAfter))
     }
 }

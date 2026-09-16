@@ -18,7 +18,38 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
-    @Test(arguments: [-1.0, Double.nan, Double.infinity])
+    // the flag is worth nothing unless the value reaches the host: validating it and then dropping it on the
+    // floor leaves every panel persistent and every update cancelling, which is what shipped before this test.
+    @Test func openCarriesTheRequestedHideAfterToTheHost() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "deploying", hideAfter: 10)))
+
+        guard case .hudOpen(_, _, let spec, _) = try #require(actions.calls.first) else {
+            Issue.record("the open never reached the host")
+            return
+        }
+        #expect(spec.hideAfter == 10)
+        #expect(spec.effectiveHideAfter == 10)
+    }
+
+    @Test func updateCarriesTheRequestedHideAfterToTheHost() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudUpdate, args: ControlArgs(message: "ready", hideAfter: 2.5)))
+
+        guard case .hudUpdate(_, _, let spec, _) = try #require(actions.calls.first) else {
+            Issue.record("the update never reached the host")
+            return
+        }
+        #expect(spec.hideAfter == 2.5)
+    }
+
+    @Test(arguments: [-1.0, Double.nan, Double.infinity, 1e12, HudSpec.maxHideAfter + 1])
     func openRejectsAHideAfterNothingCanSchedule(_ seconds: Double) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -27,7 +58,7 @@ struct ControlDispatcherHudTests {
             cmd: .sessionHudOpen, args: ControlArgs(message: "working", hideAfter: seconds)))
 
         #expect(response == ControlResponse(
-            ok: false, error: "session.hud.open: --hide-after must be a finite number of seconds, 0 or more"))
+            ok: false, error: "session.hud.open: --hide-after must be 0...86400 seconds"))
         #expect(actions.calls.isEmpty)
     }
 
@@ -39,11 +70,11 @@ struct ControlDispatcherHudTests {
             cmd: .sessionHudUpdate, args: ControlArgs(message: "working", hideAfter: -0.5)))
 
         #expect(response == ControlResponse(
-            ok: false, error: "session.hud.update: --hide-after must be a finite number of seconds, 0 or more"))
+            ok: false, error: "session.hud.update: --hide-after must be 0...86400 seconds"))
         #expect(actions.calls.isEmpty)
     }
 
-    @Test func zeroHideAfterReachesTheHostAsAPanelThatStays() async {
+    @Test func zeroHideAfterReachesTheHostAsAPanelThatStays() async throws {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
@@ -51,7 +82,11 @@ struct ControlDispatcherHudTests {
             cmd: .sessionHudOpen, args: ControlArgs(message: "working", hideAfter: 0)))
 
         #expect(response?.ok == true)
-        #expect(actions.calls.count == 1)
+        guard case .hudOpen(_, _, let spec, _) = try #require(actions.calls.first) else {
+            Issue.record("the open never reached the host")
+            return
+        }
+        #expect(spec.effectiveHideAfter == 0)
     }
 
     // `HudLayout.wrap` drops whitespace-only text, so a blank message would paint an empty frame while

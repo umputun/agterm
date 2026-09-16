@@ -29,9 +29,16 @@ public struct HudSpec: Codable, Equatable, Sendable {
     /// cannot be shown.
     public static let maxTextLength = 256
 
+    /// The longest auto-hide on offer. A bound the SCHEDULER can convert: it turns seconds into nanoseconds in
+    /// a `UInt64`, which traps on a large enough Double, and a panel that hides a day from now is already past
+    /// what anyone means by a message about work in flight.
+    public static let maxHideAfter: Double = 86_400
+
     /// Whether `seconds` can be scheduled. Rejected rather than clamped, so a caller who asked for something
     /// impossible hears about it instead of getting a duration nobody chose.
-    public static func isValidHideAfter(_ seconds: Double) -> Bool { seconds.isFinite && seconds >= 0 }
+    public static func isValidHideAfter(_ seconds: Double) -> Bool {
+        seconds.isFinite && seconds >= 0 && seconds <= maxHideAfter
+    }
 
     /// The panel's own auto-hide, 0 when it stays. The one spelling of "is this panel timed", so the arming
     /// side and the read-back cannot disagree about what nil means.
