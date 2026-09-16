@@ -265,5 +265,10 @@ schemes:
         AGTERM_STATE_DIR: "$(TARGET_TEMP_DIR)/agtermTests-state"
         AGTERM_CONTROL_SOCKET: "/tmp/agterm-hosted-tests-$(UID).sock"
         AGTERM_HOSTED_TESTS: "1"
+        # exercise startup normalization and preserve a non-C text locale
+        # clear LC_ALL so inherited values cannot override the category fixtures
+        LC_ALL: ""
+        LC_NUMERIC: "ru_RU.UTF-8"
+        LC_CTYPE: "ru_RU.UTF-8"
       targets:
         - agtermTests

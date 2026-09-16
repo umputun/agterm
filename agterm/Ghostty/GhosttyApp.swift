@@ -137,6 +137,9 @@ final class GhosttyApp {
             logger.error("ghostty_init failed")
             return
         }
+        // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
+        // reset before the first symbol lookup, which caches its geometry.
+        setlocale(LC_NUMERIC, "C")
         let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
