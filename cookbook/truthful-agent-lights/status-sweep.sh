@@ -36,6 +36,15 @@ LOCK="$AGT_LIGHTS_STATE/sweep.lock"
 
 log() { printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$AGT_LIGHTS_LOG"; }
 
+# For a condition that holds pass after pass. A sweeper that runs every two
+# minutes would otherwise fill its own log with the same sentence all night.
+log_new() { # message -> log it unless the last line already says exactly this
+  case "$(tail -n 1 "$AGT_LIGHTS_LOG" 2>/dev/null)" in
+    *"$1") ;;
+    *) log "$1" ;;
+  esac
+}
+
 # A scheduled job runs under launchd's PATH, not yours, so a Homebrew jq or an
 # agtermctl that was never symlinked is simply absent here. Say so in the log:
 # a sweeper that exits silently every two minutes looks exactly like a sweeper
@@ -254,7 +263,21 @@ shape_for() { # work state -> the shape configured for it, empty when blanked
   esac
 }
 
-windows=$("$AGTERMCTL" window list --json 2>/dev/null | jq -r '.result.windows[]? | select(.open) | .id') || exit 0
+# The status of that pipeline used to be jq's, and jq exits 0 on empty input,
+# so a dead socket or an AGTERMCTL wrapper that never worked looked exactly
+# like "no window is open": nothing done, nothing logged, and a reader left
+# reading an entirely empty log. Take the CLI's own status instead, and say
+# which of the two it was. Both lines go through log_new, because a closed
+# agterm is a normal state to sit in for hours and must not write every pass.
+if ! window_json=$("$AGTERMCTL" window list --json 2>/dev/null); then
+  log_new "window list failed through '$AGTERMCTL': agterm not running, or the socket or wrapper is wrong"
+  exit 0
+fi
+windows=$(printf '%s\n' "$window_json" | jq -r '.result.windows[]? | select(.open) | .id' 2>/dev/null)
+if [ -z "$windows" ]; then
+  log_new "window list returned no open window"
+  exit 0
+fi
 
 for w in $windows; do
   "$AGTERMCTL" tree --window "$w" --json 2>/dev/null | jq -c '
