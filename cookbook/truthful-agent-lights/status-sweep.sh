@@ -345,7 +345,19 @@ for w in $windows; do
               log "worker progress $sid -> pulse"
             fi
           elif own_turn_live "$sid"; then
-            if [ "$blink" != "true" ] || [ "$shape_now" = "$AGT_SHAPE_STUCK" ]; then
+            # The pulse is the default for a live turn, but machinery-paint.sh
+            # posts the work color from PreToolUse and posts no pulse with it,
+            # so a row already wearing that color is a tool call this very turn
+            # started. Repainting would wipe that glyph within two minutes of it
+            # going up, which is most of what the PreToolUse hook is for. Leave
+            # it. A stuck shape is the sweeper's own mark and always gets the
+            # pulse back, so a row cannot be stranded on it.
+            painted=0
+            if [ -n "$AGT_WORK_COLOR" ] && [ "$color_now" = "$AGT_WORK_COLOR" ]; then
+              painted=1
+            fi
+            if [ "$shape_now" = "$AGT_SHAPE_STUCK" ] ||
+               { [ "$blink" != "true" ] && [ "$painted" -eq 0 ]; }; then
               set_status "$sid" "$pane" active --blink
               log "own turn live $sid -> pulse"
             fi
