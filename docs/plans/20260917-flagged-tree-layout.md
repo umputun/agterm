@@ -121,28 +121,28 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Create: `agterm/Views/WorkspaceSidebar+FlaggedLayout.swift`
 - Create: `agtermTests/SidebarFlaggedLayoutTests.swift`
 
-- [ ] branch `currentShape` and `rebuildAndReload` on the layout in flagged mode: workspace parents with a
+- [x] branch `currentShape` and `rebuildAndReload` on the layout in flagged mode: workspace parents with a
       flagged session, flagged children only, no `soleFocusedWorkspaceID` force-expansion. `nodeCache` holds
       only nodes in the current projection, as today
-- [ ] restore expansion from the tracked `expandedWorkspaceIDs`, never straight from `Workspace.isExpanded`:
+- [x] restore expansion from the tracked `expandedWorkspaceIDs`, never straight from `Workspace.isExpanded`:
       keep the existing intersection with ALL extant workspace ids and the union with model-expanded ids, so
       a view-only reveal (tracked open, persisted collapsed) survives a later shape rebuild. Keep the
       unconditional mirror `didSet`, empty-over-empty included (`SidebarExpansionMirrorTests` pins it)
-- [ ] drop the `: workspace` suffix in both `rowLabel` paths when the layout is tree; keep the unfilled icon
-- [ ] track the last rendered layout, initialised in `makeNSView` alongside the first rebuild, so `reconcile`
+- [x] drop the `: workspace` suffix in both `rowLabel` paths when the layout is tree; keep the unfilled icon
+- [x] track the last rendered layout, initialised in `makeNSView` alongside the first rebuild, so `reconcile`
       rebuilds a flagged-mode sidebar when it changes and leaves an ordinary-tree sidebar alone
-- [ ] confirm drag reorder and Finder-drop resolution stay disabled/unchanged in flagged tree
-- [ ] put new Coordinator code in a `WorkspaceSidebar+FlaggedLayout.swift` extension: `Coordinator` is about
+- [x] confirm drag reorder and Finder-drop resolution stay disabled/unchanged in flagged tree
+- [x] put new Coordinator code in a `WorkspaceSidebar+FlaggedLayout.swift` extension: `Coordinator` is about
       686 lines against SwiftLint's 800-line type limit, which binds before the 1000-line file limit, and an
       extension's body does not count toward it. Widen a member from `private` only as far as the extension
       needs
-- [ ] correct the `rebuildAndReload` comment calling flagged mode "flat, non-expandable ... no workspace nodes"
-- [ ] write hosted tests on a real outline + Coordinator fixture (the `SidebarCopyNameTests.buildSidebar`
+- [x] correct the `rebuildAndReload` comment calling flagged mode "flat, non-expandable ... no workspace nodes"
+- [x] write hosted tests on a real outline + Coordinator fixture (the `SidebarCopyNameTests.buildSidebar`
       shape): structure and order, omitted empty workspaces, labels per layout, focus filter ignored, a dormant
       change under the ordinary tree causes no rebuild, a sidebar mounted after the change reads the current
       value, a group disappearing when its last flag is removed and returning when reflagged. Restore the
       global `GhosttyApp` mirror and tear down observers after each test
-- [ ] run the new class with `-only-testing:agtermTests/SidebarFlaggedLayoutTests`
+- [x] run the new class with `-only-testing:agtermTests/SidebarFlaggedLayoutTests`
 
 ### Task 3: Sum only flagged children in the flagged-tree workspace badge
 

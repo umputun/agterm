@@ -229,7 +229,7 @@ extension WorkspaceSidebar.Coordinator {
     /// `rowLabel(for:workspaceName:)`) to stay off the O(n) lookups.
     private func rowLabel(forSession id: UUID) -> String {
         guard let session = store.session(withID: id) else { return "" }
-        let workspaceName = store.sidebarMode == .flagged ? store.workspace(forSession: id)?.name ?? "" : ""
+        let workspaceName = flaggedLayout == .flat ? store.workspace(forSession: id)?.name ?? "" : ""
         return rowLabel(for: session, workspaceName: workspaceName)
     }
 }
