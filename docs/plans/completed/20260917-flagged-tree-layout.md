@@ -289,12 +289,12 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 
 ### Task 9: [Final] Verify acceptance criteria
 
-- [ ] every decision in Overview, Solution Overview and Technical Details is implemented
-- [ ] `make build` (Release)
-- [ ] `cd agtermCore && swift test`
-- [ ] `make test-app`
-- [ ] `make lint`, zero findings
-- [ ] move this plan to `docs/plans/completed/`
+- [x] every decision in Overview, Solution Overview and Technical Details is implemented
+- [x] `make build` (Release)
+- [x] `cd agtermCore && swift test`
+- [x] `make test-app`
+- [x] `make lint`, zero findings
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
