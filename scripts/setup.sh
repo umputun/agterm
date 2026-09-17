@@ -21,6 +21,8 @@ GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 GHOSTTY_REV="683d8db643b95cf229bfb5fe9fab9ae677920343"  # 2026-08-25
 ZMX_REPO="https://github.com/neurosnap/zmx"
 ZMX_REV="8bab1f0173b07e79835ea372d749af3dbf0d0842"  # v0.8.1, 2026-09-05
+# zig defaults to the builder's OS version and CPU; ship the app's arm64/macOS 14 baseline.
+ZMX_TARGET="aarch64-macos.14.0"
 # ghostty pins minimum_zig_version 0.16.0. Name the MINOR LINE, not `zig`: that one rolls, so a fresh
 # build once 0.17 is current would compile a fixed GHOSTTY_REV with a compiler it never supported. Today
 # `zig@0.16` is still an alias for `zig`, so this buys nothing yet — it claims the name Homebrew uses when
@@ -49,7 +51,7 @@ need_zmx=true
 [[ -d "$XCFRAMEWORK_DIR" ]] && need_xc=false
 [[ -d "$RESOURCES_MARKER" ]] && need_res=false
 if [[ -x "$ZMX_STAGE_DIR/zmx" && -f "$ZMX_STAGE_DIR/LICENSE" && -f "$ZMX_STAMP_FILE" ]] &&
-   [[ "$(cat "$ZMX_STAMP_FILE")" == "$ZMX_REV" ]]; then
+   [[ "$(cat "$ZMX_STAMP_FILE")" == "$ZMX_REV $ZMX_TARGET" ]]; then
   need_zmx=false
 fi
 
@@ -173,12 +175,12 @@ if $need_zmx; then
   patch_zig_float_h
 
   echo "building zmx with zig..."
-  ( cd "$zmx_build" && "$ZIG" build -Doptimize=ReleaseSafe )
+  ( cd "$zmx_build" && "$ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )
   rm -rf "$ZMX_STAGE_DIR"
   mkdir -p "$ZMX_STAGE_DIR"
   install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"
   cp "$zmx_build/LICENSE" "$ZMX_STAGE_DIR/LICENSE"
-  printf '%s\n' "$ZMX_REV" > "$ZMX_STAMP_FILE"
+  printf '%s %s\n' "$ZMX_REV" "$ZMX_TARGET" > "$ZMX_STAMP_FILE"
 fi
 
 stage_custom_themes

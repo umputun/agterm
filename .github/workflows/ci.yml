@@ -126,9 +126,11 @@ jobs:
         run: |
           ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)
           zmx=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)
-          [ -n "$ghostty" ] && [ -n "$zmx" ]
+          zmx_target=$(sed -nE 's/^ZMX_TARGET="([^"]+)".*/\1/p' scripts/setup.sh)
+          [ -n "$ghostty" ] && [ -n "$zmx" ] && [ -n "$zmx_target" ]
           echo "ghostty=$ghostty" >> "$GITHUB_OUTPUT"
           echo "zmx=$zmx" >> "$GITHUB_OUTPUT"
+          echo "zmx_target=$zmx_target" >> "$GITHUB_OUTPUT"
       - name: Cache libghostty (GhosttyKit + resources)
         uses: actions/cache@v6
         with:
@@ -144,7 +146,7 @@ jobs:
           path: |
             agterm/Resources/zmx
             .zmx-build-stamp
-          key: zmx-v1-${{ steps.revisions.outputs.zmx }}
+          key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Build libghostty + app (Release)

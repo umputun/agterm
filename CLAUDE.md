@@ -105,11 +105,12 @@ C-boundary concurrency before changing the bridge.
   `.ghostty-build-stamp`, and `.zmx-build-stamp`. Symlink all six from the main checkout instead of rebuilding;
   use absolute targets for resources. Each stamp makes its staged artifacts count as current. They remain
   untracked and disappear with worktree removal.
-- Symlink an artifact set only while the main checkout's matching stamp equals that set's revision in the
-  worktree's `setup.sh`. When `GHOSTTY_REV` or `ZMX_REV` differs, remove that set's artifact and stamp
-  links before setup runs and let it build locally. `setup.sh` writes stamps through symlinks while
-  replacing linked artifacts with local files and directories, so a linked build leaves the main checkout
-  claiming a revision its artifacts were never built from.
+- Symlink an artifact set only while the main checkout's matching stamp equals what the worktree's
+  `setup.sh` would write for that set: the revision for ghostty, and `ZMX_REV` plus `ZMX_TARGET` for zmx,
+  so a target change invalidates a set whose revision still matches. When either differs, remove that
+  set's artifact and stamp links before setup runs and let it build locally. `setup.sh` writes stamps
+  through symlinks while replacing linked artifacts with local files and directories, so a linked build
+  leaves the main checkout claiming a build its artifacts never came from.
 - After merge, verify the PR merge commit on fetched `origin/master`, then remove the worktree without
   changing the main checkout's branch. Squash/rebase makes removal report unmerged commits; after
   verification, discard the worktree safely. Native removal may leave a renamed branch, which must be
