@@ -138,7 +138,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private var lastFlaggedLayout: FlaggedViewLayout?
         /// Workspace ids the user has expanded, tracked via the expand/collapse callbacks. The source of
         /// truth for restoring expansion on rebuild: NSOutlineView discards its own expansion state for
-        /// items it no longer renders, and the flagged-mode reload drops every workspace node.
+        /// items it no longer renders: the flat flagged list drops every workspace node, and the flagged tree
+        /// drops the ones holding nothing flagged.
         /// Mirrored into the store on every assignment — a suppressed reveal opens a row without touching
         /// `Workspace.isExpanded`, so the persisted flag alone cannot answer "is this row open right now",
         /// which is what Collapse/Expand Workspace has to fold. One `didSet` rather than a push beside each
@@ -535,8 +536,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             expandedWorkspaceIDs.formIntersection(Set(store.workspaces.map(\.id)))
             expandedWorkspaceIDs.formUnion(store.workspaces.filter(\.isExpanded).map(\.id))
 
-            // restore expansion from the tracked set, not the live outline state, which forgets across a
-            // flagged-mode reload. A filter applied to a SINGLE marked workspace also force-expands it — a
+            // restore expansion from the tracked set, not the live outline state, which forgets every
+            // workspace a flagged-mode reload left out. A filter applied to a SINGLE marked workspace also force-expands it — a
             // "zoom in", so its sessions show even from a collapsed row. The force stops at one member on
             // purpose: with a working SET the tree is a list of workspaces, not a zoom, and re-expanding
             // every member on each rebuild (any session add/close/move re-shapes it) would undo the user's

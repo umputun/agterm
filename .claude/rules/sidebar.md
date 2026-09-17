@@ -202,7 +202,8 @@ paths:
   `appearanceChanged` calls `syncSelection` after `reconcile` because that path never reaches `updateNSView`.
 - Track expansion independently in `expandedWorkspaceIDs`. `NSOutlineView` drops expansion when items
   leave the data source, so expand/collapse delegate callbacks and `expandAll` update the set and
-  `rebuildAndReload` reapplies it after flagged-mode round trips.
+  `rebuildAndReload` reapplies it after flagged-mode round trips, where the flat list drops every workspace
+  node and the flagged tree drops the ones holding nothing flagged.
 - Expand Workspaces opens all. Collapse Workspaces closes all except the active workspace and scrolls it
   visible. Collapse/Expand Workspace (singular, `toggle_workspace_collapse`) folds the active one alone,
   which is the row those two never fold; it routes through `AppActions.setWorkspaceExpanded(_:expanded:in:)`,
