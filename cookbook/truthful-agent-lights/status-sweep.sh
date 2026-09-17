@@ -13,6 +13,7 @@
 #                                                   hooks have gone dark
 #   claims active while a worker subtree lives   -> active --blink
 #   claims active while machinery or a queue runs-> active, work color + shape
+#   claims active, subtree alive but unproven    -> left exactly as it stands
 #   claims active, no subtree, no progress       -> active, stuck color + shape
 #   idle or completed while work is running      -> re-lit to match the work
 #   blocked                                      -> left alone while anything
