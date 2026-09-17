@@ -194,8 +194,13 @@ scan_counts() { # agent pid -> fills SC_*, returns 1 when the scan is unusable
   SC_WATCH=${counts#*watch=};         SC_WATCH=${SC_WATCH%% *}
   case "$SC_AGENTS$SC_MACHINERY$SC_WAITING$SC_REMOTE$SC_WATCH" in *[!0-9]*) return 1 ;; esac
   SC_PIDS=""
+  # work-scan.sh builds its list by appending " " pid, so the line arrives as
+  # "pids= 100 200" with a leading space. Strip it here rather than downstream:
+  # scan_session concatenates one of these per agent, and two agents would
+  # otherwise leave a double space mid-list, which turns into an empty element
+  # the moment the list becomes commas.
   while IFS= read -r line; do
-    case "$line" in pids=*) SC_PIDS=${line#pids=} ;; esac
+    case "$line" in pids=*) SC_PIDS=${line#pids=}; SC_PIDS=${SC_PIDS# } ;; esac
   done <<<"$out"
   return 0
 }
@@ -225,7 +230,11 @@ scan_session() { # agent pid list -> fills SC_* with the combined counts
 
 cpu_centis() { # pid list -> summed cpu time in centiseconds
   local list
-  list=$(printf '%s' "$1" | tr ' ' ',' | sed 's/^,*//; s/,*$//')
+  # -s collapses a run of spaces into a single comma. ps rejects the whole list
+  # over one empty element ("Invalid (zero-length) process id"), and the error
+  # is swallowed below, so an unsqueezed list would read as no cpu time at all
+  # instead of as a bad argument. Both ends are defensive on purpose.
+  list=$(printf '%s' "$1" | tr -s ' ' ',' | sed 's/^,*//; s/,*$//')
   [ -n "$list" ] || { echo 0; return; }
   ps -o cputime= -p "$list" 2>/dev/null | awk '
     { n = split($1, t, ":"); s = 0; for (i = 1; i <= n; i++) s = s * 60 + t[i]; total += s }
@@ -346,13 +355,15 @@ for w in $windows; do
               log "worker progress $sid -> pulse"
             fi
           elif own_turn_live "$sid"; then
-            # The pulse is the default for a live turn, but machinery-paint.sh
-            # posts the work color from PreToolUse and posts no pulse with it,
-            # so a row already wearing that color is a tool call this very turn
-            # started. Repainting would wipe that glyph within two minutes of it
-            # going up, which is most of what the PreToolUse hook is for. Leave
-            # it. A stuck shape is the sweeper's own mark and always gets the
-            # pulse back, so a row cannot be stranded on it.
+            # The pulse is the default for a live turn, but the work color is
+            # a per-call override that any status post without --color discards,
+            # and UserPromptSubmit posts exactly that at the top of every turn.
+            # So a row still wearing the work color here means work was proven
+            # under it and nothing has repainted since: machinery-paint.sh from
+            # PreToolUse, or this sweeper's own work branch. Pulsing over it
+            # would wipe that glyph within two minutes of it going up. Leave it.
+            # A stuck shape is the sweeper's own mark and always gets the pulse
+            # back, so a row cannot be stranded on it.
             painted=0
             if [ -n "$AGT_WORK_COLOR" ] && [ "$color_now" = "$AGT_WORK_COLOR" ]; then
               painted=1
