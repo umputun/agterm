@@ -18,6 +18,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("ask.cancel"))
     }
 
+    func setFlaggedViewLayout(_: ControlFlaggedLayoutMode) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("sidebar.flagged-layout"))
+    }
+
     func reloadHooks() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.reload"))
     }

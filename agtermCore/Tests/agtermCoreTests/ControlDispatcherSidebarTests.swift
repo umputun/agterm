@@ -28,6 +28,11 @@ struct ControlDispatcherSidebarTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func unsupportedMessageNamesTheFlaggedLayoutCommand() {
+        #expect(ControlActionsUnsupported.message("sidebar.flagged-layout")
+            == "sidebar.flagged-layout is not supported on this platform")
+    }
+
     @Test func sidebarWidthRoutesPointsAndWindow() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
