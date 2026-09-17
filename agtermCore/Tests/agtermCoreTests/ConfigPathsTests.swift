@@ -118,7 +118,7 @@ struct ConfigPathsTests {
                   !text.contains("<") else { return nil }
             return String(text)
         }
-        // an example silently dropped from the guard must fail here: three `map`, three `command`, three
+        // an example silently dropped from the guard must fail here: three `map`, three `command`, four
         // `global-hotkey`.
         #expect(examples.count == 10)
         var bound = 0
@@ -132,7 +132,7 @@ struct ConfigPathsTests {
                 + (keymap.globalHotkey == nil ? 0 : 1)
         }
         // all three `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
-        // the alternatives example counts twice, its menu chord and its monitor-bound half. Then the three
+        // the alternatives example counts twice, its menu chord and its monitor-bound half. Then the four
         // `global-hotkey` examples, each of which must yield a chord rather than a diagnostic.
         #expect(bound == 10)
     }

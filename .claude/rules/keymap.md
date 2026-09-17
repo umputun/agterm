@@ -84,6 +84,9 @@ paths:
 - `CustomCommandRunner` uses an app-wide local `.keyDown`/`.keyUp` monitor.
   Its `KeybindMatcher` supports simple chords and leaders such as `ctrl+a>g`,
   times leaders out after 1.5 seconds, and consumes repeats/releases for presses it consumed.
+  `NSMenu.willSendActionNotification` also records current F-key presses dispatched by AppKit menus,
+  so their repeats/releases stay consumed without predicting from a stale keymap or intercepting the
+  first press. Mouse and programmatic menu actions without a current F-key down record nothing.
   Track held keycodes independently: a leader tail can arrive before its prefix is released.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; stdin and stdout go to
   `/dev/null` while stderr goes to a temp FILE, whose last 16 KiB the termination handler reads before

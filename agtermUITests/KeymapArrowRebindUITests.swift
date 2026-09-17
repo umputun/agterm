@@ -15,6 +15,41 @@ final class KeymapArrowRebindUITests: ControlAPITestCase {
         try assertFunctionKeyMenu(chord: "shift+f6", key: .F6, modifiers: .shift)
     }
 
+    func testMenuFunctionKeyReleaseDoesNotReachEitherSession() throws {
+        try relaunch(withKeymap: "map f5 next_session\n")
+        let sessionA = try activeSessionID()
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10))
+        let eventsA = try captureKeyEvents(in: sessionA)
+        let eventsB = try captureKeyEvents(in: sessionB)
+        _ = try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)
+        XCTAssertTrue(pollActiveSessionID(try XCTUnwrap(UUID(uuidString: sessionA)), timeout: 10))
+
+        app.typeKey(.F5, modifierFlags: [])
+        XCTAssertTrue(pollActiveSessionID(try XCTUnwrap(UUID(uuidString: sessionB)), timeout: 10))
+        // an unbound key proves both readers receive release events under Kitty's event-reporting flag.
+        app.typeKey(.F6, modifierFlags: [])
+        XCTAssertTrue(poll(until: ((try? String(contentsOf: eventsB, encoding: .utf8)) ?? "").contains(":3~"), timeout: 5))
+        _ = try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)
+        app.typeKey(.F6, modifierFlags: [])
+        XCTAssertTrue(poll(until: ((try? String(contentsOf: eventsA, encoding: .utf8)) ?? "").contains(":3~"), timeout: 5))
+        for file in [eventsA, eventsB] {
+            let events = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertTrue(events.contains("\u{1B}[17"), "unbound F6 should reach the terminal")
+            XCTAssertFalse(events.contains("\u{1B}[15"), "menu-owned F5 must not reach either terminal: \(events.debugDescription)")
+        }
+    }
+
+    private func captureKeyEvents(in sessionID: String) throws -> URL {
+        let events = markerDir.appendingPathComponent("events-\(sessionID)")
+        let ready = markerDir.appendingPathComponent("ready-\(sessionID)")
+        let command = "stty -echo -icanon; printf '\\033[>3u'; printf ready > '\(ready.path)'; cat > '\(events.path)'\n"
+        XCTAssertEqual(try typeUntilMarker(command, target: sessionID, file: ready, select: true,
+                                          attempts: 1, perAttempt: 10), "ready")
+        return events
+    }
+
     private func assertFunctionKeyMenu(chord: String, key: XCUIKeyboardKey,
                                        modifiers: XCUIElement.KeyModifierFlags) throws {
         try relaunch(withKeymap: "map \(chord) next_session\n")

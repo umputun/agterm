@@ -108,6 +108,105 @@ final class CustomCommandRunnerTests: XCTestCase {
         keyDown("\u{F708}", keyCode: 96, mods: mods, type: type, repeating: repeating)
     }
 
+    @MainActor
+    private final class MenuActionRecorder: NSObject {
+        var count = 0
+        var notifications = 0
+        var eventType: NSEvent.EventType?
+
+        @objc func menuAction(_ sender: NSMenuItem) { count += 1 }
+    }
+
+    func testMenuFunctionKeyConsumesRepeatAndRelease() throws {
+        try assertMenuFunctionKeyOwnership(keymap: "map f5 next_session\n")
+    }
+
+    func testMenuFunctionKeyUsesLiveMenuInsteadOfReloadedKeymap() throws {
+        try assertMenuFunctionKeyOwnership(keymap: "map f6 next_session\n")
+    }
+
+    private func assertMenuFunctionKeyOwnership(keymap: String) throws {
+        let fix = try fixture(keymap: keymap)
+        let recorder = MenuActionRecorder()
+        let menu = NSMenu(title: "Navigate")
+        menu.autoenablesItems = false
+        let item = NSMenuItem(title: "Next Session", action: #selector(MenuActionRecorder.menuAction(_:)), keyEquivalent: "\u{F708}")
+        item.target = recorder
+        item.keyEquivalentModifierMask = []
+        let prior = NSMenuItem.usesUserKeyEquivalents
+        NSMenuItem.usesUserKeyEquivalents = false
+        defer { NSMenuItem.usesUserKeyEquivalents = prior }
+        menu.addItem(item)
+        let observer = NotificationCenter.default.addObserver(forName: NSMenu.willSendActionNotification,
+                                                              object: menu, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                recorder.notifications += 1
+                recorder.eventType = NSApp.currentEvent?.type
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        NSApp.postEvent(functionKey(), atStart: true)
+        let press = try XCTUnwrap(NSApp.nextEvent(matching: .keyDown, until: Date().addingTimeInterval(1),
+                                                 inMode: .default, dequeue: true))
+        defer {
+            NSApp.postEvent(functionKey(type: .keyUp), atStart: true)
+            _ = NSApp.nextEvent(matching: .keyUp, until: Date().addingTimeInterval(1), inMode: .default, dequeue: true)
+        }
+        XCTAssertFalse(fix.runner.handleKeyEvent(press, in: window))
+        XCTAssertTrue(menu.performKeyEquivalent(with: press))
+        XCTAssertEqual(recorder.count, 1)
+        XCTAssertEqual(recorder.notifications, 1)
+        XCTAssertEqual(recorder.eventType, .keyDown)
+
+        let repeated = functionKey(repeating: true)
+        let consumedRepeat = fix.runner.handleKeyEvent(repeated, in: window)
+        if !consumedRepeat { _ = menu.performKeyEquivalent(with: repeated) }
+        XCTAssertTrue(consumedRepeat)
+        XCTAssertEqual(recorder.count, 1)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: nil))
+
+        fix.runner.stop()
+        XCTAssertTrue(menu.performKeyEquivalent(with: press))
+        XCTAssertFalse(fix.runner.handleKeyEvent(repeated, in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+    }
+
+    func testModifiedMenuFunctionKeyOwnsReleaseAfterShiftChanges() throws {
+        let fix = try fixture(keymap: "map shift+f6 next_session\n")
+        let press = keyDown("\u{F709}", keyCode: 97, mods: [.shift, .function])
+        XCTAssertFalse(fix.runner.handleKeyEvent(press, in: window))
+        fix.runner.recordMenuKeyPress(press)
+        XCTAssertTrue(fix.runner.handleKeyEvent(keyDown("\u{F709}", keyCode: 97, mods: .function, repeating: true), in: nil))
+        XCTAssertTrue(fix.runner.handleKeyEvent(keyDown("\u{F709}", keyCode: 97, mods: .function, type: .keyUp), in: nil))
+    }
+
+    func testMenuFunctionKeyOwnershipRecoversAfterMissingRelease() throws {
+        let fix = try fixture(keymap: "map f5 next_session\n")
+        let press = functionKey()
+        XCTAssertFalse(fix.runner.handleKeyEvent(press, in: window))
+        fix.runner.recordMenuKeyPress(press)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true), in: nil))
+
+        // a modal can eat the release; the next press may belong to a different responder or keymap.
+        XCTAssertFalse(fix.runner.handleKeyEvent(press, in: nil))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(repeating: true), in: nil))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: nil))
+    }
+
+    func testMenuActionsIgnoreMouseNilNonFunctionAndReleaseEvents() throws {
+        let fix = try fixture(keymap: "map f5 next_session\n")
+        let mouse = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: .zero, modifierFlags: [],
+                                                    timestamp: 0, windowNumber: window.windowNumber,
+                                                    context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
+        for event in [nil, mouse, keyDown("x", keyCode: 7, mods: []), functionKey(type: .keyUp), functionKey(repeating: true)] {
+            fix.runner.recordMenuKeyPress(event)
+        }
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: [], type: .keyUp), in: window))
+    }
+
     func testFunctionKeyConsumesRepeatAndReleaseWithoutRefiring() throws {
         let fix = try fixture(keymap: "map cmd+s|f5 toggle_sidebar\n")
         XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))

@@ -73,6 +73,7 @@ final class CustomCommandRunner {
     private var keyMonitor: Any?
     private var leaderTimer: Timer?
     private var keymapObserver: NSObjectProtocol?
+    private var menuActionObserver: NSObjectProtocol?
     private var consumedKeyCodes: Set<UInt16> = []
 
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
@@ -109,14 +110,21 @@ final class CustomCommandRunner {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.rebuild() }
         }
+        menuActionObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.willSendActionNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.recordMenuKeyPress(NSApp.currentEvent) }
+        }
     }
 
-    /// Remove the monitor, the keymap observer, and any pending leader timer.
+    /// Remove the key monitor, observers, and pending leader timer.
     func stop() {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
         if let keymapObserver { NotificationCenter.default.removeObserver(keymapObserver) }
         keymapObserver = nil
+        if let menuActionObserver { NotificationCenter.default.removeObserver(menuActionObserver) }
+        menuActionObserver = nil
         cancelLeaderTimer()
         consumedKeyCodes.removeAll()
     }
@@ -134,6 +142,13 @@ final class CustomCommandRunner {
     /// The Esc virtual keycode the matcher treats specially (the leader abort); Return is bindable and goes
     /// through `namedKey(forKeyCode:)`.
     private static let escapeKeyCode: UInt16 = 53
+
+    /// Own an F-key only after AppKit chooses a menu action, without predicting from a stale keymap.
+    func recordMenuKeyPress(_ event: NSEvent?) {
+        guard let event, event.type == .keyDown, !event.isARepeat,
+              let key = namedKey(forKeyCode: event.keyCode), bindableFunctionKeys.contains(key) else { return }
+        consumedKeyCodes.insert(event.keyCode)
+    }
 
     /// Feed one key event to the matcher; returns whether it was consumed (so the caller drops it). Esc while
     /// armed resets, `.fired` runs a command, `.firedBuiltin` runs a built-in action, `.armed` arms the leader
