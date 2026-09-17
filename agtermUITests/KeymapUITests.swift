@@ -184,6 +184,15 @@ final class KeymapUITests: XCTestCase {
                       "a custom command bound to cmd+shift+left should fire when ⌘⇧← is pressed (issue #278)")
     }
 
+    func testCustomCommandFunctionKeyFires() throws {
+        let marker = markerDir.appendingPathComponent("function-key")
+        seedKeymap("command \"Touch F5\" f5 touch '\(marker.path)'\n")
+        app.launchForUITest()
+        focusTerminal()
+
+        XCTAssertTrue(chordFiresMarker(marker) { app.typeKey(.F5, modifierFlags: []) })
+    }
+
     // ctrl+a normally moves to the shell's line start; the runner arms on it and consumes the sequence.
     func testCustomCommandLeaderFires() throws {
         let marker = markerDir.appendingPathComponent("leader")

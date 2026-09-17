@@ -13,7 +13,7 @@ extension agtermApp {
 
     /// Map a host-free `Chord` to a SwiftUI `KeyboardShortcut` — the menu-side mirror of the runner's
     /// `NSEvent`→`Chord` mapping. The base key is a printable `Character` or a named key; modifiers map 1:1.
-    private static func toShortcut(_ chord: Chord) -> KeyboardShortcut {
+    static func toShortcut(_ chord: Chord) -> KeyboardShortcut {
         let key: KeyEquivalent
         switch chord.key {
         case "tab": key = .tab
@@ -24,7 +24,13 @@ extension agtermApp {
         case "right": key = .rightArrow
         case "up": key = .upArrow
         case "down": key = .downArrow
-        default: key = KeyEquivalent(Character(chord.key))
+        default:
+            if bindableFunctionKeys.contains(chord.key), let number = Int(chord.key.dropFirst()),
+               let scalar = UnicodeScalar(0xF703 + number) {
+                key = KeyEquivalent(Character(scalar))
+            } else {
+                key = KeyEquivalent(Character(chord.key))
+            }
         }
         var modifiers: EventModifiers = []
         if chord.mods.contains(.control) { modifiers.insert(.control) }

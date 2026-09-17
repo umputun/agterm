@@ -1274,36 +1274,41 @@ Key Mapping). Three verbs, line-based; blank lines and `#` comments ignored:
 - `map <chord> <action>` — rebind a built-in menu action.
 - `command "<name>" [chord] <shell...>` — define a custom shell command, listed in the action palette
   marked `custom`. The quoted name may contain spaces. The post-name token is the chord only if it
-  parses AND carries a modifier (a bare modifier-less key is rejected). A custom chord may be a leader
-  sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
+  parses and starts with a modifier or a function key (`f1` through `f20`).
+  A custom chord may be a leader sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
 - `global-hotkey <chord>` — bind ONE system-wide chord that summons the quick terminal while any
   application is frontmost. Unset unless the line is present. Exactly one chord: no alternatives, no
-  leader sequence, and it must carry a modifier. A second line replaces the first. macOS registers it
-  by physical key position, so it survives a layout switch. It is registered with the OS rather than
+  leader sequence, and it needs a modifier unless it is a function key.
+  A second line replaces the first.
+  macOS registers it by physical key position, so it survives a layout switch.
+  It is registered with the OS rather than
   agterm's own monitor, so it takes NO part in the collision rules below — it may share a chord with a
-  menu item, and whichever application is frontmost decides who gets the key.
+  menu item, but the global hotkey wins even when agterm is frontmost.
+  `global-hotkey f5` takes F5 from every application and from agterm local map/command bindings.
 
 Either verb's chord token may hold **alternatives** joined by `|`, with no spaces around it (everything
 after the first token is the shell line): `map cmd+t|ctrl+space>s toggle_split` fires the action from
 either. A built-in's first single-chord alternative the menu can carry becomes its menu shortcut (one that
 names a reserved chord or a bare arrow is diagnosed and dropped, and the next single chord takes the slot);
 every other alternative, and every alternative of a `command`, is delivered by a key monitor and so must
-carry a modifier on its first chord. `global-hotkey` is outside all of this: the OS owns it, and it WINS —
-agterm frontmost included — so a chord it shares with a menu action fires the panel and the menu binding
-never sees it. A `map` line with no single-chord alternative
+start with a modifier or a function key. `global-hotkey` is outside all of this:
+the OS owns it and wins, agterm frontmost included, so a chord it shares with a menu action
+fires the panel and the menu binding never sees it. A `map` line with no single-chord alternative
 (`map ctrl+a>s toggle_split`) leaves the action with NO menu shortcut — its shipped default is gone, not
 kept. A malformed alternative rejects the whole line; one that merely breaks a rule or collides with
 another binding drops by itself and its siblings keep working. A line left binding nothing at all leaves
 the action on the shortcut it shipped with.
 
 A **chord** is modifier words joined by `+` then a base key: modifiers `ctrl`, `cmd`, `opt`, `shift`;
-base key is a single character or `tab`/`space`/`return`/`delete`/`left`/`right`/`up`/`down`. A key typed
-with Shift is written `shift+<base>` (`shift+/` = `?`, `shift+=` = `+`, `shift+5` = `%`) — the base key,
+base key is a single character or `tab`/`space`/`return`/`delete`/`left`/`right`/`up`/`down`,
+or `f1` through `f20`. A key typed with Shift is written `shift+<base>`
+(`shift+/` = `?`, `shift+=` = `+`, `shift+5` = `%`), the base key,
 not the shifted glyph. `+`/`>` can't be a bare key token (they are the separators), though those keys are
 bindable via `shift+=`/`shift+.`. A `map` line may not bind a bare, modifier-less arrow (`map left …`) —
 a built-in rides an always-on menu key-equivalent, so a bare arrow would swallow the key everywhere;
 any modifier makes it bindable. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane focus)
-and cannot be bound.
+and cannot be bound. On Apple keyboards, hold Fn/Globe or enable standard function keys in
+System Settings to send F1-F12 instead of media keys.
 
 Custom-command tokens (expanded into the `/bin/sh -c` line, raw — prefer the quoted `$AGT_*` env form
 for untrusted content). A remote host can set the session title (OSC) and working directory (OSC 7),

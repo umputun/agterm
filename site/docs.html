@@ -1601,7 +1601,8 @@
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">up</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >down</span
-              >). A Shift-typed symbol is written
+              >, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f1</span> through
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f20</span>). A Shift-typed symbol is written
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
               (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
@@ -1609,13 +1610,17 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
               shifted symbol. Custom commands may also use a leader sequence
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
-              must include a modifier — a bare key can't shadow a plain terminal key.
+              must start with a modifier or a function key. For example,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f5</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f5&gt;x</span>
+              are valid custom shortcuts. On Apple keyboards, hold Fn/Globe or enable standard function keys in
+              System Settings to send F1-F12 instead of media keys.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> takes exactly one
               chord and binds it <strong style="color: #e6e1d7">system-wide</strong>: it summons the quick terminal while any
               application is frontmost, which no other binding here can do — the rest only fire while agterm has the keyboard. It
-              must carry a modifier, takes no alternatives and no leader sequence, and a second
+              needs a modifier unless it is a function key, takes no alternatives and no leader sequence, and a second
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
               first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
               it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
@@ -1627,6 +1632,8 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey ctrl+`</span>
               makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃`</span> summon the panel
               from any application, at the price of that chord no longer reaching anything else.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey f5</span>
+              similarly takes F5 machine-wide, including from local map and command bindings.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by
@@ -1636,7 +1643,7 @@
               fires the action from either, and a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
               takes alternatives the same way. For a built-in, the first single-chord alternative the menu can carry becomes the menu
               shortcut; every
-              other alternative, on either verb, is delivered by a key monitor and so must carry a modifier on its first chord. This
+              other alternative, on either verb, is delivered by a key monitor and must start with a modifier or a function key. This
               is also how a built-in gets a leader sequence, because a menu item holds exactly one key equivalent:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map ctrl+a&gt;s toggle_split</span> binds
               the sequence and leaves the action with no menu shortcut at all — its shipped ⌘D is gone rather than kept, and free for

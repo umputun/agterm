@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import agterm
 import agtermCore
@@ -11,6 +12,32 @@ import agtermCore
 /// build the menu shapes instead.
 @MainActor
 final class LiveMenuKeyEquivalentsTests: XCTestCase {
+    func testFunctionKeyShortcutsRoundTrip() throws {
+        let modifiers: [(Modifier, EventModifiers)] = [([], []), (.shift, .shift), ([.control, .shift], [.control, .shift])]
+        for number in 1...20 {
+            let name = "f\(number)"
+            let scalar = try XCTUnwrap(UnicodeScalar(0xF703 + number))
+            for (mods, expected) in modifiers {
+                let shortcut = agtermApp.toShortcut(Chord(mods: mods, key: name))
+                XCTAssertEqual(shortcut.key.character, Character(scalar))
+                XCTAssertEqual(shortcut.modifiers, expected)
+                XCTAssertEqual(namedKey(forKeyEquivalent: String(shortcut.key.character)), name)
+            }
+        }
+    }
+
+    func testShiftFunctionKeyReportsResolvedMenuChord() throws {
+        let (keymap, diagnostics) = parseKeymap("map shift+f6 next_session")
+        XCTAssertTrue(diagnostics.isEmpty)
+        let chord = try XCTUnwrap(keymap.equivalent(for: .nextSession))
+        let shortcut = agtermApp.toShortcut(chord)
+        XCTAssertEqual(shortcut.modifiers, .shift)
+        let navigate = menu("Navigate", [item("Next Session", key: String(shortcut.key.character), mods: .shift)])
+        let found = try XCTUnwrap(ControlServer.collectKeyEquivalents(in: navigate, menu: "Navigate").first)
+        XCTAssertEqual(found.chord, "shift+f6")
+        XCTAssertEqual(found.chord, chord.displayString)
+    }
+
     private var priorUsesUserKeyEquivalents = true
 
     // AppKit substitutes an App Shortcut from System Settings by menu-item TITLE the moment the item joins

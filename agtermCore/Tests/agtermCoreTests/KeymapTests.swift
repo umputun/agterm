@@ -21,6 +21,44 @@ command "Second" ctrl+shift+g echo two
 """
 
 struct KeymapTests {
+    @Test(arguments: ["f5", "f20", "f5>x", "ctrl+f5>x", "shift+f6"])
+    func functionKeyCommands(_ shortcut: String) {
+        let (keymap, diagnostics) = parseKeymap("command \"Run\" \(shortcut) echo hello")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.first?.shortcut == shortcut)
+        #expect(keymap.commands.first?.command == "echo hello")
+    }
+
+    @Test(arguments: ["f5", "f20"])
+    func bareFunctionKeyMapAndGlobalHotkey(_ key: String) {
+        let (keymap, diagnostics) = parseKeymap("map \(key) toggle_sidebar\nglobal-hotkey \(key)")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleSidebar) == Chord(mods: [], key: key))
+        #expect(keymap.globalHotkey == Chord(mods: [], key: key))
+    }
+
+    @Test(arguments: ["cmd+s|f5", "cmd+s|f5>x", "f5>x"])
+    func bareFunctionKeyMapMonitorBindings(_ shortcut: String) throws {
+        let (keymap, diagnostics) = parseKeymap("map \(shortcut) toggle_sidebar")
+        #expect(diagnostics.isEmpty)
+        let tail = try #require(shortcut.split(separator: "|").last.map(String.init))
+        let binding = try #require(parseKeybind(tail))
+        #expect(keymap.builtinSequences[.toggleSidebar] == [binding])
+    }
+
+    @Test(arguments: ["x", "left", "space"])
+    func ordinaryBareFirstChordsStillRejected(_ key: String) {
+        let (commands, commandDiagnostics) = parseKeymap("command \"Run\" \(key)>x echo hello")
+        #expect(commands.commands.first?.shortcut == "")
+        #expect(!commandDiagnostics.isEmpty)
+        let (maps, mapDiagnostics) = parseKeymap("map \(key)>x toggle_sidebar")
+        #expect(maps.builtinSequences.isEmpty)
+        #expect(!mapDiagnostics.isEmpty)
+        let (global, globalDiagnostics) = parseKeymap("global-hotkey \(key)")
+        #expect(global.globalHotkey == nil)
+        #expect(!globalDiagnostics.isEmpty)
+    }
+
     @Test func overrideWinsOverDefault() {
         let override = Chord(mods: [.command, .shift], key: "e")
         let keymap = Keymap(builtinOverrides: [.toggleSplit: override], commands: [])
@@ -313,14 +351,14 @@ struct KeymapTests {
     }
 
     // a typo beside a real alternative is a typo, not a shell line: it kills the binding AND says so, rather
-    // than folding `cmd+e|f1` silently into the command.
+    // than folding `cmd+e|f21` silently into the command.
     @Test func parseCommandMalformedAlternativeIsDiagnosedAndLeavesTheLinePaletteOnly() {
-        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e|f1 echo hi")
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e|f21 echo hi")
         #expect(keymap.commands[0].shortcut.isEmpty)
-        #expect(keymap.commands[0].command == "cmd+e|f1 echo hi")
+        #expect(keymap.commands[0].command == "cmd+e|f21 echo hi")
         #expect(diagnostics.count == 1)
         #expect(diagnostics[0].message
-            == "command 'X' shortcut 'cmd+e|f1' has an invalid alternative; treating the line as palette-only")
+            == "command 'X' shortcut 'cmd+e|f21' has an invalid alternative; treating the line as palette-only")
     }
 
     // a binding whose own alternatives are a prefix pair keeps the one that fires: both run the same command,
@@ -429,7 +467,7 @@ struct KeymapTests {
     }
 
     @Test func parseInvalidChordDiagnostic() {
-        let (keymap, diagnostics) = parseKeymap("map cmd+f1 toggle_split")
+        let (keymap, diagnostics) = parseKeymap("map cmd+f21 toggle_split")
         #expect(keymap.builtinOverrides.isEmpty)
         #expect(diagnostics.count == 1)
         #expect(diagnostics[0].message.contains("invalid chord"))
@@ -622,11 +660,11 @@ struct KeymapTests {
     }
 
     @Test func mapMalformedAlternativePoisonsTheWholeLine() {
-        let (keymap, diagnostics) = parseKeymap("map cmd+t|cmd+f1 toggle_split")
+        let (keymap, diagnostics) = parseKeymap("map cmd+t|cmd+f21 toggle_split")
         #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
         #expect(keymap.sequences(for: .toggleSplit).isEmpty)
         #expect(diagnostics.count == 1)
-        #expect(diagnostics[0].message == "invalid chord 'cmd+t|cmd+f1'")
+        #expect(diagnostics[0].message == "invalid chord 'cmd+t|cmd+f21'")
     }
 
     @Test func laterMapLineReplacesTheWholeEarlierBinding() {
@@ -847,7 +885,7 @@ struct KeymapTests {
         map cmd+shift+e toggle_split
         bogus line here
         command "Deploy" ./deploy.sh
-        map cmd+f1 new_session
+        map cmd+f21 new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
@@ -857,7 +895,7 @@ struct KeymapTests {
         #expect(diagnostics[0].line == 2)
         #expect(diagnostics[0].message.contains("unknown verb"))
         #expect(diagnostics[1].line == 4)
-        #expect(diagnostics[1].message == "invalid chord 'cmd+f1'")
+        #expect(diagnostics[1].message == "invalid chord 'cmd+f21'")
     }
 
     @Test func customChordEqualsBuiltinDefaultIsDropped() {

@@ -95,7 +95,7 @@ struct CustomCommandEngineTests {
     }
 
     @Test func malformedAlternativePoisonsTheWholeShortcut() {
-        let command = CustomCommand(name: "bad", command: "echo bad", shortcut: "cmd+shift+e|f1")
+        let command = CustomCommand(name: "bad", command: "echo bad", shortcut: "cmd+shift+e|esc")
         var engine = CustomCommandEngine(commands: [command])
 
         #expect(engine.advance(cmdShiftE) == .unmatched)

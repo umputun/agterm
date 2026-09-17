@@ -26,7 +26,11 @@ public struct Modifier: OptionSet, Hashable, Sendable {
 /// - `Chord.glyphString` renders the name in palette hints and tooltips, degrading to the raw name — cosmetic;
 /// - `agtermApp.toShortcut`'s `default` arm `KeyEquivalent(Character(chord.key))` TRAPS on a multi-character
 ///   string — a crash on the first menu render, not a degradation, so update it first.
-public let bindableNamedKeys: Set<String> = Set(["tab", "space", "return", "delete"]).union(bindableArrowKeys)
+public let bindableNamedKeys: Set<String> = Set(["tab", "space", "return", "delete"])
+    .union(bindableArrowKeys).union(bindableFunctionKeys)
+
+/// Bindable function keys, permitted to start a shortcut without modifiers.
+public let bindableFunctionKeys: Set<String> = Set((1...20).map { "f\($0)" })
 
 /// The four arrow keys, a subset of `bindableNamedKeys`. Separate for one extra rule: a built-in `map` may
 /// not bind a modifier-less arrow (`parseMapLine`), since an always-on menu key-equivalent on a bare arrow
@@ -42,6 +46,26 @@ public func namedKey(forKeyCode keyCode: UInt16) -> String? {
     case 48: return "tab"
     case 49: return "space"
     case 51: return "delete"
+    case 122: return "f1"
+    case 120: return "f2"
+    case 99: return "f3"
+    case 118: return "f4"
+    case 96: return "f5"
+    case 97: return "f6"
+    case 98: return "f7"
+    case 100: return "f8"
+    case 101: return "f9"
+    case 109: return "f10"
+    case 103: return "f11"
+    case 111: return "f12"
+    case 105: return "f13"
+    case 107: return "f14"
+    case 113: return "f15"
+    case 106: return "f16"
+    case 64: return "f17"
+    case 79: return "f18"
+    case 80: return "f19"
+    case 90: return "f20"
     case 123: return "left"
     case 124: return "right"
     case 125: return "down"
@@ -175,6 +199,7 @@ public func namedKey(forKeyEquivalent character: String) -> String? {
     case 0xF701: return "down"
     case 0xF702: return "left"
     case 0xF703: return "right"
+    case 0xF704...0xF717: return "f\(scalar.value - 0xF703)"
     case 0x0D, 0x03: return "return" // carriage return, and the numeric keypad's enter
     case 0x09: return "tab"
     case 0x20: return "space"
@@ -206,6 +231,9 @@ public struct Chord: Equatable, Hashable, Sendable {
         self.key = key
     }
 
+    /// Bare function keys can start shortcuts; ordinary terminal keys require a modifier.
+    var canStartShortcut: Bool { !mods.isEmpty || bindableFunctionKeys.contains(key) }
+
     /// The chord in kitty syntax (e.g. `cmd+shift+e`), the form the user writes in `keymap.conf`. Modifiers
     /// emit in a fixed `ctrl+cmd+opt+shift` order so the round-trip is stable.
     public var displayString: String {
@@ -236,6 +264,7 @@ public struct Chord: Equatable, Hashable, Sendable {
         case "right": s += "→"
         case "up": s += "↑"
         case "down": s += "↓"
+        case let key where bindableFunctionKeys.contains(key): s += key.uppercased()
         default: s += key.count == 1 ? key.uppercased() : key
         }
         return s
@@ -267,7 +296,7 @@ public enum KeybindTarget: Hashable, Sendable {
 ///
 /// The grammar is chords separated by `>`, each a `+`-joined list of modifier words and a final base key,
 /// case-insensitive: `cmd+shift+e`, `ctrl+a>b`, `ctrl + a > b`. The base key is a single printable character
-/// or one of `bindableNamedKeys`; any other multi-char word (`esc`, `f1`) is rejected. Returns `nil` for an
+/// or one of `bindableNamedKeys`; any other multi-char word (`esc`, `f21`) is rejected. Returns `nil` for an
 /// empty input, an empty chord (a trailing `>` or `+`), a chord with no base key or more than one, an
 /// unrecognized modifier word, or an unproducible named key.
 public func parseKeybind(_ s: String) -> Keybind? {

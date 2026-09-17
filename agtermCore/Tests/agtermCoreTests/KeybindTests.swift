@@ -3,6 +3,36 @@ import Testing
 @testable import agtermCore
 
 struct KeybindTests {
+    @Test func shiftFunctionKeyRoundTripAndGlyph() throws {
+        let binding = try #require(parseKeybind("shift+f6"))
+        #expect(binding == [Chord(mods: .shift, key: "f6")])
+        #expect(binding.displayString == "shift+f6")
+        #expect(binding.glyphString == "⇧F6")
+        #expect(parseKeybind(binding.displayString) == binding)
+    }
+
+    @Test func functionKeysRoundTrip() throws {
+        let codes: [UInt16] = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109,
+                               103, 111, 105, 107, 113, 106, 64, 79, 80, 90]
+        #expect(bindableFunctionKeys == Set((1...20).map { "f\($0)" }))
+        for (offset, code) in codes.enumerated() {
+            let name = "f\(offset + 1)"
+            #expect(namedKey(forKeyCode: code) == name)
+            #expect(keyCode(forChordKey: name) == code)
+            let scalar = try #require(UnicodeScalar(0xF704 + offset))
+            #expect(namedKey(forKeyEquivalent: String(scalar)) == name)
+            #expect(parseKeybind(name.uppercased()) == [Chord(mods: [], key: name)])
+            #expect(parseKeybind("ctrl+\(name)") == [Chord(mods: .control, key: name)])
+            #expect(Chord(mods: .control, key: name).glyphString == "⌃\(name.uppercased())")
+        }
+    }
+
+    @Test(arguments: ["f0", "f21", "f01", "fn+f5"])
+    func invalidFunctionKeysRemainRejected(_ token: String) {
+        #expect(parseKeybind(token) == nil)
+        #expect(keyCode(forChordKey: token) == nil)
+    }
+
     private let cmdA = Chord(mods: .command, key: "a")
     private let cmdB = Chord(mods: .command, key: "b")
     private let ctrlA = Chord(mods: .control, key: "a")
@@ -12,10 +42,13 @@ struct KeybindTests {
     // the character counterpart of namedKey(forKeyCode:) must cover the SAME vocabulary, or a menu key
     // equivalent renders with its key missing and stops comparing against the chord the keymap resolved.
     @Test func namedKeyForKeyEquivalentCoversEveryBindableNamedKey() {
-        let characters: [String: String] = [
+        var characters: [String: String] = [
             "\u{F700}": "up", "\u{F701}": "down", "\u{F702}": "left", "\u{F703}": "right",
             "\r": "return", "\t": "tab", " ": "space", "\u{7F}": "delete",
         ]
+        for number in 1...20 {
+            characters[String(UnicodeScalar(0xF703 + number)!)] = "f\(number)"
+        }
         for (character, expected) in characters {
             #expect(namedKey(forKeyEquivalent: character) == expected)
         }
@@ -49,7 +82,7 @@ struct KeybindTests {
     }
 
     @Test func keyCodeForChordKeyRejectsUnproducibleKeys() {
-        #expect(keyCode(forChordKey: "f1") == nil)
+        #expect(keyCode(forChordKey: "f21") == nil)
         #expect(keyCode(forChordKey: "esc") == nil)
         #expect(keyCode(forChordKey: "") == nil)
     }
@@ -122,7 +155,7 @@ struct KeybindTests {
         // guards against over-widening the named-key set: only the documented names are bindable, and
         // `esc` stays reserved as the leader abort.
         #expect(parseKeybind("cmd+esc") == nil)
-        #expect(parseKeybind("cmd+f1") == nil)
+        #expect(parseKeybind("cmd+f21") == nil)
         #expect(parseKeybind("cmd+home") == nil)
         #expect(parseKeybind("cmd+end") == nil)
         #expect(parseKeybind("cmd+pageup") == nil)
@@ -466,8 +499,8 @@ struct KeybindTests {
 
     // a typo is not a collision: binding the half that parsed would hide it behind a working-looking line.
     @Test func parseKeybindsRejectsTheWholeListWhenOneAlternativeIsMalformed() {
-        #expect(parseKeybinds("cmd+t|f1") == nil)
-        #expect(parseKeybinds("f1|cmd+t") == nil)
+        #expect(parseKeybinds("cmd+t|f21") == nil)
+        #expect(parseKeybinds("f21|cmd+t") == nil)
         #expect(parseKeybinds("cmd+t|ctrl+") == nil)
         #expect(parseKeybinds("cmd+t|cmd+a+b") == nil)
     }
@@ -516,9 +549,9 @@ struct KeybindTests {
 
     // the discriminator between a typo in one alternative and a shell line that happens to lead with a pipe.
     @Test func malformedAlternativeIsToldApartFromAShellPipeline() {
-        #expect(hasMalformedAlternative("cmd+e|f1"))
-        #expect(hasMalformedAlternative("f1|cmd+e"))
+        #expect(hasMalformedAlternative("cmd+e|f21"))
+        #expect(hasMalformedAlternative("f21|cmd+e"))
         #expect(!hasMalformedAlternative("ls|grep"), "neither half is a keybind, so this is a pipeline")
-        #expect(!hasMalformedAlternative("f1"), "a lone token carries no alternative to be malformed")
+        #expect(!hasMalformedAlternative("f21"), "a lone token carries no alternative to be malformed")
     }
 }

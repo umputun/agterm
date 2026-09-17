@@ -7,6 +7,38 @@ import XCTest
 /// `ControlAPITestCase` (the `KeymapUITests` base can't reach the socket).
 @MainActor
 final class KeymapArrowRebindUITests: ControlAPITestCase {
+    func testBareFunctionKeyMenuFiresAndReportsChord() throws {
+        try assertFunctionKeyMenu(chord: "f5", key: .F5, modifiers: [])
+    }
+
+    func testShiftFunctionKeyMenuFiresAndReportsChord() throws {
+        try assertFunctionKeyMenu(chord: "shift+f6", key: .F6, modifiers: .shift)
+    }
+
+    private func assertFunctionKeyMenu(chord: String, key: XCUIKeyboardKey,
+                                       modifiers: XCUIElement.KeyModifierFlags) throws {
+        try relaunch(withKeymap: "map \(chord) next_session\n")
+        let sessionA = try activeSessionID()
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10))
+        _ = try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)
+        XCTAssertTrue(pollActiveSessionID(try XCTUnwrap(UUID(uuidString: sessionA)), timeout: 10))
+
+        let response = try sendCommand(#"{"cmd":"keymap.list"}"#)
+        let result = try XCTUnwrap(response["result"] as? [String: Any])
+        let keymap = try XCTUnwrap(result["keymap"] as? [String: Any])
+        let actions = try XCTUnwrap(keymap["actions"] as? [[String: Any]])
+        let next = try XCTUnwrap(actions.first { $0["action"] as? String == "next_session" })
+        XCTAssertEqual(next["chord"] as? String, chord)
+        let menu = try XCTUnwrap(keymap["menu"] as? [[String: Any]])
+        XCTAssertTrue(menu.contains { $0["title"] as? String == "Next Session" && $0["chord"] as? String == chord })
+
+        app.typeKey(key, modifierFlags: modifiers)
+        XCTAssertTrue(pollActiveSessionID(try XCTUnwrap(UUID(uuidString: sessionB)), timeout: 10),
+                      "\(chord) should fire the menu's next_session action")
+    }
+
     // two sessions so a single forward step never wraps to self, and the selection starts on the first so
     // the step lands on the second.
     func testMapArrowNavActionFiresWhenSeededAtLaunch() throws {

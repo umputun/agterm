@@ -73,6 +73,7 @@ final class CustomCommandRunner {
     private var keyMonitor: Any?
     private var leaderTimer: Timer?
     private var keymapObserver: NSObjectProtocol?
+    private var consumedKeyCodes: Set<UInt16> = []
 
     /// How long a half-typed leader sequence waits for its next chord before abandoning (kitty-style).
     private static let leaderTimeout: TimeInterval = 1.5
@@ -94,14 +95,14 @@ final class CustomCommandRunner {
         self.failureHud = failureHud
     }
 
-    /// Install the local `.keyDown` monitor (idempotent), build the keybind map, observe `.agtermKeymapChanged`.
+    /// Install the local key monitor (idempotent), build the keybind map, observe `.agtermKeymapChanged`.
     func start() {
         guard keyMonitor == nil else { return }
         rebuild()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self else { return event }
             // returning nil consumes the event (it never reaches the terminal); event passes it through.
-            return self.handleKeyDown(event) ? nil : event
+            return self.handleKeyEvent(event, in: NSApp.keyWindow) ? nil : event
         }
         keymapObserver = NotificationCenter.default.addObserver(
             forName: .agtermKeymapChanged, object: nil, queue: .main
@@ -117,6 +118,7 @@ final class CustomCommandRunner {
         if let keymapObserver { NotificationCenter.default.removeObserver(keymapObserver) }
         keymapObserver = nil
         cancelLeaderTimer()
+        consumedKeyCodes.removeAll()
     }
 
     /// Rebuild the matcher from the current keymap — custom commands plus the built-in monitor binds — skipping
@@ -142,16 +144,21 @@ final class CustomCommandRunner {
     /// the key window is an agterm terminal window whose focus is NOT on a text field — including one emptied
     /// to zero sessions. Passes through for a focused text field (Settings editor, inline rename, palette
     /// search) so a bound chord never eats those keystrokes, and for an auxiliary window focused off a text
-    /// field. A key repeat is ignored, so a held-down shortcut spawns one process, not one per OS repeat.
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
-        guard let keyWindow = NSApp.keyWindow else { return false }
-        return handleKeyDown(event, in: keyWindow)
+    /// field. Repeats and releases of consumed presses stay consumed without firing again.
+    func handleKeyEvent(_ event: NSEvent, in keyWindow: NSWindow?) -> Bool {
+        // ownership lasts through release, even if the action changes focus or a leader times out.
+        if event.type == .keyUp { return consumedKeyCodes.remove(event.keyCode) != nil }
+        guard event.type == .keyDown else { return false }
+        if event.isARepeat { return consumedKeyCodes.contains(event.keyCode) }
+        // a release may have occurred outside the app; a fresh press starts new ownership for this key.
+        consumedKeyCodes.remove(event.keyCode)
+        guard let keyWindow else { return false }
+        let consumed = handleKeyDown(event, in: keyWindow)
+        if consumed { consumedKeyCodes.insert(event.keyCode) }
+        return consumed
     }
 
-    /// Everything after the key-window lookup, split out so a test can supply the window: a hosted test's
-    /// own window never becomes `NSApp.keyWindow` (the app is not active), so `handleKeyDown(_:)` returns at
-    /// that guard and none of this runs. Internal for that reason alone, like
-    /// `ControlServer.collectKeyEquivalents`.
+    /// Dispatch a fresh press in a supplied window, also used by hosted tests whose window never becomes key.
     func handleKeyDown(_ event: NSEvent, in keyWindow: NSWindow) -> Bool {
         guard !event.isARepeat else { return false }
         let responder = keyWindow.firstResponder

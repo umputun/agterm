@@ -96,10 +96,99 @@ final class CustomCommandRunnerTests: XCTestCase {
         return (dashboard, { DashboardControllerRegistry.shared.unregister(windowID) })
     }
 
-    private func keyDown(_ key: String, keyCode: UInt16, mods: NSEvent.ModifierFlags) -> NSEvent {
-        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: 0,
+    private func keyDown(_ key: String, keyCode: UInt16, mods: NSEvent.ModifierFlags,
+                         type: NSEvent.EventType = .keyDown, repeating: Bool = false) -> NSEvent {
+        NSEvent.keyEvent(with: type, location: .zero, modifierFlags: mods, timestamp: 0,
                          windowNumber: window.windowNumber, context: nil,
-                         characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: keyCode)!
+                         characters: key, charactersIgnoringModifiers: key, isARepeat: repeating, keyCode: keyCode)!
+    }
+
+    private func functionKey(type: NSEvent.EventType = .keyDown, repeating: Bool = false,
+                             mods: NSEvent.ModifierFlags = .function) -> NSEvent {
+        keyDown("\u{F708}", keyCode: 96, mods: mods, type: type, repeating: repeating)
+    }
+
+    func testFunctionKeyConsumesRepeatAndReleaseWithoutRefiring() throws {
+        let fix = try fixture(keymap: "map cmd+s|f5 toggle_sidebar\n")
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
+    }
+
+    func testShiftFunctionKeyCommandFiresOnceAndConsumesRepeatAndRelease() throws {
+        let marker = stateDir.appendingPathComponent("shift-f6")
+        let fix = try fixture(keymap: "command \"X\" shift+f6 printf x > '\(marker.path)'\n")
+        let usage = CustomCommandUsageStore(directory: stateDir)
+        let bare = keyDown("\u{F709}", keyCode: 97, mods: .function)
+        XCTAssertFalse(fix.runner.handleKeyEvent(bare, in: window))
+        XCTAssertNil(usage.load().counts["X"])
+
+        let press = keyDown("\u{F709}", keyCode: 97, mods: [.shift, .function])
+        XCTAssertTrue(fix.runner.handleKeyEvent(press, in: window))
+        wait { FileManager.default.fileExists(atPath: marker.path) }
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "x")
+        XCTAssertEqual(usage.load().counts["X"], 1)
+
+        let repeated = keyDown("\u{F709}", keyCode: 97, mods: [.shift, .function], repeating: true)
+        XCTAssertTrue(fix.runner.handleKeyEvent(repeated, in: window))
+        // shift can be released before F6; ownership follows the physical key.
+        let release = keyDown("\u{F709}", keyCode: 97, mods: .function, type: .keyUp)
+        XCTAssertTrue(fix.runner.handleKeyEvent(release, in: window))
+        XCTAssertEqual(usage.load().counts["X"], 1)
+        XCTAssertFalse(fix.runner.handleKeyEvent(release, in: window))
+    }
+
+    func testFunctionKeyLeaderKeepsBothReleasesWhilePrefixHeld() throws {
+        let fix = try fixture(keymap: "map f5>x toggle_sidebar\n")
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
+        XCTAssertTrue(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: []), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: [], type: .keyUp), in: window))
+    }
+
+    func testConsumedFunctionKeySurvivesUnmatchedPressAndFocusChange() throws {
+        let fix = try fixture(keymap: "map cmd+s|f5 toggle_sidebar\n")
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: []), in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true, mods: [.shift, .function]), in: nil))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(type: .keyUp, mods: .shift), in: nil))
+        XCTAssertFalse(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: [], type: .keyUp), in: window))
+    }
+
+    func testFreshFunctionKeyPressAndStopClearStaleOwnership() throws {
+        let fix = try fixture(keymap: "map cmd+s|f5 toggle_sidebar\n")
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(), in: nil))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        fix.runner.stop()
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+    }
+
+    func testUnboundFunctionKeyPassesThrough() throws {
+        let fix = try fixture()
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
+    }
+
+    func testFunctionKeyReleaseSurvivesLeaderTimeout() throws {
+        let fix = try fixture(keymap: "map f5>x toggle_sidebar\n")
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
+        RunLoop.current.run(until: Date().addingTimeInterval(1.7))
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
+        XCTAssertFalse(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: []), in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
+        XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(type: .keyUp), in: window))
     }
 
     private var leader: NSEvent { keyDown("a", keyCode: 0, mods: [.control]) }
