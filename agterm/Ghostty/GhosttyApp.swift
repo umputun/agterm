@@ -133,13 +133,15 @@ final class GhosttyApp {
             liveUnavailableReason: ZmxLaunch.liveUnavailableReason())
         restoreLaunchDecision = restoreDecision
         resourcesDir = resolvedResources
-        guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
+        let booted = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS
+        // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
+        // reset before the first symbol lookup, which caches its geometry. ensureLocale runs inside
+        // ghostty_init ahead of its own fallible steps, so a failed init can leave the locale adopted.
+        setlocale(LC_NUMERIC, "C")
+        guard booted else {
             logger.error("ghostty_init failed")
             return
         }
-        // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
-        // reset before the first symbol lookup, which caches its geometry.
-        setlocale(LC_NUMERIC, "C")
         let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
