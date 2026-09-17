@@ -87,6 +87,9 @@ final class GhosttyApp {
     /// Whether only the frontmost window shows its sidebar, collapsing every other open window's; off by
     /// default. `WindowAccessor.reportFrontmost` reads it per frontmost change to gate the `WindowLibrary`.
     private(set) var autoHideSidebarInactiveWindows: Bool = false
+    /// How every window's flagged sidebar view arranges its sessions; the sidebar Coordinator reads it per
+    /// rebuild and on `.agtermAppearanceChanged`.
+    private(set) var flaggedViewLayout: FlaggedViewLayout = .flat
     /// Program basenames NOT to re-run on restore: the parsed user-editable `restore-denylist.conf` (seeded
     /// with the terminal multiplexers), read at launch only; consulted via `CommandRestore.shouldRestore`.
     private(set) var restoreDenylist: Set<String> = []
@@ -238,6 +241,10 @@ final class GhosttyApp {
 
     func setAutoHideSidebarInactiveWindows(_ enabled: Bool) {
         autoHideSidebarInactiveWindows = enabled
+    }
+
+    func setFlaggedViewLayout(_ layout: FlaggedViewLayout) {
+        flaggedViewLayout = layout
     }
 
     func setRestoreDenylist(_ denylist: Set<String>) {

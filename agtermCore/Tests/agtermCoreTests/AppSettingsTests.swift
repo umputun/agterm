@@ -491,6 +491,21 @@ struct AppSettingsTests {
         #expect(legacy.effectiveDockBounce == .off)
     }
 
+    @Test func flaggedViewLayoutDefaultsToFlatResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().effectiveFlaggedViewLayout == .flat)
+        #expect(AppSettings(flaggedViewLayout: "tree").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        for layout in FlaggedViewLayout.allCases {
+            let settings = AppSettings(flaggedViewLayout: layout.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.flaggedViewLayout == layout.rawValue)
+            #expect(decoded.effectiveFlaggedViewLayout == layout)
+        }
+        #expect(AppSettings(flaggedViewLayout: "grid").effectiveFlaggedViewLayout == .flat)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.flaggedViewLayout == nil)
+        #expect(legacy.effectiveFlaggedViewLayout == .flat)
+    }
+
     @Test func rightClickPasteDefaultsOnAndIsAGhosttyKey() throws {
         // UNLIKE the app-level flags this IS a ghostty key — the toggle owns it, always emitted.
         #expect(AppSettings().rightClickPaste == nil)

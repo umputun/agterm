@@ -101,17 +101,17 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
 - Create: `agtermTests/SettingsModelTests.swift`
 
-- [ ] add `FlaggedViewLayout` beside `ToolbarMode` in `AppSettings.swift` (the file's convention for
+- [x] add `FlaggedViewLayout` beside `ToolbarMode` in `AppSettings.swift` (the file's convention for
       raw-stored mode enums) and `AppSettings.flaggedViewLayout` with `effectiveFlaggedViewLayout`,
       including the memberwise init parameter; `flat` is the nil case so `settings.json` stays minimal
-- [ ] add `SettingsModel.setFlaggedViewLayout(_:)` with a delta guard ahead of `persistAndApply()`, and apply
+- [x] add `SettingsModel.setFlaggedViewLayout(_:)` with a delta guard ahead of `persistAndApply()`, and apply
       the mirror in `SettingsModel.apply` next to `setAutoHideSidebarInactiveWindows`
-- [ ] add `GhosttyApp.shared.flaggedViewLayout` (`private(set)`) and its setter
-- [ ] write host-free tests: missing, `flat`, `tree` and unknown raw values resolve as specified; round-trip
-- [ ] write a hosted `SettingsModel` test on a temporary `SettingsStore` (the model lives in the app target):
+- [x] add `GhosttyApp.shared.flaggedViewLayout` (`private(set)`) and its setter
+- [x] write host-free tests: missing, `flat`, `tree` and unknown raw values resolve as specified; round-trip
+- [x] write a hosted `SettingsModel` test on a temporary `SettingsStore` (the model lives in the app target):
       the setter persists, updates the effective mirror, posts `.agtermAppearanceChanged`, and an unchanged
       value does none of those
-- [ ] run `swift test --filter AppSettingsTests` and `-only-testing:agtermTests/SettingsModelTests`
+- [x] run `swift test --filter AppSettingsTests` and `-only-testing:agtermTests/SettingsModelTests`
 
 ### Task 2: Render the flagged tree in the sidebar
 

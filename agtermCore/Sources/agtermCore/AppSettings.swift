@@ -11,6 +11,14 @@ public enum ToolbarMode: String, Codable, Sendable, CaseIterable {
     case hidden
 }
 
+/// How the sidebar's flagged view arranges its sessions: `flat` is one list labelled `session : workspace`,
+/// `tree` nests them under their workspace rows. App-wide, not per window. Raw-stored, resolved by
+/// `effectiveFlaggedViewLayout`.
+public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
+    case flat
+    case tree
+}
+
 /// How a delivered notification bounces the Dock icon (`requestUserAttention`): `off`, `once` (one
 /// `.informationalRequest`), or `untilFocused` (a `.criticalRequest` bouncing until agterm activates).
 /// Raw-stored, resolved by `effectiveDockBounce`. Named `off`, not `none`, to dodge the `Optional.none`
@@ -311,6 +319,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// collapses its own; nil = off. Visibility then follows window focus, so a manual per-window hide is
     /// transient — the frontmost window re-shows its sidebar on refocus.
     public var autoHideSidebarInactiveWindows: Bool?
+    /// Raw `FlaggedViewLayout` for the sidebar's flagged view; nil = flat. Resolved by
+    /// `effectiveFlaggedViewLayout`.
+    public var flaggedViewLayout: String?
     /// Whether the first-launch pointer at the Help menu extras has been shown; nil/false = not yet.
     /// Written once, by the launch that shows it. See `FirstRunWelcome`.
     public var welcomeShown: Bool?
@@ -337,7 +348,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
-                autoHideSidebarInactiveWindows: Bool? = nil, welcomeShown: Bool? = nil) {
+                autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
+                welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -383,6 +395,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.hiddenInterfaceElements = hiddenInterfaceElements
         self.shownInterfaceElements = shownInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
+        self.flaggedViewLayout = flaggedViewLayout
         self.welcomeShown = welcomeShown
     }
 
@@ -413,6 +426,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// `compactToolbar` mapping. The single read point.
     public var effectiveToolbarMode: ToolbarMode {
         toolbarMode.flatMap(ToolbarMode.init(rawValue:)) ?? (compactToolbar == false ? .normal : .compact)
+    }
+
+    /// The resolved flagged-view layout: the explicit `flaggedViewLayout` when a KNOWN raw value, else `flat`.
+    public var effectiveFlaggedViewLayout: FlaggedViewLayout {
+        flaggedViewLayout.flatMap(FlaggedViewLayout.init(rawValue:)) ?? .flat
     }
 
     /// The resolved status-reset mode: the explicit `statusReset` when a KNOWN raw value, else `firstKey`.
