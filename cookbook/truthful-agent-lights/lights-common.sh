@@ -24,10 +24,24 @@ AGTERMCTL=${AGTERMCTL:-agtermctl}
 # both. Override AGT_LIGHTS_STATE if you must, and then set it in both places.
 AGT_LIGHTS_STATE=${AGT_LIGHTS_STATE:-$HOME/.local/state/agterm-lights}
 
-# the stock status script the hooks package installs. When it is present the
+# the stock status script the hooks package installs. When one is present the
 # recipe posts through it, so socket, pane and pane-id handling stay upstream's;
-# when it is not, the fallback below calls agtermctl directly.
-AGT_STATUS_SCRIPT=${AGT_STATUS_SCRIPT:-$HOME/.config/agterm/agent-status/agterm-agent-status.sh}
+# when none is, the fallback in set-status.sh calls agtermctl directly.
+#
+# Since agterm 0.26.0 the package wires the Claude hooks to
+# agterm-claude-status.sh: an adapter that stays silent when the hook was fired
+# by a worker agent spawned inside the session (a headless `claude -p` from a
+# tool call inherits the spawner's AGTERM_* environment and would otherwise
+# repaint the spawner's row) and hands every other post to agterm-agent-status.sh.
+# Posting through the adapter keeps that guard; posting through the generic
+# script would undo it. So the adapter is preferred when it is installed, and an
+# older package without it falls back to the generic script. Set
+# AGT_STATUS_SCRIPT to post through something else.
+if [ -z "${AGT_STATUS_SCRIPT:-}" ]; then
+  AGT_STATUS_SCRIPT=$HOME/.config/agterm/agent-status/agterm-claude-status.sh
+  [ -x "$AGT_STATUS_SCRIPT" ] ||
+    AGT_STATUS_SCRIPT=$HOME/.config/agterm/agent-status/agterm-agent-status.sh
+fi
 
 # extended regex of agent binaries, matched against the WHOLE command name:
 # every alternative is an exact basename, not a prefix. Add yours as its own

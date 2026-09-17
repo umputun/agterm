@@ -129,6 +129,20 @@ done < "$MAP"
 set_status() { # session-id pane args…
   local sid=$1 pane=$2
   shift 2
+  # The tree was read once, at the top of the window, and the scans and cpu
+  # samples between that read and here take seconds. A hook that posted in
+  # that gap, a permission prompt going blocked or a turn starting, has
+  # already changed the row this write was decided from, and the write would
+  # replace it. Every hook post touches the heartbeat before it posts, so a
+  # heartbeat at or after the sweep's own start time means exactly that: leave
+  # the row to the hook and look again next pass. This narrows the window
+  # rather than closing it. A post that lands after this check and before the
+  # CLI call still loses, and a session without the recipe's hooks writes no
+  # heartbeat to be checked.
+  if [ "$(hb_age "$sid")" -le 0 ]; then
+    log "hook posted during sweep $sid -> left as the hook set it"
+    return 0
+  fi
   if [ -n "$pane" ]; then
     "$AGTERMCTL" session status "$@" --target "$sid" --pane "$pane" >/dev/null 2>&1 || true
   else
@@ -368,6 +382,16 @@ for w in $windows; do
             if [ -n "$AGT_WORK_COLOR" ] && [ "$color_now" = "$AGT_WORK_COLOR" ]; then
               painted=1
             fi
+            # The color alone cannot carry this. Blanking AGT_WORK_COLOR is the
+            # documented way to keep your own tint, and then machinery-paint.sh
+            # posts a shape with no color at all; a row wearing one of the work
+            # shapes was painted just the same, and pulsing over it would wipe
+            # the glyph on the first sweep of the turn. An empty shape is a row
+            # with no override, never a match against a blanked shape variable.
+            case "$shape_now" in
+              '') ;;
+              "$AGT_SHAPE_RUNNING" | "$AGT_SHAPE_MIXED" | "$AGT_SHAPE_QUEUED") painted=1 ;;
+            esac
             if [ "$shape_now" = "$AGT_SHAPE_STUCK" ] ||
                { [ "$blink" != "true" ] && [ "$painted" -eq 0 ]; }; then
               set_status "$sid" "$pane" active --blink

@@ -24,7 +24,10 @@ hb=$(agt_state_dir hb)
 touch "$hb/$AGTERM_SESSION_ID" 2>/dev/null || true
 
 # prefer the stock script the hooks package installs — socket, pane and
-# pane-id handling then stay upstream's, and extra flags pass through
+# pane-id handling then stay upstream's, and extra flags pass through. On
+# 0.26.0 and later that is the Claude adapter, which drops the post when a
+# worker spawned inside this session fired the hook; the heartbeat above is
+# written either way, so a worker's hooks still mark the spawner as alive
 if [ -x "$AGT_STATUS_SCRIPT" ]; then
   "$AGT_STATUS_SCRIPT" "$@" >/dev/null 2>&1 || true
   exit 0
