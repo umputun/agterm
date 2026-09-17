@@ -94,13 +94,21 @@ ps -axo pid=,tty=,command= |
     # shellcheck disable=SC2009
     sid=$(ps eww "$cand" 2>/dev/null | grep -o 'AGTERM_SESSION_ID=[A-Za-z0-9-]*' | head -1)
     [ -n "$sid" ] && printf '%s %s\n' "${sid#AGTERM_SESSION_ID=}" "$cand"
-    # candidates arrive lowest pid first, so when two processes claim one
-    # session the older one — the pane's own agent, which existed before it
-    # spawned anything — wins the dedupe below
-  done | awk '!seen[$1]++' > "$MAP"
+    # More than one process can legitimately claim one session: a split with
+    # an agent in each half shares AGTERM_SESSION_ID, and both halves have a
+    # tty. Keeping only one of them would judge the whole row from that pane's
+    # tree, so an idle half could post completed over a busy one. Collect them
+    # all, lowest pid first, and let the caller combine the counts.
+  done |
+  awk '{ pids[$1] = ($1 in pids) ? pids[$1] " " $2 : $2 }
+       END { for (s in pids) print s, pids[s] }' > "$MAP"
 
+# The note records one pid, and the lowest is the right one to keep: candidates
+# arrive in pid order, so it is the process that existed before anything was
+# spawned under it. Only the fallback path in the loop below reads it, on a pass
+# where discovery found nothing at all.
 pid_dir=$(agt_state_dir pid)
-while read -r msid mpid; do
+while read -r msid mpid _; do
   [ -n "$msid" ] && agt_write_pid_note "$pid_dir/$msid" "$mpid"
 done < "$MAP"
 
@@ -178,6 +186,29 @@ scan_counts() { # agent pid -> fills SC_*, returns 1 when the scan is unusable
   return 0
 }
 
+scan_session() { # agent pid list -> fills SC_* with the combined counts
+  # One row, possibly several agents of its own. Scan each and add the counts
+  # up before anything is decided, so the question the branches below ask is
+  # "is anything running in this session" rather than "is anything running
+  # under whichever agent we happened to pick". A pty-wrapped worker that also
+  # claims the session is scanned too, and its subtree then counts both under
+  # itself and as an `agents` hit under its parent; that overstates the work
+  # rather than understating it, which is the safe direction for a light that
+  # means "something is running here".
+  local p a=0 m=0 wq=0 r=0 wt=0 pids="" ok=1
+  for p in $1; do
+    scan_counts "$p" || continue
+    ok=0
+    a=$((a + SC_AGENTS)); m=$((m + SC_MACHINERY)); wq=$((wq + SC_WAITING))
+    r=$((r + SC_REMOTE)); wt=$((wt + SC_WATCH))
+    [ -n "$SC_PIDS" ] && pids="$pids $SC_PIDS"
+  done
+  [ "$ok" -eq 0 ] || return 1
+  SC_AGENTS=$a; SC_MACHINERY=$m; SC_WAITING=$wq; SC_REMOTE=$r; SC_WATCH=$wt
+  SC_PIDS=${pids# }
+  return 0
+}
+
 cpu_centis() { # pid list -> summed cpu time in centiseconds
   local list
   list=$(printf '%s' "$1" | tr ' ' ',' | sed 's/^,*//; s/,*$//')
@@ -242,19 +273,26 @@ for w in $windows; do
     sfg=$(jq -r .sfg <<<"$row")
     [ -n "$sid" ] || continue
 
-    # a pid straight from discovery is live by construction; one read back from
-    # a note has to prove it is still the same process, not a recycled pid that
-    # happens to be another agent
-    pid=$(awk -v s="$sid" '$1 == s { print $2; exit }' "$MAP")
+    # every agent discovery found for this session, not just one: with an agent
+    # in each half of a split the row has to be classified from both trees. A
+    # pid straight from discovery was live a moment ago rather than now, so each
+    # is rechecked; one read back from a note has to prove it is still the same
+    # process, not a recycled pid that happens to be another agent
+    pids=$(awk -v s="$sid" '$1 == s { $1 = ""; sub(/^ */, ""); print; exit }' "$MAP")
     alive=0; knew_pid=0
-    if [ -n "$pid" ]; then
+    if [ -n "$pids" ]; then
       knew_pid=1
-      pid_is_agent "$pid" && alive=1
+      live=""
+      for p in $pids; do
+        if pid_is_agent "$p"; then live="$live $p"; fi
+      done
+      pids=${live# }
+      [ -n "$pids" ] && alive=1
     elif [ -f "$AGT_LIGHTS_STATE/pid/$sid" ]; then
       # this session had an agent once; whether it still does is the question
       knew_pid=1
       if agt_note_is_live "$AGT_LIGHTS_STATE/pid/$sid"; then
-        pid=$(agt_note_pid "$AGT_LIGHTS_STATE/pid/$sid")
+        pids=$(agt_note_pid "$AGT_LIGHTS_STATE/pid/$sid")
         alive=1
       fi
     fi
@@ -270,7 +308,7 @@ for w in $windows; do
         fi
         ;;
       active)
-        if [ "$alive" -eq 1 ] && scan_counts "$pid"; then
+        if [ "$alive" -eq 1 ] && scan_session "$pids"; then
           state=""; shape=""
           if [ "$SC_AGENTS" -eq 0 ]; then state=$(work_state); shape=$(shape_for "$state"); fi
           total=$((SC_AGENTS + SC_MACHINERY + SC_WAITING + SC_REMOTE + SC_WATCH))
@@ -340,7 +378,7 @@ for w in $windows; do
         ;;
       idle|completed)
         # the other direction: work is running but the row shows done, or nothing
-        if [ "$alive" -eq 1 ] && scan_counts "$pid"; then
+        if [ "$alive" -eq 1 ] && scan_session "$pids"; then
           state=""; shape=""
           if [ "$SC_AGENTS" -eq 0 ]; then state=$(work_state); shape=$(shape_for "$state"); fi
           if [ "$SC_AGENTS" -gt 0 ]; then
