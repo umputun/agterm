@@ -27,6 +27,11 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
             coordinator.syncSelection()
         }
 
+        func badge(ofWorkspace id: UUID) -> Int? {
+            let row = (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == id }
+            return row.flatMap { outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? SidebarCellView }?.badge.count
+        }
+
         var rows: [String] {
             (0..<outline.numberOfRows).map { row in
                 let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView
@@ -150,6 +155,62 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         sidebar.update()
 
         XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma", "s:c1"])
+    }
+
+    func testTreeLayoutHeaderBadgeCountsOnlyFlaggedChildren() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        alpha.sessions[0].unseenCount = 2
+        alpha.sessions[1].unseenCount = 5
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+
+        let sidebar = mount(store)
+
+        XCTAssertEqual(sidebar.badge(ofWorkspace: alpha.id), 2)
+    }
+
+    func testOrdinaryTreeHeaderBadgeStillCountsEverySession() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        alpha.sessions[0].unseenCount = 2
+        alpha.sessions[1].unseenCount = 5
+        model.setFlaggedViewLayout(.tree)
+
+        let sidebar = mount(store)
+
+        XCTAssertEqual(sidebar.badge(ofWorkspace: alpha.id), 7)
+    }
+
+    func testFlagFlipUpdatesTheTreeLayoutHeaderBadge() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        alpha.sessions[0].unseenCount = 2
+        alpha.sessions[1].unseenCount = 5
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+
+        store.setFlag(true, forSession: alpha.sessions[1].id)
+        sidebar.update()
+
+        XCTAssertEqual(sidebar.badge(ofWorkspace: alpha.id), 7)
+    }
+
+    func testUnseenChangeUpdatesTheTreeLayoutHeaderBadgeWithoutARebuild() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+        let reloads = sidebar.outline.reloads
+
+        alpha.sessions[0].unseenCount = 3
+        alpha.sessions[1].unseenCount = 9
+        sidebar.update()
+
+        XCTAssertEqual(sidebar.badge(ofWorkspace: alpha.id), 3)
+        XCTAssertEqual(sidebar.outline.reloads, reloads)
     }
 
     /// Alpha [a1 flagged, a2], Beta [b1], Gamma [c1 flagged], with a1 selected.

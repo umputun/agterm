@@ -151,14 +151,14 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Modify: `agterm/Views/WorkspaceSidebar+RowRendering.swift`
 - Modify: `agtermTests/SidebarFlaggedLayoutTests.swift`
 
-- [ ] add one Coordinator method returning a workspace row's displayed unseen count (flagged children in
+- [x] add one Coordinator method returning a workspace row's displayed unseen count (flagged children in
       flagged tree, `workspace.unseenCount` otherwise) and use it in `rowContent(forWorkspace:)` and the
       workspace cell builder, so the render and content-diff paths cannot drift
-- [ ] write tests: unread on an unflagged sibling does not reach the header; unread on a flagged child does;
+- [x] write tests: unread on an unflagged sibling does not reach the header; unread on a flagged child does;
       the ordinary tree still sums everything; a flag flip updates the header (a shape rebuild in flagged
       mode); and, separately, an unseen-count change with flags and ids unchanged updates the live header,
       which is the only case that exercises the content-diff builder
-- [ ] run the affected tests
+- [x] run the affected tests
 
 ### Task 4: Enable workspace collapse in the flagged tree
 

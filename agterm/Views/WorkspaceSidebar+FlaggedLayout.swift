@@ -24,4 +24,11 @@ extension WorkspaceSidebar.Coordinator {
             return flagged.isEmpty ? nil : (workspace, flagged)
         }
     }
+
+    /// The unseen count a workspace row shows: its RENDERED children's. `Workspace.unseenCount` sums every
+    /// session, so a flagged-tree header would otherwise report notifications from rows the view leaves out.
+    func displayedUnseen(for workspace: Workspace) -> Int {
+        guard flaggedLayout == .tree else { return workspace.unseenCount }
+        return workspace.sessions.reduce(0) { $1.flagged ? $0 + $1.unseenCount : $0 }
+    }
 }

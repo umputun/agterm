@@ -52,7 +52,7 @@ extension WorkspaceSidebar.Coordinator {
             field.setAccessibilityLabel(workspace?.name ?? "")
             // roll-up badge so an unseen notification stays visible when the workspace is collapsed
             // (gated by the Settings badge toggle, like the session badge below)
-            applyBadge(toCell: cell, count: effectiveUnseen(workspace?.unseenCount ?? 0))
+            applyBadge(toCell: cell, count: effectiveUnseen(workspace.map(displayedUnseen(for:)) ?? 0))
             // a workspace in the focus set draws the SAME grid glyph at BLACK weight, keyed on MEMBERSHIP
             // alone and NOT on `focusEnabled` — so the marked set stays legible with the filter off, while
             // looking at the whole tree.

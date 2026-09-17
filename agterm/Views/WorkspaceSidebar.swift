@@ -468,7 +468,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// `snapshotRowContent` so the snapshot and the diff can't drift.
         private func rowContent(forWorkspace workspace: Workspace) -> RowContent {
             RowContent(label: workspace.name, hasSplit: false, splitAxis: .leftRight,
-                       unseen: effectiveUnseen(workspace.unseenCount),
+                       unseen: effectiveUnseen(displayedUnseen(for: workspace)),
                        indicator: AgentIndicator(), flagged: false,
                        focusMember: store.focusedWorkspaceIDs.contains(workspace.id))
         }
