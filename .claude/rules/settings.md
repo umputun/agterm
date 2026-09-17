@@ -262,7 +262,10 @@ paths:
 - `flaggedViewLayout` is a raw `FlaggedViewLayout` (`flat`|`tree`), nil for the default `flat`, resolved by
   `effectiveFlaggedViewLayout` and mirrored to `GhosttyApp.flaggedViewLayout`. App-wide, never per window.
   Every sidebar Coordinator picks it up on `.agtermAppearanceChanged`, and only one showing the flagged view
-  rebuilds. The picker sits full-width in the Interface tab's Sidebar section, under the two-column toggles.
+  rebuilds. The picker sits at the bottom of the General tab's Sessions section: the Interface tab is exactly full at
+  540x680, and one more row pushes the quick-terminal Size off the bottom. A grouped Form scrolls, so an
+  overflowing tab still reports every control hittable; `testFlaggedViewLayoutPickerPersists` compares the
+  tab's last line against the window frame instead.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
 - These settings are GUI-only unless the control catalog explicitly says otherwise. Do not add settings
   commands merely to mirror chrome; user actions already have control coverage.

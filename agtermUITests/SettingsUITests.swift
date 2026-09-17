@@ -81,7 +81,13 @@ final class SettingsUITests: XCTestCase {
     }
 
     func testFlaggedViewLayoutPickerPersists() throws {
-        let picker = settingsControl(tab: "Interface", control: "settings-flagged-view-layout")
+        let picker = settingsControl(tab: "General", control: "settings-flagged-view-layout")
+        // the tab's last line must sit inside the fixed-size window: a grouped Form scrolls, so an
+        // overflowing tab still reports every control as hittable.
+        let window = app.windows.containing(.any, identifier: "settings-flagged-view-layout").firstMatch
+        let lastLine = app.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Also loads")).firstMatch
+        XCTAssertTrue(lastLine.waitForExistence(timeout: 5), "the General tab's closing hint should exist")
+        XCTAssertLessThanOrEqual(lastLine.frame.maxY, window.frame.maxY, "the General tab should fit without scrolling")
 
         picker.click()
         let tree = app.menuItems["Workspace tree"]

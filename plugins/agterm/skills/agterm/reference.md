@@ -1172,7 +1172,7 @@ filter is applied) or all sessions. The GUI half is the bottom-bar flag button, 
 `agtermctl sidebar flagged-layout [flat|tree|toggle]` — pick how the flagged view arranges its sessions.
 `flat` is one list labeled `session : workspace`; `tree` nests the flagged sessions under their workspace
 rows and leaves out workspaces holding none. `toggle` is the default; an unknown layout is an error.
-APP-WIDE, the same setting as Settings ▸ Interface ▸ Flagged view layout: no `--window`, no open window
+APP-WIDE, the same setting as Settings ▸ General ▸ Flagged view layout: no `--window`, no open window
 needed, and every window's flagged view follows at once. Setting it never enters flagged mode and never
 moves the selection. Returns the resulting layout in `result.text`; read back as the tree's top-level
 `sidebarFlaggedLayout`, reported under the ordinary tree too. The tree layout shares each workspace's
