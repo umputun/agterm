@@ -7,8 +7,8 @@
 #
 #   agents    — a tool subtree containing another agent binary: a dispatched
 #               worker or subagent that is still running
-#   machinery — a tool subtree doing real work (tests, builds, a long-lived ssh
-#               that IS a remote run)
+#   machinery — a tool subtree doing real work: tests, builds, installs,
+#               anything whose leaves are not on one of the lists below
 #   waiting   — a tool subtree whose every leaf is wait-shaped (sleep, flock,
 #               a poll loop, a short ssh probe), or that has no leaves at all
 #   remote    — long-lived ssh/scp subtrees, counted separately so the caller

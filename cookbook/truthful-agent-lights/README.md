@@ -1,6 +1,6 @@
 # Truthful agent lights
 
-A Claude Code session's row reports what is still running when the turn ends, and a sweeper clears every glyph nothing backs.
+A Claude Code session's row reports what is still running when the turn ends, and a sweeper clears the glyphs nothing backs, bar a `blocked` row it never saw an agent behind.
 
 ## What it does
 
@@ -61,11 +61,19 @@ chmod -x ~/.config/agterm/truthful-lights/lights-common.sh
 | `AGT_STALL_SECS` | 1500 | how long a running claim may make no progress before it reads as stuck |
 | `AGT_SSH_WORK_SECS` | 120 | above this age an `ssh` is a remote run, below it a probe |
 | `AGT_MACHINERY_PATTERN` | test and build commands | what the optional PreToolUse paint matches; set in `machinery-paint.sh`, not in `lights-common.sh` |
-| `AGT_LIGHTS_LOG` | `sweep.log` in the state directory | where the sweeper records what it changed |
+| `AGT_LIGHTS_LOG` | `sweep.log` in the state directory | where the sweeper records what it changed; set in `status-sweep.sh`, not in `lights-common.sh` |
 
 The hooks and the sweeper have to agree on `AGT_LIGHTS_STATE`, and the default is built so they cannot disagree: it hangs off `$HOME`, which is the same for both. `XDG_STATE_HOME` is deliberately not consulted, even though this is exactly the kind of file it names. The hooks run inside your shell, where an `XDG_STATE_HOME` exported from a shell rc is set; the sweeper runs from launchd, which starts with no such environment and would fall back to the default. Honoring the variable would therefore split the two halves across two directories on precisely the machines that set it, leaving the sweeper to read no stamps at all and report every live session as idle. If you do override `AGT_LIGHTS_STATE`, set it in both places, and keep it absolute.
 
-The sweeper talks to agterm's default control socket. If yours is somewhere else, point `AGTERMCTL` at a small wrapper that adds `--socket <path>` and execs the real binary — the recipe passes no socket flag of its own.
+The sweeper talks to agterm's default control socket. If yours is somewhere else, point `AGTERMCTL` at a small wrapper that appends the flag and execs the real binary — the recipe passes no socket flag of its own:
+
+```sh
+#!/bin/sh
+# AGTERMCTL points here; adjust the path and the socket
+exec /usr/local/bin/agtermctl "$@" --socket /path/to/agterm.sock
+```
+
+The order matters and is the thing to get right: `--socket` is a per-subcommand option rather than a root one, so it has to land *after* the subcommand. A wrapper built the obvious way, with the flag before `"$@"`, fails on every single call, and every status post in this recipe swallows its own errors so that a failing hook can never block a turn — so it fails silently, and the row simply never changes.
 
 Merge into `~/.claude/settings.json` (paths shown for the location above):
 
@@ -141,7 +149,7 @@ Green means the turn ended with nothing running, and it is posted with `--auto-r
 
 Kill an agent mid-run and its row clears itself within the stale window instead of pulsing for the rest of the day. Leave a session sitting at its prompt and the glyph goes away, so no glyph reliably means nothing is happening here.
 
-The sweeper's log records every change it made and why, and every reason it did nothing at all. It grows to two hundred lines and is then trimmed back to the last hundred, so it stays worth reading and never worth rotating. Read it when a row does something you did not expect: every branch that acts logs why it acted.
+The sweeper's log records every change it made and why. It grows to two hundred lines and is then trimmed back to the last hundred, so it stays worth reading and never worth rotating. Read it when a row does something you did not expect: every branch that acts logs why it acted.
 
 ## How it works
 
@@ -170,7 +178,7 @@ Stuck detection is deliberately narrow. A row that claims to be working while th
 
 ## Limits
 
-The sweeper writes a status for every session in every open window, so it will overwrite a glyph set by hand, by another recipe, or by a tool that pushes status for its own reasons — including clearing it to `idle` when nothing backs it. It closes nothing, kills nothing and touches no session content; the only thing it changes is the glyph. Its state lives under your home directory and is created 0700, readable by you rather than by everyone on the machine, and holds session ids, agent pids and the path of each session's transcript file — paths that name the directories you work in.
+The sweeper writes a status for every session in every open window, so it will overwrite a glyph set by hand, by another recipe, or by a tool that pushes status for its own reasons — including clearing it to `idle` when nothing backs it. The one glyph it will not clear is `blocked` on a session it never recorded an agent for: that is a question waiting for an answer, put up by something the sweeper knows nothing about, and clearing a prompt for input it cannot see would be worse than leaving it. It closes nothing, kills nothing and touches no session content; the only thing it changes is the glyph. Its state lives under your home directory and is created 0700, readable by you rather than by everyone on the machine, and holds session ids, agent pids and the path of each session's transcript file — paths that name the directories you work in.
 
 - **The classifier depends on an undocumented Claude Code implementation detail.** It discriminates tool subtrees by the `zsh -c source …/shell-snapshots/snapshot-….sh` wrapper Claude Code puts around every tool command. That shape is not part of any documented interface and is free to change between Claude Code versions. It was verified against Claude Code 2.1.235. If a later version drops or renames the wrapper, no subtree is ever recognized: turn-end falls back to the stock `completed --auto-reset`, and the sweeper never re-lights a row — the failure is silent and looks exactly like "nothing was running".
 - **Leaves are classified by shape, so some commands are read wrong.** `rg` over a large tree is counted as a log watcher and reads as waiting although it is doing real work, and `tail -f` on a build log reads as a watcher when it is the only thing you are waiting on. A shell script that spends its time in `git`, `curl` or `jq` reads as a poll loop. The lists are in `work-scan.sh` and are meant to be edited for the commands you actually run.
