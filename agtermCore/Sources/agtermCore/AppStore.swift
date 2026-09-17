@@ -275,7 +275,8 @@ public final class AppStore {
                             dashboardHighlighted: () -> String? = { nil },
                             dashboardFontSize: () -> Double? = { nil },
                             dashboardFontMode: () -> String? = { nil }, app: AppIdentity? = nil,
-                            liveReset: ControlLiveResetReadback? = nil) -> ControlTree {
+                            liveReset: ControlLiveResetReadback? = nil,
+                            flaggedLayout: FlaggedViewLayout? = nil) -> ControlTree {
         let activeID = selectedSessionID
         // `currentWorkspaceID`, not the selected session's owner: an EMPTY destination selects nothing, so
         // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
@@ -349,7 +350,8 @@ public final class AppStore {
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
-                           sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue, sidebarWidth: sidebarWidth,
+                           sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
+                           sidebarFlaggedLayout: flaggedLayout?.rawValue, sidebarWidth: sidebarWidth,
                            workspaceFilter: focusEnabled,
                            quickVisible: quickVisible(), zoomedSurface: zoomedSurface(),
                            dashboardMembers: dashboardMembers(),

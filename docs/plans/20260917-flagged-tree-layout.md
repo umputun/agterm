@@ -250,27 +250,29 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherSidebarTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
-- Modify: `agtermTests/ControlServerTests.swift`
-- Modify: `agtermUITests/FlaggedViewUITests.swift`
+- Create: `agtermTests/ControlServerFlaggedLayoutTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
+- Modify: `agtermUITests/ControlSidebarStatusUITests.swift`
+- Modify: `agtermUITests/SettingsUITests.swift`
 
-- [ ] add the command case, `ControlFlaggedLayoutMode.parse`, the dispatcher branch and the
+- [x] add the command case, `ControlFlaggedLayoutMode.parse`, the dispatcher branch and the
       `ControlActions.setFlaggedViewLayout` requirement; route it in `ControlServer`'s command lists
-- [ ] implement the server setter through `settingsModel.setFlaggedViewLayout`: no window guard, `toggle` from
+- [x] implement the server setter through `settingsModel.setFlaggedViewLayout`: no window guard, `toggle` from
       the effective value, unchanged value skips the write
-- [ ] add `ControlTree.sidebarFlaggedLayout`; `AppStore.controlTree` (which builds the immutable tree at
+- [x] add `ControlTree.sidebarFlaggedLayout`; `AppStore.controlTree` (which builds the immutable tree at
       `AppStore.swift:351`) takes the effective layout as a parameter like the other app-wide facts, never
       as `AppStore` state, and `ControlServer.buildTree` passes it; rewrite the workspace-row visibility doc at
       `ControlProjection.swift:327` to the predicate in Technical Details
-- [ ] add `agtermctl sidebar flagged-layout [flat|tree|toggle]` with validation and no `--window`
-- [ ] record the new requirement in `MockControlActions`; correct the `setSidebarViewMode` doc's "the flat
+- [x] add `agtermctl sidebar flagged-layout [flat|tree|toggle]` with validation and no `--window`
+- [x] record the new requirement in `MockControlActions`; correct the `setSidebarViewMode` doc's "the flat
       flagged list"; if `ControlDispatcher.swift` (992 lines) would pass 1000, put the branch's handler in a
       `ControlDispatcher+*.swift` extension as the file's siblings do
-- [ ] write tests: parse (known, default, unknown); dispatch and bad-argument error; tree encoding carries the
+- [x] write tests: parse (known, default, unknown); dispatch and bad-argument error; tree encoding carries the
       field; CLI request; hosted setter with no open window, toggle, and no-op; app-produced read-back through
       the server in BOTH ordinary-tree and flagged modes (an encoding test cannot catch an omitted server
       argument); one XCUITest driving the command and asserting the actual accessibility workspace and
       session rows as well as the read-back, since the unfiltered tree response cannot show what the GUI draws
-- [ ] run the affected suites; the XCUITest via `-only-testing:agtermUITests/FlaggedViewUITests/<test>`
+- [x] run the affected suites; the XCUITest via `-only-testing:agtermUITests/FlaggedViewUITests/<test>`
 
 ### Task 8: Update documentation
 

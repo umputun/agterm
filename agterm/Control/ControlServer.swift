@@ -536,7 +536,8 @@ final class ControlServer {
                 .sessionStatus, .sessionFlag, .sessionContext, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .hooksReload, .hooksList, .configReload,
                 .themeSet, .themeList,
-                .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sidebarWidth, .sessionType, .sessionCopy,
+                .sidebar, .sidebarMode, .sidebarFlaggedLayout, .sidebarExpand, .sidebarCollapse, .sidebarWidth,
+                .sessionType, .sessionCopy,
                 .sessionPaste, .sessionSelectAll,
                 .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize,
                 .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText,
@@ -819,7 +820,9 @@ final class ControlServer {
                 }
             },
             app: identity,
-            liveReset: liveResetReadback()
+            liveReset: liveResetReadback(),
+            // the mirror the sidebars render from, so the read-back names what is on screen.
+            flaggedLayout: GhosttyApp.shared.flaggedViewLayout
         )
     }
 

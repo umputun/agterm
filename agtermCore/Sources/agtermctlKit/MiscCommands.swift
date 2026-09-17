@@ -622,7 +622,7 @@ struct ModalCommandRunner {
 struct Sidebar: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Sidebar visibility and view mode.",
-        subcommands: [Visibility.self, Mode.self, Expand.self, Collapse.self, Width.self],
+        subcommands: [Visibility.self, Mode.self, FlaggedLayout.self, Expand.self, Collapse.self, Width.self],
         defaultSubcommand: Visibility.self
     )
 
@@ -652,6 +652,24 @@ struct Sidebar: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: mode))
+        }
+    }
+
+    /// Sets how every window's flagged sidebar view arranges its sessions; app-wide, so no `--window`.
+    struct FlaggedLayout: RequestCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "flagged-layout", abstract: "Flagged view layout (flat|tree|toggle).")
+        @Argument(help: "Layout: flat, tree, or toggle (default).") var layout: String = "toggle"
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            guard ["flat", "tree", "toggle"].contains(layout) else {
+                throw ValidationError("layout must be flat, tree, or toggle")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: layout))
         }
     }
 

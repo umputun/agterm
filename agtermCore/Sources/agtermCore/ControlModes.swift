@@ -75,6 +75,22 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
+/// Parsed layout for `sidebar.flagged-layout`.
+public enum ControlFlaggedLayoutMode: Equatable, Sendable {
+    case flat
+    case tree
+    case toggle
+
+    public static func parse(_ mode: String?) -> ControlFlaggedLayoutMode? {
+        switch mode ?? "toggle" {
+        case "flat": return .flat
+        case "tree": return .tree
+        case "toggle": return .toggle
+        default: return nil
+        }
+    }
+}
+
 /// The four modes `workspace.focus` accepts; raw values are the wire tokens and `helpSummary` states each
 /// one's effect. `add` leaves the filter flag alone so a set is built member by member with the whole tree on
 /// screen — an add that enabled the filter would hide the rows the next add needs. There is no

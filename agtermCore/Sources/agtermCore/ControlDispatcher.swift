@@ -76,6 +76,7 @@ public protocol ControlActions {
     func listThemes() -> ControlResponse
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
+    func setFlaggedViewLayout(_ mode: ControlFlaggedLayoutMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
     func setSidebarWidth(_ points: Double, window: String?) -> ControlResponse
@@ -201,8 +202,8 @@ public struct ControlDispatcher {
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList,
-                .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
-                .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
+                .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarFlaggedLayout,
+                .sidebarExpand, .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach:
             return await dispatchZmxCommand(request)
@@ -722,6 +723,11 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid sidebar mode: \(request.args?.mode ?? "toggle")")
             }
             return actions.setSidebarViewMode(mode)
+        case .sidebarFlaggedLayout:
+            guard let mode = ControlFlaggedLayoutMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false, error: "invalid flagged layout: \(request.args?.mode ?? "toggle")")
+            }
+            return actions.setFlaggedViewLayout(mode)
         case .sidebarExpand:
             return actions.expandSidebar(window: request.args?.window)
         case .sidebarCollapse:

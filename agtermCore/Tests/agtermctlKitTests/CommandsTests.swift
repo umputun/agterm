@@ -1525,6 +1525,21 @@ struct CommandsTests {
         #expect(try request(["sidebar", "mode", "flagged"]) == ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: "flagged")))
     }
 
+    @Test func sidebarFlaggedLayoutDefaultsToggle() throws {
+        #expect(try request(["sidebar", "flagged-layout"])
+            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func sidebarFlaggedLayoutTree() throws {
+        #expect(try request(["sidebar", "flagged-layout", "tree"])
+            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "tree")))
+    }
+
+    @Test func sidebarFlaggedLayoutRejectsBadLayoutAndAWindowTarget() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "flagged-layout", "grid"]) }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "flagged-layout", "tree", "--window", "w"]) }
+    }
+
     @Test func sidebarModeRejectsBadMode() {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "mode", "sideways"]) }
     }

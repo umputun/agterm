@@ -64,6 +64,7 @@ final class MockControlActions: ControlActions {
         case zmxAttach(host: String, session: String)
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
+        case flaggedViewLayout(ControlFlaggedLayoutMode)
         case expand(window: String?)
         case collapse(window: String?)
         case sidebarWidth(points: Double, window: String?)
@@ -126,6 +127,7 @@ final class MockControlActions: ControlActions {
     var unresolvedFocusTargets: [String] = []
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
+    var nextFlaggedViewLayoutResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
     var nextCollapseResponse = ControlResponse(ok: true)
     var nextSidebarWidthResponse = ControlResponse(ok: true)
@@ -482,6 +484,11 @@ final class MockControlActions: ControlActions {
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse {
         calls.append(.sidebarViewMode(mode))
         return nextSidebarViewModeResponse
+    }
+
+    func setFlaggedViewLayout(_ mode: ControlFlaggedLayoutMode) -> ControlResponse {
+        calls.append(.flaggedViewLayout(mode))
+        return nextFlaggedViewLayoutResponse
     }
 
     func expandSidebar(window: String?) -> ControlResponse {

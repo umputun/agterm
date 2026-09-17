@@ -103,4 +103,12 @@ struct ControlModesTests {
         #expect(ControlSidebarViewMode.parse("toggle") == .toggle)
         #expect(ControlSidebarViewMode.parse("wide") == nil)
     }
+
+    @Test func flaggedLayoutModeParsesModes() {
+        #expect(ControlFlaggedLayoutMode.parse(nil) == .toggle)
+        #expect(ControlFlaggedLayoutMode.parse("flat") == .flat)
+        #expect(ControlFlaggedLayoutMode.parse("tree") == .tree)
+        #expect(ControlFlaggedLayoutMode.parse("toggle") == .toggle)
+        #expect(ControlFlaggedLayoutMode.parse("grid") == nil)
+    }
 }

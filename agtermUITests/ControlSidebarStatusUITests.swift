@@ -95,6 +95,38 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid sidebar mode"), "should report invalid mode: \(bad)")
     }
 
+    func testFlaggedLayoutCommandSwitchesTheRenderedRowsAndReadsBack() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        let seeded = try sendCommand(#"{"cmd":"tree"}"#)
+        let seededTree = try XCTUnwrap((seeded["result"] as? [String: Any])?["tree"] as? [String: Any])
+        XCTAssertEqual(seededTree["sidebarFlaggedLayout"] as? String, "flat", "the layout reads back under the ordinary tree")
+        let ws = try XCTUnwrap((seededTree["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(seededID)","args":{"name":"flagme"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.flag","target":"\#(seededID)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar.mode","args":{"mode":"flagged"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(sessionRowValueExists(containing: "flagme : workspace 1"), "the flat list labels the row with its workspace")
+        XCTAssertFalse(app.staticTexts["workspace 1"].exists, "the flat list has no workspace row")
+
+        let toTree = try sendCommand(#"{"cmd":"sidebar.flagged-layout","args":{"mode":"tree"}}"#)
+        XCTAssertEqual(toTree["ok"] as? Bool, true, "sidebar.flagged-layout tree should succeed: \(toTree)")
+        XCTAssertEqual((toTree["result"] as? [String: Any])?["text"] as? String, "tree", "the command echoes the resulting layout")
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 10), "the tree layout renders the workspace row")
+        XCTAssertTrue(sessionRowValueExists(containing: "flagme"), "the flagged session stays under it")
+        XCTAssertFalse(sessionRowValueExists(containing: "flagme : workspace 1"), "the tree layout drops the workspace suffix")
+        let after = try sendCommand(#"{"cmd":"tree"}"#)
+        let afterTree = try XCTUnwrap((after["result"] as? [String: Any])?["tree"] as? [String: Any])
+        XCTAssertEqual(afterTree["sidebarFlaggedLayout"] as? String, "tree")
+
+        let toggled = try sendCommand(#"{"cmd":"sidebar.flagged-layout"}"#)
+        XCTAssertEqual((toggled["result"] as? [String: Any])?["text"] as? String, "flat", "a bare command toggles")
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForNonExistence(timeout: 10), "back to the flat list")
+
+        let bad = try sendCommand(#"{"cmd":"sidebar.flagged-layout","args":{"mode":"grid"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an invalid layout should error: \(bad)")
+        XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid flagged layout"), "should report the invalid layout: \(bad)")
+    }
+
     // orthogonal to the flagged view: the flat list ignores the marked set entirely.
     func testWorkspaceFocusHidesOtherWorkspaces() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")

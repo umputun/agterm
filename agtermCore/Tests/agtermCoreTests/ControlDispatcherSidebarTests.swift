@@ -4,6 +4,30 @@ import Testing
 
 @MainActor
 struct ControlDispatcherSidebarTests {
+    @Test(arguments: [("flat", .flat), ("tree", .tree), ("toggle", .toggle), (nil, .toggle)] as [(String?, ControlFlaggedLayoutMode)])
+    func flaggedLayoutRoutesTheParsedMode(_ raw: String?, _ mode: ControlFlaggedLayoutMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextFlaggedViewLayoutResponse = ControlResponse(ok: true, result: ControlResult(text: "tree"))
+
+        let response = await dispatcher.dispatch(
+            ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: raw)))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "tree")))
+        #expect(actions.calls == [.flaggedViewLayout(mode)])
+    }
+
+    @Test func flaggedLayoutRejectsAnUnknownModeWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(
+            ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "grid")))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid flagged layout: grid"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sidebarWidthRoutesPointsAndWindow() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

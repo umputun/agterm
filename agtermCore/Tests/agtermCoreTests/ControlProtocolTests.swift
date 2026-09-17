@@ -1285,6 +1285,23 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.sidebarMode == "flagged")
     }
 
+    @Test func treeRoundTripsWithSidebarFlaggedLayoutAndOmitsWhenNil() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], sidebarFlaggedLayout: "tree")))
+        #expect(try roundTrip(response) == response)
+
+        let json = String(decoding: try JSONEncoder().encode(ControlTree(workspaces: [])), as: UTF8.self)
+        #expect(!json.contains("sidebarFlaggedLayout"), "a nil flagged layout must be omitted; got \(json)")
+        #expect(try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8)).sidebarFlaggedLayout == nil)
+    }
+
+    @Test func flaggedLayoutRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "tree"))
+        let data = try JSONEncoder().encode(request)
+        #expect(String(decoding: data, as: UTF8.self).contains("sidebar.flagged-layout"))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == request)
+    }
+
     @Test func treeRoundTripsWithSidebarWidthAndOmitsWhenNil() throws {
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [], sidebarWidth: 271.3)))

@@ -80,6 +80,24 @@ final class SettingsUITests: XCTestCase {
                       "the default 'On first key' should remove statusReset from settings.json")
     }
 
+    func testFlaggedViewLayoutPickerPersists() throws {
+        let picker = settingsControl(tab: "Interface", control: "settings-flagged-view-layout")
+
+        picker.click()
+        let tree = app.menuItems["Workspace tree"]
+        XCTAssertTrue(tree.waitForExistence(timeout: 5), "the layout picker should offer 'Workspace tree'")
+        tree.click()
+        XCTAssertTrue(poll { self.settingsValue("flaggedViewLayout") == "tree" },
+                      "selecting 'Workspace tree' should persist flaggedViewLayout=tree to settings.json")
+
+        picker.click()
+        let flat = app.menuItems["Flat list"]
+        XCTAssertTrue(flat.waitForExistence(timeout: 5), "the layout picker should offer 'Flat list'")
+        flat.click()
+        XCTAssertTrue(poll { self.settingsValue("flaggedViewLayout") == nil },
+                      "the default 'Flat list' should remove flaggedViewLayout from settings.json")
+    }
+
     func testDockBouncePickerPersists() throws {
         let picker = settingsControl(tab: "Notifications", control: "settings-dock-bounce")
 

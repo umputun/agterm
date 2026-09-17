@@ -228,6 +228,14 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().sidebarMode == "tree")
     }
 
+    @Test func controlTreeReportsThePassedFlaggedLayoutInEitherSidebarMode() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarFlaggedLayout == nil)
+        #expect(store.controlTree(paneForeground: { _ in nil }, flaggedLayout: .tree).sidebarFlaggedLayout == "tree")
+        store.setSidebarMode(.flagged)
+        #expect(store.controlTree(paneForeground: { _ in nil }, flaggedLayout: .flat).sidebarFlaggedLayout == "flat")
+    }
+
     @Test func controlTreeReportsQuickVisibleFromClosure() {
         let store = makeStore()
         #expect(store.controlTree().quickVisible == nil)
