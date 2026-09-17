@@ -104,7 +104,8 @@ control address for `surface zoom` and `surface cursor` (`left`, `right`, `scrat
 read-only top-level fields — `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
-(`tree` or `flagged` — the read side of `sidebar mode`), `sidebarWidth` (the sidebar divider position in
+(`tree` or `flagged` — the read side of `sidebar mode`), `sidebarFlaggedLayout` (`flat` or `tree`, app-wide —
+the read side of `sidebar flagged-layout`), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
 reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `askPending` (GUI asks only), and `app` (the
@@ -284,9 +285,11 @@ the others WITHOUT switching the filter on; read membership back from the tree w
 `workspace filter [on|off|toggle]` (apply or suspend that filter for the whole window WITHOUT losing the marked
 set — no `--target`; read it back from the tree top-level `workspaceFilter`. Build a working set with
 repeated `workspace focus add`, then apply it once with `workspace filter on`; a workspace row renders iff
-`sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)` — no workspace row renders at
-all with the sidebar hidden or in `flagged` mode, the whole tree renders while the filter is off, and
-only while it is on does visibility narrow to the members — and `workspace filter on` with nothing marked is
+`sidebarVisible && ((sidebarMode == "tree" && (!workspaceFilter || focused)) || (sidebarMode == "flagged" &&
+sidebarFlaggedLayout == "tree" && one of its sessions is flagged))` — no workspace row renders at
+all with the sidebar hidden or under the flat flagged list, the ordinary tree renders whole while the filter is
+off and narrows to the members only while it is on, and the flagged tree ignores the filter — and
+`workspace filter on` with nothing marked is
 refused so the pair can never lie) ·
 `workspace collapse [--target W] [--window W]` · `workspace expand [--target W] [--window W]` (collapse/expand ONE workspace
 in the sidebar tree — the per-workspace pair, distinct from the all-workspace `sidebar expand`/`collapse`;
@@ -567,8 +570,10 @@ with `quick show` stays up when agterm loses focus, unlike one the user summoned
 per app, so none of them take `--target`/`--window`/`--pane`; all three still need an open window.
 
 **sidebar** — `sidebar [show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
-`sidebar mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read
-back from the tree's top-level `sidebarMode`) · `sidebar expand [--window W]` (expand every workspace) ·
+`sidebar mode [tree|flagged|toggle]` (flip between the workspace tree and the flagged working set; read
+back from the tree's top-level `sidebarMode`) · `sidebar flagged-layout [flat|tree|toggle]` (arrange the flagged
+view as one flat list or nested under workspace rows; app-wide, no `--window`, echoes the resulting layout; read
+back from `sidebarFlaggedLayout`) · `sidebar expand [--window W]` (expand every workspace) ·
 `sidebar collapse [--window W]` (collapse all workspaces except the active one, which stays expanded) ·
 `sidebar width <points> [--window W]` (move the divider, clamped to 160...560pt; prints the stored width
 and reads back from the tree's top-level `sidebarWidth`).

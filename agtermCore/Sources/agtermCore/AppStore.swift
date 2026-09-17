@@ -71,7 +71,7 @@ public final class AppStore {
     /// owns visibility, so toolbar, View menu, palette and the `sidebar` command all flip this one flag.
     public var sidebarVisible = true
 
-    /// Which view this window's sidebar renders: the tree or the flat flagged working set. Per-window state
+    /// Which view this window's sidebar renders: the tree or the flagged working set. Per-window state
     /// in `Snapshot`, flipped via `setSidebarMode(_:)` (bottom bar, View menu, palette, `sidebar.mode`).
     public var sidebarMode: SidebarMode = .tree
 
@@ -833,7 +833,7 @@ public final class AppStore {
         if changed { save() }
     }
 
-    /// The flagged sessions across all workspaces in tree order — the projection the flat sidebar renders.
+    /// The flagged sessions across all workspaces in tree order — the projection the flagged view renders.
     public var flaggedSessions: [Session] {
         workspaces.flatMap(\.sessions).filter(\.flagged)
     }

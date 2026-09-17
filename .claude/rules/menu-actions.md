@@ -74,7 +74,12 @@ paths:
   split/scratch/find/quick terminal, and fullscreen. Navigate contains palettes, session/attention
   stepping, pane focus, and Dashboard. File UI tests against the menu that owns the item.
 - Workspace focus controls are mode-agnostic because membership applies when tree mode returns.
-  Expand/Collapse Workspaces alone are disabled outside tree mode, in both menu and palette.
+  Expand/Collapse Workspaces and Collapse/Expand Workspace need workspace ROWS
+  (`PaletteContext.sidebarShowsWorkspaceRows`): the ordinary tree or the flagged tree, not the flat flagged list.
+  Previous/Next Workspace keep the narrower `sidebarShowsWorkspaceTree`, since `navigateWorkspace` steps the
+  focus projection and would land on a workspace the flagged tree has no row for.
+  An init call that omits `sidebarShowsWorkspaceRows` takes `sidebarShowsWorkspaceTree`, which is what keeps
+  the `agterm-linux` fork's fold commands visible.
 - Dashboard uses Command-Shift-G, `BuiltinAction.dashboard`, and `toggleDashboard`; it toggles an MRU,
   auto-sized grid unless terminal zoom is active. Share `dashboardMembers` with control.
 - The View menu carries no fullscreen item of agterm's own, and `toggle_fullscreen` rides the key monitor

@@ -251,7 +251,7 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .toggleWorkspaceCollapse))
                 .disabled(!PaletteCommand.toggleWorkspaceCollapse.isEnabled(in: context))
-                // flip the sidebar between the workspace tree and the flat flagged working-set list. one
+                // flip the sidebar between the workspace tree and the flagged working-set view. one
                 // 2-state item, keyless by default (rebindable via toggle_flagged_view); control sidebar.mode.
                 // Disabled with nothing to show (tree mode + no flags), live in flagged mode so it can
                 // always switch back to the tree.

@@ -9,7 +9,7 @@ extension AppStore {
     /// reveals its target and the active session is always inside the visible set. Navigation is scoped to
     /// `navigableSessions`, so it never trips this. No-op when the filter is off, nothing is selected, or the
     /// selection sits in a member workspace; persistence rides the caller's `selectSession` save. Also a no-op
-    /// in `.flagged` mode — that flat list is cross-workspace and ignores the marked set, so without the term,
+    /// in `.flagged` mode — that view is cross-workspace and ignores the marked set, so without the term,
     /// entering flagged view with the only flagged session in an unmarked workspace would silently disable it.
     /// Returning to `.tree` re-applies it.
     func disableFocusIfSelectionOutsideSet(_ sessionID: UUID?) {
@@ -159,7 +159,7 @@ extension AppStore {
     /// The workspaces the sidebar TREE renders: the marked set while the filter is enabled, else all — the
     /// `!workspaceFilter || focused` TERM of the row-visibility contract (`ControlWorkspaceNode.focused`), not
     /// the whole predicate a script evaluates: sidebar mode and visibility gate the tree ABOVE this (`.flagged`
-    /// renders a flat session list and never calls here). The empty-result fallback guards an INVARIANT
+    /// renders the flagged sessions, in either layout, and never calls here). The empty-result fallback guards an INVARIANT
     /// VIOLATION only — reaching it takes writing the two stored fields directly (`internal(set)`, so
     /// in-module), since the mutators keep `enabled + empty` out of reach, marking is gated on the id existing
     /// and `restoreFocus` prunes stale ids. Rendering the full tree beats stranding the user with no rows.

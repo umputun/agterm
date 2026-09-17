@@ -18,7 +18,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var sidebarWidth: Double?
     /// Whether the window's sidebar is shown; nil = the default (shown).
     public var sidebarVisible: Bool?
-    /// Which view the sidebar renders (tree or flagged flat list); nil = `.tree`.
+    /// Which view the sidebar renders (the workspace tree or the flagged view); nil = `.tree`.
     public var sidebarMode: SidebarMode?
     /// The workspaces marked in the sidebar focus set, in tree order; nil = nothing marked.
     public var focusedWorkspaceIDs: [UUID]?

@@ -548,10 +548,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace focus</span>, distinct from
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>; reported independently of whether the
                 filter is applied, so a workspace row renders iff
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible &amp;&amp; sidebarMode == "tree" &amp;&amp; (!workspaceFilter || focused)</span>
-                — no workspace row at all with the sidebar hidden or in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> mode, the whole tree
-                while the filter is off, only the members while it is on), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible &amp;&amp; ((sidebarMode == "tree" &amp;&amp; (!workspaceFilter || focused)) || (sidebarMode == "flagged" &amp;&amp; sidebarFlaggedLayout == "tree" &amp;&amp; one of its sessions is flagged))</span>
+                — no workspace row at all with the sidebar hidden or under the flat flagged list; in the ordinary tree, the
+                whole tree while the filter is off and only the members while it is on; in the flagged tree, the workspaces
+                holding a flagged session, whatever the filter says), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded).
@@ -563,6 +563,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">autoFollowMs</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarFlaggedLayout</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">flat</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar flagged-layout</span>; app-wide, so every window reports the
+                same value, under the ordinary tree too),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarWidth</span> (the sidebar divider position in points, the read side
                 of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar width</span>, reported here and not on
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>),
@@ -744,8 +748,8 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Whether a workspace is collapsed makes no difference — a folded workspace is stepped into like any other. While the
                 workspace focus filter is applied, stepping stays inside the marked workspaces, the same scoping
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session go</span> gets. With nowhere to step — the flagged
-                flat list, or a single visible workspace — it errors with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session go</span> gets. With nowhere to step — flagged mode in
+                either layout, or a single visible workspace — it errors with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other workspace to navigate to</span>.
               </p>
             </div>
@@ -2669,11 +2673,12 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">sidebar.mode</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Flip the sidebar view between the workspace tree and the flat flagged working-set list, where each row is labeled
+                Flip the sidebar view between the workspace tree and the flagged working set. In its default flat layout each row is labeled
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session : workspace</span> even across workspaces.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> is the default; idempotent; persisted
                 per-window. Read back via the tree's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar flagged-layout</span> picks how the flagged view is arranged.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 While in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> mode,
@@ -2692,6 +2697,28 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl sidebar flagged-layout [flat|tree|toggle]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">sidebar.flagged-layout</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Pick how the flagged view arranges its sessions: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flat</span> is one list
+                labeled <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session : workspace</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> nests
+                them under their workspace rows and leaves out workspaces with nothing flagged.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> is the default; an unknown layout errors. App-wide, the same
+                setting as Settings ▸ Interface: it takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, needs no open
+                window, and applies to every window's flagged view at once. <strong style="color: #bfbab0">Returns</strong> the
+                resulting layout in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span>. Read back via the tree's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarFlaggedLayout</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The tree layout shares each workspace's collapse state with the ordinary tree, so collapsing a group there
+                collapses that workspace in both. It ignores the workspace focus filter, as the flat list does, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace go</span> stays unavailable in flagged mode under either layout.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl sidebar expand [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">sidebar.expand</div>
@@ -2699,7 +2726,8 @@
                 Expand every workspace row in a window's sidebar tree. Unlike
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebar</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar mode</span>,
                 it honors <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, so a script can expand a
-                background window's tree. Idempotent; a graceful no-op in flagged mode.
+                background window's tree. Idempotent; a graceful no-op under the flat flagged list, which has no
+                workspace rows. It always writes every workspace, the ones a focus filter or the flagged tree leaves out too.
               </p>
             </div>
 
@@ -2711,8 +2739,8 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Collapse every workspace except the current one, which stays expanded and is scrolled into view. Same
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> selector and defaults as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Idempotent; a graceful no-op in flagged
-                mode.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Idempotent; a graceful no-op under the flat
+                flagged list, and it writes every workspace as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span> does.
               </p>
             </div>
 

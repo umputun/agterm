@@ -638,7 +638,7 @@ struct Sidebar: ParsableCommand {
         }
     }
 
-    /// Flips the frontmost window's sidebar between the workspace tree and the flat flagged working-set list.
+    /// Flips the frontmost window's sidebar between the workspace tree and the flagged working-set view.
     struct Mode: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "mode", abstract: "Sidebar view mode (tree|flagged|toggle).")
         @Argument(help: "Mode: tree, flagged, or toggle (default).") var mode: String = "toggle"

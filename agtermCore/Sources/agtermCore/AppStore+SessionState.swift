@@ -3,7 +3,7 @@ import Foundation
 // Per-session durable state the sidebar and title bar project: flagged working-set membership, the
 // title-bar context, and the background watermark. Split out of `AppStore.swift` for the file size limit.
 extension AppStore {
-    /// Sets (or clears) a session's flag — the durable flagged working-set membership the flat sidebar view
+    /// Sets (or clears) a session's flag — the durable flagged working-set membership the flagged sidebar view
     /// projects — and persists. Clean no-op for an unknown id or a matching flag, so delta-computed callers
     /// stay idempotent. Unflagging narrows in `.flagged` mode (dropping the row rendering the active session),
     /// hence `reselectIfSelectionHidden`; in tree mode it only repairs a selection stranded by something else.

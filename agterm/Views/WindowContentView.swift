@@ -744,7 +744,7 @@ struct WindowContentView: View {
                 .accessibilityIdentifier("focus-filter-toggle")
             }
 
-            // flip the sidebar between the workspace tree and the flat flagged working-set list. 2-state
+            // flip the sidebar between the workspace tree and the flagged working-set view. 2-state
             // glyph (filled in flagged mode); the switch animates via splitRoot's `.animation(value:)`.
             if shows(.flaggedView) {
                 Button {

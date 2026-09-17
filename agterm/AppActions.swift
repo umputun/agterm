@@ -555,7 +555,7 @@ final class AppActions {
         toggleFlag(id)
     }
 
-    /// Flip the sidebar between the workspace tree and the flat flagged working-set list. Shared by the
+    /// Flip the sidebar between the workspace tree and the flagged working-set view. Shared by the
     /// bottom-bar toggle, the View menu, the palette and `sidebar.mode`; `ContentView` animates the switch.
     func toggleFlaggedView() {
         guard uiActionsEnabled else { return }

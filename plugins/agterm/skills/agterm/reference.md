@@ -233,11 +233,12 @@ from the top-level `zoomedSurface`. Workspace nodes carry
 set — the read side of `workspace focus`, distinct from `active` the SELECTED workspace; omitted on
 non-members, and absent entirely when nothing is marked. Membership is reported INDEPENDENTLY of whether
 the filter is applied, so a marked-but-not-filtering set reads back too; a workspace ROW RENDERS in the
-sidebar iff `sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)`, every term on the
-same tree response — the sidebar hidden renders nothing, `flagged` mode renders a flat flagged-session
-list with NO workspace rows whatever the filter says, `tree` mode with the filter OFF renders the whole
-tree regardless of membership, and only `tree` mode with the filter ON narrows visibility to the
-members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
+sidebar iff `sidebarVisible && ((sidebarMode == "tree" && (!workspaceFilter || focused)) || (sidebarMode == "flagged" &&
+sidebarFlaggedLayout == "tree" && one of its sessions is flagged))`, every term on the
+same tree response — the sidebar hidden renders nothing, `flagged` mode renders NO workspace rows under
+the flat layout and, under the tree layout, the workspaces holding a flagged session whatever the filter
+says, `tree` mode with the filter OFF renders the whole tree regardless of membership, and only `tree`
+mode with the filter ON narrows visibility to the members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
@@ -247,7 +248,9 @@ timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible`
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), `sidebarWidth` (the sidebar divider position in points, the read side of
+`sidebar mode`), `sidebarFlaggedLayout` (`flat` or `tree` — how the flagged view is arranged, the read side
+of `sidebar flagged-layout`; app-wide, so every window reports the same value, under the ordinary tree
+too), `sidebarWidth` (the sidebar divider position in points, the read side of
 `sidebar width`, reported here and nowhere else), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
 the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
 `workspace filter`, so a script can record the filter state, restore it, or make the toggle idempotent),
@@ -299,7 +302,8 @@ buys nothing. A caller with no tree uses `version`.
   workspace id. A workspace's COLLAPSED state does not affect it — a folded workspace is stepped into
   like any other. While the focus filter is applied, stepping is confined to the marked workspaces, the
   same scoping `session go` gets. Errors with `no other workspace to navigate to` when there is nowhere
-  to step: the flagged flat list (which renders no workspace rows), or a single visible workspace.
+  to step: flagged mode under either layout (stepping follows the focus projection, which the flagged
+  tree does not render), or a single visible workspace.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
   foreground-created workspace that still holds the target, else the selected session's, else
@@ -313,7 +317,7 @@ buys nothing. A caller with no tree uses `version`.
   into the set leaving the filter flag EXACTLY as it was. `add` never switches the filter on: that is
   what makes a multi-workspace set buildable, since a mark that narrowed the tree would hide the rows
   still to be marked, so mark several and apply once with `workspace filter on`.
-  Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores the filter).
+  Per-window and persisted; orthogonal to `sidebar mode` (the flagged view ignores the filter in both layouts).
   While the filter is applied, `session go` navigation is scoped to the marked workspaces' sessions (and
   to the flagged set in flagged mode); an explicit `session select` of a session outside the set switches
   the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`.
@@ -332,7 +336,8 @@ buys nothing. A caller with no tree uses `version`.
   `session flag clear` never does (it empties the list), and neither does `session new --no-select`, so
   the view can hold a row with nothing selected until one of the listed commands runs.
   Nor does a plain `session new` or a `session select` in FLAGGED mode: both make the fresh or chosen
-  session active while the flagged view renders no row for it, leaving the sidebar unselected.
+  session active while the flagged view renders no row for it, leaving the sidebar unselected. New Session
+  from a flagged-tree workspace row, or its hover +, is the same case.
   A script that changes what is visible should re-read `tree` before using the default `active` target.
   A workspace
   created while the filter is applied joins the set, so it is visible without breaking the filter — except
@@ -1156,24 +1161,35 @@ like `quick type`. Errors with `quick terminal not open` (never shown), `failed 
 the ⌃⇧P palette "Toggle Sidebar", and the ⌃⌘S keymap action (`toggle_sidebar`).
 
 `agtermctl sidebar mode [tree|flagged|toggle]` — flip the frontmost window's sidebar VIEW between the
-workspace tree and the flat flagged working-set list (the durable per-session `flag`; each flagged row
-is labeled `session : workspace`, even across workspaces). `toggle` is the default; idempotent
+workspace tree and the flagged working set (the durable per-session `flag`; in the default flat layout
+each flagged row is labeled `session : workspace`, even across workspaces). `toggle` is the default; idempotent
 (delta-computed); an unknown mode is an error, and `no open window` when none is open. Persisted
 per-window. While in `flagged` mode, `session go` navigation (and the Ctrl-Tab MRU switcher) is scoped
 to the flagged sessions only; back in `tree` it spans the marked workspaces' sessions (while the focus
 filter is applied) or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
 ⌃⇧P palette. Use with `session flag` to build and view a cross-workspace working set.
 
+`agtermctl sidebar flagged-layout [flat|tree|toggle]` — pick how the flagged view arranges its sessions.
+`flat` is one list labeled `session : workspace`; `tree` nests the flagged sessions under their workspace
+rows and leaves out workspaces holding none. `toggle` is the default; an unknown layout is an error.
+APP-WIDE, the same setting as Settings ▸ Interface ▸ Flagged view layout: no `--window`, no open window
+needed, and every window's flagged view follows at once. Setting it never enters flagged mode and never
+moves the selection. Returns the resulting layout in `result.text`; read back as the tree's top-level
+`sidebarFlaggedLayout`, reported under the ordinary tree too. The tree layout shares each workspace's
+collapse state with the ordinary tree, ignores the focus filter, and keeps `workspace go` unavailable.
+
 `agtermctl sidebar expand [--window W]` — expand every workspace row in a window's sidebar tree.
 Defaults to the frontmost window; `--window` (id / prefix / `active`) targets any OPEN window, so a
 script can expand a background window's tree. Idempotent (a clean no-op when all are already expanded);
-a graceful no-op in `flagged` mode (no workspace rows); a named-but-closed window errors, and `no open
+a graceful no-op under the flat flagged list (no workspace rows), while the flagged tree expands; it
+writes every workspace either way, the ones a filter or the flagged tree omits included. A
+named-but-closed window errors, and `no open
 window` when none is open. The GUI half (frontmost only) is View ▸ Expand Workspaces and the ⌃⇧P palette
 "Expand Workspaces".
 
 `agtermctl sidebar collapse [--window W]` — collapse every workspace EXCEPT the current one (the same
 resolution as `--target active`), which stays expanded and is scrolled into view. Same `--window`
-selector and defaults as `expand`. Idempotent; a graceful no-op in `flagged` mode; a named-but-closed
+selector and defaults as `expand`. Idempotent; a graceful no-op under the flat flagged list; a named-but-closed
 window errors, and `no open window` when none is open. The GUI half (frontmost only) is View ▸ Collapse
 Workspaces and the ⌃⇧P palette "Collapse Workspaces".
 

@@ -469,13 +469,16 @@ agtermctl tree --json | jq '.result.tree.quickVisible'  # is it open right now?
 
 ## Flag a working set and view just the flagged sessions
 
-Flag a few sessions across workspaces, then flip the sidebar to the flat flagged list (each row labeled
-`session : workspace`). The flag is durable (persisted per session); `sidebar mode` is per-window.
+Flag a few sessions across workspaces, then flip the sidebar to the flagged view: one flat list with each
+row labeled `session : workspace`, or, under the tree layout, the flagged sessions nested under their
+workspace rows. The flag is durable (persisted per session); `sidebar mode` is per-window; the layout is
+app-wide.
 
 ```bash
 agtermctl session flag on --target "$AGTERM_SESSION_ID"   # flag this session
 agtermctl session flag on --target a1b2                   # flag another (any workspace)
 agtermctl sidebar mode flagged                            # show only the flagged sessions
+agtermctl sidebar flagged-layout tree                     # nest them under workspace rows, in every window
 agtermctl session go --to next                            # in flagged mode, nav steps the flagged set only
 agtermctl sidebar mode tree                               # back to the full tree
 agtermctl session flag clear                              # unflag everything in the window
@@ -535,8 +538,9 @@ member with the whole tree still on screen and applied ONCE with `workspace filt
 filter off` suspends it WITHOUT losing the set, so peeking at everything and coming back costs one call
 each way. Membership reads back per workspace as `focused`, the flag as the tree-level
 `workspaceFilter`, and a workspace row renders iff
-`sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)` — no workspace row renders at
-all with the sidebar hidden or in `flagged` mode (that view is a flat flagged-session list); in `tree`
+`sidebarVisible && ((sidebarMode == "tree" && (!workspaceFilter || focused)) || (sidebarMode == "flagged" &&
+sidebarFlaggedLayout == "tree" && one of its sessions is flagged))` — no workspace row renders at
+all with the sidebar hidden or under the flat flagged list, and the flagged tree ignores the filter; in `tree`
 mode with the filter off the whole tree is on screen regardless of membership, and only with the filter
 on does visibility narrow to the members. `filter on` with nothing marked is refused, so an applied
 filter always has a visible member and the pair can never disagree with what is on screen.
@@ -567,7 +571,8 @@ if [ "$was" = "true" ]; then agtermctl workspace filter on; fi
 
 Open every workspace at once, or collapse all but the current one (the same resolution as
 `--target active`, which stays expanded and scrolled into view) to cut clutter. Defaults to the frontmost window; pass
-`--window` to target any open window. A no-op in flagged mode.
+`--window` to target any open window. A no-op under the flat flagged list; in the flagged tree it acts, and
+either way it writes every workspace, the ones that view leaves out too.
 
 ```bash
 agtermctl sidebar expand                                 # expand every workspace (frontmost window)

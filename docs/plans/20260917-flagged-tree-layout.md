@@ -276,16 +276,16 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 
 ### Task 8: Update documentation
 
-- [ ] `site/docs.html`: the flagged view's two layouts, the setting, shared collapse state and that Expand All
+- [x] `site/docs.html`: the flagged view's two layouts, the setting, shared collapse state and that Expand All
       / Collapse Others still write every workspace
-- [ ] `site/commands.html`: `sidebar.flagged-layout`, its arguments, `sidebarFlaggedLayout` read-back, the
+- [x] `site/commands.html`: `sidebar.flagged-layout`, its arguments, `sidebarFlaggedLayout` read-back, the
       revised workspace-row visibility predicate; no command total anywhere
-- [ ] `plugins/agterm/skills/agterm/`: the command and read-back in `SKILL.md` and `reference.md`, and every
+- [x] `plugins/agterm/skills/agterm/`: the command and read-back in `SKILL.md` and `reference.md`, and every
       existing flat-only or "no-op in flagged mode" claim in `reference.md` and `examples.md` corrected
-- [ ] `.claude/rules/sidebar.md`, `control-api.md`, `settings.md`, `menu-actions.md` (line 77's "disabled
+- [x] `.claude/rules/sidebar.md`, `control-api.md`, `settings.md`, `menu-actions.md` (line 77's "disabled
       outside tree mode"): the layout axis, the reveal rule, the
       shared-collapse trade, the stepping limit; `site/index.html` and `site/llms.txt` only if they list it
-- [ ] no `CHANGELOG.md` entry (release-only)
+- [x] no `CHANGELOG.md` entry (release-only)
 
 ### Task 9: [Final] Verify acceptance criteria
 

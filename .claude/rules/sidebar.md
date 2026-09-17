@@ -79,9 +79,23 @@ paths:
   non-primary pane is focused.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
-- Flagged mode renders one flat, non-expandable outline using `session : workspace`, base terminal/split
-  icons, status, and badge. It ignores workspace focus, disables drag reorder, and shows the tinted
-  non-scrolling hint `No flagged sessions. / Right-click a session → Flag.` when empty.
+- Flagged mode has two layouts, chosen by the app-wide `FlaggedViewLayout` setting ([[settings]]), not per window.
+  `flat` is one non-expandable outline labeled `session : workspace`.
+  `tree` renders workspace rows holding only their flagged sessions, omits workspaces with none, and drops the suffix.
+  Both use base terminal/split icons, status, and badge, ignore workspace focus, disable drag reorder, and show
+  the tinted non-scrolling hint `No flagged sessions. / Right-click a session → Flag.` when empty.
+- The layout is orthogonal to `SidebarMode`, never a third case: every `sidebarMode == .flagged` check in
+  `agtermCore` means "the flagged set is what is visible", which holds in both layouts.
+  `AppStore.rendersWorkspaceRows(flaggedLayout:)` is the one predicate for "the outline has workspace rows",
+  taking the layout as a parameter because the store does not hold app-wide state.
+- `Coordinator.workspaceProjection` yields the workspace rows for the ordinary tree AND the flagged tree, so
+  `rebuildAndReload` keeps one expansion-restore path. Never add a parallel flagged-tree build.
+- A flagged-tree header badge sums only its flagged children (`displayedUnseen(for:)`), in both the cell
+  builder and the content-diff builder. `Workspace.unseenCount` sums every session and would report
+  notifications from rows the view leaves out.
+- The flagged tree shares `Workspace.isExpanded` with the ordinary tree, so folding a group folds that
+  workspace in both. Deliberate: `tree` reports one `collapsed` per workspace, and a second folding memory
+  would make every script that reads it mode-aware.
 - Mode flips call `reselectIfSelectionHidden` only when the active session would disappear. Mutators
   no-op without saving on unknown/unchanged IDs and prune transient selection when rows disappear.
 - GUI surfaces are `flagged-view-toggle`, row Flag/Unflag, View-menu Show Flagged/Show All, Flag Session,
@@ -123,9 +137,11 @@ paths:
   2. removing the last member disables;
   3. restore prunes stale IDs and disables if none remain.
 - The complete row-visibility contract is
-  `sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)`. Do not shorten it:
+  `sidebarVisible && ((sidebarMode == "tree" && (!workspaceFilter || focused)) ||
+  (sidebarMode == "flagged" && sidebarFlaggedLayout == "tree" && one of its sessions is flagged))`.
+  Do not shorten it, and keep the parentheses: focus restricts the ordinary tree only.
   `focused && workspaceFilter` fails when filtering is off, while `!workspaceFilter || focused` ignores
-  hidden-sidebar and flagged-mode rendering.
+  hidden-sidebar and flat-list rendering.
 - Selecting outside the applied set disables filtering but preserves membership. Creating a visible
   workspace while filtering adds it to the set. Background `session.new --no-select --create-workspace`
   and `workspace.new --collapsed` opt out. Removal prunes membership and disables on empty.
@@ -171,9 +187,19 @@ paths:
 
 ## Reconciliation and expansion
 
-- `TreeShape` reflects visible workspace/session roots in tree mode and one stable `flaggedShapeID` group
-  in flagged mode. Mode changes always rebuild. Observation must read mode, both focus fields, and every
-  session flag: membership redraws icons; enabled state reshapes the tree.
+- `TreeShape` reflects the `workspaceProjection` rows wherever workspace rows render, and one stable
+  `flaggedShapeID` group under the flat flagged list. Mode and effective-layout changes always rebuild; the
+  effective layout is nil under the ordinary tree, so a setting change there rebuilds nothing.
+  Observation must read mode, both focus fields, and every session flag: membership redraws icons; enabled
+  state reshapes the tree. The layout is not observable and arrives on `.agtermAppearanceChanged`.
+- `rebuildAndReload` records what it rendered (`lastMode`, `lastFlaggedLayout`, `lastShape`, the row-content
+  snapshot) itself, not `reconcile`: the mount builds directly, and an unrecorded first build makes the next
+  reconcile rebuild for a change that never happened.
+- A mode or layout switch moves the selected row, possibly under a collapsed workspace, while the selected id
+  stays the same. `rebuildAndReload` compares against the previously rendered mode and layout before
+  overwriting them and clears `lastRevealedSelection` only for that switch, so the next `syncSelection`
+  reveals it with persistence suppressed. No other rebuild may clear it, or a deliberate fold reopens.
+  `appearanceChanged` calls `syncSelection` after `reconcile` because that path never reaches `updateNSView`.
 - Track expansion independently in `expandedWorkspaceIDs`. `NSOutlineView` drops expansion when items
   leave the data source, so expand/collapse delegate callbacks and `expandAll` update the set and
   `rebuildAndReload` reapplies it after flagged-mode round trips.
@@ -181,7 +207,8 @@ paths:
   visible. Collapse/Expand Workspace (singular, `toggle_workspace_collapse`) folds the active one alone,
   which is the row those two never fold; it routes through `AppActions.setWorkspaceExpanded(_:expanded:in:)`,
   the same persist-then-notify path as `workspace.collapse`/`.expand`. Scope notifications by the target `AppStore` object so only that window's Coordinator acts.
-  Both no-op in flagged mode. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
+  Both no-op under the flat flagged list and act in the flagged tree, always writing every workspace, the
+  ones a filter or the flagged tree omits included. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
 
 ## Persistence
