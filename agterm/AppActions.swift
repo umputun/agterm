@@ -541,7 +541,7 @@ final class AppActions {
 
     // MARK: - Flagged working-set
 
-    /// Toggle a session's flagged membership (the durable working-set the flat sidebar view projects), from
+    /// Toggle a session's flagged membership (the durable working-set the flagged sidebar view projects), from
     /// the row's "Flag"/"Unflag" item; clean no-op on an unknown id.
     func toggleFlag(_ sessionID: UUID) {
         guard uiActionsEnabled else { return }

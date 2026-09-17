@@ -32,7 +32,7 @@ extension AppStore {
 
     /// `reselectionTarget`'s walk restricted to `scope`, over the tree FLATTENED in sidebar order: the
     /// in-scope session that shifted into the removed slot, else the nearest one before it. It spans
-    /// workspaces because the scope can — the flagged sidebar renders one flat cross-workspace list, so the
+    /// workspaces because the scope can — the flagged sidebar's sessions come from every workspace, so the
     /// adjacent row there may live elsewhere; a same-workspace scope collapses it back.
     private func nearestInScopeTarget(after location: (workspaceIndex: Int, sessionIndex: Int),
                                       scope: Set<UUID>) -> UUID? {

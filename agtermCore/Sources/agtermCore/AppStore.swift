@@ -702,8 +702,8 @@ public final class AppStore {
     /// Steps the CURRENT workspace one place through `visibleWorkspaces`, WRAPPING, via `selectWorkspace`, so
     /// a focus filter confines it as it does session nav. Collapse state is deliberately NOT a term: skipping
     /// a folded workspace would let the sidebar's fold silently rewrite where a keystroke lands. Nil with
-    /// nowhere to step — flagged mode renders no workspace rows, and a lone workspace would only reselect
-    /// itself. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
+    /// nowhere to step — flagged mode (`canStepWorkspaces` owns why), and a lone workspace would only
+    /// reselect itself. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
     @discardableResult
     public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
         guard canStepWorkspaces else { return nil }

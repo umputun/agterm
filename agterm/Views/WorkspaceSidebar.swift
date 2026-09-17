@@ -101,7 +101,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
         _ = store.selectedSessionID
         _ = store.sidebarSelectionIDs
-        // sidebarMode flips the whole data source (tree ↔ flat flagged list), so a mode change must rebuild.
+        // sidebarMode flips the whole data source (tree ↔ flagged view), so a mode change must rebuild.
         _ = store.sidebarMode
         // the marked set restricts the tree to its members while the filter is on; BOTH fields are read so
         // a membership change or a filter flip takes the rebuild branch.

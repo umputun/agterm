@@ -571,8 +571,8 @@ if [ "$was" = "true" ]; then agtermctl workspace filter on; fi
 
 Open every workspace at once, or collapse all but the current one (the same resolution as
 `--target active`, which stays expanded and scrolled into view) to cut clutter. Defaults to the frontmost window; pass
-`--window` to target any open window. A no-op under the flat flagged list; in the flagged tree it acts, and
-either way it writes every workspace, the ones that view leaves out too.
+`--window` to target any open window. A no-op under the flat flagged list. In either tree layout both
+apply to all workspaces, including those the view omits.
 
 ```bash
 agtermctl sidebar expand                                 # expand every workspace (frontmost window)

@@ -138,8 +138,9 @@ public final class Session: Identifiable {
         return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
     }
 
-    /// User-set flagged working-set membership: surfaces the session in the sidebar's flat cross-workspace
-    /// flagged view with a filled row icon. Persisted, surviving a relaunch and a workspace move.
+    /// User-set flagged working-set membership: surfaces the session in the sidebar's cross-workspace
+    /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
+    /// workspace move.
     public var flagged: Bool = false
 
     /// What the session is FOR, set only over `session.context` and shown in the title bar. Durable purpose

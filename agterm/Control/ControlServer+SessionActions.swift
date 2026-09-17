@@ -500,7 +500,7 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// Flag/unflag the target for the flagged working-set view (the durable `Session.flagged` the flat
+    /// Flag/unflag the target for the flagged working-set view (the durable `Session.flagged` the flagged
     /// sidebar mode projects). `on|off|toggle` is computed against `flagged`, so both are idempotent;
     /// `clear` ignores the target, unflags every session in the resolved store, and reports ok with no id.
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse {

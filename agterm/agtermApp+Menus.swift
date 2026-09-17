@@ -387,8 +387,8 @@ extension agtermApp {
                     .keyboardShortcut(shortcut(for: .lastSession))
                     .disabled(!PaletteCommand.lastSession.isEnabled(in: context))
                 // step between WORKSPACES, landing on each one's first session. keyless, rebindable via
-                // previous_workspace/next_workspace; control workspace.go. tree mode only, like the
-                // expansion items in View — flagged mode renders no workspace rows to step through.
+                // previous_workspace/next_workspace; control workspace.go. ordinary tree only, narrower than
+                // the expansion items in View: `AppStore.canStepWorkspaces` owns why.
                 Button { actions.selectPreviousWorkspace() } label: {
                     Label("Previous Workspace", systemImage: "chevron.up.2")
                 }

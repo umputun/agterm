@@ -617,8 +617,8 @@ error keeps those names for compatibility.
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
-  Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
-  list. Unknown mode errors. The tree's `flagged` flag tracks membership.
+  Pair with `sidebar mode flagged` to see just the flagged sessions, arranged by
+  `sidebar flagged-layout` (a flat `session : workspace` list by default). Unknown mode errors. The tree's `flagged` flag tracks membership.
 - `session context <TEXT|--clear> [--target] [--window W]` — set or clear what the session is ABOUT, shown
   in the title bar — a PR number, an issue, the task in hand. It is set from OUTSIDE the session, so a
   hook or an orchestrator can say what a session it just created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank
@@ -1181,9 +1181,8 @@ collapse state with the ordinary tree, ignores the focus filter, and keeps `work
 `agtermctl sidebar expand [--window W]` — expand every workspace row in a window's sidebar tree.
 Defaults to the frontmost window; `--window` (id / prefix / `active`) targets any OPEN window, so a
 script can expand a background window's tree. Idempotent (a clean no-op when all are already expanded);
-a graceful no-op under the flat flagged list (no workspace rows), while the flagged tree expands; it
-writes every workspace either way, the ones a filter or the flagged tree omits included. A
-named-but-closed window errors, and `no open
+a graceful no-op under the flat flagged list (no workspace rows). In either tree layout it applies to
+all workspaces, including those the view omits. A named-but-closed window errors, and `no open
 window` when none is open. The GUI half (frontmost only) is View ▸ Expand Workspaces and the ⌃⇧P palette
 "Expand Workspaces".
 

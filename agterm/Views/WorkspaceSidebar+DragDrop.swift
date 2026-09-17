@@ -9,7 +9,7 @@ extension WorkspaceSidebar.Coordinator {
     // MARK: - Drag and drop
 
     func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-        // the flat flagged view is a derived projection, not a reorderable tree — no drag source there.
+        // the flagged view is a derived projection in either layout, not a reorderable tree — no drag source there.
         guard store.sidebarMode == .tree, let node = item as? SidebarNode else { return nil }
         let pbItem = NSPasteboardItem()
         switch node.kind {

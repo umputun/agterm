@@ -207,8 +207,8 @@ paths:
   visible. Collapse/Expand Workspace (singular, `toggle_workspace_collapse`) folds the active one alone,
   which is the row those two never fold; it routes through `AppActions.setWorkspaceExpanded(_:expanded:in:)`,
   the same persist-then-notify path as `workspace.collapse`/`.expand`. Scope notifications by the target `AppStore` object so only that window's Coordinator acts.
-  Both no-op under the flat flagged list and act in the flagged tree, always writing every workspace, the
-  ones a filter or the flagged tree omits included. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
+  Both no-op under the flat flagged list. In either tree layout they apply to all workspaces, including
+  those the view omits. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
 
 ## Persistence
