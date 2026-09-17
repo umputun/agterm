@@ -107,6 +107,17 @@ struct PaletteCatalogTests {
             in: PaletteContext(sidebarShowsWorkspaceRows: true, hasCurrentWorkspace: false)))
     }
 
+    // regression: the agterm-linux fork builds its context without `sidebarShowsWorkspaceRows`; a `false`
+    // default hid its three fold commands in the ordinary tree.
+    @Test func workspaceFoldCommandsStayVisibleForACallerThatOmitsTheRowsArgument() {
+        let legacyTree = PaletteContext(sidebarShowsWorkspaceTree: true)
+        let legacyFlagged = PaletteContext(sidebarShowsFlaggedOnly: true)
+        for command in [PaletteCommand.expandWorkspaces, .collapseWorkspaces, .toggleWorkspaceCollapse] {
+            #expect(command.isVisible(in: legacyTree))
+            #expect(!command.isVisible(in: legacyFlagged))
+        }
+    }
+
     @Test func workspaceStepCommandsShowOnlyInTheOrdinaryTree() {
         let ordinaryTree = PaletteContext(sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true)
         let flaggedTree = PaletteContext(sidebarShowsWorkspaceRows: true, sidebarShowsFlaggedOnly: true)

@@ -5,7 +5,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasFlaggedSessions: Bool
     public let sidebarShowsWorkspaceTree: Bool
     /// Whether the sidebar has workspace ROWS to fold: the ordinary tree, or flagged mode under the tree
-    /// layout. Wider than `sidebarShowsWorkspaceTree`, which workspace stepping still keys on.
+    /// layout. Wider than `sidebarShowsWorkspaceTree`, which workspace stepping still keys on. An init call
+    /// that omits it takes `sidebarShowsWorkspaceTree`, so a caller with no flagged tree keeps its fold commands.
     public let sidebarShowsWorkspaceRows: Bool
     public let sidebarShowsFlaggedOnly: Bool
     public let activeSessionFlagged: Bool
@@ -47,7 +48,7 @@ public struct PaletteContext: Sendable, Equatable {
 
     public init(canRemoveWorkspace: Bool = false,
                 hasFlaggedSessions: Bool = false,
-                sidebarShowsWorkspaceTree: Bool = false, sidebarShowsWorkspaceRows: Bool = false,
+                sidebarShowsWorkspaceTree: Bool = false, sidebarShowsWorkspaceRows: Bool? = nil,
                 sidebarShowsFlaggedOnly: Bool = false,
                 activeSessionFlagged: Bool = false,
                 hasMarkedWorkspaces: Bool = false,
@@ -67,7 +68,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
-        self.sidebarShowsWorkspaceRows = sidebarShowsWorkspaceRows
+        self.sidebarShowsWorkspaceRows = sidebarShowsWorkspaceRows ?? sidebarShowsWorkspaceTree
         self.sidebarShowsFlaggedOnly = sidebarShowsFlaggedOnly
         self.activeSessionFlagged = activeSessionFlagged
         self.hasMarkedWorkspaces = hasMarkedWorkspaces
