@@ -27,6 +27,10 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
             coordinator.syncSelection()
         }
 
+        var selectedSessionIDs: [UUID] {
+            outline.selectedRowIndexes.compactMap { (outline.item(atRow: $0) as? SidebarNode)?.id }
+        }
+
         func badge(ofWorkspace id: UUID) -> Int? {
             let row = (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == id }
             return row.flatMap { outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? SidebarCellView }?.badge.count
@@ -155,6 +159,105 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         sidebar.update()
 
         XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma", "s:c1"])
+    }
+
+    // regression: a structure switch under an unchanged selection left the active session hidden under its
+    // collapsed workspace, because the reveal only fired when the selected id changed.
+    func testViewToggleToTreeRevealsTheActiveSessionUnderACollapsedWorkspace() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        store.setWorkspaceExpanded(alpha.id, expanded: false)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+
+        store.setSidebarMode(.tree)
+        sidebar.update()
+
+        XCTAssertEqual(sidebar.selectedSessionIDs, [alpha.sessions[0].id])
+        XCTAssertEqual(store.workspaces.first?.isExpanded, false)
+    }
+
+    // regression: same defect through the layout switch, which arrives by notification, not `updateNSView`.
+    func testLayoutSwitchToTreeRevealsTheActiveSessionUnderACollapsedWorkspace() throws {
+        let store = try seededStore()
+        let alpha = try XCTUnwrap(store.workspaces.first)
+        store.setWorkspaceExpanded(alpha.id, expanded: false)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+
+        model.setFlaggedViewLayout(.tree)
+
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma", "s:c1"])
+        XCTAssertEqual(sidebar.selectedSessionIDs, [alpha.sessions[0].id])
+        XCTAssertEqual(store.workspaces.first?.isExpanded, false)
+    }
+
+    func testARevealedWorkspaceStaysOpenWhenAnotherGroupsMembershipChanges() throws {
+        let store = try seededStore()
+        let c1 = try XCTUnwrap(store.flaggedSessions.last)
+        store.setWorkspaceExpanded(try XCTUnwrap(store.workspaces.first).id, expanded: false)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+        model.setFlaggedViewLayout(.tree)
+
+        store.setFlag(false, forSession: c1.id)
+        sidebar.update()
+
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1"])
+        XCTAssertEqual(store.workspaces.first?.isExpanded, false)
+    }
+
+    func testUnrelatedUpdatesAfterMountLeaveADeliberateFoldAlone() throws {
+        let store = try seededStore()
+        let a1 = try XCTUnwrap(store.flaggedSessions.first)
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+        sidebar.outline.collapseItem(sidebar.outline.item(atRow: 0))
+        let folded = ["ws:Alpha", "ws:Gamma", "s:c1"]
+        XCTAssertEqual(sidebar.rows, folded)
+
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertEqual(sidebar.rows, folded)
+
+        store.renameSession(a1.id, to: "a1 renamed")
+        sidebar.update()
+        XCTAssertEqual(sidebar.rows, folded)
+    }
+
+    func testSelectionAndMultiSelectionSurviveBothLayoutDirections() throws {
+        let store = try seededStore()
+        let ids = store.flaggedSessions.map(\.id)
+        store.setSidebarSelection(ids)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+        XCTAssertEqual(sidebar.selectedSessionIDs, ids)
+
+        model.setFlaggedViewLayout(.tree)
+        XCTAssertEqual(sidebar.selectedSessionIDs, ids)
+
+        model.setFlaggedViewLayout(.flat)
+        XCTAssertEqual(sidebar.selectedSessionIDs, ids)
+        XCTAssertEqual(store.selectedSessionID, ids.first)
+        XCTAssertEqual(store.sidebarSelectionIDs, ids)
+    }
+
+    func testOneSettingChangeReachesEveryFlaggedSidebarAndALaterMount() throws {
+        let first = try seededStore()
+        first.setSidebarMode(.flagged)
+        let second = try XCTUnwrap(library.loadStore(for: library.newWindow().id))
+        let session = try XCTUnwrap(second.workspaces.first?.sessions.first)
+        second.renameWorkspace(try XCTUnwrap(second.workspaces.first).id, to: "Delta")
+        second.renameSession(session.id, to: "d1")
+        second.setFlag(true, forSession: session.id)
+        second.setSidebarMode(.flagged)
+        let sidebars = [mount(first), mount(second)]
+
+        model.setFlaggedViewLayout(.tree)
+
+        XCTAssertEqual(sidebars[0].rows, ["ws:Alpha", "s:a1", "ws:Gamma", "s:c1"])
+        XCTAssertEqual(sidebars[1].rows, ["ws:Delta", "s:d1"])
+        XCTAssertEqual(mount(second).rows, ["ws:Delta", "s:d1"])
     }
 
     func testCollapseOthersActsInTheTreeLayoutAndWritesOmittedWorkspaces() throws {

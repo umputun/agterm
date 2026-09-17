@@ -200,25 +200,25 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Modify: `agterm/Views/WorkspaceSidebar.swift`
 - Modify: `agtermTests/SidebarFlaggedLayoutTests.swift`
 
-- [ ] write failing regression tests first, driven through the REAL entry paths (the store mutation plus
+- [x] write failing regression tests first, driven through the REAL entry paths (the store mutation plus
       `updateNSView`'s reconcile-then-sync for the view toggle; the `SettingsModel` setter and its
       `.agtermAppearanceChanged` post for the layout switch), never a hand-placed `syncSelection` call that
       would hide its absence: flagged to tree view toggle with the active session under a collapsed
       workspace; flat to tree layout switch in the same state; confirm both fail
-- [ ] in `reconcile`, compute the transition against the previously RENDERED mode and effective layout before
+- [x] in `reconcile`, compute the transition against the previously RENDERED mode and effective layout before
       overwriting them, and clear `lastRevealedSelection` only for that transition, so the next
       `syncSelection` expands the owner with persistence suppressed and scrolls. Not on other shape rebuilds,
       not on unrelated appearance notifications, not on collapse-driven notification/update traffic
-- [ ] call `syncSelection` from `appearanceChanged` after a layout transition, since that path does not pass
+- [x] call `syncSelection` from `appearanceChanged` after a layout transition, since that path does not pass
       through `updateNSView`
-- [ ] initialise the tracked mode and layout where `makeNSView` does its first rebuild, so the first unrelated
+- [x] initialise the tracked mode and layout where `makeNSView` does its first rebuild, so the first unrelated
       notification is not mistaken for a structure switch
-- [ ] write tests: `Workspace.isExpanded` stays collapsed on disk after the reveal; a revealed
+- [x] write tests: `Workspace.isExpanded` stays collapsed on disk after the reveal; a revealed
       persisted-collapsed parent stays open when ANOTHER workspace's flagged membership changes; the first
       unrelated appearance notification after mount, and a title/badge update, leave a deliberate fold alone;
       selection and multi-selection survive flat to tree and tree to flat; two fixtures with distinct stores
       both update from ONE `SettingsModel` setter call, and a third mounted afterwards reads the current value
-- [ ] run the affected tests
+- [x] run the affected tests
 
 ### Task 6: Add the Settings picker
 

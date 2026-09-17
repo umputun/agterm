@@ -273,6 +273,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile reloads those rows.
             reconcile()
+            // this path never passes through `updateNSView`, so a rebuild here would drop the row selection.
+            syncSelection()
             // agent-status colors are global, so the content diff can't see a color change — re-apply all.
             reapplyStatusGlyphs()
             updateEmptyState()
@@ -488,6 +490,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// identity and expansion state stay stable, then reloads the outline preserving expansion.
         func rebuildAndReload() {
             guard let outline = outlineView else { return }
+            // a mode or layout switch moves the selected row, possibly under a collapsed workspace, while the
+            // selected id stays the same: forget the last reveal so the next `syncSelection` reveals it again.
+            // Only a switch does this. Any other rebuild must leave a deliberate fold alone.
+            if store.sidebarMode != lastMode || flaggedLayout != lastFlaggedLayout { lastRevealedSelection = nil }
             // record what this build renders HERE, not in `reconcile`: the mount builds directly, and an
             // unrecorded first build makes the next reconcile rebuild for a change that never happened.
             lastMode = store.sidebarMode
