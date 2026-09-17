@@ -28,18 +28,23 @@ struct AppStoreStatusTests {
         #expect(stamp > now - 60 && stamp <= now)
     }
 
-    @Test func controlTreeNilsStatusChangedAtWhenIdle() throws {
+    @Test func controlTreeReportsStatusChangedAtWhenIdle() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        #expect(store.controlTree().workspaces[0].sessions[0].statusChangedAt == nil)
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: session.id)
         #expect(store.controlTree().workspaces[0].sessions[0].statusChangedAt != nil)
 
+        session.statusChangedAt = Date(timeIntervalSince1970: 0)
+        let before = Date().timeIntervalSince1970
         store.setAgentIndicator(AgentIndicator(status: .idle), forSession: session.id)
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
         #expect(node.status == nil)
-        #expect(node.statusChangedAt == nil)
+        let stamp = try #require(node.statusChangedAt)
+        #expect(stamp == session.statusChangedAt?.timeIntervalSince1970)
+        #expect(stamp >= before)
     }
 
     @Test func controlTreeRefreshesStatusChangedAtOnARePushOfTheSameStatus() throws {

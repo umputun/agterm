@@ -246,14 +246,20 @@ struct AppStoreTests {
         #expect(stamp >= before)
     }
 
-    @Test func setAgentIndicatorClearsStatusChangedAtOnIdle() {
+    @Test func setAgentIndicatorStampsAndRefreshesStatusChangedAtOnIdle() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: a.id)
         #expect(a.statusChangedAt != nil)
-        store.setAgentIndicator(AgentIndicator(), forSession: a.id)
-        #expect(a.statusChangedAt == nil)
+        for _ in 0..<2 {
+            a.statusChangedAt = Date(timeIntervalSince1970: 0)
+            let before = Date()
+            store.setAgentIndicator(AgentIndicator(), forSession: a.id)
+            let stamp = try #require(a.statusChangedAt)
+            #expect(stamp >= before)
+            #expect(stamp <= Date())
+        }
     }
 
     @Test func setAgentIndicatorReassertingNonIdleUpdatesStatusChangedAt() {

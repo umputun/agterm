@@ -107,11 +107,9 @@ public final class Session: Identifiable {
     /// status glyph reacts. Ephemeral.
     public var agentIndicator = AgentIndicator()
 
-    /// Last time the status was set non-idle — stamped by `AppStore.setAgentIndicator` on EVERY non-idle set
-    /// (nil on idle), not just on an idle→non-idle transition. Ephemeral. Sorts the attention list
-    /// newest-change-first, and `controlTree` publishes it as the node's `statusChangedAt`. That read-back
-    /// ships epoch seconds compared against `ControlEvent.ts`, so it must stay a wall-clock `Date` — a
-    /// monotonic instant would keep the sort working and make a client's computed age meaningless.
+    /// Last time the status was set, idle and repeated values included; nil before any set, never persisted.
+    /// Must stay a wall-clock `Date`: `controlTree` ships it as epoch seconds compared against `ControlEvent.ts`,
+    /// so a monotonic instant would make a client's computed age meaningless.
     @ObservationIgnored public var statusChangedAt: Date?
 
     /// Whether idle auto-follow already pulled the user to THIS blocked episode; ephemeral. Set on jumping

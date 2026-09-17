@@ -206,9 +206,9 @@ unset or idle), `statusBlink`/`statusColor`/`statusShape` (the status glyph's `-
 `#rrggbb` tint and its `--shape` silhouette from `session status`, omitted when idle / not blinking / using
 the configured color or shape — the tint and the silhouette report the per-call override only),
 `statusChangedAt` (when that status was last set, in epoch seconds — the same clock as an event's `ts`;
-omitted when idle, and refreshed by a re-push of the SAME status, so `now - statusChangedAt` is how long
-ago the status was last written — normally the agent's own push, though a pane promotion re-tags the
-indicator and counts too; ephemeral, so it does not survive a restart), `background` (the background
+omitted before any set, and refreshed by every set including idle and a re-push of the SAME status, so
+`now - statusChangedAt` is how long ago the status was last written; automatic and manual clears count
+too; ephemeral, so it does not survive a restart), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen`; omitted when zero), `commandWait`/`splitCommandWait` (whether either pane's `--command` was
