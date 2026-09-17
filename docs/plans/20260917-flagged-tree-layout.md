@@ -225,13 +225,13 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 **Files:**
 - Modify: `agterm/Views/SettingsView.swift`
 
-- [ ] add a full-width "Flagged view layout" picker (Flat list / Workspace tree) inside the Interface tab's
+- [x] add a full-width "Flagged view layout" picker (Flat list / Workspace tree) inside the Interface tab's
       existing Sidebar section, below the two-column toggle rows, extracting the row builder from
       `twoColumnSection` if the section needs mixed content; accessibility id `settings-flagged-view-layout`
-- [ ] confirm the Interface tab still fits the fixed 540x680 settings window
-- [ ] the SwiftUI binding itself is exercised by Task 7's UI case or the manual check; `SettingsModel` is
+- [x] confirm the Interface tab still fits the fixed 540x680 settings window
+- [x] the SwiftUI binding itself is exercised by Task 7's UI case or the manual check; `SettingsModel` is
       covered by Task 1's hosted test
-- [ ] build the app target
+- [x] build the app target
 
 ### Task 7: Add the `sidebar.flagged-layout` control command and read-back
 

@@ -457,7 +457,14 @@ private struct InterfaceSettingsView: View {
     var body: some View {
         Form {
             twoColumnSection("Title Bar", elements: InterfaceElement.allCases.filter { $0.section == .titleBar })
-            twoColumnSection("Sidebar", elements: InterfaceElement.allCases.filter { $0.section == .sidebar })
+            Section("Sidebar") {
+                twoColumnRows(InterfaceElement.allCases.filter { $0.section == .sidebar })
+                Picker("Flagged view layout", selection: flaggedViewLayout) {
+                    Text("Flat list").tag(FlaggedViewLayout.flat)
+                    Text("Workspace tree").tag(FlaggedViewLayout.tree)
+                }
+                .accessibilityIdentifier("settings-flagged-view-layout")
+            }
             Section("Multiple Windows") {
                 Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
@@ -488,20 +495,26 @@ private struct InterfaceSettingsView: View {
                 set: { model.setQuickTerminalSizePercent($0) })
     }
 
-    /// A section whose toggles lay out TWO per row, each filling half the row around a centered `Divider` so
-    /// the columns read as EVEN and visibly separated; an odd final element pairs with an empty half.
-    @ViewBuilder
+    private var flaggedViewLayout: Binding<FlaggedViewLayout> {
+        Binding(get: { model.settings.effectiveFlaggedViewLayout },
+                set: { model.setFlaggedViewLayout($0) })
+    }
+
     private func twoColumnSection(_ title: String, elements: [InterfaceElement]) -> some View {
-        Section(title) {
-            ForEach(Array(stride(from: 0, to: elements.count, by: 2)), id: \.self) { start in
-                HStack(spacing: 16) {
-                    toggle(for: elements[start]).frame(maxWidth: .infinity)
-                    Divider()
-                    if start + 1 < elements.count {
-                        toggle(for: elements[start + 1]).frame(maxWidth: .infinity)
-                    } else {
-                        Spacer().frame(maxWidth: .infinity)
-                    }
+        Section(title) { twoColumnRows(elements) }
+    }
+
+    /// Toggles laid out TWO per row, each filling half the row around a centered `Divider` so the columns
+    /// read as EVEN and visibly separated; an odd final element pairs with an empty half.
+    private func twoColumnRows(_ elements: [InterfaceElement]) -> some View {
+        ForEach(Array(stride(from: 0, to: elements.count, by: 2)), id: \.self) { start in
+            HStack(spacing: 16) {
+                toggle(for: elements[start]).frame(maxWidth: .infinity)
+                Divider()
+                if start + 1 < elements.count {
+                    toggle(for: elements[start + 1]).frame(maxWidth: .infinity)
+                } else {
+                    Spacer().frame(maxWidth: .infinity)
                 }
             }
         }
