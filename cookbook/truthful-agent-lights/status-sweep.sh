@@ -27,7 +27,11 @@ DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 . "$DIR/lights-common.sh"
 
 AGT_LIGHTS_LOG=${AGT_LIGHTS_LOG:-$AGT_LIGHTS_STATE/sweep.log}
-mkdir -p "$AGT_LIGHTS_STATE" 2>/dev/null || true
+# 0700, not whatever the ambient umask gives: the notes below record session
+# ids, agent pids and the path of every session's transcript, which names the
+# directories you work in. The umask is set in a subshell so it applies to the
+# directory being created and to nothing else the script does.
+(umask 077; mkdir -p "$AGT_LIGHTS_STATE") 2>/dev/null || true
 LOCK="$AGT_LIGHTS_STATE/sweep.lock"
 
 log() { printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$AGT_LIGHTS_LOG"; }

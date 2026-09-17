@@ -100,7 +100,10 @@ agt_note_is_live() { # note-path -> 0 when that exact process is still running
 }
 
 agt_state_dir() { # ensure and echo a state subdirectory
-  mkdir -p "$AGT_LIGHTS_STATE/$1" 2>/dev/null || true
+  # 0700 like the root above: these hold session ids, pids and transcript
+  # paths. The umask is confined to a subshell so sourcing this file never
+  # changes the mode of anything else the caller writes.
+  (umask 077; mkdir -p "$AGT_LIGHTS_STATE/$1") 2>/dev/null || true
   printf '%s\n' "$AGT_LIGHTS_STATE/$1"
 }
 
