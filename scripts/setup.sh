@@ -75,6 +75,55 @@ if [[ ! -x "$ZIG" ]]; then
   ZIG="$(brew --prefix "$ZIG_FORMULA")/bin/zig"
 fi
 
+# The macOS 27 SDK's math.h asks the compiler's float.h for INFINITY/NAN through clang's
+# `__need_infinity_nan` protocol (LLVM PR #164348, Apple clang 21). Zig 0.16's bundled float.h does not
+# implement it, so compiling zig's libc++ fails with "undeclared identifier 'INFINITY'". Both builds link
+# libc++, but libghostty compiles against Ghostty's own apple-sdk math.h overlay and zmx's exported VT
+# dependency path does not, which is why only the zmx build needs this. A shim for the two macros, not a
+# backport of LLVM 22's header split: remove it once ZIG_FORMULA resolves to a release carrying zig's own
+# fix (master has it in 520af696).
+SHIM_MARK='Local patch (agterm scripts/setup.sh)'
+patch_zig_float_h() {
+  local zig_lib float_h source tmp
+  zig_lib="$("$ZIG" env | sed -n 's/.*lib_dir"\{0,1\} *[=:] *"\([^"]*\)".*/\1/p')"
+  float_h="$zig_lib/include/float.h"
+  if [[ ! -f "$float_h" ]]; then
+    echo "warning: zig float.h not found at $float_h; skipping __need_infinity_nan shim" >&2
+    return 0
+  fi
+  # upstream's own implementation carries no marker of ours, and must never be replaced by the shim or
+  # by a stale backup taken before the keg gained it
+  if grep -q '__need_infinity_nan' "$float_h" && ! grep -qF "$SHIM_MARK" "$float_h"; then
+    echo "zig float.h implements __need_infinity_nan upstream; no shim needed"
+    return 0
+  fi
+  # both of our markers, so an interrupted run is re-derived rather than mistaken for a finished one
+  if grep -qF "$SHIM_MARK" "$float_h" && grep -q '#endif /\* __need_infinity_nan \*/' "$float_h"; then
+    echo "zig float.h already carries the __need_infinity_nan shim"
+    return 0
+  fi
+  # only a half-applied shim of ours may fall back to the backup it was taken from
+  source="$float_h"
+  if grep -qF "$SHIM_MARK" "$float_h" && [[ -f "$float_h.orig" ]]; then
+    source="$float_h.orig"
+  fi
+  tmp="$(mktemp "$float_h.XXXXXX")"
+  perl -0pe 's|^#ifndef __CLANG_FLOAT_H\n#define __CLANG_FLOAT_H\n|/* Local patch (agterm scripts/setup.sh): honor the macOS 27 SDK\n * __need_infinity_nan protocol (LLVM PR #164348). */\n#if defined(__need_infinity_nan)\n#  undef INFINITY\n#  undef NAN\n#  define INFINITY (__builtin_inff())\n#  define NAN (__builtin_nanf(""))\n#  undef __need_infinity_nan\n#else\n\n#ifndef __CLANG_FLOAT_H\n#define __CLANG_FLOAT_H\n|m' "$source" > "$tmp"
+  printf '#endif /* __need_infinity_nan */\n' >> "$tmp"
+  # publish only a header that got the whole transformation: the substitution is silent when the guard
+  # lines are spaced differently, and appending the closing #endif alone would corrupt the header
+  if ! grep -q '^#if defined(__need_infinity_nan)$' "$tmp" || ! grep -q '^#ifndef __CLANG_FLOAT_H$' "$tmp"; then
+    rm -f "$tmp"
+    echo "warning: zig float.h not in the expected form; skipping __need_infinity_nan shim" >&2
+    return 0
+  fi
+  chmod u+w "$float_h"
+  [[ -f "$float_h.orig" ]] || cp -p "$float_h" "$float_h.orig"
+  chmod --reference="$float_h" "$tmp" 2>/dev/null || chmod 0644 "$tmp"
+  mv "$tmp" "$float_h"
+  echo "shimmed zig float.h for the macOS 27 SDK: $float_h (backup: $float_h.orig)"
+}
+
 # Metal Toolchain is needed only when the xcframework build runs.
 if { $need_xc || $need_res; } && ! xcrun metal --version >/dev/null 2>&1; then
   echo "downloading Xcode Metal Toolchain (one-time)..."
@@ -120,6 +169,8 @@ if $need_zmx; then
   git -C "$zmx_build" remote add origin "$ZMX_REPO"
   git -C "$zmx_build" fetch -q --depth 1 origin "$ZMX_REV"
   git -C "$zmx_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
+
+  patch_zig_float_h
 
   echo "building zmx with zig..."
   ( cd "$zmx_build" && "$ZIG" build -Doptimize=ReleaseSafe )
