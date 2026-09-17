@@ -364,7 +364,7 @@ for w in $windows; do
           if [ "$SC_AGENTS" -eq 0 ]; then state=$(work_state); shape=$(shape_for "$state"); fi
           total=$((SC_AGENTS + SC_MACHINERY + SC_WAITING + SC_REMOTE + SC_WATCH))
           if [ "$SC_AGENTS" -gt 0 ]; then
-            if [ "$shape_now" = "$AGT_SHAPE_STUCK" ]; then
+            if [ -n "$AGT_SHAPE_STUCK" ] && [ "$shape_now" = "$AGT_SHAPE_STUCK" ]; then
               set_status "$sid" "$pane" active --blink
               log "worker progress $sid -> pulse"
             fi
@@ -392,7 +392,7 @@ for w in $windows; do
               '') ;;
               "$AGT_SHAPE_RUNNING" | "$AGT_SHAPE_MIXED" | "$AGT_SHAPE_QUEUED") painted=1 ;;
             esac
-            if [ "$shape_now" = "$AGT_SHAPE_STUCK" ] ||
+            if { [ -n "$AGT_SHAPE_STUCK" ] && [ "$shape_now" = "$AGT_SHAPE_STUCK" ]; } ||
                { [ "$blink" != "true" ] && [ "$painted" -eq 0 ]; }; then
               set_status "$sid" "$pane" active --blink
               log "own turn live $sid -> pulse"
