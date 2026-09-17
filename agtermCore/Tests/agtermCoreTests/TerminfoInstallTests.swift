@@ -200,7 +200,12 @@ struct TerminfoInstallTests {
         var stray: [Int32] = [-1, -1]
         try #require(pipe(&stray) == 0)
         defer { close(stray[0]); close(stray[1]) }
-        let ssh = try fixture.fakeSSH(exitCode: 0, probingDescriptor: stray[1])
+        // the fake ssh is /bin/sh, which holds fd 10 (saved stdout) and 255 (its script) during the probe
+        let sentinel = fcntl(stray[1], F_DUPFD, 11)
+        try #require(sentinel >= 11)
+        defer { close(sentinel) }
+        try #require(sentinel != 255)
+        let ssh = try fixture.fakeSSH(exitCode: 0, probingDescriptor: sentinel)
 
         let outcome = try TerminfoInstall.run(TerminfoInstall.Connection(destination: "buildbox"), clientPath: nil,
                                               environment: ["TERMINFO": env, "PATH": "/bin:/usr/bin"], ssh: ssh, infocmp: infocmp)
