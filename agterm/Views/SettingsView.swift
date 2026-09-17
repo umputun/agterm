@@ -176,12 +176,12 @@ private struct GeneralSettingsView: View {
                 set: { model.setRightClickPaste($0 ? nil : false) })
     }
 
-    /// Default ON; turning it off stores false and leaves only the disclosure triangle as the hit target.
     private var flaggedViewLayout: Binding<FlaggedViewLayout> {
         Binding(get: { model.settings.effectiveFlaggedViewLayout },
                 set: { model.setFlaggedViewLayout($0) })
     }
 
+    /// Default ON; turning it off stores false and leaves only the disclosure triangle as the hit target.
     private var workspaceRowClickExpands: Binding<Bool> {
         Binding(get: { model.settings.workspaceRowClickExpands ?? true },
                 set: { model.setWorkspaceRowClickExpands($0 ? nil : false) })
