@@ -25,6 +25,7 @@ extension AppActions {
             canRemoveWorkspace: activeStore?.canRemoveWorkspace == true,
             hasFlaggedSessions: activeStore?.flaggedSessions.isEmpty == false,
             sidebarShowsWorkspaceTree: activeStore?.sidebarMode == .tree,
+            sidebarShowsWorkspaceRows: activeStore?.rendersWorkspaceRows(flaggedLayout: GhosttyApp.shared.flaggedViewLayout) == true,
             sidebarShowsFlaggedOnly: activeStore?.sidebarMode == .flagged,
             activeSessionFlagged: activeStore?.activeSession?.flagged == true,
             hasMarkedWorkspaces: activeStore?.focusedWorkspaceIDs.isEmpty == false,

@@ -16,6 +16,16 @@ struct AppStoreFocusTests {
         #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
     }
 
+    @Test func rendersWorkspaceRowsInTheOrdinaryTreeAndTheFlaggedTreeLayoutOnly() {
+        let store = makeStore()
+        #expect(store.rendersWorkspaceRows(flaggedLayout: .flat))
+        #expect(store.rendersWorkspaceRows(flaggedLayout: .tree))
+        store.setSidebarMode(.flagged)
+        #expect(!store.rendersWorkspaceRows(flaggedLayout: .flat))
+        #expect(store.rendersWorkspaceRows(flaggedLayout: .tree))
+        #expect(!store.canStepWorkspaces)
+    }
+
     @Test func clearFocusEmptiesAWholeMultiMemberSet() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

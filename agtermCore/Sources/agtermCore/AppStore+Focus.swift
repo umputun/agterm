@@ -173,13 +173,22 @@ extension AppStore {
     /// what `PaletteCommand.isEnabled` reads, so the menu item and the mapped key cannot claim to do
     /// something the action then declines. A lone visible workspace is a dead end only while it is ALREADY
     /// current: when the current one is filtered out, entering the sole survivor is the whole point of the
-    /// step. Flagged mode renders no workspace rows at all.
+    /// step. Off in flagged mode whatever its layout: the flagged tree does render workspace rows, but
+    /// `navigateWorkspace` steps `visibleWorkspaces`, the FOCUS projection, and would land on a workspace
+    /// that view has no row for and select a session that is not flagged.
     public var canStepWorkspaces: Bool {
         guard sidebarMode == .tree else { return false }
         let ids = visibleWorkspaces.map(\.id)
         guard !ids.isEmpty else { return false }
         guard let current = currentWorkspaceID, ids.contains(current) else { return true }
         return ids.count > 1
+    }
+
+    /// Whether the sidebar has workspace rows: always in the ordinary tree, and in flagged mode only under
+    /// the tree layout. The layout is app-wide state the store does not hold, so the caller passes it in.
+    /// The precondition of every expand/collapse path.
+    public func rendersWorkspaceRows(flaggedLayout: FlaggedViewLayout) -> Bool {
+        sidebarMode == .tree || flaggedLayout == .tree
     }
 
     /// The session set navigation operates over — the VISIBLE/FILTERED set, not the whole tree: flagged

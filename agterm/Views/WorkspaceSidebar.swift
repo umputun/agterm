@@ -317,14 +317,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in self?.renameController.beginEditing(node: node) }
         }
 
-        /// Expand every workspace in this window's sidebar. Gated on tree mode here so `expandAll`'s
-        /// tracked-expansion seeding can't fire in flagged mode, where there are no workspace rows.
+        /// Expand every workspace in this window's sidebar. Gated on workspace rows here so `expandAll`'s
+        /// tracked-expansion seeding can't fire under the flat flagged list, which has none.
         @objc private func expandWorkspacesNotified() {
-            guard store.sidebarMode == .tree else { return }
+            guard rendersWorkspaceRows else { return }
             expandAll()
         }
 
-        /// Collapse every workspace except the active one; `collapseOthers` gates on tree mode itself.
+        /// Collapse every workspace except the active one; `collapseOthers` gates on workspace rows itself.
         @objc private func collapseWorkspacesNotified() {
             collapseOthers()
         }
@@ -339,7 +339,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             guard let id = notification.userInfo?[Self.workspaceIDUserInfoKey] as? UUID,
                   let expanded = notification.userInfo?[Self.expandedUserInfoKey] as? Bool else { return }
             if expanded { expandedWorkspaceIDs.insert(id) } else { expandedWorkspaceIDs.remove(id) }
-            guard store.sidebarMode == .tree, let outline = outlineView,
+            guard rendersWorkspaceRows, let outline = outlineView,
                   let node = nodeCache[id], outline.row(forItem: node) >= 0 else { return }
             suppressExpansionPersist = true
             if expanded { outline.expandItem(node) } else { outline.collapseItem(node) }
@@ -597,9 +597,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// Collapses every workspace except the current one (`store.currentWorkspaceID`), keeping that
-        /// one expanded and scrolled into view. Tree-mode only — flagged mode has no workspace rows.
+        /// one expanded and scrolled into view. Needs workspace rows, which the flat flagged list lacks.
         func collapseOthers() {
-            guard let outline = outlineView, store.sidebarMode == .tree else { return }
+            guard let outline = outlineView, rendersWorkspaceRows else { return }
             let keepID = store.currentWorkspaceID
             // this command targets ALL workspaces, not just the visible `roots`: reduce the tracked set to
             // exactly the active workspace, so a focus filter hiding some can't leave them in the set for

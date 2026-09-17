@@ -94,14 +94,26 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.toggleFlaggedView.isVisible(in: PaletteContext(sidebarShowsFlaggedOnly: true)))
     }
 
-    @Test func treeExpansionCommandsShowOnlyInWorkspaceTreeMode() {
-        #expect(PaletteCommand.expandWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
-        #expect(PaletteCommand.collapseWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
-        #expect(!PaletteCommand.expandWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
-        #expect(!PaletteCommand.collapseWorkspaces.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
-        for command in [PaletteCommand.toggleWorkspaceCollapse, .previousWorkspace, .nextWorkspace] {
-            #expect(command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: true)))
-            #expect(!command.isVisible(in: PaletteContext(sidebarShowsWorkspaceTree: false)))
+    @Test func workspaceFoldCommandsShowWheneverTheSidebarHasWorkspaceRows() {
+        let ordinaryTree = PaletteContext(sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true)
+        let flaggedTree = PaletteContext(sidebarShowsWorkspaceRows: true, sidebarShowsFlaggedOnly: true)
+        let flaggedFlat = PaletteContext(sidebarShowsFlaggedOnly: true)
+        for command in [PaletteCommand.expandWorkspaces, .collapseWorkspaces, .toggleWorkspaceCollapse] {
+            #expect(command.isVisible(in: ordinaryTree))
+            #expect(command.isVisible(in: flaggedTree))
+            #expect(!command.isVisible(in: flaggedFlat))
+        }
+        #expect(!PaletteCommand.toggleWorkspaceCollapse.isEnabled(
+            in: PaletteContext(sidebarShowsWorkspaceRows: true, hasCurrentWorkspace: false)))
+    }
+
+    @Test func workspaceStepCommandsShowOnlyInTheOrdinaryTree() {
+        let ordinaryTree = PaletteContext(sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true)
+        let flaggedTree = PaletteContext(sidebarShowsWorkspaceRows: true, sidebarShowsFlaggedOnly: true)
+        for command in [PaletteCommand.previousWorkspace, .nextWorkspace] {
+            #expect(command.isVisible(in: ordinaryTree))
+            #expect(!command.isVisible(in: flaggedTree))
+            #expect(!command.isVisible(in: PaletteContext(sidebarShowsFlaggedOnly: true)))
             #expect(!command.isEnabled(in: PaletteContext(sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: false)))
         }
     }
@@ -109,7 +121,7 @@ struct PaletteCatalogTests {
     // a step below two visible workspaces cannot move, and `isEnabled` is the single run-now predicate, so
     // it has to say so rather than leaving a live item that no-ops. Folding one workspace still works.
     @Test func workspaceStepsDisableWithNowhereToStep() {
-        let alone = PaletteContext(sidebarShowsWorkspaceTree: true, canStepWorkspaces: false, hasCurrentWorkspace: true)
+        let alone = PaletteContext(sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, canStepWorkspaces: false, hasCurrentWorkspace: true)
         let several = PaletteContext(sidebarShowsWorkspaceTree: true, canStepWorkspaces: true, hasCurrentWorkspace: true)
         for command in [PaletteCommand.previousWorkspace, .nextWorkspace] {
             #expect(!command.isEnabled(in: alone))
@@ -179,7 +191,7 @@ struct PaletteCatalogTests {
 
     /// Everything present, nothing covering: every command's menu item is live here.
     private static let live = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                             sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                             sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                              canStepWorkspaces: true,
                                              canStepWindows: true,
                                              activeSessionHasSplit: true, hasPendingClose: true,
@@ -218,7 +230,7 @@ struct PaletteCatalogTests {
 
     @Test func sessionPresenceGatesTheSameCommandsTheMenuDoes() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
@@ -231,7 +243,7 @@ struct PaletteCatalogTests {
 
     @Test func workspacePresenceGatesTheWorkspaceEntries() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
@@ -246,7 +258,7 @@ struct PaletteCatalogTests {
 
     @Test func terminalZoomLeavesOnlyTheItemsCarryingNoModalTerm() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
@@ -260,7 +272,7 @@ struct PaletteCatalogTests {
 
     @Test func aPendingPickerLeavesTheSameSet() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
@@ -276,7 +288,7 @@ struct PaletteCatalogTests {
         #expect(controller.openAsk(PendingAsk(id: "ask", title: "Continue?",
                                              buttons: [ControlAskButton(id: "yes", label: "Yes")])))
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
@@ -293,7 +305,7 @@ struct PaletteCatalogTests {
     // Navigate ▸ Dashboard is the open grid's own escape hatch, so its item alone survives that one cover.
     @Test func theOpenDashboardSparesItsOwnToggle() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
-                                     sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true,
+                                     sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
                                      canStepWorkspaces: true,
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,

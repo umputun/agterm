@@ -490,7 +490,7 @@ final class AppActions {
 
     /// Expand every workspace in `store`'s window sidebar. The sidebar owns the outline, so this posts a
     /// store-scoped notification and only that window's `WorkspaceSidebar.Coordinator` acts — how
-    /// `sidebar.expand` targets a specific (default frontmost) window. No-op in flagged mode (no rows).
+    /// `sidebar.expand` targets a specific (default frontmost) window. No-op under the flat flagged list (no rows).
     func expandAllWorkspaces(in store: AppStore) {
         NotificationCenter.default.post(name: .agtermExpandWorkspaces, object: store)
     }
@@ -503,7 +503,7 @@ final class AppActions {
     }
 
     /// Collapse every workspace except the current one in `store`'s window sidebar, keeping that one
-    /// expanded and scrolled into view. Store-scoped like `expandAllWorkspaces(in:)`, no-op in flagged mode,
+    /// expanded and scrolled into view. Store-scoped like `expandAllWorkspaces(in:)`, no-op under the flat flagged list,
     /// and how `sidebar.collapse` targets a specific (default frontmost) window.
     func collapseOtherWorkspaces(in store: AppStore) {
         NotificationCenter.default.post(name: .agtermCollapseWorkspaces, object: store)
@@ -512,13 +512,14 @@ final class AppActions {
     /// Fold or unfold the CURRENT workspace alone, for the keyless `toggle_workspace_collapse`, its View-menu
     /// item and its palette row. The per-workspace counterpart of Expand / Collapse Workspaces, which act on
     /// every row and deliberately keep this one open — so before this there was no built-in way to fold the
-    /// workspace you are in. Tree mode only, matching those two and the rows it acts on. Targets what the row
+    /// workspace you are in. Needs workspace rows, matching those two and the rows it acts on. Targets what the row
     /// SHOWS (`isCurrentWorkspaceCollapsed`), not what is persisted: a reveal routinely leaves this workspace
     /// open on screen while its stored flag still says collapsed, and toggling the stored flag there costs the
     /// user a keystroke that changes nothing he can see.
     func toggleActiveWorkspaceCollapse() {
         guard uiActionsEnabled else { return }
-        guard let store, store.sidebarMode == .tree, let id = store.currentWorkspaceID else { return }
+        guard let store, store.rendersWorkspaceRows(flaggedLayout: GhosttyApp.shared.flaggedViewLayout),
+              let id = store.currentWorkspaceID else { return }
         setWorkspaceExpanded(id, expanded: store.isCurrentWorkspaceCollapsed, in: store)
     }
 

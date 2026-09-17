@@ -8,9 +8,8 @@ extension WorkspaceSidebar.Coordinator {
         store.sidebarMode == .flagged ? GhosttyApp.shared.flaggedViewLayout : nil
     }
 
-    /// Whether the outline has workspace rows, the precondition of every expand/collapse path.
     var rendersWorkspaceRows: Bool {
-        store.sidebarMode == .tree || flaggedLayout == .tree
+        store.rendersWorkspaceRows(flaggedLayout: GhosttyApp.shared.flaggedViewLayout)
     }
 
     /// The workspace rows and their session rows, in store order. The flagged tree reads ALL workspaces, not

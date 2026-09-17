@@ -33,6 +33,19 @@ final class AppActionsPaletteTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testPaletteContextReportsWorkspaceRowsForTheOrdinaryTreeAndTheFlaggedTreeLayout() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        addTeardownBlock { @MainActor in GhosttyApp.shared.setFlaggedViewLayout(.flat) }
+        XCTAssertTrue(actions.paletteContext.sidebarShowsWorkspaceRows)
+
+        store.setSidebarMode(.flagged)
+        XCTAssertFalse(actions.paletteContext.sidebarShowsWorkspaceRows)
+
+        GhosttyApp.shared.setFlaggedViewLayout(.tree)
+        XCTAssertTrue(actions.paletteContext.sidebarShowsWorkspaceRows)
+        XCTAssertFalse(actions.paletteContext.sidebarShowsWorkspaceTree)
+    }
+
     private func moveDestinationIDs() -> [String] {
         actions.paletteActions().map(\.id).filter { $0.hasPrefix("move-") }
     }

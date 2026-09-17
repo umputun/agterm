@@ -47,7 +47,8 @@ extension ControlServer {
     }
 
     /// Expand every workspace in a window's sidebar tree; `--window` picks the OPEN target, default frontmost.
-    /// Idempotent, and a graceful no-op in flagged mode (no workspace rows); a closed or absent window errors.
+    /// Idempotent, and a graceful no-op under the flat flagged list (no workspace rows); a closed or absent
+    /// window errors.
     /// Drives the same `AppActions.expandAllWorkspaces(in:)` the View menu / palette drive.
     func expandSidebar(window: String?) -> ControlResponse {
         resolver.resolveOpenPlacementStore(window) { store in
@@ -57,7 +58,7 @@ extension ControlServer {
     }
 
     /// Collapse every workspace except the current one, which stays expanded and scrolled into view; same
-    /// window selector and flagged-mode/idempotency/error behavior as `expandSidebar`.
+    /// window selector and flat-list/idempotency/error behavior as `expandSidebar`.
     func collapseSidebar(window: String?) -> ControlResponse {
         resolver.resolveOpenPlacementStore(window) { store in
             actions.collapseOtherWorkspaces(in: store)

@@ -174,25 +174,25 @@ an unchanged selection can leave the active session hidden under a collapsed wor
 - Modify: `agtermTests/AppActionsPaletteTests.swift`
 - Modify: `agtermTests/SidebarFlaggedLayoutTests.swift`
 
-- [ ] replace the tree-mode guards in `expandWorkspacesNotified`, `setWorkspaceExpandedNotified`,
+- [x] replace the tree-mode guards in `expandWorkspacesNotified`, `setWorkspaceExpandedNotified`,
       `collapseOthers` and `toggleActiveWorkspaceCollapse` with the "renders workspace rows" predicate
-- [ ] add `PaletteContext.sidebarShowsWorkspaceRows`; `expandWorkspaces`, `collapseWorkspaces` and
+- [x] add `PaletteContext.sidebarShowsWorkspaceRows`; `expandWorkspaces`, `collapseWorkspaces` and
       `toggleWorkspaceCollapse` become visible on it; `previousWorkspace`/`nextWorkspace` keep
       `sidebarShowsWorkspaceTree` visibility and `canStepWorkspaces` enablement
-- [ ] state the stepping limit where `canStepWorkspaces` is defined: `navigateWorkspace` steps the focus
+- [x] state the stepping limit where `canStepWorkspaces` is defined: `navigateWorkspace` steps the focus
       projection, which can land on a workspace the flagged tree does not show
-- [ ] correct every comment this task makes false, not only the control docs: `expandSidebar`/
+- [x] correct every comment this task makes false, not only the control docs: `expandSidebar`/
       `collapseSidebar` in `ControlServer+AppCommands.swift`; `AppActions.swift` 493, 506, 515;
       `WorkspaceSidebar.swift` 318-319 and 597-598; `PaletteCatalog.swift` 172-174;
       `agtermApp+Menus.swift` 239-240
-- [ ] audit the workspace-row context menu and hover add button in flagged tree; Delete Workspace keeps
+- [x] audit the workspace-row context menu and hover add button in flagged tree; Delete Workspace keeps
       whole-workspace behaviour and its confirmation
-- [ ] keep Expand All / Collapse Others at their existing all-workspace persistence scope: they write every
+- [x] keep Expand All / Collapse Others at their existing all-workspace persistence scope: they write every
       workspace, groups the flagged tree omits included, because collapse state is shared
-- [ ] write tests: palette visibility per mode and layout; collapse commands act in flagged tree and persist
+- [x] write tests: palette visibility per mode and layout; collapse commands act in flagged tree and persist
       `Workspace.isExpanded`; a fold made in flagged tree shows in the ordinary tree; Collapse Others in
       flagged tree also collapses an omitted workspace
-- [ ] run the affected suites
+- [x] run the affected suites
 
 ### Task 5: Reveal the selected session after a sidebar structure switch (TDD)
 

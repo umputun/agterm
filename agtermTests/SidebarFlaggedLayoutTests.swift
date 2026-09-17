@@ -157,6 +157,56 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma", "s:c1"])
     }
 
+    func testCollapseOthersActsInTheTreeLayoutAndWritesOmittedWorkspaces() throws {
+        let store = try seededStore()
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+
+        actions.collapseOtherWorkspaces(in: store)
+
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma"])
+        XCTAssertEqual(store.workspaces.map(\.isExpanded), [true, false, false])
+    }
+
+    func testCollapseOthersStaysANoOpUnderTheFlatList() throws {
+        let store = try seededStore()
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+
+        actions.collapseOtherWorkspaces(in: store)
+
+        XCTAssertEqual(sidebar.rows, ["s:a1 : Alpha", "s:c1 : Gamma"])
+        XCTAssertEqual(store.workspaces.map(\.isExpanded), [true, true, true])
+    }
+
+    func testFoldMadeInTheTreeLayoutShowsInTheOrdinaryTree() throws {
+        let store = try seededStore()
+        let gamma = try XCTUnwrap(store.workspaces.last)
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+
+        actions.setWorkspaceExpanded(gamma.id, expanded: false, in: store)
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma"])
+
+        store.setSidebarMode(.tree)
+        sidebar.update()
+
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "s:a2", "ws:Beta", "s:b1", "ws:Gamma"])
+    }
+
+    func testToggleActiveWorkspaceCollapseActsInTheTreeLayout() throws {
+        let store = try seededStore()
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.tree)
+        let sidebar = mount(store)
+
+        actions.toggleActiveWorkspaceCollapse()
+
+        XCTAssertEqual(sidebar.rows, ["ws:Alpha", "ws:Gamma", "s:c1"])
+    }
+
     func testTreeLayoutHeaderBadgeCountsOnlyFlaggedChildren() throws {
         let store = try seededStore()
         let alpha = try XCTUnwrap(store.workspaces.first)
@@ -203,6 +253,7 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         store.setSidebarMode(.flagged)
         model.setFlaggedViewLayout(.tree)
         let sidebar = mount(store)
+        XCTAssertEqual(sidebar.badge(ofWorkspace: alpha.id), 0)
         let reloads = sidebar.outline.reloads
 
         alpha.sessions[0].unseenCount = 3
