@@ -305,17 +305,26 @@ for w in $windows; do
               set_status "$sid" "$pane" "${AGT_STATUS_ARGS[@]}"
               log "stuck $sid (running claim, no progress) -> stuck glyph"
             fi
-          elif [ -f "$AGT_LIGHTS_STATE/turnstart/$sid" ] && [ -f "$AGT_LIGHTS_STATE/turnend/$sid" ] &&
+          elif [ "$total" -eq 0 ] &&
+               [ -f "$AGT_LIGHTS_STATE/turnstart/$sid" ] && [ -f "$AGT_LIGHTS_STATE/turnend/$sid" ] &&
                [ "$(stat -f %m "$AGT_LIGHTS_STATE/turnend/$sid" 2>/dev/null || echo 0)" -gt \
                  "$(stat -f %m "$AGT_LIGHTS_STATE/turnstart/$sid" 2>/dev/null || echo 1)" ]; then
             # the stamps prove no turn is running and the scan found nothing:
             # the background work this glyph stood for has drained
             set_status "$sid" "$pane" completed --auto-reset
             log "work drained $sid -> completed"
-          elif [ "$(hb_age "$sid")" -gt "$AGT_HB_STALE_SECS" ]; then
+          elif [ "$total" -eq 0 ] && [ "$(hb_age "$sid")" -gt "$AGT_HB_STALE_SECS" ]; then
             set_status "$sid" "$pane" idle
             log "idle at prompt $sid -> idle"
           fi
+          # Both of the last two branches insist the scan came back empty, and
+          # that is the whole point of the count. An empty `state` is not an
+          # empty machine: machinery under the cpu gate, an i/o-bound download,
+          # a server that is up and quiet all report work_state nothing while
+          # the subtree is alive. Clearing the row there would post `completed`
+          # over a running `rsync` or `docker pull` the moment its turn ended.
+          # With nothing proven either way, the honest move is to leave the
+          # glyph exactly as it stands.
         elif [ "$alive" -eq 0 ]; then
           age=$(hb_age "$sid")
           if [ "$age" -lt "$AGT_HB_FRESH_SECS" ]; then
