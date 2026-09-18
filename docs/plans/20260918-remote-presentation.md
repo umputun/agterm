@@ -583,13 +583,15 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `plugins/agterm/skills/agterm/reference.md`,
   `plugins/agterm/skills/agterm/examples.md`
 
-- [ ] document the stream and its meaning (presentation connected, not pane attached), unsynchronized HUD
+- [x] document the stream and its meaning (presentation connected, not pane attached), unsynchronized HUD
       expiry, the OSC exclusion and its reason, one `notify` event on each app, the notification limitation
       while disconnected, the reconnect policy, and the far-side `agtermctl` PATH precondition
-- [ ] rewrite the control-api.md statement that `zmx.tree` and `zmx.attach` are the only commands leaving
+- [x] rewrite the control-api.md statement that `zmx.tree` and `zmx.attach` are the only commands leaving
       the accept thread to describe streaming hand-off
-- [ ] record the XCUITest exemption for the presentation commands in control-api.md
-- [ ] no surface states a command total
+- [x] record the XCUITest exemption for the presentation commands in control-api.md
+- [x] no surface states a command total
+- ➕ `site/llms.txt` had no remote-session entry at all, so it gained one feature bullet covering attach
+      and mirroring together. `zmx present` is documented as plumbing on every command surface.
 
 Slice 1 ends here and ships as its own PR.
 

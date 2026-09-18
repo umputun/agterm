@@ -97,6 +97,13 @@ s=$(agtermctl zmx tree studio.local --json |
 The row is marked remote and carries `remoteHost` in the tree. Closing it ends only this side's connection,
 and it does not come back after a relaunch.
 
+Status, `notify` and HUD calls made by a program inside that session show on both Macs. Check the
+mirroring stream, which needs `agtermctl` on the far side's ssh PATH:
+
+```sh
+agtermctl tree --json | jq '.. | objects | select(.remoteHost) | {name, presentation}'
+```
+
 ## Read or change the local restore policy
 
 This is about THIS instance, not a remote one: `zmx attach` requires nothing of the local restore mode.

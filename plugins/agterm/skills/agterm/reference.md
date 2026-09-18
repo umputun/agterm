@@ -140,6 +140,11 @@ omitted for non-Live and remote panes; the split field includes hidden splits an
 split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session, and never present after a relaunch because a remote session is never written to disk),
+`presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
+origin too old to stream, or `failed` with the reason in `error`; it says whether status, notifications
+and the HUD are being mirrored from the origin, never whether the panes' ssh connections are up),
+`presenters` (on an origin session: `mirrors`, how many streams mirror it, one per attached row and not
+per Mac; omitted when none does),
 `hasSplit` (whether a second pane exists at all, shown or hidden with ⌘D; omitted when there is none —
 read THIS to decide whether a session has a split, because a hidden split reports `split: false` while
 its pane stays alive, and it is present exactly when `splitRatio`/`splitFocused` can be),
@@ -1600,6 +1605,28 @@ is created, so a session that has gone since the listing fails and creates nothi
 here is a failure found before that point — a connection that starts and later drops is an ordinary pane
 exit, which holds on Ghostty's press-any-key prompt under one line naming the host, the session, the pane
 and the exit status.
+
+A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
+agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
+Mac mirrors the origin session's status, its `notify` notifications and its HUD. Nothing has to be set up
+beyond the `agtermctl` PATH precondition above. What to expect:
+
+- `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
+  about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
+- When the stream drops, the mirrored status and HUD are cleared here and come back on reconnect. Retries
+  run after 1, 2, 4, 8, 16 then 30 seconds, slow to every 5 minutes after eight failures in a row, and
+  never stop.
+- A notification raised while the stream is down is never shown here; status and HUD are restored.
+- A terminal notification (OSC 9/777) is not mirrored: it already arrives in the pane's bytes and is
+  raised here once. A mirrored `notify` records a `notify` event on each app.
+- A HUD with `--hide-after` closes here on this Mac's own countdown of the time the origin had left, so
+  the two panels can close a moment apart.
+- A HUD or overlay opened by a program on THIS Mac wins: a mirrored HUD never replaces or closes it.
+- A status set on this Mac's row holds until the origin's status next changes.
+
+`agtermctl zmx present SESSION` is the plumbing behind it: it opens the stream on the local socket and
+bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the origin; it is not meant to
+be typed.
 
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
 nothing agterm does from this end can kill them. It is never written to disk, so it does not come back

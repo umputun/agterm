@@ -534,7 +534,14 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> (the machine an attached session
                 came from, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach</span>; omitted for a
-                local session, and never present after a relaunch because a remote session is not persisted), and
+                local session, and never present after a relaunch because a remote session is not persisted),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (on an attached session only:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connecting</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unsupported</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failed</span> with the reason in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error</span>; it reports the
+                stream mirroring status, notifications and the HUD from the origin, not the panes' ssh connections),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presenters</span> (on an origin session:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mirrors</span>, how many streams mirror it, one per attached row and not per Mac; omitted when none does), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
@@ -3256,7 +3263,19 @@
                 Each pane holds on Ghostty's own press-any-key prompt when its ssh exits, under one line naming the host, the session, the pane and the exit status. Closing the session here ends only this side's connection: the far-side processes keep running, and nothing this command does can kill them. A remote session is never written to disk, so it does not come back after a relaunch.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Every attach also opens a presentation stream, so the row mirrors the origin session's status, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> notifications and its HUD; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> on the tree node reports it. The mirrored status and HUD clear while the stream is down and return on reconnect, a notification raised meanwhile is not shown, and a terminal notification (OSC 9/777) is not mirrored because it already arrives in the pane's bytes.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Pinned zmx has a single leader, and an attach joins as a follower, so the remote arrives at the <em>other</em> machine's window size and ignores input until the first <em>classified</em> key — a printable character, Return, Tab or Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side, so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Leadership is per pane, so typing in one half of a split leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something else resizes it.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl zmx present SESSION
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.present</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                The plumbing behind a remote session's mirroring, run by agterm over ssh on the origin and not meant to be typed. It opens a presentation stream for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">SESSION</span> on the local socket and bridges it to stdio as newline-delimited JSON: a snapshot of the session's status and HUD, then each change and each <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span>, with a ping every 10 seconds. It is refused for a session whose panes are not all live-backed. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> advertises support as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span>, the protocol version.
               </p>
             </div>
           </section>

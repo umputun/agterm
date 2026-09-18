@@ -166,7 +166,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.fullscreen`, `.minimize`
 - `keymap.reload`, `keymap.list`, `hooks.reload`, `hooks.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
-- `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`
+- `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
 
 `terminfo install` is a CLI-only command with no protocol counterpart, the one exemption from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
@@ -1108,8 +1108,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
   freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
   a second Mac.
-- `zmx.tree` and `zmx.attach` are the ONLY commands `handleConnection` moves off the accept thread, and
-  that thread's own descriptor close moves with them. Everything else stays inline, because dispatch
+- Three commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
+  so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
+  `zmx.present` is a streaming hand-off: it is dispatched inline, its ordinary reply is written, and on ok
+  the descriptor passes to a `ControlStreamOwner` whose reader thread is the only one that closes it.
+  Everything else stays inline, because dispatch
   refreshes the window cache in the same execution the fast path reads. Running an ssh inline instead
   makes `zmx tree <this machine>` DEADLOCK: the far side's own `agtermctl` waits in the backlog this
   connection is holding. Local `zmx.list` blocks that thread too, on a subprocess bounded at 3s, and
@@ -1155,6 +1158,41 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `ZmxLaunch.wrapsLocally` is the one gate both surface factories read, so a remote pane is never wrapped
   in a local daemon. Wrapping buys nothing for a session that never restores, and under live mode window
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
+- Presentation is what a program asks agterm to draw: status, notifications and the HUD. Such a program runs
+  on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
+  Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
+  bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
+- The stream is newline-delimited JSON, `PresentationFrame` with `gen`, `rev` and a body. The hub registers
+  a subscriber BEFORE it takes the snapshot and holds deltas until the snapshot is sent, so nothing falls
+  between the two. A viewer drops a frame from another generation or an old revision, and skips an unknown
+  kind without ending the stream, which is what lets a later kind reach an older viewer.
+- `zmx.tree` advertises `presentation`, the protocol version. A viewer never launches the bridge against an
+  origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
+- Read-back is `presentation {state, mode, error}` on the viewer's session node and `presenters {mirrors}`
+  on the origin's. `connected` means the PRESENTATION stream is up. It says nothing about the panes' own
+  ssh connections, which the app cannot observe under the hold prompt.
+- A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
+  second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
+  identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
+  neighbour. A local status write takes the row over until the origin's next change.
+- A mirrored HUD carries the origin's REMAINING time, and the viewer counts that down on its own clock.
+  The two expiries are not synchronized, so the panels can close a moment apart; the origin's withdrawal
+  frame closes the viewer's early. A mirrored HUD yields to a HUD or program overlay this Mac's own caller
+  opened, and never closes one.
+- Only a `notify` command is mirrored. A terminal notification (OSC 9/777) already reaches the viewer in
+  the pane's bytes and its libghostty raises it, so mirroring it would show it twice. Each app records
+  its own `notify` event. Notifications are not part of the snapshot: one raised while the stream is down
+  is never shown on the viewer, where status and HUD are restored on reconnect.
+- When the stream ends, the mirrored status and HUD are cleared, since nothing would ever clear them. The
+  client retries after 1, 2, 4, 8, 16 then 30 seconds, moves to a 300-second cap after eight failures in a
+  row, and never gives up; 30 seconds without a frame counts as a failure against the origin's 10-second
+  ping. One warning per failure episode or changed reason. A soft close stops the client and undo starts a
+  fresh one.
+- The origin bounds each stream: 256 KiB a line checked before delivery, a bounded outbound queue whose
+  overflow closes the subscriber, a hello deadline, and a drop when the source session leaves.
+- XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
+  existing status, notification and HUD paths those suites already cover. `ControlServerRemotePresentationTests`
+  runs both roles in one process over the real bridge binary instead.
 - Accepted v1 limitations, documented rather than built around. Pinned zmx keeps one `leader_client_fd` and
   our attach is a follower, so the snapshot arrives at the FAR side's geometry and does not resize until
   the first classified keystroke calls `setLeader`:
