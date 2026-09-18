@@ -557,13 +557,22 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 - Modify: `agtermTests/ControlServerZmxTests.swift`
 
-- [ ] add `presentation` to the viewer session node and `presenters` with the mirror count to the origin
+- [x] add `presentation` to the viewer session node and `presenters` with the mirror count to the origin
       session node, with CLI human output
-- [ ] write projection and CLI tests for both fields, including `unsupported` and `failed(reason)`
-- [ ] add one hosted end-to-end test with both roles in one process through the injected runner: attach,
+- [x] write projection and CLI tests for both fields, including `unsupported` and `failed(reason)`
+- [x] add one hosted end-to-end test with both roles in one process through the injected runner: attach,
       set status and open a HUD on the origin session, assert the viewer row renders both, close the stream,
       assert the mirrored status and HUD are both gone from the viewer
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; all green
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; all green
+- ➕ the end-to-end test lives in `agtermTests/ControlServerRemotePresentationTests.swift`, beside the
+      viewer fixtures it reuses. Its injected transport launches the bundled `agtermctl zmx present`
+      against the test server's socket, so the real bridge and stream owner are in the path and only ssh
+      is replaced. `ControlPayloads.swift` and `ControlServerZmxTests.swift` needed no change.
+- ⚠️ the end-to-end test asserts rendering at the deck's inputs, not on a painted surface: the viewer's
+      indicator the sidebar row reads, the HUD body file, and `DeckPaneGates` / `OverlayPanelStyle` resolving
+      the viewer as a passive panel. No hosted test in the repo reads painted HUD text from a live libghostty
+      overlay, and `HudDeckGatesTests` asserts at the same seam. This narrows the Testing Strategy's "state
+      exists but nothing paints fails" claim for slice 1, a maintainer decision to confirm.
 
 ### Task 12: Slice 1 documentation
 

@@ -49,6 +49,24 @@ extension AppStore {
         return closeHud(id)
     }
 
+    /// The `tree` read-back of this Mac's stream to `session`'s origin, nil for a local session.
+    func presentationNode(of session: Session) -> ControlPresentationNode? {
+        guard let state = session.remotePresentation else { return nil }
+        switch state.connection {
+        case .connecting: return ControlPresentationNode(state: "connecting", mode: state.mode.rawValue)
+        case .connected: return ControlPresentationNode(state: "connected", mode: state.mode.rawValue)
+        case .unsupported: return ControlPresentationNode(state: "unsupported", mode: state.mode.rawValue)
+        case .failed(let reason):
+            return ControlPresentationNode(state: "failed", mode: state.mode.rawValue, error: reason)
+        }
+    }
+
+    /// The `tree` read-back of the viewers mirroring `session`, nil when there is none.
+    func presentersNode(of session: Session) -> ControlPresentersNode? {
+        let mirrors = presentationHub?.subscriberCount(session: session.id) ?? 0
+        return mirrors > 0 ? ControlPresentersNode(mirrors: mirrors) : nil
+    }
+
     /// The local role standing for one of the origin's panes, resolved at use so a swap or promotion on this
     /// side since the attach is honoured. Nil for a pane with no counterpart here.
     public func localPane(_ pane: PresentationPane?, in session: Session) -> OverlayPane? {

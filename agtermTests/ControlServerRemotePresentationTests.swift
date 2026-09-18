@@ -268,4 +268,84 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         XCTAssertTrue(transport.launches.isEmpty)
     }
+
+    @MainActor
+    private final class BridgeTransport: RemotePresentationTransport {
+        let argv: [String]
+        private let process = RemotePresentationProcess()
+
+        init(argv: [String]) { self.argv = argv }
+
+        func open(_ ignored: [String], onLine: @escaping @MainActor (Data) -> Void,
+                  onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+            process.open(argv, onLine: onLine, onClose: onClose)
+        }
+    }
+
+    private func waitUntil(_ what: String, _ condition: @escaping @MainActor () -> Bool) {
+        let met = expectation(description: what)
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(8)
+            while !condition(), Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+            met.fulfill()
+        }
+        wait(for: [met], timeout: 10)
+        XCTAssertTrue(condition(), what)
+    }
+
+    func testStatusAndHudTravelFromAnOriginSessionToItsViewerAndLeaveWithTheStream() throws {
+        let library = WindowLibrary(directory: stateDir)
+        let socketPath = "/tmp/agterm-e2e-\(UUID().uuidString.prefix(8)).sock"
+        let server = ControlServer(
+            library: library,
+            actions: AppActions(library: library),
+            settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
+            identity: AppIdentity(version: "9.9.9"),
+            socketPath: socketPath
+        )
+        servers.append(server)
+        defer {
+            unlink(socketPath)
+            unlink(socketPath + ".lock")
+        }
+        server.start()
+        XCTAssertNotNil(server.boundSocketPath)
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let origin = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        origin.surface = GhosttySurfaceView(workingDirectory: NSHomeDirectory(), backedByZmx: true)
+        let viewer = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(),
+                                                    remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: origin.id.uuidString,
+                                       daemonsByLocalPane: [viewer.paneIdentity: ZmxSupport.daemonName(for: origin.paneIdentity)],
+                                       presentationVersion: PresentationCodec.version), forSession: viewer.id)
+        let cli = try XCTUnwrap(Bundle.main.executableURL).deletingLastPathComponent()
+            .appendingPathComponent("agtermctl").path
+        server.remoteTransport = BridgeTransport(argv: [cli, "zmx", "present", origin.id.uuidString,
+                                                        "--socket", socketPath])
+
+        server.startRemotePresentation(for: viewer)
+        waitUntil("the viewer's stream connects") { viewer.remotePresentation?.connection == .connected }
+
+        store.applyControlStatus(AgentIndicator(status: .blocked, blink: true), forSession: origin.id)
+        waitUntil("the origin's status reaches the viewer row") { viewer.agentIndicator.status == .blocked }
+        XCTAssertTrue(viewer.agentIndicator.blink)
+
+        XCTAssertTrue(server.openHud(origin.id.uuidString, window: nil, spec: HudSpec(message: "deploying")).ok)
+        waitUntil("the origin's HUD is painted on the viewer") {
+            viewer.hudActive && self.body(of: viewer).contains("deploying")
+        }
+        XCTAssertFalse(DeckPaneGates.coverActive(viewer), "the deck mounts it as a passive panel")
+        XCTAssertFalse(OverlayPanelStyle.resolve(viewer).interactive)
+        XCTAssertEqual(viewer.hudSpec?.message, "deploying")
+        XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == origin.id.uuidString }?
+            .presenters, ControlPresentersNode(mirrors: 1))
+
+        server.shutdownPresentationStreams()
+        waitUntil("the mirrored status and HUD leave with the stream") {
+            viewer.agentIndicator.status == .idle && !viewer.hudActive
+        }
+        XCTAssertTrue(origin.hudActive, "the origin keeps drawing its own panel")
+        XCTAssertEqual(origin.agentIndicator.status, .blocked)
+    }
 }

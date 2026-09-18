@@ -454,7 +454,11 @@ struct SocketClient {
                 let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
                 let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""
                 let splitAttribution = session.splitLiveAttribution.map { "  split live attribution: \($0)" } ?? ""
-                lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)\(splitCwdSuffix)\(titleSuffix)\(attribution)\(splitAttribution)")
+                let presentation = session.presentation.map {
+                    "  presentation: \($0.state)" + ($0.error.map { " (\($0))" } ?? "")
+                } ?? ""
+                let presenters = session.presenters.map { "  mirrored by: \($0.mirrors)" } ?? ""
+                lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)\(splitCwdSuffix)\(titleSuffix)\(attribution)\(splitAttribution)\(presentation)\(presenters)")
             }
         }
         return lines.joined(separator: "\n")

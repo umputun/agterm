@@ -249,6 +249,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// session is never persisted, so this never survives a relaunch.
     public let remoteHost: String?
 
+    /// This Mac's presentation stream to the session's origin, on an attached session only. `state` is
+    /// `connecting`, `connected`, `unsupported` for an origin that predates the stream, or `failed` with
+    /// the reason in `error`. It says whether status, notifications and HUD are being mirrored, never
+    /// whether the panes' own ssh connections are up.
+    public let presentation: ControlPresentationNode?
+    /// How many presentation streams are mirroring this session; omitted when none is. A count of
+    /// connections, so two rows attached from one Mac are two.
+    public let presenters: ControlPresentersNode?
+
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
@@ -264,7 +273,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
-                liveAttribution: String? = nil, splitLiveAttribution: String? = nil) {
+                liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
+                presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -309,7 +319,29 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.remoteHost = remoteHost
         self.liveAttribution = liveAttribution
         self.splitLiveAttribution = splitLiveAttribution
+        self.presentation = presentation
+        self.presenters = presenters
     }
+}
+
+/// A viewer's presentation stream as `tree` reports it.
+public struct ControlPresentationNode: Codable, Sendable, Equatable {
+    public let state: String
+    public let mode: String
+    public let error: String?
+
+    public init(state: String, mode: String, error: String? = nil) {
+        self.state = state
+        self.mode = mode
+        self.error = error
+    }
+}
+
+/// The viewers of an origin session as `tree` reports them.
+public struct ControlPresentersNode: Codable, Sendable, Equatable {
+    public let mirrors: Int
+
+    public init(mirrors: Int) { self.mirrors = mirrors }
 }
 
 /// A workspace and its sessions as projected into the `tree` response.

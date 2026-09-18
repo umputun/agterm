@@ -466,4 +466,54 @@ struct AppStoreTreeProjectionTests {
         #expect(node.foregroundShell == nil)
         #expect(node.splitForegroundShell == nil)
     }
+
+    @MainActor
+    private final class NullSink: PresentationSink {
+        func offer(_ frame: PresentationFrame) -> Bool { true }
+        func close(_ reason: PresentationHub.CloseReason) {}
+    }
+
+    @Test(arguments: [(RemotePresentationConnection.connecting, "connecting", String?.none),
+                      (.connected, "connected", nil), (.failed("exit 255"), "failed", "exit 255")])
+    func aViewerRowReportsItsStream(_ connection: RemotePresentationConnection, _ state: String,
+                                    _ error: String?) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1),
+                         forSession: session.id)
+        store.setRemoteConnection(connection, forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.presentation == ControlPresentationNode(state: state, mode: "mirror", error: error))
+    }
+
+    @Test func anOriginThatPredatesTheStreamReadsUnsupported() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: nil),
+                         forSession: session.id)
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presentation?.state == "unsupported")
+    }
+
+    @Test func anOriginRowCountsItsMirrorsAndOmitsBothFieldsOtherwise() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let plain = String(decoding: try JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+        #expect(!plain.contains("presentation"))
+        #expect(!plain.contains("presenters"))
+
+        for _ in 0..<2 {
+            try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .mirror),
+                              sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+        }
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2))
+    }
 }

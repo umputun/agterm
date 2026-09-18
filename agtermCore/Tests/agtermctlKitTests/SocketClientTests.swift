@@ -935,6 +935,23 @@ struct SocketClientTests {
         #expect(output.contains("split live attribution: orphaned"))
     }
 
+    @Test func formatTreeShowsTheViewersStreamStateAndTheOriginsMirrorCount() {
+        let viewer = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: true, split: false,
+                                        backedByZmx: nil,
+                                        presentation: ControlPresentationNode(state: "failed", mode: "mirror",
+                                                                              error: "exit 255"))
+        let origin = ControlSessionNode(id: "s2", name: "api", cwd: "/tmp", active: false, split: false,
+                                        backedByZmx: nil,
+                                        presenters: ControlPresentersNode(mirrors: 2))
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true,
+                                                                 sessions: [viewer, origin])])
+
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
+
+        #expect(out.contains("presentation: failed (exit 255)"))
+        #expect(out.contains("mirrored by: 2"))
+    }
+
     @Test func formatResponseTree() {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true)
         let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
