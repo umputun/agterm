@@ -419,6 +419,39 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(created.splitInitialCommand).contains("agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2"))
     }
 
+    func testAttachRecordsWhichLocalPaneStandsForEachOfTheOriginsPanes() async throws {
+        let advertising = Self.splitProjection.replacingOccurrences(of: #"{"remote":{"#,
+                                                                    with: #"{"remote":{"presentation":1,"#)
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: advertising, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        let state = try XCTUnwrap(created.remotePresentation)
+        let remoteLeft = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"))
+        let remoteRight = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"))
+        XCTAssertEqual(state.binding.remoteSessionID, "s1")
+        XCTAssertEqual(state.binding.localPane(forRemote: remoteLeft), created.paneIdentity)
+        XCTAssertEqual(state.binding.localPane(forRemote: remoteRight), created.splitPaneIdentity)
+        XCTAssertNotNil(created.splitPaneIdentity)
+        XCTAssertEqual(state.connection, .connecting)
+    }
+
+    func testAttachingToAnOriginThatPredatesPresentationReadsUnsupported() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertEqual(created.remotePresentation?.connection, .unsupported)
+    }
+
     // attach shipped with no focus call, so a teleported session opened with the keyboard still elsewhere
     func testAttachFocusesTheSplitPaneOnceItsSurfacesMaterialize() async throws {
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection,

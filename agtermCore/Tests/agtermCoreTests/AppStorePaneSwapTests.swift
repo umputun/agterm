@@ -380,4 +380,95 @@ struct AppStorePaneSwapTests {
         #expect(fixture.store.presentationSnapshot(forSession: fixture.session.id).status?.pane
                 == .identity(primary))
     }
+
+    @Test func aMirroredStatusFollowsItsPaneThroughASwapOnTheViewer() throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        let remoteRight = UUID()
+        let split = try #require(session.splitPaneIdentity)
+        fixture.store.bindRemote(RemoteBinding(remoteSessionID: "s1",
+                                               daemonsByLocalPane: [split: ZmxSupport.daemonName(for: remoteRight)],
+                                               presentationVersion: 1), forSession: session.id)
+        let status = PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                        pane: .identity(remoteRight), changedAt: nil)
+        fixture.store.applyRemoteStatus(status, forSession: session.id)
+        #expect(session.agentIndicator.statusPane == .right)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+        fixture.store.applyRemoteStatus(status, forSession: session.id)
+
+        #expect(session.agentIndicator.statusPane == .left, "the shell moved to the primary slot and the glyph with it")
+    }
+
+    // ownership was once a value comparison, which a swap's rewrite of the pane tag defeated
+    @Test func aSwapOnTheViewerDoesNotStrandAMirroredStatusAtDisconnect() throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        let remoteRight = UUID()
+        let split = try #require(session.splitPaneIdentity)
+        fixture.store.bindRemote(RemoteBinding(remoteSessionID: "s1",
+                                               daemonsByLocalPane: [split: ZmxSupport.daemonName(for: remoteRight)],
+                                               presentationVersion: 1), forSession: session.id)
+        fixture.store.setRemoteConnection(.connected, forSession: session.id)
+        fixture.store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                                           pane: .identity(remoteRight), changedAt: nil),
+                                        forSession: session.id)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+        fixture.store.setRemoteConnection(.connecting, forSession: session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    private func attach(_ fixture: Fixture, remoteRight: UUID) throws {
+        let split = try #require(fixture.session.splitPaneIdentity)
+        fixture.store.bindRemote(RemoteBinding(remoteSessionID: "s1",
+                                               daemonsByLocalPane: [split: ZmxSupport.daemonName(for: remoteRight)],
+                                               presentationVersion: 1), forSession: fixture.session.id)
+        fixture.store.setRemoteConnection(.connected, forSession: fixture.session.id)
+    }
+
+    // the promotion re-tags the glyph through the local status setter, which took it away from the bridge
+    @Test func aMirroredStatusThatFollowsItsPaneThroughAPromotionStillLeavesWithTheStream() throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        let remoteRight = UUID()
+        try attach(fixture, remoteRight: remoteRight)
+        fixture.store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                                           pane: .identity(remoteRight), changedAt: nil),
+                                        forSession: session.id)
+
+        fixture.store.closePrimaryPane(session.id)
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.agentIndicator.statusPane == .left)
+        fixture.store.setRemoteConnection(.connecting, forSession: session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func aStatusWithNoLocalOwnerGainsNoneFromASwap() throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        try attach(fixture, remoteRight: UUID())
+        fixture.store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                                           pane: .scratch, changedAt: nil), forSession: session.id)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+
+        #expect(session.agentIndicator.statusPane == nil)
+    }
+
+    @Test func aStatusWithNoLocalOwnerSurvivesThePrimaryClosing() throws {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        try attach(fixture, remoteRight: UUID())
+        fixture.store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                                           pane: .scratch, changedAt: nil), forSession: session.id)
+
+        fixture.store.closePrimaryPane(session.id)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.agentIndicator.statusPane == nil)
+        #expect(session.remotePresentation?.statusOwnerUnknown == true)
+    }
 }

@@ -146,7 +146,7 @@ extension AppStore {
         var indicator = session.agentIndicator
         if indicator.status == .idle {
             indicator.statusPane = nil
-        } else {
+        } else if session.remotePresentation?.statusOwnerUnknown != true {
             switch indicator.statusPane {
             case nil, .left: indicator.statusPane = .right
             case .right: indicator.statusPane = .left
@@ -282,13 +282,16 @@ extension AppStore {
         // the exited primary owned any `.left`/nil tag, which dies with it; a `.right` tag belonged to the
         // survivor and FOLLOWS it, re-tagged `.left` so `tree` (now `split:false`) and the survivor's
         // `.left`-role keystroke-clear agree instead of contradicting. `.scratch` is untouched.
-        if session.agentIndicator.status != .idle {
+        if session.agentIndicator.status != .idle, session.remotePresentation?.statusOwnerUnknown != true {
             switch session.agentIndicator.statusPane ?? .left {
             case .left: setAgentIndicator(AgentIndicator(), forSession: session.id)
             case .right:
                 var promoted = session.agentIndicator
                 promoted.statusPane = .left
+                // a re-tag, not a write: the setter would take a mirrored glyph away from the bridge
+                let bridged = session.remotePresentation?.statusBridged ?? false
                 setAgentIndicator(promoted, forSession: session.id)
+                session.remotePresentation?.statusBridged = bridged
             case .scratch: break
             }
         }

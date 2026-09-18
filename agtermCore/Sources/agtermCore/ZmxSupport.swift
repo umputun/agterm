@@ -182,6 +182,14 @@ public enum ZmxSupport {
         namePrefix + compactUUID(paneIdentity)
     }
 
+    /// The pane identity `daemonName(for:)` built `name` from, nil for any other name.
+    public static func paneIdentity(fromDaemonName name: String) -> UUID? {
+        guard isDaemonName(name) else { return nil }
+        let hex = Array(name.dropFirst(namePrefix.count))
+        let groups = [hex[0..<8], hex[8..<12], hex[12..<16], hex[16..<20], hex[20..<32]]
+        return UUID(uuidString: groups.map { String($0) }.joined(separator: "-"))
+    }
+
     /// Whether `name` is one of OUR daemons: the exact shape `daemonName(for:)` emits. A prefix test is
     /// not enough — the namespace is a shared /tmp directory, so a user session called `agterm-notes`
     /// would otherwise read as an unclaimed app daemon and be pruned.

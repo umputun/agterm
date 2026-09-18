@@ -478,24 +478,36 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
-- Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
+- Create: `agtermCore/Sources/agtermCore/RemotePresentationState.swift`
+- Modify: `agtermCore/Sources/agtermCore/ZmxSupport.swift`
+- Create: `agterm/Control/ControlServer+RemotePresentation.swift`
+- Modify: `agterm/Control/ControlServer+Hud.swift`
+- Create: `agtermTests/ControlServerRemotePresentationTests.swift`
 - Create: `agtermCore/Sources/agtermCore/AppStore+RemotePresentation.swift`
 - Modify: `agterm/Control/ControlServer+Zmx.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneSwapTests.swift`
 - Modify: `agtermTests/ControlServerZmxTests.swift`
 
-- [ ] write failing tests: a mirrored clear from another pane is applied where `applyControlStatus` would
+- [x] write failing tests: a mirrored clear from another pane is applied where `applyControlStatus` would
       refuse it; disconnect clears the bridge-owned status and HUD and leaves local status alone; a local
       program overlay keeps the slot and the mirrored HUD yields; after a pane swap or promotion on the
       viewer, state for a remote pane still lands on the right local pane; the binding is never persisted;
       an origin without the capability sets `unsupported`
-- [ ] write a hosted test asserting a mirrored HUD body is written to the surface, not only stored
-- [ ] add immutable `Session.remoteBinding`, decoding each remote pane identity from its daemon name once,
+- [x] write a hosted test asserting a mirrored HUD body is written to the surface, not only stored
+- [x] add immutable `Session.remoteBinding`, decoding each remote pane identity from its daemon name once,
       in `attachRemoteSession`, and resolving the local role through `paneRole(forIdentity:)` at use time
-- [ ] add `Session.remotePresentation` and the apply/clear seam in `AppStore+RemotePresentation`
-- [ ] render mirrored status and HUD through the existing views, reading the merged state
-- [ ] run the targeted tests - must pass before Task 10
+- [x] add `Session.remotePresentation` and the apply/clear seam in `AppStore+RemotePresentation`
+- [x] render mirrored status and HUD through the existing views, reading the merged state
+- [x] run the targeted tests - must pass before Task 10
+- ➕ the binding is set right after `addSession`, not at construction: `remoteHost` needs the constructor
+  because `addSession` saves, while a remote session is never persisted, so nothing can catch the binding
+  half-written. It also keeps `AppStore.swift` and the `Session` initializer, both near the lint limit and
+  both called by the linux fork, unchanged
+- ➕ the binding carries no attachment id in slice 1, matching `zmx.present`
+- ➕ a mirrored HUD goes through this Mac's own HUD path (`showRemoteHud`), so it is sized to the local
+  pane and comes down on the local timer armed with the origin's remaining lifetime; it yields to a
+  program overlay and to a HUD this Mac's own program opened
 
 ### Task 10: Viewer client, automatic start and row-visibility lifecycle
 

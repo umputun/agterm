@@ -166,6 +166,25 @@ final class AppActionsFocusTests: XCTestCase {
         XCTAssertTrue(session.scratchActive)
     }
 
+    func testAttentionPickOnAMirroredStatusWithNoLocalOwnerMovesNoPane() throws {
+        let pair = try makePair()
+        let store = pair.backStore
+        let session = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: NSTemporaryDirectory(),
+                                                     select: false, remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1),
+                         forSession: session.id)
+        store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil,
+                                                   pane: .scratch, changedAt: nil), forSession: session.id)
+        store.toggleScratch(session.id)
+        session.splitFocused = true
+
+        pair.actions.selectAttention(windowID: pair.back, sessionID: session.id)
+
+        XCTAssertEqual(store.activeSession?.id, session.id)
+        XCTAssertTrue(session.scratchActive)
+        XCTAssertTrue(session.splitFocused)
+    }
+
     func testAttentionPickLeavesAnActiveSessionsPanesAlone() throws {
         let pair = try makePair()
         let session = try addSession(to: pair.backStore, AgentIndicator(status: .active, statusPane: .left))

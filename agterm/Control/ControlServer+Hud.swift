@@ -69,6 +69,11 @@ extension ControlServer {
         openHud(target, window: nil, spec: spec, placement: ControlHudPlacement(pane: pane), fallbackToSession: true)
     }
 
+    /// A pane the origin placed its panel over may not be laid out here, so this falls back to session-wide.
+    func openRemoteHud(_ target: String, spec: HudSpec, placement: ControlHudPlacement) -> ControlResponse {
+        openHud(target, window: nil, spec: spec, placement: placement, fallbackToSession: true)
+    }
+
     private func openHud(_ target: String?, window: String?, spec: HudSpec,
                          placement: ControlHudPlacement, fallbackToSession: Bool) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in

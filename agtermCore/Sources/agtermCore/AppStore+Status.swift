@@ -42,6 +42,8 @@ extension AppStore {
     /// idle auto-follow. No-op for an unknown id; never persisted.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
         guard let session = session(withID: id) else { return }
+        // any write through here is a local one until `applyRemoteStatus` says otherwise right after it
+        session.remotePresentation?.statusBridged = false
         let previous = session.agentIndicator
         let wasBlocked = session.agentIndicator.status == .blocked
         var indicator = indicator

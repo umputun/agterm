@@ -123,6 +123,8 @@ extension AppActions {
         // a no-op unless the status needs attention: the scratch-hide / split-focus side effects must never
         // fire on plain navigation to a still-active session, or one merely showing its keep-alive scratch.
         guard indicator.status.needsAttention else { focusActiveSession(); return }
+        // a mirrored status for a pane with no counterpart here names no pane to reveal
+        guard session.remotePresentation?.statusOwnerUnknown != true else { focusActiveSession(); return }
         let pane = indicator.statusPane
         // a shown scratch masks a non-scratch block; overlays are deliberately left alone.
         if pane != .scratch, session.scratchActive { store?.toggleScratch(session.id) }

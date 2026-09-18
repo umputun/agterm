@@ -415,9 +415,13 @@ public final class Session: Identifiable {
         hudHeightPercent = nil
         hudExpiresAt = nil
         hudResizedWidthPercent = nil
+        remotePresentation?.hudBridged = false
         cancelTimer?()
         withdraw?()
     }
+
+    /// What this Mac keeps about a session attached from another one; nil for a local session.
+    @ObservationIgnored public internal(set) var remotePresentation: RemotePresentationState?
 
     /// Tells attached viewers the panel is gone. Set when the HUD is published, so a panel whose body was
     /// never written, and so never published, withdraws nothing.
