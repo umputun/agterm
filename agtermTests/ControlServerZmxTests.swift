@@ -424,12 +424,16 @@ final class ControlServerZmxTests: XCTestCase {
                                                                     with: #"{"remote":{"presentation":1,"#)
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: advertising, stderr: ""))
         let server = makeServer(list: "", remoteRunner: runner)
+        let transport = RecordingTransport()
+        server.remoteTransport = transport
         let store = try XCTUnwrap(library.activeStore)
 
         let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
 
         XCTAssertTrue(response.ok)
         let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertEqual(transport.launches.count, 1, "the attach opens the presentation stream itself")
+        XCTAssertEqual(transport.launches.first?.prefix(2), ["ssh", "-T"])
         let state = try XCTUnwrap(created.remotePresentation)
         let remoteLeft = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"))
         let remoteRight = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"))
@@ -443,6 +447,8 @@ final class ControlServerZmxTests: XCTestCase {
     func testAttachingToAnOriginThatPredatesPresentationReadsUnsupported() async throws {
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
         let server = makeServer(list: "", remoteRunner: runner)
+        let transport = RecordingTransport()
+        server.remoteTransport = transport
         let store = try XCTUnwrap(library.activeStore)
 
         let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
@@ -450,6 +456,7 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertTrue(response.ok)
         let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
         XCTAssertEqual(created.remotePresentation?.connection, .unsupported)
+        XCTAssertTrue(transport.launches.isEmpty, "an origin without the capability never gets a stream ssh")
     }
 
     // attach shipped with no focus call, so a teleported session opened with the keyboard still elsewhere
@@ -1049,5 +1056,21 @@ private final class FakeRemoteRunner: RemoteCommandRunner, @unchecked Sendable {
         lock.withLock { recorded.append(argv) }
         await beforeReturn?()
         return result
+    }
+}
+
+@MainActor
+private final class RecordingTransport: RemotePresentationTransport {
+    final class Link: RemotePresentationLink {
+        func send(_ line: Data) {}
+        func stop() {}
+    }
+
+    var launches: [[String]] = []
+
+    func open(_ argv: [String], onLine: @escaping @MainActor (Data) -> Void,
+              onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+        launches.append(argv)
+        return Link()
     }
 }

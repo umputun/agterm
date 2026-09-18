@@ -15,6 +15,39 @@ struct RemoteSessionTests {
         #expect(argv.count == 8)
     }
 
+    @Test func presentIsNonInteractiveAndRunsTheBridgeForThatSession() throws {
+        let argv = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C")
+
+        #expect(argv.prefix(7) == ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox"])
+        #expect(argv.count == 8)
+        #expect(argv[7].contains(RemoteSession.cliPathPrefix), "sshd's PATH does not reach an installed CLI")
+    }
+
+    @Test func presentRunsTheBridgeForExactlyThatSession() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.presentCommand(host: "buildbox", session: "s1;rm"))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["zmx", "present", "s1;rm"]],
+                "a shell metacharacter in the id reaches the bridge as one argument and runs nothing")
+    }
+
+    @Test(arguments: ["", "s 1", "s1\u{1B}[31m"])
+    func presentRefusesASessionThatIsNotAPlainToken(_ session: String) {
+        #expect(throws: RemoteSession.InvocationError.invalidSession) {
+            try RemoteSession.presentCommand(host: "buildbox", session: session)
+        }
+    }
+
+    @Test func presentRefusesAHostileHost() {
+        #expect(throws: RemoteSession.InvocationError.invalidHost) {
+            try RemoteSession.presentCommand(host: "-oProxyCommand=touch /tmp/pwned", session: "s1")
+        }
+    }
+
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
         #expect(argv.prefix(7) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox"])

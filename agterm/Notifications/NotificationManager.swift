@@ -99,10 +99,11 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// only by `bannersEnabled`), attributed to the session's primary pane so a click reveals it. False, and
     /// nothing sent, when no open window owns the session (no click-reveal identity to build).
     @discardableResult
-    func send(toSession session: Session, title: String, body: String) -> Bool {
+    func send(toSession session: Session, title: String, body: String,
+              origin: NotificationOrigin = .control) -> Bool {
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
         guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
-            forSession: session.id, title: title, body: body, origin: .control
+            forSession: session.id, title: title, body: body, origin: origin
         ) else { return false }
         session.unseenCount += 1
         bounceDock()

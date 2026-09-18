@@ -222,6 +222,8 @@ extension ControlServer {
         if let right, let local = created.splitPaneIdentity { daemons[local] = right }
         store.bindRemote(RemoteBinding(remoteSessionID: remote.id, daemonsByLocalPane: daemons,
                                        presentationVersion: tree.presentation), forSession: created.id)
+        // the row's created event fired inside `addSession`, before the binding existed
+        startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck
         // re-render can clear from under it through `onFocusChange`.
         actions.focusSplitPane(created, wantSplit: created.splitFocused)

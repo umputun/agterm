@@ -28,6 +28,19 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
     }
 
+    /// One ssh invocation carrying `session`'s presentation stream, for as long as the row is shown.
+    ///
+    /// `-T` because frames travel on plain stdio and a pty would mangle them, and no lifetime deadline:
+    /// the stream is meant to stay up. `exec` so the far-side shell does not linger between ssh and the
+    /// bridge, which would keep a dead bridge's stdio open.
+    public static func presentCommand(host: String, session: String, connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        guard isPlain(session) else { throw InvocationError.invalidSession }
+        let chain = cliPathPrefix + " && exec agtermctl zmx present " + CommandRestore.shellQuotedLine([session])
+        let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+    }
+
     /// sshd runs a remote command with `/usr/bin:/bin:/usr/sbin:/sbin` and a non-interactive shell reads no
     /// profile, so an installed CLI is otherwise not found and every command exits 127. `CommandPath` owns
     /// where it can live; APPENDED, so a user's own `agtermctl` earlier on PATH still wins.

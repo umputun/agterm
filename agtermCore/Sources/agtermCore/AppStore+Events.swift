@@ -30,6 +30,7 @@ extension AppStore {
     /// connection's state, which the app cannot observe under the hold prompt.
     private func emitRemoteVisibility(_ kind: ControlEventKind, session: Session, workspace: UUID) {
         guard let host = session.remoteHost else { return }
+        onRemoteRowVisibility?(session, kind == .remoteOpened)
         emitControlEvent(kind, workspace: workspace, session: session.id,
                          payload: ControlEventPayload(name: session.displayName, host: host))
     }

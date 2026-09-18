@@ -516,6 +516,9 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Modify: `agtermCore/Sources/agtermCore/RemoteSession.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Events.swift`
 - Create: `agterm/Control/RemotePresentationProcess.swift`
+- Modify: `agterm/Control/ControlServer+RemotePresentation.swift`, `agterm/Control/ControlServer+Presentation.swift`, `agterm/Control/ControlServer.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
+- Modify: `agtermTests/ControlServerRemotePresentationTests.swift`, `agtermTests/ControlServerZmxTests.swift`
 - Modify: `agterm/Control/ControlServer+Zmx.swift`
 - Modify: `agterm/Notifications/NotificationManager.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/RemotePresentationClientTests.swift`
@@ -523,21 +526,26 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePendingCloseTests.swift`
 - Create: `agtermTests/RemotePresentationProcessTests.swift`
 
-- [ ] write failing tests for the client state machine with a fake transport and clock: hello then
+- [x] write failing tests for the client state machine with a fake transport and clock: hello then
       snapshot then deltas; stale-generation frames ignored; missed ack marks the stream stale and
       reconnects; backoff capped at 30s, growing to five minutes after repeated failures, reset by a healthy
       connection, never stopping; one warning per failure episode; no launch at all for an `unsupported`
       row; soft close stops the client and undo restarts it with a fresh generation; workspace restoration
       restarts it
-- [ ] add `RemoteSession.presentCommand(host:endpoint:session:attachment:)` reusing the BatchMode and PATH
+- [x] add `RemoteSession.presentCommand(host:endpoint:session:attachment:)` reusing the BatchMode and PATH
       chain, `-T`, no lifetime deadline
-- [ ] implement `RemotePresentationProcess`: long-lived `Process` with stdio pipes behind the injected seam,
+- [x] implement `RemotePresentationProcess`: long-lived `Process` with stdio pipes behind the injected seam,
       SIGTERM on stop, stderr to `os.Logger`
-- [ ] drive start and stop from `emitSessionCreated` and `emitSessionClosed` for a remote row with a
+- [x] drive start and stop from `emitSessionCreated` and `emitSessionClosed` for a remote row with a
       binding, so every producer of those edges is covered; a start failure never fails the attach
-- [ ] deliver a mirrored `notify` through the explicit-notify path of `NotificationManager`, with no focus
+- [x] deliver a mirrored `notify` through the explicit-notify path of `NotificationManager`, with no focus
       suppression, marked so it is never relayed onward
-- [ ] run the targeted tests - must pass before Task 11
+- [x] run the targeted tests - must pass before Task 11
+- ➕ the attach starts the client itself, right after `bindRemote`: the row's created event fires inside
+  `addSession`, before the binding exists. `AppStore.onRemoteRowVisibility` covers soft close, undo and
+  workspace restoration, where the binding is already on the row
+- ➕ the client has no timer of its own; the server ticks every client once a second, which is what makes
+  backoff and the stale check deterministic under a fake clock
 
 ### Task 11: Slice 1 read-back, end-to-end test and gates
 

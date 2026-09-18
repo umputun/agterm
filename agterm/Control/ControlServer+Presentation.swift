@@ -150,7 +150,11 @@ extension ControlServer {
     /// reach into, so the server assigns wherever it already walks the open windows.
     func attachPresentationHub() {
         for entry in library.windows {
-            library.store(for: entry.id)?.presentationHub = presentationHub
+            guard let store = library.store(for: entry.id) else { continue }
+            store.presentationHub = presentationHub
+            store.onRemoteRowVisibility = { [weak self] session, shown in
+                MainActor.assumeIsolated { self?.remoteRowVisibilityChanged(session, shown: shown) }
+            }
         }
         dropOrphanedPresentationStreams()
     }

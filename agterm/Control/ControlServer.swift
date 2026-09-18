@@ -76,6 +76,12 @@ final class ControlServer {
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10
 
+    /// This Mac as a VIEWER: one client per attached session. `ControlServer+RemotePresentation` owns the
+    /// logic. The transport is injectable so a hosted test needs no ssh.
+    var remoteClients: [UUID: RemotePresentationClient] = [:]
+    var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()
+    var remoteTick: Task<Void, Never>?
+
     nonisolated private func cachedWindows() -> [ControlWindowNode] {
         cacheLock.lock(); defer { cacheLock.unlock() }
         return cachedWindowNodes
@@ -310,6 +316,7 @@ final class ControlServer {
         // or a bind that failed) still holds one and would otherwise keep it for the whole process.
         defer { releaseOwnership() }
         shutdownPresentationStreams()
+        stopRemotePresentations()
         guard listenFD >= 0 else { return }
         close(listenFD)
         listenFD = -1

@@ -159,4 +159,113 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         XCTAssertFalse(local.hudActive)
     }
+
+    @MainActor
+    private final class Transport: RemotePresentationTransport {
+        final class Link: RemotePresentationLink {
+            var stopped = false
+            func send(_ line: Data) {}
+            func stop() { stopped = true }
+        }
+
+        var launches: [[String]] = []
+        var links: [Link] = []
+        var deliver: [(Data) -> Void] = []
+
+        func open(_ argv: [String], onLine: @escaping @MainActor (Data) -> Void,
+                  onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+            launches.append(argv)
+            deliver.append(onLine)
+            let link = Link()
+            links.append(link)
+            return link
+        }
+
+        func feed(_ body: PresentationFrame.Body, rev: Int) throws {
+            let line = try PresentationCodec.encode(PresentationFrame(gen: 3, rev: rev, body: body)).dropLast()
+            deliver.last?(Data(line))
+        }
+    }
+
+    private func connected() throws -> (fix: (server: ControlServer, store: AppStore, session: Session),
+                                        transport: Transport) {
+        let fix = try fixture()
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        fix.server.startRemotePresentation(for: fix.session)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)), rev: 0)
+        return (fix, transport)
+    }
+
+    func testStartingOpensTheBridgeForTheOriginsSession() throws {
+        let (fix, transport) = try connected()
+
+        XCTAssertEqual(transport.launches.count, 1)
+        XCTAssertEqual(transport.launches[0].prefix(2), ["ssh", "-T"])
+        XCTAssertTrue(try XCTUnwrap(transport.launches[0].last).contains("present"))
+        XCTAssertNotNil(fix.server.remoteClients[fix.session.id])
+    }
+
+    func testTheSnapshotReachesTheRowAndMarksItConnected() throws {
+        let (fix, transport) = try connected()
+        let status = PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: nil,
+                                        changedAt: nil)
+
+        try transport.feed(.snapshot(PresentationSnapshot(status: status, hud: nil)), rev: 1)
+
+        XCTAssertEqual(fix.session.agentIndicator.status, .blocked)
+        XCTAssertEqual(fix.session.remotePresentation?.connection, .connected)
+    }
+
+    func testAMirroredHudFrameIsShownOnTheRow() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+        try transport.feed(.hud(hud("deploying")), rev: 2)
+
+        XCTAssertTrue(fix.session.hudActive)
+        XCTAssertTrue(body(of: fix.session).contains("deploying"))
+    }
+
+    func testASoftCloseStopsTheClientAndUndoStartsAFreshOne() throws {
+        let (fix, transport) = try connected()
+        fix.server.refreshWindowCache()
+
+        XCTAssertTrue(fix.store.softCloseSession(fix.session.id))
+        XCTAssertTrue(transport.links[0].stopped)
+        XCTAssertNil(fix.server.remoteClients[fix.session.id])
+
+        XCTAssertTrue(fix.store.undoPendingClose())
+        XCTAssertEqual(transport.launches.count, 2)
+        XCTAssertNotNil(fix.server.remoteClients[fix.session.id])
+    }
+
+    func testStartingTwiceKeepsOneClient() throws {
+        let (fix, transport) = try connected()
+
+        fix.server.startRemotePresentation(for: fix.session)
+
+        XCTAssertEqual(transport.launches.count, 1)
+    }
+
+    func testStoppingTheServerStopsEveryClient() throws {
+        let (fix, transport) = try connected()
+
+        fix.server.stop()
+
+        XCTAssertTrue(transport.links[0].stopped)
+        XCTAssertTrue(fix.server.remoteClients.isEmpty)
+    }
+
+    func testALocalSessionGetsNoClient() throws {
+        let fix = try fixture()
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let local = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+
+        fix.server.startRemotePresentation(for: local)
+
+        XCTAssertTrue(transport.launches.isEmpty)
+    }
 }
