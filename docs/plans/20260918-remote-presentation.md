@@ -355,15 +355,15 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Create: `agtermCore/Sources/agtermCore/PresentationHub.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/PresentationHubTests.swift`
 
-- [ ] write failing tests: subscribe returns the snapshot before any delta; a change during subscribe lands
+- [x] write failing tests: subscribe returns the snapshot before any delta; a change during subscribe lands
       after the snapshot; revisions are monotonic per generation; a second subscriber to one session gets
       its own generation; a full queue disconnects that subscriber only; unsubscribe releases state; the
       snapshot's HUD lifetime is sampled at subscribe through a supplied closure; a missed ack past the
       stale timeout marks the subscriber dead
-- [ ] implement `PresentationHub` (`@MainActor`): subscribe, publish, unsubscribe, bounded per-subscriber
+- [x] implement `PresentationHub` (`@MainActor`): subscribe, publish, unsubscribe, bounded per-subscriber
       queue behind an injected sink
-- [ ] implement liveness state with an injected clock: last ack, stale timeout, ping requests to the sink
-- [ ] run `swift test --filter PresentationHubTests` - must pass before Task 3
+- [x] implement liveness state with an injected clock: last ack, stale timeout, ping requests to the sink
+- [x] run `swift test --filter PresentationHubTests` - must pass before Task 3
 
 ### Task 3: Publish status to the hub
 
