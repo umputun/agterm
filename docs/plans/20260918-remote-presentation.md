@@ -343,11 +343,11 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Create: `agtermCore/Sources/agtermCore/PresentationFrames.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/PresentationFramesTests.swift`
 
-- [ ] write failing tests: round trip of every slice-1 frame, unknown kind tolerated, oversize line refused,
+- [x] write failing tests: round trip of every slice-1 frame, unknown kind tolerated, oversize line refused,
       malformed JSON reported with a diagnosable error, version negotiation picking the lower side
-- [ ] define `PresentationFrame` (hello, ping, ack, snapshot, status, hud, notify) with `gen` and `rev`
-- [ ] implement the newline codec with the frame-size bound
-- [ ] run `swift test --filter PresentationFramesTests` - must pass before Task 2
+- [x] define `PresentationFrame` (hello, ping, ack, snapshot, status, hud, notify) with `gen` and `rev`
+- [x] implement the newline codec with the frame-size bound
+- [x] run `swift test --filter PresentationFramesTests` - must pass before Task 2
 
 ### Task 2: Origin hub with atomic snapshot and ordered deltas
 
