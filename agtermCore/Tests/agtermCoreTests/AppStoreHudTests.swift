@@ -223,4 +223,193 @@ struct AppStoreHudTests {
         #expect(withProgram.overlaySizePercent == 70)
         #expect(withProgram.hud == nil)
     }
+
+    @MainActor
+    private final class HudSink: PresentationSink {
+        var frames: [PresentationFrame] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            frames.append(frame)
+            return true
+        }
+        func close(_ reason: PresentationHub.CloseReason) {}
+
+        var huds: [PresentationHud?] {
+            frames.compactMap { if case .hud(let hud) = $0.body { return .some(hud) } else { return nil } }
+        }
+        var snapshot: PresentationSnapshot? {
+            frames.lazy.compactMap { if case .snapshot(let snapshot) = $0.body { snapshot } else { nil } }.first
+        }
+    }
+
+    private static let start = Date(timeIntervalSince1970: 1_789_000_000)
+    private static let size = HudPanelSize(widthPercent: 30, heightPercent: 8)
+
+    private struct Mirrored {
+        let store: AppStore
+        let session: Session
+        let hub: PresentationHub
+        let sink: HudSink
+    }
+
+    private func mirroredStore() throws -> Mirrored {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let sink = HudSink()
+        try subscribe(sink, to: session, in: store, hub: hub, now: Self.start)
+        return Mirrored(store: store, session: session, hub: hub, sink: sink)
+    }
+
+    private func subscribe(_ sink: HudSink, to session: Session, in store: AppStore, hub: PresentationHub,
+                           now: Date) throws {
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: ["hud"], mode: .mirror),
+                          sink: sink) { store.presentationSnapshot(forSession: session.id, now: now) }
+    }
+
+    private func openAndPublish(_ message: String, hideAfter: Double? = nil, in store: AppStore,
+                                session: Session, paneIdentity: UUID? = nil) {
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: message, hideAfter: hideAfter),
+                      file: "/tmp/agterm-test-hud-\(session.id)", size: Self.size, paneIdentity: paneIdentity)
+        store.publishHud(forSession: session.id, expiresAt: hideAfter.map { Self.start.addingTimeInterval($0) },
+                         now: Self.start)
+    }
+
+    @Test func aPublishedHudTravelsWithItsPaneIdentityAndRemainingLifetime() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+
+        openAndPublish("deploying", hideAfter: 10, in: store, session: session,
+                       paneIdentity: session.paneIdentity)
+
+        let hud = try #require(sink.huds.last ?? nil)
+        #expect(hud.spec.message == "deploying")
+        #expect(hud.pane == .identity(session.paneIdentity))
+        #expect(hud.remaining == 10)
+    }
+
+    @Test func aSessionWideHudWithNoAutoHideTravelsWithNeither() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+
+        openAndPublish("waiting", in: store, session: session)
+
+        let hud = try #require(sink.huds.last ?? nil)
+        #expect(hud.pane == nil)
+        #expect(hud.remaining == nil)
+    }
+
+    @Test func everyPublicationCarriesALargerGeneration() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+        openAndPublish("one", in: store, session: session)
+
+        store.updateHud(session.id, spec: HudSpec(message: "two"), size: Self.size)
+        store.publishHud(forSession: session.id, expiresAt: nil, now: Self.start)
+        openAndPublish("three", in: store, session: session)
+
+        let generations = sink.huds.compactMap { $0?.generation }
+        #expect(generations.count == 3)
+        #expect(generations == generations.sorted())
+        #expect(Set(generations).count == 3)
+    }
+
+    @Test func aLateSubscriberGetsTheRemainingLifetimeNotTheConfiguredOne() throws {
+        let fix = try mirroredStore()
+        let (store, session, hub) = (fix.store, fix.session, fix.hub)
+        openAndPublish("deploying", hideAfter: 10, in: store, session: session)
+        let late = HudSink()
+
+        try subscribe(late, to: session, in: store, hub: hub, now: Self.start.addingTimeInterval(7))
+
+        #expect(late.snapshot?.hud?.remaining == 3)
+        #expect(late.snapshot?.hud?.spec.hideAfter == 10)
+    }
+
+    @Test func remainingLifetimeNeverGoesNegative() throws {
+        let fix = try mirroredStore()
+        let (store, session, hub) = (fix.store, fix.session, fix.hub)
+        openAndPublish("deploying", hideAfter: 10, in: store, session: session)
+        let late = HudSink()
+
+        try subscribe(late, to: session, in: store, hub: hub, now: Self.start.addingTimeInterval(11))
+
+        #expect(late.snapshot?.hud?.remaining == 0)
+    }
+
+    @Test func closingTheHudPublishesAbsence() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+        openAndPublish("deploying", in: store, session: session)
+
+        store.closeHud(session.id)
+
+        #expect(sink.huds.count == 2)
+        #expect(sink.huds.last == .some(nil))
+        #expect(store.presentationSnapshot(forSession: session.id, now: Self.start).hud == nil)
+    }
+
+    @Test func aProgramOverlayReplacingTheHudPublishesAbsence() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+        openAndPublish("deploying", in: store, session: session)
+
+        #expect(store.openOverlay(session.id, command: "htop"))
+
+        #expect(sink.huds.last == .some(nil))
+    }
+
+    @Test func aHudThatWasNeverPublishedIsAbsentFromTheSnapshotAndPublishesNothingOnDiscard() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "unwritten"), file: "/tmp/agterm-x",
+                      size: Self.size)
+        #expect(store.presentationSnapshot(forSession: session.id, now: Self.start).hud == nil)
+        store.closeHud(session.id)
+
+        #expect(sink.huds.isEmpty)
+    }
+
+    @Test func aFailedReplacementPublishesAbsenceOnceAndNeverTheRejectedSpec() throws {
+        let fix = try mirroredStore()
+        let (store, session, sink) = (fix.store, fix.session, fix.sink)
+        openAndPublish("first", in: store, session: session)
+
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "rejected"), file: "/tmp/agterm-x",
+                      size: Self.size)
+        store.closeHud(session.id)
+
+        #expect(sink.huds.map { $0?.spec.message } == ["first", nil])
+    }
+
+    @Test func aResizeRepublishesTheForcedWidthAndKeepsTheDeadline() throws {
+        let fix = try mirroredStore()
+        let (store, session, hub) = (fix.store, fix.session, fix.hub)
+        openAndPublish("deploying", hideAfter: 10, in: store, session: session)
+
+        #expect(store.resizeOverlay(session.id, sizePercent: 60))
+        store.publishHudResize(forSession: session.id, now: Self.start.addingTimeInterval(4))
+
+        let resized = try #require(fix.sink.huds.last ?? nil)
+        #expect(resized.spec.sizePercent == 60)
+        #expect(resized.remaining == 6)
+        let late = HudSink()
+        try subscribe(late, to: session, in: store, hub: hub, now: Self.start.addingTimeInterval(4))
+        #expect(late.snapshot?.hud?.spec.sizePercent == 60)
+    }
+
+    @Test func theNextPublicationDropsAForcedWidthItsSpecDoesNotAsk() throws {
+        let fix = try mirroredStore()
+        let (store, session) = (fix.store, fix.session)
+        openAndPublish("deploying", in: store, session: session)
+        store.resizeOverlay(session.id, sizePercent: 60)
+        store.publishHudResize(forSession: session.id, now: Self.start)
+
+        store.updateHud(session.id, spec: HudSpec(message: "done"), size: Self.size)
+        store.publishHud(forSession: session.id, expiresAt: nil, now: Self.start)
+
+        #expect((fix.sink.huds.last ?? nil)?.spec.sizePercent == nil)
+    }
 }

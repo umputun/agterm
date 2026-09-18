@@ -65,6 +65,8 @@ final class ControlServer {
     /// Live HUD auto-hide timers, one per session. `ControlServer+Hud` owns the logic; the state sits here
     /// because an extension cannot hold it. Main-actor only.
     var hudAutoHide: [UUID: HudAutoHide] = [:]
+    /// The clock HUD expiry deadlines are stamped from.
+    var hudClock: () -> Date = Date.init
 
     nonisolated private func cachedWindows() -> [ControlWindowNode] {
         cacheLock.lock(); defer { cacheLock.unlock() }

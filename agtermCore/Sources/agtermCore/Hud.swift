@@ -71,6 +71,11 @@ public struct HudSpec: Codable, Equatable, Sendable {
                 textColor: textColor, sizePercent: sizePercent, position: position, hideAfter: hideAfter)
     }
 
+    func withSizePercent(_ percent: Int?) -> HudSpec {
+        HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: backgroundColor,
+                textColor: textColor, sizePercent: percent, position: position, hideAfter: hideAfter)
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         message = try c.decode(String.self, forKey: .message)

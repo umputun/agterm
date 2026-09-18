@@ -93,6 +93,7 @@ extension ControlServer: ControlActions {
                 store.resizeOverlay(id, sizePercent: previousSize)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
+            if hud { store.publishHudResize(forSession: id, now: self.hudClock()) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

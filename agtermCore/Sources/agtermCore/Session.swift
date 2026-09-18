@@ -406,13 +406,32 @@ public final class Session: Identifiable {
     public func discardHudBody() {
         if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
         let cancelTimer = onHudDiscarded
+        let withdraw = onHudWithdrawn
         onHudDiscarded = nil
+        onHudWithdrawn = nil
         hudSpec = nil
         hudPaneIdentity = nil
         hudFile = nil
         hudHeightPercent = nil
+        hudExpiresAt = nil
+        hudResizedWidthPercent = nil
         cancelTimer?()
+        withdraw?()
     }
+
+    /// Tells attached viewers the panel is gone. Set when the HUD is published, so a panel whose body was
+    /// never written, and so never published, withdraws nothing.
+    @ObservationIgnored var onHudWithdrawn: (() -> Void)?
+
+    /// When the app hides the published panel, nil for a persistent one.
+    @ObservationIgnored var hudExpiresAt: Date?
+
+    /// The width an `overlay.resize` forced on the published panel, until the next open or update resolves
+    /// the size from its own spec. A viewer sizes from its own pane, so only a forced width travels.
+    @ObservationIgnored var hudResizedWidthPercent: Int?
+
+    /// Bumped on every publication, so a viewer's timer for an earlier panel cannot close a later one.
+    @ObservationIgnored var hudPublishGeneration = 0
 
     /// Cancels the app's auto-hide timer for this panel; `discardHudBody` calls and clears it. Every teardown
     /// that drops a HUD already routes through that one method, which is why the hook hangs there.

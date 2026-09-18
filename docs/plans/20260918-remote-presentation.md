@@ -397,19 +397,20 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
-- Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+Presentation.swift`
+- Modify: `agterm/Control/ControlServer.swift`
 - Modify: `agterm/Control/ControlServer+Hud.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreHudTests.swift`
 - Modify: `agtermTests/ControlServerHudAutoHideTests.swift`
 
-- [ ] write failing tests: every discard path publishes absence (close, auto-hide, replacement by an
+- [x] write failing tests: every discard path publishes absence (close, auto-hide, replacement by an
       overlay); a stale HUD generation cannot close a replacement; a late subscriber gets the remaining
       lifetime, not the configured one; a failed update publishes nothing and the prior HUD stays; a failed
       replacement open never publishes the rejected spec but does publish absence
-- [ ] store an expiry deadline from an injected clock in `HudAutoHide`; add a HUD generation
-- [ ] publish HUD state after `writeHudBody` succeeds, and absence from `Session.discardHudBody`, keeping
+- [x] store an expiry deadline from an injected clock in `HudAutoHide`; add a HUD generation
+- [x] publish HUD state after `writeHudBody` succeeds, and absence from `Session.discardHudBody`, keeping
       its existing callback's timer cancellation
-- [ ] run the targeted tests - must pass before Task 6
+- [x] run the targeted tests - must pass before Task 6
 
 ### Task 6: `zmx.tree` presentation capability
 

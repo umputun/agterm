@@ -11,6 +11,9 @@ private let hudLogger = Logger(subsystem: "com.umputun.agterm", category: "Contr
 /// would recreate the panel's surface.
 struct HudAutoHide {
     let revision: Int
+    /// When the panel comes down. A viewer's remaining lifetime is sampled from it, so a late subscriber
+    /// gets what is left and not the configured interval again.
+    let deadline: Date
     let task: Task<Void, Never>
 }
 
@@ -18,13 +21,18 @@ struct HudAutoHide {
 /// `ControlDispatcher+Hud`; this layer supplies the three things agtermCore cannot resolve — the bundled
 /// helper's path, the terminal font's cell size, and live geometry, plus the body file the helper reads.
 extension ControlServer {
-    /// Arms `spec`'s auto-hide for `session`, replacing whatever was armed before, and registers the
-    /// cancellation the store calls from `discardHudBody`. A spec with no auto-hide only cancels.
+    /// Arms `spec`'s auto-hide for `session`, replacing whatever was armed before, registers the
+    /// cancellation the store calls from `discardHudBody`, and publishes the panel to attached viewers with
+    /// the deadline it now has. A spec with no auto-hide only cancels, and still publishes.
     ///
     /// Called after the body write succeeds, never before: a rejected open or update must leave the panel
-    /// that is actually on screen with the deadline it actually has.
+    /// that is actually on screen with the deadline it actually has, and must not reach a viewer.
     func armHudAutoHide(_ session: Session, spec: HudSpec) {
         let id = session.id
+        defer {
+            library.store(forSession: id)?.publishHud(forSession: id, expiresAt: hudAutoHide[id]?.deadline,
+                                                      now: hudClock())
+        }
         let revision = (hudAutoHide[id]?.revision ?? 0) + 1
         hudAutoHide[id]?.task.cancel()
         hudAutoHide[id] = nil
@@ -39,7 +47,8 @@ extension ControlServer {
             // through the store, so the body file goes with the panel and the deck sees the slot empty.
             self.library.store(forSession: id)?.closeHud(id)
         }
-        hudAutoHide[id] = HudAutoHide(revision: revision, task: task)
+        hudAutoHide[id] = HudAutoHide(revision: revision, deadline: hudClock().addingTimeInterval(seconds),
+                                      task: task)
         session.onHudDiscarded = { [weak self] in
             MainActor.assumeIsolated {
                 self?.hudAutoHide[id]?.task.cancel()
