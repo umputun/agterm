@@ -39,7 +39,9 @@ package.targets += [
     // The fixtures need a socket client they can copy into a test bundle, which /usr/bin/nc
     // cannot be (see the target's own comment).
     .executableTarget(name: "session-host-test-client"),
+    .executableTarget(name: "session-host-pty-probe"),
     .testTarget(name: "SessionHostRuntimeTests",
-                dependencies: ["SessionHostRuntime", "agterm-session-host", "session-host-test-client"]),
+                dependencies: ["SessionHostRuntime", "agterm-session-host", "session-host-test-client",
+                               "session-host-pty-probe"]),
 ]
 #endif

@@ -4,10 +4,13 @@ import Testing
 @testable import SessionHostRuntime
 
 struct SessionHostTrampolineTests {
-    @Test func echoWritesThroughThePTY() throws {
-        let child = try PTYProcess.spawn(argv: ["/bin/echo", "two words", "last"], env: [:], cwd: "/tmp", rows: 24, cols: 80)
+    private static let probe = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent(".build/debug/session-host-pty-probe").path
+
+    @Test func outputReachesTheParentThroughThePTY() throws {
+        let child = try PTYProcess.spawn(argv: [Self.probe, "args", "two words", "last"], env: [:], cwd: "/tmp", rows: 24, cols: 80)
         let result = try collect(child)
-        #expect(result.output == "two words last\n")
+        #expect(result.output == "/private/tmp\n2\ntwo words\nlast\n")
         #expect(result.status == 0)
         #expect(result.execError == nil)
     }
@@ -16,9 +19,8 @@ struct SessionHostTrampolineTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("session-host-\(UUID().uuidString)/with space")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
-        let child = try PTYProcess.spawn(
-            argv: ["/bin/sh", "-c", "printf '%s\\n' \"$PWD\" \"$#\" \"$1\"", "probe", "one argument with spaces"],
-            env: [:], cwd: directory.path, rows: 24, cols: 80)
+        let child = try PTYProcess.spawn(argv: [Self.probe, "args", "one argument with spaces"],
+                                        env: [:], cwd: directory.path, rows: 24, cols: 80)
         let result = try collect(child)
         let lines = result.output.split(separator: "\n").map(String.init)
         #expect(lines.count == 3)
@@ -30,7 +32,7 @@ struct SessionHostTrampolineTests {
     }
 
     @Test func environmentIsReplacedAndPreservesNewlines() throws {
-        let child = try PTYProcess.spawn(argv: ["/usr/bin/env"], env: ["VALUE": "first\nsecond", "OTHER": "two words"],
+        let child = try PTYProcess.spawn(argv: [Self.probe, "env"], env: ["VALUE": "first\nsecond", "OTHER": "two words"],
                                         cwd: "/tmp", rows: 24, cols: 80)
         let result = try collect(child)
         #expect(Set(result.output.split(separator: "\n")) == ["VALUE=first", "second", "OTHER=two words"])
@@ -38,8 +40,16 @@ struct SessionHostTrampolineTests {
         #expect(result.status == 0)
     }
 
+    @Test func outputSurvivesAReaderStalledPastTheExitDrain() throws {
+        let child = try PTYProcess.spawn(argv: [Self.probe, "env"], env: ["VALUE": "kept"], cwd: "/tmp", rows: 24, cols: 80)
+        Thread.sleep(forTimeInterval: 1.5)
+        let result = try collect(child)
+        #expect(result.output == "VALUE=kept\n")
+        #expect(result.status == 0)
+    }
+
     @Test func initialWindowSizeIsAvailableBeforeExec() throws {
-        let child = try PTYProcess.spawn(argv: ["/bin/stty", "size"], env: [:], cwd: "/tmp", rows: 37, cols: 119)
+        let child = try PTYProcess.spawn(argv: [Self.probe, "size"], env: [:], cwd: "/tmp", rows: 37, cols: 119)
         let result = try collect(child)
         #expect(result.output == "37 119\n")
         #expect(result.status == 0)
@@ -94,9 +104,7 @@ struct SessionHostTrampolineTests {
         let privateFD = fcntl(original, F_DUPFD_CLOEXEC, 200)
         try #require(privateFD >= 0)
         defer { close(privateFD) }
-        let child = try PTYProcess.spawn(
-            argv: ["/bin/sh", "-c", "test ! -e \"/dev/fd/$1\" && /bin/echo closed", "probe", String(privateFD)],
-            env: [:], cwd: "/tmp", rows: 24, cols: 80)
+        let child = try PTYProcess.spawn(argv: [Self.probe, "fd", String(privateFD)], env: [:], cwd: "/tmp", rows: 24, cols: 80)
         let result = try collect(child)
         #expect(result.output == "closed\n")
         #expect(result.status == 0)
@@ -131,6 +139,8 @@ struct SessionHostTrampolineTests {
         var errorData = Data()
         var outputOpen = true
         var errorOpen = true
+        var acknowledged = false
+        let marker = Data("--pty-probe-end--\r\n".utf8)
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline && (outputOpen || errorOpen || status == nil) {
             var fds = [
@@ -140,6 +150,14 @@ struct SessionHostTrampolineTests {
             let polled = fds.withUnsafeMutableBufferPointer { poll($0.baseAddress, nfds_t($0.count), 50) }
             if polled < 0 && errno != EINTR { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
             if fds[0].revents != 0 { outputOpen = try readAvailable(child.ptyFD, into: &output, pty: true) }
+            if !acknowledged, let range = output.range(of: marker) {
+                output.removeSubrange(range)
+                acknowledged = true
+                var ack: UInt8 = 0x0A
+                var written: Int
+                repeat { written = write(child.ptyFD, &ack, 1) } while written < 0 && errno == EINTR
+                guard written == 1 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            }
             if fds[1].revents != 0 { errorOpen = try readAvailable(child.execErrorFD, into: &errorData, pty: false) }
             if status == nil {
                 var rawStatus: Int32 = 0
