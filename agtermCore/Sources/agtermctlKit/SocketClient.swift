@@ -386,7 +386,14 @@ struct SocketClient {
         }
         if !keymap.commands.isEmpty {
             lines.append(contentsOf: ["", "commands:"])
-            lines.append(contentsOf: keymap.commands.map { "    \($0.name)  \($0.shortcut ?? "(palette only)")" })
+            lines.append(contentsOf: keymap.commands.map { command in
+                var row = "    \(command.name)  \(command.shortcut ?? "(palette only)")"
+                if command.errorHud {
+                    row += "  --error-hud --error-position \(command.errorPosition.rawValue)"
+                    if let pane = command.errorPane { row += " --error-pane \(pane.rawValue)" }
+                }
+                return row
+            })
         }
         if !keymap.diagnostics.isEmpty {
             lines.append(contentsOf: ["", "diagnostics:"])

@@ -13,11 +13,34 @@ public struct CustomCommand: Codable, Equatable, Sendable, Identifiable {
     /// The keybind string (e.g. `cmd+shift+e` or `ctrl+a>b`); empty means palette-only.
     public var shortcut: String
 
-    public init(id: UUID = UUID(), name: String, command: String, shortcut: String) {
+    public var errorHud: Bool
+    public var errorPosition: HudPosition
+    public var errorPane: OverlayPane?
+
+    public init(id: UUID = UUID(), name: String, command: String, shortcut: String,
+                errorHud: Bool = false, errorPosition: HudPosition = .defaultPosition, errorPane: OverlayPane? = nil) {
         self.id = id
         self.name = name
         self.command = command
         self.shortcut = shortcut
+        self.errorHud = errorHud
+        self.errorPosition = errorPosition
+        self.errorPane = errorPane
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, command, shortcut, errorHud, errorPosition, errorPane
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        command = try values.decode(String.self, forKey: .command)
+        shortcut = try values.decode(String.self, forKey: .shortcut)
+        errorHud = try values.decodeIfPresent(Bool.self, forKey: .errorHud) ?? false
+        errorPosition = try values.decodeIfPresent(HudPosition.self, forKey: .errorPosition) ?? .defaultPosition
+        errorPane = try values.decodeIfPresent(OverlayPane.self, forKey: .errorPane)
     }
 }
 

@@ -36,9 +36,30 @@ public struct ControlKeymapCommand: Codable, Sendable, Equatable {
     /// dropped as colliding — the diagnostics say which).
     public var shortcut: String?
 
-    public init(name: String, shortcut: String? = nil) {
+    public var errorHud: Bool
+    public var errorPosition: HudPosition
+    public var errorPane: OverlayPane?
+
+    public init(name: String, shortcut: String? = nil, errorHud: Bool = false,
+                errorPosition: HudPosition = .defaultPosition, errorPane: OverlayPane? = nil) {
         self.name = name
         self.shortcut = shortcut
+        self.errorHud = errorHud
+        self.errorPosition = errorPosition
+        self.errorPane = errorPane
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, shortcut, errorHud, errorPosition, errorPane
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        shortcut = try values.decodeIfPresent(String.self, forKey: .shortcut)
+        errorHud = try values.decodeIfPresent(Bool.self, forKey: .errorHud) ?? false
+        errorPosition = try values.decodeIfPresent(HudPosition.self, forKey: .errorPosition) ?? .defaultPosition
+        errorPane = try values.decodeIfPresent(OverlayPane.self, forKey: .errorPane)
     }
 }
 
@@ -125,7 +146,8 @@ public extension ControlKeymap {
                                        overridden: resolved != action.defaultChord ? true : nil)
         }
         let commands = keymap.commands.map {
-            ControlKeymapCommand(name: $0.name, shortcut: $0.shortcut.isEmpty ? nil : $0.shortcut)
+            ControlKeymapCommand(name: $0.name, shortcut: $0.shortcut.isEmpty ? nil : $0.shortcut,
+                                errorHud: $0.errorHud, errorPosition: $0.errorPosition, errorPane: $0.errorPane)
         }
         return ControlKeymap(path: path, actions: actions, commands: commands,
                              diagnostics: diagnostics.map { ControlKeymapDiagnostic(line: $0.line, message: $0.message) },

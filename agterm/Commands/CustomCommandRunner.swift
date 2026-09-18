@@ -4,10 +4,11 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCommandRunner")
 
-/// How the runner shows a failed command: posts the panel, answering false when the slot holds a running
-/// program, which is never evicted for a message. Taking it down again is the panel's own auto-hide.
+/// How the runner shows a failed command: posts the panel and answers nil, or the reason it did not open,
+/// such as the slot holding a running program, which is never evicted for a message. Taking it down again
+/// is the panel's own auto-hide.
 struct FailureHud {
-    let open: (_ sessionID: String, _ message: String, _ detail: String?) -> Bool
+    let open: (_ sessionID: String, _ spec: HudSpec, _ pane: OverlayPane?) -> String?
 }
 
 /// A command's stderr, captured to a temp file so a failure can say what it printed.
@@ -431,7 +432,7 @@ final class CustomCommandRunner {
     /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` over the app environment and
     /// running in `cwd` (nil for a sessionless launch, which inherits the app's). `PATH` is widened first
     /// (`CommandPath`): the app's own is launchd's, and `sh -c` runs no profile, so a bare `agtermctl` would
-    /// exit 127. stderr goes to a temp file the failure report reads; a clean exit reports nothing.
+    /// exit 127. Only commands opting into failure panels capture stderr; a clean exit reports nothing.
     private func spawn(_ command: CustomCommand, context: CommandContext, cwd: String?) {
         let line = context.expand(command.command)
         let process = Process()
@@ -442,13 +443,12 @@ final class CustomCommandRunner {
                                                   bundledCLIDirectory: CLIInstaller.bundledTool?
                                                       .deletingLastPathComponent().path)
         process.environment = environment
-        // fire-and-forget: pin stdin and stdout to /dev/null rather than inherit the app's fds, which vary by
-        // launch. stderr is captured instead: it carries the one line that says why a command failed.
+        // detached commands must not inherit the app's launch-dependent stdio.
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
-        let capture = StderrFile()
+        let capture = command.errorHud ? StderrFile() : nil
         process.standardError = capture?.handle ?? FileHandle.nullDevice
-        if capture == nil {
+        if command.errorHud, capture == nil {
             logger.error("custom command \"\(command.name, privacy: .public)\": stderr capture unavailable")
         }
         if let cwd, !cwd.isEmpty {
@@ -464,7 +464,7 @@ final class CustomCommandRunner {
             // the handler fires on an arbitrary queue; hop to the main actor to post.
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self.report(name: name, reason: "exit \(status)", detail: detail, sessionID: sessionID)
+                    self.report(command: command, reason: "exit \(status)", detail: detail, sessionID: sessionID)
                 }
             }
         }
@@ -476,19 +476,18 @@ final class CustomCommandRunner {
             logger.error("custom command \"\(name, privacy: .public)\" failed to spawn: \(error.localizedDescription, privacy: .public)")
             // a command that never started has no exit status and no output of its own, so the launch error
             // is the whole diagnosis.
-            report(name: name, reason: error.localizedDescription, detail: nil, sessionID: sessionID)
+            report(command: command, reason: error.localizedDescription, detail: nil, sessionID: sessionID)
         }
     }
 
-    /// Surface a failed command: the macOS banner as before, plus a panel over the session it fired in. The
-    /// banner obeys the notifications setting, so with banners off the panel is the only thing the user sees.
-    /// A sessionless launch and a session that has since closed have nowhere to put one.
-    private func report(name: String, reason: String, detail: String?, sessionID: String) {
-        NotificationManager.shared.notifyCommandFailure(name: name, detail: reason)
-        guard let failureHud, !sessionID.isEmpty else { return }
-        guard failureHud.open(sessionID, CommandFailure.message(name: name, reason: reason), detail) else {
-            logger.notice("custom command \"\(name, privacy: .public)\" failed (\(reason, privacy: .public)); no panel: the session is gone or a program overlay holds the slot")
-            return
+    /// Banners keep their notification preference; the panel is per-command opt-in.
+    private func report(command: CustomCommand, reason: String, detail: String?, sessionID: String) {
+        NotificationManager.shared.notifyCommandFailure(name: command.name, detail: reason)
+        guard command.errorHud, let failureHud, !sessionID.isEmpty else { return }
+        let spec = HudSpec(message: CommandFailure.message(name: command.name, reason: reason), detail: detail,
+                           position: command.errorPosition, hideAfter: Self.failureHudSeconds)
+        if let refusal = failureHud.open(sessionID, spec, command.errorPane) {
+            logger.notice("custom command \"\(command.name, privacy: .public)\" failed (\(reason, privacy: .public)); no failure panel: \(refusal, privacy: .public)")
         }
     }
 }

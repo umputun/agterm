@@ -13,6 +13,19 @@ import agtermCore
 // one test's output lands in the other's pipe.
 @Suite(.serialized)
 struct SocketClientTests {
+    @Test func formatsCustomCommandErrorOptions() {
+        let payload = ControlKeymap(path: "/tmp/keymap.conf", actions: [], commands: [
+            ControlKeymapCommand(name: "quiet"),
+            ControlKeymapCommand(name: "default", errorHud: true),
+            ControlKeymapCommand(name: "placed", shortcut: "ctrl+a>p", errorHud: true,
+                                 errorPosition: .topRight, errorPane: .left)
+        ], diagnostics: [])
+        let output = SocketClient.formatKeymap(payload)
+        #expect(output.contains("    quiet  (palette only)\n"))
+        #expect(output.contains("    default  (palette only)  --error-hud --error-position center\n"))
+        #expect(output.contains("    placed  ctrl+a>p  --error-hud --error-position top-right --error-pane left"))
+    }
+
     @Test func consecutiveEventReadsUseIndependentOneShotConnections() throws {
         let run = UUID(uuidString: "CBB5E3D0-7A9B-4C96-9EA2-18B14380DDB1")!
         let script = EventReadScript(run: run)

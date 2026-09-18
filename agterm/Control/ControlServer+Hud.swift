@@ -1,7 +1,10 @@
 import AppKit
 import CoreText
 import Foundation
+import os
 import agtermCore
+
+private let hudLogger = Logger(subsystem: "com.umputun.agterm", category: "ControlHud")
 
 /// A session's live auto-hide timer and the revision that armed it. The revision is what makes a superseded
 /// callback inert: an update restarts the interval without bumping `Session.overlaySlotGeneration`, which
@@ -50,6 +53,15 @@ extension ControlServer {
 
     func openHud(_ target: String?, window: String?, spec: HudSpec,
                  placement: ControlHudPlacement) -> ControlResponse {
+        openHud(target, window: window, spec: spec, placement: placement, fallbackToSession: false)
+    }
+
+    func openCommandFailureHud(_ target: String, spec: HudSpec, pane: OverlayPane?) -> ControlResponse {
+        openHud(target, window: nil, spec: spec, placement: ControlHudPlacement(pane: pane), fallbackToSession: true)
+    }
+
+    private func openHud(_ target: String?, window: String?, spec: HudSpec,
+                         placement: ControlHudPlacement, fallbackToSession: Bool) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
@@ -64,7 +76,11 @@ extension ControlServer {
             case .resolved(let identity, let targetPane):
                 paneIdentity = identity
                 pane = targetPane
-            case .rejected(let response): return response
+            case .rejected(let response):
+                guard fallbackToSession else { return response }
+                hudLogger.notice("failure panel for \"\(spec.message, privacy: .public)\" falling back to session-wide placement: \(response.error ?? "unknown placement error", privacy: .public)")
+                paneIdentity = nil
+                pane = nil
             }
             let file = Self.bodyFile(for: id)
             // measured ONCE and threaded through: the sizing and the header describe the same panel, and

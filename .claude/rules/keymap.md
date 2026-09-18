@@ -31,9 +31,15 @@ paths:
   by physical position, inverting `namedKey`/`latinKey` rather than adding a third table, so it survives a
   layout switch. It summons the quick terminal; see [[windows]] for the panel.
 - `parseKeymap` never throws. `map <chord> <action>` takes one whitespace-delimited chord token.
-  `command "<name>" [chord] <shell...>` treats the token after the quoted name as a shortcut only when
+  `command "<name>" [chord] [error options] <shell...>` treats the token after the quoted name as a shortcut only when
   `parseKeybinds` accepts it with a modifier or a bare function key;
   other bare keys are diagnosed and stay palette-only.
+  Parse `--error-hud`, `--error-position POS`, and `--error-pane left|right` as a contiguous prefix
+  after that optional chord, in any order. Position uses `HudPosition.parse`, aliases included.
+  The first ordinary shell token or `--` ends option parsing; preserve the remaining substring and
+  never seek another chord. Missing/invalid values, duplicate flags, unknown leading `--error-*`,
+  or placement without `--error-hud` diagnose and skip the command. Defaults: false, center, no pane.
+  `CustomCommand` Codable and `ControlKeymapCommand` read-back carry all three fields.
   Empty shell text is invalid. Both verbs split on spaces/tabs. Blank lines and comments are skipped;
   inline `#` starts a comment only after whitespace and outside double quotes. Each bad line yields
   `KeymapDiagnostic{line,message}` without stopping later lines. `{AGT_X}` text remains verbatim.
@@ -89,18 +95,16 @@ paths:
   first press. Mouse and programmatic menu actions without a current F-key down record nothing.
   Track held keycodes independently: a leader tail can arrive before its prefix is released.
   `.fired` launches detached `/bin/sh -c` with cwd, selection, and `$AGT_*`; stdin and stdout go to
-  `/dev/null` while stderr goes to a temp FILE, whose last 16 KiB the termination handler reads before
-  removing it (`StderrFile`, `CommandFailure`). A pipe would be wrong here in both directions: its read end
-  dies with agterm, so a background process a chord started would take SIGPIPE where `/dev/null` let it run
-  on, and it needs a live reader or a full buffer blocks the command. The accepted cost is disk: the 16 KiB
-  is a READ cap, so a command that logs heavily writes all of it, and a descendant that inherited the file
-  goes on growing the unlinked inode until it exits. `/dev/null` grew nothing. A spawn error or non-zero exit calls `notifyCommandFailure` AND posts
-  a HUD over the firing session through the injected `FailureHud`, carrying the name, the exit status or
-  launch error, and the last nonblank stderr line; the banner obeys the notifications setting, so with
-  banners off the panel is the only report. It clears itself through the HUD's own `--hide-after`, posted
-  with `failureHudSeconds`, so the runner holds no clock and no close of its own; [[control-api]] owns that
-  contract and the ownership question with it. A program overlay owning the slot refuses the open, which is
-  logged and never evicts the program. Exit 0 reports nothing whatever it printed. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
+  `/dev/null`. Only `errorHud` commands capture stderr to a temp file (`StderrFile`, `CommandFailure`),
+  reading its last 16 KiB before removing it. A pipe would break background descendants after agterm exits;
+  the file avoids that, but its write size is unbounded until every writer exits.
+  A spawn error or non-zero exit always calls `notifyCommandFailure`, which obeys the notification
+  setting. Only `errorHud` adds a panel through injected `FailureHud`, with the name, reason and any
+  usable stderr line. `errorPosition` defaults to `HudPosition.defaultPosition`; `errorPane` defaults nil.
+  Resolve an explicit left/right role at failure time. Placement rejection falls back to session-wide
+  at the configured position and logs it; other errors do not retry, and program overlays keep their slot.
+  HUD auto-hide owns the ten-second lifetime (`failureHudSeconds`); [[control-api]] owns that contract.
+  Exit 0 reports nothing whatever it printed. `.firedBuiltin` routes through `AppActions.perform(_:in:)`, a reverse lookup over
   `PaletteCommand.allCases` on `builtinAction`, falling
   back to `paletteLessHandler(for:)` — the sole listing of the actions holding no palette row, partitioned
   against `PaletteCommand` by `AppActionsPaletteTests`. Rebuild the matcher from commands AND

@@ -14,6 +14,7 @@ final class CustomCommandRunnerTests: XCTestCase {
     private var window: NSWindow!
     private var windowID: WindowInfo.ID!
     private var started: [CustomCommandRunner] = []
+    private var failureServers: [ControlServer] = []
 
     /// A menu chord deliberately unlike `toggle_sidebar`'s shipped one, so the monitor cannot appear to work
     /// by accident, plus the leader alternative every case below drives.
@@ -40,6 +41,13 @@ final class CustomCommandRunnerTests: XCTestCase {
         await MainActor.run {
             started.forEach { $0.stop() }
             started = []
+            for storeID in library.openIDs() {
+                for session in library.store(for: storeID)?.workspaces.flatMap(\.sessions) ?? [] {
+                    session.discardHudBody()
+                }
+            }
+            failureServers.forEach { $0.stop() }
+            failureServers = []
             WindowRegistry.shared.unregister(windowID)
             windowID = nil
             window.orderOut(nil)
@@ -451,27 +459,47 @@ final class CustomCommandRunnerTests: XCTestCase {
 
     /// Records what the runner would put on screen for a failed command.
     private final class HudRecorder: @unchecked Sendable {
-        var posts: [(session: String, message: String, detail: String?)] = []
+        struct Post {
+            let session: String
+            let spec: HudSpec
+            let pane: OverlayPane?
+            var message: String { spec.message }
+            var detail: String? { spec.detail }
+        }
+
+        var posts: [Post] = []
         var refuse = false
 
         var hud: FailureHud {
-            FailureHud(open: { [self] session, message, detail in
-                posts.append((session, message, detail))
-                return !refuse
+            FailureHud(open: { [self] session, spec, pane in
+                posts.append(Post(session: session, spec: spec, pane: pane))
+                return refuse ? "refused by test" : nil
             })
         }
     }
 
     /// A runner wired to `recorder`, plus a session for its commands to fire in.
-    private func failureFixture(_ recorder: HudRecorder) throws -> (runner: CustomCommandRunner, session: Session) {
+    private func failureFixture(_ recorder: HudRecorder, useControlServer: Bool = false) throws -> (runner: CustomCommandRunner, session: Session) {
         try write(keymap: CustomCommandRunnerTests.sidebarKeymap)
         let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
         settings.setConfigDirectory(configDir.path)
         let actions = AppActions(library: library)
         actions.settingsModel = settings
+        var hud = recorder.hud
+        if useControlServer {
+            let server = ControlServer(library: library, actions: actions, settingsModel: settings,
+                                       identity: AppIdentity(version: "9.9.9"),
+                                       socketPath: "/tmp/agterm-failure-\(UUID().uuidString.prefix(8)).sock")
+            failureServers.append(server)
+            hud = FailureHud(open: { sessionID, spec, pane in
+                _ = recorder.hud.open(sessionID, spec, pane)
+                let response = server.openCommandFailureHud(sessionID, spec: spec, pane: pane)
+                return response.ok ? nil : response.error ?? "refused without a reason"
+            })
+        }
         let runner = CustomCommandRunner(library: library, settings: settings, actions: actions,
                                          usage: CustomCommandUsageStore(directory: stateDir),
-                                         socketProvider: { "" }, failureHud: recorder.hud)
+                                         socketProvider: { "" }, failureHud: hud)
         runner.start()
         started.append(runner)
         let store = try XCTUnwrap(library.activeStore)
@@ -494,7 +522,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         let recorder = HudRecorder()
         let fix = try failureFixture(recorder)
         fix.runner.run(CustomCommand(name: "probe", command: "echo first >&2; echo boom >&2; exit 3",
-                                     shortcut: "ctrl+a>p"))
+                                     shortcut: "ctrl+a>p", errorHud: true))
 
         wait { !recorder.posts.isEmpty }
 
@@ -502,6 +530,9 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(recorder.posts.first?.session, fix.session.id.uuidString)
         XCTAssertEqual(recorder.posts.first?.message, "probe: exit 3")
         XCTAssertEqual(recorder.posts.first?.detail, "boom")
+        XCTAssertEqual(recorder.posts.first?.spec.position, .center)
+        XCTAssertEqual(recorder.posts.first?.spec.hideAfter, CustomCommandRunner.failureHudSeconds)
+        XCTAssertNil(recorder.posts.first?.pane)
     }
 
     // the second command only starts failing after the first has run to its last statement, so the post it
@@ -511,11 +542,11 @@ final class CustomCommandRunnerTests: XCTestCase {
         let fix = try failureFixture(recorder)
         let marker = stateDir.appendingPathComponent("quiet-\(UUID().uuidString).done")
         fix.runner.run(CustomCommand(name: "quiet", command: "echo noise >&2; : > \(marker.path); exit 0",
-                                     shortcut: "ctrl+a>p"))
+                                     shortcut: "ctrl+a>p", errorHud: true))
         fix.runner.run(CustomCommand(name: "loud",
                                      command: "while [ ! -f \(marker.path) ]; do sleep 0.02; done; "
                                          + "echo boom >&2; exit 2",
-                                     shortcut: "ctrl+a>l"))
+                                     shortcut: "ctrl+a>l", errorHud: true))
 
         wait { !recorder.posts.isEmpty }
 
@@ -532,7 +563,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         fix.runner.run(CustomCommand(name: "orphan",
                                      command: "( sleep 0.6; echo late >&2 && : > \(marker.path) ) & "
                                          + "echo boom >&2; exit 5",
-                                     shortcut: "ctrl+a>p"))
+                                     shortcut: "ctrl+a>p", errorHud: true))
 
         wait { !recorder.posts.isEmpty }
         XCTAssertEqual(recorder.posts.first?.message, "orphan: exit 5")
@@ -552,7 +583,7 @@ final class CustomCommandRunnerTests: XCTestCase {
                                      command: "for i in $(seq 1 8192); do "
                                          + "printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\n' >&2; "
                                          + "done; echo 'final line' >&2; exit 1",
-                                     shortcut: "ctrl+a>p"))
+                                     shortcut: "ctrl+a>p", errorHud: true))
 
         wait(upTo: 20) { !recorder.posts.isEmpty }
 
@@ -567,7 +598,7 @@ final class CustomCommandRunnerTests: XCTestCase {
         fix.runner.run(CustomCommand(name: "burst",
                                      command: "head -c 49152 /dev/zero | tr '\\0' 'x' >&2; printf '\\n' >&2; "
                                          + "echo 'final line' >&2; exit 7",
-                                     shortcut: "ctrl+a>b"))
+                                     shortcut: "ctrl+a>b", errorHud: true))
 
         wait(upTo: 20) { !recorder.posts.isEmpty }
 
@@ -579,11 +610,106 @@ final class CustomCommandRunnerTests: XCTestCase {
         let recorder = HudRecorder()
         recorder.refuse = true
         let fix = try failureFixture(recorder)
-        fix.runner.run(CustomCommand(name: "probe", command: "exit 4", shortcut: "ctrl+a>p"))
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 4", shortcut: "ctrl+a>p", errorHud: true))
 
         wait { !recorder.posts.isEmpty }
 
         XCTAssertEqual(recorder.posts.count, 1, "a refusal still tries once")
+    }
+
+    func testOptedOutCommandUsesDevNullAndPostsNoPanel() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        let marker = stateDir.appendingPathComponent("stderr-kind")
+        fix.runner.run(CustomCommand(name: "quiet", command: "if [ /dev/fd/2 -ef /dev/null ]; then "
+                                    + "echo null; else echo captured; fi > \(marker.path); exit 4", shortcut: ""))
+        fix.runner.run(CustomCommand(name: "barrier", command: "while [ ! -s \(marker.path) ]; do sleep 0.01; done; "
+                                    + "sleep 0.1; exit 1", shortcut: "", errorHud: true))
+
+        wait { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "null\n")
+        XCTAssertEqual(recorder.posts.map(\.message), ["barrier: exit 1"])
+    }
+
+    func testSpawnFailurePostsOnlyWhenOptedIn() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        fix.session.currentCwd = stateDir.appendingPathComponent("missing-directory").path
+
+        fix.runner.run(CustomCommand(name: "quiet", command: "true", shortcut: ""))
+        XCTAssertTrue(recorder.posts.isEmpty)
+        fix.runner.run(CustomCommand(name: "loud", command: "true", shortcut: "", errorHud: true,
+                                     errorPosition: .topLeft, errorPane: .left))
+
+        XCTAssertEqual(recorder.posts.count, 1)
+        XCTAssertTrue(recorder.posts.first?.message.hasPrefix("loud: ") == true)
+        XCTAssertNil(recorder.posts.first?.detail)
+        XCTAssertEqual(recorder.posts.first?.spec.position, .topLeft)
+        XCTAssertEqual(recorder.posts.first?.pane, .left)
+    }
+
+    func testFailurePanelUsesConfiguredPaneRegardlessOfFocus() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder, useControlServer: true)
+        fix.session.hasSplit = true
+        fix.session.isSplit = true
+        fix.session.splitPaneIdentity = UUID()
+        fix.session.splitFocused = false
+
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 3", shortcut: "", errorHud: true,
+                                     errorPosition: .bottomLeft, errorPane: .right))
+        wait { fix.session.hudActive }
+
+        XCTAssertEqual(fix.session.hudPaneIdentity, fix.session.splitPaneIdentity)
+        XCTAssertEqual(fix.session.hudSpec?.position, .bottomLeft)
+    }
+
+    func testHiddenConfiguredPaneFallsBackAtConfiguredPosition() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder, useControlServer: true)
+        fix.session.hasSplit = true
+        fix.session.isSplit = false
+        fix.session.splitPaneIdentity = UUID()
+        fix.session.splitFocused = false
+
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 3", shortcut: "", errorHud: true,
+                                     errorPosition: .topRight, errorPane: .right))
+        wait { fix.session.hudActive }
+
+        XCTAssertTrue(fix.session.hudActive)
+        XCTAssertNil(fix.session.hudPaneIdentity)
+        XCTAssertEqual(fix.session.hudSpec?.position, .topRight)
+    }
+
+    func testGoneConfiguredPaneFallsBackAtConfiguredPosition() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder, useControlServer: true)
+
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 3", shortcut: "", errorHud: true,
+                                     errorPosition: .bottomCenter, errorPane: .right))
+        wait { fix.session.hudActive }
+
+        XCTAssertTrue(fix.session.hudActive)
+        XCTAssertNil(fix.session.hudPaneIdentity)
+        XCTAssertEqual(fix.session.hudSpec?.position, .bottomCenter)
+    }
+
+    func testFailurePanelLeavesProgramOverlayInPlace() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder, useControlServer: true)
+        let store = try XCTUnwrap(library.activeStore)
+        XCTAssertTrue(store.openOverlay(fix.session.id, command: "sleep 30"))
+        let generation = fix.session.overlaySlotGeneration
+
+        fix.runner.run(CustomCommand(name: "probe", command: "exit 3", shortcut: "", errorHud: true,
+                                     errorPane: .right))
+        wait { !recorder.posts.isEmpty }
+
+        XCTAssertTrue(fix.session.programOverlayActive)
+        XCTAssertFalse(fix.session.hudActive)
+        XCTAssertEqual(fix.session.overlaySlotGeneration, generation)
+        XCTAssertEqual(recorder.posts.count, 1)
     }
 
     /// Runs `command` from `surface` and returns what it wrote, or nil if it never wrote anything. The spawn

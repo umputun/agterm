@@ -726,7 +726,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - `keymap.reload` shares GUI reload and returns diagnostic count. `keymap.list` reports:
   resolved built-in actions and override state; live AppKit menu equivalents/menu/title/selector; path;
-  custom commands; diagnostics. An action's `chord` is the menu key equivalent alone, so it keeps comparing
+  custom commands with `errorHud` (boolean), `errorPosition` (canonical, default center), and optional
+  `errorPane` (left/right, omitted for session-wide); diagnostics. Human command rows show opted-in error
+  options. An action's `chord` is the menu key equivalent alone, so it keeps comparing
   against `menu`, while `alternates` holds its monitor-bound binds in kitty syntax and is omitted when
   empty; the human actions column joins the whole set with `|`. Both halves are canonical kitty syntax, not
   the file's own spelling — only a custom command's `shortcut` is preserved verbatim. `overridden` compares
