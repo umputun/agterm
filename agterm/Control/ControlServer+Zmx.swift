@@ -119,8 +119,7 @@ extension ControlServer {
             let remote = try RemoteTreeMerger.decode(stdout: result.stdout)
             // the far side cannot know which name reached it, so the destination we were given is stamped
             // here rather than self-reported there
-            let stamped = ControlRemoteTree(host: host, endpoint: remote.endpoint, sessions: remote.sessions)
-            return ControlResponse(ok: true, result: ControlResult(remote: stamped))
+            return ControlResponse(ok: true, result: ControlResult(remote: remote.stamped(host: host)))
         } catch let error as RemoteTreeMerger.MergeError {
             return ControlResponse(ok: false, error: error.message)
         } catch {

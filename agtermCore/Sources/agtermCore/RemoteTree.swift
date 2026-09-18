@@ -101,7 +101,8 @@ public enum RemoteTreeMerger {
                 }
             }
         }
-        return ControlRemoteTree(host: nil, endpoint: endpoint, sessions: sessions)
+        return ControlRemoteTree(host: nil, endpoint: endpoint, sessions: sessions,
+                                 presentation: PresentationCodec.version)
     }
 
     /// Reads back what the far side's own `zmx tree` printed. The caller must reject a nonzero exit BEFORE

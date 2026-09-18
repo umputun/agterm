@@ -23,6 +23,7 @@ struct RemoteTreeTests {
 
         #expect(tree.host == nil, "the local form sshed nowhere, so it names no destination")
         #expect(tree.endpoint == endpoint)
+        #expect(tree.presentation == PresentationCodec.version)
         #expect(tree.sessions.count == 1)
         #expect(tree.sessions[0].panes == [ControlRemotePane(pane: "left", daemon: Self.left)])
         #expect(tree.sessions[0].splitAxis == nil)
@@ -201,6 +202,27 @@ struct RemoteTreeTests {
             ControlResponse(ok: true, result: ControlResult(remote: payload))), as: UTF8.self)
 
         #expect(try RemoteTreeMerger.decode(stdout: stdout) == payload)
+    }
+
+    @Test func anAnswerFromAnOriginWithoutPresentationDecodesWithNoVersion() throws {
+        let stdout = #"{"ok":true,"result":{"remote":{"endpoint":{"executable":"/z","socketDirectory":"/t"},"sessions":[]}}}"#
+
+        #expect(try RemoteTreeMerger.decode(stdout: stdout).presentation == nil)
+    }
+
+    @Test func stampingTheHostKeepsEveryOtherField() throws {
+        let session = ControlRemoteSession(id: "s1", name: "build", windowID: "w-1", windowName: "main",
+                                           workspaceID: "ws-1", workspaceName: "work", cwd: "/repo",
+                                           splitAxis: nil,
+                                           panes: [ControlRemotePane(pane: "left", daemon: Self.left)])
+        let remote = ControlRemoteTree(host: nil, endpoint: endpoint, sessions: [session], presentation: 1)
+        let stdout = String(decoding: try JSONEncoder().encode(
+            ControlResponse(ok: true, result: ControlResult(remote: remote))), as: UTF8.self)
+
+        let stamped = try RemoteTreeMerger.decode(stdout: stdout).stamped(host: "buildbox")
+
+        #expect(stamped == ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [session],
+                                             presentation: 1))
     }
 
     @Test func theRemotesOwnRefusalIsReadFromStdoutWhereAgtermctlPutsIt() {

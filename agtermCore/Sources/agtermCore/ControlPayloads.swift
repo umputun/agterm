@@ -152,11 +152,22 @@ public struct ControlRemoteTree: Codable, Sendable, Equatable {
     public let host: String?
     public let endpoint: ControlZmxEndpoint
     public let sessions: [ControlRemoteSession]
+    /// The presentation protocol version this app speaks. Absent from an app that predates the presentation
+    /// stream, which is how an attaching Mac learns not to open one.
+    public let presentation: Int?
 
-    public init(host: String?, endpoint: ControlZmxEndpoint, sessions: [ControlRemoteSession]) {
+    public init(host: String?, endpoint: ControlZmxEndpoint, sessions: [ControlRemoteSession],
+                presentation: Int? = nil) {
         self.host = host
         self.endpoint = endpoint
         self.sessions = sessions
+        self.presentation = presentation
+    }
+
+    /// This answer with the ssh destination the requesting app was given. A field added to this type has to
+    /// be copied here too, or the requesting app loses it.
+    public func stamped(host: String) -> ControlRemoteTree {
+        ControlRemoteTree(host: host, endpoint: endpoint, sessions: sessions, presentation: presentation)
     }
 }
 

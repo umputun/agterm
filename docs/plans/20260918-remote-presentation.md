@@ -416,16 +416,16 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/ControlPayloads.swift`
-- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher+Zmx.swift`
+- Modify: `agtermCore/Sources/agtermCore/RemoteTree.swift`
 - Modify: `agterm/Control/ControlServer+Zmx.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteTreeTests.swift`
 - Modify: `agtermTests/ControlServerZmxTests.swift`
 
-- [ ] add the optional `presentation` version to `ControlRemoteTree` and emit it from the bare `zmx.tree`
-- [ ] preserve it where `remoteTree(host:)` rebuilds the decoded answer to stamp `host`
-- [ ] write tests: the field absent decodes; the field present survives `remoteTree(host:)` and reaches
+- [x] add the optional `presentation` version to `ControlRemoteTree` and emit it from the bare `zmx.tree`
+- [x] preserve it where `remoteTree(host:)` rebuilds the decoded answer to stamp `host`
+- [x] write tests: the field absent decodes; the field present survives `remoteTree(host:)` and reaches
       `attachRemoteSession`
-- [ ] run the targeted tests - must pass before Task 7
+- [x] run the targeted tests - must pass before Task 7
 
 ### Task 7: Stream owner and `zmx.present` hand-off in the control server
 

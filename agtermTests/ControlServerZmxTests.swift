@@ -136,6 +136,28 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(runner.invocations.first?.first, "ssh")
     }
 
+    func testTheFarSidesPresentationVersionSurvivesTheHostStamp() async throws {
+        let advertising = Self.projection.replacingOccurrences(of: #"{"remote":{"#,
+                                                               with: #"{"remote":{"presentation":1,"#)
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: advertising, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        let remote = try XCTUnwrap(response.result?.remote)
+        XCTAssertEqual(remote.presentation, 1)
+        XCTAssertEqual(remote.host, "buildbox")
+    }
+
+    func testAnOriginThatPredatesPresentationReportsNoVersion() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.projection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let response = await server.remoteTree(host: "buildbox")
+
+        XCTAssertNil(try XCTUnwrap(response.result?.remote).presentation)
+    }
+
     func testTheBareFormAnswersAboutThisAppWithoutSshingAnywhere() async throws {
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: "", stderr: ""))
         let server = makeServer(list: "", remoteRunner: runner)
@@ -146,6 +168,7 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertTrue(response.ok)
         XCTAssertNil(remote.host, "nothing was sshed to, so there is no destination to name")
         XCTAssertTrue(runner.invocations.isEmpty, "the local form must never reach ssh")
+        XCTAssertEqual(remote.presentation, PresentationCodec.version)
         // no pane in this fixture is zmx-backed, and an empty list is a successful answer rather than
         // a refusal: it does not claim to tell "not live" apart from "live with nothing eligible"
         XCTAssertTrue(remote.sessions.isEmpty)
