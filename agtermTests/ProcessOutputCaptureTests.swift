@@ -51,6 +51,45 @@ final class ProcessOutputCaptureTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }
 
+    func testCollectMissReleasesBothReadEndsWhileAWriterStaysOpen() throws {
+        let process = shell("echo row; echo notice >&2")
+        let capture = try ProcessOutputCapture(attachingTo: process)
+        let held = try heldWriteEnds(of: process)
+        defer { held.forEach { close($0) } }
+        try process.run()
+        capture.didLaunch()
+        process.waitUntilExit()
+
+        XCTAssertNil(capture.collect(until: .now() + 0.25))
+
+        for fd in held {
+            XCTAssertTrue(waitForBrokenPipe(fd, within: 2), "a missed collect must close the read end behind fd \(fd)")
+        }
+    }
+
+    func testCancelReleasesBothReadEndsOfAnUnlaunchedCapture() throws {
+        let process = shell("echo row")
+        let capture = try ProcessOutputCapture(attachingTo: process)
+        let held = try heldWriteEnds(of: process)
+        defer { held.forEach { close($0) } }
+
+        capture.cancel()
+
+        for fd in held {
+            XCTAssertTrue(waitForBrokenPipe(fd, within: 2), "cancel must close the read end behind fd \(fd)")
+        }
+    }
+
+    private func heldWriteEnds(of process: Process) throws -> [Int32] {
+        try [process.standardOutput, process.standardError].map { handle in
+            let source = try XCTUnwrap(handle as? FileHandle).fileDescriptor
+            let fd = dup(source)
+            XCTAssertGreaterThanOrEqual(fd, 0)
+            XCTAssertEqual(fcntl(fd, F_SETNOSIGPIPE, 1), 0)
+            return fd
+        }
+    }
+
     private func shell(_ script: String) -> Process {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
