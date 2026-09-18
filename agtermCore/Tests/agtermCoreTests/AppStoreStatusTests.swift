@@ -161,4 +161,94 @@ struct AppStoreStatusTests {
 
         #expect(drafts.kinds.isEmpty)
     }
+
+    @MainActor
+    private final class RecordingSink: PresentationSink {
+        var frames: [PresentationFrame] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            frames.append(frame)
+            return true
+        }
+        func close(_ reason: PresentationHub.CloseReason) {}
+
+        var statuses: [PresentationStatus?] {
+            frames.compactMap { if case .status(let status) = $0.body { return .some(status) } else { return nil } }
+        }
+    }
+
+    private func mirroredStore() throws -> (AppStore, Session, RecordingSink) {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.toggleSplit(session.id)
+        let sink = RecordingSink()
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .mirror),
+                          sink: sink) { store.presentationSnapshot(forSession: session.id) }
+        return (store, session, sink)
+    }
+
+    @Test func aStatusWriteReachesTheHubAsFullStateWithItsOwnerPaneAndGlyphOverrides() throws {
+        let (store, session, sink) = try mirroredStore()
+        let split = try #require(session.splitPaneIdentity)
+
+        store.applyControlStatus(AgentIndicator(status: .blocked, blink: true, color: "#ff8800", shape: .star,
+                                                statusPane: .right), forSession: session.id)
+
+        let status = try #require(sink.statuses.last ?? nil)
+        #expect(status.status == .blocked)
+        #expect(status.blink)
+        #expect(status.color == "#ff8800")
+        #expect(status.shape == .star)
+        #expect(status.pane == .identity(split))
+        #expect(status.changedAt == session.statusChangedAt?.timeIntervalSince1970)
+    }
+
+    @Test(arguments: [StatusPane.left, .scratch, nil])
+    func theOwnerPaneTravelsAsAnIdentityOrScratch(_ pane: StatusPane?) throws {
+        let (store, session, sink) = try mirroredStore()
+
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: pane), forSession: session.id)
+
+        let expected: PresentationPane = pane == .scratch ? .scratch : .identity(session.paneIdentity)
+        #expect((sink.statuses.last ?? nil)?.pane == expected)
+    }
+
+    @Test func idleReachesTheHubAsAnAbsentStatus() throws {
+        let (store, session, sink) = try mirroredStore()
+        store.applyControlStatus(AgentIndicator(status: .active), forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: .idle), forSession: session.id)
+
+        #expect(sink.statuses.count == 2)
+        #expect(sink.statuses.last == .some(nil))
+    }
+
+    @Test func aRefusedWritePublishesNothing() throws {
+        let (store, session, sink) = try mirroredStore()
+        store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
+
+        #expect(sink.statuses.count == 1)
+    }
+
+    @Test func aRepeatedIdenticalWriteRepublishesTheRestampedState() throws {
+        let (store, session, sink) = try mirroredStore()
+
+        store.applyControlStatus(AgentIndicator(status: .active), forSession: session.id)
+        session.statusChangedAt = Date(timeIntervalSince1970: 1)
+        store.applyControlStatus(AgentIndicator(status: .active), forSession: session.id)
+
+        #expect(sink.statuses.count == 2)
+        #expect((sink.statuses.last ?? nil)?.changedAt == session.statusChangedAt?.timeIntervalSince1970)
+        #expect((sink.statuses.last ?? nil)?.changedAt != 1)
+    }
+
+    @Test func theSnapshotOfAnIdleSessionHasNoStatus() throws {
+        let (store, session, _) = try mirroredStore()
+
+        #expect(store.presentationSnapshot(forSession: session.id).status == nil)
+    }
 }

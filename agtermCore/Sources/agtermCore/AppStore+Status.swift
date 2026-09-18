@@ -56,6 +56,8 @@ extension AppStore {
         session.statusChangedAt = Date()
         // a re-asserted blocked-over-blocked is not a new episode and stays muted (Session.autoFollowConsumed).
         if !wasBlocked, indicator.status == .blocked { session.autoFollowConsumed = false }
+        // ahead of the unchanged guard: a repeated write restamps `statusChangedAt`, which a viewer orders by
+        presentationHub?.publish(.status(presentationStatus(of: session)), session: id)
         guard previous != indicator else { return }
         emitControlEvent(
             .status,

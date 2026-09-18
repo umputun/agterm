@@ -353,4 +353,31 @@ struct AppStorePaneSwapTests {
         #expect(fixture.store.swapPanes(fixture.session.id) == .roleNotMutable)
         #expect(State(fixture.session) == before)
     }
+
+    @Test func aSwapKeepsTheStatusOwnersIdentityForAViewer() throws {
+        let fixture = makeSeededSession()
+        let split = try #require(fixture.session.splitPaneIdentity)
+        fixture.store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .right),
+                                         forSession: fixture.session.id)
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+
+        #expect(fixture.session.agentIndicator.statusPane == .left)
+        #expect(fixture.store.presentationSnapshot(forSession: fixture.session.id).status?.pane
+                == .identity(split))
+    }
+
+    @Test func anUnspecifiedStatusOwnerKeepsThePrimaryIdentityThroughASwap() throws {
+        let fixture = makeSeededSession()
+        let primary = fixture.session.paneIdentity
+        fixture.store.applyControlStatus(AgentIndicator(status: .blocked), forSession: fixture.session.id)
+        #expect(fixture.store.presentationSnapshot(forSession: fixture.session.id).status?.pane
+                == .identity(primary))
+
+        #expect(fixture.store.swapPanes(fixture.session.id) == nil)
+
+        #expect(fixture.session.agentIndicator.statusPane == .right)
+        #expect(fixture.store.presentationSnapshot(forSession: fixture.session.id).status?.pane
+                == .identity(primary))
+    }
 }

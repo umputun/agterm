@@ -126,6 +126,9 @@ public final class AppStore {
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
+    /// Where this store publishes a session's presentation state for attached viewers. One hub serves every
+    /// window, since a viewer subscribes by session id alone.
+    @ObservationIgnored public var presentationHub: PresentationHub?
     @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
 
     /// Told the pane identities of every session or split leaving the visible model, hard or soft, which

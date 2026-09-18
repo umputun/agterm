@@ -369,12 +369,15 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Status.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
+- Create: `agtermCore/Sources/agtermCore/AppStore+Presentation.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreStatusTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneSwapTests.swift`
 
-- [ ] write failing tests: set, idle, clear and pane overrides each reach the hub as full state with owner
+- [x] write failing tests: set, idle, clear and pane overrides each reach the hub as full state with owner
       pane and glyph overrides; a refused status change publishes nothing
-- [ ] publish full status state from the status mutation seam
-- [ ] run `swift test --filter AppStoreStatusTests` - must pass before Task 4
+- [x] publish full status state from the status mutation seam
+- [x] run `swift test --filter AppStoreStatusTests` - must pass before Task 4
 
 ### Task 4: Notification provenance and control-origin publication
 
