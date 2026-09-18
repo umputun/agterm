@@ -62,6 +62,7 @@ final class MockControlActions: ControlActions {
         case zmxReset
         case zmxTree(host: String?)
         case zmxAttach(host: String, session: String)
+        case zmxPresent(session: String)
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
         case flaggedViewLayout(ControlFlaggedLayoutMode)
@@ -469,6 +470,11 @@ final class MockControlActions: ControlActions {
     func remoteTree(host: String?) async -> ControlResponse {
         calls.append(.zmxTree(host: host))
         return nextRemoteTreeResponse
+    }
+
+    func openPresentation(session: String) -> ControlResponse {
+        calls.append(.zmxPresent(session: session))
+        return ControlResponse(ok: true, result: ControlResult(id: session))
     }
 
     func attachRemoteSession(host: String, session: String) async -> ControlResponse {

@@ -285,7 +285,7 @@ ssh pty.
 
 | Command | CLI | Slice | Purpose |
 |---|---|---|---|
-| `zmx.present` | `agtermctl zmx present --session <id> --attachment <id>` | 1 | presentation stream; streaming |
+| `zmx.present` | `agtermctl zmx present <session>` | 1 | presentation stream; streaming |
 | `session.overlay.job.run` | `agtermctl session overlay run-job <id>` | 2 | helper connection: claim, started, exit, cancel; streaming |
 | `session.overlay.job.result` | `agtermctl session overlay job-result <id>` | 2 | retained outcome by job id |
 
@@ -436,21 +436,26 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift`
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher+Zmx.swift`
 - Create: `agtermTests/ControlStreamOwnerTests.swift`
-- Modify: `agtermTests/ControlServerTests.swift`
+- Create: `agtermTests/ControlServerPresentationTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`, `agtermCore/Sources/agtermCore/ControlActionsDefaults.swift`
 
-- [ ] add `zmxPresent` to `Command` with its arguments and validation (session must exist and be
+- [x] add `zmxPresent` to `Command` with its arguments and validation (session must exist and be
       zmx-backed)
-- [ ] in `handleConnection`, hand a streaming command's descriptor to `ControlStreamOwner` and return; the
+- [x] in `handleConnection`, hand a streaming command's descriptor to `ControlStreamOwner` and return; the
       owner closes it
-- [ ] implement the owner, generic over the frame handler so Task 18 reuses it: reader and writer off the
+- [x] implement the owner, generic over the frame handler so Task 18 reuses it: reader and writer off the
       main actor, `@Sendable` libdispatch closures, bounded write queue, hello exchange, pings on the hub's
       request, orderly shutdown on EOF, stall or server stop
-- [ ] replace request/reply socket timing on the handed-off descriptor: no idle receive timeout, a bounded
+- [x] replace request/reply socket timing on the handed-off descriptor: no idle receive timeout, a bounded
       write that a blocked peer cannot hang
-- [ ] write tests: the accept thread stays free while a stream is open (probe `window.list`); a stream idle
+- [x] write tests: the accept thread stays free while a stream is open (probe `window.list`); a stream idle
       past `readTimeoutSeconds` stays open; a stalled reader is disconnected without blocking the main
       actor; EOF unsubscribes; server stop closes streams
-- [ ] run the targeted hosted tests - must pass before Task 8
+- [x] run the targeted hosted tests - must pass before Task 8
+- ➕ `zmx.present` takes the session as its target and no `--attachment`: the origin has no use for an
+  attachment id until slice 2's reconciliation, and adding it then is an additive optional argument
+- ➕ the server owns the hub and assigns it to every open store from `refreshWindowCache`, since
+  `WindowLibrary.swift` sits at the 1000-line lint limit and creates the stores
 
 ### Task 8: `agtermctl zmx present` bridge
 

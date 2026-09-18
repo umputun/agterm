@@ -54,6 +54,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.reset"))
     }
 
+    func openPresentation(session _: String) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.present"))
+    }
+
     func remoteTree(host _: String?) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.tree"))
     }

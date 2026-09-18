@@ -207,6 +207,28 @@ struct ControlDispatcherZmxTests {
         #expect(actions.calls == [.zmxAttach(host: "buildbox", session: "s1")])
     }
 
+    @Test func zmxPresentCarriesTheSession() async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions)
+            .dispatch(ControlRequest(cmd: .zmxPresent, target: " s1 "))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.zmxPresent(session: "s1")])
+    }
+
+    @Test(arguments: [(nil, "zmx.present requires a session"), ("  ", "zmx.present requires a session"),
+                      ("s1\u{1B}[31m", "invalid session"), ("s 1", "invalid session")])
+    func zmxPresentRefusesBeforeTheHostIsCalled(_ target: String?, _ error: String) async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions)
+            .dispatch(ControlRequest(cmd: .zmxPresent, target: target))
+
+        #expect(response?.error == error)
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func zmxAttachRefusesWithoutAHostOrASessionBeforeTheHostIsCalled() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
