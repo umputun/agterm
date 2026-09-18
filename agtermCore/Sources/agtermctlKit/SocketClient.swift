@@ -63,8 +63,8 @@ struct SocketClient {
         }
     }
 
-    /// Open and connect a `AF_UNIX` stream socket to `path`.
-    private func connect() throws -> Int32 {
+    /// Open and connect a `AF_UNIX` stream socket to `path`. The caller owns the descriptor.
+    func connect() throws -> Int32 {
         var addr = sockaddr_un()
         let pathCapacity = MemoryLayout.size(ofValue: addr.sun_path)
         guard path.utf8.count < pathCapacity else {

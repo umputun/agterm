@@ -18,6 +18,17 @@ struct ZmxCommandsTests {
         #expect(try JSONDecoder().decode(ControlRequest.self, from: JSONEncoder().encode(request)) == request)
     }
 
+    @Test func presentNamesTheSessionAsItsTarget() throws {
+        let present = try Zmx.Present.parse(["s1", "--socket", "/tmp/x.sock"])
+
+        #expect(present.makeRequest() == ControlRequest(cmd: .zmxPresent, target: "s1"))
+        #expect(present.options.socketPath() == "/tmp/x.sock")
+    }
+
+    @Test func presentRequiresASession() {
+        #expect(throws: (any Error).self) { try Zmx.Present.parse([]) }
+    }
+
     @Test func treeCarriesItsHostAsAnArgumentNotATarget() throws {
         let tree = try Zmx.Tree.parse(["buildbox"])
 

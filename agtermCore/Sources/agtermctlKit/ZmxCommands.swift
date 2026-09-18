@@ -15,8 +15,34 @@ struct Zmx: ParsableCommand {
         Every one needs a running agterm: only the app can join its live windows, its pending closes and \
         its persisted snapshots against what zmx reports. With agterm stopped there is nothing to ask.
         """,
-        subcommands: [List.self, Prune.self, Kill.self, Reset.self, Tree.self, Attach.self]
+        subcommands: [List.self, Prune.self, Kill.self, Reset.self, Tree.self, Attach.self, Present.self]
     )
+
+    struct Present: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Carry a presentation stream for one session between stdin/stdout and this app.",
+            discussion: """
+            Run by the agterm on another Mac, over ssh, after it attached one of this app's sessions: it \
+            is how that Mac shows this session's status, notifications and HUD. Stdout carries \
+            newline-delimited JSON frames and nothing else, and stdin takes the other side's frames. It \
+            is not meant to be run by hand. A refused session exits nonzero with the reason on stderr.
+            """)
+
+        @Argument(help: "The session id the other Mac attached.")
+        var session: String
+
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() -> ControlRequest { ControlRequest(cmd: .zmxPresent, target: session) }
+
+        func run() throws {
+            let socket = try SocketClient(path: options.socketPath()).connect()
+            defer { close(socket) }
+            let bridge = StreamBridge(socket: socket, input: STDIN_FILENO, output: STDOUT_FILENO)
+            try bridge.open(makeRequest())
+            bridge.pump()
+        }
+    }
 
     struct Reset: RequestCommand {
         static let configuration = CommandConfiguration(

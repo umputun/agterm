@@ -463,15 +463,16 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - Create: `agtermCore/Sources/agtermctlKit/StreamBridge.swift`
 - Modify: `agtermCore/Sources/agtermctlKit/ZmxCommands.swift`
 - Create: `agtermCore/Tests/agtermctlKitTests/StreamBridgeTests.swift`
+- Modify: `agtermCore/Sources/agtermctlKit/SocketClient.swift`, `agtermCore/Tests/agtermctlKitTests/ZmxCommandsTests.swift`
 
-- [ ] implement a streaming socket connection separate from `SocketClient.send`
-- [ ] pump stdin to the socket and the socket to stdout; nothing else is written to stdout; diagnostics go
+- [x] implement a streaming socket connection separate from `SocketClient.send`
+- [x] pump stdin to the socket and the socket to stdout; nothing else is written to stdout; diagnostics go
       to stderr
-- [ ] a server refusal of the opening request exits nonzero with the error on stderr; it is a failure, not
+- [x] a server refusal of the opening request exits nonzero with the error on stderr; it is a failure, not
       an `unsupported` signal, which comes from `zmx.tree` alone
-- [ ] write tests against a socket pair: frames pass both ways unmodified, EOF on either side ends the
+- [x] write tests against a socket pair: frames pass both ways unmodified, EOF on either side ends the
       bridge, a refused opening request exits nonzero with nothing on stdout
-- [ ] run `swift test --filter StreamBridgeTests` - must pass before Task 9
+- [x] run `swift test --filter StreamBridgeTests` - must pass before Task 9
 
 ### Task 9: Viewer model: remote binding and remote-owned presentation state
 
