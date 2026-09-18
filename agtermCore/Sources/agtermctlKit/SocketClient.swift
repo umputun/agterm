@@ -14,6 +14,17 @@ struct SocketClientError: Error, CustomStringConvertible {
     init(_ description: String) { self.description = description }
 }
 
+/// A server response beside the bytes it arrived as. `--json` prints `raw` unchanged, so a field this
+/// build of the CLI does not model still reaches the caller; the human path reads `response`.
+struct SocketReply {
+    let response: ControlResponse
+    /// The response line without its trailing newline.
+    let raw: Data
+
+    /// The line `--json` prints.
+    var line: String { String(decoding: raw, as: UTF8.self) }
+}
+
 /// A blocking, one-request-per-connection client for the agterm control socket: connect to a unix domain
 /// socket, write the request line, read the single response line, decode it.
 struct SocketClient {
@@ -25,7 +36,7 @@ struct SocketClient {
     private static let maxLineBytes = 64 << 20
 
     /// Connect, send `request` as one newline-terminated JSON line, read the response line, decode it.
-    func send(_ request: ControlRequest) throws -> ControlResponse {
+    func send(_ request: ControlRequest) throws -> SocketReply {
         var data = try JSONEncoder().encode(request)
         // the server rejects a request line over the shared cap (newline excluded, matching this count)
         // and closes the connection; check before writing so the caller gets this error instead of a
@@ -46,7 +57,7 @@ struct SocketClient {
             throw SocketClientError("no response from \(path)")
         }
         do {
-            return try JSONDecoder().decode(ControlResponse.self, from: line)
+            return SocketReply(response: try JSONDecoder().decode(ControlResponse.self, from: line), raw: line)
         } catch {
             throw SocketClientError("could not decode response: \(error.localizedDescription)")
         }
@@ -130,14 +141,18 @@ struct SocketClient {
         }
     }
 
-    /// Print a response: the raw JSON line with `json: true`, otherwise a human-readable summary. An error
-    /// response (`ok == false`, non-`--json`) goes to stderr; everything else to stdout.
-    static func printResponse(_ response: ControlResponse, json: Bool, echoID: Bool = false) {
-        if !json, !response.ok {
-            FileHandle.standardError.write(Data((formatResponse(response, json: false) + "\n").utf8))
+    /// Print a reply: the server's line unchanged with `json: true`, otherwise a human-readable summary. An
+    /// error response (`ok == false`, non-`--json`) goes to stderr; everything else to stdout.
+    static func printResponse(_ reply: SocketReply, json: Bool, echoID: Bool = false) {
+        if json {
+            print(reply.line)
             return
         }
-        print(formatResponse(response, json: json, echoID: echoID))
+        if !reply.response.ok {
+            FileHandle.standardError.write(Data((formatResponse(reply.response) + "\n").utf8))
+            return
+        }
+        print(formatResponse(reply.response, echoID: echoID))
     }
 
     /// Render a pick or ask open response as the documented `{"id":"…"}` JSON object.
@@ -181,17 +196,12 @@ struct SocketClient {
         poll <= 10 ? 0.1 : 0.5
     }
 
-    /// Render a response to a single string (no trailing newline): the raw JSON line with `json: true`,
-    /// otherwise a human-readable summary — an `error:` line, the tree listing, the selected text, the
-    /// affected id (only when `echoID`, i.e. for the create commands), or a bare `ok`. Pure so it can be
-    /// unit-tested directly; `printResponse` routes it to stdout/stderr.
-    static func formatResponse(_ response: ControlResponse, json: Bool, echoID: Bool = false) -> String {
-        if json {
-            if let data = try? JSONEncoder().encode(response), let line = String(data: data, encoding: .utf8) {
-                return line
-            }
-            return ""
-        }
+    /// Render a response as its human-readable summary (no trailing newline): an `error:` line, the tree
+    /// listing, the selected text, the affected id (only when `echoID`, i.e. for the create commands), or
+    /// a bare `ok`. Never JSON: `--json` prints the server's own line through `printResponse`, and a
+    /// re-encoding here would drop every field this build does not model. Pure so it can be unit-tested
+    /// directly; `printResponse` routes it to stdout/stderr.
+    static func formatResponse(_ response: ControlResponse, echoID: Bool = false) -> String {
         if !response.ok {
             return "error: " + (response.error ?? "unknown error")
         }

@@ -91,7 +91,7 @@ struct Ask: ParsableCommand {
                         sleep: Thread.sleep(forTimeInterval:), output: { print($0) })
         }
 
-        func execute(send: @escaping (ControlRequest) throws -> ControlResponse,
+        func execute(send: @escaping (ControlRequest) throws -> SocketReply,
                      sleep: @escaping (TimeInterval) -> Void, output: @escaping (String) -> Void,
                      errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError) throws {
             let runner = ModalCommandRunner(family: .ask, json: options.json, send: send, sleep: sleep,
@@ -113,7 +113,7 @@ struct Ask: ParsableCommand {
             try execute(send: SocketClient(path: options.socketPath()).send, output: { print($0) })
         }
 
-        func execute(send: @escaping (ControlRequest) throws -> ControlResponse,
+        func execute(send: @escaping (ControlRequest) throws -> SocketReply,
                      output: @escaping (String) -> Void,
                      errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError) throws {
             let runner = ModalCommandRunner(family: .ask, json: options.json, send: send, sleep: { _ in },

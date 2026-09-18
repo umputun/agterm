@@ -119,9 +119,9 @@ extension RequestCommand {
     func defaultRun() throws {
         let request = try makeRequest()
         let client = SocketClient(path: options.socketPath())
-        let response = try client.send(request)
-        SocketClient.printResponse(response, json: options.json, echoID: echoesResultID)
-        if !response.ok { throw ExitCode.failure }
+        let reply = try client.send(request)
+        SocketClient.printResponse(reply, json: options.json, echoID: echoesResultID)
+        if !reply.response.ok { throw ExitCode.failure }
     }
 }
 

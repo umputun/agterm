@@ -35,12 +35,12 @@ struct SocketClientTests {
         let client = SocketClient(path: server.path)
 
         let first = try client.send(ControlRequest(cmd: .eventsRead))
-        let anchor = try #require(first.result?.events)
+        let anchor = try #require(first.response.result?.events)
         let second = try client.send(ControlRequest(
             cmd: .eventsRead, args: ControlArgs(after: String(anchor.next), run: anchor.run.uuidString)
         ))
 
-        #expect(second.result?.events?.next == 8)
+        #expect(second.response.result?.events?.next == 8)
         #expect(script.requests().map { $0.args?.after } == [nil, "7"])
     }
 
@@ -51,10 +51,10 @@ struct SocketClientTests {
         defer { server.stop() }
 
         let client = SocketClient(path: server.path)
-        let response = try client.send(ControlRequest(cmd: .sessionSelect, target: "active"))
+        let reply = try client.send(ControlRequest(cmd: .sessionSelect, target: "active"))
 
-        #expect(response.ok)
-        #expect(response.result?.id == "9f3c")
+        #expect(reply.response.ok)
+        #expect(reply.response.result?.id == "9f3c")
         #expect(server.received?.cmd == .sessionSelect)
         #expect(server.received?.target == "active")
     }
@@ -66,10 +66,10 @@ struct SocketClientTests {
         defer { server.stop() }
 
         let client = SocketClient(path: server.path)
-        let response = try client.send(ControlRequest(cmd: .workspaceDelete, target: "active"))
+        let reply = try client.send(ControlRequest(cmd: .workspaceDelete, target: "active"))
 
-        #expect(!response.ok)
-        #expect(response.error == "cannot delete last workspace")
+        #expect(!reply.response.ok)
+        #expect(reply.response.error == "cannot delete last workspace")
     }
 
     // a `session.text --all` payload exceeds the old 1 MiB read cap; it must round-trip, not fail.
@@ -80,10 +80,10 @@ struct SocketClientTests {
         defer { server.stop() }
 
         let client = SocketClient(path: server.path)
-        let response = try client.send(ControlRequest(cmd: .sessionText, target: "active"))
+        let reply = try client.send(ControlRequest(cmd: .sessionText, target: "active"))
 
-        #expect(response.ok)
-        #expect(response.result?.text == big)
+        #expect(reply.response.ok)
+        #expect(reply.response.result?.text == big)
     }
 
     @Test func connectFailureToMissingSocketThrows() {
@@ -177,7 +177,7 @@ struct SocketClientTests {
         """)
         #expect(SocketClient.formatHooks(ControlHooks(path: "/p", diagnostics: [], hooks: [])) == "hooks: /p\n  (no hooks)")
         let response = ControlResponse(ok: true, result: ControlResult(hooks: payload))
-        #expect(SocketClient.formatResponse(response, json: false).hasPrefix("hooks: /tmp/hooks.conf"))
+        #expect(SocketClient.formatResponse(response).hasPrefix("hooks: /tmp/hooks.conf"))
     }
 
     @Test func formatsKeymapWithEveryActionAndTheLiveMenu() {
@@ -351,8 +351,7 @@ struct SocketClientTests {
     @Test func formatResponsePicksTheKeymapRenderer() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(keymap: payload)),
-                                              json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(keymap: payload)))
         #expect(out.hasPrefix("keymap: /tmp/keymap.conf"))
     }
 
@@ -363,7 +362,7 @@ struct SocketClientTests {
 
         let command = try Session.New.parse(["--socket", server.path])
         let printed = try captureStdout { try command.run() }
-        #expect(printed == "9f3c\n")
+        #expect(printed == Data("9f3c\n".utf8))
     }
 
     @Test func runQuietsIdForNonCreateCommand() throws {
@@ -373,11 +372,11 @@ struct SocketClientTests {
 
         let command = try Tree.parse(["--socket", server.path])
         let printed = try captureStdout { try command.run() }
-        #expect(printed == "ok\n")
+        #expect(printed == Data("ok\n".utf8))
     }
 
-    /// Runs `body` with the process stdout redirected to a pipe, returning everything it printed.
-    private func captureStdout(_ body: () throws -> Void) throws -> String {
+    /// Runs `body` with the process stdout redirected to a pipe, returning the bytes it printed.
+    private func captureStdout(_ body: () throws -> Void) throws -> Data {
         let pipe = Pipe()
         let saved = dup(STDOUT_FILENO)
         defer { close(saved) }
@@ -387,8 +386,7 @@ struct SocketClientTests {
         fflush(nil)
         dup2(saved, STDOUT_FILENO)
         try pipe.fileHandleForWriting.close()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+        return pipe.fileHandleForReading.readDataToEndOfFile()
     }
 
     @Test func runThrowsExitCodeFailureOnErrorResponse() throws {
@@ -497,7 +495,7 @@ struct SocketClientTests {
             input: Data("One\n".utf8),
             send: { request in
                 requests.append(request)
-                return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
             },
             sleep: { _ in Issue.record("--no-block must not sleep") },
             output: { output.append($0) }
@@ -525,17 +523,17 @@ struct SocketClientTests {
             send: { request in
                 requests.append(request)
                 if request.cmd == .pickOpen {
-                    return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                    return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
                 }
                 polls += 1
                 if polls <= 11 {
-                    return ControlResponse(ok: true, result: ControlResult(
+                    return SocketReply(ControlResponse(ok: true, result: ControlResult(
                         pick: ControlPickResult(result: .pending)
-                    ))
+                    )))
                 }
-                return ControlResponse(ok: true, result: ControlResult(
+                return SocketReply(ControlResponse(ok: true, result: ControlResult(
                     pick: ControlPickResult(result: .picked, id: "One", label: "One", index: 0)
-                ))
+                )))
             },
             sleep: { sleeps.append($0) },
             output: { output.append($0) }
@@ -561,10 +559,10 @@ struct SocketClientTests {
                 input: Data("One\n".utf8),
                 send: { request in
                     request.cmd == .pickOpen
-                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
-                        : ControlResponse(ok: true, result: ControlResult(
+                        ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
+                        : SocketReply(ControlResponse(ok: true, result: ControlResult(
                             pick: ControlPickResult(result: .cancelled)
-                        ))
+                        )))
                 },
                 sleep: { _ in Issue.record("a terminal result must not sleep") },
                 output: { output.append($0) }
@@ -587,7 +585,7 @@ struct SocketClientTests {
         #expect(throws: ExitCode.failure) {
             try command.execute(
                 input: Data("One\n".utf8),
-                send: { _ in ControlResponse(ok: false, error: "boom") },
+                send: { _ in SocketReply(ControlResponse(ok: false, error: "boom")) },
                 sleep: { _ in },
                 output: { _ in Issue.record("a non-JSON server error must not use stdout") },
                 errorOutput: { errors.append($0) }
@@ -601,8 +599,8 @@ struct SocketClientTests {
                 input: Data("One\n".utf8),
                 send: { request in
                     request.cmd == .pickOpen
-                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
-                        : ControlResponse(ok: true)
+                        ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
+                        : SocketReply(ControlResponse(ok: true))
                 },
                 sleep: { _ in },
                 output: { _ in Issue.record("a protocol error must not use stdout") },
@@ -616,11 +614,11 @@ struct SocketClientTests {
         let command = try Pick.Open.parse([])
         var sent: [ControlRequest] = []
         // ok, but with no pick payload: the server still holds the picker, so it must be dismissed.
-        let malformedPoll: (ControlRequest) throws -> ControlResponse = { request in
+        let malformedPoll: (ControlRequest) throws -> SocketReply = { request in
             sent.append(request)
             return request.cmd == .pickOpen
-                ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
-                : ControlResponse(ok: true)
+                ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
+                : SocketReply(ControlResponse(ok: true))
         }
 
         #expect(throws: ExitCode.failure) {
@@ -656,8 +654,8 @@ struct SocketClientTests {
                 send: { request in
                     sent.append(request)
                     return request.cmd == .pickOpen
-                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
-                        : ControlResponse(ok: false, error: "unknown pick: pick-1")
+                        ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
+                        : SocketReply(ControlResponse(ok: false, error: "unknown pick: pick-1"))
                 },
                 sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
             )
@@ -677,9 +675,9 @@ struct SocketClientTests {
                 send: { request in
                     sent.append(request)
                     switch request.cmd {
-                    case .pickOpen: return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                    case .pickOpen: return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "pick-1")))
                     case .pickResult: throw SocketClientError("no response from /tmp/agterm.sock")
-                    default: return ControlResponse(ok: true)
+                    default: return SocketReply(ControlResponse(ok: true))
                     }
                 },
                 sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
@@ -698,7 +696,7 @@ struct SocketClientTests {
         #expect(throws: ExitCode.failure) {
             try command.execute(
                 input: Data("One\n".utf8),
-                send: { _ in ControlResponse(ok: false, error: "boom") },
+                send: { _ in SocketReply(ControlResponse(ok: false, error: "boom")) },
                 sleep: { _ in },
                 output: { output.append($0) },
                 errorOutput: { _ in Issue.record("a JSON server error must not use stderr") }
@@ -727,9 +725,9 @@ struct SocketClientTests {
             try command.execute(
                 send: {
                     request = $0
-                    return ControlResponse(ok: true, result: ControlResult(
+                    return SocketReply(ControlResponse(ok: true, result: ControlResult(
                         pick: ControlPickResult(result: outcome)
-                    ))
+                    )))
                 },
                 output: { output.append($0) }
             )
@@ -762,7 +760,7 @@ struct SocketClientTests {
 
         #expect(throws: ExitCode.failure) {
             try command.execute(
-                send: { _ in ControlResponse(ok: false, error: "boom") },
+                send: { _ in SocketReply(ControlResponse(ok: false, error: "boom")) },
                 output: { _ in Issue.record("a non-JSON server error must not use stdout") },
                 errorOutput: { errors.append($0) }
             )
@@ -772,7 +770,7 @@ struct SocketClientTests {
         errors.removeAll()
         #expect(throws: ExitCode.failure) {
             try command.execute(
-                send: { _ in ControlResponse(ok: true) },
+                send: { _ in SocketReply(ControlResponse(ok: true)) },
                 output: { _ in Issue.record("a protocol error must not use stdout") },
                 errorOutput: { errors.append($0) }
             )
@@ -786,7 +784,7 @@ struct SocketClientTests {
 
         #expect(throws: ExitCode.failure) {
             try command.execute(
-                send: { _ in ControlResponse(ok: false, error: "boom") },
+                send: { _ in SocketReply(ControlResponse(ok: false, error: "boom")) },
                 output: { output.append($0) },
                 errorOutput: { _ in Issue.record("a JSON server error must not use stderr") }
             )
@@ -798,35 +796,35 @@ struct SocketClientTests {
     }
 
     @Test func formatResponseBareOk() {
-        #expect(SocketClient.formatResponse(ControlResponse(ok: true), json: false) == "ok")
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true)) == "ok")
     }
 
     @Test func formatResponseEchoesIdWhenRequested() {
         let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c"))
-        #expect(SocketClient.formatResponse(response, json: false, echoID: true) == "9f3c")
+        #expect(SocketClient.formatResponse(response, echoID: true) == "9f3c")
     }
 
     @Test func formatResponseSuppressesIdByDefault() {
         let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c"))
-        #expect(SocketClient.formatResponse(response, json: false) == "ok")
+        #expect(SocketClient.formatResponse(response) == "ok")
     }
 
     @Test func formatResponseText() {
         let response = ControlResponse(ok: true, result: ControlResult(text: "selected\nlines"))
-        #expect(SocketClient.formatResponse(response, json: false) == "selected\nlines")
+        #expect(SocketClient.formatResponse(response) == "selected\nlines")
     }
 
     @Test(arguments: [0, 42])
     func formatResponseCursorPrintsTheBareColumn(_ column: Int) {
         let response = ControlResponse(ok: true, result: ControlResult(id: "surface:s1:left",
                                                                       cursor: ControlCursor(column: column)))
-        #expect(SocketClient.formatResponse(response, json: false) == "\(column)")
+        #expect(SocketClient.formatResponse(response) == "\(column)")
     }
 
     @Test func formatResponseZeroCountIsOk() {
         // keymap.reload reports a parse-diagnostic count; 0 reads as a clean reload.
         let response = ControlResponse(ok: true, result: ControlResult(count: 0))
-        #expect(SocketClient.formatResponse(response, json: false) == "ok")
+        #expect(SocketClient.formatResponse(response) == "ok")
     }
 
     /// `restore.capture` carries both `count` and its own `text`; the text must win, or the shared `count`
@@ -835,27 +833,27 @@ struct SocketClientTests {
         var result = ControlResult(count: 3)
         result.text = "captured 3 panes"
         let response = ControlResponse(ok: true, result: result)
-        #expect(SocketClient.formatResponse(response, json: false) == "captured 3 panes")
+        #expect(SocketClient.formatResponse(response) == "captured 3 panes")
     }
 
     @Test func formatResponseNonZeroCountPluralizes() {
         let response = ControlResponse(ok: true, result: ControlResult(count: 3))
-        #expect(SocketClient.formatResponse(response, json: false) == "3 diagnostic(s)")
+        #expect(SocketClient.formatResponse(response) == "3 diagnostic(s)")
     }
 
     @Test(arguments: [(1, "1 session"), (2, "2 sessions"), (0, "0 sessions")])
     func formatResponseAffectedSessions(_ affected: Int, _ expected: String) {
         let response = ControlResponse(ok: true, result: ControlResult(affected: affected))
-        #expect(SocketClient.formatResponse(response, json: false) == expected)
+        #expect(SocketClient.formatResponse(response) == expected)
     }
 
     @Test func formatResponseError() {
-        #expect(SocketClient.formatResponse(ControlResponse(ok: false, error: "boom"), json: false) == "error: boom")
+        #expect(SocketClient.formatResponse(ControlResponse(ok: false, error: "boom")) == "error: boom")
     }
 
     @Test func formatResponseRatio() {
         let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c", ratio: 0.85))
-        #expect(SocketClient.formatResponse(response, json: false) == "0.850")
+        #expect(SocketClient.formatResponse(response) == "0.850")
     }
 
     // the caller compares its request against the echo to detect a clamp, so both directions are pinned:
@@ -864,19 +862,50 @@ struct SocketClientTests {
     @Test(arguments: [(271.3, "271.3"), (271.34, "271.34"), (300.0, "300.0")])
     func formatResponseSidebarWidth(_ stored: Double, _ rendered: String) {
         let response = ControlResponse(ok: true, result: ControlResult(sidebarWidth: stored))
-        #expect(SocketClient.formatResponse(response, json: false) == rendered)
+        #expect(SocketClient.formatResponse(response) == rendered)
     }
 
     @Test func formatResponseErrorFallback() {
-        #expect(SocketClient.formatResponse(ControlResponse(ok: false), json: false) == "error: unknown error")
+        #expect(SocketClient.formatResponse(ControlResponse(ok: false)) == "error: unknown error")
     }
 
-    @Test func formatResponseJSONIsRaw() throws {
-        let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c"))
-        let line = SocketClient.formatResponse(response, json: true)
-        let decoded = try JSONDecoder().decode(ControlResponse.self, from: Data(line.utf8))
-        #expect(decoded.ok)
-        #expect(decoded.result?.id == "9f3c")
+    /// Fields this build does not model, at both levels, plus spelling the encoder would never produce:
+    /// boundary and separator spaces, a `\u0020` escape, and a decomposed `é`, which `String ==` would
+    /// equate with the precomposed form. #625: a re-encode drops the fields and rewrites the rest.
+    private static let unmodeledLine = " {\"ok\": true, \"result\": {\"tree\": {\"idleMs\": 1, \"sidebarMode\": \"tree\", \"workspaces\": []}, "
+        + "\"futureField\": {\"a\": 1}}, \"warning\": \"deprecated\\u0020flag e\u{0301}\"} "
+
+    @Test func sendKeepsTheServerLineByteForByte() throws {
+        let server = StubServer(line: Data(Self.unmodeledLine.utf8))
+        try server.start()
+        defer { server.stop() }
+
+        let reply = try SocketClient(path: server.path).send(ControlRequest(cmd: .tree))
+        #expect(reply.raw == Data(Self.unmodeledLine.utf8))
+        #expect(reply.response.result?.tree?.idleMs == 1)
+    }
+
+    @Test func jsonPrintsTheServerLineUnchanged() throws {
+        let server = StubServer(line: Data(Self.unmodeledLine.utf8))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Tree.parse(["--json", "--socket", server.path])
+        let printed = try captureStdout { try command.run() }
+        #expect(printed == Data((Self.unmodeledLine + "\n").utf8))
+    }
+
+    @Test func jsonPrintsAnErrorLineUnchangedBeforeFailing() throws {
+        let line = "{\"ok\": false, \"error\": \"boom\", \"hint\": \"unmodeled e\u{0301}\"} "
+        let server = StubServer(line: Data(line.utf8))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Tree.parse(["--json", "--socket", server.path])
+        let printed = try captureStdout {
+            #expect(throws: ExitCode.failure) { try command.run() }
+        }
+        #expect(printed == Data((line + "\n").utf8))
     }
 
     @Test(arguments: [("/other", "/main  split cwd: /other"), ("/main", "/main")])
@@ -885,21 +914,13 @@ struct SocketClientTests {
         let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
         let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true, sessions: [session])])
         let response = ControlResponse(ok: true, result: ControlResult(tree: tree))
-        let output = SocketClient.formatResponse(response, json: false)
+        let output = SocketClient.formatResponse(response)
         #expect(output == "* work  [w]\n  * shell (split)  [s]  \(expected)")
-        let json = SocketClient.formatResponse(response, json: true)
-        let decoded = try JSONDecoder().decode(ControlResponse.self, from: Data(json.utf8))
-        #expect(decoded.result?.tree?.workspaces[0].sessions[0].splitCwd == splitCwd)
     }
 
     @Test func formatWindowResizeReportsAppliedWidthAndHeight() throws {
         let response = try JSONDecoder().decode(ControlResponse.self, from: Data(#"{"ok":true,"result":{"id":"w","width":1200,"height":800}}"#.utf8))
-        #expect(SocketClient.formatResponse(response, json: false) == "1200 800")
-        let encoded = SocketClient.formatResponse(response, json: true)
-        let json = try #require(JSONSerialization.jsonObject(with: Data(encoded.utf8)) as? [String: Any])
-        let result = try #require(json["result"] as? [String: Any])
-        #expect(result["width"] as? Int == 1200)
-        #expect(result["height"] as? Int == 800)
+        #expect(SocketClient.formatResponse(response) == "1200 800")
     }
 
     @Test func formatTreeIncludesBothAttributionsWhenPresent() throws {
@@ -909,7 +930,7 @@ struct SocketClientTests {
         """#.utf8)
         let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
         let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true, sessions: [session])])
-        let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         #expect(output.contains("live attribution: supervisor"))
         #expect(output.contains("split live attribution: orphaned"))
     }
@@ -918,7 +939,7 @@ struct SocketClientTests {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true)
         let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines.count == 2)
         #expect(lines[0] == "* work  [w1]")
@@ -930,7 +951,7 @@ struct SocketClientTests {
                                          hasSplit: true)
         let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines[1] == "  * shell (split hidden)  [s1]  /tmp")
     }
@@ -940,7 +961,7 @@ struct SocketClientTests {
                                          realized: false)
         let workspace = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines[1] == "  * shell (not realized)  [s1]  /tmp")
     }
@@ -950,7 +971,7 @@ struct SocketClientTests {
                                          realized: true)
         let workspace = ControlWorkspaceNode(id: "w2", name: "work", active: true, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines[1] == "  * shell  [s2]  /tmp", "only the failing state earns a tag; nil must stay quiet too")
     }
@@ -960,7 +981,7 @@ struct SocketClientTests {
                                          overlay: false, scratch: true)
         let workspace = ControlWorkspaceNode(id: "w3", name: "work", active: true, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines[1] == "  * shell (scratch)  [s3]  /tmp")
     }
@@ -969,7 +990,7 @@ struct SocketClientTests {
         let session = ControlSessionNode(id: "s2", name: "logs", cwd: "/var", active: false, split: false)
         let workspace = ControlWorkspaceNode(id: "w2", name: "other", active: false, sessions: [session])
         let tree = ControlTree(workspaces: [workspace])
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines[0] == "  other  [w2]")
         #expect(lines[1] == "    logs  [s2]  /var")
@@ -983,7 +1004,7 @@ struct SocketClientTests {
             // a closed-but-active window (a frontmost id not yet loaded) renders [active] without [open].
             ControlWindowNode(id: "w4", name: "pending", open: false, active: true),
         ]
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(windows: windows)), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(windows: windows)))
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines.count == 4)
         #expect(lines[0] == "w1  work [open] [active]")
@@ -993,14 +1014,14 @@ struct SocketClientTests {
     }
 
     @Test func formatResponseEmptyWindows() {
-        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(windows: [])), json: false)
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(windows: [])))
         // a present-but-empty `windows` payload still takes the windows branch, so it renders empty.
         #expect(out == "")
     }
 
     @Test func formatResponseThemesMarksCurrent() {
         let response = ControlResponse(ok: true, result: ControlResult(theme: "Nord", themes: ["Dracula", "Nord"]))
-        let out = SocketClient.formatResponse(response, json: false)
+        let out = SocketClient.formatResponse(response)
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines == ["  default ghostty", "  Dracula", "* Nord"])
     }
@@ -1008,7 +1029,7 @@ struct SocketClientTests {
     @Test func formatResponseThemesMarksGhosttyDefaultWhenCurrent() {
         // nil current theme = ghostty's built-in is active, so the leading "default ghostty" row is marked.
         let response = ControlResponse(ok: true, result: ControlResult(theme: nil, themes: ["Dracula"]))
-        let out = SocketClient.formatResponse(response, json: false)
+        let out = SocketClient.formatResponse(response)
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines == ["* default ghostty", "  Dracula"])
     }
@@ -1016,13 +1037,13 @@ struct SocketClientTests {
     @Test func formatResponseThemeSetIsBareOk() {
         // theme.set returns only `theme` (no `themes` array), so it prints `ok` like other mutations.
         let response = ControlResponse(ok: true, result: ControlResult(theme: "Dracula"))
-        #expect(SocketClient.formatResponse(response, json: false) == "ok")
+        #expect(SocketClient.formatResponse(response) == "ok")
     }
 
     @Test func formatResponseThemesMarksBothSyncedSides() {
         let response = ControlResponse(ok: true, result: ControlResult(
             theme: nil, themes: ["agterm", "Builtin Light", "Nord"], sync: true, light: "Builtin Light", dark: "agterm"))
-        let out = SocketClient.formatResponse(response, json: false)
+        let out = SocketClient.formatResponse(response)
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines.first == "syncing with macOS appearance — light: Builtin Light, dark: agterm")
         #expect(lines.contains("* agterm"))
@@ -1033,22 +1054,31 @@ struct SocketClientTests {
 
     @Test func formatsAppIdentityAndOmitsAnEmptyCommit() {
         let withCommit = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: "a1b2c3d")))
-        #expect(SocketClient.formatResponse(withCommit, json: false) == "0.24.0 (a1b2c3d)")
+        #expect(SocketClient.formatResponse(withCommit) == "0.24.0 (a1b2c3d)")
 
         for commit in [nil, ""] as [String?] {
             let response = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: commit)))
-            #expect(SocketClient.formatResponse(response, json: false) == "0.24.0")
+            #expect(SocketClient.formatResponse(response) == "0.24.0")
         }
     }
 
     @Test func versionJSONCarriesTheRawResponseWithoutTheClientPath() throws {
-        let response = ControlResponse(ok: true, result: ControlResult(app: AppIdentity(version: "0.24.0", commit: "a1b2c3d")))
-        let line = SocketClient.formatResponse(response, json: true)
-        #expect(!line.contains("client"))
-        #expect(!line.contains(Version.clientPath() ?? "agtermctl"))
+        let line = "{\"ok\": true, \"result\": {\"app\": {\"version\": \"0.24.0\", \"commit\": \"a1b2c3d\\u0020\"}}} "
+        let server = StubServer(line: Data(line.utf8))
+        try server.start()
+        defer { server.stop() }
 
-        let decoded = try JSONDecoder().decode(ControlResponse.self, from: Data(line.utf8))
-        #expect(decoded == response)
+        let command = try Version.parse(["--json", "--socket", server.path])
+        let printed = try captureStdout { try command.run() }
+        #expect(printed == Data((line + "\n").utf8))
+        #expect(!String(decoding: printed, as: UTF8.self).contains("client"))
+    }
+}
+
+/// A `SocketReply` for a fake `send`, carrying the response's own encoding as the line it arrived as.
+extension SocketReply {
+    init(_ response: ControlResponse) {
+        self.init(response: response, raw: try! JSONEncoder().encode(response)) // swiftlint:disable:this force_try
     }
 }
 
@@ -1075,7 +1105,7 @@ private final class EventReadScript: @unchecked Sendable {
 /// connection, reads the request line, records it, and writes back a canned `ControlResponse`.
 private final class StubServer: @unchecked Sendable {
     let path: String
-    private let canned: ControlResponse
+    private let canned: Data
     private var listenFD: Int32 = -1
     private let queue = DispatchQueue(label: "stub.server")
     private let finished = DispatchSemaphore(value: 0)
@@ -1083,9 +1113,14 @@ private final class StubServer: @unchecked Sendable {
     private var stopped = false
     private(set) var received: ControlRequest?
 
-    init(response: ControlResponse) {
-        self.canned = response
+    /// Answers with `line` exactly, so a test can send bytes no encoder would produce.
+    init(line: Data) {
+        self.canned = line
         self.path = NSTemporaryDirectory() + "agterm-stub-\(UUID().uuidString.prefix(8)).sock"
+    }
+
+    convenience init(response: ControlResponse) {
+        self.init(line: try! JSONEncoder().encode(response)) // swiftlint:disable:this force_try
     }
 
     func start() throws {
@@ -1136,7 +1171,7 @@ private final class StubServer: @unchecked Sendable {
         }
         received = try? JSONDecoder().decode(ControlRequest.self, from: buffer)
 
-        guard var data = try? JSONEncoder().encode(canned) else { return }
+        var data = canned
         data.append(UInt8(ascii: "\n"))
         data.withUnsafeBytes { raw in
             var offset = 0

@@ -462,7 +462,7 @@ struct Pick: ParsableCommand {
         /// real delays or process fds.
         func execute(
             input: Data,
-            send: @escaping (ControlRequest) throws -> ControlResponse,
+            send: @escaping (ControlRequest) throws -> SocketReply,
             sleep: @escaping (TimeInterval) -> Void,
             output: @escaping (String) -> Void,
             errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError
@@ -495,7 +495,7 @@ struct Pick: ParsableCommand {
         /// One-shot read with injectable transport/stdout/stderr, so every wire outcome and exit mapping is
         /// covered without replacing process file descriptors.
         func execute(
-            send: @escaping (ControlRequest) throws -> ControlResponse,
+            send: @escaping (ControlRequest) throws -> SocketReply,
             output: @escaping (String) -> Void,
             errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError
         ) throws {
@@ -526,7 +526,7 @@ struct ModalCommandRunner {
 
     let family: Family
     let json: Bool
-    let send: (ControlRequest) throws -> ControlResponse
+    let send: (ControlRequest) throws -> SocketReply
     let sleep: (TimeInterval) -> Void
     let output: (String) -> Void
     let errorOutput: (String) -> Void
@@ -534,7 +534,7 @@ struct ModalCommandRunner {
     func open(_ request: ControlRequest, noBlock: Bool) throws {
         let opened = try send(request)
         try requireSuccess(opened)
-        guard let id = opened.result?.id else {
+        guard let id = opened.response.result?.id else {
             errorOutput("error: \(family.rawValue).open result missing id")
             throw ExitCode.failure
         }
@@ -544,17 +544,17 @@ struct ModalCommandRunner {
         }
         var pendingPolls = 0
         while true {
-            let response: ControlResponse
+            let polled: SocketReply
             do {
-                response = try send(ControlRequest(cmd: family.resultCommand, target: id))
+                polled = try send(ControlRequest(cmd: family.resultCommand, target: id))
             } catch {
                 // each request opens its own connection, so cancellation can still reach the host after a failed poll.
                 abandon(id)
                 throw error
             }
             // the id-only poll cannot resolve to another window; failure means the host no longer holds the dialog.
-            try requireSuccess(response)
-            guard let result = try reply(from: response) else {
+            try requireSuccess(polled)
+            guard let result = try reply(from: polled.response) else {
                 errorOutput("error: \(family.rawValue).result missing result")
                 abandon(id)
                 throw ExitCode.failure
@@ -571,9 +571,9 @@ struct ModalCommandRunner {
     }
 
     func read(_ request: ControlRequest) throws {
-        let response = try send(request)
-        try requireSuccess(response)
-        guard let result = try reply(from: response) else {
+        let polled = try send(request)
+        try requireSuccess(polled)
+        guard let result = try reply(from: polled.response) else {
             errorOutput("error: \(family.rawValue).result missing result")
             throw ExitCode.failure
         }
@@ -600,10 +600,9 @@ struct ModalCommandRunner {
         }
     }
 
-    private func requireSuccess(_ response: ControlResponse) throws {
-        guard !response.ok else { return }
-        let line = SocketClient.formatResponse(response, json: json)
-        if json { output(line) } else { errorOutput(line) }
+    private func requireSuccess(_ reply: SocketReply) throws {
+        guard !reply.response.ok else { return }
+        if json { output(reply.line) } else { errorOutput(SocketClient.formatResponse(reply.response)) }
         throw ExitCode.failure
     }
 

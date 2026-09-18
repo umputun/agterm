@@ -108,7 +108,7 @@ struct AskCommandsTests {
         var lines: [String] = []
         try command.execute(send: {
             requests.append($0)
-            return ControlResponse(ok: true, result: ControlResult(id: "ask-id", pane: "right"))
+            return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id", pane: "right")))
         }, sleep: { _ in Issue.record("no-block must not sleep") }, output: { lines.append($0) })
 
         #expect(requests.count == 1)
@@ -128,11 +128,11 @@ struct AskCommandsTests {
         let answer = ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0)
         try command.execute(send: { request in
             requests.append(request)
-            if request.cmd == .askOpen { return ControlResponse(ok: true, result: ControlResult(id: "ask-id")) }
+            if request.cmd == .askOpen { return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id"))) }
             polls += 1
-            return ControlResponse(ok: true, result: ControlResult(
+            return SocketReply(ControlResponse(ok: true, result: ControlResult(
                 ask: polls <= 11 ? ControlAskResult(result: .pending) : answer
-            ))
+            )))
         }, sleep: { delays.append($0) }, output: { lines.append($0) })
 
         #expect(requests.first?.args?.window == "w")
@@ -149,8 +149,8 @@ struct AskCommandsTests {
         #expect(throws: ExitCode(rawValue: code)) {
             try command.execute(send: {
                 $0.cmd == .askOpen
-                    ? ControlResponse(ok: true, result: ControlResult(id: "ask-id"))
-                    : ControlResponse(ok: true, result: ControlResult(ask: ControlAskResult(result: outcome)))
+                    ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id")))
+                    : SocketReply(ControlResponse(ok: true, result: ControlResult(ask: ControlAskResult(result: outcome))))
             }, sleep: { _ in }, output: { lines.append($0) })
         }
         #expect(lines == ["{\"result\":\"\(outcome.rawValue)\"}"])
@@ -161,16 +161,14 @@ struct AskCommandsTests {
         let command = try open(["Continue?", "--button", "yes=Yes"] + (json ? ["--json"] : []))
         var lines: [String] = []
         var errors: [String] = []
-        let response = ControlResponse(ok: false, error: "ask already pending")
+        let raw = Data(#"{"ok": false, "error": "ask already pending", "hint": "unmodeled"}"#.utf8)
+        let reply = SocketReply(response: try JSONDecoder().decode(ControlResponse.self, from: raw), raw: raw)
         #expect(throws: ExitCode.failure) {
-            try command.execute(send: { _ in response }, sleep: { _ in }, output: { lines.append($0) },
+            try command.execute(send: { _ in reply }, sleep: { _ in }, output: { lines.append($0) },
                                 errorOutput: { errors.append($0) })
         }
-        #expect(lines.count == (json ? 1 : 0))
+        #expect(lines == (json ? [String(decoding: raw, as: UTF8.self)] : []))
         #expect(errors == (json ? [] : ["error: ask already pending"]))
-        if json {
-            #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(#require(lines.first).utf8)) == response)
-        }
     }
 
     @Test func missingOpenIDFailsBeforePolling() throws {
@@ -180,7 +178,7 @@ struct AskCommandsTests {
         #expect(throws: ExitCode.failure) {
             try command.execute(send: {
                 requests.append($0)
-                return ControlResponse(ok: true)
+                return SocketReply(ControlResponse(ok: true))
             }, sleep: { _ in }, output: { _ in Issue.record("malformed open must not print an answer") },
             errorOutput: { errors.append($0) })
         }
@@ -195,7 +193,7 @@ struct AskCommandsTests {
         #expect(throws: ExitCode.failure) {
             try command.execute(send: {
                 requests.append($0)
-                return $0.cmd == .askOpen ? ControlResponse(ok: true, result: ControlResult(id: "ask-id")) : ControlResponse(ok: true)
+                return $0.cmd == .askOpen ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id"))) : SocketReply(ControlResponse(ok: true))
             }, sleep: { _ in }, output: { _ in Issue.record("malformed poll must not print an answer") },
             errorOutput: { errors.append($0) })
         }
@@ -211,7 +209,7 @@ struct AskCommandsTests {
             try command.execute(send: {
                 requests.append($0)
                 switch $0.cmd {
-                case .askOpen: return ControlResponse(ok: true, result: ControlResult(id: "ask-id"))
+                case .askOpen: return SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id")))
                 case .askResult: throw SocketClientError("poll failed")
                 default: throw SocketClientError("cancel failed")
                 }
@@ -231,8 +229,8 @@ struct AskCommandsTests {
             try command.execute(send: {
                 requests.append($0)
                 return $0.cmd == .askOpen
-                    ? ControlResponse(ok: true, result: ControlResult(id: "ask-id"))
-                    : ControlResponse(ok: false, error: "unknown ask: ask-id")
+                    ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id")))
+                    : SocketReply(ControlResponse(ok: false, error: "unknown ask: ask-id"))
             }, sleep: { _ in }, output: { _ in }, errorOutput: { _ in })
         }
         #expect(requests.map(\.cmd) == [.askOpen, .askResult])
@@ -252,7 +250,7 @@ struct AskCommandsTests {
         do {
             try command.execute(send: {
                 requests.append($0)
-                return ControlResponse(ok: true, result: ControlResult(ask: result))
+                return SocketReply(ControlResponse(ok: true, result: ControlResult(ask: result)))
             }, output: { lines.append($0) })
         } catch let code as ExitCode {
             exit = code.rawValue
@@ -270,7 +268,7 @@ struct AskCommandsTests {
         #expect(throws: ExitCode.failure) {
             try command.execute(send: {
                 requests.append($0)
-                return ControlResponse(ok: true)
+                return SocketReply(ControlResponse(ok: true))
             }, output: { _ in }, errorOutput: { errors.append($0) })
         }
         #expect(requests.map(\.cmd) == [.askResult])

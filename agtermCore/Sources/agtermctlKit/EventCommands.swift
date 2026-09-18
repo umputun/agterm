@@ -14,7 +14,7 @@ struct EventStreamDependencies {
 
     static func live(socketPath: String) -> EventStreamDependencies {
         EventStreamDependencies(
-            send: { request in try SocketClient(path: socketPath).send(request) },
+            send: { request in try SocketClient(path: socketPath).send(request).response },
             sleep: Thread.sleep(forTimeInterval:),
             writeLine: { line in
                 FileHandle.standardOutput.write(Data((line + "\n").utf8))

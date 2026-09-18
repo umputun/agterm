@@ -587,22 +587,22 @@ struct Session: ParsableCommand {
                 // `!wait`, so its `wait` is nil, and the floating `--size-percent` rides that single source
                 // instead of a duplicated ControlArgs.
                 let opened = try client.send(makeRequest())
-                guard opened.ok, let id = opened.result?.id else {
+                guard opened.response.ok, let id = opened.response.result?.id else {
                     SocketClient.printResponse(opened, json: options.json)
                     throw ExitCode.failure
                 }
                 while true {
                     let res = try client.send(resultRequest(id: id))
-                    if res.ok {
+                    if res.response.ok {
                         if options.json { SocketClient.printResponse(res, json: true) }
                         // a successful result must carry the status; its absence is a protocol violation, not success.
-                        guard let code = res.result?.exitCode else {
+                        guard let code = res.response.result?.exitCode else {
                             FileHandle.standardError.write(Data("error: result missing exit code\n".utf8))
                             throw ExitCode.failure
                         }
                         throw ExitCode(rawValue: Int32(code))
                     }
-                    if res.error == OverlayResultError.stillRunning {
+                    if res.response.error == OverlayResultError.stillRunning {
                         Thread.sleep(forTimeInterval: 0.1)
                         continue
                     }
