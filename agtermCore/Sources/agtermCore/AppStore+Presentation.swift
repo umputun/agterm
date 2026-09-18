@@ -1,5 +1,15 @@
 import Foundation
 
+/// NotificationOrigin is where an accepted notification came from, which decides whether it travels to viewers.
+public enum NotificationOrigin: String, Sendable {
+    /// OSC 9/777 from a pane. zmx already carries those bytes to a viewer's own pane, which raises it there.
+    case terminal
+    /// An explicit control `notify`.
+    case control
+    /// One a viewer received from its origin. Never relayed onward.
+    case mirrored
+}
+
 // MARK: - Presentation state for attached viewers
 
 extension AppStore {

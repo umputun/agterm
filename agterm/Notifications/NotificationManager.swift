@@ -67,7 +67,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
             return
         }
         guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
-            forSession: session.id, title: title, body: body
+            forSession: session.id, title: title, body: body, origin: .terminal
         ) else { return }
 
         // the badge always tracks the unseen notification; the macOS banner is gated by the toggle.
@@ -102,7 +102,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     func send(toSession session: Session, title: String, body: String) -> Bool {
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
         guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
-            forSession: session.id, title: title, body: body
+            forSession: session.id, title: title, body: body, origin: .control
         ) else { return false }
         session.unseenCount += 1
         bounceDock()

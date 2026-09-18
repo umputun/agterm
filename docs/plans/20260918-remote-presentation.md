@@ -384,13 +384,14 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Events.swift`
 - Modify: `agterm/Notifications/NotificationManager.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+Presentation.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreEventTests.swift`
 
-- [ ] write failing tests: a control notification reaches the hub with pane and source; an OSC one does
+- [x] write failing tests: a control notification reaches the hub with pane and source; an OSC one does
       not; the public `notify` event is identical for both
-- [ ] pass notification origin from both `NotificationManager` producers into `recordNotificationEvent`
-- [ ] publish control-origin notifications as one-shot frames
-- [ ] run `swift test --filter AppStoreEventTests` - must pass before Task 5
+- [x] pass notification origin from both `NotificationManager` producers into `recordNotificationEvent`
+- [x] publish control-origin notifications as one-shot frames
+- [x] run `swift test --filter AppStoreEventTests` - must pass before Task 5
 
 ### Task 5: HUD expiry deadline, generation and publication
 

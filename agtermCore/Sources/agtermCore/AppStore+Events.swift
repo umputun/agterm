@@ -49,10 +49,16 @@ extension AppStore {
 
     /// Records an accepted terminal/control notification in the app event ring and returns its effective
     /// title. An unresolved session returns nil and emits nothing. Delivery gating belongs to the caller.
+    /// Only a `.control` one is published to attached viewers.
     @discardableResult
-    public func recordNotificationEvent(forSession id: UUID, title: String, body: String) -> String? {
+    public func recordNotificationEvent(forSession id: UUID, title: String, body: String,
+                                        origin: NotificationOrigin = .terminal) -> String? {
         guard let session = session(withID: id), let workspace = workspace(forSession: id) else { return nil }
         let effectiveTitle = title.isEmpty ? session.displayName : title
+        if origin == .control {
+            presentationHub?.publish(.notify(PresentationNotify(title: effectiveTitle, body: body, pane: nil,
+                                                                source: origin.rawValue)), session: id)
+        }
         emitControlEvent(
             .notify,
             workspace: workspace.id,

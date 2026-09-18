@@ -187,6 +187,55 @@ final class AppStoreEventTests {
         #expect(batch.items[0].payload.body == "tests passed")
     }
 
+    @MainActor
+    private final class NotifySink: PresentationSink {
+        var notifies: [PresentationNotify] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if case .notify(let notify) = frame.body { notifies.append(notify) }
+            return true
+        }
+        func close(_ reason: PresentationHub.CloseReason) {}
+    }
+
+    @Test func onlyAControlNotificationReachesAViewerAndThePublicEventIsTheSameForEveryOrigin() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let sink = NotifySink()
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: ["notify"], mode: .mirror),
+                          sink: sink) { store.presentationSnapshot(forSession: session.id) }
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        for origin in [NotificationOrigin.terminal, .control, .mirrored] {
+            store.recordNotificationEvent(forSession: session.id, title: "build", body: "done", origin: origin)
+        }
+
+        #expect(sink.notifies == [PresentationNotify(title: "build", body: "done", pane: nil, source: "control")])
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.notify], limit: 100
+        )))
+        #expect(batch.items.count == 3)
+        #expect(Set(batch.items.map { $0.payload.title }) == ["build"])
+        #expect(Set(batch.items.map { $0.payload.body }) == ["done"])
+    }
+
+    @Test func aControlNotificationWithNoTitleTravelsWithTheEffectiveOne() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo", name: "api"))
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let sink = NotifySink()
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: ["notify"], mode: .mirror),
+                          sink: sink) { store.presentationSnapshot(forSession: session.id) }
+
+        store.recordNotificationEvent(forSession: session.id, title: "", body: "done", origin: .control)
+
+        #expect(sink.notifies.map(\.title) == ["api"])
+    }
+
     @Test func addSoftCloseUndoAndGraceFinalizationEmitVisibleMembershipEdgesOnly() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let store = try #require(library.activeStore)
