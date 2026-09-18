@@ -136,6 +136,15 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), ZmxClient.terminationGrace + 1)
     }
 
+    func testRunThrowsForAnExecutableThatCannotLaunch() {
+        let invocation = ZmxClient.Invocation(executablePath: "/nonexistent/zmx-\(UUID().uuidString)", arguments: ["list"],
+                                              environment: [:], timeout: 5, mergesStderr: false)
+
+        XCTAssertThrowsError(try ZmxClient.run(invocation)) { error in
+            if case ZmxClient.CommandError.timedOut = error { XCTFail("a failed launch must not wait out a deadline") }
+        }
+    }
+
     func testLiveReapListsThenKillsOnlyUnclaimedZeroClientNames() {
         let known = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
         let orphan = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

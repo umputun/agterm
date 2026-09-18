@@ -29,6 +29,17 @@ final class RemoteCommandProcessRunnerTests: XCTestCase {
         XCTAssertEqual(result.stderr.utf8.count, 524_288)
     }
 
+    func testOutputHeldOpenPastTheExitIsAFailureWithoutPartialStdout() async {
+        let started = Date()
+
+        let result = await runner.run(["sh", "-c", "sleep 5 & echo row"], deadline: 10)
+
+        XCTAssertEqual(result.status, -1)
+        XCTAssertEqual(result.stdout, "")
+        XCTAssertEqual(result.stderr, "the remote command output did not close in time")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
     func testANonzeroExitKeepsBothStreams() async {
         let result = await runner.run(["sh", "-c", "printf out; printf err >&2; exit 7"], deadline: 10)
 

@@ -222,59 +222,34 @@ final class ZmxClient {
         process.executableURL = URL(fileURLWithPath: invocation.executablePath)
         process.arguments = invocation.arguments
         process.environment = invocation.environment
-        let output = Pipe()
-        let errors = Pipe()
-        // libghostty spawns surface commands from its io thread with plain inheritance, so a pipe end still
-        // open here would ride into that child and hold EOF back for the daemon's lifetime.
-        for handle in [output.fileHandleForReading, output.fileHandleForWriting,
-                       errors.fileHandleForReading, errors.fileHandleForWriting] {
-            _ = fcntl(handle.fileDescriptor, F_SETFD, FD_CLOEXEC)
-        }
-        process.standardOutput = output
-        process.standardError = errors
+        // drained while waiting: zmx writes the listing row by row, so a few daemons fill the pipe before exit
+        let capture = try ProcessOutputCapture(attachingTo: process)
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
-        try process.run()
-        // drain both pipes while waiting: zmx writes the listing row by row, so the pipe never grows past
-        // its initial 512 bytes, four daemons fill it, and reading only after exit was the timeout every time.
-        let stdoutSink = Sink(output.fileHandleForReading)
-        let stderrSink = Sink(errors.fileHandleForReading)
+        do {
+            try process.run()
+        } catch {
+            capture.cancel()
+            throw error
+        }
+        capture.didLaunch()
         if finished.wait(timeout: .now() + invocation.timeout) == .timedOut {
             process.terminate()
             if finished.wait(timeout: .now() + terminationGrace) == .timedOut {
                 Darwin.kill(process.processIdentifier, SIGKILL)
                 process.waitUntilExit()
             }
+            capture.cancel()
             throw CommandError.timedOut
         }
-        // the child has exited, so EOF is due unless a write end leaked to another process; one grace
-        // period covers both joins, and a miss is a failed listing rather than a short one.
-        let deadline = DispatchTime.now() + terminationGrace
-        guard let stdout = stdoutSink.wait(until: deadline), let stderr = stderrSink.wait(until: deadline) else {
+        // EOF is due once the child has exited, unless a write end leaked to another process; a miss is a
+        // failed listing rather than a short one.
+        guard let output = capture.collect(until: .now() + terminationGrace) else {
             throw CommandError.timedOut
         }
         guard process.terminationStatus == 0 else {
-            throw CommandError.failed(process.terminationStatus, stdout + stderr)
+            throw CommandError.failed(process.terminationStatus, output.stdout + output.stderr)
         }
-        return invocation.mergesStderr ? stdout + stderr : stdout
-    }
-
-    /// One pipe drained to EOF on its own thread, never a pool worker: a leaked write end keeps the read
-    /// blocked for that process's lifetime, and the join gives up on it without the thread doing so.
-    private final class Sink: @unchecked Sendable {
-        private var data = Data()
-        private let done = DispatchSemaphore(value: 0)
-
-        init(_ handle: FileHandle) {
-            Thread.detachNewThread { [self] in
-                data = handle.readDataToEndOfFile()
-                done.signal()
-            }
-        }
-
-        func wait(until deadline: DispatchTime) -> String? {
-            guard done.wait(timeout: deadline) == .success else { return nil }
-            return String(decoding: data, as: UTF8.self)
-        }
+        return invocation.mergesStderr ? output.stdout + output.stderr : output.stdout
     }
 }
