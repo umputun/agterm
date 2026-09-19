@@ -1003,6 +1003,19 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertFalse(session.overlayActive)
     }
 
+    func testLosingThePresenterCancelsAnOverlayItNeverStarted() throws {
+        let (_, session) = try addSession()
+        let (_, id) = try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertEqual(server.overlayJobs.job(job)?.state, .finished(.canceled))
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       "overlay ended: canceled")
+    }
+
     func testARemoteOverlaysResultIsRunningThenItsFailure() throws {
         let (_, session) = try addSession()
         try present(session)

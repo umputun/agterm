@@ -87,6 +87,17 @@ extension AppStore {
                                    session: sessionID)
     }
 
+    /// The viewer presenting `sessionID` is gone, and every overlay it held goes with it for good: a later
+    /// stream never adopts one. An unclaimed job is cancelled and can no longer launch, a slot whose program
+    /// already ended is freed, and a claimed or running job keeps its slot until its helper reports.
+    public func remoteOverlayPresenterLost(forSession sessionID: UUID) {
+        guard let session = session(withID: sessionID) else { return }
+        for slot in session.remoteOverlays.slots {
+            session.remoteOverlays.surfaceGone(job: slot.job)
+            if case .unclaimed? = overlayJobs?.job(slot.job)?.state { overlayJobs?.cancel(slot.job) }
+        }
+    }
+
     /// Fails a job its presenter refused to show, before any helper claimed it.
     public func rejectRemoteOverlay(_ job: String, forSession sessionID: UUID) {
         guard let session = session(withID: sessionID), session.remoteOverlays.slot(job: job) != nil else { return }
@@ -103,6 +114,15 @@ extension AppStore {
             session.remoteOverlays.remove(job: slot.job)
         }
         session.remoteOverlays.clearFailure(pane)
+    }
+
+    /// Ends what `session` handed out before it leaves this store, soft close included: its ask, and its
+    /// overlays shown on viewers. Loss cleanup cannot find a session once it is gone, and an undo must not
+    /// bring a reservation back, so each job ends now and its slot and result go with it.
+    func releaseLeavingSession(_ session: Session) {
+        session.cancelPendingAsk()
+        for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
+        session.remoteOverlays = RemoteOverlays()
     }
 
     /// `remoteOverlays` read-back: one entry per slot a viewer holds.

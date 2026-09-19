@@ -469,7 +469,7 @@ public final class WindowLibrary {
         store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
         for workspace in store.workspaces {
             for session in workspace.sessions {
-                session.cancelPendingAsk()
+                store.releaseLeavingSession(session)
                 store.emitSessionClosed(session, workspace: workspace.id)
             }
         }
@@ -515,7 +515,7 @@ public final class WindowLibrary {
             store.dropLaunchPanes(store.workspaces.flatMap(\.sessions))
             for workspace in store.workspaces {
                 for session in workspace.sessions {
-                    session.cancelPendingAsk()
+                    store.releaseLeavingSession(session)
                     store.emitSessionClosed(session, workspace: workspace.id)
                 }
             }

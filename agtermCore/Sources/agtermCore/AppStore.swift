@@ -519,7 +519,7 @@ public final class AppStore {
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
         let removed = workspace.sessions[location.sessionIndex]
-        removed.cancelPendingAsk()
+        releaseLeavingSession(removed)
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
@@ -560,7 +560,7 @@ public final class AppStore {
         recordRecentClosedWorkspace(workspace, selectedSessionID: removingActive ? selectedSessionID : nil,
                                     focusMember: focusedWorkspaceIDs.contains(workspaceID))
         for session in workspace.sessions {
-            session.cancelPendingAsk()
+            releaseLeavingSession(session)
             emitSessionClosed(session, workspace: workspace.id)
         }
         if workspace.sessions.isEmpty { scheduleTreeChanged() }

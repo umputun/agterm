@@ -88,7 +88,7 @@ extension AppStore {
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
         let session = workspace.sessions[location.sessionIndex]
-        session.cancelPendingAsk()
+        releaseLeavingSession(session)
         closeTimedHud(session)
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(session, workspace: workspace.id)
@@ -160,7 +160,7 @@ extension AppStore {
             guard workspaces.indices.contains(close.workspaceIndex),
                   workspaces[close.workspaceIndex].sessions.indices.contains(close.sessionIndex),
                   workspaces[close.workspaceIndex].sessions[close.sessionIndex].id == close.session.id else { continue }
-            close.session.cancelPendingAsk()
+            releaseLeavingSession(close.session)
             closeTimedHud(close.session)
             _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
         }
@@ -205,7 +205,7 @@ extension AppStore {
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
         for session in workspaces[index].sessions {
-            session.cancelPendingAsk()
+            releaseLeavingSession(session)
             closeTimedHud(session)
         }
         let visibleWorkspace = workspaces.remove(at: index)

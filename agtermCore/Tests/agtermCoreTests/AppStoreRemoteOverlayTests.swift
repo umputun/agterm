@@ -17,17 +17,28 @@ struct AppStoreRemoteOverlayTests {
         var bodies: [PresentationFrame.Body] { frames.map(\.body) }
     }
 
+    final class Clock {
+        var now = Date(timeIntervalSince1970: 1_789_000_000)
+    }
+
     static let context = OverlayLaunchContext(command: "revdiff", cwd: "/tmp", sessionEnvironment: [:])
 
     let store = makeStore()
     let hub = PresentationHub(staleTimeout: 30)
-    let jobs = OverlayJobs()
+    let clock = Clock()
+    let jobs: OverlayJobs
     let presenter = Sink()
+
+    init() {
+        let clock = clock
+        jobs = OverlayJobs(now: { clock.now })
+    }
 
     private func origin(presented: Bool = true, split: Bool = false) throws -> (Session, PresentationHub.SubscriberID?) {
         store.presentationHub = hub
         store.overlayJobs = jobs
         jobs.onFinished = { [store] in store.finishRemoteOverlay($0) }
+        hub.onPresenterLost = { [store] in store.remoteOverlayPresenterLost(forSession: $0) }
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         if split { store.toggleSplit(session.id) }
@@ -192,6 +203,83 @@ struct AppStoreRemoteOverlayTests {
         #expect(session.remoteOverlays.slots.isEmpty)
     }
 
+    private func presentAgain(_ session: Session) throws -> Sink {
+        let sink = Sink()
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter),
+                                   sink: sink) { PresentationSnapshot(status: nil, hud: nil) }
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+        return sink
+    }
+
+    @Test func losingThePresenterCancelsAnUnclaimedJobAndALateClaimLaunchesNothing() throws {
+        let (session, id) = try origin()
+        let job = try job(of: open(session))
+
+        hub.unsubscribe(try #require(id))
+
+        #expect(jobs.job(job)?.state == .finished(.canceled))
+        #expect(jobs.claim(job) {} == nil)
+        #expect(session.remoteOverlays.slots.isEmpty)
+    }
+
+    @Test(arguments: [OverlayJobOutcome.exited(3), .unknown])
+    func losingThePresenterFreesAHeldSurfacesSlotAndKeepsItsOutcome(_ outcome: OverlayJobOutcome) throws {
+        let (session, id) = try origin()
+        let job = try job(of: open(session, wait: true))
+        jobs.finish(job, outcome)
+
+        hub.unsubscribe(try #require(id))
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(jobs.job(job)?.state == .finished(outcome))
+    }
+
+    @Test func aRunningJobKeepsItsSlotAcrossAReconnectAndFreesItOnItsOutcome() throws {
+        let (session, id) = try origin()
+        let job = try job(of: open(session, wait: true))
+        _ = jobs.claim(job) {}
+        jobs.started(job)
+
+        hub.unsubscribe(try #require(id))
+        _ = try presentAgain(session)
+        #expect(session.remoteOverlays.slot(nil)?.job == job)
+        jobs.finish(job, .exited(0))
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.overlayExitCode == 0)
+    }
+
+    @Test func anOldJobEndingLeavesTheNewPresentersJobAlone() throws {
+        let (session, id) = try origin(split: true)
+        let old = try job(of: open(session, pane: .left))
+        _ = jobs.claim(old) {}
+        jobs.started(old)
+        hub.unsubscribe(try #require(id))
+        _ = try presentAgain(session)
+        let newer = try job(of: open(session, pane: .right))
+
+        jobs.finish(old, .exited(1))
+
+        #expect(session.remoteOverlays.slots.map(\.job) == [newer])
+        #expect(jobs.job(newer)?.state == .unclaimed(deadline: clock.now.addingTimeInterval(OverlayJobs.launchWindow)))
+    }
+
+    @Test(arguments: [false, true])
+    func aClaimThatNeverStartsAfterTheLossEndsUnknownAndFreesTheSlot(_ reconnect: Bool) throws {
+        let (session, id) = try origin()
+        let job = try job(of: open(session))
+        _ = jobs.claim(job) {}
+
+        hub.unsubscribe(try #require(id))
+        if reconnect { _ = try presentAgain(session) }
+        clock.now = clock.now.addingTimeInterval(OverlayJobs.startWindow)
+        jobs.expire()
+
+        #expect(jobs.job(job)?.state == .finished(.unknown))
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.remoteOverlays.failure(nil) == "unknown")
+    }
+
     @Test func aRefusalFromThePresenterFailsTheLaunch() throws {
         let (session, _) = try origin()
         let job = try job(of: open(session))
@@ -244,7 +332,9 @@ struct AppStoreRemoteOverlayTests {
 
     @Test func aResizeFailsOnceTheJobsStreamIsGoneEvenWithANewerOne() throws {
         let (session, id) = try origin()
-        _ = open(session)
+        let job = try job(of: open(session))
+        _ = jobs.claim(job) {}
+        jobs.started(job)
         hub.unsubscribe(try #require(id))
         let newer = Sink()
         let newerID = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter),
@@ -279,6 +369,38 @@ struct AppStoreRemoteOverlayTests {
         let node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == session.id.uuidString })
 
         #expect(node.remoteOverlays == nil)
+    }
+
+    // regression: a soft-closed source left the store before loss cleanup could find it, and undo brought the slots back
+    @Test func softClosingTheSourceEndsItsJobsAndUndoRestoresNoReservation() throws {
+        let (session, _) = try origin(split: true)
+        let unclaimed = try job(of: open(session))
+        let running = try job(of: open(session, pane: .right, wait: true))
+        var reached = 0
+        _ = jobs.claim(running) { reached += 1 }
+        jobs.started(running)
+
+        #expect(store.softCloseSession(session.id))
+
+        #expect(presenter.bodies.contains(.overlayClose(PresentationOverlayChange(job: unclaimed))))
+        #expect(presenter.bodies.contains(.overlayClose(PresentationOverlayChange(job: running))))
+        #expect(jobs.claim(unclaimed) {} == nil)
+        #expect(reached == 1)
+        jobs.finish(running, .exited(0))
+        #expect(store.undoPendingClose())
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.remoteOverlays.failure(nil) == nil)
+        #expect(session.paneOverlayExitCode(.right) == nil)
+    }
+
+    @Test func closingTheSourceFreesAHeldSlot() throws {
+        let (session, _) = try origin()
+        let job = try job(of: open(session, wait: true))
+        jobs.finish(job, .exited(3))
+
+        store.closeSession(session.id)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
     }
 
     @Test func aPaneTheOriginDoesNotHaveIsRefusedWithoutAJob() throws {

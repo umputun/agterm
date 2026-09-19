@@ -874,14 +874,18 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationHubTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/OverlayJobsTests.swift`
 
-- [ ] write failing tests: on loss of the presenter's stream an unclaimed job ends `canceled` and a late claim
+- [x] write failing tests: on loss of the presenter's stream an unclaimed job ends `canceled` and a late claim
       launches nothing; a finished and an `unknown` job release their reservation at once with outcomes
       unchanged; a claimed or running job releases on its terminal outcome, including after a reconnect and
       after another viewer acquired the role, without touching that viewer's newer job; claim, then stream
       loss, then no `started` inside the launch window ends `unknown` with the reservation released, with and
       without a reconnect
-- [ ] mark the presenter's jobs presentation-lost on stream loss and release reservations as above
-- [ ] run the targeted tests - must pass before Task 22
+- [x] mark the presenter's jobs presentation-lost on stream loss and release reservations as above
+- [x] run the targeted tests - must pass before Task 22
+- ➕ the loss rules live in `AppStore.remoteOverlayPresenterLost`, called from the server's
+  `onPresenterLost` beside the ask handback; every slot of the session counts as its viewer surface gone,
+  so a held one is freed and a running one frees on its outcome. Tests are in `AppStoreRemoteOverlayTests`
+  and one hosted case in `ControlServerSessionActionsTests`
 
 ### Task 22: Overlay presentation on the viewer
 
