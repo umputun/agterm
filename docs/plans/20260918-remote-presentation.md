@@ -635,18 +635,25 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationClientTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationFramesTests.swift`
 
-- [ ] write failing tests, origin: acquire grants one connection per session; a second is refused and keeps
+- [x] write failing tests, origin: acquire grants one connection per session; a second is refused and keeps
       mirroring; no preemption; a missed heartbeat or a closed stream revokes and bumps the generation;
       a slice-1 peer negotiates down to mirror
-- [ ] write failing tests, viewer: the client sends acquire after a hello that offers presenter mode;
+- [x] write failing tests, viewer: the client sends acquire after a hello that offers presenter mode;
       granted, refused and revoked each update `remotePresentation.mode`; a reconnect acquires again
-- [ ] add the slice-2 frames to the codec, with round-trip tests
-- [ ] implement `PresenterGrant`, wire it into the hub, and wire acquisition into the client
-- [ ] project the mode on the viewer node and add the grant flag to the origin's `presenters`
-- [ ] show the row's connection indicator with a tooltip for `connecting` and `failed`, read from
+- [x] add the slice-2 frames to the codec, with round-trip tests
+- [x] implement `PresenterGrant`, wire it into the hub, and wire acquisition into the client
+- [x] project the mode on the viewer node and add the grant flag to the origin's `presenters`
+- [x] show the row's connection indicator with a tooltip for `connecting` and `failed`, read from
       `remotePresentation.connection`, including a first connection that never succeeded; a test for the
       state-to-indicator mapping
-- [ ] run the targeted tests - must pass before Task 14
+- [x] run the targeted tests - must pass before Task 14
+- ➕ `presenter.revoked` is not a frame: nothing preempts and nothing releases early, so the role is only
+  ever lost with its stream, and no frame reaches a closed stream. Loss of the stream is the revocation
+- ➕ only the presenter frames joined the codec here; the ask and overlay frames join with Tasks 14-22,
+  where their payloads are defined
+- ➕ the origin's hello answer echoes the viewer's mode, so a slice-1 viewer asking for `mirror` is
+  never offered the role; `presenters.mirrors` counts the viewers that are not the presenter
+- ➕ the row indicator swaps the remote cloud for `icloud.slash` and puts the notice in the icon's tooltip
 
 ### Task 14: Ask ownership split on the origin
 

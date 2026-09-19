@@ -326,6 +326,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         server.startRemotePresentation(for: viewer)
         waitUntil("the viewer's stream connects") { viewer.remotePresentation?.connection == .connected }
+        waitUntil("the viewer is granted the presenter role") { viewer.remotePresentation?.mode == .presenter }
 
         store.applyControlStatus(AgentIndicator(status: .blocked, blink: true), forSession: origin.id)
         waitUntil("the origin's status reaches the viewer row") { viewer.agentIndicator.status == .blocked }
@@ -339,12 +340,13 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(OverlayPanelStyle.resolve(viewer).interactive)
         XCTAssertEqual(viewer.hudSpec?.message, "deploying")
         XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == origin.id.uuidString }?
-            .presenters, ControlPresentersNode(mirrors: 1))
+            .presenters, ControlPresentersNode(mirrors: 0, presenter: true))
 
         server.shutdownPresentationStreams()
         waitUntil("the mirrored status and HUD leave with the stream") {
             viewer.agentIndicator.status == .idle && !viewer.hudActive
         }
+        XCTAssertEqual(viewer.remotePresentation?.mode, .mirror)
         XCTAssertTrue(origin.hudActive, "the origin keeps drawing its own panel")
         XCTAssertEqual(origin.agentIndicator.status, .blocked)
     }

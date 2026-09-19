@@ -337,11 +337,16 @@ public struct ControlPresentationNode: Codable, Sendable, Equatable {
     }
 }
 
-/// The viewers of an origin session as `tree` reports them.
+/// The viewers of an origin session as `tree` reports them. `mirrors` counts the viewers that are not the
+/// presenter; `presenter` is omitted unless a viewer holds that role.
 public struct ControlPresentersNode: Codable, Sendable, Equatable {
     public let mirrors: Int
+    public let presenter: Bool?
 
-    public init(mirrors: Int) { self.mirrors = mirrors }
+    public init(mirrors: Int, presenter: Bool? = nil) {
+        self.mirrors = mirrors
+        self.presenter = presenter
+    }
 }
 
 /// A workspace and its sessions as projected into the `tree` response.

@@ -125,6 +125,11 @@ public struct PresentationFrame: Equatable, Sendable {
         case status(PresentationStatus?)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
+        /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
+        case presenterAcquire
+        case presenterGranted
+        /// The role is held by another viewer; this one stays a mirror until it reconnects.
+        case presenterRefused
         /// A kind this build does not speak. Kept, with its ordering, so a newer peer does not break the stream.
         case unknown(String)
 
@@ -137,6 +142,9 @@ public struct PresentationFrame: Equatable, Sendable {
             case .status: return "status"
             case .hud: return "hud"
             case .notify: return "notify"
+            case .presenterAcquire: return "presenter.acquire"
+            case .presenterGranted: return "presenter.granted"
+            case .presenterRefused: return "presenter.refused"
             case .unknown(let kind): return kind
             }
         }
@@ -171,6 +179,9 @@ extension PresentationFrame: Codable {
         case "status": body = .status(try container.decodeIfPresent(PresentationStatus.self, forKey: .status))
         case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
         case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
+        case "presenter.acquire": body = .presenterAcquire
+        case "presenter.granted": body = .presenterGranted
+        case "presenter.refused": body = .presenterRefused
         default: body = .unknown(kind)
         }
     }
@@ -186,7 +197,7 @@ extension PresentationFrame: Codable {
         case .status(let status): try container.encodeIfPresent(status, forKey: .status)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)
-        case .ping, .ack, .unknown: break
+        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown: break
         }
     }
 }

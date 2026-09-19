@@ -134,7 +134,7 @@ struct PresentationHubTests {
         try hub.subscribe(session: Self.session, hello: hello, sink: sink) { Self.empty }
 
         #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: ["status", "notify"],
-                                                              mode: .mirror)))
+                                                              mode: .presenter)))
     }
 
     @Test func aPeerWithNoUsableVersionIsRefused() {

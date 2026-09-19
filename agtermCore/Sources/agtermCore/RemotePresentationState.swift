@@ -31,6 +31,18 @@ public enum RemotePresentationConnection: Equatable, Sendable {
     /// The origin predates the stream. Terminal for the row: nothing is ever launched.
     case unsupported
     case failed(String)
+
+    /// What a remote row tells the user while its stream is not up, nil when there is nothing to say. Read
+    /// from the state itself, so the notice clears the moment the stream is back. An origin too old for the
+    /// stream gets none: nothing the user does here changes it.
+    public func rowNotice(host: String) -> String? {
+        switch self {
+        case .connected, .unsupported: return nil
+        case .connecting: return "Connecting to \(host) for status, notifications, dialogs and overlays"
+        case .failed(let reason):
+            return "Lost the connection to \(host) (\(reason)), retrying. Close and reattach the session to retry now."
+        }
+    }
 }
 
 /// RemotePresentationState is everything a viewer keeps about one attached session's presentation.

@@ -47,6 +47,25 @@ struct RemotePresentationStateTests {
         #expect(session.remotePresentation?.connection == expected)
     }
 
+    @Test(arguments: [RemotePresentationConnection.connected, .unsupported])
+    func aRowWithAStreamUpOrNoneToHaveShowsNoNotice(_ connection: RemotePresentationConnection) {
+        #expect(connection.rowNotice(host: "buildbox") == nil)
+    }
+
+    @Test(arguments: [RemotePresentationConnection.connecting, .failed("exit 255")])
+    func aRowWhoseStreamIsNotUpNamesTheHost(_ connection: RemotePresentationConnection) throws {
+        let notice = try #require(connection.rowNotice(host: "buildbox"))
+
+        #expect(notice.contains("buildbox"))
+    }
+
+    @Test func aFailedStreamsNoticeCarriesTheReasonAndTheManualRecovery() throws {
+        let notice = try #require(RemotePresentationConnection.failed("exit 255").rowNotice(host: "buildbox"))
+
+        #expect(notice.contains("exit 255"))
+        #expect(notice.contains("reattach"))
+    }
+
     @Test func aMirroredStatusLandsOnTheMappedLocalPaneWithItsGlyphOverrides() throws {
         let (store, session) = try attached()
 

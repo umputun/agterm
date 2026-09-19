@@ -67,6 +67,7 @@ extension ControlServer {
             connection: { [weak self] connection in
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
+            mode: { [weak self] mode in self?.library.store(forSession: id)?.setRemoteMode(mode, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public) is down: \(reason, privacy: .public)")
             })

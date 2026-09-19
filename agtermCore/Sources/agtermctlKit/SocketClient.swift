@@ -455,9 +455,12 @@ struct SocketClient {
                 let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""
                 let splitAttribution = session.splitLiveAttribution.map { "  split live attribution: \($0)" } ?? ""
                 let presentation = session.presentation.map {
-                    "  presentation: \($0.state)" + ($0.error.map { " (\($0))" } ?? "")
+                    "  presentation: \($0.state)" + ($0.mode == "presenter" ? ", presenter" : "")
+                        + ($0.error.map { " (\($0))" } ?? "")
                 } ?? ""
-                let presenters = session.presenters.map { "  mirrored by: \($0.mirrors)" } ?? ""
+                let presenters = session.presenters.map {
+                    ($0.presenter == true ? "  presented remotely" : "") + ($0.mirrors > 0 ? "  mirrored by: \($0.mirrors)" : "")
+                } ?? ""
                 lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)\(splitCwdSuffix)\(titleSuffix)\(attribution)\(splitAttribution)\(presentation)\(presenters)")
             }
         }

@@ -98,7 +98,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // reload; a touch inside viewFor wouldn't register it. The badge-visibility toggle
         // (GhosttyApp.notificationBadgeEnabled) is NOT observable and drives a re-reconcile via
         // .agtermAppearanceChanged, like toolbarMode.
-        _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
+        _ = store.workspaces.map {
+            ($0.id, $0.name, $0.unseenCount, $0.sessions.map {
+                ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
+                 $0.remotePresentation?.connection)
+            })
+        }
         _ = store.selectedSessionID
         _ = store.sidebarSelectionIDs
         // sidebarMode flips the whole data source (tree ↔ flagged view), so a mode change must rebuild.
@@ -376,6 +381,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             /// independent of `focusEnabled`, so marking re-renders just that row even while the filter is
             /// off (with it on the shape changes too and the rebuild branch takes over). False for sessions.
             let focusMember: Bool
+            /// The remote row's stream notice, nil while it is up or for a local row.
+            var presentationNotice: String?
 
             func differsOnlyInLabel(from other: RowContent) -> Bool {
                 var relabeled = self
@@ -484,7 +491,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
                        splitAxis: session.splitAxis,
                        unseen: effectiveUnseen(session.unseenCount),
                        indicator: session.agentIndicator, flagged: session.flagged,
-                       focusMember: false)
+                       focusMember: false, presentationNotice: presentationNotice(for: session))
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so NSOutlineView item
@@ -790,6 +797,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedHorizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
+        lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")
+        lazy var remoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash", weight: .bold)
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)

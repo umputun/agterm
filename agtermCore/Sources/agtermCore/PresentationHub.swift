@@ -49,6 +49,7 @@ public final class PresentationHub {
     private let now: () -> Date
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
+    private var grant = PresenterGrant()
 
     public init(staleTimeout: TimeInterval, now: @escaping () -> Date = Date.init) {
         self.staleTimeout = staleTimeout
@@ -75,7 +76,8 @@ public final class PresentationHub {
         let held = subscriber.held ?? []
         subscriber.held = nil
         let kinds = Self.supportedKinds.filter(hello.kinds.contains)
-        let answer = PresentationHello(version: version, kinds: kinds, mode: .mirror)
+        // presenter is offered only to a viewer that asked for it, so a slice-1 viewer stays a mirror
+        let answer = PresentationHello(version: version, kinds: kinds, mode: hello.mode)
         for body in [.hello(answer), .snapshot(state)] + held {
             guard send(body, to: id) else { break }
         }
@@ -84,6 +86,7 @@ public final class PresentationHub {
 
     public func unsubscribe(_ id: SubscriberID) {
         subscribers[id] = nil
+        grant.release(id)
     }
 
     public func publish(_ body: PresentationFrame.Body, session: UUID) {
@@ -102,6 +105,9 @@ public final class PresentationHub {
         switch frame.body {
         case .ack: subscriber.lastAck = now()
         case .ping: send(.ack, to: id)
+        case .presenterAcquire:
+            let granted = grant.acquire(session: subscriber.session, by: id)
+            send(granted ? .presenterGranted : .presenterRefused, to: id)
         default: break
         }
     }
@@ -123,6 +129,12 @@ public final class PresentationHub {
         subscribers.values.count { $0.session == session }
     }
 
+    /// Whether a viewer holds `session`'s presenter role.
+    public func hasPresenter(session: UUID) -> Bool { grant.holder(of: session) != nil }
+
+    /// Counts changes of `session`'s presenter, a grant and a loss alike.
+    public func presenterGeneration(session: UUID) -> Int { grant.generation(of: session) }
+
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
         guard let subscriber = subscribers[id] else { return false }
@@ -137,6 +149,7 @@ public final class PresentationHub {
 
     private func drop(_ id: SubscriberID, reason: CloseReason) {
         guard let subscriber = subscribers.removeValue(forKey: id) else { return }
+        grant.release(id)
         subscriber.sink.close(reason)
     }
 }

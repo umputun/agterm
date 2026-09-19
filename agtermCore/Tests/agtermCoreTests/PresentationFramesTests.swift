@@ -28,6 +28,11 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 12, body: .snapshot(PresentationSnapshot(status: nil, hud: paneHud))),
         PresentationFrame(gen: 2, rev: 10, body: .notify(PresentationNotify(
             title: "build", body: "done", pane: pane, source: "control"))),
+        PresentationFrame(gen: 1, rev: 13, body: .hello(PresentationHello(
+            version: 1, kinds: ["status"], mode: .presenter))),
+        PresentationFrame(gen: 1, rev: 14, body: .presenterAcquire),
+        PresentationFrame(gen: 1, rev: 15, body: .presenterGranted),
+        PresentationFrame(gen: 1, rev: 16, body: .presenterRefused),
     ]
 
     @Test(arguments: frames)

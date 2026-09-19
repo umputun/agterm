@@ -45,6 +45,11 @@ extension AppStore {
         closeBridgedHud(forSession: id)
     }
 
+    /// Records whether this Mac is the session's presenter or a mirror beside the origin.
+    public func setRemoteMode(_ mode: PresentationMode, forSession id: UUID) {
+        session(withID: id)?.remotePresentation?.mode = mode
+    }
+
     /// Marks the live HUD as the bridge's. Called once the app has the mirrored panel up.
     public func markHudBridged(forSession id: UUID) {
         guard let session = session(withID: id), session.hudActive else { return }
@@ -72,8 +77,11 @@ extension AppStore {
 
     /// The `tree` read-back of the viewers mirroring `session`, nil when there is none.
     func presentersNode(of session: Session) -> ControlPresentersNode? {
-        let mirrors = presentationHub?.subscriberCount(session: session.id) ?? 0
-        return mirrors > 0 ? ControlPresentersNode(mirrors: mirrors) : nil
+        guard let hub = presentationHub else { return nil }
+        let viewers = hub.subscriberCount(session: session.id)
+        guard viewers > 0 else { return nil }
+        let presented = hub.hasPresenter(session: session.id)
+        return ControlPresentersNode(mirrors: presented ? viewers - 1 : viewers, presenter: presented ? true : nil)
     }
 
     /// The local role standing for one of the origin's panes, resolved at use so a swap or promotion on this

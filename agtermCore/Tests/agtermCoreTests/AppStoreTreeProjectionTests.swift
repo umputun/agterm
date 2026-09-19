@@ -516,4 +516,36 @@ struct AppStoreTreeProjectionTests {
 
         #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2))
     }
+
+    @Test func anOriginRowReportsItsPresenterApartFromItsMirrors() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let hello = PresentationHello(version: 1, kinds: [], mode: .presenter)
+        let presenter = try hub.subscribe(session: session.id, hello: hello, sink: NullSink()) {
+            store.presentationSnapshot(forSession: session.id)
+        }
+        try hub.subscribe(session: session.id, hello: hello, sink: NullSink()) {
+            store.presentationSnapshot(forSession: session.id)
+        }
+
+        hub.receive(PresentationFrame(gen: 1, rev: 0, body: .presenterAcquire), from: presenter)
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters
+            == ControlPresentersNode(mirrors: 1, presenter: true))
+    }
+
+    @Test func aViewerRowReportsTheModeItWasGranted() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1),
+                         forSession: session.id)
+
+        store.setRemoteMode(.presenter, forSession: session.id)
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presentation?.mode == "presenter")
+    }
 }

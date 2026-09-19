@@ -24,6 +24,7 @@ public struct RemotePresentationEffects {
     public var hud: @MainActor (PresentationHud?) -> Void
     public var notify: @MainActor (PresentationNotify) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
+    public var mode: @MainActor (PresentationMode) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -31,12 +32,14 @@ public struct RemotePresentationEffects {
                 hud: @escaping @MainActor (PresentationHud?) -> Void,
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
+                mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
         self.hud = hud
         self.notify = notify
         self.connection = connection
+        self.mode = mode
         self.warn = warn
     }
 }
@@ -74,6 +77,9 @@ public final class RemotePresentationClient {
     private var failures = 0
     private var warnedReason: String?
     private var connection: RemotePresentationConnection?
+    /// Nil until reported, so a new client's first report reaches the row whatever an earlier client of
+    /// the same row left on it.
+    private var mode: PresentationMode?
 
     public init(argv: [String], presentationVersion: Int?, transport: RemotePresentationTransport,
                 effects: RemotePresentationEffects, now: @escaping () -> Date = Date.init) {
@@ -92,6 +98,7 @@ public final class RemotePresentationClient {
             return
         }
         running = true
+        report(.mirror)
         launch()
     }
 
@@ -156,7 +163,11 @@ public final class RemotePresentationClient {
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
         case .ping: send(.ack, on: link)
-        case .hello, .ack, .unknown: break
+        // an origin that predates the role answers mirror, and nothing is asked of it
+        case .hello(let answer) where answer.mode == .presenter: send(.presenterAcquire, on: link)
+        case .presenterGranted: report(.presenter)
+        case .presenterRefused: report(.mirror)
+        case .hello, .ack, .presenterAcquire, .unknown: break
         }
     }
 
@@ -174,7 +185,7 @@ public final class RemotePresentationClient {
             onClose: { [weak self] reason in self?.linkClosed(reason: reason, launch: launch) })
         link = opened
         let hello = PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
-                                      mode: .mirror)
+                                      mode: .presenter)
         send(.hello(hello), on: opened)
     }
 
@@ -186,6 +197,8 @@ public final class RemotePresentationClient {
             effects.warn(reason)
         }
         report(.failed(reason))
+        // the role goes with the link it was granted to
+        report(.mirror)
         let cap = failures > Self.failuresBeforeLateCap ? Self.lateCap : Self.firstCap
         let delay = min(pow(2, Double(min(failures - 1, 30))), cap)
         retryAt = now().addingTimeInterval(delay)
@@ -205,5 +218,11 @@ public final class RemotePresentationClient {
         guard connection != next else { return }
         connection = next
         effects.connection(next)
+    }
+
+    private func report(_ next: PresentationMode) {
+        guard mode != next else { return }
+        mode = next
+        effects.mode(next)
     }
 }

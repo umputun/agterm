@@ -38,6 +38,7 @@ struct RemotePresentationClientTests {
         var huds: [PresentationHud?] = []
         var notifies: [PresentationNotify] = []
         var connections: [RemotePresentationConnection] = []
+        var modes: [PresentationMode] = []
         var warnings: [String] = []
     }
 
@@ -62,6 +63,7 @@ struct RemotePresentationClientTests {
             hud: { recorder.huds.append($0) },
             notify: { recorder.notifies.append($0) },
             connection: { recorder.connections.append($0) },
+            mode: { recorder.modes.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -71,8 +73,9 @@ struct RemotePresentationClientTests {
         (try? PresentationCodec.encode(PresentationFrame(gen: gen, rev: rev, body: body)).dropLast()) ?? Data()
     }
 
-    func connect(_ client: RemotePresentationClient, snapshot: PresentationSnapshot? = nil, gen: Int = 7) {
-        let answer = PresentationHello(version: 1, kinds: ["status", "hud", "notify"], mode: .mirror)
+    func connect(_ client: RemotePresentationClient, snapshot: PresentationSnapshot? = nil, gen: Int = 7,
+                 mode: PresentationMode = .mirror) {
+        let answer = PresentationHello(version: 1, kinds: ["status", "hud", "notify"], mode: mode)
         transport.deliver(line(.hello(answer), gen: gen, rev: 0))
         transport.deliver(line(.snapshot(snapshot ?? PresentationSnapshot(status: nil, hud: nil)), gen: gen, rev: 1))
     }
@@ -85,8 +88,82 @@ struct RemotePresentationClientTests {
         #expect(transport.launches == [["ssh", "buildbox", "present"]])
         let hello = try #require(transport.links[0].sent.first)
         #expect(hello.body == .hello(PresentationHello(version: PresentationCodec.version,
-                                                       kinds: PresentationHub.supportedKinds, mode: .mirror)))
+                                                       kinds: PresentationHub.supportedKinds, mode: .presenter)))
         #expect(recorder.connections == [.connecting])
+    }
+
+    @Test func anOriginOfferingTheRoleIsAskedForIt() {
+        let client = makeClient()
+        client.start()
+
+        connect(client, mode: .presenter)
+
+        #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
+    }
+
+    @Test func anOriginAnsweringMirrorIsNeverAskedForTheRole() {
+        let client = makeClient()
+        client.start()
+
+        connect(client)
+
+        #expect(!transport.links[0].sent.map(\.body).contains(.presenterAcquire))
+        #expect(recorder.modes == [.mirror])
+    }
+
+    @Test func aGrantMakesThisMacThePresenter() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.presenterGranted, rev: 2))
+
+        #expect(recorder.modes == [.mirror, .presenter])
+    }
+
+    @Test func aRefusalKeepsThisMacAMirror() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.presenterRefused, rev: 2))
+
+        #expect(recorder.modes == [.mirror])
+        #expect(recorder.connections.last == .connected)
+    }
+
+    // regression: a replacement client after soft close and undo left the row reading presenter when refused
+    @Test func aReplacementClientRefusedTheRoleResetsTheRowToMirror() {
+        let first = makeClient()
+        first.start()
+        connect(first, mode: .presenter)
+        transport.deliver(line(.presenterGranted, rev: 2))
+        first.stop()
+
+        let replacement = makeClient()
+        replacement.start()
+        connect(replacement, gen: 8, mode: .presenter)
+        transport.deliver(line(.presenterRefused, gen: 8, rev: 2))
+
+        #expect(recorder.modes.last == .mirror)
+    }
+
+    @Test func losingTheStreamDropsTheRoleAndAReconnectAsksAgain() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        transport.deliver(line(.presenterGranted, rev: 2))
+
+        transport.close("exit 255")
+        #expect(recorder.modes == [.mirror, .presenter, .mirror])
+
+        clock.now = clock.now.addingTimeInterval(2)
+        client.tick()
+        connect(client, gen: 8, mode: .presenter)
+        transport.deliver(line(.presenterGranted, gen: 8, rev: 2))
+
+        #expect(transport.links[1].sent.map(\.body).last == .presenterAcquire)
+        #expect(recorder.modes == [.mirror, .presenter, .mirror, .presenter])
     }
 
     @Test func theSnapshotIsAppliedAndMarksTheStreamConnected() {

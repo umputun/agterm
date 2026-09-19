@@ -57,6 +57,7 @@ extension WorkspaceSidebar.Coordinator {
             // alone and NOT on `focusEnabled` — so the marked set stays legible with the filter off, while
             // looking at the whole tree.
             cell.imageView?.image = store.focusedWorkspaceIDs.contains(node.id) ? focusedWorkspaceIcon : workspaceIcon
+            cell.imageView?.toolTip = nil
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
         case .session:
             field.stringValue = rowLabel(forSession: node.id)
@@ -72,8 +73,11 @@ extension WorkspaceSidebar.Coordinator {
             // so the fill would be noise.
             let showSplitIcon = session?.hasSplit == true
             let flagged = store.sidebarMode == .tree && session?.flagged == true
+            let notice = session.flatMap(presentationNotice(for:))
             cell.imageView?.image = iconForSession(split: showSplitIcon, axis: session?.splitAxis ?? .leftRight,
-                                                   flagged: flagged, remote: session?.remoteHost != nil)
+                                                   flagged: flagged, remote: session?.remoteHost != nil,
+                                                   disconnected: notice != nil)
+            cell.imageView?.toolTip = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
         }
         // text/icon colors track the terminal theme; a selected row uses the selection foreground.
@@ -84,6 +88,12 @@ extension WorkspaceSidebar.Coordinator {
         let selected = outlineView.selectedRowIndexes.contains(outlineView.row(forItem: item))
         cell.setColors(selected: selected)
         return cell
+    }
+
+    /// The notice a remote row shows while its presentation stream is not up, nil otherwise.
+    func presentationNotice(for session: Session) -> String? {
+        guard let host = session.remoteHost else { return nil }
+        return session.remotePresentation?.connection.rowNotice(host: host)
     }
 
     /// Shows the unseen-notification `count` capsule on the row (hidden, zero-width when 0, so the
@@ -101,7 +111,11 @@ extension WorkspaceSidebar.Coordinator {
     /// passes `flagged: false` for. It marks that split by WEIGHT, as the focused-workspace icon does,
     /// because `.fill` is what every other row icon spends on FLAGGED, so a filled cloud would read as a
     /// flag. The axis is not distinguished — no cloud symbol carries both arrangements.
-    private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool, remote: Bool) -> NSImage? {
+    ///
+    /// A remote row whose presentation stream is down swaps the cloud for its slashed form.
+    private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool, remote: Bool,
+                                disconnected: Bool) -> NSImage? {
+        if remote, disconnected { return split ? remoteDisconnectedSplitSessionIcon : remoteDisconnectedSessionIcon }
         if remote { return split ? remoteSplitSessionIcon : remoteSessionIcon }
         switch (split, axis, flagged) {
         case (true, .topBottom, true): return flaggedHorizontalSplitSessionIcon
