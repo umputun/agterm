@@ -120,6 +120,57 @@ struct RemotePresentationStateTests {
         #expect(session.agentIndicator == same)
     }
 
+    // every reconnect brings a snapshot, which overwrote a status set on this Mac's row
+    @Test(arguments: [PresentationStatus?.none, PresentationStatus(status: .completed, blink: false, color: nil,
+                                                                   shape: nil, pane: nil, changedAt: nil)])
+    func aSnapshotLeavesAStatusSetLocallyAlone(_ origin: PresentationStatus?) throws {
+        let (store, session) = try attached()
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+
+        store.applyRemoteSnapshotStatus(origin, forSession: session.id)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.remotePresentation?.statusBridged == false)
+    }
+
+    @Test func aStatusClearedLocallyGivesTheRowBackToTheNextSnapshot() throws {
+        let (store, session) = try attached()
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+
+        store.applyRemoteSnapshotStatus(status(.completed, pane: nil), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .completed)
+        #expect(session.remotePresentation?.statusBridged == true)
+    }
+
+    @Test func aSnapshotReplacesAStatusTheBridgeSet() throws {
+        let (store, session) = try attached()
+        store.applyRemoteStatus(status(.blocked, pane: nil), forSession: session.id)
+
+        store.applyRemoteSnapshotStatus(nil, forSession: session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func aSnapshotFillsAnIdleRow() throws {
+        let (store, session) = try attached()
+
+        store.applyRemoteSnapshotStatus(status(.blocked, pane: nil), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.remotePresentation?.statusBridged == true)
+    }
+
+    @Test func aDeltaStillReplacesAStatusSetLocally() throws {
+        let (store, session) = try attached()
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+
+        store.applyRemoteStatus(status(.completed, pane: nil), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .completed)
+    }
+
     @Test func losingTheStreamClearsTheMirroredStatus() throws {
         let (store, session) = try attached()
         store.setRemoteConnection(.connected, forSession: session.id)

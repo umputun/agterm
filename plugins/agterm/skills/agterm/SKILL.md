@@ -242,7 +242,7 @@ entries in `surfaces` report their own Boolean, while scratch and overlays omit 
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
 session, and never present after a relaunch because a remote session is not persisted),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
-`unsupported`, or `failed` with `error` - not the ssh connection's) and `presenters` (origin session:
+`unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `mirror`) and `presenters` (origin session:
 `mirrors`, the count of streams mirroring it, one per attached row and not per Mac),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),

@@ -26,6 +26,15 @@ extension AppStore {
         session.remotePresentation?.statusOwnerResolved = owner?.resolved ?? true
     }
 
+    /// Applies the status a snapshot carries, unless the row holds a non-idle one set on this Mac. A snapshot
+    /// comes with every reconnect, so it must not end what a local write started. An origin write made while
+    /// the stream was down is held back with it, until the origin's next live update.
+    public func applyRemoteSnapshotStatus(_ status: PresentationStatus?, forSession id: UUID) {
+        guard let session = session(withID: id), let state = session.remotePresentation else { return }
+        if !state.statusBridged, session.agentIndicator.status != .idle { return }
+        applyRemoteStatus(status, forSession: id)
+    }
+
     /// Moves the stream's state. Leaving `connected` withdraws what the bridge put on screen, since a glyph
     /// or a panel outliving the stream that fed it would describe nothing.
     public func setRemoteConnection(_ connection: RemotePresentationConnection, forSession id: UUID) {

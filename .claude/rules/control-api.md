@@ -1174,7 +1174,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
   second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
   identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
-  neighbour. A local status write takes the row over until the origin's next change.
+  neighbour. A non-idle status written locally takes the row over until a LIVE status update arrives from
+  the origin, a same-value write included since the origin publishes those too. A snapshot does not end
+  it: one arrives with every reconnect, so `applyRemoteSnapshotStatus` skips such a row, which also holds
+  back an origin write made while the stream was down. A local clear leaves the row idle, and the next
+  snapshot fills it.
 - A mirrored HUD carries the origin's REMAINING time, and the viewer counts that down on its own clock.
   The two expiries are not synchronized, so the panels can close a moment apart; the origin's withdrawal
   frame closes the viewer's early. A mirrored HUD yields to a HUD or program overlay this Mac's own caller

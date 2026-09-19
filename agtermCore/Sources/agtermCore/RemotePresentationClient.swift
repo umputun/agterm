@@ -18,17 +18,22 @@ public protocol RemotePresentationTransport: AnyObject {
 /// needs AppKit.
 public struct RemotePresentationEffects {
     public var status: @MainActor (PresentationStatus?) -> Void
+    /// The status a snapshot carries. Separate from `status` because it is no change on the origin: one
+    /// arrives with every reconnect.
+    public var snapshotStatus: @MainActor (PresentationStatus?) -> Void
     public var hud: @MainActor (PresentationHud?) -> Void
     public var notify: @MainActor (PresentationNotify) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
+                snapshotStatus: @escaping @MainActor (PresentationStatus?) -> Void,
                 hud: @escaping @MainActor (PresentationHud?) -> Void,
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
+        self.snapshotStatus = snapshotStatus
         self.hud = hud
         self.notify = notify
         self.connection = connection
@@ -145,7 +150,7 @@ public final class RemotePresentationClient {
             failures = 0
             warnedReason = nil
             report(.connected)
-            effects.status(snapshot.status)
+            effects.snapshotStatus(snapshot.status)
             effects.hud(snapshot.hud)
         case .status(let status): effects.status(status)
         case .hud(let hud): effects.hud(hud)

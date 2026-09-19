@@ -538,7 +538,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (on an attached session only:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connecting</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unsupported</span> or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failed</span> with the reason in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error</span>; it reports the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failed</span> with the reason in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error</span>, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mode</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mirror</span>; it reports the
                 stream mirroring status, notifications and the HUD from the origin, not the panes' ssh connections),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presenters</span> (on an origin session:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mirrors</span>, how many streams mirror it, one per attached row and not per Mac; omitted when none does), and
@@ -3231,7 +3231,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span> (only when one was given — the ssh destination the requesting app was handed, stamped on after decoding, since the far side cannot know which name reached it),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">endpoint</span> (the zmx
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">executable</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">socketDirectory</span>), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">socketDirectory</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (the presentation protocol version, absent from an app too old to stream), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>, each with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span> (what
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes),

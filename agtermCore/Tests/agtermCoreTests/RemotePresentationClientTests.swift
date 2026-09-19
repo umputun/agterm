@@ -34,6 +34,7 @@ struct RemotePresentationClientTests {
 
     final class Recorder {
         var statuses: [PresentationStatus?] = []
+        var snapshotStatuses: [PresentationStatus?] = []
         var huds: [PresentationHud?] = []
         var notifies: [PresentationNotify] = []
         var connections: [RemotePresentationConnection] = []
@@ -54,6 +55,10 @@ struct RemotePresentationClientTests {
         let clock = clock
         let effects = RemotePresentationEffects(
             status: { recorder.statuses.append($0) },
+            snapshotStatus: {
+                recorder.statuses.append($0)
+                recorder.snapshotStatuses.append($0)
+            },
             hud: { recorder.huds.append($0) },
             notify: { recorder.notifies.append($0) },
             connection: { recorder.connections.append($0) },
@@ -94,6 +99,17 @@ struct RemotePresentationClientTests {
         #expect(recorder.statuses == [Self.blocked])
         #expect(recorder.huds == [hud])
         #expect(recorder.connections == [.connecting, .connected])
+    }
+
+    @Test func aSnapshotsStatusIsReportedApartFromADelta() {
+        let client = makeClient()
+        client.start()
+
+        connect(client, snapshot: PresentationSnapshot(status: Self.blocked, hud: nil))
+        transport.deliver(line(.status(nil), rev: 2))
+
+        #expect(recorder.snapshotStatuses == [Self.blocked])
+        #expect(recorder.statuses == [Self.blocked, nil])
     }
 
     @Test func deltasAreAppliedInOrder() {

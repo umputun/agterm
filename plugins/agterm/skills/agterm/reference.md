@@ -141,7 +141,7 @@ split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session, and never present after a relaunch because a remote session is never written to disk),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
-origin too old to stream, or `failed` with the reason in `error`; it says whether status, notifications
+origin too old to stream, or `failed` with the reason in `error`, and `mode` is `mirror`; it says whether status, notifications
 and the HUD are being mirrored from the origin, never whether the panes' ssh connections are up),
 `presenters` (on an origin session: `mirrors`, how many streams mirror it, one per attached row and not
 per Mac; omitted when none does),
@@ -1579,6 +1579,7 @@ same answer a target that does not exist gets.
 Mac over ssh; with none it reports this app's own, which is exactly the form the remote call runs on the
 far side, so it is also how to see what another machine would answer without sshing anywhere.
 `result.remote` carries `endpoint` (the zmx `executable` and `socketDirectory`), `host` when one was given,
+`presentation` (the presentation protocol version, absent from an app too old to stream),
 and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID`/`workspaceName` (show the
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
 `context` when its owner set one, `cwd`, `splitAxis` when it has a split, and `panes`
@@ -1622,7 +1623,9 @@ beyond the `agtermctl` PATH precondition above. What to expect:
 - A HUD with `--hide-after` closes here on this Mac's own countdown of the time the origin had left, so
   the two panels can close a moment apart.
 - A HUD or overlay opened by a program on THIS Mac wins: a mirrored HUD never replaces or closes it.
-- A status set on this Mac's row holds until the origin's status next changes.
+- A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
+  repeat of the same value included. A reconnect does not end it, even when the origin's status changed
+  while the stream was down. Clearing it here gives the row back to the origin's status.
 
 `agtermctl zmx present SESSION` is the plumbing behind it: it opens the stream on the local socket and
 bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the origin; it is not meant to

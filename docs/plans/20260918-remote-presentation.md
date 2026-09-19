@@ -508,6 +508,8 @@ Frame size and the pending-output queue are bounded; the limits are constants be
 - ➕ a mirrored HUD goes through this Mac's own HUD path (`showRemoteHud`), so it is sized to the local
   pane and comes down on the local timer armed with the origin's remaining lifetime; it yields to a
   program overlay and to a HUD this Mac's own program opened
+- ➕ there is no `Session.remoteBinding`: the binding is `RemotePresentationState.binding`, reached through
+  `Session.remotePresentation`, beside the connection state and the bridged flags
 
 ### Task 10: Viewer client, automatic start and row-visibility lifecycle
 
@@ -546,6 +548,15 @@ Frame size and the pending-output queue are bounded; the limits are constants be
   workspace restoration, where the binding is already on the row
 - ➕ the client has no timer of its own; the server ticks every client once a second, which is what makes
   backoff and the stale check deterministic under a fake clock
+- ➕ the command is `RemoteSession.presentCommand(host:session:connectTimeout:)`. It takes no endpoint, since
+  the far side's `agtermctl` resolves its own socket, and no attachment id in slice 1
+- ➕ the client tracks no acks: it answers the origin's ping and goes stale after 30 seconds without any
+  frame. Ack tracking is the hub's. Nothing restores a remote session from disk, since one is never
+  persisted; the hook's cases are soft close, session undo and workspace undo, each tested
+- ➕ a snapshot's status goes through `applyRemoteSnapshotStatus`, which skips a row holding a non-idle
+  status set on this Mac, since a snapshot comes with every reconnect. It also holds back an origin
+  write made while the stream was down, until the origin's next live update; a local clear gives the
+  row back to the next snapshot
 
 ### Task 11: Slice 1 read-back, end-to-end test and gates
 

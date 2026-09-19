@@ -434,7 +434,8 @@ public final class Session: Identifiable {
     /// the size from its own spec. A viewer sizes from its own pane, so only a forced width travels.
     @ObservationIgnored var hudResizedWidthPercent: Int?
 
-    /// Bumped on every publication, so a viewer's timer for an earlier panel cannot close a later one.
+    /// Counts publications of the panel. Frame order is what keeps a stale close off a later panel; a
+    /// viewer does not read this.
     @ObservationIgnored var hudPublishGeneration = 0
 
     /// Cancels the app's auto-hide timer for this panel; `discardHudBody` calls and clears it. Every teardown

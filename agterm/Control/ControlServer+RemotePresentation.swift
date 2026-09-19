@@ -54,6 +54,9 @@ extension ControlServer {
             status: { [weak self] status in
                 self?.library.store(forSession: id)?.applyRemoteStatus(status, forSession: id)
             },
+            snapshotStatus: { [weak self] status in
+                self?.library.store(forSession: id)?.applyRemoteSnapshotStatus(status, forSession: id)
+            },
             hud: { [weak self] hud in self?.showRemoteHud(hud, forSession: id) },
             notify: { [weak self] notify in
                 guard let session = self?.library.store(forSession: id)?.session(withID: id) else { return }

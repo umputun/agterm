@@ -69,8 +69,8 @@ public struct PresentationStatus: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationHud is the origin's live HUD. `generation` orders replacements so a close aimed at an older
-/// panel cannot remove its successor.
+/// PresentationHud is the origin's live HUD. `generation` counts its publications; a withdrawal carries
+/// none, and the frame's `rev` is what orders it against a replacement.
 public struct PresentationHud: Codable, Equatable, Sendable {
     public var spec: HudSpec
     /// The pane a pane-scoped panel sits over; nil for a session-wide one. `HudSpec` holds only the position
