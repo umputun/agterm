@@ -899,19 +899,27 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteSessionTests.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
 
-- [ ] write failing tests: `overlay.request` opens a local overlay with the run-job ssh command on the
+- [x] write failing tests: `overlay.request` opens a local overlay with the run-job ssh command on the
       mapped pane; occupancy answers `overlay.rejected`; the stream dropping while the job ssh lives leaves
       the overlay running and a close from the origin still ends it; closing on the viewer tears down the
       job ssh and sends `overlay.closed` when a stream exists; with the stream down, viewer close still ends
       the job `canceled`; `overlay.close` and `overlay.resize` frames are applied locally; on stream loss
       an ended job's surface closes at once, a held `--wait` one included, and a running one closes when its
       job ssh ends, ignoring `--wait`, also after a reconnect
-- [ ] add `RemoteSession.runJobCommand(host:endpoint:job:)` with `-tt`
-- [ ] preserve size, color, follow, pane scope and `--wait` from the request; the held `--wait` surface on
+- [x] add `RemoteSession.runJobCommand(host:endpoint:job:)` with `-tt`
+- [x] preserve size, color, follow, pane scope and `--wait` from the request; the held `--wait` surface on
       the viewer is distinct from program completion on the origin
-- [ ] projection tests assert a session-wide replica sets `overlay` and a pane-scoped replica appears in
+- [x] projection tests assert a session-wide replica sets `overlay` and a pane-scoped replica appears in
       `paneOverlays` only
-- [ ] run the targeted tests - must pass before Task 23
+- [x] run the targeted tests - must pass before Task 23
+- ➕ `RemoteSession.runJobCommand(host:job:)` takes no endpoint: the helper is the origin's installed
+  `agtermctl`, reached through `cliPathPrefix` like the presentation bridge
+- ➕ a replica is an ordinary local overlay tagged with `OverlayReplica` on its slot (`PaneOverlay.replica`,
+  `Session.overlayReplica`), so swap and promotion move it with the slot; every close path reports it once
+  through `Session.onReplicaOverlayClosed`. A held `--wait` exit reaches the store through the surface's new
+  `onExitHeld`, fired from `GHOSTTY_ACTION_SHOW_CHILD_EXITED` when the view keeps the surface
+- ➕ the app wiring is tested in `ControlServerRemotePresentationTests`, beside the replica ask, not in
+  `ControlServerSessionActionsTests`; the store rules in `RemotePresentationStateTests`
 
 ### Task 23: Verify acceptance criteria
 

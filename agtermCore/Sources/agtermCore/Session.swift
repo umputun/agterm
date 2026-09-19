@@ -62,6 +62,8 @@ public struct PaneOverlay: Equatable, Sendable {
     /// Whether the overlay holds its surface after the command exits (libghostty's "press any key to
     /// close"), instead of closing.
     public var wait: Bool
+    /// Set on a viewer when the overlay shows a job running on its origin.
+    public var replica: OverlayReplica?
 
     public init(command: String, cwd: String? = nil, backgroundColor: String? = nil, wait: Bool = false) {
         self.command = command
@@ -349,6 +351,10 @@ public final class Session: Identifiable {
     public var askPresentedRemotely: Bool { askRemoteOwner != nil }
     /// Overlay slots a viewer's presenter holds and the outcomes of remote jobs, on the origin.
     public internal(set) var remoteOverlays = RemoteOverlays()
+    /// The origin's job the session-wide overlay shows, on a viewer.
+    @ObservationIgnored public internal(set) var overlayReplica: OverlayReplica?
+    /// Tells the origin a replica overlay's surface is gone here, whatever closed it.
+    @ObservationIgnored var onReplicaOverlayClosed: (@MainActor (String) -> Void)?
     /// Set on a viewer while the pending ask is a replica of one its origin handed over: drawn and answered
     /// here, but owned and resolved on the origin, which is what the answer is sent to.
     public private(set) var askReplica = false
@@ -756,10 +762,12 @@ public final class Session: Identifiable {
     /// exit code readable by `session.overlay.result`; here no pane survives to be asked. `teardown()` nils
     /// the surface's store-capturing callbacks, breaking the store/session/surface/closure cycle.
     public func teardownPaneOverlay(_ pane: OverlayPane) {
+        let replica = paneOverlay(pane)?.replica
         paneOverlaySurface(pane)?.teardown()
         setPaneOverlay(nil, pane: pane)
         setPaneOverlaySurface(nil, pane: pane)
         setPaneOverlayExitCode(nil, pane: pane)
+        if let replica { onReplicaOverlayClosed?(replica.job) }
     }
 
     /// The pane-slot writers, paired with the `paneOverlay*` readers through `OverlayPane`'s key paths.

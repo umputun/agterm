@@ -41,6 +41,17 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
     }
 
+    /// One ssh invocation running the helper for `job`, an overlay the origin handed to this Mac, for as long
+    /// as the overlay is up. `-tt` because the program is the user's and reads the pty; `exec` so the helper's
+    /// hangup check sees the ssh session's own pty close.
+    public static func runJobCommand(host: String, job: String, connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        guard isPlain(job) else { throw InvocationError.invalidSession }
+        let chain = cliPathPrefix + " && exec agtermctl session overlay run-job " + CommandRestore.shellQuotedLine([job])
+        let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
+    }
+
     /// sshd runs a remote command with `/usr/bin:/bin:/usr/sbin:/sbin` and a non-interactive shell reads no
     /// profile, so an installed CLI is otherwise not found and every command exits 127. `CommandPath` owns
     /// where it can live; APPENDED, so a user's own `agtermctl` earlier on PATH still wins.

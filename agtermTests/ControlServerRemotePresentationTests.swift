@@ -257,6 +257,46 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.askPending?.id, "local")
     }
 
+    private let handedOverlay = PresentationOverlay(job: "job-1", pane: nil, sizePercent: 50, backgroundColor: nil,
+                                                    follow: false, wait: false)
+
+    func testAHandedOverOverlayRunsTheJobsHelperOverSshAndItsCloseGoesBack() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+        try transport.feed(.overlayRequest(handedOverlay), rev: 2)
+
+        let host = try XCTUnwrap(fix.session.remoteHost)
+        XCTAssertEqual(fix.session.overlayCommand,
+                       CommandRestore.shellQuotedLine(try RemoteSession.runJobCommand(host: host, job: "job-1")))
+        XCTAssertEqual(fix.session.overlaySizePercent, 50)
+        fix.store.closeOverlay(fix.session.id)
+        XCTAssertEqual(transport.links[0].sent.last, .overlayClosed(PresentationOverlayChange(job: "job-1")))
+    }
+
+    func testAnOverlayTheRowCannotShowIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        fix.store.openOverlay(fix.session.id, command: "top")
+
+        try transport.feed(.overlayRequest(handedOverlay), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .overlayRejected(PresentationOverlayChange(job: "job-1")))
+        XCTAssertEqual(fix.session.overlayCommand, "top")
+    }
+
+    func testTheOriginsResizeAndCloseReachTheOverlay() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try transport.feed(.overlayRequest(handedOverlay), rev: 2)
+
+        try transport.feed(.overlayResize(PresentationOverlayChange(job: "job-1", sizePercent: 70)), rev: 3)
+        XCTAssertEqual(fix.session.overlaySizePercent, 70)
+        try transport.feed(.overlayClose(PresentationOverlayChange(job: "job-1")), rev: 4)
+
+        XCTAssertFalse(fix.session.overlayActive)
+    }
+
     private func replica(_ style: ControlAskStyle) -> PresentationAsk {
         PresentationAsk(PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")],
                                    style: style), pane: nil, owner: 2)

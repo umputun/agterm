@@ -116,13 +116,15 @@ extension AppStore {
         session.remoteOverlays.clearFailure(pane)
     }
 
-    /// Ends what `session` handed out before it leaves this store, soft close included: its ask, and its
-    /// overlays shown on viewers. Loss cleanup cannot find a session once it is gone, and an undo must not
-    /// bring a reservation back, so each job ends now and its slot and result go with it.
+    /// Ends what `session` handed out or took over before it leaves this store, soft close included: its
+    /// ask, its overlays shown on viewers, and the replicas it shows for an origin. Neither side's cleanup
+    /// can find a session once it is gone, and an undo must bring back neither a reservation nor a replica
+    /// whose held exit went unseen, so each ends now.
     func releaseLeavingSession(_ session: Session) {
         session.cancelPendingAsk()
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()
+        for slot in session.overlayReplicas { closeReplicaOverlay(slot.replica.job, forSession: session.id) }
     }
 
     /// `remoteOverlays` read-back: one entry per slot a viewer holds.

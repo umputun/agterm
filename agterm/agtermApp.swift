@@ -664,6 +664,7 @@ struct agtermApp: App {
             }
             view.onExitCodeCaptured = { store.recordPaneOverlayExit(sessionID, pane: livePane(), code: $0) }
             view.onExit = { store.closePaneOverlay(sessionID, pane: livePane()) }
+            view.onExitHeld = { store.replicaOverlayHeld(forSession: sessionID, pane: livePane()) }
             // a PANE overlay tracks its pane's focus like the pane itself does: clicking it moves
             // `splitFocused`, so the deck's per-pane focus gate keeps it active instead of resigning first
             // responder on the next update, and `focusedOverlayPane` (⌘W rung, search, `topmostSurface`)
@@ -679,6 +680,7 @@ struct agtermApp: App {
                 view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
             }
             view.onExit = { store.closeOverlay(sessionID) }
+            view.onExitHeld = { store.replicaOverlayHeld(forSession: sessionID, pane: nil) }
         }
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.

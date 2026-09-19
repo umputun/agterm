@@ -48,6 +48,32 @@ struct RemoteSessionTests {
         }
     }
 
+    @Test func runJobForcesAPtyAndReachesTheInstalledCli() throws {
+        let argv = try RemoteSession.runJobCommand(host: "buildbox", job: "job-1")
+
+        #expect(argv.prefix(7) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox"])
+        #expect(argv.count == 8)
+        #expect(argv[7].contains(RemoteSession.cliPathPrefix))
+    }
+
+    @Test func runJobRunsTheHelperForExactlyThatJob() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.runJobCommand(host: "buildbox", job: "j1;rm"))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["session", "overlay", "run-job", "j1;rm"]])
+    }
+
+    @Test(arguments: ["", "j 1", "j1\u{1B}[31m"])
+    func runJobRefusesAJobThatIsNotAPlainToken(_ job: String) {
+        #expect(throws: RemoteSession.InvocationError.invalidSession) {
+            try RemoteSession.runJobCommand(host: "buildbox", job: job)
+        }
+    }
+
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
         #expect(argv.prefix(7) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox"])

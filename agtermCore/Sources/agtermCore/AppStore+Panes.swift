@@ -369,6 +369,8 @@ extension AppStore {
     /// never kept alive. Used on explicit close and when the program exits. No-op (false) with no overlay.
     @discardableResult public func closeOverlay(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
+        let replica = session.overlayReplica
+        session.overlayReplica = nil
         session.overlayActive = false
         session.overlaySurface?.teardown()
         session.overlaySurface = nil
@@ -381,6 +383,7 @@ extension AppStore {
         // so discarding the HUD here is what keeps `hudActive` and its body file from outliving the slot they
         // describe, including for a HUD whose surface never realized and so never tore itself down.
         session.discardHudBody()
+        if let replica { session.onReplicaOverlayClosed?(replica.job) }
         return true
     }
 
@@ -460,10 +463,11 @@ extension AppStore {
     /// overlay, never kept alive. The exit code SURVIVES, cleared only by the next open on that pane. Used
     /// on explicit close and when the program exits. No-op (false) with no overlay on that pane.
     @discardableResult public func closePaneOverlay(_ sessionID: UUID, pane: OverlayPane) -> Bool {
-        guard let session = session(withID: sessionID), session.paneOverlay(pane) != nil else { return false }
+        guard let session = session(withID: sessionID), let overlay = session.paneOverlay(pane) else { return false }
         session.setPaneOverlay(nil, pane: pane)
         session.paneOverlaySurface(pane)?.teardown()
         session.setPaneOverlaySurface(nil, pane: pane)
+        if let replica = overlay.replica { session.onReplicaOverlayClosed?(replica.job) }
         return true
     }
 
