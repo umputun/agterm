@@ -36,6 +36,9 @@ Decisions already taken:
 - slice 2 is a first version: it favors no confusing state and no leftover artifact over preserving work
   across a disconnect. Presentation loss ends the viewer's claim on every job it held; a refused mirror
   stays a mirror until it reconnects; reconnect timing stays as slice 1 shipped it
+- a remote `overlay.close` replies at once, like a local one: it requests the cancel and the surface's
+  removal, and `session.overlay.result` answers whether and how the program ended (Eugene, first-version
+  bar); `closeSessionOverlay` stays synchronous in `ControlActions`
 - an overlay gets no public job handle: a remote job's outcome lands in the slot result local overlays
   already use, so `--block` keeps their known race (a second overlay opened on the slot before the next
   100ms poll answers for the first), documented rather than closed
@@ -269,20 +272,16 @@ and `--block` read: an exit code, or a failure reason (`launch-failed`, `cancele
 recorded, and a report for a job the table no longer holds is ignored, so a late helper report never
 overwrites another overlay's result.
 
-**Remote close and resize.** Both send a fire-and-forget frame. Close also cancels through the helper
-connection, leaves the accept thread, and waits off the main actor with a bounded deadline for the helper's
-terminal report: it replies `execution: ended` with the outcome, or `execution: pending` when the deadline
-passes, and always `surface: pending` for a remote overlay, since surface removal on the viewer is not
-confirmed. A close that arrives before any helper claimed the job cancels the unclaimed job atomically
-and revokes its launch permission: the job ends `canceled`, the slot is released, a late claim is refused
-and nothing is launched; racing a claim, either close wins and nothing launches or the claim wins and the
-claimant is canceled through its connection. An already-finished job reports its known outcome at once,
-except that a retained `unknown` never reads as ended: the helper may have died while the program
-survived, so the reply is `execution: unknown` and the outcome stays `unknown`. Resize replies
-`requested`; read-back carries the requested size and claims nothing about what the viewer applied, and a
-viewer-side resize error is not reported back. Resize fails explicitly when the job's own presentation
-stream is gone, even if another stream has since connected. `session.overlay.text` and
-`session.overlay.copy` are refused for a remotely presented overlay.
+**Remote close and resize.** Close sends `overlay.close` to the presenter and replies at once: an unclaimed
+job ends `canceled` and can never launch, a claimed or running one is cancelled through its helper (no
+presentation stream is needed for that), and a held `--wait` surface whose program ended frees its slot.
+The reply means the request was made; `session.overlay.result` answers `overlay still running` until the
+helper reports, then the exit code or `overlay ended: canceled|unknown`, and `unknown` never proves the
+program is gone. A `--wait` job keeps its slot after the program ends, its result readable, until the
+origin closes it, the viewer sends `overlay.closed`, or the stream is lost. Resize replies ok, records the
+requested size in `remoteOverlays`, and fails with `the viewer showing this overlay is gone` when the
+job's own presentation stream is gone, even if another has since connected. `session.overlay.text` and
+`session.overlay.copy` are refused with `overlay is shown on another Mac`.
 
 **Presentation loss.** Losing a presenter's stream marks every job it held as presentation-lost, for good;
 a later stream or presenter never adopts them. On the origin an unclaimed job is canceled and its launch
@@ -828,19 +827,19 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`, `agtermTests/ControlServerTests.swift`
 
-- [ ] write failing tests: grant then open reserves the slot, sends `overlay.request`, mounts nothing
+- [x] write failing tests: grant then open reserves the slot, sends `overlay.request`, mounts nothing
       locally, leaves `programOverlayActive` false, and zoom and deck on the origin behave as uncovered; a
       second open against the reserved slot is refused; an overlay already local when the grant arrives
       stays local; `overlay.rejected` and deadline expiry each end the job `launch-failed` with no local
       launch; with no presenter an open is local as today
-- [ ] implement the reservation separately from coverage, the `overlay.request` emission and the launch
+- [x] implement the reservation separately from coverage, the `overlay.request` emission and the launch
       deadline
-- [ ] write failing tests: a remote job's exit code reaches `session.overlay.result` and `--block` for its
+- [x] write failing tests: a remote job's exit code reaches `session.overlay.result` and `--block` for its
       slot; `launch-failed`, `canceled` and `unknown` answer as errors naming the outcome and `--block`
       exits 1;
       a report after the first terminal outcome, or for a job no longer held, changes no slot result
-- [ ] record each remote job's first terminal outcome into its slot result
-- [ ] write failing tests for close: it leaves the accept thread and does not block `window.list` or the
+- [x] record each remote job's first terminal outcome into its slot result
+- [x] write failing tests for close: it leaves the accept thread and does not block `window.list` or the
       helper's report; it replies `execution: ended` with the outcome once the helper confirms and
       `execution: pending` at the deadline; `surface: pending` for a remote overlay; an already-finished job
       answers at once, but a retained `unknown` replies `execution: unknown` and stays `unknown`; with the
@@ -848,15 +847,24 @@ Slice 1 ends here and ships as its own PR.
       `canceled`, nothing launches, the slot is free; close raced against a claim either prevents the launch
       or cancels the claimant; close captures its job before waiting and answers for that job even when the
       slot is reused meanwhile
-- [ ] make `closeSessionOverlay` async in the `ControlActions` requirement (`ControlDispatcher.swift:94`)
+- [x] make `closeSessionOverlay` async in the `ControlActions` requirement (`ControlDispatcher.swift:94`)
       and its callers; for a remote overlay: atomic cancel of an unclaimed job in `OverlayJobs`, else cancel
       through the helper connection, bounded wait off the main actor, fire-and-forget `overlay.close` frame
-- [ ] resize replies `requested`, records the requested size in `remoteOverlays`, and fails explicitly when
+- [x] resize replies `requested`, records the requested size in `remoteOverlays`, and fails explicitly when
       the job's own stream is gone, even with a newer stream connected; `session.overlay.text` and `.copy`
       refuse a remote overlay; tests for each
-- [ ] project the origin's nodes during remote presentation (`overlay: false`, `paneOverlays` without the
+- [x] project the origin's nodes during remote presentation (`overlay: false`, `paneOverlays` without the
       pane, the slot in `remoteOverlays`), with projection tests
-- [ ] run the targeted tests - must pass before Task 21
+- [x] run the targeted tests - must pass before Task 21
+- ➕ close is synchronous and replies at once (Eugene's decision, see Decisions): no async `ControlActions`
+  requirement, no bounded wait, no `execution`/`surface` reply fields. The close items above that describe
+  the wait and those fields are replaced by that contract, tested as open, close, result
+- ➕ remote state lives in `Session.remoteOverlays` (`RemoteOverlays.swift`), keyed by pane role like the
+  local slots, with the logic in `AppStore+RemoteOverlay.swift`; `Session.swift` gained one stored property
+- ➕ a `--wait` job keeps its slot after it ends, its result recorded, until origin close, the viewer's new
+  `overlay.closed` frame, or stream loss; the viewer sends `overlay.closed` from Task 22
+- ➕ remote open builds its context from this Mac's `SurfaceEnvironment.session`, the identities a local
+  overlay gets; `follow` is passed to the viewer and selects nothing on the origin
 
 ### Task 21: Presentation loss on the origin
 
@@ -934,6 +942,8 @@ Slice 1 ends here and ships as its own PR.
       best-effort close and resize wording, the `text`/`copy` refusal for a remote overlay, the
       `presentation-lost` reason field, presentation loss ending held surfaces, and the row indicator with
       close-and-reattach as the manual recovery
+- [ ] document that a remote `overlay.close` reply means the cancel was requested, not that the program
+      ended, replacing the close help's "destroys it" wording for that case
 - [ ] document in `site/commands.html` and the bundled skill that a remote overlay's non-exit outcomes
       (`launch-failed`, `canceled`, `unknown`) answer `overlay.result` as errors and make `--block` exit 1,
       and that `--block` polls the slot, so an overlay opened on it before the next poll answers for it

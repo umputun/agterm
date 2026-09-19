@@ -289,7 +289,7 @@ struct RemotePresentationClientTests {
         client.start()
         connect(client)
 
-        transport.deliver(line(.unknown("overlay.request"), rev: 2))
+        transport.deliver(line(.unknown("future.kind"), rev: 2))
         transport.deliver(line(.status(Self.blocked), rev: 3))
 
         #expect(recorder.statuses == [nil, Self.blocked])

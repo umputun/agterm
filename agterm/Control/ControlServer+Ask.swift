@@ -151,14 +151,18 @@ extension ControlServer {
             && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
     }
 
-    /// Applies what a session's presenter sent about an ask it was handed.
-    func receivePresenterAsk(_ body: PresentationFrame.Body, forSession sessionID: UUID) {
+    /// Applies what a session's presenter sent about work it was handed.
+    func receivePresenterFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID) {
         guard let store = library.store(forSession: sessionID) else { return }
         switch body {
         case .askResolve(let answer):
             store.resolveRemoteAsk(answer, forSession: sessionID)
         case .askRejected(let ref) where store.isPresentingRemotely(ref, forSession: sessionID):
             takeBackRemoteAsk(forSession: sessionID)
+        case .overlayRejected(let change):
+            store.rejectRemoteOverlay(change.job, forSession: sessionID)
+        case .overlayClosed(let change):
+            store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
         default:
             break
         }

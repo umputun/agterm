@@ -263,6 +263,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// How many presentation streams are mirroring this session; omitted when none is. A count of
     /// connections, so two rows attached from one Mac are two.
     public let presenters: ControlPresentersNode?
+    /// Overlay slots a viewer presenting this session holds, on the origin; omitted when none is held. Such
+    /// an overlay covers nothing here, so `overlay` and `paneOverlays` leave it out.
+    public let remoteOverlays: [ControlRemoteOverlayNode]?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
@@ -280,7 +283,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
                 liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
-                presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil) {
+                presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
+                remoteOverlays: [ControlRemoteOverlayNode]? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -327,6 +331,20 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitLiveAttribution = splitLiveAttribution
         self.presentation = presentation
         self.presenters = presenters
+        self.remoteOverlays = remoteOverlays
+    }
+}
+
+/// An overlay slot of an origin session held by the viewer presenting it, as `tree` reports it.
+public struct ControlRemoteOverlayNode: Codable, Sendable, Equatable {
+    /// The pane role, omitted for the session-wide slot.
+    public let pane: String?
+    /// The size requested for a session-wide overlay; what the viewer applied is not reported.
+    public let sizePercent: Int?
+
+    public init(pane: String?, sizePercent: Int?) {
+        self.pane = pane
+        self.sizePercent = sizePercent
     }
 }
 

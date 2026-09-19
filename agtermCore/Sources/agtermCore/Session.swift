@@ -347,6 +347,8 @@ public final class Session: Identifiable {
     @ObservationIgnored var onRemoteAskEnded: (@MainActor (String) -> Void)?
 
     public var askPresentedRemotely: Bool { askRemoteOwner != nil }
+    /// Overlay slots a viewer's presenter holds and the outcomes of remote jobs, on the origin.
+    public internal(set) var remoteOverlays = RemoteOverlays()
     /// Set on a viewer while the pending ask is a replica of one its origin handed over: drawn and answered
     /// here, but owned and resolved on the origin, which is what the answer is sent to.
     public private(set) var askReplica = false

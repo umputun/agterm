@@ -121,7 +121,7 @@ public final class PresentationHub {
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-        case .askResolve, .askRejected:
+        case .askResolve, .askRejected, .overlayRejected, .overlayClosed:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break

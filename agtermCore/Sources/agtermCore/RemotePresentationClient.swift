@@ -184,7 +184,8 @@ public final class RemotePresentationClient {
         case .askRequest(let ask):
             if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
         case .askDismiss(let ref): effects.askDismiss(ref)
-        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .unknown: break
+        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .overlayRequest, .overlayRejected,
+             .overlayClose, .overlayResize, .overlayClosed, .unknown: break
         }
     }
 

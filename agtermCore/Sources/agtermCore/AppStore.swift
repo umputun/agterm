@@ -129,6 +129,8 @@ public final class AppStore {
     /// Where this store publishes a session's presentation state for attached viewers. One hub serves every
     /// window, since a viewer subscribes by session id alone.
     @ObservationIgnored public var presentationHub: PresentationHub?
+    /// The remote overlay jobs this Mac handed to presenters, shared with the server like the hub.
+    @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
     @ObservationIgnored public var onRemoteRowVisibility: ((Session, Bool) -> Void)?
     @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
@@ -351,7 +353,8 @@ public final class AppStore {
                                           context: session.context, remoteHost: session.remoteHost,
                                           splitCwd: session.hasSplit ? session.cwd(for: .right) : nil,
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
-                                          presentation: presentationNode(of: session), presenters: presentersNode(of: session))
+                                          presentation: presentationNode(of: session), presenters: presentersNode(of: session),
+                                          remoteOverlays: remoteOverlayNodes(of: session))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

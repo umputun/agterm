@@ -41,6 +41,14 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 19, body: .askResolve(PresentationAskAnswer(id: "a1", owner: 3, button: nil))),
         PresentationFrame(gen: 1, rev: 20, body: .askRejected(PresentationAskRef(id: "a1", owner: 3))),
         PresentationFrame(gen: 1, rev: 21, body: .askDismiss(PresentationAskRef(id: "a1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 22, body: .overlayRequest(PresentationOverlay(
+            job: "j1", pane: pane, sizePercent: 60, backgroundColor: "#102030", follow: true, wait: true))),
+        PresentationFrame(gen: 1, rev: 23, body: .overlayRequest(PresentationOverlay(
+            job: "j1", pane: nil, sizePercent: nil, backgroundColor: nil, follow: false, wait: false))),
+        PresentationFrame(gen: 1, rev: 24, body: .overlayRejected(PresentationOverlayChange(job: "j1"))),
+        PresentationFrame(gen: 1, rev: 25, body: .overlayClose(PresentationOverlayChange(job: "j1"))),
+        PresentationFrame(gen: 1, rev: 26, body: .overlayResize(PresentationOverlayChange(job: "j1", sizePercent: 40))),
+        PresentationFrame(gen: 1, rev: 27, body: .overlayClosed(PresentationOverlayChange(job: "j1"))),
     ]
 
     @Test(arguments: frames)
@@ -53,10 +61,10 @@ struct PresentationFramesTests {
     }
 
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {
-        let line = Data(#"{"kind":"overlay.request","gen":3,"rev":12,"job":"abc"}"#.utf8)
+        let line = Data(#"{"kind":"future.kind","gen":3,"rev":12,"job":"abc"}"#.utf8)
 
         #expect(try PresentationCodec.decode(line) == PresentationFrame(gen: 3, rev: 12,
-                                                                        body: .unknown("overlay.request")))
+                                                                        body: .unknown("future.kind")))
     }
 
     @Test func anOversizeLineIsRefusedBeforeDecoding() {

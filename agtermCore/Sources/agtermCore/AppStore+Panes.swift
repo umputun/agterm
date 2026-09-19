@@ -142,6 +142,7 @@ extension AppStore {
             (session.rightOverlaySurface, session.leftOverlaySurface)
         (session.leftOverlayExitCode, session.rightOverlayExitCode) =
             (session.rightOverlayExitCode, session.leftOverlayExitCode)
+        session.remoteOverlays.swapPanes()
 
         var indicator = session.agentIndicator
         if indicator.status == .idle {
@@ -209,6 +210,7 @@ extension AppStore {
         session.splitRatio = nil // tearing down the split clears its geometry too, so a fresh split opens even
         // the right pane is gone, so its overlay has nothing left to cover and nobody left to read its status.
         session.teardownPaneOverlay(.right)
+        dropRemoteOverlay(.right, of: session)
         // a search bar pinned to the torn-down split surface would stay stuck (the weak `searchSurface`
         // zeroes but `searchActive` stays true), so reset search on the surviving session.
         session.clearSearch()
@@ -274,6 +276,8 @@ extension AppStore {
         // the left slot WITH its exit code, so `session.overlay.result --pane left` still answers afterwards.
         session.teardownPaneOverlay(.left)
         session.promotePaneOverlay()
+        dropRemoteOverlay(.left, of: session)
+        session.remoteOverlays.promoteRight()
         // reset search only if the torn-down primary owned the bar (or the weak ref already dangled), so a
         // search owned by the SURVIVING pane stays valid across promotion — `closeScratch`'s identity guard.
         if session.searchSurface == nil || session.searchSurface === priorPrimary {
@@ -334,6 +338,7 @@ extension AppStore {
         session.overlayCwd = cwd
         session.overlayWait = wait
         session.overlayExitCode = nil
+        session.remoteOverlays.clearFailure(nil)
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
         session.overlayBackgroundColor = backgroundColor
         session.overlayActive = true
@@ -439,6 +444,7 @@ extension AppStore {
         // the slot would sit active with no program — reject instead of opening a dead overlay.
         guard session.rendersPane(pane) else { return .paneNotVisible }
         session.setPaneOverlayExitCode(nil, pane: pane)
+        session.remoteOverlays.clearFailure(pane)
         session.setPaneOverlay(PaneOverlay(command: command, cwd: cwd, backgroundColor: backgroundColor,
                                            wait: wait), pane: pane)
         return nil

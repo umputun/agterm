@@ -159,6 +159,40 @@ public struct PresentationAskRef: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationOverlay asks the presenter to show an overlay whose program runs on the origin: the viewer
+/// opens a local surface running the job's helper over ssh. Nothing of the command or its environment is
+/// sent; the helper gets those from the origin when it claims the job.
+public struct PresentationOverlay: Codable, Equatable, Sendable {
+    public var job: String
+    /// The origin's pane the overlay covers, nil for the session-wide slot.
+    public var pane: PresentationPane?
+    public var sizePercent: Int?
+    public var backgroundColor: String?
+    public var follow: Bool
+    public var wait: Bool
+
+    public init(job: String, pane: PresentationPane?, sizePercent: Int?, backgroundColor: String?, follow: Bool,
+                wait: Bool) {
+        self.job = job
+        self.pane = pane
+        self.sizePercent = sizePercent
+        self.backgroundColor = backgroundColor
+        self.follow = follow
+        self.wait = wait
+    }
+}
+
+/// PresentationOverlayChange names one remote overlay job, with a size for a resize.
+public struct PresentationOverlayChange: Codable, Equatable, Sendable {
+    public var job: String
+    public var sizePercent: Int?
+
+    public init(job: String, sizePercent: Int? = nil) {
+        self.job = job
+        self.sizePercent = sizePercent
+    }
+}
+
 /// PresentationSnapshot is the replaceable state a subscriber starts from.
 public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var status: PresentationStatus?
@@ -192,6 +226,13 @@ public struct PresentationFrame: Equatable, Sendable {
         case askRejected(PresentationAskRef)
         /// The ask ended on the origin; the presenter takes its dialog down without answering.
         case askDismiss(PresentationAskRef)
+        case overlayRequest(PresentationOverlay)
+        /// The presenter cannot show the overlay; the origin fails the job without launching anything.
+        case overlayRejected(PresentationOverlayChange)
+        case overlayClose(PresentationOverlayChange)
+        case overlayResize(PresentationOverlayChange)
+        /// The viewer closed its surface, which frees a slot held only for a `--wait` surface.
+        case overlayClosed(PresentationOverlayChange)
         /// A kind this build does not speak. Kept, with its ordering, so a newer peer does not break the stream.
         case unknown(String)
 
@@ -211,6 +252,11 @@ public struct PresentationFrame: Equatable, Sendable {
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"
             case .askDismiss: return "ask.dismiss"
+            case .overlayRequest: return "overlay.request"
+            case .overlayRejected: return "overlay.rejected"
+            case .overlayClose: return "overlay.close"
+            case .overlayResize: return "overlay.resize"
+            case .overlayClosed: return "overlay.closed"
             case .unknown(let kind): return kind
             }
         }
@@ -229,7 +275,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, hud, notify, ask
+        case kind, gen, rev, hello, snapshot, status, hud, notify, ask, overlay
     }
 
     public init(from decoder: Decoder) throws {
@@ -252,6 +298,12 @@ extension PresentationFrame: Codable {
         case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
         case "ask.rejected": body = .askRejected(try container.decode(PresentationAskRef.self, forKey: .ask))
         case "ask.dismiss": body = .askDismiss(try container.decode(PresentationAskRef.self, forKey: .ask))
+        case "overlay.request": body = .overlayRequest(try container.decode(PresentationOverlay.self, forKey: .overlay))
+        case "overlay.rejected":
+            body = .overlayRejected(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
+        case "overlay.close": body = .overlayClose(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
+        case "overlay.resize": body = .overlayResize(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
+        case "overlay.closed": body = .overlayClosed(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
         default: body = .unknown(kind)
         }
     }
@@ -270,6 +322,10 @@ extension PresentationFrame: Codable {
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)
         case .askResolve(let answer): try container.encode(answer, forKey: .ask)
         case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)
+        case .overlayRequest(let overlay): try container.encode(overlay, forKey: .overlay)
+        case .overlayRejected(let change), .overlayClose(let change), .overlayResize(let change),
+             .overlayClosed(let change):
+            try container.encode(change, forKey: .overlay)
         case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown: break
         }
     }

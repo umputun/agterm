@@ -133,6 +133,9 @@ extension ControlServer {
     /// session is fine, it is the cover that is not up. A HUD is refused ahead of everything, `overlayActive`
     /// alone being unable to tell the app's own painter from a caller's program.
     private func overlayReadSurface(_ session: Session, pane: OverlayPane?) -> OverlayReadSurface {
+        if session.remoteOverlays.slot(pane) != nil {
+            return .rejected(ControlResponse(ok: false, error: OverlayResultError.shownElsewhere))
+        }
         let occupied: Bool
         let surface: (any TerminalSurface)?
         if let pane {

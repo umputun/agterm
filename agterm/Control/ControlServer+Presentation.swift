@@ -151,11 +151,15 @@ extension ControlServer {
     func attachPresentationHub() {
         presentationHub.onPresenterLost = { [weak self] session in self?.takeBackRemoteAsk(forSession: session) }
         presentationHub.onPresenterFrame = { [weak self] session, body in
-            self?.receivePresenterAsk(body, forSession: session)
+            self?.receivePresenterFrame(body, forSession: session)
+        }
+        overlayJobs.onFinished = { [weak self] job in
+            self?.library.store(forSession: job.session)?.finishRemoteOverlay(job)
         }
         for entry in library.windows {
             guard let store = library.store(for: entry.id) else { continue }
             store.presentationHub = presentationHub
+            store.overlayJobs = overlayJobs
             store.onRemoteRowVisibility = { [weak self] session, shown in
                 MainActor.assumeIsolated { self?.remoteRowVisibilityChanged(session, shown: shown) }
             }

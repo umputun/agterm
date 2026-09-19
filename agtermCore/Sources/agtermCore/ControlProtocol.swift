@@ -593,6 +593,12 @@ public struct ControlResult: Codable, Sendable, Equatable {
 public enum OverlayResultError {
     public static let stillRunning = "overlay still running"
     public static let noResult = "no overlay result"
+    /// An overlay a viewer showed that ended without an exit code: `launch-failed`, `canceled`, `unknown`.
+    public static func ended(_ outcome: String) -> String { "overlay ended: \(outcome)" }
+    /// The overlay runs on another Mac's surface, so this Mac has nothing to read or copy.
+    public static let shownElsewhere = "overlay is shown on another Mac"
+    /// The stream the overlay was handed to is gone, so nothing can reach the surface to resize it.
+    public static let viewerGone = "the viewer showing this overlay is gone"
 }
 
 /// Error strings for `session.overlay.*` aimed at a session whose overlay slot holds a HUD. The slot is

@@ -943,6 +943,218 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(session.overlayActive, "a refused hud command must leave the program overlay alone")
     }
 
+    private final class PresenterSink: PresentationSink {
+        var bodies: [PresentationFrame.Body] = []
+        var generation = 0
+
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if bodies.isEmpty { generation = frame.gen }
+            bodies.append(frame.body)
+            return true
+        }
+
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    @discardableResult
+    private func present(_ session: Session) throws -> (PresenterSink, PresentationHub.SubscriberID) {
+        server.attachPresentationHub()
+        let sink = PresenterSink()
+        let id = try server.presentationHub.subscribe(
+            session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter), sink: sink
+        ) { PresentationSnapshot(status: nil, hud: nil) }
+        server.presentationHub.receive(PresentationFrame(gen: sink.generation, rev: 0, body: .presenterAcquire), from: id)
+        return (sink, id)
+    }
+
+    private func remoteJob(_ session: Session) throws -> String {
+        try XCTUnwrap(session.remoteOverlays.slot(nil)?.job)
+    }
+
+    func testAnOverlayForAPresentedSessionGoesToTheViewerAndCoversNothingHere() throws {
+        let (_, session) = try addSession()
+        let (sink, _) = try present(session)
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false))
+
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString)))
+        let job = try remoteJob(session)
+        guard case .overlayRequest(let request)? = sink.bodies.last else { return XCTFail("no overlay.request sent") }
+        XCTAssertEqual(request.job, job)
+        XCTAssertFalse(session.overlayActive)
+        let context = try XCTUnwrap(server.overlayJobs.job(job)?.context)
+        XCTAssertEqual(context.command, "true")
+        XCTAssertEqual(context.environment["AGTERM_SESSION_ID"], session.id.uuidString)
+        XCTAssertEqual(context.environment["AGTERM_SOCKET"], server.resolvedSocketPath)
+    }
+
+    func testALocalOpenOnASlotAViewerStillHoldsIsRefused() throws {
+        let (_, session) = try addSession()
+        let (_, id) = try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+        _ = server.overlayJobs.claim(job) {}
+        server.overlayJobs.started(job)
+        server.presentationHub.unsubscribe(id)
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false))
+
+        XCTAssertEqual(response.error, "overlay already open")
+        XCTAssertFalse(session.overlayActive)
+    }
+
+    func testARemoteOverlaysResultIsRunningThenItsFailure() throws {
+        let (_, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       OverlayResultError.stillRunning)
+        server.overlayJobs.finish(job, .launchFailed)
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       "overlay ended: launch-failed")
+    }
+
+    func testARemoteOverlaysExitCodeIsItsResult() throws {
+        let (_, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+
+        server.overlayJobs.finish(try remoteJob(session), .exited(3))
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).result?.exitCode, 3)
+    }
+
+    func testAHeldWaitSurfaceKeepsItsSlotUntilClosedWithItsResultReadable() throws {
+        let (store, session) = try addSession()
+        try present(session)
+        let options = ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: true, sizePercent: nil,
+                                                       backgroundColor: nil, follow: false, pane: nil)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options).ok)
+        server.overlayJobs.finish(try remoteJob(session), .exited(3))
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).result?.exitCode, 3)
+        XCTAssertNotNil(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.remoteOverlays)
+        XCTAssertTrue(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+
+        XCTAssertTrue(session.remoteOverlays.slots.isEmpty)
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).result?.exitCode, 3)
+    }
+
+    func testOverlayReadsRefuseAnOverlayShownOnAnotherMac() throws {
+        let (_, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let options = ControlSessionOverlayTextOptions(pane: nil, all: false, lines: nil)
+
+        XCTAssertEqual(server.readSessionOverlayText(session.id.uuidString, window: nil, options: options).error,
+                       OverlayResultError.shownElsewhere)
+        XCTAssertEqual(server.copySessionOverlaySelection(session.id.uuidString, window: nil, pane: nil).error,
+                       OverlayResultError.shownElsewhere)
+    }
+
+    func testClosingARemoteOverlayCancelsItAndAsksTheViewerToTakeItDown() throws {
+        let (_, session) = try addSession()
+        let (sink, _) = try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+
+        let response = server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil)
+
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(sink.bodies.last, .overlayClose(PresentationOverlayChange(job: job)))
+        XCTAssertEqual(server.overlayJobs.job(job)?.state, .finished(.canceled))
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       "overlay ended: canceled")
+    }
+
+    func testResizingARemoteOverlayIsSentWhileItsViewerIsUpAndRefusedAfter() throws {
+        let (_, session) = try addSession()
+        let (sink, id) = try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+        _ = server.overlayJobs.claim(job) {}
+        server.overlayJobs.started(job)
+
+        XCTAssertTrue(server.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: 40).ok)
+        XCTAssertEqual(sink.bodies.last, .overlayResize(PresentationOverlayChange(job: job, sizePercent: 40)))
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertEqual(server.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: 60).error,
+                       OverlayResultError.viewerGone)
+    }
+
+    private func openOriginHud(_ store: AppStore, _ session: Session) {
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8))
+    }
+
+    func testARemoteOpenTakesTheSlotFromAnOriginHud() throws {
+        let (store, session) = try addSession()
+        try present(session)
+        openOriginHud(store, session)
+
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+
+        XCTAssertFalse(session.hudActive)
+        XCTAssertNotNil(session.remoteOverlays.slot(nil))
+    }
+
+    func testClosingReachesARemoteJobUnderAHudOpenedDuringItsRun() throws {
+        let (store, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+        var reached = 0
+        _ = server.overlayJobs.claim(job) { reached += 1 }
+        server.overlayJobs.started(job)
+        openOriginHud(store, session)
+
+        XCTAssertTrue(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+
+        XCTAssertEqual(reached, 1)
+        XCTAssertTrue(session.hudActive)
+    }
+
+    func testARemoteResultEndingUnderAHudIsStillReadable() throws {
+        let (store, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        let job = try remoteJob(session)
+        openOriginHud(store, session)
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       OverlayResultError.stillRunning)
+        server.overlayJobs.finish(job, .exited(3))
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).result?.exitCode, 3)
+    }
+
+    func testAHudOpenedAfterARemoteResultReportsNoResult() throws {
+        let (store, session) = try addSession()
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false)).ok)
+        server.overlayJobs.finish(try remoteJob(session), .exited(3))
+
+        openOriginHud(store, session)
+
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       OverlayHudError.noResult)
+    }
+
+    func testARemoteOpenOnAPaneTheOriginDoesNotHaveIsRefused() throws {
+        let (_, session) = try addSession()
+        try present(session)
+        let options = ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, follow: false, pane: .right)
+
+        XCTAssertEqual(server.openSessionOverlay(session.id.uuidString, window: nil, options: options).error,
+                       PaneOverlayError.paneNotVisible)
+        XCTAssertTrue(session.remoteOverlays.slots.isEmpty)
+    }
+
     func testHudOverALiveProgramOverlayIsRefusedAndWritesNothing() throws {
         let (store, session) = try makeHudSession()
         XCTAssertTrue(store.openOverlay(session.id, command: "true"))

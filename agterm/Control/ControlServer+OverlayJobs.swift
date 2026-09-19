@@ -98,6 +98,34 @@ extension ControlServer {
         stream.send(.cancel)
     }
 
+    /// Hands an overlay to the viewer presenting the session; nil when no viewer does, so the caller opens it
+    /// here. The launch context is built as a local overlay's would be, from this Mac's session.
+    func openRemoteOverlay(in store: AppStore, sessionID: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {
+        guard let session = store.session(withID: sessionID) else { return nil }
+        let context = OverlayLaunchContext(
+            command: options.command,
+            cwd: OverlayLaunchContext.cwd(explicit: options.cwd, session: session, homeDirectory: NSHomeDirectory()),
+            sessionEnvironment: sessionEnvironment(for: session, in: store))
+        switch store.openRemoteOverlay(sessionID, options: options, context: context) {
+        case .notPresented:
+            return nil
+        case .slotTaken:
+            return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
+        case .paneMissing:
+            return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
+        case .opened:
+            scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
+            return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
+        }
+    }
+
+    /// What a program started for `session` sees on this Mac, the same identities a local overlay gets.
+    private func sessionEnvironment(for session: Session, in store: AppStore) -> [String: String] {
+        SurfaceEnvironment.session(sessionID: session.id, windowID: library.windowID(for: store),
+                                   workspaceID: store.workspace(forSession: session.id)?.id,
+                                   socketPath: resolvedSocketPath, programVersion: identity.version)
+    }
+
     /// Runs the table's expiry once `seconds` have passed, which ends whatever deadline fell in between.
     func scheduleOverlayJobExpiry(after seconds: TimeInterval) {
         Task { @MainActor [weak self] in
