@@ -1218,7 +1218,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   wins: the exit code where a local overlay keeps one, or `launch-failed` (refused, or nothing claimed it in
   time), `canceled` (closed, or the ssh went away) or `unknown` (the helper went away, or never reported
   starting), which does not prove the program stopped. A refused open ends `launch-failed`; nothing falls back to a local overlay, since the caller's
-  program must run once.
+  program must run once. A command whose launch context exceeds the helper's 256 KiB frame is refused at
+  open with `overlay command too large to show on another Mac`, before any job exists.
 - `overlay.result` reads the slot. A non-exit outcome answers `overlay ended: <outcome>` as an error, so
   `--block` exits 1 for it; `--block` polls the slot, so an overlay opened on it before the next poll
   answers for it. The result is readable once the job ends, even while a held `--wait` surface on the viewer

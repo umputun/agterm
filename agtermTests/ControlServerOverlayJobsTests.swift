@@ -183,6 +183,41 @@ final class ControlServerOverlayJobsTests: XCTestCase {
         waitUntil("the job ends unknown") { server.overlayJobs.job(job)?.state == .finished(.unknown) }
     }
 
+    func testACancelHeldForAHelperIsDroppedWhenItsJobEnds() {
+        let server = makeServer()
+        server.attachPresentationHub()
+        let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)
+        XCTAssertTrue(server.claimOverlayJob(job).ok)
+        server.overlayJobs.cancel(job)
+        XCTAssertTrue(server.pendingJobCancels.contains(job))
+
+        server.overlayJobs.helperGone(job)
+
+        XCTAssertFalse(server.pendingJobCancels.contains(job))
+    }
+
+    // regression: a helper adopted after its job ended was sent the context, and its cancel was already gone
+    func testAHelperAdoptedAfterItsJobEndedIsSentNothing() throws {
+        let server = makeServer()
+        let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)
+        _ = server.overlayJobs.claim(job) {}
+        server.overlayJobs.helperGone(job)
+        var pair: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair), 0)
+        defer { close(pair[1]) }
+        var timeout = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(pair[1], SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+
+        server.adoptOverlayJobStream(descriptor: pair[0], job: job)
+
+        let peer = pair[1]
+        let received = offMain { () -> Int in
+            var byte: UInt8 = 0
+            return read(peer, &byte, 1)
+        }
+        XCTAssertEqual(received, 0)
+    }
+
     func testACancelReachesTheHelper() throws {
         let server = makeServer()
         let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)

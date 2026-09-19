@@ -8,6 +8,8 @@ public enum RemoteOverlayOpen: Equatable, Sendable {
     case slotTaken
     /// The origin has no pane in the requested role.
     case paneMissing
+    /// The launch context is larger than the helper reads in one frame.
+    case tooLarge
     case opened(job: String)
 }
 
@@ -25,12 +27,15 @@ extension AppStore {
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
+        guard let frame = try? OverlayJobFrame.context(context).line(),
+              frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one
         if pane == nil, session.hudActive { closeHud(sessionID) }
-        let job = jobs.register(session: sessionID, pane: pane, owner: hub.presenterGeneration(session: sessionID),
-                                context: context)
+        let owner = hub.presenterGeneration(session: sessionID)
+        let job = jobs.register(session: sessionID, pane: pane, owner: owner, context: context)
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
-        session.remoteOverlays.reserve(RemoteOverlaySlot(job: job, pane: pane, sizePercent: size, wait: options.wait))
+        session.remoteOverlays.reserve(RemoteOverlaySlot(job: job, pane: pane, owner: owner, sizePercent: size,
+                                                              wait: options.wait))
         clearOverlayExitCode(pane, in: session)
         hub.sendToPresenter(.overlayRequest(PresentationOverlay(
             job: job, pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, backgroundColor: options.backgroundColor,
@@ -79,8 +84,8 @@ extension AppStore {
     /// viewer holds the slot, false when the stream the job was handed to is gone, even if another is up.
     public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool? {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(nil) else { return nil }
-        guard let hub = presentationHub, let job = overlayJobs?.job(slot.job), hub.hasPresenter(session: sessionID),
-              hub.presenterGeneration(session: sessionID) == job.owner else { return false }
+        guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
+              hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
         let size = sizePercent.map { min(100, max(1, $0)) }
         session.remoteOverlays.resize(job: slot.job, sizePercent: size)
         return hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size)),

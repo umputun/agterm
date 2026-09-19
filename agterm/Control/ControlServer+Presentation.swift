@@ -157,6 +157,7 @@ extension ControlServer {
             self?.receivePresenterFrame(body, forSession: session)
         }
         overlayJobs.onFinished = { [weak self] job in
+            self?.pendingJobCancels.remove(job.id)
             self?.library.store(forSession: job.session)?.finishRemoteOverlay(job)
         }
         for entry in library.windows {

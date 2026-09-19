@@ -76,7 +76,9 @@ struct AppStoreRemoteOverlayTests {
 
         #expect(presenter.bodies.last == .overlayRequest(PresentationOverlay(
             job: job, pane: nil, sizePercent: 60, backgroundColor: "#102030", follow: true, wait: true)))
-        #expect(session.remoteOverlays.slot(nil) == RemoteOverlaySlot(job: job, pane: nil, sizePercent: 60, wait: true))
+        #expect(session.remoteOverlays.slot(nil) == RemoteOverlaySlot(job: job, pane: nil,
+                                                                      owner: hub.presenterGeneration(session: session.id),
+                                                                      sizePercent: 60, wait: true))
         #expect(!session.overlayActive)
         #expect(!session.programOverlayActive)
         #expect(jobs.job(job)?.context == Self.context)
@@ -417,6 +419,35 @@ struct AppStoreRemoteOverlayTests {
         store.closeSession(session.id)
 
         #expect(session.remoteOverlays.slots.isEmpty)
+    }
+
+    @Test func aCommandTooLargeForTheHelperIsRefusedWithoutAJob() throws {
+        let (session, _) = try origin()
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8))
+        let command = String(repeating: "x", count: PresentationCodec.maxFrameBytes / 2)
+        let context = OverlayLaunchContext(command: command, cwd: "/tmp", sessionEnvironment: [:])
+
+        let result = store.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
+            command: command, cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, follow: false, pane: nil),
+                                             context: context)
+
+        #expect(result == .tooLarge)
+        #expect(session.hudActive)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(!presenter.bodies.contains { if case .overlayRequest = $0 { true } else { false } })
+    }
+
+    @Test func aHeldSurfaceStillResizesAfterItsJobLeftTheTable() throws {
+        let (session, _) = try origin()
+        let held = try job(of: open(session, size: 60, wait: true))
+        jobs.finish(held, .exited(0))
+        for _ in 0..<OverlayJobs.finishedRetention {
+            jobs.finish(jobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context), .exited(0))
+        }
+
+        #expect(jobs.job(held) == nil)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: 40) == true)
     }
 
     @Test func aPaneTheOriginDoesNotHaveIsRefusedWithoutAJob() throws {

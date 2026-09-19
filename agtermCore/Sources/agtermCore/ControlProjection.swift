@@ -260,8 +260,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// the reason in `error`. It says whether status, notifications and HUD are being mirrored, never
     /// whether the panes' own ssh connections are up.
     public let presentation: ControlPresentationNode?
-    /// How many presentation streams are mirroring this session; omitted when none is. A count of
-    /// connections, so two rows attached from one Mac are two.
+    /// The presentation streams on this session: how many mirror it, a count of connections so two rows
+    /// attached from one Mac are two, and whether one presents it. Omitted when there is none.
     public let presenters: ControlPresentersNode?
     /// Overlay slots a viewer presenting this session holds, on the origin; omitted when none is held. Such
     /// an overlay covers nothing here, so `overlay` and `paneOverlays` leave it out.

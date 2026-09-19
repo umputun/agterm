@@ -6,6 +6,8 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let job: String
     /// The pane role the slot covers, nil for the session-wide slot. Follows its pane across a swap.
     public fileprivate(set) var pane: OverlayPane?
+    /// The presenter generation the job was handed to; only that stream can still reach its surface.
+    public let owner: Int
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
     /// Whether the viewer's surface stays up after the program ends (`--wait`), which keeps the slot held
@@ -14,9 +16,11 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     /// Whether the program already ended, its result recorded, while a held surface keeps the slot.
     public var ended = false
 
-    public init(job: String, pane: OverlayPane?, sizePercent: Int?, wait: Bool = false, ended: Bool = false) {
+    public init(job: String, pane: OverlayPane?, owner: Int, sizePercent: Int?, wait: Bool = false,
+                ended: Bool = false) {
         self.job = job
         self.pane = pane
+        self.owner = owner
         self.sizePercent = sizePercent
         self.wait = wait
         self.ended = ended

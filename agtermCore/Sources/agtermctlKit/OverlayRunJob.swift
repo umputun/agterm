@@ -36,8 +36,8 @@ final class OverlayJobRunner: @unchecked Sendable {
         return context
     }
 
-    /// Runs `context` to the end and returns the helper's own exit status: the program's, or 128 plus the
-    /// signal that ended it. The program starts from `baseEnvironment`, the helper's own, with the context
+    /// Runs `context` to the end and returns the helper's own exit status: the program's, 128 plus the
+    /// signal that ended it, or 127 when it could not be launched. The program starts from `baseEnvironment`, the helper's own, with the context
     /// over it, so it keeps HOME, PATH and TERM. A report the app never receives changes nothing here.
     func run(_ context: OverlayLaunchContext, baseEnvironment: [String: String]) -> Int32 {
         let environment = baseEnvironment.merging(context.environment) { _, fromContext in fromContext }
@@ -211,7 +211,8 @@ extension Session.Overlay {
             Run on this Mac by the agterm on another Mac, over ssh, when it shows one of this app's \
             overlays: it claims the job, runs its program under that ssh terminal, and reports how it \
             ended. It is not meant to be run by hand. A job that cannot be claimed exits 1 having \
-            launched nothing; otherwise it exits with the program's status.
+            launched nothing, one whose program cannot be launched exits 127, and otherwise it exits \
+            with the program's status.
             """)
 
         @Argument(help: "The job id the other Mac was handed.")

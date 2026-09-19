@@ -72,8 +72,8 @@ final class ControlServer {
     /// here because an extension cannot hold it. Main-actor only.
     let presentationHub = PresentationHub(staleTimeout: 30)
     var presentationStreams: [PresentationStream] = []
-    /// Remote overlay jobs this Mac handed to presenters. Replaceable so a hosted test can inject a clock.
-    var overlayJobs = OverlayJobs()
+    /// Remote overlay jobs this Mac handed to presenters.
+    let overlayJobs = OverlayJobs()
     var overlayJobStreams: [String: OverlayJobStream] = [:]
     /// Jobs cancelled between their claim and the adoption of the helper's connection.
     var pendingJobCancels: Set<String> = []

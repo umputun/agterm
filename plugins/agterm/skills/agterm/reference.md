@@ -1763,6 +1763,7 @@ a terminal surface's.
 `overlay already open` /
 `no overlay` / `overlay still running` / `no overlay result` / `pane overlay already open` /
 `overlay ended: launch-failed|canceled|unknown` / `overlay is shown on another Mac` /
+`overlay command too large to show on another Mac` /
 `the viewer showing this overlay is gone` (an overlay shown on another Mac) /
 `pane not visible` (pane overlay or HUD open),
 `no hud` (session hud update/close with none up) /

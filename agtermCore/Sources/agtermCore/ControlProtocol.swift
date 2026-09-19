@@ -599,6 +599,8 @@ public enum OverlayResultError {
     public static let shownElsewhere = "overlay is shown on another Mac"
     /// The stream the overlay was handed to is gone, so nothing can reach the surface to resize it.
     public static let viewerGone = "the viewer showing this overlay is gone"
+    /// The command and its environment exceed what the helper reads in one frame.
+    public static let tooLarge = "overlay command too large to show on another Mac"
 }
 
 /// Error strings for `session.overlay.*` aimed at a session whose overlay slot holds a HUD. The slot is

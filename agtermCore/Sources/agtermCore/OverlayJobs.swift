@@ -50,6 +50,8 @@ public final class OverlayJobs {
     public static let launchWindow: TimeInterval = 30
     /// Claim to `started`: the helper spawning a local child.
     public static let startWindow: TimeInterval = 10
+    /// Finished jobs kept for late lookups, oldest dropped first, so a busy origin does not keep every one.
+    public static let finishedRetention = 32
 
     /// Called once per job with its first terminal outcome.
     public var onFinished: ((OverlayJob) -> Void)?
@@ -57,6 +59,7 @@ public final class OverlayJobs {
     private var jobs: [String: OverlayJob] = [:]
     /// How to reach a claimed job's helper. Cleared with the job's outcome.
     private var cancelHooks: [String: () -> Void] = [:]
+    private var finishedOrder: [String] = []
 
     public init(now: @escaping () -> Date = Date.init) {
         self.now = now
@@ -107,6 +110,8 @@ public final class OverlayJobs {
         jobs[id] = job
         cancelHooks[id] = nil
         onFinished?(job)
+        finishedOrder.append(id)
+        if finishedOrder.count > Self.finishedRetention { jobs[finishedOrder.removeFirst()] = nil }
         return true
     }
 

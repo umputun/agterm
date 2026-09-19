@@ -130,8 +130,8 @@ extension ControlServer {
     /// session-wide slot. Shared by both, so `no overlay` and `overlay not realized` cannot come to mean
     /// different things on one command than the other. A filled slot with an unrealized surface is the ms
     /// after `overlay.open`, and it names the OVERLAY rather than borrowing `session not realized`: the
-    /// session is fine, it is the cover that is not up. A HUD is refused ahead of everything, `overlayActive`
-    /// alone being unable to tell the app's own painter from a caller's program.
+    /// session is fine, it is the cover that is not up. An overlay shown on another Mac is refused first, then
+    /// a HUD, `overlayActive` alone being unable to tell the app's own painter from a caller's program.
     private func overlayReadSurface(_ session: Session, pane: OverlayPane?) -> OverlayReadSurface {
         if session.remoteOverlays.slot(pane) != nil {
             return .rejected(ControlResponse(ok: false, error: OverlayResultError.shownElsewhere))

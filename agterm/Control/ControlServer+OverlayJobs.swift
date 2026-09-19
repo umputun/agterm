@@ -81,11 +81,12 @@ extension ControlServer {
                 DispatchQueue.main.async { MainActor.assumeIsolated { stream?.closed() } }
             }
         )
-        guard let context = overlayJobs.job(job)?.context else {
+        // a job that ended between its claim and this adoption must not launch, its queued cancel gone with it
+        guard let claimed = overlayJobs.job(job), case .claimed = claimed.state else {
             stream.shutdown()
             return
         }
-        stream.send(.context(context))
+        stream.send(.context(claimed.context))
         if pendingJobCancels.remove(job) != nil { stream.send(.cancel) }
     }
 
@@ -113,6 +114,8 @@ extension ControlServer {
             return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
         case .paneMissing:
             return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
+        case .tooLarge:
+            return ControlResponse(ok: false, error: OverlayResultError.tooLarge)
         case .opened:
             scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
             return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))

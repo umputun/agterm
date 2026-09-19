@@ -179,4 +179,17 @@ struct OverlayJobsTests {
     func onlyAnOutcomeWithoutAnExitCodeHasAFailureName(_ outcome: OverlayJobOutcome, _ name: String?) {
         #expect(outcome.failureName == name)
     }
+
+    @Test func onlyTheMostRecentFinishedJobsAreKept() {
+        let (jobs, finished) = makeJobs()
+        let ids = (0...OverlayJobs.finishedRetention).map { _ in register(jobs) }
+        let live = register(jobs)
+
+        for id in ids { jobs.finish(id, .exited(0)) }
+
+        #expect(jobs.job(ids[0]) == nil)
+        #expect(jobs.job(ids[1])?.state == .finished(.exited(0)))
+        #expect(jobs.job(live) != nil)
+        #expect(finished().count == ids.count)
+    }
 }
