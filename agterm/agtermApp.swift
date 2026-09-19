@@ -634,16 +634,15 @@ struct agtermApp: App {
         let isHud = pane == nil && session.hudActive
         let hudFile = isHud ? session.hudFile : nil
         let codeFile = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-ovl-\(UUID().uuidString).code")
-        var overlayEnv = env
-        overlayEnv[OverlayCapture.cmdEnvKey] = spec.command
-        overlayEnv[OverlayCapture.codeEnvKey] = codeFile
-        if let hudFile { overlayEnv[HudLayout.fileEnvKey] = hudFile }
         // an explicit `--cwd` is the caller's local choice; only the inherited default follows the remote rule.
-        let cwd = spec.cwd ?? session.localWorkingDirectory(reported: session.effectiveCwd,
-                                                             homeDirectory: NSHomeDirectory())
-        let view = GhosttySurfaceView(workingDirectory: cwd,
+        let context = OverlayLaunchContext(
+            command: spec.command,
+            cwd: OverlayLaunchContext.cwd(explicit: spec.cwd, session: session, homeDirectory: NSHomeDirectory()),
+            sessionEnvironment: env)
+        let view = GhosttySurfaceView(workingDirectory: context.cwd,
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
-                                      waitAfterCommand: spec.wait, autoFocus: !isHud, env: overlayEnv)
+                                      waitAfterCommand: spec.wait, autoFocus: !isHud,
+                                      env: context.localEnvironment(codeFile: codeFile, hudFile: hudFile))
         view.overlayCodeFile = codeFile
         view.hudBodyFile = hudFile
         // the overlay's own background color (`session.overlay.open --background-color`), applied in

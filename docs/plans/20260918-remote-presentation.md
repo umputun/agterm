@@ -741,14 +741,17 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agterm/agtermApp.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/OverlayCaptureTests.swift`
 
-- [ ] build the job's launch context in one place shared with the local overlay launch: the
+- [x] build the job's launch context in one place shared with the local overlay launch: the
       `AGTERM_OVL_CMD` command string, cwd resolved on the origin, the origin's `AGTERM_*` identities;
       `TERM` is left for the helper to take from its pty; the `shellLine` wrapper and its code file stay
       local-only
-- [ ] write a test comparing the variables a local overlay launch receives with those the job context
+- [x] write a test comparing the variables a local overlay launch receives with those the job context
       carries, listing every deliberate difference, and asserting no viewer session id or socket path can
       enter the context
-- [ ] run the targeted tests - must pass before Task 18
+- [x] run the targeted tests - must pass before Task 18
+- ➕ `OverlayLaunchContext` in `OverlayCapture.swift` carries command, cwd and environment and is Codable
+  for the helper connection; the local factory builds through it and adds only `localEnvironment`'s code
+  and HUD files, and `OverlayLaunchContext.cwd` owns the `--cwd` or remote-rule default for both
 
 ### Task 18: Origin helper connection and the claim-versus-expiry state machine
 
@@ -891,7 +894,8 @@ Slice 1 ends here and ships as its own PR.
 - [ ] slice 1: status, control notifications and HUD for an attached session appear on the viewer;
       mirrored status and HUD clear on disconnect
 - [ ] slice 2: a session-associated ask of either style and a program overlay appear on the viewer only,
-      the program runs once on the origin, and `--block` returns its real exit status
+      the program runs once on the origin, and `--block` returns its real exit status when no other overlay
+      reuses the slot before its next poll
 - [ ] every decisive failure test from Testing Strategy exists and passes
 - [ ] an origin without the capability leaves the attach working, launches no stream ssh, and the viewer
       row reads `unsupported`
@@ -915,6 +919,9 @@ Slice 1 ends here and ships as its own PR.
       best-effort close and resize wording, the `text`/`copy` refusal for a remote overlay, the
       `presentation-lost` reason field, presentation loss ending held surfaces, and the row indicator with
       close-and-reattach as the manual recovery
+- [ ] document in `site/commands.html` and the bundled skill that a remote overlay's non-exit outcomes
+      (`launch-failed`, `canceled`, `unknown`) answer `overlay.result` as errors and make `--block` exit 1,
+      and that `--block` polls the slot, so an overlay opened on it before the next poll answers for it
 - [ ] update the streaming hand-off statement in control-api.md to include the helper connection and the
       async remote close
 - [ ] mirror the new commands, arguments and read-back fields in `site/commands.html` and the bundled skill;
