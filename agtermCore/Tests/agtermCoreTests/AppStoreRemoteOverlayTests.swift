@@ -249,6 +249,22 @@ struct AppStoreRemoteOverlayTests {
         #expect(session.overlayExitCode == 0)
     }
 
+    @Test func aCloseAfterTheStreamBrokeStillReachesTheRunningJob() throws {
+        let (session, id) = try origin()
+        let job = try job(of: open(session))
+        var reached = 0
+        _ = jobs.claim(job) { reached += 1 }
+        jobs.started(job)
+        hub.unsubscribe(try #require(id))
+
+        #expect(store.closeRemoteOverlay(session.id, pane: nil))
+        #expect(reached == 1)
+        jobs.finish(job, .canceled)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.remoteOverlays.failure(nil) == "canceled")
+    }
+
     @Test func anOldJobEndingLeavesTheNewPresentersJobAlone() throws {
         let (session, id) = try origin(split: true)
         let old = try job(of: open(session, pane: .left))

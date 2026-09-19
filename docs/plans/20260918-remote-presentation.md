@@ -926,19 +926,28 @@ Slice 1 ends here and ships as its own PR.
 **Files:**
 - Modify: `agtermTests/ControlServerZmxTests.swift`
 
-- [ ] slice 1: status, control notifications and HUD for an attached session appear on the viewer;
+- [x] slice 1: status, control notifications and HUD for an attached session appear on the viewer;
       mirrored status and HUD clear on disconnect
-- [ ] slice 2: a session-associated ask of either style and a program overlay appear on the viewer only,
+- [x] slice 2: a session-associated ask of either style and a program overlay appear on the viewer only,
       the program runs once on the origin, and `--block` returns its real exit status when no other overlay
       reuses the slot before its next poll
-- [ ] every decisive failure test from Testing Strategy exists and passes
-- [ ] an origin without the capability leaves the attach working, launches no stream ssh, and the viewer
+- [x] every decisive failure test from Testing Strategy exists and passes
+- [x] an origin without the capability leaves the attach working, launches no stream ssh, and the viewer
       row reads `unsupported`
-- [ ] add one hosted end-to-end test for slice 2 through the injected runner: an ask answered on the viewer
+- [x] add one hosted end-to-end test for slice 2 through the injected runner: an ask answered on the viewer
       completes the caller; an overlay job runs once, selects the viewer-only surface through the rendering
       gates, and returns its status. Like slice 1 it asserts rendering inputs, not painted pixels; on-screen
       rendering is confirmed by the two-Mac checks in Post-Completion
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; all green
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint` once; all green
+- ➕ the slice 2 end-to-end case sits beside slice 1's in `ControlServerRemotePresentationTests`, sharing its
+  real-bridge setup (`bridgedPair`); the program runs once under the bundle's `run-job` helper and its status
+  becomes the origin's `session.overlay.result`. The test launches `run-job` itself with the job id it read
+  from the viewer, so the viewer surface's ssh launch and exit callbacks and CLI `--block` are left to the
+  two-Mac checks. The decisive failure tests map to `OverlayJobsTests` (deadline
+  race, helper gone before and after the claim, a long healthy run), `AppStoreRemoteOverlayTests` (a close
+  after the stream broke, an old job's result after a new open), `RemotePresentationStateTests` and
+  `RemotePresentationClientTests` (ask refused on occupancy, stream lost during an ask); the origin-side close
+  after a broken stream was the one missing and is added here
 
 ### Task 24: [Final] Update documentation
 
