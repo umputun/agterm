@@ -247,13 +247,13 @@ once expiry wins a late claim spawns nothing. A job is never rerun and never lau
 presenter, overlays behave as they do today.
 
 **Job helper.** `run-job` supervises. It opens a streaming connection to the origin's local socket
-(`session.overlay.job.run`, handed off the accept thread like `zmx.present`), claims the job over it,
+(`session.overlay.job.run`, handed off the accept thread like `zmx.present`), whose request is the claim,
 receives the shell command, cwd and environment, launches the command under the ssh pty, reports
 `started`, waits, and reports the exit. It evaluates the command with status-preserving shell semantics
 (`/bin/sh -c 'eval "$AGTERM_OVL_CMD"'`), not through `OverlayCapture.shellLine`; what is shared with a
 local launch is the command string and the environment. That connection is the helper's liveness: it
-stays open for the whole run with ping/ack, the origin sends `cancel` over it, and it is independent of the
-presentation stream. Losing the pty or receiving SIGHUP or SIGTERM is a cancellation, the same as a
+stays open for the whole run and closes when the helper dies, the origin sends `cancel` over it, and it
+is independent of the presentation stream. Losing the pty or receiving SIGHUP or SIGTERM is a cancellation, the same as a
 `cancel` frame: the helper terminates the child, escalates to SIGKILL after a grace period, and reports
 `canceled`. That is what makes closing the overlay on the viewer work with no presentation stream.
 Outcomes are `exited(code)`, `canceled`, `launch-failed`, and `unknown`. `unknown` is reached only by a
@@ -319,8 +319,8 @@ ssh pty.
   `ask.dismiss`, `overlay.request` (job id, size, color, follow, pane scope, wait), `overlay.close`,
   `overlay.resize`
 
-**Helper frames** on `session.overlay.job.run`: `claim`, `context`, `refused`, `started`, `exited`,
-`canceled`, `launch-failed`, `cancel`, `ping`, `ack`.
+**Helper frames** on `session.overlay.job.run`, after the reply to the claim: `context`, `cancel` (origin
+to helper); `started`, `exited`, `canceled`, `launch-failed` (helper to origin).
 
 Frame size and the pending-output queue are bounded; the limits are constants beside the codec.
 
@@ -763,20 +763,27 @@ Slice 1 ends here and ships as its own PR.
 - Create: `agtermCore/Tests/agtermCoreTests/OverlayJobsTests.swift`
 - Create: `agtermTests/ControlServerOverlayJobsTests.swift`
 
-- [ ] create `OverlayJobs`, private to the origin and holding remote jobs only: states unclaimed, claimed,
+- [x] create `OverlayJobs`, private to the origin and holding remote jobs only: states unclaimed, claimed,
       running; outcomes exited, canceled, launch-failed, unknown; first terminal outcome wins and a report
       for a job no longer held is ignored
-- [ ] write failing table tests: claim raced against launch-deadline expiry yields exactly one winner; once
+- [x] write failing table tests: claim raced against launch-deadline expiry yields exactly one winner; once
       the claim wins, the deadline cannot fail the running job; once expiry wins, the job is
       `launch-failed` and a late claim is refused; the grant is single use and bound to job and presenter
       generation; a claim with no `started` inside the launch window ends `unknown`; the helper connection
       closing without a terminal report ends `unknown`; a running job with a live connection stays running
       past every timeout; completion of a claimed job is accepted after the presenter generation changed
-- [ ] add streaming `session.overlay.job.run`, handed to `ControlStreamOwner`, with the helper frames
-- [ ] deliver `cancel` to a job's helper connection from the job table
-- [ ] write hosted tests against a fake helper peer: claim returns the context; a second claim is refused;
+- [x] add streaming `session.overlay.job.run`, handed to `ControlStreamOwner`, with the helper frames
+- [x] deliver `cancel` to a job's helper connection from the job table
+- [x] write hosted tests against a fake helper peer: claim returns the context; a second claim is refused;
       connection loss marks the job `unknown`; cancel reaches the peer
-- [ ] run the targeted tests - must pass before Task 19
+- [x] run the targeted tests - must pass before Task 19
+- ➕ the `session.overlay.job.run` request is itself the claim: an ok reply is the one winner against the
+  launch deadline, and the origin's first frame is `context`. There is no `claim` or `refused` frame
+- ➕ no ping/ack on the helper connection: the helper runs on the origin, so its death closes the local
+  socket, which ends an unreported job `unknown`. Frames are `context`, `cancel`, `started`, `exited`,
+  `canceled`, `launch-failed`
+- ➕ the claim carries no presenter generation: a job is single use by id, and presentation loss cancels an
+  unclaimed job (Task 21), which refuses a later claim. Windows are 30s open-to-claim, 10s claim-to-start
 
 ### Task 19: `run-job` supervising helper
 

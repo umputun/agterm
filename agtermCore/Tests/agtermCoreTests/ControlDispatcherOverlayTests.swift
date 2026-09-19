@@ -26,6 +26,29 @@ struct ControlDispatcherOverlayTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [(String?.none, "session.overlay.job.run requires a job id"), ("  ", "session.overlay.job.run requires a job id"),
+                      ("not-a-uuid", "invalid job id")])
+    func jobRunRejectsAMissingOrMalformedJobBeforeCallingActions(_ target: String?, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayJobRun, target: target))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func jobRunRoutesTheJobToTheHostsClaim() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let job = UUID().uuidString
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayJobRun, target: job))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: job)))
+        #expect(actions.calls == [.claimOverlayJob(job)])
+    }
+
     @Test func sessionOverlayOpenRoutesOptionsAndEchoesActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

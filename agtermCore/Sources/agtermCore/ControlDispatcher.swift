@@ -169,6 +169,8 @@ public protocol ControlActions {
     func attachRemoteSession(host: String, session: String) async -> ControlResponse
     /// Accept a viewer's presentation stream. After an ok answer the host speaks frames on that connection.
     func openPresentation(session: String) -> ControlResponse
+    /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
+    func claimOverlayJob(_ job: String) -> ControlResponse
     /// Attach into an open local window, defaulting to the frontmost window after discovery.
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse
 }
@@ -200,6 +202,8 @@ public struct ControlDispatcher {
                 .sessionOverlayText, .sessionBackground,
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
+        case .sessionOverlayJobRun:
+            return dispatchSessionOverlayCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
             return dispatchWorkspaceCommand(request)

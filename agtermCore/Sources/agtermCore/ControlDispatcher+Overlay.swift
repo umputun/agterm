@@ -70,6 +70,12 @@ extension ControlDispatcher {
             }
         case .sessionOverlayText:
             return dispatchSessionOverlayText(request)
+        case .sessionOverlayJobRun:
+            guard let job = request.target?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "session.overlay.job.run requires a job id")
+            }
+            guard UUID(uuidString: job) != nil else { return ControlResponse(ok: false, error: "invalid job id") }
+            return actions.claimOverlayJob(job)
         default:
             preconditionFailure("dispatchSessionOverlayCommand called for \(request.cmd.rawValue)")
         }

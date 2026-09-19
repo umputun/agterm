@@ -72,6 +72,11 @@ final class ControlServer {
     /// here because an extension cannot hold it. Main-actor only.
     let presentationHub = PresentationHub(staleTimeout: 30)
     var presentationStreams: [PresentationStream] = []
+    /// Remote overlay jobs this Mac handed to presenters. Replaceable so a hosted test can inject a clock.
+    var overlayJobs = OverlayJobs()
+    var overlayJobStreams: [String: OverlayJobStream] = [:]
+    /// Jobs cancelled between their claim and the adoption of the helper's connection.
+    var pendingJobCancels: Set<String> = []
     var presentationHeartbeat: Task<Void, Never>?
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10
@@ -448,6 +453,21 @@ final class ControlServer {
             return
         }
 
+        // a claimed job's helper keeps its connection the same way, and a claim whose reply never reached
+        // the helper leaves nobody to run the job
+        if request.cmd == .sessionOverlayJobRun {
+            let response = runBlocking { await server.dispatch(request) }
+            let written = server.responseWriter(conn, response)
+            guard response.ok, let job = response.result?.id else { return }
+            guard written else {
+                runBlocking { await server.overlayJobs.helperGone(job) }
+                return
+            }
+            handedOff = true
+            runBlocking { await server.adoptOverlayJobStream(descriptor: conn, job: job) }
+            return
+        }
+
         // `zmx tree <this machine>` would otherwise deadlock against itself: the far side's own agtermctl
         // waits in this server's backlog while this connection holds the only accept thread.
         if Self.waitsOnNetwork(request.cmd) {
@@ -576,7 +596,7 @@ final class ControlServer {
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
-                .zmxAttach, .zmxPresent, .dashboard, .version:
+                .zmxAttach, .zmxPresent, .sessionOverlayJobRun, .dashboard, .version:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)

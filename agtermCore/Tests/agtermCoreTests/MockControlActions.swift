@@ -63,6 +63,7 @@ final class MockControlActions: ControlActions {
         case zmxTree(host: String?)
         case zmxAttach(host: String, session: String)
         case zmxPresent(session: String)
+        case claimOverlayJob(String)
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
         case flaggedViewLayout(ControlFlaggedLayoutMode)
@@ -475,6 +476,11 @@ final class MockControlActions: ControlActions {
     func openPresentation(session: String) -> ControlResponse {
         calls.append(.zmxPresent(session: session))
         return ControlResponse(ok: true, result: ControlResult(id: session))
+    }
+
+    func claimOverlayJob(_ job: String) -> ControlResponse {
+        calls.append(.claimOverlayJob(job))
+        return ControlResponse(ok: true, result: ControlResult(id: job))
     }
 
     func attachRemoteSession(host: String, session: String) async -> ControlResponse {

@@ -58,6 +58,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.present"))
     }
 
+    func claimOverlayJob(_: String) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.job.run"))
+    }
+
     func remoteTree(host _: String?) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.tree"))
     }
