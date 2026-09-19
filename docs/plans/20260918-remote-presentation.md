@@ -792,16 +792,24 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Create: `agtermCore/Tests/agtermctlKitTests/OverlayRunJobTests.swift`
 
-- [ ] implement `agtermctl session overlay run-job <id>`: connect, claim, spawn the shell command as a child
+- [x] implement `agtermctl session overlay run-job <id>`: connect, claim, spawn the shell command as a child
       under the inherited pty with foreground process-group handling, forward SIGWINCH, wait, report, exit
       with the program's status, evaluating the command with status-preserving semantics
-- [ ] a `cancel` frame, pty loss, SIGHUP or SIGTERM terminates the child, escalates to SIGKILL after a grace
+- [x] a `cancel` frame, pty loss, SIGHUP or SIGTERM terminates the child, escalates to SIGKILL after a grace
       period, and reports canceled
-- [ ] write tests with a real child process: a program exiting 3 yields job result 3 and helper exit 3; pty
+- [x] write tests with a real child process: a program exiting 3 yields job result 3 and helper exit 3; pty
       loss with a child that ignores the first signal still ends `canceled` with the child gone; a refused
       claim launches nothing; cancel ends `canceled`; a report failure does not change the helper's own
       exit status
-- [ ] run `swift test --filter OverlayRunJobTests` - must pass before Task 20
+- [x] run `swift test --filter OverlayRunJobTests` - must pass before Task 20
+- ➕ the program leads its own process group, started suspended and resumed only once `tcsetpgrp` made it
+  the pty's foreground, so it gets the keys and SIGWINCH directly and nothing is forwarded; the helper
+  ignores SIGINT, SIGQUIT, SIGTSTP and SIGTTOU like a shell running a foreground command
+- ➕ a cancel frame, SIGHUP, SIGTERM or a pty hangup the helper sees itself (it may not be the session
+  leader) ends the whole group, TERM then KILL after the grace, and `canceled` is reported only once the
+  group is empty; the program starts from the helper's own environment with the context over it
+- ➕ the helper's socket is close-on-exec, so only the helper's own death closes it for the app
+- ➕ exit status is the program's, or 128 plus the signal that ended it; a launch failure exits 127
 
 ### Task 20: Origin overlay routing, best-effort close and resize
 

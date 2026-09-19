@@ -97,7 +97,7 @@ struct StreamBridge: Sendable {
         }
     }
 
-    private static func writeAll(_ fd: Int32, _ data: Data) -> Bool {
+    static func writeAll(_ fd: Int32, _ data: Data) -> Bool {
         data.withUnsafeBytes { raw in
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return true }
             var offset = 0

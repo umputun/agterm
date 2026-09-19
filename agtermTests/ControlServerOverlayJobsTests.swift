@@ -195,6 +195,87 @@ final class ControlServerOverlayJobsTests: XCTestCase {
         XCTAssertEqual(offMain { client.frame() } ?? nil, .cancel)
     }
 
+    private func runUnderScript(_ job: String) throws -> (Process, FileHandle) {
+        let cli = try XCTUnwrap(Bundle.main.executableURL).deletingLastPathComponent().appendingPathComponent("agtermctl").path
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "'\(cli)' session overlay run-job \(job) --socket '\(socketPath!)'; true"]
+        let input = Pipe()
+        process.standardInput = input
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        return (process, input.fileHandleForWriting)
+    }
+
+    private func context(_ command: String) -> OverlayLaunchContext {
+        OverlayLaunchContext(command: command, cwd: "/tmp", sessionEnvironment: ["AGTERM_ENABLED": "1"])
+    }
+
+    func testAProgramReadingTheTerminalFirstGetsItsInputUnderARealPty() throws {
+        let server = makeServer()
+        let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: context(#"read line; test "$line" = hello && exit 7; exit 1"#))
+        let (script, input) = try runUnderScript(job)
+        defer { if script.isRunning { kill(script.processIdentifier, SIGKILL) } }
+        waitUntil("the program runs") { server.overlayJobs.job(job)?.state == .running }
+
+        input.write(Data("hello\n".utf8))
+
+        waitUntil("the program exits 7") { server.overlayJobs.job(job)?.state == .finished(.exited(7)) }
+    }
+
+    // regression: a program whose read saw the hangup's EOF and exited was reported exited, its descendant left
+    func testLosingThePtyCancelsEvenWhenTheProgramExitsOnTheHangupsEndOfFile() throws {
+        let server = makeServer()
+        let pidFile = "/tmp/agterm-job-\(UUID().uuidString.prefix(8)).pid"
+        defer { try? FileManager.default.removeItem(atPath: pidFile) }
+        let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: context(
+            #"trap "" HUP; /bin/sleep 60 & echo $! > \#(pidFile); read line; exit 23"#))
+        let (script, _) = try runUnderScript(job)
+        defer { if script.isRunning { kill(script.processIdentifier, SIGKILL) } }
+        waitUntil("the program runs") { server.overlayJobs.job(job)?.state == .running }
+        waitUntil("the descendant is up") { FileManager.default.fileExists(atPath: pidFile) }
+        let descendant = try XCTUnwrap(pid_t((try String(contentsOfFile: pidFile, encoding: .utf8))
+            .trimmingCharacters(in: .whitespacesAndNewlines)))
+        defer { kill(descendant, SIGKILL) }
+
+        kill(script.processIdentifier, SIGKILL)
+
+        waitUntil("the job ends") {
+            if case .finished = server.overlayJobs.job(job)?.state { return true }
+            return false
+        }
+        XCTAssertEqual(server.overlayJobs.job(job)?.state, .finished(.canceled))
+        waitUntil("the descendant is gone") { kill(descendant, 0) != 0 }
+    }
+
+    func testLosingThePtyCancelsAProgramIgnoringHangupAndEndsItsDescendants() throws {
+        let server = makeServer()
+        let pidFile = "/tmp/agterm-job-\(UUID().uuidString.prefix(8)).pid"
+        defer { try? FileManager.default.removeItem(atPath: pidFile) }
+        let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: context(
+            #"trap "" HUP TERM; /bin/sleep 60 & echo $! > \#(pidFile); wait"#))
+        let (script, _) = try runUnderScript(job)
+        defer { if script.isRunning { kill(script.processIdentifier, SIGKILL) } }
+        waitUntil("the program runs") { server.overlayJobs.job(job)?.state == .running }
+        waitUntil("the descendant is up") { FileManager.default.fileExists(atPath: pidFile) }
+        let descendant = try XCTUnwrap(pid_t((try String(contentsOfFile: pidFile, encoding: .utf8))
+            .trimmingCharacters(in: .whitespacesAndNewlines)))
+        defer { kill(descendant, SIGKILL) }
+
+        kill(script.processIdentifier, SIGKILL)
+
+        let canceled = expectation(description: "the job ends canceled")
+        Task { @MainActor in
+            while server.overlayJobs.job(job)?.state != .finished(.canceled) {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            canceled.fulfill()
+        }
+        wait(for: [canceled], timeout: 15)
+        XCTAssertNotEqual(kill(descendant, 0), 0, "the program's descendant outlived the cancel")
+    }
+
     func testAnOpenJobConnectionLeavesTheAcceptThreadFree() throws {
         let server = makeServer()
         let job = server.overlayJobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)
