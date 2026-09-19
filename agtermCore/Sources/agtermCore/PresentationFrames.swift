@@ -103,6 +103,62 @@ public struct PresentationNotify: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationAsk is an ask the origin hands its presenter to draw. `owner` is the presenter generation it
+/// was handed under, and every answer echoes it, so one arriving after a handback is recognisably stale.
+public struct PresentationAsk: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var message: String?
+    public var buttons: [ControlAskButton]
+    public var defaultID: String?
+    public var destructiveID: String?
+    public var style: ControlAskStyle
+    public var align: ControlAskAlignment
+    public var width: Int?
+    /// The origin's pane the dialog covers, nil for the whole session.
+    public var pane: PresentationPane?
+    public var owner: Int
+
+    public init(_ ask: PendingAsk, pane: PresentationPane?, owner: Int) {
+        id = ask.id
+        title = ask.title
+        message = ask.message
+        buttons = ask.buttons
+        defaultID = ask.defaultID
+        destructiveID = ask.destructiveID
+        style = ask.style
+        align = ask.align
+        width = ask.width
+        self.pane = pane
+        self.owner = owner
+    }
+}
+
+/// PresentationAskAnswer is the presenter's answer: a button id, or nil for a dismissal with Esc or Command-W.
+/// Only the id travels; the origin derives label and index from the buttons it stored.
+public struct PresentationAskAnswer: Codable, Equatable, Sendable {
+    public var id: String
+    public var owner: Int
+    public var button: String?
+
+    public init(id: String, owner: Int, button: String?) {
+        self.id = id
+        self.owner = owner
+        self.button = button
+    }
+}
+
+/// PresentationAskRef names one handed-over ask, for a refusal or a dismissal.
+public struct PresentationAskRef: Codable, Equatable, Sendable {
+    public var id: String
+    public var owner: Int
+
+    public init(id: String, owner: Int) {
+        self.id = id
+        self.owner = owner
+    }
+}
+
 /// PresentationSnapshot is the replaceable state a subscriber starts from.
 public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var status: PresentationStatus?
@@ -130,6 +186,12 @@ public struct PresentationFrame: Equatable, Sendable {
         case presenterGranted
         /// The role is held by another viewer; this one stays a mirror until it reconnects.
         case presenterRefused
+        case askRequest(PresentationAsk)
+        case askResolve(PresentationAskAnswer)
+        /// The presenter cannot show the ask, so the origin takes it back.
+        case askRejected(PresentationAskRef)
+        /// The ask ended on the origin; the presenter takes its dialog down without answering.
+        case askDismiss(PresentationAskRef)
         /// A kind this build does not speak. Kept, with its ordering, so a newer peer does not break the stream.
         case unknown(String)
 
@@ -145,6 +207,10 @@ public struct PresentationFrame: Equatable, Sendable {
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
+            case .askRequest: return "ask.request"
+            case .askResolve: return "ask.resolve"
+            case .askRejected: return "ask.rejected"
+            case .askDismiss: return "ask.dismiss"
             case .unknown(let kind): return kind
             }
         }
@@ -163,7 +229,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, hud, notify
+        case kind, gen, rev, hello, snapshot, status, hud, notify, ask
     }
 
     public init(from decoder: Decoder) throws {
@@ -182,6 +248,10 @@ extension PresentationFrame: Codable {
         case "presenter.acquire": body = .presenterAcquire
         case "presenter.granted": body = .presenterGranted
         case "presenter.refused": body = .presenterRefused
+        case "ask.request": body = .askRequest(try container.decode(PresentationAsk.self, forKey: .ask))
+        case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
+        case "ask.rejected": body = .askRejected(try container.decode(PresentationAskRef.self, forKey: .ask))
+        case "ask.dismiss": body = .askDismiss(try container.decode(PresentationAskRef.self, forKey: .ask))
         default: body = .unknown(kind)
         }
     }
@@ -197,6 +267,9 @@ extension PresentationFrame: Codable {
         case .status(let status): try container.encodeIfPresent(status, forKey: .status)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)
+        case .askRequest(let ask): try container.encode(ask, forKey: .ask)
+        case .askResolve(let answer): try container.encode(answer, forKey: .ask)
+        case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)
         case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown: break
         }
     }

@@ -19,12 +19,14 @@ struct PresenterGrant {
         return holder == subscriber
     }
 
-    /// Takes the role back from a connection that went away, whichever session it held.
-    mutating func release(_ subscriber: PresentationHub.SubscriberID) {
-        for (session, holder) in holders where holder == subscriber {
+    /// Takes the role back from a connection that went away. Returns the sessions it held.
+    mutating func release(_ subscriber: PresentationHub.SubscriberID) -> [UUID] {
+        let held = holders.filter { $0.value == subscriber }.map(\.key)
+        for session in held {
             holders[session] = nil
             generations[session, default: 0] += 1
         }
+        return held
     }
 
     func holder(of session: UUID) -> PresentationHub.SubscriberID? { holders[session] }

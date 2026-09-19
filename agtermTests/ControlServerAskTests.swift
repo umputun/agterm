@@ -514,6 +514,147 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: window))
     }
 
+    func testATerminalAskWithAPresenterIsHandedToItAndNotDrawnHere() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let (sink, _) = try present(session)
+        let ask = makeTerminalAsk()
+
+        XCTAssertEqual(open(ask), ControlResponse(ok: true, result: ControlResult(id: ask.id)))
+
+        XCTAssertTrue(session.askPresentedRemotely)
+        guard case .askRequest(let request)? = sink.bodies.last else { return XCTFail("no ask.request sent") }
+        XCTAssertEqual(request.id, ask.id)
+        let input = SessionAskInput(session: session, store: store, actions: actions, windowID: windowID,
+                                    askID: ask.id, frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+        XCTAssertFalse(input.visible)
+        let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
+        XCTAssertEqual(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.ask,
+                       ControlSessionAsk(id: ask.id, remote: true))
+    }
+
+    func testATargetedGuiAskWithAPresenterLeavesTheWindowSlotFree() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let controller = register(try XCTUnwrap(library.activeWindowID))
+        try present(session)
+        let ask = makeAsk()
+
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+
+        XCTAssertNil(controller.pendingAsk)
+        XCTAssertEqual(session.askPending?.id, ask.id)
+        XCTAssertTrue(session.askPresentedRemotely)
+    }
+
+    func testAnAnswerFromThePresenterCompletesTheCaller() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let (sink, id) = try present(session)
+        let ask = makeTerminalAsk()
+        XCTAssertTrue(open(ask).ok)
+        guard case .askRequest(let request)? = sink.bodies.last else { return XCTFail("no ask.request sent") }
+
+        server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 1, body: .askResolve(
+            PresentationAskAnswer(id: ask.id, owner: request.owner, button: "yes"))), from: id)
+
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
+                       ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+    }
+
+    func testLosingThePresenterDrawsATerminalAskHere() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let (_, id) = try present(session)
+        let ask = makeTerminalAsk()
+        XCTAssertTrue(open(ask).ok)
+
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertFalse(session.askPresentedRemotely)
+        let input = SessionAskInput(session: session, store: store, actions: actions, windowID: windowID,
+                                    askID: ask.id, frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+        XCTAssertTrue(input.visible)
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .pending)
+    }
+
+    func testARefusalFromThePresenterTakesTheAskBack() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let (sink, id) = try present(session)
+        let ask = makeTerminalAsk()
+        XCTAssertTrue(open(ask).ok)
+        guard case .askRequest(let request)? = sink.bodies.last else { return XCTFail("no ask.request sent") }
+
+        server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 1, body: .askRejected(
+            PresentationAskRef(id: ask.id, owner: request.owner))), from: id)
+
+        XCTAssertFalse(session.askPresentedRemotely)
+        XCTAssertEqual(session.askPending?.id, ask.id)
+    }
+
+    func testLosingThePresenterMovesAGuiAskIntoItsVisibleWindowSlot() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let (_, id) = try present(session)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertEqual(controller.pendingAsk?.id, ask.id)
+        XCTAssertEqual(controller.pendingAsk?.anchor, AskAnchor(sessionID: session.id))
+        XCTAssertNil(session.askPending)
+        XCTAssertEqual(AskRegistry.shared.owner(for: ask.id), .window(windowID))
+        XCTAssertTrue(server.cancelAsk(ask.id, window: nil).ok)
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask, ControlAskResult(result: .cancelled))
+    }
+
+    func testAGuiAskWhoseTargetIsHiddenHereEndsPresentationLost() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let selectedID = try XCTUnwrap(store.selectedSessionID)
+        _ = register(try XCTUnwrap(library.activeWindowID))
+        let background = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        store.selectSession(selectedID)
+        let (_, id) = try present(background)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: background.id.uuidString).ok)
+
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
+                       ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
+        XCTAssertNil(background.askPending)
+    }
+
+    func testAGuiAskMeetingAnUnrelatedPickEndsPresentationLostAndLeavesThePick() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let controller = register(try XCTUnwrap(library.activeWindowID))
+        let (_, id) = try present(session)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+        XCTAssertTrue(controller.open(PendingPick(id: "picker", items: [ControlPickItem(id: "one", label: "One")])))
+
+        server.presentationHub.unsubscribe(id)
+
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
+                       ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
+        XCTAssertEqual(controller.pending?.id, "picker")
+    }
+
+    @discardableResult
+    private func present(_ session: Session) throws -> (PresenterSink, PresentationHub.SubscriberID) {
+        server.attachPresentationHub()
+        let sink = PresenterSink()
+        let id = try server.presentationHub.subscribe(
+            session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter), sink: sink
+        ) { PresentationSnapshot(status: nil, hud: nil) }
+        server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire),
+                                       from: id)
+        XCTAssertEqual(sink.bodies.last, .presenterGranted)
+        return (sink, id)
+    }
+
     private func register(_ windowID: UUID) -> PickController {
         let controller = PickController()
         PickRegistry.shared.register(windowID, controller: controller)
@@ -540,6 +681,20 @@ final class ControlServerAskTests: XCTestCase {
                       placement: ControlAskPlacement = ControlAskPlacement(), follow: Bool = false) -> ControlResponse {
         server.openAsk(ask, target: target, window: window, placement: placement, follow: follow)
     }
+}
+
+@MainActor
+private final class PresenterSink: PresentationSink {
+    var frames: [PresentationFrame] = []
+
+    func offer(_ frame: PresentationFrame) -> Bool {
+        frames.append(frame)
+        return true
+    }
+
+    func close(_: PresentationHub.CloseReason) {}
+
+    var bodies: [PresentationFrame.Body] { frames.map(\.body) }
 }
 
 @MainActor

@@ -91,10 +91,13 @@ public struct ControlSessionAsk: Codable, Sendable, Equatable {
     public let id: String
     /// Current left/right placement, nil for the whole session.
     public let pane: String?
+    /// True while a viewer presenting the session draws the ask; omitted when this Mac does.
+    public let remote: Bool?
 
-    public init(id: String, pane: String? = nil) {
+    public init(id: String, pane: String? = nil, remote: Bool? = nil) {
         self.id = id
         self.pane = pane
+        self.remote = remote
     }
 }
 

@@ -340,6 +340,13 @@ public final class Session: Identifiable {
     public private(set) var askPending: PendingAsk?
     /// Stable identity of the covered pane; nil covers the whole session.
     public private(set) var askPaneIdentity: UUID?
+    /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
+    /// presented ask keeps the slot and its result here but is neither drawn nor answered on this Mac.
+    public private(set) var askRemoteOwner: Int?
+    /// Tells the presenter a handed-over ask ended here. Set with the handover, run once when it resolves.
+    @ObservationIgnored var onRemoteAskEnded: (@MainActor (String) -> Void)?
+
+    public var askPresentedRemotely: Bool { askRemoteOwner != nil }
 
     /// The anchored pane's current role, nil for session-wide placement or a destroyed pane.
     public var askTargetPane: OverlayPane? {
@@ -348,11 +355,25 @@ public final class Session: Identifiable {
 
     /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
     @discardableResult
-    public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil) -> Bool {
+    public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil) -> Bool {
         guard askPending == nil else { return false }
         askPaneIdentity = paneIdentity
+        askRemoteOwner = remoteOwner
         askPending = ask
         return true
+    }
+
+    /// Takes a handed-over ask back to be drawn here, so an answer from its former presenter is stale.
+    public func takeAskBack() {
+        askRemoteOwner = nil
+        onRemoteAskEnded = nil
+    }
+
+    /// Empties the slot without an outcome, for an ask that moves to another owner rather than ending.
+    public func releaseAsk() {
+        askPending = nil
+        askPaneIdentity = nil
+        takeAskBack()
     }
 
     /// Retains a registered ask's terminal outcome before clearing its slot; stale ids are ignored.
@@ -362,8 +383,11 @@ public final class Session: Identifiable {
         if case let .session(sessionID, windowID) = AskRegistry.shared.owner(for: id), sessionID == self.id {
             AskRegistry.shared.retain(id: id, result: result, window: windowID)
         }
+        let ended = onRemoteAskEnded
         askPending = nil
         askPaneIdentity = nil
+        takeAskBack()
+        ended?(id)
         return true
     }
 

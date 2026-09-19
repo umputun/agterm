@@ -240,6 +240,7 @@ struct AskCommandsTests {
         (ControlAskResult(result: .pending), Int32(1)),
         (ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0), Int32(0)),
         (ControlAskResult(result: .cancelled), Int32(2)),
+        (ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost), Int32(2)),
         (ControlAskResult(result: .escaped), Int32(3)),
     ])
     func oneShotResultPrintsEveryOutcomeAndMapsExit(result: ControlAskResult, expectedExit: Int32) throws {

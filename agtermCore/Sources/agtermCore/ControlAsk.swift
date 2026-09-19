@@ -57,12 +57,19 @@ public struct ControlAskResult: Codable, Sendable, Equatable {
     public let label: String?
     /// index is the answered button's zero-based position in caller order.
     public let index: Int?
+    /// reason says why a cancelled dialog ended, absent for an ordinary cancel. An older client ignores it.
+    public let reason: String?
 
-    public init(result: ControlAskOutcome, id: String? = nil, label: String? = nil, index: Int? = nil) {
+    /// The reason an ask carries when the viewer presenting it was lost and the origin could not show it.
+    public static let presentationLost = "presentation-lost"
+
+    public init(result: ControlAskOutcome, id: String? = nil, label: String? = nil, index: Int? = nil,
+                reason: String? = nil) {
         self.result = result
         self.id = id
         self.label = label
         self.index = index
+        self.reason = reason
     }
 }
 

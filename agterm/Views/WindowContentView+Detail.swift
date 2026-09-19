@@ -154,7 +154,7 @@ extension WindowContentView {
                                       detailFrame: CGRect(origin: .zero, size: geo.size), paneFrames: anchors.frames(in: geo),
                                       font: askFont, foreground: chromeText, background: terminalColor)
                 }
-                .allowsHitTesting(session.askPending != nil && deckInteractive && isActive)
+                .allowsHitTesting(session.askPending != nil && !session.askPresentedRemotely && deckInteractive && isActive)
             }
         }
         .transformAnchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { value, anchor in

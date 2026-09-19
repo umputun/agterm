@@ -167,7 +167,7 @@ public final class RemotePresentationClient {
         case .hello(let answer) where answer.mode == .presenter: send(.presenterAcquire, on: link)
         case .presenterGranted: report(.presenter)
         case .presenterRefused: report(.mirror)
-        case .hello, .ack, .presenterAcquire, .unknown: break
+        case .hello, .ack, .presenterAcquire, .askRequest, .askResolve, .askRejected, .askDismiss, .unknown: break
         }
     }
 

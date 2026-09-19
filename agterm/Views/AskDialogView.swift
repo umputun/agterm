@@ -33,7 +33,8 @@ struct SessionAskInput {
     let frame: CGRect?
 
     var visible: Bool {
-        guard session.askPending?.id == askID, store.selectedSessionID == session.id,
+        // a viewer presenting the session draws this ask, so nothing of it is shown or answered here
+        guard session.askPending?.id == askID, !session.askPresentedRemotely, store.selectedSessionID == session.id,
               let frame, !frame.isEmpty,
               TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil,
               DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true else { return false }

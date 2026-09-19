@@ -51,6 +51,12 @@ public final class PresentationHub {
     private var lastGeneration = 0
     private var grant = PresenterGrant()
 
+    /// Called with a session whose presenter went away, after the role is released.
+    public var onPresenterLost: (@MainActor (UUID) -> Void)?
+    /// Called with what a session's current presenter sent about work it was handed. Frames of this kind
+    /// from any other viewer are dropped before this is reached.
+    public var onPresenterFrame: (@MainActor (UUID, PresentationFrame.Body) -> Void)?
+
     public init(staleTimeout: TimeInterval, now: @escaping () -> Date = Date.init) {
         self.staleTimeout = staleTimeout
         self.now = now
@@ -86,7 +92,14 @@ public final class PresentationHub {
 
     public func unsubscribe(_ id: SubscriberID) {
         subscribers[id] = nil
-        grant.release(id)
+        release(id)
+    }
+
+    /// Sends `body` to `session`'s presenter alone. False when there is none, or it stalled and was dropped.
+    @discardableResult
+    public func sendToPresenter(_ body: PresentationFrame.Body, session: UUID) -> Bool {
+        guard let holder = grant.holder(of: session) else { return false }
+        return send(body, to: holder)
     }
 
     public func publish(_ body: PresentationFrame.Body, session: UUID) {
@@ -108,6 +121,9 @@ public final class PresentationHub {
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
+        case .askResolve, .askRejected:
+            guard grant.holder(of: subscriber.session) == id else { return }
+            onPresenterFrame?(subscriber.session, frame.body)
         default: break
         }
     }
@@ -149,7 +165,11 @@ public final class PresentationHub {
 
     private func drop(_ id: SubscriberID, reason: CloseReason) {
         guard let subscriber = subscribers.removeValue(forKey: id) else { return }
-        grant.release(id)
         subscriber.sink.close(reason)
+        release(id)
+    }
+
+    private func release(_ id: SubscriberID) {
+        for session in grant.release(id) { onPresenterLost?(session) }
     }
 }

@@ -219,6 +219,28 @@ struct AskTests {
         PendingAsk(id: id, title: "Choose", buttons: buttons(count: 1))
     }
 
+    @Test func aPresentationLostCancelEncodesItsReasonBesideTheOutcome() throws {
+        let result = ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost)
+
+        let fields = try #require(JSONSerialization.jsonObject(with: try JSONEncoder().encode(result)) as? [String: Any])
+
+        #expect(fields["result"] as? String == "cancelled")
+        #expect(fields["reason"] as? String == "presentation-lost")
+    }
+
+    @Test func anOrdinaryCancelCarriesNoReason() throws {
+        let fields = try #require(JSONSerialization.jsonObject(
+            with: try JSONEncoder().encode(ControlAskResult(result: .cancelled))) as? [String: Any])
+
+        #expect(fields["reason"] == nil)
+    }
+
+    @Test func aResultFromAServerWithoutTheReasonDecodes() throws {
+        let result = try JSONDecoder().decode(ControlAskResult.self, from: Data(#"{"result":"cancelled"}"#.utf8))
+
+        #expect(result == ControlAskResult(result: .cancelled))
+    }
+
     private func buttons(count: Int) -> [ControlAskButton] {
         (0..<count).map { ControlAskButton(id: "button-\($0)", label: "Button \($0)") }
     }

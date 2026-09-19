@@ -90,6 +90,12 @@ public final class AskRegistry {
         return true
     }
 
+    /// Moves a pending ask to another live owner, for one handed back from a viewer into a window slot.
+    public func reassign(id: String, to owner: Owner) {
+        guard owners[id] != nil else { return }
+        owners[id] = owner
+    }
+
     /// Returns the registered live owner; finished and unknown ids have none.
     public func owner(for id: String) -> Owner? {
         owners[id]

@@ -668,23 +668,30 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherAskTests.swift`
 - Modify: `agtermTests/ControlServerAskTests.swift`, `agtermTests/AskDialogViewTests.swift`
 
-- [ ] write failing tests for both styles, the default terminal ask (`session.openAsk`, `AskRegistry`
+- [x] write failing tests for both styles, the default terminal ask (`session.openAsk`, `AskRegistry`
       `.session` owner) and the GUI ask (`PickController` reservation, origin visibility): with a presenter
       a session-associated ask is marked remotely presented and takes neither local path; `AskDialogView`
       neither renders nor resolves it; a resolve with an unknown button id or a stale generation is refused;
       an escaped resolve completes escaped; the first result wins when two resolves race
-- [ ] write failing tests for the three transitions: `ask.cancel`, soft close and pane teardown complete
+- [x] write failing tests for the three transitions: `ask.cancel`, soft close and pane teardown complete
       canceled and send `ask.dismiss`, never handing the ask back; viewer rejection, stream loss and revoked
       grant return it to the origin under a new generation; when the origin cannot present it (hidden GUI
       target, or an unrelated pick holding the slot) it completes canceled with reason `presentation-lost`
       and the unrelated pick is untouched
-- [ ] add the optional `reason` to `ControlAskResult`; tests: it encodes as `reason: presentation-lost`
+- [x] add the optional `reason` to `ControlAskResult`; tests: it encodes as `reason: presentation-lost`
       beside `result: cancelled`, an ordinary cancel carries none, a payload without it decodes, and
       `agtermctl ask` still exits 2 and prints the field under `--json`
-- [ ] separate authoritative pending and result ownership from the local UI reservation
-- [ ] route `ask.request` and `ask.dismiss` through the hub; untargeted GUI ask and `pick.open` stay local
-- [ ] report a remotely presented ask on the origin's `ask` node with `remote: true`, with a projection test
-- [ ] run the targeted tests - must pass before Task 15
+- [x] separate authoritative pending and result ownership from the local UI reservation
+- [x] route `ask.request` and `ask.dismiss` through the hub; untargeted GUI ask and `pick.open` stay local
+- [x] report a remotely presented ask on the origin's `ask` node with `remote: true`, with a projection test
+- [x] run the targeted tests - must pass before Task 15
+- ➕ a handed-over ask of either style keeps `Session.askPending` with `askRemoteOwner` set, so every
+  existing cancel and teardown path ends it and a session-scoped `onRemoteAskEnded` sends `ask.dismiss`.
+  While a viewer presents a session, a terminal ask and a targeted GUI ask for it share that one slot
+- ➕ no `ask.accepted` frame: the origin acts only on a refusal, so the viewer sends `ask.rejected` or an
+  answer and nothing in between. `follow` raises no origin window for a handed-over ask
+- ➕ a GUI ask taken back moves into its window slot through `AskRegistry.reassign`, under the visibility
+  rule `presentAsk` applies at open, and otherwise ends `presentation-lost`
 
 ### Task 15: Ask presentation on the viewer
 

@@ -149,6 +149,10 @@ extension ControlServer {
     /// Points every open store at the hub. Stores are created by the window library, which this file cannot
     /// reach into, so the server assigns wherever it already walks the open windows.
     func attachPresentationHub() {
+        presentationHub.onPresenterLost = { [weak self] session in self?.takeBackRemoteAsk(forSession: session) }
+        presentationHub.onPresenterFrame = { [weak self] session, body in
+            self?.receivePresenterAsk(body, forSession: session)
+        }
         for entry in library.windows {
             guard let store = library.store(for: entry.id) else { continue }
             store.presentationHub = presentationHub

@@ -33,6 +33,14 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 14, body: .presenterAcquire),
         PresentationFrame(gen: 1, rev: 15, body: .presenterGranted),
         PresentationFrame(gen: 1, rev: 16, body: .presenterRefused),
+        PresentationFrame(gen: 1, rev: 17, body: .askRequest(PresentationAsk(
+            PendingAsk(id: "a1", title: "deploy?", message: "to prod", buttons: [ControlAskButton(id: "y", label: "Yes", hotkey: "y")],
+                       defaultID: "y", style: .gui, align: .center, width: 40),
+            pane: pane, owner: 3))),
+        PresentationFrame(gen: 1, rev: 18, body: .askResolve(PresentationAskAnswer(id: "a1", owner: 3, button: "y"))),
+        PresentationFrame(gen: 1, rev: 19, body: .askResolve(PresentationAskAnswer(id: "a1", owner: 3, button: nil))),
+        PresentationFrame(gen: 1, rev: 20, body: .askRejected(PresentationAskRef(id: "a1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 21, body: .askDismiss(PresentationAskRef(id: "a1", owner: 3))),
     ]
 
     @Test(arguments: frames)
