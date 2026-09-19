@@ -242,8 +242,9 @@ entries in `surfaces` report their own Boolean, while scratch and overlays omit 
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
 session, and never present after a relaunch because a remote session is not persisted),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
-`unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `mirror`) and `presenters` (origin session:
-`mirrors`, the count of streams mirroring it, one per attached row and not per Mac),
+`unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
+`presenters` (origin session: `mirrors`, the streams mirroring it without presenting, and `presenter: true`
+when one presents it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
 `splitAxis` (`vertical` for left/right or `horizontal` for top/bottom; omitted without a split),
@@ -636,7 +637,11 @@ listing, not the name, and resolves the remote again first, so a session that ha
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
 never restored after a relaunch. The attached row mirrors the origin session's status, `notify`
 notifications and HUD over a stream that reconnects by itself ([details](reference.md#restore)); read
-`presentation.state` in `tree`, and expect mirrored status and HUD to clear while it is down. Both run ssh non-interactively, so key-based auth must already work, and
+`presentation.state` in `tree`, and expect mirrored status and HUD to clear while it is down. One
+attached row per session holds the presenter role: an `ask open` or `session overlay open` newly aimed at
+the session on the origin is handed to it, the overlay's program still runs once on the origin, and a remote
+`overlay close` replies when the cancel is requested
+([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm
 has no CLI an ssh command can find. Every zmx command needs a running agterm.
 

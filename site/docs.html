@@ -2727,6 +2727,20 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               is never replaced by a mirrored one.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              One Mac attached to a session <em>presents</em> it, the first to ask while nobody does, and its row's
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">presentation</span> reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mode: presenter</span>. A question (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ask</span>) or a program overlay a
+              program then opens in that session is handed to the presenting Mac, where you are, and the answer or the program's exit status still
+              reaches the program on the other side. The overlay's program runs once, on the other Mac, inside an ssh terminal this
+              Mac opens for it. If this Mac refuses a question, it goes back to the other side; if it cannot show an overlay, the
+              overlay fails rather than opening over there. Closing such an overlay from a script asks for it to end, and its
+              result says how it did.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              While the stream is down the row says so and names the host. A question goes back to the other side, a finished
+              overlay held open with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> closes, and a running overlay keeps running until its program
+              ends. Retrying is automatic; close and reattach the session to retry at once.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               An attach joins as a follower, and pinned zmx has one leader per pane, so the pane arrives at the <em>other</em>
               machine's window size and ignores input until your first <em>classified</em> key — a printable character, Return, Tab or
               Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side,

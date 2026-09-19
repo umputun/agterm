@@ -958,22 +958,25 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `plugins/agterm/skills/agterm/reference.md`,
   `plugins/agterm/skills/agterm/examples.md`
 
-- [ ] extend control-api.md Remote sessions with the presenter, ask and overlay job contracts: the three
+- [x] extend control-api.md Remote sessions with the presenter, ask and overlay job contracts: the three
       ask transitions, the job outcomes, `launch-failed` in place of a local fallback, the uncovered origin,
       best-effort close and resize wording, the `text`/`copy` refusal for a remote overlay, the
       `presentation-lost` reason field, presentation loss ending held surfaces, and the row indicator with
       close-and-reattach as the manual recovery
-- [ ] document that a remote `overlay.close` reply means the cancel was requested, not that the program
+- [x] document that a remote `overlay.close` reply means the cancel was requested, not that the program
       ended, replacing the close help's "destroys it" wording for that case
-- [ ] document in `site/commands.html` and the bundled skill that a remote overlay's non-exit outcomes
+- [x] document in `site/commands.html` and the bundled skill that a remote overlay's non-exit outcomes
       (`launch-failed`, `canceled`, `unknown`) answer `overlay.result` as errors and make `--block` exit 1,
       and that `--block` polls the slot, so an overlay opened on it before the next poll answers for it
-- [ ] update the streaming hand-off statement in control-api.md to include the helper connection and the
+- [x] update the streaming hand-off statement in control-api.md to include the helper connection and the
       async remote close
-- [ ] mirror the new commands, arguments and read-back fields in `site/commands.html` and the bundled skill;
+- [x] mirror the new commands, arguments and read-back fields in `site/commands.html` and the bundled skill;
       update `site/docs.html`; touch `README.md` and `site/index.html` only where remote attach is described
-- [ ] no surface states a command total
-- [ ] move this plan to `docs/plans/completed/`
+- [x] no surface states a command total
+- [x] move this plan to `docs/plans/completed/`
+- ➕ `README.md` and `site/index.html` describe no remote attach, so they are unchanged; `site/llms.txt` gains
+  the asks and overlays on its remote-sessions line. The viewer's own `overlay.result` for a replica is
+  documented as its local ssh status, with the origin's as the authoritative answer
 
 ## Post-Completion
 

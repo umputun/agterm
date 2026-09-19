@@ -613,7 +613,7 @@ struct Session: ParsableCommand {
         }
 
         struct Close: RequestCommand {
-            static let configuration = CommandConfiguration(abstract: "Close the overlay terminal (destroys it).")
+            static let configuration = CommandConfiguration(abstract: "Close the overlay terminal (destroys it; for one shown on another Mac, requests its cancel).")
             @Option(name: .long, help: "Close that split pane's overlay (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
             var pane: String?
             @OptionGroup var target: TargetOptions

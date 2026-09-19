@@ -141,10 +141,13 @@ split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session, and never present after a relaunch because a remote session is never written to disk),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
-origin too old to stream, or `failed` with the reason in `error`, and `mode` is `mirror`; it says whether status, notifications
-and the HUD are being mirrored from the origin, never whether the panes' ssh connections are up),
-`presenters` (on an origin session: `mirrors`, how many streams mirror it, one per attached row and not
-per Mac; omitted when none does),
+origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
+row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
+never whether the panes' ssh connections are),
+`presenters` (on an origin session: `mirrors`, how many streams mirror it without presenting, one per
+attached row and not per Mac, and `presenter: true` when one presents it; omitted when none does),
+`remoteOverlays` (on an origin session: the overlay slots a presenting Mac holds, each `{pane?,
+sizePercent?}`, while the session itself stays uncovered here; omitted when none is held),
 `hasSplit` (whether a second pane exists at all, shown or hidden with ⌘D; omitted when there is none —
 read THIS to decide whether a session has a split, because a hidden split reports `split: false` while
 its pane stays alive, and it is present exactly when `splitRatio`/`splitFocused` can be),
@@ -184,8 +187,9 @@ tracks the latest update. `spinner` names the STYLE, a string, so a static panel
 session-wide placement omits it. `hud` and `overlay` are mutually exclusive because they share one slot, and a HUD reports `overlay`
 FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
 a message for one. No event announces a HUD; poll `tree` for it),
-`ask` (the pending terminal question as `{id, pane?}`, with `pane` omitted for session-wide placement;
-omitted when no terminal ask is pending), `scratch` (scratch shown), `flagged` (in the
+`ask` (the session's pending question as `{id, pane?, remote?, replica?}` (a terminal question, or one of
+either style handed over for a remote session), with `pane` omitted for session-wide placement, `remote: true` on an origin while the Mac presenting the session draws it, and
+`replica: true` on that Mac for the copy it draws; omitted when the session ask slot is empty), `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `context` (what the session is about — the `session context` value, persisted and
 omitted when unset), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
@@ -748,7 +752,8 @@ error keeps those names for compatibility.
   overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
   `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
   or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
-  resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
+  resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open, and
+  `the viewer showing this overlay is gone` for an overlay shown on another Mac whose stream has dropped. Returns the
   session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
   HUD a percent is accepted and re-flows its WIDTH (the panel re-flows and its `hud.sizePercent` reports the
   new value; `hud.heightPercent` does not move, the text wrapping at a fixed 60 columns rather than at the
@@ -757,20 +762,28 @@ error keeps those names for compatibility.
   re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
   `--pane` closes that split pane's overlay; omit it for the session-wide one. It also takes a HUD down,
-  as a courtesy — the slot is the same one.
+  as a courtesy — the slot is the same one. For an overlay shown on another Mac (see Remote sessions) the
+  reply means the cancel was REQUESTED, not that the program ended; `session overlay result` reports how
+  it ended.
 - `session overlay result [--pane left|right] [--target] [--window W]` — returns `result.exitCode` once
   the overlay has closed. Errors `overlay still running` while up, `no overlay result` if none ran.
   `--pane` reads that pane's overlay; omit it for the session-wide one. A HUD runs the app's own painter,
   not a caller's program, so there is no status to report and the session-wide arm errors
   `no overlay result: the slot holds a hud`; the `--pane` arm still reads the separate pane-overlay slot,
-  since HUD pane scope changes placement without changing slot ownership.
+  since HUD pane scope changes placement without changing slot ownership. For an overlay shown on another
+  Mac the result is readable once its job ends, even while a held `--wait` surface there keeps the slot or
+  a HUD opened here during the run holds it. A job with no exit code errors `overlay ended: launch-failed`,
+  `overlay ended: canceled` or `overlay ended: unknown` (its helper stopped reporting, which does not prove
+  the program stopped), and `open --block` exits 1 for it. `--block` polls the slot, so an overlay
+  opened on it before the next poll answers for it.
 - `session overlay copy [--pane left|right] [--target] [--window W]` — returns `result.text` with the
   selection made INSIDE the overlay. `session copy` cannot reach it: that one addresses the pane the overlay
   covers, so a selection the user made in the overlay reads as `no selection` there. Does NOT touch the
   system clipboard. `--pane` reads that pane's overlay; omit it for the session-wide one. Errors
   `no overlay` with nothing in the slot, `overlay not realized` in the moment after `open` before its
   terminal is up, `no selection` when nothing is selected, and
-  `no overlay to read: the slot holds a hud` for a HUD, whose text is agterm's own.
+  `no overlay to read: the slot holds a hud` for a HUD, whose text is agterm's own, and
+  `overlay is shown on another Mac` for one a presenting Mac draws.
 - `session overlay text [--all] [--lines N] [--pane left|right] [--target] [--window W]` — returns
   `result.text` with the overlay's terminal buffer. `session text` reads the surface UNDERNEATH — its
   `--pane right` returns the shell, not the program drawn over it. `--all` and `--lines N` mean what they do
@@ -1123,8 +1136,9 @@ including `{"result":"pending"}` with exit 1. `ask cancel ID [--window W]` cance
 returns `ok`; cancelling a retained finished result is a successful no-op. Both commands use the exact
 global id and reject a mismatched explicit window.
 
-Session nodes expose terminal asks as `ask: {id, pane?}`; `pane` follows the current left/right role and
-is omitted for session-wide placement. Top-level `askPending` is GUI-only. Resolution removes the field
+Session nodes expose terminal asks as `ask: {id, pane?}`, plus a handed-over ask of either style with
+`remote` or `replica` (see Remote sessions); `pane` follows the current left/right role and is omitted for
+session-wide placement. Top-level `askPending` is the window's GUI slot. Resolution removes the field
 for that slot. The raw open reply echoes `result.pane` for pane placement. The latest 32 finished results
 are retained across both styles, including after owner closure; pending requests are never evicted.
 App shutdown can interrupt polling. Ask emits no events.
@@ -1626,6 +1640,23 @@ beyond the `agtermctl` PATH precondition above. What to expect:
 - A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
   repeat of the same value included. A reconnect does not end it, even when the origin's status changed
   while the stream was down. Clearing it here gives the row back to the origin's status.
+- One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
+  whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect.
+  While a session has a presenter, an `ask open` or `session overlay open` newly aimed at it on the origin
+  is handed to the presenting Mac, and the caller on the origin gets the answer or the exit status as usual.
+- A handed-over ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on
+  screen), or one whose stream drops, goes back to the origin and waits there like a local one. If the
+  origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.
+- A handed-over overlay runs its program ONCE, on the origin, under an ssh terminal the presenting Mac
+  opens (`agtermctl session overlay run-job`, plumbing not meant to be typed). The origin's session stays
+  uncovered and its slot is reserved (`remoteOverlays`). An overlay the presenting Mac cannot show ends
+  `launch-failed` rather than opening on the origin. `session overlay close` requests the cancel, `resize`
+  answers `the viewer showing this overlay is gone` once its stream is, and `copy`/`text` refuse. The
+  presenting Mac's own `session overlay result` for it reports its local ssh status; ask the origin.
+- When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
+  and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
+- While the stream is not up the row's indicator says so and names the host. It retries on its own;
+  close and reattach the session to retry at once.
 
 `agtermctl zmx present SESSION` is the plumbing behind it: it opens the stream on the local socket and
 bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the origin; it is not meant to
@@ -1731,6 +1762,8 @@ a terminal surface's.
 `invalid scratch mode`, `session has no split` (focus, restore, or HUD update), `no selection` (copy),
 `overlay already open` /
 `no overlay` / `overlay still running` / `no overlay result` / `pane overlay already open` /
+`overlay ended: launch-failed|canceled|unknown` / `overlay is shown on another Mac` /
+`the viewer showing this overlay is gone` (an overlay shown on another Mac) /
 `pane not visible` (pane overlay or HUD open),
 `no hud` (session hud update/close with none up) /
 `hud pane must be left or right` (a HUD pane ID resolved to scratch) /

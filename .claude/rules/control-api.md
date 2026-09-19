@@ -155,7 +155,8 @@ renumbering. Do not reintroduce a count anywhere.
   `.split.close`, `.swap`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
-  `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.hud.open`, `.hud.update`, `.hud.close`
+  `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
+  `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
 - `quick`, `quick.type`, `quick.text`
@@ -668,8 +669,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Exit 0 means answered, including a No button; exit 3 means escaped, exit 2 means cancelled,
   and exit 1 means failure. `--no-block` prints `{"id":"…"}`.
   One-shot `ask result` also prints `pending` and exits 1 for it.
-- A session node exposes its terminal ask as `ask: {id, pane?}`; `pane` is the current left/right role
-  and is omitted for session-wide placement. Top-level `askPending` identifies the pending GUI ask.
+- A session node exposes its session-slot ask as `ask: {id, pane?, remote?, replica?}`: a local terminal
+  ask, or a handed-over ask of either style (see Remote sessions); `pane` is the current left/right role
+  and is omitted for session-wide placement. Top-level `askPending` identifies the window's pending GUI ask.
   Each field is omitted when its slot is empty. App shutdown can interrupt polling.
   Ask emits no events; result and tree polling are its explicit event exemption.
 
@@ -1108,10 +1110,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
   freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
   a second Mac.
-- Three commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
+- Four commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
-  `zmx.present` is a streaming hand-off: it is dispatched inline, its ordinary reply is written, and on ok
-  the descriptor passes to a `ControlStreamOwner` whose reader thread is the only one that closes it.
+  `zmx.present` and `session.overlay.job.run` are streaming hand-offs: each is dispatched inline, its
+  ordinary reply is written, and on ok the descriptor passes to a `ControlStreamOwner` whose reader thread
+  is the only one that closes it. A remote `overlay.close` does not leave the thread: it replies at once.
   Everything else stays inline, because dispatch
   refreshes the window cache in the same execution the fast path reads. Running an ssh inline instead
   makes `zmx tree <this machine>` DEADLOCK: the far side's own `agtermctl` waits in the backlog this
@@ -1192,6 +1195,47 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   row, and never gives up; 30 seconds without a frame counts as a failure against the origin's 10-second
   ping. One warning per failure episode or changed reason. A soft close stops the client and undo starts a
   fresh one.
+- A stream a viewer opens asks for the PRESENTER role. The origin grants it to one stream per session and
+  refuses the rest, which stay mirrors and ask again only on their own reconnect; an origin predating the
+  role answers mirror. The role goes with its stream. Read back the viewer's `presentation.mode` and the
+  origin's `presenters.presenter`. While a session has a presenter, a newly opened session-associated ask or
+  program overlay is handed to it; one already open stays where it is.
+- An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
+  a replica, `ask.replica`, whose answer carries only the button id and is checked against the stored
+  buttons. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
+  session or pane, which dismisses the replica. The viewer refusing it (its slot is taken, or a GUI target is
+  not on screen; a terminal replica for a hidden row waits hidden like a local one) or its stream being lost
+  hands it back: the origin owns it again as an ordinary ask, pending until its target is shown, and one it
+  cannot place ends `cancelled` with `reason: presentation-lost`, a field an older client ignores. A late
+  answer from the former presenter is refused.
+- An overlay handed over is a JOB. The origin reserves the slot, so the session stays uncovered here while
+  no second overlay opens on it, and the viewer opens an ordinary overlay running
+  `ssh -tt <origin> agtermctl session overlay run-job <job>`. That helper claims the job over
+  `session.overlay.job.run`, which is the claim itself: one winner against a 30-second launch deadline,
+  after which a late claim spawns nothing. The helper runs the program under the ssh terminal, in the cwd a
+  local overlay would get and with agterm's session variables over the environment and `TERM` the ssh
+  session gave the helper, and reports `started` and one outcome. The first outcome
+  wins: the exit code where a local overlay keeps one, or `launch-failed` (refused, or nothing claimed it in
+  time), `canceled` (closed, or the ssh went away) or `unknown` (the helper went away, or never reported
+  starting), which does not prove the program stopped. A refused open ends `launch-failed`; nothing falls back to a local overlay, since the caller's
+  program must run once.
+- `overlay.result` reads the slot. A non-exit outcome answers `overlay ended: <outcome>` as an error, so
+  `--block` exits 1 for it; `--block` polls the slot, so an overlay opened on it before the next poll
+  answers for it. The result is readable once the job ends, even while a held `--wait` surface on the viewer
+  keeps the slot or a HUD opened here during the run holds the session-wide slot. The viewer's own `overlay.result` for such an overlay reports its local ssh and
+  helper status; the origin's answer is the authoritative one.
+- `overlay.close` on a remote overlay replies once the cancel is REQUESTED, not once the program ended;
+  `overlay.result` reports how it ended. `overlay.resize` reaches only the stream the job was handed to and
+  answers `the viewer showing this overlay is gone` without it. Both are best effort: what the viewer applied
+  is not read back. `overlay.text` and `overlay.copy` refuse with `overlay is shown on another Mac`. Read the
+  reservation back as `remoteOverlays` (`pane`, `sizePercent`) on the origin's session node.
+- Losing the presenter ends its overlays for good: no later stream adopts one. An unclaimed job is cancelled,
+  a held surface's slot is freed, and a running job keeps its slot until its helper reports, which the
+  helper does when the ssh terminal goes. On the viewer a held surface closes at once and a running one
+  keeps its program and closes when its ssh ends, held or not. A session leaving either store, soft close
+  included, ends all of this before it goes, so undo brings back neither a reservation nor a replica.
+- A row whose stream is not up says so on its sidebar indicator, naming the host. Retrying is automatic;
+  closing and reattaching the session is the manual way to retry now.
 - The origin bounds each stream: 256 KiB a line checked before delivery, a bounded outbound queue whose
   overflow closes the subscriber, a hello deadline, and a drop when the source session leaves.
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
