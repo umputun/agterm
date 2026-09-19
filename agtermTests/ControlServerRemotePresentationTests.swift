@@ -164,7 +164,10 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     private final class Transport: RemotePresentationTransport {
         final class Link: RemotePresentationLink {
             var stopped = false
-            func send(_ line: Data) {}
+            var sent: [PresentationFrame.Body] = []
+            func send(_ line: Data) {
+                if let frame = try? PresentationCodec.decode(line.dropLast()) { sent.append(frame.body) }
+            }
             func stop() { stopped = true }
         }
 
@@ -225,6 +228,100 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         XCTAssertTrue(fix.session.hudActive)
         XCTAssertTrue(body(of: fix.session).contains("deploying"))
+    }
+
+    func testAHandedOverAskIsShownOnTheRowAndItsAnswerGoesBack() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let ask = PresentationAsk(PendingAsk(id: "a1", title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")]),
+                                  pane: nil, owner: 2)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(fix.session.askPending?.id, "a1")
+        XCTAssertTrue(fix.session.askReplica)
+        fix.session.resolveAsk(id: "a1", ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .askResolve(PresentationAskAnswer(id: "a1", owner: 2, button: "yes")))
+    }
+
+    func testAnAskTheRowCannotShowIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        fix.session.openAsk(PendingAsk(id: "local", title: "local", buttons: [ControlAskButton(id: "ok", label: "OK")]))
+
+        try transport.feed(.askRequest(PresentationAsk(PendingAsk(id: "a1", title: "deploy?",
+                                                                  buttons: [ControlAskButton(id: "yes", label: "Yes")]),
+                                                       pane: nil, owner: 2)), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: "a1", owner: 2)))
+        XCTAssertEqual(fix.session.askPending?.id, "local")
+    }
+
+    private func replica(_ style: ControlAskStyle) -> PresentationAsk {
+        PresentationAsk(PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")],
+                                   style: style), pane: nil, owner: 2)
+    }
+
+    private func unselect(_ fix: (server: ControlServer, store: AppStore, session: Session)) throws {
+        let other = try XCTUnwrap(fix.store.workspaces.flatMap(\.sessions).first { $0.id != fix.session.id })
+        fix.store.selectSession(other.id)
+    }
+
+    func testAGuiReplicaForARowNotSelectedIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try unselect(fix)
+        let ask = replica(.gui)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: ask.id, owner: 2)))
+        XCTAssertNil(fix.session.askPending)
+    }
+
+    func testAGuiReplicaUnderZoomIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        fix.store.selectSession(fix.session.id)
+        let windowID = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        zoom.set(.on, target: .session(fix.session.id, .primary))
+        let ask = replica(.gui)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: ask.id, owner: 2)))
+    }
+
+    func testAGuiReplicaUnderTheDashboardIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        fix.store.selectSession(fix.session.id)
+        let windowID = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        defer { DashboardControllerRegistry.shared.unregister(windowID) }
+        dashboard.open(members: [DashboardMember(session: fix.session.id, surface: .primary)])
+        let ask = replica(.gui)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: ask.id, owner: 2)))
+    }
+
+    func testATerminalReplicaForARowNotSelectedWaitsHiddenLikeALocalOne() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try unselect(fix)
+        let ask = replica(.terminal)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(fix.session.askPending?.id, ask.id)
+        XCTAssertTrue(fix.session.askReplica)
+        XCTAssertNotEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: ask.id, owner: 2)))
     }
 
     func testASoftCloseStopsTheClientAndUndoStartsAFreshOne() throws {

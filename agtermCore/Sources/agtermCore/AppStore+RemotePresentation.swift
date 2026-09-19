@@ -43,6 +43,38 @@ extension AppStore {
         guard state.connection == .connected, connection != .connected else { return }
         if state.statusBridged { setAgentIndicator(AgentIndicator(), forSession: id) }
         closeBridgedHud(forSession: id)
+        // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
+        if session.askReplica { session.releaseAsk() }
+    }
+
+    /// Shows an ask `id`'s origin handed over, in its own style over the mapped session or pane. `answer`
+    /// carries the outcome back: the button id alone, nil for Esc or Command-W, and a refusal when the
+    /// dialog is cancelled here. False when it cannot be shown, which the caller reports as a refusal.
+    public func presentReplicaAsk(_ ask: PresentationAsk, forSession id: UUID,
+                                  answer: @escaping @MainActor (PresentationFrame.Body) -> Void) -> Bool {
+        guard let session = session(withID: id), let binding = session.remotePresentation?.binding else { return false }
+        var paneIdentity: UUID?
+        if case .identity(let remote)? = ask.pane {
+            guard let local = binding.localPane(forRemote: remote), let role = session.paneRole(forIdentity: local),
+                  session.rendersPane(role) else { return false }
+            paneIdentity = local
+        }
+        let pending = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
+                                 defaultID: ask.defaultID, destructiveID: ask.destructiveID, style: ask.style,
+                                 align: ask.align, width: ask.width)
+        return session.openReplicaAsk(pending, paneIdentity: paneIdentity) { result in
+            switch result.result {
+            case .answered: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: result.id)))
+            case .escaped: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: nil)))
+            case .cancelled, .pending: answer(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)))
+            }
+        }
+    }
+
+    /// Takes a replica down without answering it, once its origin ended the ask.
+    public func dismissReplicaAsk(_ ref: PresentationAskRef, forSession id: UUID) {
+        guard let session = session(withID: id), session.askReplica, session.askPending?.id == ref.id else { return }
+        session.releaseAsk()
     }
 
     /// Records whether this Mac is the session's presenter or a mirror beside the origin.

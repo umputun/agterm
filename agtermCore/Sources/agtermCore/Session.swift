@@ -347,6 +347,11 @@ public final class Session: Identifiable {
     @ObservationIgnored var onRemoteAskEnded: (@MainActor (String) -> Void)?
 
     public var askPresentedRemotely: Bool { askRemoteOwner != nil }
+    /// Set on a viewer while the pending ask is a replica of one its origin handed over: drawn and answered
+    /// here, but owned and resolved on the origin, which is what the answer is sent to.
+    public private(set) var askReplica = false
+    /// Sends a replica's outcome to its origin. Run once when it resolves; a dismissal skips it.
+    @ObservationIgnored var onReplicaResolved: (@MainActor (ControlAskResult) -> Void)?
 
     /// The anchored pane's current role, nil for session-wide placement or a destroyed pane.
     public var askTargetPane: OverlayPane? {
@@ -363,6 +368,15 @@ public final class Session: Identifiable {
         return true
     }
 
+    /// Reserves the slot for a replica of an origin's ask, whose outcome goes to `resolved` instead of here.
+    func openReplicaAsk(_ ask: PendingAsk, paneIdentity: UUID?,
+                        resolved: @escaping @MainActor (ControlAskResult) -> Void) -> Bool {
+        guard openAsk(ask, paneIdentity: paneIdentity) else { return false }
+        askReplica = true
+        onReplicaResolved = resolved
+        return true
+    }
+
     /// Takes a handed-over ask back to be drawn here, so an answer from its former presenter is stale.
     public func takeAskBack() {
         askRemoteOwner = nil
@@ -373,6 +387,8 @@ public final class Session: Identifiable {
     public func releaseAsk() {
         askPending = nil
         askPaneIdentity = nil
+        askReplica = false
+        onReplicaResolved = nil
         takeAskBack()
     }
 
@@ -384,10 +400,14 @@ public final class Session: Identifiable {
             AskRegistry.shared.retain(id: id, result: result, window: windowID)
         }
         let ended = onRemoteAskEnded
+        let replicaResolved = onReplicaResolved
         askPending = nil
         askPaneIdentity = nil
+        askReplica = false
+        onReplicaResolved = nil
         takeAskBack()
         ended?(id)
+        replicaResolved?(result)
         return true
     }
 

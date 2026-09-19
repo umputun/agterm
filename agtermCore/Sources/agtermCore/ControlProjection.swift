@@ -93,11 +93,14 @@ public struct ControlSessionAsk: Codable, Sendable, Equatable {
     public let pane: String?
     /// True while a viewer presenting the session draws the ask; omitted when this Mac does.
     public let remote: Bool?
+    /// True on a viewer for a replica of an ask its origin owns; the id is the origin's.
+    public let replica: Bool?
 
-    public init(id: String, pane: String? = nil, remote: Bool? = nil) {
+    public init(id: String, pane: String? = nil, remote: Bool? = nil, replica: Bool? = nil) {
         self.id = id
         self.pane = pane
         self.remote = remote
+        self.replica = replica
     }
 }
 

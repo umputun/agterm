@@ -39,6 +39,9 @@ struct RemotePresentationClientTests {
         var notifies: [PresentationNotify] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
+        var asks: [PresentationAsk] = []
+        var dismissals: [PresentationAskRef] = []
+        var showsAsks = true
         var warnings: [String] = []
     }
 
@@ -64,6 +67,11 @@ struct RemotePresentationClientTests {
             notify: { recorder.notifies.append($0) },
             connection: { recorder.connections.append($0) },
             mode: { recorder.modes.append($0) },
+            askRequest: {
+                recorder.asks.append($0)
+                return recorder.showsAsks
+            },
+            askDismiss: { recorder.dismissals.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -146,6 +154,64 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.presenterRefused, gen: 8, rev: 2))
 
         #expect(recorder.modes.last == .mirror)
+    }
+
+    static let handedOver = PresentationAsk(PendingAsk(id: "a1", title: "deploy?",
+                                                       buttons: [ControlAskButton(id: "yes", label: "Yes")]),
+                                            pane: nil, owner: 2)
+
+    @Test func aHandedOverAskReachesTheAppAndNothingIsSentBack() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.askRequest(Self.handedOver), rev: 2))
+
+        #expect(recorder.asks == [Self.handedOver])
+        #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
+    }
+
+    @Test func anAskTheAppCannotShowIsRefused() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        recorder.showsAsks = false
+
+        transport.deliver(line(.askRequest(Self.handedOver), rev: 2))
+
+        #expect(transport.links[0].sent.map(\.body).last == .askRejected(PresentationAskRef(id: "a1", owner: 2)))
+    }
+
+    @Test func theOriginsDismissalReachesTheApp() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.askDismiss(PresentationAskRef(id: "a1", owner: 2)), rev: 2))
+
+        #expect(recorder.dismissals == [PresentationAskRef(id: "a1", owner: 2)])
+    }
+
+    @Test func anAnswerGoesOutOnTheLink() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        let answer = PresentationFrame.Body.askResolve(PresentationAskAnswer(id: "a1", owner: 2, button: "yes"))
+
+        client.answer(answer)
+
+        #expect(transport.links[0].sent.map(\.body).last == answer)
+    }
+
+    @Test func anAnswerWithTheStreamDownIsDropped() {
+        let client = makeClient()
+        client.start()
+        transport.close("exit 255")
+        let sent = transport.links[0].sent.count
+
+        client.answer(.askResolve(PresentationAskAnswer(id: "a1", owner: 2, button: "yes")))
+
+        #expect(transport.links[0].sent.count == sent)
     }
 
     @Test func losingTheStreamDropsTheRoleAndAReconnectAsksAgain() {

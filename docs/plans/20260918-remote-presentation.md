@@ -703,15 +703,23 @@ Slice 1 ends here and ships as its own PR.
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationClientTests.swift`
 - Modify: `agtermTests/ControlServerAskTests.swift`
 
-- [ ] write failing tests: the viewer answers `ask.accepted` only after its dialog is reserved; occupancy or
+- [x] write failing tests: the viewer answers `ask.accepted` only after its dialog is reserved; occupancy or
       a missing visible pane answers `ask.rejected`; `ask.dismiss` and a revoked generation hide the dialog
       without resolving; a button travels as an id only; Esc and Command-W send the escaped outcome; the
       replica appears on the viewer's `ask` node with `replica: true`; losing the stream dismisses a shown
       replica at once without resolving it and with no reconnect
-- [ ] present the remote ask in its own style through the existing ask UI against the mapped local session
+- [x] present the remote ask in its own style through the existing ask UI against the mapped local session
       and pane
-- [ ] send `ask.resolve` with the presenter generation and tear the dialog down on dismiss
-- [ ] run the targeted tests - must pass before Task 16
+- [x] send `ask.resolve` with the presenter generation and tear the dialog down on dismiss
+- [x] run the targeted tests - must pass before Task 16
+- ➕ the viewer shows a replica of either style in its session slot, in the ask's own appearance over the
+  mapped session or pane: `AskDialogView` already styles by `ask.style`, and a targeted GUI ask is anchored
+  to that same session or pane on the origin. It takes session-slot input rules, not the window modal slot.
+  A GUI replica keeps the local GUI rule and is refused unless its row is selected with no zoom target and
+  no open dashboard; a terminal replica, like a local terminal ask, waits hidden until its row is shown
+- ➕ nothing is sent on acceptance; a refusal is `ask.rejected`, sent when the slot is taken or the mapped
+  pane is not shown, and also when the replica is cancelled here (session or pane teardown), so the origin
+  takes the ask back rather than waiting on a dialog nobody can see
 
 ### Task 16: Overlay dispatch split, job table and job handle for local overlays
 

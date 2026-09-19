@@ -320,7 +320,8 @@ public final class AppStore {
                                           paneOverlays: paneOverlays(session), hud: hudNode(session),
                                           ask: session.askPending.map {
                                               ControlSessionAsk(id: $0.id, pane: session.askTargetPane?.rawValue,
-                                                                remote: session.askPresentedRemotely ? true : nil)
+                                                                remote: session.askPresentedRemotely ? true : nil,
+                                                                replica: session.askReplica ? true : nil)
                                           },
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,

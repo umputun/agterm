@@ -68,9 +68,23 @@ extension ControlServer {
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
             mode: { [weak self] mode in self?.library.store(forSession: id)?.setRemoteMode(mode, forSession: id) },
+            askRequest: { [weak self] ask in self?.showReplicaAsk(ask, forSession: id) ?? false },
+            askDismiss: { [weak self] ref in self?.library.store(forSession: id)?.dismissReplicaAsk(ref, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public) is down: \(reason, privacy: .public)")
             })
+    }
+
+    /// Shows an ask `id`'s origin handed over. A GUI one keeps the local rule of refusing a target that is not
+    /// on screen; a terminal one, like a local terminal ask, waits hidden until its session is shown.
+    private func showReplicaAsk(_ ask: PresentationAsk, forSession id: UUID) -> Bool {
+        guard let store = library.store(forSession: id) else { return false }
+        if ask.style == .gui {
+            guard let windowID = library.windowID(for: store), guiTargetShown(id, in: store, windowID: windowID) else {
+                return false
+            }
+        }
+        return store.presentReplicaAsk(ask, forSession: id) { [weak self] body in self?.remoteClients[id]?.answer(body) }
     }
 
     private func startRemoteTick() {

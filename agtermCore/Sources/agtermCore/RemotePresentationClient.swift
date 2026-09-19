@@ -25,6 +25,9 @@ public struct RemotePresentationEffects {
     public var notify: @MainActor (PresentationNotify) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
     public var mode: @MainActor (PresentationMode) -> Void
+    /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
+    public var askRequest: @MainActor (PresentationAsk) -> Bool
+    public var askDismiss: @MainActor (PresentationAskRef) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -33,6 +36,8 @@ public struct RemotePresentationEffects {
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
+                askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
+                askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -40,6 +45,8 @@ public struct RemotePresentationEffects {
         self.notify = notify
         self.connection = connection
         self.mode = mode
+        self.askRequest = askRequest
+        self.askDismiss = askDismiss
         self.warn = warn
     }
 }
@@ -109,6 +116,13 @@ public final class RemotePresentationClient {
         dropLink()
     }
 
+    /// Sends what this Mac answered about work the origin handed over. Dropped with no link: the origin
+    /// takes that work back when the stream goes.
+    public func answer(_ body: PresentationFrame.Body) {
+        guard let link else { return }
+        send(body, on: link)
+    }
+
     /// Reconnects when a retry is due and drops a link that has gone quiet.
     public func tick() {
         guard running else { return }
@@ -167,7 +181,10 @@ public final class RemotePresentationClient {
         case .hello(let answer) where answer.mode == .presenter: send(.presenterAcquire, on: link)
         case .presenterGranted: report(.presenter)
         case .presenterRefused: report(.mirror)
-        case .hello, .ack, .presenterAcquire, .askRequest, .askResolve, .askRejected, .askDismiss, .unknown: break
+        case .askRequest(let ask):
+            if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
+        case .askDismiss(let ref): effects.askDismiss(ref)
+        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .unknown: break
         }
     }
 

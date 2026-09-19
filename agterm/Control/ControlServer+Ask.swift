@@ -138,12 +138,17 @@ extension ControlServer {
 
     /// Whether a GUI ask anchored to `session` could be shown now: the rule `presentAsk` applies at open.
     private func guiAskFits(_ session: Session, in store: AppStore, windowID: UUID) -> Bool {
-        guard store.selectedSessionID == session.id,
-              TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil,
-              DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true else { return false }
+        guard guiTargetShown(session.id, in: store, windowID: windowID) else { return false }
         guard session.askPaneIdentity != nil else { return true }
         guard let pane = session.askTargetPane else { return false }
         return session.rendersPane(pane)
+    }
+
+    /// Whether `sessionID` is on screen for a GUI ask: selected, with no zoom target and no dashboard over it.
+    func guiTargetShown(_ sessionID: UUID, in store: AppStore, windowID: UUID) -> Bool {
+        store.selectedSessionID == sessionID
+            && TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil
+            && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
     }
 
     /// Applies what a session's presenter sent about an ask it was handed.

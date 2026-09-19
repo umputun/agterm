@@ -261,6 +261,122 @@ struct RemotePresentationStateTests {
         #expect(!store.snapshot().workspaces.flatMap(\.sessions).contains { $0.id == session.id })
     }
 
+    private func handedOver(pane: PresentationPane? = nil) -> PresentationAsk {
+        PresentationAsk(PendingAsk(id: UUID().uuidString, title: "deploy?",
+                                   buttons: [ControlAskButton(id: "yes", label: "Yes"), ControlAskButton(id: "no", label: "No")]),
+                        pane: pane, owner: 4)
+    }
+
+    @Test func aHandedOverAskIsShownOverTheMappedPaneAsAReplica() throws {
+        let (store, session) = try attached()
+        let ask = handedOver(pane: .identity(Self.remoteRight))
+
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { _ in })
+
+        #expect(session.askPending?.id == ask.id)
+        #expect(session.askPaneIdentity == session.splitPaneIdentity)
+        #expect(session.askReplica)
+        #expect(store.controlTree().workspaces[0].sessions[0].ask == ControlSessionAsk(id: ask.id, pane: "right", replica: true))
+    }
+
+    @Test func anOccupiedSlotRefusesTheReplica() throws {
+        let (store, session) = try attached()
+        session.openAsk(PendingAsk(id: "local", title: "local", buttons: [ControlAskButton(id: "ok", label: "OK")]))
+
+        #expect(!store.presentReplicaAsk(handedOver(), forSession: session.id) { _ in })
+        #expect(session.askPending?.id == "local")
+    }
+
+    @Test(arguments: [false, true])
+    func aPaneNotShownHereRefusesTheReplica(_ unmapped: Bool) throws {
+        let (store, session) = try attached()
+        if !unmapped { session.isSplit = false }
+
+        let pane = PresentationPane.identity(unmapped ? UUID() : Self.remoteRight)
+        #expect(!store.presentReplicaAsk(handedOver(pane: pane), forSession: session.id) { _ in })
+        #expect(session.askPending == nil)
+    }
+
+    @Test func anAnswerSendsTheButtonIdAlone() throws {
+        let (store, session) = try attached()
+        let ask = handedOver()
+        var sent: [PresentationFrame.Body] = []
+        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+
+        session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "no", label: "No", index: 1))
+
+        #expect(sent == [.askResolve(PresentationAskAnswer(id: ask.id, owner: 4, button: "no"))])
+        #expect(session.askPending == nil)
+    }
+
+    @Test func aDismissalWithEscSendsNoButton() throws {
+        let (store, session) = try attached()
+        let ask = handedOver()
+        var sent: [PresentationFrame.Body] = []
+        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+
+        session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
+
+        #expect(sent == [.askResolve(PresentationAskAnswer(id: ask.id, owner: 4, button: nil))])
+    }
+
+    @Test func aCancelHereRefusesTheAskSoTheOriginTakesItBack() throws {
+        let (store, session) = try attached()
+        let ask = handedOver()
+        var sent: [PresentationFrame.Body] = []
+        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+
+        session.cancelPendingAsk()
+
+        #expect(sent == [.askRejected(PresentationAskRef(id: ask.id, owner: 4))])
+    }
+
+    @Test func theOriginsDismissalTakesTheReplicaDownWithoutAnswering() throws {
+        let (store, session) = try attached()
+        let ask = handedOver()
+        var sent: [PresentationFrame.Body] = []
+        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+
+        store.dismissReplicaAsk(PresentationAskRef(id: ask.id, owner: 4), forSession: session.id)
+
+        #expect(session.askPending == nil)
+        #expect(!session.askReplica)
+        #expect(sent.isEmpty)
+    }
+
+    @Test func aDismissalNamingAnotherAskLeavesTheReplica() throws {
+        let (store, session) = try attached()
+        let ask = handedOver()
+        store.presentReplicaAsk(ask, forSession: session.id) { _ in }
+
+        store.dismissReplicaAsk(PresentationAskRef(id: "other", owner: 4), forSession: session.id)
+
+        #expect(session.askPending?.id == ask.id)
+    }
+
+    @Test func losingTheStreamTakesTheReplicaDownWithoutAnswering() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        let ask = handedOver()
+        var sent: [PresentationFrame.Body] = []
+        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+
+        store.setRemoteConnection(.failed("exit 255"), forSession: session.id)
+
+        #expect(session.askPending == nil)
+        #expect(sent.isEmpty)
+    }
+
+    @Test func losingTheStreamLeavesAnAskOfThisMacsOwn() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        session.openAsk(PendingAsk(id: "local", title: "local", buttons: [ControlAskButton(id: "ok", label: "OK")]))
+
+        store.setRemoteConnection(.failed("exit 255"), forSession: session.id)
+
+        #expect(session.askPending?.id == "local")
+    }
+
     @Test func aSessionWithNoBindingIgnoresMirroredState() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
