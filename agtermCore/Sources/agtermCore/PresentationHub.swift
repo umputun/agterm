@@ -43,7 +43,7 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify"]
+    public static let supportedKinds = ["status", "hud", "notify", "context"]
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date

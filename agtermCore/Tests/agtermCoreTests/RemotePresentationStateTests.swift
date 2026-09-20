@@ -7,8 +7,8 @@ struct RemotePresentationStateTests {
     static let remoteLeft = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000001")!
     static let remoteRight = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
 
-    private func attached(version: Int? = 1, split: Bool = true) throws -> (AppStore, Session) {
-        let store = makeStore()
+    private func attached(version: Int? = 1, split: Bool = true, store: AppStore? = nil) throws -> (AppStore, Session) {
+        let store = store ?? makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", remoteHost: "buildbox"))
         if split { store.toggleSplit(session.id) }
@@ -17,6 +17,11 @@ struct RemotePresentationStateTests {
         store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: daemons,
                                        presentationVersion: version), forSession: session.id)
         return (store, session)
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private(set) var isSet = false
+        func set() { isSet = true }
     }
 
     private func status(_ status: AgentStatus, pane: PresentationPane?) -> PresentationStatus {
@@ -188,6 +193,138 @@ struct RemotePresentationStateTests {
         store.applyRemoteStatus(status(.completed, pane: nil), forSession: session.id)
 
         #expect(session.agentIndicator.status == .completed)
+    }
+
+    @Test func aMirroredContextShowsOnARowWithNoneOfItsOwn() throws {
+        let (store, session) = try attached()
+
+        store.applyRemoteContext("PR #517", forSession: session.id)
+
+        #expect(session.effectiveContext == "PR #517")
+        #expect(session.context == nil)
+    }
+
+    @Test func aContextSetHereWinsOverTheMirroredOne() throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("origin", forSession: session.id)
+
+        store.setContext("local", forSession: session.id)
+
+        #expect(session.effectiveContext == "local")
+    }
+
+    @Test func clearingTheLocalContextRevealsWhatTheOriginSentMeanwhile() throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("first", forSession: session.id)
+        store.setContext("local", forSession: session.id)
+        store.applyRemoteContext("second", forSession: session.id)
+
+        store.setContext(nil, forSession: session.id)
+
+        #expect(session.effectiveContext == "second")
+    }
+
+    @Test func anOriginClearUnderALocalContextIsRemembered() throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("origin", forSession: session.id)
+        store.setContext("local", forSession: session.id)
+        store.applyRemoteContext(nil, forSession: session.id)
+
+        store.setContext(nil, forSession: session.id)
+
+        #expect(session.effectiveContext == nil)
+    }
+
+    @Test func settingTheSameTextAsTheMirrorStillMakesALocalOverride() throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("same", forSession: session.id)
+
+        #expect(store.setContext("same", forSession: session.id) == true)
+        store.applyRemoteContext("changed", forSession: session.id)
+
+        #expect(session.effectiveContext == "same")
+    }
+
+    @Test func losingTheStreamWithdrawsTheMirroredContextAndKeepsALocalOne() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        store.applyRemoteContext("origin", forSession: session.id)
+        store.setContext("local", forSession: session.id)
+
+        store.setRemoteConnection(.connecting, forSession: session.id)
+        store.setContext(nil, forSession: session.id)
+
+        #expect(session.effectiveContext == nil)
+    }
+
+    @Test func aMirroredContextIsIgnoredOnALocalSession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
+
+        store.applyRemoteContext("origin", forSession: session.id)
+
+        #expect(session.effectiveContext == nil)
+    }
+
+    @Test func theTreeReportsTheEffectiveContext() throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("origin", forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+
+        #expect(node.context == "origin")
+    }
+
+    @Test func aMirroredContextInvalidatesAnObserverOfTheEffectiveValue() throws {
+        let (store, session) = try attached()
+        let invalidated = Flag()
+        withObservationTracking { _ = session.effectiveContext } onChange: { invalidated.set() }
+
+        store.applyRemoteContext("origin", forSession: session.id)
+
+        #expect(invalidated.isSet)
+    }
+
+    @Test func contextEventsFollowOnlyTheEffectiveValue() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var events: [ControlEventKind] = []
+        let store = AppStore(persistence: PersistenceStore(directory: directory),
+                             controlEventSink: { events.append($0.kind) }, paneFinalizer: nil)
+        let (_, session) = try attached(store: store)
+        store.setRemoteConnection(.connected, forSession: session.id)
+        events.removeAll()
+
+        store.applyRemoteContext("origin", forSession: session.id)
+        #expect(events == [.treeChanged])
+        events.removeAll()
+        store.applyRemoteContext("origin", forSession: session.id)
+        store.setContext("origin", forSession: session.id)
+        store.applyRemoteContext("new origin", forSession: session.id)
+        #expect(events.isEmpty)
+
+        store.setContext(nil, forSession: session.id)
+        #expect(events == [.treeChanged])
+        events.removeAll()
+        store.setRemoteConnection(.failed("offline"), forSession: session.id)
+        #expect(events == [.treeChanged])
+        #expect(session.effectiveContext == nil)
+    }
+
+    @Test func mirroredContextUpdatesAndDisconnectNeverSave() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AppStore(persistence: PersistenceStore(directory: directory), paneFinalizer: nil)
+        let (_, session) = try attached(store: store)
+        store.setRemoteConnection(.connected, forSession: session.id)
+        let snapshot = directory.appendingPathComponent("workspaces.json")
+        try FileManager.default.removeItem(at: snapshot)
+
+        store.applyRemoteContext("origin", forSession: session.id)
+        #expect(!FileManager.default.fileExists(atPath: snapshot.path))
+        store.setRemoteConnection(.connecting, forSession: session.id)
+        #expect(!FileManager.default.fileExists(atPath: snapshot.path))
     }
 
     @Test func losingTheStreamClearsTheMirroredStatus() throws {

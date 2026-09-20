@@ -22,9 +22,11 @@ extension AppStore {
     @discardableResult
     public func setContext(_ context: String?, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), session.context != context else { return false }
+        let previous = session.effectiveContext
         session.context = context
         save()
-        scheduleTreeChanged()
+        presentationHub?.publish(.context(context), session: id)
+        if previous != session.effectiveContext { scheduleTreeChanged() }
         return true
     }
 

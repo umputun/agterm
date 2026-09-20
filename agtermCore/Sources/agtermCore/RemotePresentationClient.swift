@@ -24,6 +24,7 @@ public struct RemotePresentationEffects {
     public var hud: @MainActor (PresentationHud?) -> Void
     public var notify: @MainActor (PresentationNotify) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
+    public var context: @MainActor (String?) -> Void
     public var mode: @MainActor (PresentationMode) -> Void
     /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
     public var askRequest: @MainActor (PresentationAsk) -> Bool
@@ -39,6 +40,7 @@ public struct RemotePresentationEffects {
                 hud: @escaping @MainActor (PresentationHud?) -> Void,
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
+                context: @escaping @MainActor (String?) -> Void = { _ in },
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
                 askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
@@ -51,6 +53,7 @@ public struct RemotePresentationEffects {
         self.hud = hud
         self.notify = notify
         self.connection = connection
+        self.context = context
         self.mode = mode
         self.askRequest = askRequest
         self.askDismiss = askDismiss
@@ -183,7 +186,9 @@ public final class RemotePresentationClient {
             report(.connected)
             effects.snapshotStatus(snapshot.status)
             effects.hud(snapshot.hud)
+            effects.context(snapshot.context)
         case .status(let status): effects.status(status)
+        case .context(let context): effects.context(context)
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
         case .ping: send(.ack, on: link)

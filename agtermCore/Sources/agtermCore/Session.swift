@@ -145,10 +145,11 @@ public final class Session: Identifiable {
     /// workspace move.
     public var flagged: Bool = false
 
-    /// What the session is FOR, set only over `session.context` and shown in the title bar. Durable purpose
-    /// held until an explicit clear, never a claim about current activity — nothing expires it and no command
-    /// exit drops it. Persisted; validated by `validateContext` before it lands here.
+    /// Local context, persisted for local sessions; clearing reveals any mirrored context.
     public var context: String?
+    /// Ephemeral origin context, observed independently of the stream's bookkeeping.
+    public internal(set) var mirroredContext: String?
+    public var effectiveContext: String? { context ?? mirroredContext }
 
     /// Changes only when one live primary-slot surface replaces another; SwiftUI hosts fold it into their
     /// identity, so lazy nil→first creation stays at zero while split-survivor promotion remounts the view.

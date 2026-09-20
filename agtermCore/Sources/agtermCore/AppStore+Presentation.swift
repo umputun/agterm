@@ -17,7 +17,7 @@ extension AppStore {
     public func presentationSnapshot(forSession id: UUID, now: Date = Date()) -> PresentationSnapshot {
         guard let session = session(withID: id) else { return PresentationSnapshot(status: nil, hud: nil) }
         return PresentationSnapshot(status: presentationStatus(of: session),
-                                    hud: presentationHud(of: session, now: now))
+                                    hud: presentationHud(of: session, now: now), context: session.context)
     }
 
     /// Publishes the session's live HUD to attached viewers. Called once its body is on disk, never before:

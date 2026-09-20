@@ -49,6 +49,9 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 25, body: .overlayClose(PresentationOverlayChange(job: "j1"))),
         PresentationFrame(gen: 1, rev: 26, body: .overlayResize(PresentationOverlayChange(job: "j1", sizePercent: 40))),
         PresentationFrame(gen: 1, rev: 27, body: .overlayClosed(PresentationOverlayChange(job: "j1"))),
+        PresentationFrame(gen: 1, rev: 28, body: .context("PR #517")),
+        PresentationFrame(gen: 1, rev: 29, body: .context(nil)),
+        PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))),
     ]
 
     @Test(arguments: frames)
@@ -65,6 +68,13 @@ struct PresentationFramesTests {
 
         #expect(try PresentationCodec.decode(line) == PresentationFrame(gen: 3, rev: 12,
                                                                         body: .unknown("future.kind")))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutContextDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{}}"#.utf8)
+
+        #expect(try PresentationCodec.decode(line) == PresentationFrame(
+            gen: 1, rev: 1, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: nil))))
     }
 
     @Test func anOversizeLineIsRefusedBeforeDecoding() {

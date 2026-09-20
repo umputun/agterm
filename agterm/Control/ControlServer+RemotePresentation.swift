@@ -67,6 +67,9 @@ extension ControlServer {
             connection: { [weak self] connection in
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
+            context: { [weak self] context in
+                self?.library.store(forSession: id)?.applyRemoteContext(context, forSession: id)
+            },
             mode: { [weak self] mode in self?.library.store(forSession: id)?.setRemoteMode(mode, forSession: id) },
             askRequest: { [weak self] ask in self?.showReplicaAsk(ask, forSession: id) ?? false },
             askDismiss: { [weak self] ref in self?.library.store(forSession: id)?.dismissReplicaAsk(ref, forSession: id) },

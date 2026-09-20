@@ -10,6 +10,14 @@ extension AppStore {
         session(withID: id)?.remotePresentation = RemotePresentationState(binding: binding)
     }
 
+    /// Keeps origin updates even while a local override hides them.
+    public func applyRemoteContext(_ context: String?, forSession id: UUID) {
+        guard let session = session(withID: id), session.remotePresentation != nil else { return }
+        let previous = session.effectiveContext
+        session.mirroredContext = context
+        if previous != session.effectiveContext { scheduleTreeChanged() }
+    }
+
     /// Applies the origin's status, nil for idle. Bypasses `applyControlStatus`: that rule arbitrates
     /// between panes writing locally, and would refuse a clear the origin already accepted.
     public func applyRemoteStatus(_ status: PresentationStatus?, forSession id: UUID) {
@@ -41,6 +49,7 @@ extension AppStore {
         guard let session = session(withID: id), let state = session.remotePresentation else { return }
         session.remotePresentation?.connection = connection
         guard state.connection == .connected, connection != .connected else { return }
+        applyRemoteContext(nil, forSession: id)
         if state.statusBridged { setAgentIndicator(AgentIndicator(), forSession: id) }
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it

@@ -284,7 +284,7 @@ struct TitlebarLabel: View {
                 workspaceName: workspace?.name,
                 sessionName: showsSessionName ? (store.activeSession?.displayName ?? "Agterm") : nil,
                 windowName: showsWindowName ? library.customWindowName(for: windowID) : nil,
-                context: showsContext ? store.activeSession?.context : nil,
+                context: showsContext ? store.activeSession?.effectiveContext : nil,
                 detail: store.activeSession?.subtitleDetail ?? "",
                 remoteHost: showsRemoteHost ? store.activeSession?.remoteHost : nil
             ),

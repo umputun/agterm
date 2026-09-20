@@ -197,10 +197,12 @@ public struct PresentationOverlayChange: Codable, Equatable, Sendable {
 public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var status: PresentationStatus?
     public var hud: PresentationHud?
+    public var context: String?
 
-    public init(status: PresentationStatus?, hud: PresentationHud?) {
+    public init(status: PresentationStatus?, hud: PresentationHud?, context: String? = nil) {
         self.status = status
         self.hud = hud
+        self.context = context
     }
 }
 
@@ -213,6 +215,7 @@ public struct PresentationFrame: Equatable, Sendable {
         case ack
         case snapshot(PresentationSnapshot)
         case status(PresentationStatus?)
+        case context(String?)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
@@ -243,6 +246,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .ack: return "ack"
             case .snapshot: return "snapshot"
             case .status: return "status"
+            case .context: return "context"
             case .hud: return "hud"
             case .notify: return "notify"
             case .presenterAcquire: return "presenter.acquire"
@@ -275,7 +279,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, hud, notify, ask, overlay
+        case kind, gen, rev, hello, snapshot, status, context, hud, notify, ask, overlay
     }
 
     public init(from decoder: Decoder) throws {
@@ -289,6 +293,7 @@ extension PresentationFrame: Codable {
         case "ack": body = .ack
         case "snapshot": body = .snapshot(try container.decode(PresentationSnapshot.self, forKey: .snapshot))
         case "status": body = .status(try container.decodeIfPresent(PresentationStatus.self, forKey: .status))
+        case "context": body = .context(try container.decodeIfPresent(String.self, forKey: .context))
         case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
         case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
         case "presenter.acquire": body = .presenterAcquire
@@ -317,6 +322,7 @@ extension PresentationFrame: Codable {
         case .hello(let hello): try container.encode(hello, forKey: .hello)
         case .snapshot(let snapshot): try container.encode(snapshot, forKey: .snapshot)
         case .status(let status): try container.encodeIfPresent(status, forKey: .status)
+        case .context(let context): try container.encodeIfPresent(context, forKey: .context)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)

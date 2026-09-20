@@ -1487,6 +1487,10 @@
                 and follows the session and window names on one line in compact mode, where a long value truncates before the
                 names do. Settings ▸ Interface ▸ Title Bar ▸ "Session context" hides it without clearing it. A set or clear
                 that changes the value emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span>.
+                A session attached from another Mac also shows that Mac's context: a value set here wins over it, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> here removes only the local value. The mirrored
+                value is never saved and goes when the stream drops, and the event follows what is shown, so setting the text
+                already on screen emits nothing.
               </p>
             </div>
 

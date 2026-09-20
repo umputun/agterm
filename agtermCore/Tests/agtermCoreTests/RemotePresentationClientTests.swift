@@ -36,6 +36,7 @@ struct RemotePresentationClientTests {
         var statuses: [PresentationStatus?] = []
         var snapshotStatuses: [PresentationStatus?] = []
         var huds: [PresentationHud?] = []
+        var contexts: [String?] = []
         var notifies: [PresentationNotify] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
@@ -70,6 +71,7 @@ struct RemotePresentationClientTests {
             hud: { recorder.huds.append($0) },
             notify: { recorder.notifies.append($0) },
             connection: { recorder.connections.append($0) },
+            context: { recorder.contexts.append($0) },
             mode: { recorder.modes.append($0) },
             askRequest: {
                 recorder.asks.append($0)
@@ -108,6 +110,27 @@ struct RemotePresentationClientTests {
         #expect(hello.body == .hello(PresentationHello(version: PresentationCodec.version,
                                                        kinds: PresentationHub.supportedKinds, mode: .presenter)))
         #expect(recorder.connections == [.connecting])
+    }
+
+    @Test func theSnapshotsContextIsAppliedThenEachChangeBehindIt() {
+        let client = makeClient()
+        client.start()
+
+        connect(client, snapshot: PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))
+        transport.deliver(line(.context("PR #518"), rev: 2))
+        transport.deliver(line(.context(nil), rev: 3))
+
+        #expect(recorder.contexts == ["PR #517", "PR #518", nil])
+    }
+
+    @Test func aLaterSnapshotWithoutContextClearsTheMirror() {
+        let client = makeClient()
+        client.start()
+        connect(client, snapshot: PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))
+
+        transport.deliver(line(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 2))
+
+        #expect(recorder.contexts == ["PR #517", nil])
     }
 
     @Test func anOriginOfferingTheRoleIsAskedForIt() {

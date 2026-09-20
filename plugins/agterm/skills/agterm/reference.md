@@ -190,8 +190,8 @@ a message for one. No event announces a HUD; poll `tree` for it),
 `ask` (the session's pending question as `{id, pane?, remote?, replica?}` (a terminal question, or one of
 either style handed over for a remote session), with `pane` omitted for session-wide placement, `remote: true` on an origin while the Mac presenting the session draws it, and
 `replica: true` on that Mac for the copy it draws; omitted when the session ask slot is empty), `scratch` (scratch shown), `flagged` (in the
-flagged working-set), `context` (what the session is about — the `session context` value, persisted and
-omitted when unset), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
+flagged working-set), `context` (what the session is about — the `session context` value, or on an attached row without
+one the origin's mirrored context; omitted when neither is set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
 as `status`, so it is never reported without a `status`), `statusBlink` (`true` when the status glyph is
@@ -635,8 +635,10 @@ error keeps those names for compatibility.
   trimmed of outer spaces and rejected if empty, over 256 UTF-8 bytes, or carrying any control character or
   line/paragraph separator; a rejected call leaves the previous context standing. It states durable purpose,
   not current activity: it persists across quit, relaunch and restore, and nothing expires it. A duplicated
-  session starts without one. A set or clear that CHANGES the value emits `tree.changed`; re-setting the
-  same value emits nothing. The tree's `context` field is the read side, omitted when unset. In the title
+  session starts without one. A set or clear that changes the SHOWN value emits `tree.changed`; re-setting
+  the same value emits nothing. The tree's `context` field is the read side, omitted when unset. A session
+  attached from another Mac also shows that Mac's context when it has none of its own (see Remote
+  sessions); that mirrored value is never persisted, and setting the text it already shows emits nothing. In the title
   bar it takes line two in normal mode (replacing the cwd/terminal-title detail) and follows the session and
   window names on line one in compact mode, where a long value tail-truncates before the names do. Settings
   ▸ Interface ▸ Title Bar ▸ "Session context" hides it without clearing it.
@@ -1623,15 +1625,20 @@ and the exit status.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
-Mac mirrors the origin session's status, its `notify` notifications and its HUD. Nothing has to be set up
-beyond the `agtermctl` PATH precondition above. What to expect:
+Mac mirrors the origin session's status, its `session context`, its `notify` notifications and its HUD.
+Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:
+
+- The origin's context shows in this Mac's title bar and as the row's `context` in `tree`. A
+  `session context` set on this Mac's row wins over it, and `--clear` here removes only that local value,
+  so the origin's latest context shows again. It cannot blank the origin's. An origin running an agterm
+  that predates context mirroring still connects and mirrors status and HUD, with no context.
 
 - `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
-- When the stream drops, the mirrored status and HUD are cleared here and come back on reconnect. Retries
+- When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect. Retries
   run after 1, 2, 4, 8, 16 then 30 seconds, slow to every 5 minutes after eight failures in a row, and
   never stop.
-- A notification raised while the stream is down is never shown here; status and HUD are restored.
+- A notification raised while the stream is down is never shown here; status, context and HUD are restored.
 - A terminal notification (OSC 9/777) is not mirrored: it already arrives in the pane's bytes and is
   raised here once. A mirrored `notify` records a `notify` event on each app.
 - A HUD with `--hide-after` closes here on this Mac's own countdown of the time the origin had left, so
