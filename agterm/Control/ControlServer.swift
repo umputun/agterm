@@ -339,7 +339,7 @@ final class ControlServer {
     /// same moment, and the kernel releases it when a force-quit kills the holder — which is the case the
     /// `unlink` in `start()` exists for.
     private func acquireOwnership() -> Bool {
-        let lockPath = socketPath + ".lock"
+        let lockPath = ControlResolve.ownershipLockPath(forSocket: socketPath)
         let fd = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
         guard fd >= 0 else {
             log("control lock open(\(lockPath)) failed: \(String(cString: strerror(errno)))")

@@ -117,4 +117,9 @@ struct ControlResolveTests {
         let path = ControlResolve.socketPath(stateDir: nil, appSupport: "/Users/x/Library/Application Support/agterm")
         #expect(path == "/Users/x/Library/Application Support/agterm/agterm.sock")
     }
+
+    @Test func ownershipLockSitsBesideTheSocketItGuards() {
+        let socket = ControlResolve.socketPath(stateDir: "/tmp/agterm-state", appSupport: "/unused")
+        #expect(ControlResolve.ownershipLockPath(forSocket: socket) == "/tmp/agterm-state/agterm.sock.lock")
+    }
 }

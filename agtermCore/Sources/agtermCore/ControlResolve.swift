@@ -67,4 +67,9 @@ public enum ControlResolve {
         let base = stateDir ?? appSupport
         return (base as NSString).appendingPathComponent("agterm.sock")
     }
+
+    /// The control socket's ownership lock path.
+    public static func ownershipLockPath(forSocket socketPath: String) -> String {
+        socketPath + ".lock"
+    }
 }

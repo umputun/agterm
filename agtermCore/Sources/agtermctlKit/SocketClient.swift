@@ -111,10 +111,11 @@ struct SocketClient {
         return fd
     }
 
-    /// The sentence after a failed `connect`. Only a refusal is ambiguous, and only a held lock narrows
-    /// it: see `ControlServer.acquireOwnership` for why neither answer is stronger than that.
+    /// The sentence after a failed `connect`. A refusal and a missing socket are the two the ownership
+    /// lock narrows, and only to an owner being there: `ControlServer.start` keeps the lock after a failed
+    /// bind, so a held lock never says how the socket came to be unreachable.
     private static func hint(forConnect failure: Int32, path: String) -> String {
-        guard failure == ECONNREFUSED else { return "is agterm running?" }
+        guard failure == ECONNREFUSED || failure == ENOENT else { return "is agterm running?" }
         if ownershipLockHeld(socketPath: path) == true {
             return "the socket owner is present but not accepting connections"
         }
@@ -126,7 +127,7 @@ struct SocketClient {
     /// test instead would fail a starting instance's own `LOCK_EX|LOCK_NB`.
     private static func ownershipLockHeld(socketPath: String) -> Bool? {
         #if canImport(Darwin)
-        let fd = open(socketPath + ".lock", O_RDONLY | O_CLOEXEC)
+        let fd = open(ControlResolve.ownershipLockPath(forSocket: socketPath), O_RDONLY | O_CLOEXEC)
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         var query = flock()

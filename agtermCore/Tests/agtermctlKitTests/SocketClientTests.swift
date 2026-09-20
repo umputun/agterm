@@ -1139,11 +1139,24 @@ struct SocketClientTests {
         #expect(error.description.contains("Connection refused"))
     }
 
-    @Test func aMissingSocketKeepsTheRunningQuestionAndItsErrno() throws {
+    @Test func aMissingSocketWithAHeldOwnershipLockReportsThePresentOwner() throws {
+        let path = NSTemporaryDirectory() + "agterm-unbound-\(UUID().uuidString.prefix(8)).sock"
+        let lockPath = ControlResolve.ownershipLockPath(forSocket: path)
+        let lock = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        try #require(lock >= 0)
+        defer { close(lock); unlink(lockPath) }
+        try #require(flock(lock, LOCK_EX | LOCK_NB) == 0)
+
+        let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: path).connect() }
+        #expect(error.description.contains("the socket owner is present but not accepting connections"))
+        #expect(error.description.contains("No such file or directory"))
+    }
+
+    @Test func aMissingSocketWithNoOwnershipLockStaysUncertainAndKeepsItsErrno() throws {
         let path = NSTemporaryDirectory() + "agterm-absent-\(UUID().uuidString.prefix(8)).sock"
 
         let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: path).connect() }
-        #expect(error.description.contains("is agterm running?"))
+        #expect(error.description.contains("agterm may be stopped or unable to accept connections"))
         #expect(error.description.contains("No such file or directory"))
     }
 
@@ -1154,7 +1167,7 @@ struct SocketClientTests {
 
         _ = try? SocketClient(path: socket.path).connect()
 
-        let owner = open(socket.path + ".lock", O_CREAT | O_RDWR, 0o600)
+        let owner = open(ControlResolve.ownershipLockPath(forSocket: socket.path), O_CREAT | O_RDWR, 0o600)
         defer { close(owner) }
         #expect(flock(owner, LOCK_EX | LOCK_NB) == 0)
     }
@@ -1189,7 +1202,7 @@ private final class RefusedSocket {
     }
 
     func holdOwnershipLock(hold: Bool = true) throws -> Int32 {
-        let lockFD = open(path + ".lock", O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        let lockFD = open(ControlResolve.ownershipLockPath(forSocket: path), O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
         guard lockFD >= 0 else { throw SocketClientError("lock open() failed") }
         guard hold else { return lockFD }
         guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
@@ -1202,7 +1215,7 @@ private final class RefusedSocket {
     func stop() {
         close(fd)
         unlink(path)
-        unlink(path + ".lock")
+        unlink(ControlResolve.ownershipLockPath(forSocket: path))
     }
 }
 
