@@ -311,7 +311,11 @@ struct SessionHostServerTests {
         fixture.names.append(name)
         let request = SessionHost.Ensure(name: name, argv: [fixture.zmx.path, "attach", name], cwd: fixture.directory.path,
                                         env: fixture.environment, rows: 24, cols: 80)
-        guard case .ok(let ready) = try fixture.exchange(.ensure(request)).last else { Issue.record("daemon was not created"); return }
+        let replies = try fixture.exchange(.ensure(request))
+        guard case .ok(let ready) = replies.last else {
+            Issue.record("daemon was not created: \(replies.map(String.init(describing:))); host log: \(fixture.hostLog())")
+            return
+        }
         let shell = ready.leaderPid
         let daemon = try parentPID(shell)
         #expect(Responsibility.system.responsibleProcess(of: shell) == first)
@@ -506,12 +510,16 @@ struct SessionHostServerTests {
             return try ZmxListParser.parse(String(decoding: data, as: UTF8.self))
         }
 
+        func hostLog() -> String {
+            (try? String(contentsOfFile: paths.log, encoding: .utf8)) ?? "none"
+        }
+
         func exchange(_ request: SessionHost.Request) throws -> [SessionHost.Response] {
             var data = try SessionHost.encodeFrame(SessionHost.Request.hello(identity))
             data.append(try SessionHost.encodeFrame(request))
             let replies = try raw(data)
             if replies.count != 2 {
-                print("host fixture replies: \(replies); log: \((try? String(contentsOfFile: paths.log, encoding: .utf8)) ?? "none")")
+                print("host fixture replies: \(replies); log: \(hostLog())")
             }
             return replies
         }
