@@ -1107,6 +1107,104 @@ struct SocketClientTests {
         #expect(printed == Data((line + "\n").utf8))
         #expect(!String(decoding: printed, as: UTF8.self).contains("client"))
     }
+
+    @Test func refusedConnectWithAHeldOwnershipLockReportsThePresentOwner() throws {
+        let socket = try RefusedSocket()
+        defer { socket.stop() }
+        let lock = try socket.holdOwnershipLock()
+        defer { close(lock) }
+
+        let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: socket.path).connect() }
+        #expect(error.description.contains("the socket owner is present but not accepting connections"))
+        #expect(error.description.contains("Connection refused"))
+    }
+
+    @Test func refusedConnectWithAnUnheldOwnershipLockDoesNotClaimTheAppIsGone() throws {
+        let socket = try RefusedSocket()
+        defer { socket.stop() }
+        close(try socket.holdOwnershipLock(hold: false))
+
+        let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: socket.path).connect() }
+        #expect(error.description.contains("agterm may be stopped or unable to accept connections"))
+        #expect(!error.description.contains("is agterm running?"))
+    }
+
+    @Test func refusedConnectWithNoOwnershipLockFileDoesNotClaimTheAppIsGone() throws {
+        let socket = try RefusedSocket()
+        defer { socket.stop() }
+
+        let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: socket.path).connect() }
+        #expect(error.description.contains("agterm may be stopped or unable to accept connections"))
+        // the absent lock file sets errno to ENOENT inside the probe, after the connect error is read
+        #expect(error.description.contains("Connection refused"))
+    }
+
+    @Test func aMissingSocketKeepsTheRunningQuestionAndItsErrno() throws {
+        let path = NSTemporaryDirectory() + "agterm-absent-\(UUID().uuidString.prefix(8)).sock"
+
+        let error = try #require(throws: SocketClientError.self) { _ = try SocketClient(path: path).connect() }
+        #expect(error.description.contains("is agterm running?"))
+        #expect(error.description.contains("No such file or directory"))
+    }
+
+    @Test func probingTheOwnershipLockLeavesItAcquirable() throws {
+        let socket = try RefusedSocket()
+        defer { socket.stop() }
+        close(try socket.holdOwnershipLock(hold: false))
+
+        _ = try? SocketClient(path: socket.path).connect()
+
+        let owner = open(socket.path + ".lock", O_CREAT | O_RDWR, 0o600)
+        defer { close(owner) }
+        #expect(flock(owner, LOCK_EX | LOCK_NB) == 0)
+    }
+}
+
+/// A unix socket bound but never listened on: Darwin refuses it with the `ECONNREFUSED` a full backlog returns.
+private final class RefusedSocket {
+    let path: String
+    private let fd: Int32
+
+    init() throws {
+        path = NSTemporaryDirectory() + "agterm-refused-\(UUID().uuidString.prefix(8)).sock"
+        fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw SocketClientError("refused socket() failed") }
+        unlink(path)
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let bytes = path.utf8CString
+        withUnsafeMutablePointer(to: &addr.sun_path) { dst in
+            dst.withMemoryRebound(to: CChar.self, capacity: bytes.count) { buf in
+                bytes.withUnsafeBufferPointer { src in buf.update(from: src.baseAddress!, count: src.count) }
+            }
+        }
+        let bound = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                bind(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bound == 0 else {
+            close(fd)
+            throw SocketClientError("refused bind() failed: \(String(cString: strerror(errno)))")
+        }
+    }
+
+    func holdOwnershipLock(hold: Bool = true) throws -> Int32 {
+        let lockFD = open(path + ".lock", O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        guard lockFD >= 0 else { throw SocketClientError("lock open() failed") }
+        guard hold else { return lockFD }
+        guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
+            close(lockFD)
+            throw SocketClientError("lock flock() failed")
+        }
+        return lockFD
+    }
+
+    func stop() {
+        close(fd)
+        unlink(path)
+        unlink(path + ".lock")
+    }
 }
 
 /// A `SocketReply` for a fake `send`, carrying the response's own encoding as the line it arrived as.

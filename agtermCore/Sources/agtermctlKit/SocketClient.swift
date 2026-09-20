@@ -102,11 +102,44 @@ struct SocketClient {
             }
         }
         guard result == 0 else {
-            let message = String(cString: strerror(errno))
+            // close() and the hint's own probe both overwrite errno.
+            let failure = errno
+            let message = String(cString: strerror(failure))
             close(fd)
-            throw SocketClientError("connect(\(path)) failed: \(message) — is agterm running?")
+            throw SocketClientError("connect(\(path)) failed: \(message) — \(Self.hint(forConnect: failure, path: path))")
         }
         return fd
+    }
+
+    /// The sentence after a failed `connect`. Only a refusal is ambiguous, and only a held lock narrows
+    /// it: see `ControlServer.acquireOwnership` for why neither answer is stronger than that.
+    private static func hint(forConnect failure: Int32, path: String) -> String {
+        guard failure == ECONNREFUSED else { return "is agterm running?" }
+        if ownershipLockHeld(socketPath: path) == true {
+            return "the socket owner is present but not accepting connections"
+        }
+        return "agterm may be stopped or unable to accept connections"
+    }
+
+    /// Whether a process holds the server's ownership lock on `<socketPath>.lock`, nil when that cannot be
+    /// answered. Darwin's `F_GETLK` observes a `flock` without competing for it; taking a shared lock to
+    /// test instead would fail a starting instance's own `LOCK_EX|LOCK_NB`.
+    private static func ownershipLockHeld(socketPath: String) -> Bool? {
+        #if canImport(Darwin)
+        let fd = open(socketPath + ".lock", O_RDONLY | O_CLOEXEC)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        var query = flock()
+        query.l_type = Int16(F_WRLCK)
+        query.l_whence = Int16(SEEK_SET)
+        query.l_start = 0
+        query.l_len = 0
+        let queried = withUnsafeMutablePointer(to: &query) { fcntl(fd, F_GETLK, $0) }
+        guard queried == 0 else { return nil }
+        return query.l_type != Int16(F_UNLCK)
+        #else
+        return nil
+        #endif
     }
 
     /// Write all of `data` to `fd`, looping over short writes.
