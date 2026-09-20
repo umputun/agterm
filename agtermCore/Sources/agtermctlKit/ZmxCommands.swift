@@ -23,7 +23,7 @@ struct Zmx: ParsableCommand {
             abstract: "Carry a presentation stream for one session between stdin/stdout and this app.",
             discussion: """
             Run by the agterm on another Mac, over ssh, after it attached one of this app's sessions: it \
-            is how that Mac shows this session's status, notifications and HUD. Stdout carries \
+            is how that Mac shows this session's status, context, notifications and HUD. Stdout carries \
             newline-delimited JSON frames and nothing else, and stdin takes the other side's frames. It \
             is not meant to be run by hand. A refused session exits nonzero with the reason on stderr.
             """)

@@ -38,7 +38,7 @@ public enum RemotePresentationConnection: Equatable, Sendable {
     public func rowNotice(host: String) -> String? {
         switch self {
         case .connected, .unsupported: return nil
-        case .connecting: return "Connecting to \(host) for status, notifications, dialogs and overlays"
+        case .connecting: return "Connecting to \(host) for status, context, notifications, dialogs and overlays"
         case .failed(let reason):
             return "Lost the connection to \(host) (\(reason)), retrying. Close and reattach the session to retry now."
         }

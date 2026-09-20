@@ -257,7 +257,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
 
     /// This Mac's presentation stream to the session's origin, on an attached session only. `state` is
     /// `connecting`, `connected`, `unsupported` for an origin that predates the stream, or `failed` with
-    /// the reason in `error`. It says whether status, notifications and HUD are being mirrored, never
+    /// the reason in `error`. It says whether status, context, notifications and HUD are being mirrored, never
     /// whether the panes' own ssh connections are up.
     public let presentation: ControlPresentationNode?
     /// The presentation streams on this session: how many mirror it, a count of connections so two rows

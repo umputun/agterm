@@ -388,8 +388,10 @@ omitted when expanded).
   title bar: a PR number, an issue, the task in hand. Use it when you
   start work a session's name cannot describe. Exactly one of TEXT or `--clear`; a blank TEXT is an error,
   not a second way to clear. Trimmed; max 256 UTF-8 bytes; no control characters (tabs included) or line
-  breaks. Persists
-  across a relaunch until cleared. Read it back from the tree node's `context` field.
+  breaks. Persists across a relaunch for local sessions. On an attached row, a local value overrides the
+  origin's mirrored context; `--clear` removes that override and reveals the origin's latest value.
+  The mirrored value is never persisted. Read the shown value from the tree node's `context` field;
+  setting the text already shown emits no `tree.changed` event.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge WITHOUT changing the
   selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
   no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an
@@ -635,9 +637,9 @@ chosen open local window's current workspace (default: frontmost after discovery
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
-never restored after a relaunch. The attached row mirrors the origin session's status, `notify`
+never restored after a relaunch. The attached row mirrors the origin session's status, context, `notify`
 notifications and HUD over a stream that reconnects by itself ([details](reference.md#restore)); read
-`presentation.state` in `tree`, and expect mirrored status and HUD to clear while it is down. One
+`presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. One
 attached row per session holds the presenter role: an `ask open` or `session overlay open` newly aimed at
 the session on the origin is handed to it, the overlay's program still runs once on the origin, and a remote
 `overlay close` replies when the cancel is requested

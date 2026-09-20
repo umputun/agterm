@@ -14,7 +14,11 @@ extension AppStore {
     public func applyRemoteContext(_ context: String?, forSession id: UUID) {
         guard let session = session(withID: id), session.remotePresentation != nil else { return }
         let previous = session.effectiveContext
-        session.mirroredContext = context
+        if let context, case let .valid(value) = Session.validateContext(context) {
+            session.mirroredContext = value
+        } else {
+            session.mirroredContext = nil
+        }
         if previous != session.effectiveContext { scheduleTreeChanged() }
     }
 

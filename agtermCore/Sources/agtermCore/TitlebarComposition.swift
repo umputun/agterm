@@ -21,7 +21,7 @@ public struct TitlebarComposition: Sendable, Equatable {
         public var sessionName: String?
         /// The window's USER-SET name; nil for an auto "window N" name as well as when hidden.
         public var windowName: String?
-        /// `Session.context`; nil when unset or hidden.
+        /// `Session.effectiveContext`; nil when unset or hidden.
         public var context: String?
         /// `Session.subtitleDetail` — the focused pane's terminal title or its cwd.
         public var detail: String

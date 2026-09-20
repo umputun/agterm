@@ -1163,7 +1163,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `ZmxLaunch.wrapsLocally` is the one gate both surface factories read, so a remote pane is never wrapped
   in a local daemon. Wrapping buys nothing for a session that never restores, and under live mode window
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
-- Presentation is what a program asks agterm to draw: status, notifications and the HUD. Such a program runs
+- Presentation is what a program asks agterm to draw: status, context, notifications and the HUD. Such a program runs
   on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
   Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
   bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
@@ -1199,7 +1199,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Only a `notify` command is mirrored. A terminal notification (OSC 9/777) already reaches the viewer in
   the pane's bytes and its libghostty raises it, so mirroring it would show it twice. Each app records
   its own `notify` event. Notifications are not part of the snapshot: one raised while the stream is down
-  is never shown on the viewer, where status and HUD are restored on reconnect.
+  is never shown on the viewer, where status, context and HUD are restored on reconnect.
 - When the stream ends, the mirrored status, context and HUD are cleared, since nothing would ever clear them. The
   client retries after 1, 2, 4, 8, 16 then 30 seconds, moves to a 300-second cap after eight failures in a
   row, and never gives up; 30 seconds without a frame counts as a failure against the origin's 10-second
@@ -1250,7 +1250,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The origin bounds each stream: 256 KiB a line checked before delivery, a bounded outbound queue whose
   overflow closes the subscriber, a hello deadline, and a drop when the source session leaves.
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
-  existing status, notification and HUD paths those suites already cover. `ControlServerRemotePresentationTests`
+  existing status, context, notification and HUD paths those suites already cover. `ControlServerRemotePresentationTests`
   runs both roles in one process over the real bridge binary instead.
 - Accepted v1 limitations, documented rather than built around. Pinned zmx keeps one `leader_client_fd` and
   our attach is a follower, so the snapshot arrives at the FAR side's geometry and does not resize until

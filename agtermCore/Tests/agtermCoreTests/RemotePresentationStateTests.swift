@@ -213,6 +213,25 @@ struct RemotePresentationStateTests {
         #expect(session.effectiveContext == "local")
     }
 
+    @Test(arguments: [String(repeating: "x", count: 257), "first\nsecond"])
+    func anInvalidMirroredContextIsDiscarded(_ context: String) throws {
+        let (store, session) = try attached()
+        store.applyRemoteContext("previous", forSession: session.id)
+
+        store.applyRemoteContext(context, forSession: session.id)
+
+        #expect(session.effectiveContext == nil)
+        #expect(session.mirroredContext == nil)
+    }
+
+    @Test func aValidMirroredContextIsTrimmed() throws {
+        let (store, session) = try attached()
+
+        store.applyRemoteContext("  PR #517  ", forSession: session.id)
+
+        #expect(session.effectiveContext == "PR #517")
+    }
+
     @Test func clearingTheLocalContextRevealsWhatTheOriginSentMeanwhile() throws {
         let (store, session) = try attached()
         store.applyRemoteContext("first", forSession: session.id)
@@ -252,6 +271,8 @@ struct RemotePresentationStateTests {
         store.setContext("local", forSession: session.id)
 
         store.setRemoteConnection(.connecting, forSession: session.id)
+        #expect(session.effectiveContext == "local")
+        #expect(session.context == "local")
         store.setContext(nil, forSession: session.id)
 
         #expect(session.effectiveContext == nil)

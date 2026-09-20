@@ -90,6 +90,25 @@ final class WindowContentViewTitlebarTests: XCTestCase {
         }
     }
 
+    func testTitlebarShowsMirroredContextWithoutALocalValue() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        store.sidebarVisible = false
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/repo",
+                                                    name: "build", remoteHost: "dev"))
+        store.bindRemote(RemoteBinding(remoteSessionID: UUID().uuidString, daemonsByLocalPane: [:],
+                                       presentationVersion: 1), forSession: session.id)
+        store.applyRemoteContext("PR #517", forSession: session.id)
+        XCTAssertNil(session.context)
+
+        for mode in [ToolbarMode.normal, .compact] {
+            let shown = try renderTitlebar(mode: mode, width: 640)
+            let hidden = try renderTitlebar(mode: mode, width: 640, hidden: [.sessionContext])
+            let scale = Int(window.backingScaleFactor)
+            XCTAssertGreaterThan(differentPixels(shown, hidden, from: 110 * scale, to: (640 - 250) * scale), 20)
+        }
+    }
+
     func testLongRemoteIdentityKeepsButtonsInPlaceWithSidebarVisible() throws {
         let store = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
