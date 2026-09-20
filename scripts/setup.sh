@@ -35,6 +35,11 @@ RESOURCES_MARKER="agterm/Resources/terminfo"
 STAMP_FILE=".ghostty-build-stamp"
 ZMX_STAGE_DIR="agterm/Resources/zmx"
 ZMX_STAMP_FILE=".zmx-build-stamp"
+# applied in name order over the plain pin; scripts/zmx-patches/README.md says what each one is for.
+# The stamp carries their digest, so editing a patch rebuilds zmx exactly as a ZMX_REV change does.
+ZMX_PATCH_DIR="scripts/zmx-patches"
+ZMX_PATCH_DIGEST="$(cat "$ZMX_PATCH_DIR"/*.patch | shasum -a 256 | cut -c1-16)"
+ZMX_STAMP="$ZMX_REV $ZMX_TARGET $ZMX_PATCH_DIGEST"
 
 # stage agterm's own bundled theme(s) from the committed source into the (gitignored,
 # setup-regenerated) ghostty themes dir. idempotent and called on both the cached and the
@@ -51,7 +56,7 @@ need_zmx=true
 [[ -d "$XCFRAMEWORK_DIR" ]] && need_xc=false
 [[ -d "$RESOURCES_MARKER" ]] && need_res=false
 if [[ -x "$ZMX_STAGE_DIR/zmx" && -f "$ZMX_STAGE_DIR/LICENSE" && -f "$ZMX_STAMP_FILE" ]] &&
-   [[ "$(cat "$ZMX_STAMP_FILE")" == "$ZMX_REV $ZMX_TARGET" ]]; then
+   [[ "$(cat "$ZMX_STAMP_FILE")" == "$ZMX_STAMP" ]]; then
   need_zmx=false
 fi
 
@@ -171,6 +176,10 @@ if $need_zmx; then
   git -C "$zmx_build" remote add origin "$ZMX_REPO"
   git -C "$zmx_build" fetch -q --depth 1 origin "$ZMX_REV"
   git -C "$zmx_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
+  for zmx_patch in "$ZMX_PATCH_DIR"/*.patch; do
+    echo "applying $(basename "$zmx_patch")..."
+    git -C "$zmx_build" apply --whitespace=nowarn "$PWD/$zmx_patch"
+  done
 
   patch_zig_float_h
 
@@ -180,7 +189,7 @@ if $need_zmx; then
   mkdir -p "$ZMX_STAGE_DIR"
   install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"
   cp "$zmx_build/LICENSE" "$ZMX_STAGE_DIR/LICENSE"
-  printf '%s %s\n' "$ZMX_REV" "$ZMX_TARGET" > "$ZMX_STAMP_FILE"
+  printf '%s\n' "$ZMX_STAMP" > "$ZMX_STAMP_FILE"
 fi
 
 stage_custom_themes

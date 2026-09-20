@@ -146,7 +146,7 @@ jobs:
           path: |
             agterm/Resources/zmx
             .zmx-build-stamp
-          key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}
+          key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}-${{ hashFiles('scripts/zmx-patches/*.patch') }}
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Build libghostty + app (Release)
