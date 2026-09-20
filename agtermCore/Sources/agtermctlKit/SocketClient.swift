@@ -102,7 +102,7 @@ struct SocketClient {
             }
         }
         guard result == 0 else {
-            // close() and the hint's own probe both overwrite errno.
+            // close() and the hint's own probe may overwrite errno.
             let failure = errno
             let message = String(cString: strerror(failure))
             close(fd)

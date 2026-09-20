@@ -334,6 +334,46 @@ struct SessionHostServerTests {
         try fixture.waitForExit()
     }
 
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
+    func oversizedRequestPeerClosureDoesNotKillTheClient() throws {
+        // an oversized request could kill the client with sigpipe
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.start()
+        #expect(try fixture.raw(Data(repeating: 0x61, count: SessionHost.maximumFrameBytes * 8)).isEmpty)
+        #expect(try fixture.exchange(.stop).last == .stopped)
+        try fixture.waitForExit()
+    }
+
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the staged fixture executables"),
+          arguments: [("exit 23", Int32(23), Process.TerminationReason.exit),
+                      ("kill -KILL $$", SIGKILL, Process.TerminationReason.uncaughtSignal)])
+    func failedFixtureClientCannotPassAsAnEmptyReply(termination: String, status: Int32, reason: Process.TerminationReason) throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let command = fixture.directory.appendingPathComponent("failed-client")
+        try "#!/bin/sh\nprintf 'fixture failure' >&2\n\(termination)\n".write(to: command, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: command.path)
+
+        let error = try #require(throws: FixtureCommandError.self) { try fixture.raw(Data(), command: command) }
+        #expect(error.command == command.path)
+        #expect(error.status == status)
+        #expect(error.reason == reason)
+        #expect(error.stderr == "fixture failure")
+    }
+
+    private struct FixtureCommandError: Error, CustomStringConvertible {
+        let command: String
+        let status: Int32
+        let reason: Process.TerminationReason
+        let stderr: String
+
+        var description: String {
+            let termination = reason == .exit ? "exit" : "signal"
+            return "fixture command \(command) failed: \(termination) \(status): \(stderr)"
+        }
+    }
+
     private final class Clock {
         var time: TimeInterval = 0
     }
@@ -548,9 +588,10 @@ struct SessionHostServerTests {
                 process.waitUntilExit()
                 throw POSIXError(.ETIMEDOUT)
             }
-            let stderr = errors.fileHandleForReading.readDataToEndOfFile()
-            if process.terminationStatus != 0 {
-                print("fixture command \(command.lastPathComponent) status \(process.terminationStatus), reason \(process.terminationReason): \(String(decoding: stderr, as: UTF8.self))")
+            let stderr = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+                throw FixtureCommandError(command: command.path, status: process.terminationStatus,
+                                          reason: process.terminationReason, stderr: stderr)
             }
             return output.fileHandleForReading.readDataToEndOfFile()
         }

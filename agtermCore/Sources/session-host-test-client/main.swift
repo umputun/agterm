@@ -25,6 +25,11 @@ let connected = withUnsafePointer(to: &address) {
 }
 guard connected == 0 else { exit(1) }
 
+// the host closes mid-write when it rejects an oversized frame, and a default-fatal SIGPIPE would kill
+// this client with no output, which a strict fixture then reads as a failed run.
+var noSigPipe: Int32 = 1
+setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+
 // Both directions stay live at once: a stalled peer keeps stdin open forever, and the run must still
 // end when the host closes its side.
 var input = Int32(STDIN_FILENO)
@@ -53,7 +58,11 @@ while true {
             var written = 0
             while written < count {
                 let step = buffer.withUnsafeBytes { write(connection, $0.baseAddress!.advanced(by: written), count - written) }
-                if step <= 0 { exit(1) }
+                if step <= 0 {
+                    // rejection closes the connection without a response frame
+                    let failure = step < 0 ? errno : 0
+                    exit(failure == EPIPE || failure == ECONNRESET || failure == ENOTCONN ? 0 : 1)
+                }
                 written += step
             }
         }

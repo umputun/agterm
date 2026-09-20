@@ -1160,7 +1160,6 @@ struct SocketClientTests {
     }
 }
 
-/// A unix socket bound but never listened on: Darwin refuses it with the `ECONNREFUSED` a full backlog returns.
 private final class RefusedSocket {
     let path: String
     private let fd: Int32
