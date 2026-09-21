@@ -92,7 +92,8 @@ public struct ZmxLeadState: Equatable, Sendable {
         guard notice.nonce == attachment.nonce else { return false }
         guard role == nil || notice.generation >= generation else { return false }
         generation = notice.generation
-        guard reattaching || role != notice.role else { return false }
+        // a re-attach starts with no role, so its first report always changes it
+        guard role != notice.role else { return false }
         reattaching = false
         role = notice.role
         return true

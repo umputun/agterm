@@ -248,6 +248,7 @@ extension AppStore {
         survivor.promoteToPrimaryPane()
         session.surface = survivor
         session.splitSurface = nil
+        ZmxLeadBook.shared.forget(pane: session.paneIdentity)
         session.paneIdentity = session.splitPaneIdentity ?? UUID()
         session.splitPaneIdentity = nil
         let wasShown = session.isSplit

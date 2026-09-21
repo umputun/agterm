@@ -17,4 +17,4 @@ apply, and re-running `check.py`.
   how agterm uses it.
 
 `check.py <zmx>` drives two managed clients on ptys of different sizes against one daemon in a throwaway
-`ZMX_DIR` and exits nonzero on the first broken rule.
+`ZMX_DIR`, prints one line per rule, and exits nonzero when any of them is broken.

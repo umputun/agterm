@@ -1689,8 +1689,9 @@ variables; an existing local path is not checked to be the same repository as th
 
 Each pane has ONE leading Mac, whose window size the program inside sees. `zmx attach` takes the lead in
 every pane at once; the same panes on the Mac the session runs on are covered ("in use from another Mac").
-Each pane's `lead` in `tree` reads `leader`, `follower` or `unowned`, and is absent when the pane's zmx
-reports none (an older agterm on either side). `agtermctl session lead [--pane left|right]` takes the lead
+Each pane's `lead` in `tree` reads `leader`, `follower` or `unowned`. It is absent when the pane has no
+daemon to lead, which is every local pane outside Live sessions mode (`agtermctl restore mode`), and when
+an agterm on either side predates the lead. `agtermctl session lead [--pane left|right]` takes the lead
 for this Mac, as pressing a key on the cover does.
 
 On the Mac the session RUNS on, a covered pane stays fully drivable: `session type`, `session text` and

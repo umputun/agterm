@@ -95,6 +95,21 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertFalse(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
     }
 
+    // the release can land on the destroyed old view and never reach `consumes`.
+    func testATakeoverKeyWhoseReleaseWasNeverSeenDoesNotSwallowItsNextPress() throws {
+        let (view, identity) = pane()
+        PaneLead.report(try notice("n:follower:1"), from: view)
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: view))
+        let fresh = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                       env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "fresh", claim: true), pane: identity)
+        PaneLead.report(try notice("fresh:leader:2"), from: fresh)
+
+        XCTAssertFalse(PaneLead.consumes(try key(.keyDown, code: 0), in: fresh))
+        XCTAssertFalse(PaneLead.consumes(try key(.keyDown, code: 0, repeating: true), in: fresh))
+        XCTAssertFalse(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
+    }
+
     func testACommandChordOnACoveredPaneIsSwallowedWithoutTakingTheLead() throws {
         let (view, _) = pane()
         PaneLead.report(try notice("n:follower:1"), from: view)

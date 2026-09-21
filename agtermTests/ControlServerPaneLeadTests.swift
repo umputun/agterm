@@ -164,6 +164,30 @@ final class ControlServerPaneLeadTests: XCTestCase {
         XCTAssertTrue(invocations.isEmpty)
     }
 
+    func testCommandsThatActOnThePanesOwnSurfaceAreRefusedWhileItIsCovered() async throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                      env: ["AGTERM_PANE_ID": session.paneIdentity.uuidString], backedByZmx: true)
+        session.surface = view
+        panes.append(session.paneIdentity)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: session.paneIdentity)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")),
+                                     pane: session.paneIdentity)
+        let refusal = "pane is covered while another Mac leads it; take the lead first (session lead)"
+        let id = session.id.uuidString
+
+        XCTAssertEqual(server.pasteSession(id, window: nil, pane: nil).error, refusal)
+        XCTAssertEqual(server.selectAllSession(id, window: nil).error, refusal)
+        let opened = await server.searchSession(session.id, store: store, text: "needle", to: nil)
+        XCTAssertEqual(opened.error, refusal)
+        let closed = await server.searchSession(session.id, store: store, text: nil, to: "close")
+        XCTAssertTrue(closed.ok, "closing a search is cleanup, not a read of the covered grid")
+        XCTAssertEqual(server.coveredRefusal(view)?.ok, false)
+    }
+
     func testSessionLeadReattachesOnlyACoveredPane() throws {
         let server = makeServer()
         let store = try XCTUnwrap(library.activeStore)

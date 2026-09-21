@@ -36,6 +36,7 @@ extension ControlServer {
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            if let refusal = self.coveredRefusal(surface) { return refusal }
             surface.expediteSpawn()
             // the cast alone only proves the SLOT is filled; a false return is the view without a surface.
             guard surface.performBindingAction(action) else {
@@ -113,6 +114,7 @@ extension ControlServer {
             guard surface.isRealized else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            if let refusal = self.coveredRefusal(surface) { return refusal }
             guard let text = surface.readSelection() else {
                 return ControlResponse(ok: false, error: "no selection")
             }
@@ -412,6 +414,13 @@ extension ControlServer {
             if TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil {
                 return ControlResponse(ok: false, error: "terminal zoom active")
             }
+        }
+
+        // the PINNED owner when a search is open, else the pane an open would land on: split focus can move
+        // while a search stays bound to its pane. Close, above, stays available as cleanup.
+        if let owner = (session.searchSurface ?? session.onScreenSurface) as? GhosttySurfaceView,
+           let refusal = coveredRefusal(owner) {
+            return refusal
         }
 
         // open/needle/navigate need the bar + highlights visible, so select the target (which also realizes

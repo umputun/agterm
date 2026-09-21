@@ -30,6 +30,16 @@ extension ControlServer {
         return !covered && viewport ? .surface : .daemon(name: name, client: client)
     }
 
+    /// The refusal for a command that acts on the pane's OWN surface, `session.paste`, `.selectall`, `.copy`
+    /// and an opening or navigating `.search`: while covered, that surface holds output laid out for
+    /// another grid and the daemon drops what it sends, so answering ok would report a paste that never
+    /// landed or a selection of the wrong text. A pane that leads keeps the native action and its
+    /// read-back, with no delivery acknowledgement: a role report trails the daemon by up to 250 ms.
+    func coveredRefusal(_ surface: GhosttySurfaceView) -> ControlResponse? {
+        guard surface.leadCovered else { return nil }
+        return ControlResponse(ok: false, error: "pane is covered while another Mac leads it; take the lead first (session lead)")
+    }
+
     /// `session.lead`: what a key press on the pane's cover does. A pane that already leads answers ok, so
     /// a caller can ask without reading `lead` first; one whose zmx never reported a role has no lead to
     /// take and says so rather than answering ok for nothing.

@@ -1280,7 +1280,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   be covered, never in the continuing leader's.
 - `ZmxLeadBook` holds the state, keyed by pane identity so it follows a swap or a promoted split.
   `lead` on each primary/split surface node reads it: `leader`, `follower`, `unowned`, and omitted until
-  the pane's zmx reports, which an origin or a zmx without the patch never does. Such a pane behaves as
+  the pane's zmx reports. A pane with no daemon never does, which is every local pane outside Live
+  sessions mode, and neither does an origin or a zmx without the patch. Such a pane behaves as
   before and is never covered. A role change emits `tree.changed`.
 - A pane that does not lead is covered (`PaneLeadCover`), by every host of its terminal: the deck, where
   it sits BELOW the pane's own pane overlay and hides while one is up, terminal zoom, and the dashboard.
@@ -1322,6 +1323,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The default `session.text` is the one read whose meaning is the pane's own scrolled viewport, so it
   stays on the surface while the pane leads and moves to the daemon only while it is covered. That read
   alone keeps the one-hop window after a demotion.
+- Commands that act on the pane's OWN surface are refused while it is covered, with `pane is covered
+  while another Mac leads it; take the lead first (session lead)`: `session.paste`, `.selectall`, `.copy`,
+  and a `session.search` that opens, updates or navigates, judged on the PINNED `searchSurface` when a
+  search is open. They would otherwise answer ok for a paste the daemon drops or select text laid out
+  for another grid. `session.search --to close` stays available, being cleanup. A pane that leads keeps
+  the native action and its read-back and NO delivery acknowledgement, the role report trailing the
+  daemon by up to 250 ms; paste is not routed through `zmx type`, which is keystrokes and would lose
+  bracketed paste.
 - A covered pane ATTACHED from another Mac refuses all three with `pane is in use on the Mac it runs
   on; take the lead to drive it from here`: its daemon is an ssh away and these reads are synchronous.
 - `session.lead [--pane]` is the control twin of the cover's key. A pane that already leads answers ok;

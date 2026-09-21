@@ -64,7 +64,7 @@ def main():
         pids.append(p1)
         out1 = drain(f1, 2.0)
         roles1 = ROLE.findall(out1)
-        ok &= check("first attach is told it leads", roles1 and roles1[-1][:2] == (b"origin-1", b"leader"), repr(roles1))
+        ok &= check("first attach is told it leads", bool(roles1) and roles1[-1][:2] == (b"origin-1", b"leader"), repr(roles1))
 
         screen = cli("screen", NAME).stdout.split(b"\n", 1)[0].split()
         ok &= check("pty has the first client's grid", screen[1:3] == [b"83", b"30"], repr(screen))
@@ -73,9 +73,9 @@ def main():
         pids.append(p2)
         out2 = drain(f2, 2.0)
         roles2 = ROLE.findall(out2)
-        ok &= check("claiming attach is told it leads", roles2 and roles2[-1][:2] == (b"viewer-2", b"leader"), repr(roles2))
+        ok &= check("claiming attach is told it leads", bool(roles2) and roles2[-1][:2] == (b"viewer-2", b"leader"), repr(roles2))
         demoted = ROLE.findall(drain(f1, 1.0))
-        ok &= check("the old leader is told it follows", demoted and demoted[-1][:2] == (b"origin-1", b"follower"), repr(demoted))
+        ok &= check("the old leader is told it follows", bool(demoted) and demoted[-1][:2] == (b"origin-1", b"follower"), repr(demoted))
 
         screen = cli("screen", NAME).stdout.split(b"\n", 1)[0].split()
         ok &= check("pty took the claimer's grid", screen[1:3] == [b"120", b"40"], repr(screen))
@@ -106,7 +106,7 @@ def main():
         os.kill(p2, 15)
         time.sleep(1.0)
         orphaned = ROLE.findall(drain(f1, 1.0))
-        ok &= check("the leader leaving reports unowned", orphaned and orphaned[-1][1] == b"unowned", repr(orphaned))
+        ok &= check("the leader leaving reports unowned", bool(orphaned) and orphaned[-1][1] == b"unowned", repr(orphaned))
 
         missing = cli("screen", "no-such-session")
         ok &= check("screen on a missing session fails", missing.returncode != 0)

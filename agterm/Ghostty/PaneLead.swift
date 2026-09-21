@@ -29,6 +29,9 @@ enum PaneLead {
 
     /// True when `event` belongs to a takeover and must not reach the terminal.
     static func consumes(_ event: NSEvent, in view: GhosttySurfaceView) -> Bool {
+        // the takeover key's release can land on the destroyed old view, or on nothing while the new one
+        // mounts, and never reach this. A fresh press of the same key proves it was released.
+        if event.type == .keyDown, !event.isARepeat, event.keyCode == takeoverKeyCode { takeoverKeyCode = nil }
         if event.type == .keyUp, event.keyCode == takeoverKeyCode {
             takeoverKeyCode = nil
             return true
