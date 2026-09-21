@@ -456,9 +456,12 @@ struct agtermApp: App {
         // an attach that ended holds on its exit prompt, a failed take-over included: no client is left to
         // report a role, and a cover would hide the line saying what died and swallow the key that closes it
         view.onExitHeld = { [weak view] in
-            guard let pane = view.flatMap({ UUID(uuidString: $0.paneToken) }) else { return }
-            ZmxLeadBook.shared.forget(pane: pane)
-            store.leadRoleChanged()
+            guard let view else { return }
+            if let pane = UUID(uuidString: view.paneToken) {
+                ZmxLeadBook.shared.forget(pane: pane)
+                store.leadRoleChanged()
+            }
+            Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: services.library)
         }
     }
 
@@ -505,6 +508,7 @@ struct agtermApp: App {
     @MainActor
     static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
                                library: WindowLibrary, alreadyFinalized: UUID? = nil) {
+        guard let session = store.session(withID: sessionID), session.surface === view || session.splitSurface === view else { return }
         if view.isSplitPane {
             store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {

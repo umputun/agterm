@@ -1630,7 +1630,8 @@ and the exit status.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
-Mac mirrors the origin session's status, its `session context`, its `notify` notifications and its HUD.
+Mac mirrors the origin session's status, its `session context`, its `notify` notifications, its HUD and
+the layout of panes already attached.
 Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:
 
 - The origin's context shows in this Mac's title bar and as the row's `context` in `tree`. A
@@ -1638,6 +1639,12 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   so the origin's latest context shows again. It cannot blank the origin's. An origin running an agterm
   that predates context mirroring still connects and mirrors status and HUD, with no context.
 
+- Two existing remote panes follow the origin's split axis, hide/show and swaps. Local panes, divider
+  ratio and focus stay local. A layout never opens a pane: an origin split opened later requires closing
+  and attaching the row again, and a replica closed here stays closed. Older origins leave layout alone.
+- Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
+  left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
+  split prevents automatic primary removal; an ordinary disconnect still holds for a keypress.
 - `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect. Retries

@@ -641,7 +641,8 @@ keeps the frontmost window unchanged; an invalid or closed target fails. Takes t
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
 never restored after a relaunch. The attached row mirrors the origin session's status, context, `notify`
-notifications and HUD over a stream that reconnects by itself ([details](reference.md#restore)); read
+notifications, HUD and the layout of attached panes over a stream that reconnects by itself
+([details](reference.md#restore)); read
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. One
 attached row per session holds the presenter role: an `ask open` or `session overlay open` newly aimed at
 the session on the origin is handed to it, the overlay's program still runs once on the origin, and a remote

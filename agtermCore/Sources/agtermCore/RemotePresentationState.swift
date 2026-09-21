@@ -44,6 +44,10 @@ public struct RemoteBinding: Equatable, Sendable {
     public func localPane(forRemote identity: UUID) -> UUID? { localByRemotePane[identity] }
 
     public func daemon(forLocalPane identity: UUID) -> String? { daemonsByLocalPane[identity] }
+
+    func remotePane(forLocal identity: UUID) -> UUID? {
+        localByRemotePane.first { $0.value == identity }?.key
+    }
 }
 
 /// RemotePresentationConnection is the state of a viewer's presentation stream, as read-back reports it.
@@ -72,6 +76,8 @@ public struct RemotePresentationState: Equatable, Sendable {
     public let binding: RemoteBinding
     public var connection: RemotePresentationConnection
     public var mode: PresentationMode = .mirror
+    var layout: PresentationLayout?
+    var heldPanes: Set<UUID> = []
     /// Whether the glyph on the row is the bridge's. A flag and not a comparison of values: a pane swap
     /// rewrites the indicator without changing who set it, and a local write of the very same value does
     /// change who set it. Every local write clears this.

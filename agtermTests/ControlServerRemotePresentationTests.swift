@@ -476,6 +476,29 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         return BridgedPair(server: server, store: store, origin: origin, viewer: viewer, socketPath: socketPath, cli: cli)
     }
 
+    func testLayoutTravelsOverTheBridgeWithoutOpeningPanesAndClosesARemovedHeldReplica() throws {
+        let pair = try bridgedPair()
+        let services = agtermApp.SurfaceServices(library: pair.server.library, actions: AppActions(library: pair.server.library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+        let replica = agtermApp.makeSurface(for: pair.viewer, store: pair.store, env: [:], services: services)
+        pair.viewer.surface = replica
+        pair.store.setSplitVisibility(pair.origin.id, shown: true, axis: .topBottom)
+        pair.store.applyControlStatus(AgentIndicator(status: .blocked), forSession: pair.origin.id)
+        waitUntil("the update after the layout arrives") { pair.viewer.agentIndicator.status == .blocked }
+        XCTAssertFalse(pair.viewer.hasSplit)
+        XCTAssertNil(pair.viewer.splitSurface)
+        try XCTUnwrap(replica.onExitHeld)()
+        XCTAssertNotNil(pair.store.session(withID: pair.viewer.id))
+
+        pair.origin.splitSurface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        pair.store.closePrimaryPane(pair.origin.id)
+
+        waitUntil("the layout removes the held replica") { pair.store.session(withID: pair.viewer.id) == nil }
+        XCTAssertTrue(replica.isDestroyed)
+        XCTAssertNil(pair.server.remoteClients[pair.viewer.id])
+    }
+
     func testStatusAndHudTravelFromAnOriginSessionToItsViewerAndLeaveWithTheStream() throws {
         let pair = try bridgedPair()
         let (server, store, origin, viewer) = (pair.server, pair.store, pair.origin, pair.viewer)

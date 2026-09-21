@@ -87,7 +87,7 @@ extension AppStore {
         // active with no surface and no program forever.
         session.dropUnrealizedPaneOverlays()
         if wasShown != shown { emitPaneVisibility(.paneSplit, session: session, shown: shown) }
-        save()
+        savePaneLayout(session)
     }
 
     /// Sets a session's split-divider primary-pane fraction, clamped and persisted; returns the applied
@@ -162,7 +162,7 @@ extension AppStore {
         // PaneHostIdentity observes this because surface slots are ignored; keep the swap toggle unconditional
         // so a zoom host re-evaluates and sees its new occupant token.
         session.splitFocused.toggle()
-        save()
+        savePaneLayout(session)
         return nil
     }
 
@@ -224,7 +224,7 @@ extension AppStore {
         // the departing right pane owned any `.right`-tagged block, which no survivor can keystroke-clear.
         clearIndicatorOwnedByPane(.right, of: session)
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
-        save()
+        savePaneLayout(session)
     }
 
     /// The primary pane's shell exited: a live split is PROMOTED into the primary slot and the session
@@ -308,7 +308,7 @@ extension AppStore {
             }
         }
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
-        save()
+        savePaneLayout(session)
     }
 
     /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane

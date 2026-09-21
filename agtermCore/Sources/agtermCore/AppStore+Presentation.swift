@@ -17,7 +17,22 @@ extension AppStore {
     public func presentationSnapshot(forSession id: UUID, now: Date = Date()) -> PresentationSnapshot {
         guard let session = session(withID: id) else { return PresentationSnapshot(status: nil, hud: nil) }
         return PresentationSnapshot(status: presentationStatus(of: session),
-                                    hud: presentationHud(of: session, now: now), context: session.context)
+                                    hud: presentationHud(of: session, now: now), context: session.context,
+                                    layout: presentationLayout(of: session))
+    }
+
+    func presentationLayout(of session: Session) -> PresentationLayout? {
+        guard session.remoteHost == nil else { return nil }
+        let panes = [session.paneIdentity] + (session.hasSplit ? [session.splitPaneIdentity].compactMap { $0 } : [])
+        return PresentationLayout(panes: panes, primary: session.paneIdentity,
+                                  axis: session.hasSplit ? session.splitAxis.rawValue : nil, shown: session.isSplit)
+    }
+
+    func savePaneLayout(_ session: Session) {
+        save()
+        if let layout = presentationLayout(of: session) {
+            presentationHub?.publishLayout(layout, session: session.id)
+        }
     }
 
     /// Publishes the session's live HUD to attached viewers. Called once its body is on disk, never before:

@@ -1161,7 +1161,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `ZmxLaunch.wrapsLocally` is the one gate both surface factories read, so a remote pane is never wrapped
   in a local daemon. Wrapping buys nothing for a session that never restores, and under live mode window
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
-- Presentation is what a program asks agterm to draw: status, context, notifications and the HUD. Such a program runs
+- Presentation carries status, context, notifications, the HUD and the layout of attached panes. Such a program runs
   on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
   Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
   bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
@@ -1173,7 +1173,19 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
 - Read-back is `presentation {state, mode, error}` on the viewer's session node and `presenters {mirrors}`
   on the origin's. `connected` means the PRESENTATION stream is up. It says nothing about the panes' own
-  ssh connections, which the app cannot observe under the hold prompt.
+  ssh connections.
+- A `layout` frame and the snapshot's optional `layout` carry model pane identities, primary, axis and
+  shown state, including an unrealized origin split. Invalid layouts are ignored without disconnecting.
+  An older origin omits the field and leaves the viewer's layout alone.
+- Axis, visibility and swaps follow the origin only for an existing, realized pair of mapped replicas.
+  The viewer never creates a pane from a layout; newly opened origin splits require closing and attaching
+  the row again. A locally closed replica stays closed, and local panes keep their layout. Ratio and
+  keyboard focus stay local; hiding the split maximizes this Mac's focused pane.
+- Confirmed removal closes a mapped replica without requiring acknowledgement, including one already
+  held after ssh exited. If it is the last realized replica, it stays until its ssh exits, then the row
+  may close and following stops. Automatic primary removal is skipped while a local split is pending.
+  A layout never removes a local replacement. Losing the stream alone keeps the panes; an ordinary ssh
+  disconnect still shows the disconnect line and holds for a keypress.
 - A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
   second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
   identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
@@ -1248,7 +1260,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The origin bounds each stream: 256 KiB a line checked before delivery, a bounded outbound queue whose
   overflow closes the subscriber, a hello deadline, and a drop when the source session leaves.
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
-  existing status, context, notification and HUD paths those suites already cover. `ControlServerRemotePresentationTests`
+  existing status, context, notification, HUD and pane paths those suites already cover. `ControlServerRemotePresentationTests`
   runs both roles in one process over the real bridge binary instead.
 ## Pane lead
 

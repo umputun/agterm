@@ -163,11 +163,15 @@ struct AppStoreRemoteAskTests {
         let (session, _) = try origin(split: true)
         let pending = ask()
         store.presentAskRemotely(pending, in: session, paneIdentity: session.splitPaneIdentity, window: Self.window)
+        let frameCount = presenter.frames.count
 
         store.closeSplit(session.id)
 
         #expect(AskRegistry.shared.result(for: pending.id)?.result.result == .cancelled)
-        #expect(presenter.bodies.last == .askDismiss(PresentationAskRef(id: pending.id, owner: 1)))
+        #expect(Array(presenter.bodies.dropFirst(frameCount)) == [
+            .askDismiss(PresentationAskRef(id: pending.id, owner: 1)),
+            .layout(PresentationLayout(panes: [session.paneIdentity], primary: session.paneIdentity, shown: false)),
+        ])
     }
 
     @Test func aTakenBackTerminalAskIsDrawnHereAndALateAnswerIsRefused() throws {

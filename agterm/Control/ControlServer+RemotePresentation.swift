@@ -80,8 +80,12 @@ extension ControlServer {
             overlayResize: { [weak self] change in
                 self?.library.store(forSession: id)?.resizeReplicaOverlay(change, forSession: id)
             },
+            layout: { [weak self] layout in
+                guard let self, let store = library.store(forSession: id) else { return }
+                agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library)
+            },
             warn: { reason in
-                remoteLogger.warning("presentation stream for \(id, privacy: .public) is down: \(reason, privacy: .public)")
+                remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })
     }
 

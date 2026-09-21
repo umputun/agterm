@@ -43,12 +43,13 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "context"]
+    public static let supportedKinds = ["status", "hud", "notify", "context", "layout"]
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
+    private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
 
     /// Called with a session whose presenter went away, after the role is released.
@@ -79,6 +80,7 @@ public final class PresentationHub {
         subscribers[id] = subscriber
 
         let state = snapshot()
+        if layouts[session] == nil { layouts[session] = state.layout }
         let held = subscriber.held ?? []
         subscriber.held = nil
         let kinds = Self.supportedKinds.filter(hello.kinds.contains)
@@ -91,7 +93,8 @@ public final class PresentationHub {
     }
 
     public func unsubscribe(_ id: SubscriberID) {
-        subscribers[id] = nil
+        let session = subscribers.removeValue(forKey: id)?.session
+        if let session, subscriberCount(session: session) == 0 { layouts[session] = nil }
         release(id)
     }
 
@@ -100,6 +103,12 @@ public final class PresentationHub {
     public func sendToPresenter(_ body: PresentationFrame.Body, session: UUID) -> Bool {
         guard let holder = grant.holder(of: session) else { return false }
         return send(body, to: holder)
+    }
+
+    func publishLayout(_ layout: PresentationLayout, session: UUID) {
+        guard subscriberCount(session: session) > 0, layouts[session] != layout else { return }
+        layouts[session] = layout
+        publish(.layout(layout), session: session)
     }
 
     public func publish(_ body: PresentationFrame.Body, session: UUID) {
@@ -165,6 +174,7 @@ public final class PresentationHub {
 
     private func drop(_ id: SubscriberID, reason: CloseReason) {
         guard let subscriber = subscribers.removeValue(forKey: id) else { return }
+        if subscriberCount(session: subscriber.session) == 0 { layouts[subscriber.session] = nil }
         subscriber.sink.close(reason)
         release(id)
     }
