@@ -366,6 +366,9 @@ omitted when expanded).
   legacy left/right behavior. The GUI actions are ⌘D for vertical and ⌘⇧D for horizontal; either
   transposes a shown split of the other orientation. Hide keeps it alive; `close` destroys the pane and
   whatever runs in it.
+- `session lead [--pane left|right]`: for a session shared with another Mac, take the lead of a pane here
+  (what a key press on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
+  `unowned`. On the Mac the session runs on, a covered pane still takes `session type`/`text`.
 - `session swap`: exchange the two terminals' physical positions and primary/split roles without restarting
   them. Focus follows the terminal; axis and divider ratio stay fixed. Works on shown or hidden splits and
   under zoom/dashboard; errors when there is no split or either surface is not ready. Read the new primary

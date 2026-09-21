@@ -3,7 +3,7 @@
 #
 # We build from source rather than downloading a prebuilt artifact so the toolchain is fully
 # self-owned: the inputs are pinned upstream revisions, zig, and Xcode's Metal Toolchain. No fork or
-# daily-build release is involved.
+# daily-build release is involved; zmx takes the patches in scripts/zmx-patches over its plain pin.
 #
 # GHOSTTY_REV is a plain pin for reproducibility, not a workaround. It was held at a 2026-04-30
 # pre-regression commit while later builds blanked the scrollback on a font-size increase; that is

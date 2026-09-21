@@ -191,11 +191,11 @@ extension ControlServer {
         // attaching is the user asking for the session HERE, so every pane claims the lead at once
         let leads = (left: ZmxLeadAttachment(claim: true), right: ZmxLeadAttachment(claim: true))
         do {
-            primary = try paneCommand(host: host, tree: tree, daemon: left, name: remote.name, pane: .left,
-                                      lead: leads.left)
+            primary = try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: left,
+                                                          session: remote.name, pane: .left, lead: leads.left)
             split = try right.map {
-                try paneCommand(host: host, tree: tree, daemon: $0, name: remote.name, pane: .right,
-                                lead: leads.right)
+                try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: $0,
+                                                    session: remote.name, pane: .right, lead: leads.right)
             }
         } catch {
             return ControlResponse(ok: false, error: "\(host) reported a session agterm cannot address")
@@ -238,12 +238,6 @@ extension ControlServer {
         // re-render can clear from under it through `onFocusChange`.
         actions.focusSplitPane(created, wantSplit: created.splitFocused)
         return ControlResponse(ok: true, result: ControlResult(id: created.id.uuidString))
-    }
-
-    private func paneCommand(host: String, tree: ControlRemoteTree, daemon: String, name: String,
-                             pane: ZmxPaneRole, lead: ZmxLeadAttachment) throws -> String {
-        try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: daemon,
-                                            session: name, pane: pane, lead: lead)
     }
 
     /// Kill the daemons the inventory shows as unclaimed and detached.

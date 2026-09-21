@@ -23,6 +23,28 @@ extension ControlServer {
         return .daemon(name: name, client: client)
     }
 
+    /// `session.lead`: what a key press on the pane's cover does. A pane that already leads answers ok, so
+    /// a caller can ask without reading `lead` first; one whose zmx never reported a role has no lead to
+    /// take and says so rather than answering ok for nothing.
+    func takeSessionLead(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse {
+        guard pane != .scratch else { return ControlResponse(ok: false, error: "the scratch terminal has no lead") }
+        return resolver.resolveSession(target, window: window) { store, id in
+            let session = store.session(withID: id)
+            if pane == .right, session?.splitSurface == nil {
+                return ControlResponse(ok: false, error: "session has no split pane")
+            }
+            guard let surface = (pane == .right ? session?.splitSurface : session?.surface) as? GhosttySurfaceView,
+                  let identity = UUID(uuidString: surface.paneToken) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            guard ZmxLeadBook.shared.role(pane: identity) != nil || surface.leadCovered else {
+                return ControlResponse(ok: false, error: "pane has no lead to take")
+            }
+            if surface.leadCovered, !ZmxLeadBook.shared.reattaching(pane: identity) { PaneLead.reattach?(surface, true) }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// `session.text` for a covered pane, nil when the pane is not covered.
     func coveredText(_ surface: GhosttySurfaceView, all: Bool, lines: Int?) -> ControlResponse? {
         switch coveredPane(surface) {

@@ -230,9 +230,11 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
-Primary/split surfaces report `backedByZmx`; scratch and overlays omit it.
+Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `lead` is `leader`, `follower`
+or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
+lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
 so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
@@ -549,6 +551,9 @@ error keeps those names for compatibility.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a
   surface is not ready. The new primary supplies `tree`'s `cwd`/`title`/`foreground`/`restoreCommand`/
   `commandWait`; the other side supplies `splitCwd`/`splitForeground`/`splitRestoreCommand`/`splitCommandWait`.
+- `session lead [--pane left|right] [--target] [--window W]`: take the lead of a pane for this Mac, as a
+  key press on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
+  `pane has no lead to take` when its terminal reports none. Read back `surfaces[].lead`.
 - `session scratch [on|off|toggle] [--command CMD] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
   `exit` in it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the
@@ -1682,18 +1687,21 @@ one opened after the attach-time split is closed), Duplicate Session, and New Se
 to open in the current session's directory. An explicit overlay `--cwd` is used as given. Quote both
 variables; an existing local path is not checked to be the same repository as the remote one.
 
-When another client leads at a different terminal size, local cursor and screen-text reads can disagree
-with the application's layout; automation relying on those reads, including the chat transport, is
-unsupported in that state.
+Each pane has ONE leading Mac, whose window size the program inside sees. `zmx attach` takes the lead in
+every pane at once; the same panes on the Mac the session runs on are covered ("in use from another Mac").
+Each pane's `lead` in `tree` reads `leader`, `follower` or `unowned`, and is absent when the pane's zmx
+reports none (an older agterm on either side). `agtermctl session lead [--pane left|right]` takes the lead
+for this Mac, as pressing a key on the cover does.
+
+On the Mac the session RUNS on, a covered pane stays fully drivable: `session type`, `session text` and
+`surface cursor` go through the session's daemon and answer for the real layout, so pane-to-pane
+automation is unaffected by who leads. On the ATTACHING Mac a covered pane refuses those three with
+`pane is in use on the Mac it runs on`; run `session lead` first.
 
 Both commands run ssh non-interactively (`BatchMode`), so key-based auth must already work for the host —
-a password or host-key prompt is a failure, not a question. An attach joins as a follower and pinned zmx
-keeps one leader per pane, so the pane arrives at the OTHER machine's window size and drops input until
-the first CLASSIFIED key (a printable character, Return, Tab or Backspace) takes the lead and reflows
-it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side, so a mouse-driven TUI looks
-dead, and an ordinary control key may not wake it. Because the lead is per pane, typing in one half of a split leaves the other at the
-remote's geometry, and after the session closes the far side keeps that size until something there resizes
-it.
+a password or host-key prompt is a failure, not a question. Against an origin whose agterm predates the
+lead, the attach follows instead: the pane arrives at the OTHER machine's window size and drops input
+until a typed key (a printable character, Return, Tab or Backspace) takes the lead.
 
 Every zmx command needs a running agterm: only the app can join its live windows, its pending closes and
 its persisted snapshots against what zmx reports. With agterm stopped there is nothing to ask.

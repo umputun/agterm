@@ -460,7 +460,10 @@
                 displays wake, then recovers on its own — poll this after an unattended create),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">backedByZmx</span> (true only when every existing
                 primary/split pane is currently zmx-backed; each primary/split object in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value, and its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span>: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">leader</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">follower</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unowned</span>, which says whether this Mac's
+                window size is the one the pane's program sees. A pane that does not lead is covered. Absent until the
+                pane's terminal reports one),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">liveAttribution</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitLiveAttribution</span> (primary and split pane
                 attribution: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">supervisor</span> identifies the bundled
@@ -1310,6 +1313,23 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitCommandWait</span>. The GUI twin is
                 <strong style="color: #bfbab0">View ▸ Swap Panes</strong> and the matching action-palette row. Neither has a
                 default shortcut.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session lead [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.lead</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Take the lead of a pane for this Mac. A session attached from another Mac has one leading Mac per pane, whose
+                window size the program sees; a pane that does not lead is covered. This uncovers it here and covers it on
+                the other Mac, exactly as pressing a key on the cover does. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> defaults to the primary pane.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A pane that already leads answers ok. One whose terminal reports no lead, which is every pane of an agterm
+                or an origin older than this command, answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane has no lead to take</span>. Read each pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span> from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>.
               </p>
             </div>
 
@@ -3303,7 +3323,7 @@
                 When the stream drops, a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> overlay whose program already ended closes on the presenting Mac, and a running one keeps running and closes when its ssh ends; nothing is handed back later. While the stream is not up, the row's indicator says so and names the host. It retries on its own; close and reattach the session to retry at once.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Pinned zmx has a single leader, and an attach joins as a follower, so the remote arrives at the <em>other</em> machine's window size and ignores input until the first <em>classified</em> key — a printable character, Return, Tab or Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side, so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Leadership is per pane, so typing in one half of a split leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something else resizes it.
+                Each pane has one leading Mac, whose window size the program sees. An attach takes the lead in every pane, and the same panes on the Mac the session runs on are covered; each pane's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">leader</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">follower</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unowned</span>. A key on the cover or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session lead</span> takes it back. On the Mac the session runs on, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface cursor</span> keep working on a covered pane; on the attaching Mac a covered pane refuses them until it leads again. Closing the session uncovers the far side. An origin running an older agterm reports no lead, and the attach then arrives at its window size until a typed key.
               </p>
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">

@@ -27,6 +27,10 @@ extension AppStore {
     /// `alreadyFinalized` names a pane whose daemon the CALLER has destroyed, so the teardown does not ask
     /// the finalizer to kill a name that is already gone. Only `zmx kill` passes one.
     func finalizePaneIdentities(_ sessions: [Session], alreadyFinalized: UUID? = nil) {
+        // every pane, an attached one included: its daemon is not ours to kill, its lead state is
+        for session in sessions {
+            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
+        }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
     }
@@ -187,7 +191,10 @@ extension AppStore {
            session.locallyManagedPaneIdentities.contains(splitPaneIdentity) {
             paneFinalizer?([splitPaneIdentity])
         }
-        if let split = session.splitPaneIdentity { launchPaneDrop?([split]) }
+        if let split = session.splitPaneIdentity {
+            launchPaneDrop?([split])
+            ZmxLeadBook.shared.forget(pane: split)
+        }
         let wasShown = session.isSplit
         session.isSplit = false
         session.hasSplit = false

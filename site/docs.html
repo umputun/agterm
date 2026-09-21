@@ -2743,12 +2743,14 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               ends. Retrying is automatic; close and reattach the session to retry at once.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              An attach joins as a follower, and pinned zmx has one leader per pane, so the pane arrives at the <em>other</em>
-              machine's window size and ignores input until your first <em>classified</em> key — a printable character, Return, Tab or
-              Backspace — takes the lead and reflows it. Until then the mouse, focus reporting and Ctrl-L do not reach the far side,
-              so a mouse-driven TUI looks dead, and an ordinary control key may not wake it either. Because the lead is per pane, typing in one half of a split
-              leaves the other at the remote's geometry, and after you close the session the far side keeps your size until something
-              there resizes it. When a connection drops, the pane holds on Ghostty's press-any-key prompt under one line naming the
+              Each pane has one Mac that leads it, and the program inside sees that Mac's window size. Attaching takes the
+              lead in every pane at once, so the session arrives at <em>your</em> size with nothing to press, and the same
+              panes on the Mac the session runs on are covered with a note that it is in use elsewhere. Pressing a key on a
+              cover, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session lead</span>, takes the lead back and covers the pane on the other
+              side. Scripts typing into a covered pane on the Mac the session runs on still work, and so do their reads of
+              its screen: both go through the session itself, not the covered view. When you close the session the panes
+              on the far side uncover by themselves. Both Macs need an agterm with this behaviour; against an older one
+              the attach still arrives at the other Mac's size until you type. When a connection drops, the pane holds on Ghostty's press-any-key prompt under one line naming the
               host, the session, the pane and the exit status.
             </p>
 

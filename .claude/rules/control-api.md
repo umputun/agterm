@@ -152,7 +152,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.collapse`, `.expand`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
-  `.split.close`, `.swap`,
+  `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
@@ -1034,10 +1034,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   local split (the first on an unsplit remote session, or one created after the attach-time split
   closes), Duplicate Session and a new session under the current-directory setting. The primary SSH
   surface still starts in HOME without the helper. `keymap.md` owns the token contract.
-- When another client leads at a different terminal size, local cursor and screen-text reads can
-  disagree with the application's layout; automation relying on those reads, the chat transport
-  included, is unsupported in that state. `docs/backlog/attached-pane-content-is-laid-out-for-the-leaders-grid.md`
-  carries the zmx mechanism.
+- A pane's zmx daemon applies ONE client's grid, its leader's. Which client leads is explicit; see
+  Pane lead below.
 - `zmx list` carries the `endpoint` header — the zmx executable and its `ZMX_DIR` — because neither is
   guessable from another machine. It is INJECTED from `ZmxClient` through the restored runtime, never
   recomputed from the process environment, which would duplicate runtime selection and break hosted tests
@@ -1252,17 +1250,67 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
   existing status, context, notification and HUD paths those suites already cover. `ControlServerRemotePresentationTests`
   runs both roles in one process over the real bridge binary instead.
-- Accepted v1 limitations, documented rather than built around. Pinned zmx keeps one `leader_client_fd` and
-  our attach is a follower, so the snapshot arrives at the FAR side's geometry and does not resize until
-  the first classified keystroke calls `setLeader`:
-  - before that keystroke follower input is DROPPED, not merely non-claiming, so mouse, focus and Ctrl-L
-    never reach the remote and a mouse-first TUI looks dead;
-  - leadership is per DAEMON, so a typed primary can sit beside a split still at the far side's geometry;
-  - on detach each daemon we led keeps our geometry until it receives qualifying input or a resize report,
-    while panes we never claimed stay correct.
+## Pane lead
 
-  An opt-in upstream `zmx attach --take-leadership` with handback would remove all three and is not part of
-  this work.
+- zmx keeps one leader per daemon and applies only its grid. Stock zmx moves the lead to whichever client
+  sends bytes it classifies as typing, which `session.type` on the origin is, and so is a terminal's reply
+  to a Kitty keyboard-status query. `scripts/zmx-patches/0001-explicit-leadership.patch` adds an opt-in:
+  a client attached with `ZMX_MANAGED=<nonce>` leads only by claiming at attach (`ZMX_MANAGED_CLAIM`), its
+  input is dropped while it follows, and a resize from it never claims a vacant slot. Every attach agterm
+  starts is managed; a stock client on the same daemon keeps upstream behaviour.
+- `zmx.attach` claims in every pane, so the attaching Mac's grid applies with no key press. A local pane
+  attaches WITHOUT the claim: it leads a daemon nobody leads, and one relaunched under another Mac's lead
+  comes back covered instead of taking it.
+- The client reports its role as a TITLE, `OSC 2;zmx-role;<nonce>:<unowned|leader|follower>:<generation>`,
+  intercepted in `GhosttyCallbacks` ahead of `applyTitle`. Not OSC 777: libghostty drops a desktop
+  notification that follows another within one second APP-WIDE (`Surface.zig showDesktopNotification`),
+  which lost the report after every re-attach and would lose one of a split's two. The nonce is per
+  attachment and the daemon unsets it before spawning the shell, so neither a program printing the title
+  nor a report from a surface the pane already replaced is accepted; a program that enables
+  `title-report` can read it back and forge its OWN pane's role, which is accepted.
+- A static `title` in the user's ghostty config makes libghostty drop every OSC title, the reports
+  included, while the daemon goes on enforcing a role the app never learned: a follower's
+  `session.type` would answer ok for input the daemon drops. `GhosttyApp.clearStaticTitle` therefore
+  clears the key in EVERY config build, reload and per-surface overlay included, and the title callback
+  keeps its one effect by skipping `applyTitle` while `staticTitleConfigured`.
+- The client writes a report only where it cannot split an escape sequence or a UTF-8 character,
+  tracked with Ghostty's own `Stream.nextSliceUntilGround`, and forces one with CAN after 250 ms. The
+  daemon reports to a client only when ITS role changed, so CAN lands in a fresh terminal or one about to
+  be covered, never in the continuing leader's.
+- `ZmxLeadBook` holds the state, keyed by pane identity so it follows a swap or a promoted split.
+  `lead` on each primary/split surface node reads it: `leader`, `follower`, `unowned`, and omitted until
+  the pane's zmx reports, which an origin or a zmx without the patch never does. Such a pane behaves as
+  before and is never covered. A role change emits `tree.changed`.
+- A pane that does not lead is covered (`PaneLeadCover`). Taking the lead is always a FRESH attach into a
+  new surface, by the first key on the cover, by `session.lead`, or by itself when the role turns
+  `unowned`. The automatic one omits the claim, so it leads only if the daemon is still unowned when it
+  arrives and cannot take a lead someone claimed meanwhile. In place repair was rejected: libghostty
+  reports a new grid before its terminal has it, and the role report reaches the app a main-queue hop
+  after the bytes behind it, so a replay could be parsed at the old grid.
+- `agtermApp.reattachPane` runs none of the pane's close paths: session, daemon and pane identity stay,
+  so the program keeps its `AGTERM_PANE_ID`. The cover stays up from the swap until the new client's
+  first report. The launch attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is
+  gone, locally as for an attached pane, so a vanished session ends the pane. An attached pane is
+  rebuilt from `RemoteBinding.Origin`, never from the pane's first command line, which carries that
+  attachment's nonce.
+- The takeover key is consumed with its repeats and its release, and a Command chord on a covered pane
+  is swallowed without taking the lead. Paste, drop, IME and mouse need no app-side guard: the daemon
+  drops a managed follower's input.
+- While a LOCAL pane is covered, `session.text` and `surface.cursor` are answered by `zmx screen`, the
+  daemon's own terminal, which always has the leader's layout, and `session.type` goes through
+  `zmx type`, which queues bytes without the lead and acknowledges them. This is what keeps pane-to-pane
+  automation, the chat transport included, working on the Mac a session runs on while another Mac leads
+  it. A failed daemon read is an error, never a fall back to the covered surface. `session.type` maps
+  each CR, LF or CRLF to one CR and stays unbracketed, as `inject` does with key events.
+- A pane that leads is read from its own surface, scrolled viewport included, so there is a window of
+  one main-queue hop after a demotion in which a read still answers locally.
+- A covered pane ATTACHED from another Mac refuses all three with `pane is in use on the Mac it runs
+  on; take the lead to drive it from here`: its daemon is an ssh away and these reads are synchronous.
+- `session.lead [--pane]` is the control twin of the cover's key. A pane that already leads answers ok;
+  one with no reported role answers `pane has no lead to take`; scratch is refused. Read back `lead`.
+  It has no menu item or chord: the cover is its GUI surface.
+- The far side runs the ORIGIN's zmx, so both Macs need the patch. Against an older origin nothing is
+  reported, no pane is covered, and the pre-patch behaviour holds: the attach follows until a typed key.
 
 ## Session backgrounds
 

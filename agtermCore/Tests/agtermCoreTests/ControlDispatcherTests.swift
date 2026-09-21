@@ -673,6 +673,29 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.sessionSwap(target: "session", window: "win")])
     }
 
+    @Test func sessionLeadParsesThePaneOnceAndRoutesIt() async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionLead, target: "session", args: ControlArgs(window: "win", pane: "split")))
+        let bare = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionLead, target: "active"))
+
+        #expect(response?.ok == true)
+        #expect(bare?.ok == true)
+        #expect(actions.calls == [.sessionLead(target: "session", window: "win", pane: .right),
+                                  .sessionLead(target: "active", window: nil, pane: nil)])
+    }
+
+    @Test func sessionLeadRejectsAnUnknownPaneBeforeDispatch() async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionLead, target: "session", args: ControlArgs(pane: "middle")))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid pane: middle"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func splitRejectsAnUnknownAxisBeforeDispatch() async {
         let actions = MockControlActions()
         let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
