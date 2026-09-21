@@ -1306,13 +1306,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   is swallowed without taking the lead. Paste, drop, IME and mouse need no app-side guard: the daemon
   drops a managed follower's input.
 - The role the app holds is a REPORT, a main-queue hop and up to 250 ms behind the daemon, so it never
-  decides delivery. For a LOCAL pane whose zmx has reported any role, `session.type` ALWAYS goes through
+  decides delivery. For a LOCAL pane, after its zmx's first role report, `session.type` ALWAYS goes through
   `zmx type`, which queues bytes without the lead and acknowledges them, and `surface.cursor` plus
   `session.text --all`/`--lines` are ALWAYS answered by `zmx screen`, the daemon's own terminal, which
   has the leader's layout. Keying these on the cached role answered ok for input the daemon had already
   started dropping. This is what keeps pane-to-pane automation, the chat transport included, working on
   the Mac a session runs on while another Mac leads it. A failed daemon call is an error, never a fall
   back to the surface. The main pane's realize poll repeats the check before each inject.
+- Accepted limit: between a local pane's attach and its first role report the pane types through its
+  surface, so a `session.type` there can answer ok for input a daemon led from another Mac drops. The
+  window is one pane spawn plus the report lag. Probing `zmx type` before every call was rejected: a
+  daemon from a build predating the patch never reports and ignores the `Type` tag, so each call to it
+  would time out again.
 - `zmx type` is keystrokes, not bytes and not a paste: `session.type` sends each line ending as one CR
   and the daemon encodes every CR as a Return press and release, and every run between them as typed
   text, with Ghostty's own key encoder against its terminal's LIVE keyboard mode. A program that asked
