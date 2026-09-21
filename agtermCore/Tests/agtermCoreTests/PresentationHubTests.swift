@@ -126,6 +126,36 @@ struct PresentationHubTests {
         #expect(hub.subscriberCount(session: Self.session) == 0)
     }
 
+    @Test(arguments: [false, true])
+    func aNewSubscriberReceivesAReturnToThePreviousLayout(staleHeartbeat: Bool) throws {
+        let hub = makeHub()
+        let first = Sink()
+        let primary = UUID()
+        let initial = PresentationLayout(panes: [primary], primary: primary, shown: false)
+        let changed = PresentationLayout(panes: [primary, UUID()], primary: primary, axis: "vertical", shown: true)
+        let id = try hub.subscribe(session: Self.session, hello: Self.hello, sink: first) {
+            PresentationSnapshot(status: nil, hud: nil, layout: initial)
+        }
+        if staleHeartbeat {
+            clock.now += 31
+            hub.heartbeat()
+            #expect(first.closed == .stale)
+        } else {
+            hub.unsubscribe(id)
+        }
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+        hub.publishLayout(changed, session: Self.session)
+        let next = Sink()
+        let snapshot = PresentationSnapshot(status: nil, hud: nil, layout: changed)
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: next) { snapshot }
+        #expect(next.bodies.last == .snapshot(snapshot))
+
+        hub.publishLayout(initial, session: Self.session)
+
+        #expect(next.bodies.last == .layout(initial))
+        #expect(next.frames.count == 3)
+    }
+
     @Test func theAnswerAdvertisesOnlyKindsBothSidesSpeak() throws {
         let hub = makeHub()
         let sink = Sink()
