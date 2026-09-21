@@ -4,16 +4,20 @@ import SwiftUI
 /// Covers a pane whose zmx client does not lead: what its terminal drew is laid out for another client's
 /// grid. Always mounted, so the pane's ZStack keeps one shape (see `sessionDetail`); it draws and takes
 /// hits only while the pane is covered. A click focuses the pane, whose next key press takes the lead.
+/// Every host of a pane's terminal mounts one, the deck, terminal zoom and the dashboard alike, directly
+/// over that terminal: a pane overlay above it is another program's and stays visible.
 struct PaneLeadCover: View {
     let session: Session
     let pane: OverlayPane
-    let background: Color
-    let foreground: Color
+    var background = WindowContentView.resolvedTerminalColor()
+    var foreground = WindowContentView.resolvedChromeText()
+    /// The pane sits under its own pane overlay, which draws on a transparent backing.
+    var hidden = false
 
     var body: some View {
         let identity = session.paneIdentity(for: pane == .left ? StatusPane.left : .right)
         let book = ZmxLeadBook.shared
-        let covered = book.covered(pane: identity)
+        let covered = book.covered(pane: identity) && !hidden
         ZStack {
             if covered {
                 background

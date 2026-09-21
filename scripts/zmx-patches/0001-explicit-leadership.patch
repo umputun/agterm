@@ -138,7 +138,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
      var list = try std.ArrayList(u8).initCapacity(alloc, 64);
 diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 --- zmx-orig/src/loop.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/loop.zig	2026-09-20 18:33:20.087881234 -0500
++++ zmx/src/loop.zig	2026-09-20 19:16:39.160571512 -0500
 @@ -6,6 +6,7 @@
  const cross = @import("cross.zig");
  const socket = @import("socket.zig");
@@ -313,7 +313,21 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          // check if leader needs to be updated by detecting any user input
          if (util.isUserInput(payload)) {
              try self.setLeader(gpa, client);
-@@ -959,9 +1039,11 @@
+@@ -916,6 +996,13 @@
+     pub fn handleSwitch(self: *Daemon, gpa: std.mem.Allocator, session_name: []const u8) !void {
+         for (self.clients.items) |client| {
+             if (self.leader_client_fd == client.socket_fd) {
++                // a managed client's terminal is bound to THIS session: its token, its role generation
++                // and what it reads and types through `screen` and `type` all name it, so moving the
++                // client to another daemon would leave every one of them pointing at the wrong session
++                if (client.managed) {
++                    std.log.info("ignoring switch to {s}: the leader is a managed client", .{session_name});
++                    return;
++                }
+                 // Include the daemon's current cwd so the new session can start
+                 // in the right directory. A remote cwd is left out: it names no
+                 // directory here, so the new session is better off with the
+@@ -959,9 +1046,11 @@
  
          client.is_terminal = true;
  
@@ -326,7 +340,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          const is_leader = self.leader_client_fd == client.socket_fd;
          const resize = std.mem.bytesToValue(ipc.Resize, payload);
  
-@@ -973,6 +1055,7 @@
+@@ -973,6 +1062,7 @@
          // shell's own SIGWINCH redraw still arrives after the snapshot.
          if (is_leader) {
              try resizeTerm(gpa, term, resize.cols, resize.rows);
@@ -334,7 +348,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          }
  
          // Only serialize on re-attach (has_had_client), not first attach, to avoid
-@@ -1032,7 +1115,8 @@
+@@ -1032,7 +1122,8 @@
          payload: []const u8,
      ) !void {
          if (payload.len != @sizeOf(ipc.Resize)) return;
@@ -344,7 +358,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              try self.setLeader(gpa, client);
          }
          // only leader can resize
-@@ -1042,6 +1126,7 @@
+@@ -1042,6 +1133,7 @@
          var ws = resize.winsize();
          _ = cross.c.ioctl(pty_fd, cross.c.TIOCSWINSZ, &ws);
          try resizeTerm(gpa, term, resize.cols, resize.rows);
@@ -352,7 +366,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          std.log.debug("resize rows={d} cols={d}", .{ resize.rows, resize.cols });
      }
  
-@@ -1148,6 +1233,44 @@
+@@ -1148,6 +1240,44 @@
          }
      }
  
@@ -397,7 +411,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pub fn handleRun(self: *Daemon, gpa: std.mem.Allocator, io: std.Io, client: *Client, payload: []const u8) !void {
          // Reset task tracking so the new command's exit marker is detected.
          // Without this, a second `zmx run` on the same session is ignored
-@@ -1235,6 +1358,7 @@
+@@ -1235,6 +1365,7 @@
          vt_stream.nextSlice(payload);
          self.setPwd(term);
          self.has_pty_output = true;
@@ -405,7 +419,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          for (self.clients.items) |client| {
              try ipc.appendMessage(gpa, &client.write_buf, .Output, payload);
              client.has_pending_output = true;
-@@ -1450,6 +1574,196 @@
+@@ -1450,6 +1581,219 @@
      try std.testing.expectEqualStrings("hello", daemon.pty_write_buf.items);
  }
  
@@ -512,6 +526,29 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +
 +    _ = daemon.closeClient(alloc, viewer, 1, false);
 +    _ = daemon.closeClient(alloc, origin, 0, false);
++}
++
++test "switch moves a stock leader and leaves a managed one bound to its session" {
++    const alloc = std.testing.allocator;
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++
++    const a = try lib_posix.pipe2(.{});
++    const stock = try testClient(alloc, a[0], true);
++    try daemon.clients.append(alloc, stock);
++    daemon.leader_client_fd = a[0];
++    try daemon.handleSwitch(alloc, "other");
++    const sent = std.mem.bytesToValue(ipc.Header, stock.write_buf.items[0..@sizeOf(ipc.Header)]);
++    try std.testing.expectEqual(ipc.Tag.Switch, sent.tag);
++
++    const managed = try testManaged(alloc, &daemon, a[1], true);
++    daemon.leader_client_fd = a[1];
++    try daemon.handleSwitch(alloc, "other");
++    try std.testing.expectEqual(@as(usize, 0), managed.write_buf.items.len);
++
++    _ = daemon.closeClient(alloc, managed, 1, false);
++    _ = daemon.closeClient(alloc, stock, 0, false);
 +}
 +
 +test "an unmanaged client still leads by typing" {

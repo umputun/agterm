@@ -405,7 +405,10 @@ final class GhosttyApp {
         // the broadcast pushes the shared config (no background image, default font size) to every surface,
         // wiping per-surface watermarks and zoom — re-assert them after. No-op without either; on the
         // zoom-clearing reload paths the per-session fontSize was already nil'd, so only watermarks re-apply.
-        for surface in surfaces { surface.reapplySessionConfigIfNeeded() }
+        for surface in surfaces {
+            surface.reapplySessionConfigIfNeeded()
+            if let staticTitle, surface.session != nil { surface.applyTitle(staticTitle) }
+        }
         return lastConfigDiagnosticsCount
     }
 
@@ -580,18 +583,18 @@ final class GhosttyApp {
         try? FileManager.default.removeItem(atPath: tmp)
     }
 
-    /// Whether the user's config sets a static `title`. libghostty drops EVERY OSC title while that key is
-    /// set, the role reports a pane's zmx client sends as titles included, and the daemon enforces a role
-    /// the app would then never learn. So the key is cleared in every config build and its one effect in
-    /// agterm, ignoring the programs' own titles, is kept by the title callback reading this.
-    private(set) var staticTitleConfigured = false
+    /// The static `title` of the user's config, nil when unset. libghostty drops EVERY OSC title while that
+    /// key is set, the role reports a pane's zmx client sends as titles included, and the daemon enforces a
+    /// role the app would then never learn. So the key is cleared in every config build and agterm applies
+    /// it instead: to a pane when it is built, in place of each title a program sets, and on a reload.
+    private(set) var staticTitle: String?
 
     private func clearStaticTitle(_ cfg: ghostty_config_t) {
         let key = "title"
         var value: UnsafePointer<CChar>?
         let read = key.withCString { ghostty_config_get(cfg, &value, $0, UInt(key.utf8.count)) }
-        staticTitleConfigured = read && value.map { $0.pointee != 0 } ?? false
-        guard staticTitleConfigured else { return }
+        staticTitle = read ? value.map { String(cString: $0) }.flatMap { $0.isEmpty ? nil : $0 } : nil
+        guard staticTitle != nil else { return }
         let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-title-\(UUID().uuidString).conf")
         do {
             try "title =\n".write(toFile: tmp, atomically: true, encoding: .utf8)

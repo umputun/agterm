@@ -527,7 +527,7 @@ struct WindowContentView: View {
     }
 
     /// The terminal theme's foreground color, with a light fallback if libghostty hasn't reported one.
-    private static func resolvedChromeText() -> Color {
+    static func resolvedChromeText() -> Color {
         Color(nsColor: GhosttyApp.shared.terminalForegroundColor ?? .labelColor)
     }
 

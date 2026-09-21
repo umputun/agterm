@@ -164,11 +164,13 @@ struct DashboardView: View {
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
                          onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-split-\(PaneHostIdentity.token(for: member.surface, in: session))")
+                .overlay { PaneLeadCover(session: session, pane: .right).allowsHitTesting(false) }
         } else {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
                          onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-primary-\(PaneHostIdentity.token(for: member.surface, in: session))")
+                .overlay { PaneLeadCover(session: session, pane: .left).allowsHitTesting(false) }
         }
     }
 

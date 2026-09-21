@@ -51,15 +51,38 @@ final class ControlServerPaneLeadTests: XCTestCase {
         return (view, identity)
     }
 
-    func testALeadingOrUnreportedPaneIsReadFromItsOwnSurface() throws {
+    func testAPaneWhoseZmxNeverReportedKeepsItsOwnSurfaceForEverything() throws {
         let server = makeServer()
-        for role in [ZmxLeadRole.leader, nil] {
-            let (view, _) = try pane(role: role)
-            XCTAssertNil(server.coveredText(view, all: false, lines: nil))
-            XCTAssertNil(server.coveredCursor(view, controlID: "x"))
-            XCTAssertNil(server.coveredType("ls\n", into: view, session: UUID()))
-        }
+        let (view, _) = try pane(role: nil)
+
+        XCTAssertNil(server.coveredText(view, all: false, lines: 3))
+        XCTAssertNil(server.coveredCursor(view, controlID: "x"))
+        XCTAssertNil(server.coveredType("ls\n", into: view, session: UUID()))
         XCTAssertTrue(invocations.isEmpty)
+    }
+
+    // the role the app holds trails the daemon's, so it never decides whether input is delivered.
+    func testALeadingPaneStillTypesAndReadsItsLayoutThroughTheDaemon() throws {
+        let server = makeServer()
+        let (view, identity) = try pane(role: .leader)
+        zmxReply = { $0.arguments.first == "screen" ? "1 80 24 5 0 0\nprompt\n" : "" }
+
+        XCTAssertNil(server.coveredText(view, all: false, lines: nil), "its scrolled viewport is its own")
+        XCTAssertEqual(server.coveredText(view, all: false, lines: 1)?.result?.text, "prompt")
+        XCTAssertEqual(server.coveredCursor(view, controlID: "x")?.result?.cursor?.column, 5)
+        XCTAssertEqual(server.coveredType("ls\n", into: view, session: UUID())?.ok, true)
+
+        let name = ZmxSupport.daemonName(for: identity)
+        XCTAssertEqual(invocations.map(\.arguments), [["screen", name, "--all"], ["screen", name], ["type", name]])
+    }
+
+    func testALeadingPaneAttachedFromAnotherMacIsDrivenThroughItsOwnSurface() throws {
+        let server = makeServer()
+        let (view, _) = try pane(role: .leader, local: false)
+
+        XCTAssertNil(server.coveredText(view, all: true, lines: nil))
+        XCTAssertNil(server.coveredCursor(view, controlID: "x"))
+        XCTAssertNil(server.coveredType("ls\n", into: view, session: UUID()))
     }
 
     func testACoveredLocalPaneIsReadFromItsDaemon() throws {

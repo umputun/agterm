@@ -268,8 +268,9 @@ extension WindowContentView {
                 Color.clear
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
             }
+            PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText,
+                          hidden: covered)
             paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
-            PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText)
         }
         .hudPaneAnchor(pane)
         .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in

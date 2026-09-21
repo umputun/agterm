@@ -428,6 +428,7 @@ struct agtermApp: App {
     private static func wirePane(_ view: GhosttySurfaceView, session: Session, store: AppStore,
                                  services: SurfaceServices) {
         view.session = session
+        if let title = GhosttyApp.shared.staticTitle { view.applyTitle(title) }
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
@@ -452,6 +453,13 @@ struct agtermApp: App {
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
+        // an attach that ended holds on its exit prompt, a failed take-over included: no client is left to
+        // report a role, and a cover would hide the line saying what died and swallow the key that closes it
+        view.onExitHeld = { [weak view] in
+            guard let pane = view.flatMap({ UUID(uuidString: $0.paneToken) }) else { return }
+            ZmxLeadBook.shared.forget(pane: pane)
+            store.leadRoleChanged()
+        }
     }
 
     /// Replaces `old` with a fresh attach of the same pane in the same slot. None of the pane's close paths
@@ -464,17 +472,26 @@ struct agtermApp: App {
               let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
               let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
         else { return }
-        let fontSize = old.currentFontSize() ?? session.fontSize
+        // a dashboard cell's transient font is not the pane's: seeding from it would persist the small size
+        let fontSize = old.dashboardFontOverride == nil ? old.currentFontSize() ?? session.fontSize : session.fontSize
         let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
                                       command: launch.command, waitAfterCommand: launch.wait,
                                       env: launch.environment, backedByZmx: old.backedByZmx)
         view.isSplitPane = old.isSplitPane
         Self.wirePane(view, session: session, store: store, services: services)
+        view.dashboardFontOverride = old.dashboardFontOverride
         ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: true)
         // the old client's exit must not close the pane the new one now owns
         _ = old.claimProcessExit()
         let hadFocus = old.window?.firstResponder === old
-        if session.searchSurface === old { old.endSearch() }
+        // synchronously: END_SEARCH reports back through a callback `destroySurface` clears first
+        if session.searchSurface === old {
+            session.searchActive = false
+            session.searchNeedle = ""
+            session.searchTotal = nil
+            session.searchSelected = nil
+            session.searchSurface = nil
+        }
         if old.isSplitPane { session.splitSurface = view } else { session.surface = view }
         old.destroySurface()
         if old.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }

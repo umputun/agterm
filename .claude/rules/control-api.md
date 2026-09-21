@@ -1271,8 +1271,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A static `title` in the user's ghostty config makes libghostty drop every OSC title, the reports
   included, while the daemon goes on enforcing a role the app never learned: a follower's
   `session.type` would answer ok for input the daemon drops. `GhosttyApp.clearStaticTitle` therefore
-  clears the key in EVERY config build, reload and per-surface overlay included, and the title callback
-  keeps its one effect by skipping `applyTitle` while `staticTitleConfigured`.
+  clears the key in EVERY config build, reload and per-surface overlay included, keeps the string as
+  `staticTitle`, and agterm applies it itself where libghostty used to: when a pane is wired, in place of
+  every title a program sets, and to every surface on a reload.
 - The client writes a report only where it cannot split an escape sequence or a UTF-8 character,
   tracked with Ghostty's own `Stream.nextSliceUntilGround`, and forces one with CAN after 250 ms. The
   daemon reports to a client only when ITS role changed, so CAN lands in a fresh terminal or one about to
@@ -1281,7 +1282,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `lead` on each primary/split surface node reads it: `leader`, `follower`, `unowned`, and omitted until
   the pane's zmx reports, which an origin or a zmx without the patch never does. Such a pane behaves as
   before and is never covered. A role change emits `tree.changed`.
-- A pane that does not lead is covered (`PaneLeadCover`). Taking the lead is always a FRESH attach into a
+- A pane that does not lead is covered (`PaneLeadCover`), by every host of its terminal: the deck, where
+  it sits BELOW the pane's own pane overlay and hides while one is up, terminal zoom, and the dashboard.
+  The daemon ignores a session switch while its leader is managed: the client's nonce, its generation and
+  what it reads and types through the daemon are all bound to that one session. Taking the lead is always a FRESH attach into a
   new surface, by the first key on the cover, by `session.lead`, or by itself when the role turns
   `unowned`. The automatic one omits the claim, so it leads only if the daemon is still unowned when it
   arrives and cannot take a lead someone claimed meanwhile. In place repair was rejected: libghostty
@@ -1289,21 +1293,29 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   after the bytes behind it, so a replay could be parsed at the old grid.
 - `agtermApp.reattachPane` runs none of the pane's close paths: session, daemon and pane identity stay,
   so the program keeps its `AGTERM_PANE_ID`. The cover stays up from the swap until the new client's
-  first report. The launch attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is
+  first report. An open search owned by the old surface is cleared synchronously, since END_SEARCH
+  answers through a callback `destroySurface` clears first; a dashboard cell's transient font is carried
+  as the override and never seeds the new surface's own size. `wirePane`'s `onExitHeld` drops the
+  pane's lead state when an attach ends on its exit prompt, a failed take-over included, or the cover
+  would hide the line saying what died and swallow the key that closes it. The launch attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is
   gone, locally as for an attached pane, so a vanished session ends the pane. An attached pane is
   rebuilt from `RemoteBinding.Origin`, never from the pane's first command line, which carries that
   attachment's nonce.
 - The takeover key is consumed with its repeats and its release, and a Command chord on a covered pane
   is swallowed without taking the lead. Paste, drop, IME and mouse need no app-side guard: the daemon
   drops a managed follower's input.
-- While a LOCAL pane is covered, `session.text` and `surface.cursor` are answered by `zmx screen`, the
-  daemon's own terminal, which always has the leader's layout, and `session.type` goes through
-  `zmx type`, which queues bytes without the lead and acknowledges them. This is what keeps pane-to-pane
-  automation, the chat transport included, working on the Mac a session runs on while another Mac leads
-  it. A failed daemon read is an error, never a fall back to the covered surface. `session.type` maps
-  each CR, LF or CRLF to one CR and stays unbracketed, as `inject` does with key events.
-- A pane that leads is read from its own surface, scrolled viewport included, so there is a window of
-  one main-queue hop after a demotion in which a read still answers locally.
+- The role the app holds is a REPORT, a main-queue hop and up to 250 ms behind the daemon, so it never
+  decides delivery. For a LOCAL pane whose zmx has reported any role, `session.type` ALWAYS goes through
+  `zmx type`, which queues bytes without the lead and acknowledges them, and `surface.cursor` plus
+  `session.text --all`/`--lines` are ALWAYS answered by `zmx screen`, the daemon's own terminal, which
+  has the leader's layout. Keying these on the cached role answered ok for input the daemon had already
+  started dropping. This is what keeps pane-to-pane automation, the chat transport included, working on
+  the Mac a session runs on while another Mac leads it. A failed daemon call is an error, never a fall
+  back to the surface. `session.type` maps each CR, LF or CRLF to one CR and stays unbracketed, as
+  `inject` does with key events; the main pane's realize poll repeats the check before each inject.
+- The default `session.text` is the one read whose meaning is the pane's own scrolled viewport, so it
+  stays on the surface while the pane leads and moves to the daemon only while it is covered. That read
+  alone keeps the one-hop window after a demotion.
 - A covered pane ATTACHED from another Mac refuses all three with `pane is in use on the Mac it runs
   on; take the lead to drive it from here`: its daemon is an ssh away and these reads are synchronous.
 - `session.lead [--pane]` is the control twin of the cover's key. A pane that already leads answers ok;

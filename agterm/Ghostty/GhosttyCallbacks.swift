@@ -46,10 +46,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
                 DispatchQueue.main.async { PaneLead.report(notice, from: view) }
                 return true
             }
-            DispatchQueue.main.async {
-                // a static `title` in the user's config means program titles are not wanted
-                if !GhosttyApp.shared.staticTitleConfigured { view.applyTitle(title) }
-            }
+            // a static `title` in the user's config stands in for every title a program sets
+            DispatchQueue.main.async { view.applyTitle(GhosttyApp.shared.staticTitle ?? title) }
             return true
         case GHOSTTY_ACTION_CELL_SIZE:
             // the cell pixel size changed (cmd +/- font size, or DPI): a trigger only — the view reads the

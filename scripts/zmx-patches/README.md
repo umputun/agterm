@@ -10,10 +10,11 @@ apply, and re-running `check.py`.
 
 - `0001-explicit-leadership.patch` lets a terminal own which client leads a session. A client attached
   with `ZMX_MANAGED=<token>` leads only by claiming at attach (`ZMX_MANAGED_CLAIM`), never by typing, and
-  is told its role through a reserved OSC 777 notification carrying the token. `zmx screen` reads the
+  reports its role as a title under a reserved prefix that carries the token. `zmx screen` reads the
   daemon's own terminal, which always has the leader's layout, and `zmx type` queues input with an
-  acknowledgement and without taking the lead. A client that does not set the variable behaves as
-  upstream does. `.claude/rules/control-api.md` owns how agterm uses it.
+  acknowledgement and without taking the lead. A session switch is ignored while the leader is managed.
+  A client that does not set the variable behaves as upstream does. `.claude/rules/control-api.md` owns
+  how agterm uses it.
 
 `check.py <zmx>` drives two managed clients on ptys of different sizes against one daemon in a throwaway
 `ZMX_DIR` and exits nonzero on the first broken rule.

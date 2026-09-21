@@ -384,6 +384,24 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(node["splitRestoreCommand"], "nothing may be pinned on the vacated split slot")
     }
 
+    // a ui-test pane runs no zmx client, so it reports no lead: the refusals are what is reachable here.
+    func testSessionLeadRefusesAPaneWithNoLead() throws {
+        let sessionID = try activeSessionID()
+        let plain = try sendCommand(#"{"cmd":"session.lead","target":"\#(sessionID)"}"#)
+        XCTAssertEqual(plain["ok"] as? Bool, false)
+        XCTAssertEqual(plain["error"] as? String, "pane has no lead to take", "\(plain)")
+
+        let noSplit = try sendCommand(#"{"cmd":"session.lead","target":"\#(sessionID)","args":{"pane":"split"}}"#)
+        XCTAssertEqual(noSplit["error"] as? String, "session has no split pane", "\(noSplit)")
+        let scratch = try sendCommand(#"{"cmd":"session.lead","target":"\#(sessionID)","args":{"pane":"scratch"}}"#)
+        XCTAssertEqual(scratch["error"] as? String, "the scratch terminal has no lead", "\(scratch)")
+        let invalid = try sendCommand(#"{"cmd":"session.lead","target":"\#(sessionID)","args":{"pane":"middle"}}"#)
+        XCTAssertEqual(invalid["error"] as? String, "invalid pane: middle", "\(invalid)")
+
+        let surfaces = try XCTUnwrap(try restoreNode(sessionID)["surfaces"] as? [[String: Any]])
+        XCTAssertTrue(surfaces.allSatisfy { $0["lead"] == nil }, "omitted, not null, for a pane with no role")
+    }
+
     // the last case is where session.restore diverges from session.status, which falls back to left.
     func testSessionRestoreRejectsUnrestorablePanes() throws {
         let sessionID = try activeSessionID()

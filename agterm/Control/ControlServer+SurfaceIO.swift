@@ -559,8 +559,12 @@ extension ControlServer {
             try? await Task.sleep(nanoseconds: 30_000_000)
             // poll for the surface AND its realization (a false inject keeps polling), so a just-created or
             // just-selected session isn't reported ok before its libghostty surface is up.
-            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.injectAsUserInput(text: text) {
-                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView {
+                // a pane that realized during the wait may have come up managed, or following
+                if let covered = coveredType(text, into: surface, session: id) { return covered }
+                if surface.injectAsUserInput(text: text) {
+                    return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+                }
             }
         }
         return ControlResponse(ok: false, error: "session not realized")

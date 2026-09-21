@@ -1,26 +1,33 @@
 import agtermCore
 import Foundation
 
-/// Reads and scripted typing for a pane that does not lead its zmx daemon. Its own surface holds output
-/// laid out for another client's grid, so screen text and the cursor come from the daemon's terminal
-/// instead, and typing goes through the daemon's acknowledged path, which a follower's keystrokes cannot
-/// use: the daemon drops them. This is what keeps pane-to-pane automation working on the Mac a session
-/// runs on while another Mac leads it.
+/// Reads and scripted typing for a pane whose zmx client takes part in explicit leadership. A pane that
+/// does not lead holds output laid out for another client's grid, and the daemon drops what it types, so
+/// screen text and the cursor come from the daemon's terminal and typing goes through the daemon's
+/// acknowledged path. This is what keeps pane-to-pane automation working on the Mac a session runs on
+/// while another Mac leads it.
+///
+/// The role the app holds is a REPORT, a main-queue hop and up to 250 ms behind the daemon, so it is never
+/// what guarantees delivery: a local managed pane always types and reads its cursor through the daemon.
 extension ControlServer {
-    enum CoveredPane {
-        /// The pane leads, or its zmx never reported a role: its own surface is the truth.
-        case notCovered
+    enum PaneSource {
+        /// The pane's zmx never reported a role, or the read is of the viewport of a pane that leads.
+        case surface
         case daemon(name: String, client: ZmxClient)
         case refused(String)
     }
 
-    func coveredPane(_ surface: GhosttySurfaceView) -> CoveredPane {
-        guard surface.leadCovered else { return .notCovered }
+    /// `viewport` is a default `session.text`: the one read whose meaning is the pane's own scrolled view,
+    /// kept on the surface while the pane leads.
+    func paneSource(_ surface: GhosttySurfaceView, viewport: Bool = false) -> PaneSource {
+        let covered = surface.leadCovered
+        guard covered || ZmxLeadBook.shared.role(pane: UUID(uuidString: surface.paneToken)) != nil else { return .surface }
         guard let name = surface.zmxSessionName, let client = zmxClient else {
             // an attached pane's daemon is on another Mac, out of reach of a synchronous read
-            return .refused("pane is in use on the Mac it runs on; take the lead to drive it from here")
+            return covered
+                ? .refused("pane is in use on the Mac it runs on; take the lead to drive it from here") : .surface
         }
-        return .daemon(name: name, client: client)
+        return !covered && viewport ? .surface : .daemon(name: name, client: client)
     }
 
     /// `session.lead`: what a key press on the pane's cover does. A pane that already leads answers ok, so
@@ -45,10 +52,10 @@ extension ControlServer {
         }
     }
 
-    /// `session.text` for a covered pane, nil when the pane is not covered.
+    /// `session.text` answered by the daemon, nil when the pane's own surface is the source.
     func coveredText(_ surface: GhosttySurfaceView, all: Bool, lines: Int?) -> ControlResponse? {
-        switch coveredPane(surface) {
-        case .notCovered: return nil
+        switch paneSource(surface, viewport: !all && lines == nil) {
+        case .surface: return nil
         case .refused(let reason): return ControlResponse(ok: false, error: reason)
         case .daemon(let name, let client):
             guard let screen = client.screen(name: name, all: all || lines != nil) else {
@@ -58,10 +65,10 @@ extension ControlServer {
         }
     }
 
-    /// `surface.cursor` for a covered pane, nil when the pane is not covered.
+    /// `surface.cursor` answered by the daemon, nil when the pane's own surface is the source.
     func coveredCursor(_ surface: GhosttySurfaceView, controlID: String) -> ControlResponse? {
-        switch coveredPane(surface) {
-        case .notCovered: return nil
+        switch paneSource(surface) {
+        case .surface: return nil
         case .refused(let reason): return ControlResponse(ok: false, error: reason)
         case .daemon(let name, let client):
             guard let screen = client.screen(name: name, all: false) else {
@@ -72,10 +79,10 @@ extension ControlServer {
         }
     }
 
-    /// `session.type` into a covered pane, nil when the pane is not covered.
+    /// `session.type` through the daemon, nil when the pane's own surface takes it.
     func coveredType(_ text: String, into surface: GhosttySurfaceView, session: UUID) -> ControlResponse? {
-        switch coveredPane(surface) {
-        case .notCovered: return nil
+        switch paneSource(surface) {
+        case .surface: return nil
         case .refused(let reason): return ControlResponse(ok: false, error: reason)
         case .daemon(let name, let client):
             let bytes = KeystrokeSegments.ptyBytes(text)
