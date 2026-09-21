@@ -188,6 +188,28 @@ final class ControlServerPaneLeadTests: XCTestCase {
         XCTAssertEqual(server.coveredRefusal(view)?.ok, false)
     }
 
+    func testASearchWhosePaneIsDemotedWhileItWaitsIsRefusedNotAnswered() async throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let identity = session.paneIdentity
+        session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                             env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        panes.append(identity)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: identity)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:1")), pane: identity)
+        let demotion = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:2"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(5)) {
+            _ = ZmxLeadBook.shared.apply(demotion, pane: identity)
+        }
+
+        let searched = await server.searchSession(session.id, store: store, text: "needle", to: nil)
+
+        XCTAssertEqual(searched.error, "pane is covered while another Mac leads it; take the lead first (session lead)")
+        XCTAssertNotEqual(session.searchNeedle, "needle")
+    }
+
     func testSessionLeadReattachesOnlyACoveredPane() throws {
         let server = makeServer()
         let store = try XCTUnwrap(library.activeStore)

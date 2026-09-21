@@ -443,6 +443,8 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "session not realized")
         }
 
+        // the role can change across every wait below, so the owner is re-checked before each mutation
+        if let refusal = coveredRefusal(openSurface) { return refusal }
         openSurface.expediteSpawn()
         // `searchActive` here means a prior open settled (set by the async START callback); two rapid
         // scripted opens could mis-toggle, but the GUI's single-⌘F path is the common case.
@@ -461,6 +463,7 @@ extension ControlServer {
             if needleChanged {
                 await Task.yield()
                 try? await Task.sleep(nanoseconds: 30_000_000)
+                if let refusal = coveredRefusal(surface) { return refusal }
                 session.searchTotal = nil
                 session.searchSelected = nil
             }
@@ -485,6 +488,7 @@ extension ControlServer {
             try? await Task.sleep(nanoseconds: 30_000_000)
             if session.searchTotal != nil { break }
         }
+        if let refusal = coveredRefusal(surface) { return refusal }
         // an empty display string (the bar opened with no query yet) maps to nil so the CLI prints `ok`
         // rather than a blank line; the count is nil until a query runs.
         let display = session.searchDisplayText
