@@ -85,10 +85,13 @@ extension ControlServer {
         case .surface: return nil
         case .refused(let reason): return ControlResponse(ok: false, error: reason)
         case .daemon(let name, let client):
-            let bytes = KeystrokeSegments.ptyBytes(text)
+            // a half-typed word goes first and on the same acknowledged path: left in place it would commit
+            // after the scripted line, and committed through the surface the daemon may drop it
+            let bytes = KeystrokeSegments.ptyBytes(surface.pendingComposition + text)
             guard bytes.isEmpty || client.type(name: name, bytes: bytes) else {
                 return ControlResponse(ok: false, error: "the pane's zmx daemon did not accept the input")
             }
+            surface.discardComposition()
             // the pane-scoped status clear `injectAsUserInput` fires: the input a blocked agent waited for
             if !text.isEmpty { surface.onUserInputClearsStatus?(InterruptKeystroke.classify(text: text)) }
             return ControlResponse(ok: true, result: ControlResult(id: session.uuidString))

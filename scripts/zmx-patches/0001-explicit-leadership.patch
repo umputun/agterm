@@ -15,8 +15,8 @@ diff -ruN zmx-orig/src/daemonize.zig zmx/src/daemonize.zig
      lib_posix.exit(1);
 diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 --- zmx-orig/src/ipc.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/ipc.zig	2026-09-20 18:30:23.609696911 -0500
-@@ -26,6 +26,17 @@
++++ zmx/src/ipc.zig	2026-09-20 19:24:39.125329550 -0500
+@@ -26,6 +26,18 @@
      EnvGet = 19,
      EnvSet = 20,
      EnvData = 21,
@@ -28,13 +28,14 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    /// request: one `ScreenMode` byte.
 +    /// reply: a `ScreenHeader` followed by the text, or an empty payload for a mode it does not know.
 +    Screen = 24,
-+    /// request: bytes for the pty, queued without taking the lead.
++    /// request: typed text, each CR a Return key, encoded by the daemon for the
++    /// session's keyboard mode and queued without taking the lead.
 +    /// reply: one `TypeResult` byte. Accepted means queued, not executed.
 +    Type = 25,
      // Non-exhaustive: this enum comes off the wire via bytesToValue and
      // @enumFromInt, so out-of-range values are representable
      // rather than UB. Switches must handle `_` (unknown tag).
-@@ -75,6 +86,50 @@
+@@ -75,6 +87,50 @@
      return .{ .rows = 24, .cols = 120 };
  }
  
@@ -85,7 +86,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  pub const MAX_CMD_LEN = 256;
  pub const MAX_CWD_LEN = 256;
  
-@@ -344,7 +399,8 @@
+@@ -344,7 +400,8 @@
          .{ Tag.Run, 9 },       .{ Tag.Ack, 10 },          .{ Tag.Switch, 11 },
          .{ Tag.Write, 12 },    .{ Tag.TaskComplete, 13 }, .{ Tag.LabelGet, 14 },
          .{ Tag.LabelSet, 15 }, .{ Tag.LabelClear, 16 },   .{ Tag.LabelData, 17 },
@@ -95,7 +96,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
      }) |p| try std.testing.expectEqual(@as(u8, p[1]), @intFromEnum(p[0]));
  }
  
-@@ -379,6 +435,40 @@
+@@ -379,6 +436,40 @@
      return error.Unexpected;
  }
  
@@ -138,7 +139,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
      var list = try std.ArrayList(u8).initCapacity(alloc, 64);
 diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 --- zmx-orig/src/loop.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/loop.zig	2026-09-20 19:16:39.160571512 -0500
++++ zmx/src/loop.zig	2026-09-20 19:24:04.570664288 -0500
 @@ -6,6 +6,7 @@
  const cross = @import("cross.zig");
  const socket = @import("socket.zig");
@@ -206,7 +207,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                          .Run => try daemon.handleRun(gpa, io, client, msg.payload),
 -                        .Ack, .TaskComplete, .LabelData, .EnvData => {},
 +                        .Manage => daemon.handleManage(client, msg.payload),
-+                        .Type => try daemon.handleType(gpa, client, msg.payload),
++                        .Type => try daemon.handleType(gpa, client, &term, msg.payload),
 +                        .Screen => try daemon.handleScreen(gpa, client, &term, msg.payload),
 +                        .Ack, .TaskComplete, .LabelData, .EnvData, .Role => {},
                          .Write => try daemon.handleWrite(gpa, client, msg.payload),
@@ -247,7 +248,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          std.log.info("client disconnected fd={d} remaining={d}", .{ fd, self.clients.items.len });
          if (shutdown_on_last and self.clients.items.len == 0) {
              self.shutdown(gpa);
-@@ -848,10 +880,54 @@
+@@ -848,10 +880,67 @@
      fn setLeader(self: *Daemon, gpa: std.mem.Allocator, client: *Client) !void {
          std.log.info("setting new leader client_fd={d}", .{client.socket_fd});
          self.leader_client_fd = client.socket_fd;
@@ -293,16 +294,29 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    }
 +
 +    /// Queue automation bytes without touching leadership, and say whether they were queued.
-+    pub fn handleType(self: *Daemon, gpa: std.mem.Allocator, client: *Client, payload: []const u8) !void {
-+        const fits = payload.len > 0 and self.pty_write_buf.items.len + payload.len <= PTY_WRITE_BUF_MAX;
-+        if (fits) self.queuePtyInput(gpa, payload);
++    pub fn handleType(
++        self: *Daemon,
++        gpa: std.mem.Allocator,
++        client: *Client,
++        term: *const ghostty_vt.Terminal,
++        payload: []const u8,
++    ) !void {
++        const keys = util.encodeTyped(gpa, term, payload) catch |err| {
++            std.log.warn("failed to encode typed input err={s}", .{@errorName(err)});
++            try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@intFromEnum(ipc.TypeResult.rejected)});
++            client.has_pending_output = true;
++            return;
++        };
++        defer gpa.free(keys);
++        const fits = keys.len > 0 and self.pty_write_buf.items.len + keys.len <= PTY_WRITE_BUF_MAX;
++        if (fits) self.queuePtyInput(gpa, keys);
 +        const result: ipc.TypeResult = if (fits) .accepted else .rejected;
 +        try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@intFromEnum(result)});
 +        client.has_pending_output = true;
      }
  
      fn getLeaderClient(self: *Daemon) ?*Client {
-@@ -901,6 +977,10 @@
+@@ -901,6 +990,10 @@
              return;
          }
  
@@ -313,7 +327,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          // check if leader needs to be updated by detecting any user input
          if (util.isUserInput(payload)) {
              try self.setLeader(gpa, client);
-@@ -916,6 +996,13 @@
+@@ -916,6 +1009,13 @@
      pub fn handleSwitch(self: *Daemon, gpa: std.mem.Allocator, session_name: []const u8) !void {
          for (self.clients.items) |client| {
              if (self.leader_client_fd == client.socket_fd) {
@@ -327,7 +341,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  // Include the daemon's current cwd so the new session can start
                  // in the right directory. A remote cwd is left out: it names no
                  // directory here, so the new session is better off with the
-@@ -959,9 +1046,11 @@
+@@ -959,9 +1059,11 @@
  
          client.is_terminal = true;
  
@@ -340,7 +354,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          const is_leader = self.leader_client_fd == client.socket_fd;
          const resize = std.mem.bytesToValue(ipc.Resize, payload);
  
-@@ -973,6 +1062,7 @@
+@@ -973,6 +1075,7 @@
          // shell's own SIGWINCH redraw still arrives after the snapshot.
          if (is_leader) {
              try resizeTerm(gpa, term, resize.cols, resize.rows);
@@ -348,7 +362,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          }
  
          // Only serialize on re-attach (has_had_client), not first attach, to avoid
-@@ -1032,7 +1122,8 @@
+@@ -1032,7 +1135,8 @@
          payload: []const u8,
      ) !void {
          if (payload.len != @sizeOf(ipc.Resize)) return;
@@ -358,7 +372,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              try self.setLeader(gpa, client);
          }
          // only leader can resize
-@@ -1042,6 +1133,7 @@
+@@ -1042,6 +1146,7 @@
          var ws = resize.winsize();
          _ = cross.c.ioctl(pty_fd, cross.c.TIOCSWINSZ, &ws);
          try resizeTerm(gpa, term, resize.cols, resize.rows);
@@ -366,7 +380,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          std.log.debug("resize rows={d} cols={d}", .{ resize.rows, resize.cols });
      }
  
-@@ -1148,6 +1240,44 @@
+@@ -1148,6 +1253,44 @@
          }
      }
  
@@ -411,7 +425,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pub fn handleRun(self: *Daemon, gpa: std.mem.Allocator, io: std.Io, client: *Client, payload: []const u8) !void {
          // Reset task tracking so the new command's exit marker is detected.
          // Without this, a second `zmx run` on the same session is ignored
-@@ -1235,6 +1365,7 @@
+@@ -1235,6 +1378,7 @@
          vt_stream.nextSlice(payload);
          self.setPwd(term);
          self.has_pty_output = true;
@@ -419,7 +433,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          for (self.clients.items) |client| {
              try ipc.appendMessage(gpa, &client.write_buf, .Output, payload);
              client.has_pending_output = true;
-@@ -1450,6 +1581,219 @@
+@@ -1450,6 +1594,244 @@
      try std.testing.expectEqualStrings("hello", daemon.pty_write_buf.items);
  }
  
@@ -570,8 +584,33 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    _ = daemon.closeClient(alloc, stock, 0, false);
 +}
 +
++test "typed input is encoded for the keyboard mode the program asked for" {
++    const alloc = std.testing.allocator;
++    const cfg = Cfg{ .socket_dir = "", .log_dir = "" };
++    var term = try initTerminal(alloc, std.testing.io, .{ .cols = 80, .rows = 24 }, &cfg);
++    defer term.deinit(alloc);
++    var stream = term.vtStream();
++    defer stream.deinit();
++
++    const legacy = try util.encodeTyped(alloc, &term, "ls -la\r\rcaf\xc3\xa9");
++    defer alloc.free(legacy);
++    try std.testing.expectEqualStrings("ls -la\r\rcaf\xc3\xa9", legacy);
++
++    // every kitty flag: Return is reported as a key, with its release
++    stream.nextSlice("\x1b[>31u");
++    const kitty = try util.encodeTyped(alloc, &term, "ls\r");
++    defer alloc.free(kitty);
++    try std.testing.expect(std.mem.startsWith(u8, kitty, "ls"));
++    try std.testing.expect(std.mem.indexOf(u8, kitty, "\x1b[13u") != null);
++    try std.testing.expect(std.mem.indexOf(u8, kitty, "\x1b[13;1:3u") != null);
++    try std.testing.expect(std.mem.indexOfScalar(u8, kitty, '\r') == null);
++}
++
 +test "type queues bytes without the lead and says when the queue is full" {
 +    const alloc = std.testing.allocator;
++    const cfg = Cfg{ .socket_dir = "", .log_dir = "" };
++    var term = try initTerminal(alloc, std.testing.io, .{ .cols = 80, .rows = 24 }, &cfg);
++    defer term.deinit(alloc);
 +    var daemon = testDaemon();
 +    defer daemon.clients.deinit(alloc);
 +    defer daemon.pty_write_buf.deinit(alloc);
@@ -582,7 +621,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const caller = try testClient(alloc, a[0], false);
 +    try daemon.clients.append(alloc, caller);
 +
-+    try daemon.handleType(alloc, caller, "\r");
++    try daemon.handleType(alloc, caller, &term, "\r");
 +    try std.testing.expectEqualStrings("\r", daemon.pty_write_buf.items);
 +    try std.testing.expectEqual(@as(?i32, 42), daemon.leader_client_fd);
 +    try std.testing.expectEqual(@intFromEnum(ipc.TypeResult.accepted), caller.write_buf.items[caller.write_buf.items.len - 1]);
@@ -590,7 +629,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const too_much = try alloc.alloc(u8, Daemon.PTY_WRITE_BUF_MAX);
 +    defer alloc.free(too_much);
 +    @memset(too_much, 'x');
-+    try daemon.handleType(alloc, caller, too_much);
++    try daemon.handleType(alloc, caller, &term, too_much);
 +    try std.testing.expectEqualStrings("\r", daemon.pty_write_buf.items);
 +    try std.testing.expectEqual(@intFromEnum(ipc.TypeResult.rejected), caller.write_buf.items[caller.write_buf.items.len - 1]);
 +    _ = daemon.closeClient(alloc, caller, 0, false);
@@ -641,7 +680,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      var cfg = Cfg{
 diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 --- zmx-orig/src/main.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/main.zig	2026-09-20 18:53:54.535153805 -0500
++++ zmx/src/main.zig	2026-09-20 19:24:44.303400238 -0500
 @@ -249,6 +249,28 @@
              if (err == error.SessionUnresponsive) std.process.exit(1);
              return printError(io, "send failed: {s}", .{@errorName(err)});
@@ -676,7 +715,7 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
          \\  [k]ill <name>... [--force]                  Kill session and all attached clients
          \\  [hi]story <name> [--vt|--html]              Output session scrollback
 +        \\  screen <name> [--all]                       Geometry and cursor on one line, then the screen text
-+        \\  type <name>                                 Queue stdin as input without taking the lead
++        \\  type <name>                                 Type stdin as keys (CR is Return) without taking the lead
          \\  [w]ait <name>...                            Wait for session tasks to complete
          \\  [t]ail <name>...                            Follow session output
          \\  [c]ompletions <shell>                       Shell completions (bash, zsh, fish, nu)
@@ -693,7 +732,7 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
          \\
      ;
      var buf: [8192]u8 = undefined;
-@@ -1759,6 +1789,58 @@
+@@ -1759,6 +1789,59 @@
      return error.NoAckReceived;
  }
  
@@ -724,8 +763,9 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 +    try w.interface.flush();
 +}
 +
-+/// Queues stdin, byte for byte, as input to the session without taking the
-+/// lead. Success means the daemon queued it, not that the program read it.
++/// Types stdin into the session as keystrokes, each CR a Return key, without
++/// taking the lead. Nothing is trimmed. Success means the daemon queued it, not
++/// that the program read it.
 +fn typeInto(alloc: std.mem.Allocator, io: std.Io, session_name: []const u8, socket_path: []const u8) !void {
 +    var payload = std.ArrayList(u8).empty;
 +    defer payload.deinit(alloc);
@@ -986,11 +1026,33 @@ diff -ruN zmx-orig/src/test.zig zmx/src/test.zig
  }
 diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 --- zmx-orig/src/util.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/util.zig	2026-09-20 18:29:39.807074609 -0500
-@@ -941,6 +941,31 @@
++++ zmx/src/util.zig	2026-09-20 19:23:48.996833787 -0500
+@@ -941,6 +941,53 @@
      };
  }
  
++/// The bytes a terminal sends for `typed`, as keystrokes rather than as a paste:
++/// each carriage return is a Return key press and release, and every run between
++/// them is text a key produced. Encoded against `term`'s live keyboard mode, so
++/// a program that asked for the kitty protocol gets `CSI 13 u` where a shell gets
++/// a bare CR. Caller frees.
++pub fn encodeTyped(alloc: std.mem.Allocator, term: *const ghostty_vt.Terminal, typed: []const u8) ![]u8 {
++    var builder: std.Io.Writer.Allocating = .init(alloc);
++    defer builder.deinit();
++    const opts = ghostty_vt.input.KeyEncodeOptions.fromTerminal(term);
++
++    var rest = typed;
++    while (rest.len > 0) {
++        const run = std.mem.indexOfScalar(u8, rest, '\r') orelse rest.len;
++        if (run > 0) try ghostty_vt.input.encodeKey(&builder.writer, .{ .utf8 = rest[0..run] }, opts);
++        if (run == rest.len) break;
++        try ghostty_vt.input.encodeKey(&builder.writer, .{ .key = .enter }, opts);
++        try ghostty_vt.input.encodeKey(&builder.writer, .{ .key = .enter, .action = .release }, opts);
++        rest = rest[run + 1 ..];
++    }
++    return alloc.dupe(u8, builder.writer.buffered());
++}
++
 +/// Plain text of the active screen, or of scrollback plus the active screen,
 +/// read the way a terminal copies a selection: soft-wrapped rows joined and
 +/// trailing blanks trimmed. Empty for a blank screen. Caller frees.

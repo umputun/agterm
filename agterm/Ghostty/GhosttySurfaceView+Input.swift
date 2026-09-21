@@ -454,6 +454,23 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         committingComposition = false
     }
 
+    /// The text of a live composition, empty when none. For input that does NOT go through this surface:
+    /// `commitOrDiscardComposition` commits by `insertText`, which a managed pane's daemon may be dropping,
+    /// so that caller sends this text itself and then calls `discardComposition`.
+    var pendingComposition: String { hasMarkedText() ? _markedText : "" }
+
+    /// Ends a composition whose text a caller delivered another way, without inserting it here.
+    func discardComposition() {
+        guard hasMarkedText() else { return }
+        _markedRange = NSRange(location: NSNotFound, length: 0)
+        _markedText = ""
+        if let surface { ghostty_surface_preedit(surface, nil, 0) }
+        guard window?.firstResponder === self else { return }
+        committingComposition = true
+        inputContext?.discardMarkedText()
+        committingComposition = false
+    }
+
     func attributedSubstring(forProposedRange _: NSRange, actualRange _: NSRangePointer?) -> NSAttributedString? {
         nil
     }

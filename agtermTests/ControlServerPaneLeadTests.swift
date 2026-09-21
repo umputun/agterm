@@ -135,6 +135,23 @@ final class ControlServerPaneLeadTests: XCTestCase {
                        "input the daemon did not queue must never answer ok")
     }
 
+    func testAPendingCompositionIsTypedFirstAndDroppedOnlyOnceTheDaemonTookIt() throws {
+        let server = makeServer()
+        let (view, _) = try pane(role: .leader)
+        // set directly: `setMarkedText` needs a live libghostty surface, which a hosted test has none of
+        view._markedText = "ni"
+        view._markedRange = NSRange(location: 0, length: 2)
+
+        zmxReply = { _ in throw ZmxClient.CommandError.timedOut }
+        XCTAssertEqual(server.coveredType("hao\n", into: view, session: UUID())?.ok, false)
+        XCTAssertEqual(view.pendingComposition, "ni", "input that was not delivered leaves the composition alone")
+
+        zmxReply = { _ in "" }
+        XCTAssertEqual(server.coveredType("hao\n", into: view, session: UUID())?.ok, true)
+        XCTAssertEqual(invocations.last?.input, Data("nihao\r".utf8))
+        XCTAssertEqual(view.pendingComposition, "")
+    }
+
     func testACoveredPaneAttachedFromAnotherMacRefusesInsteadOfAnsweringWrong() throws {
         let server = makeServer()
         let (view, _) = try pane(role: .follower, local: false)

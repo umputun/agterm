@@ -1311,8 +1311,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   has the leader's layout. Keying these on the cached role answered ok for input the daemon had already
   started dropping. This is what keeps pane-to-pane automation, the chat transport included, working on
   the Mac a session runs on while another Mac leads it. A failed daemon call is an error, never a fall
-  back to the surface. `session.type` maps each CR, LF or CRLF to one CR and stays unbracketed, as
-  `inject` does with key events; the main pane's realize poll repeats the check before each inject.
+  back to the surface. The main pane's realize poll repeats the check before each inject.
+- `zmx type` is keystrokes, not bytes and not a paste: `session.type` sends each line ending as one CR
+  and the daemon encodes every CR as a Return press and release, and every run between them as typed
+  text, with Ghostty's own key encoder against its terminal's LIVE keyboard mode. A program that asked
+  for the kitty protocol therefore gets `CSI 13 u` and the release where a shell gets a bare CR, exactly
+  as `inject`'s key events do; a fixed CR was wrong for every such program in an ordinary live pane.
+  A pending IME composition is sent FIRST on the same acknowledged call and dropped locally only once
+  the daemon took it: committing it through the surface would race the scripted line or be dropped.
 - The default `session.text` is the one read whose meaning is the pane's own scrolled viewport, so it
   stays on the surface while the pane leads and moves to the daemon only while it is covered. That read
   alone keeps the one-hop window after a demotion.
