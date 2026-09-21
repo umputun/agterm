@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 import agtermCore
 
 protocol ClientPeer: AnyObject {
@@ -9,6 +10,7 @@ protocol ClientPeer: AnyObject {
 }
 
 public final class Client {
+    private static let logger = Logger(subsystem: "com.umputun.agterm", category: "session-host")
     private let connect: () throws -> any ClientPeer
     private let diagnostic: (String) -> Void
     private let execute: ([String], [String: String]) throws -> Void
@@ -32,7 +34,12 @@ public final class Client {
             phase = .afterDispatch
             try peer.send(frame, deadline: deadline)
             reply = try peer.receive(deadline: deadline)
-        } catch {}
+        } catch {
+            Self.logger.error("client \(request.name, privacy: .public) phase=\(String(describing: phase), privacy: .public) error=\(String(describing: error), privacy: .public)")
+        }
+        if case .error(let failure)? = reply {
+            Self.logger.error("client \(request.name, privacy: .public) host stage=\(String(describing: failure.stage), privacy: .public) message=\(failure.message, privacy: .public)")
+        }
         let outcome = SessionHost.ClientOutcome.decide(phase: phase, reply: reply)
         if let message = outcome.diagnostic { diagnostic(message) }
         try execute(outcome == .fullAttach ? request.argv : Array(request.argv.prefix(3)), request.env)

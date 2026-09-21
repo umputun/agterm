@@ -136,6 +136,9 @@ final class SessionHostClientTests: XCTestCase {
         let environment: [String: String]
         var clients: [Int32] = []
         var terminals: [Int32] = []
+        private var evidenceDirectory: URL {
+            URL(fileURLWithPath: "/tmp/agterm-session-host-evidence").appendingPathComponent(directory.lastPathComponent)
+        }
 
         init() throws {
             let bundle = directory.appendingPathComponent("Client.app")
@@ -152,6 +155,7 @@ final class SessionHostClientTests: XCTestCase {
             let info = ["CFBundleIdentifier": "com.umputun.clienttest.\(UUID().uuidString)", "CFBundleExecutable": "agterm-session-host"]
             try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: bundle.appendingPathComponent("Contents/Info.plist"))
             try FileManager.default.createDirectory(at: URL(fileURLWithPath: paths.ownerLock).deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: evidenceDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
 
         func startClient(name: String, loginArgv: Bool = false, command: [String] = [], terminal: Bool = false, mediated: Bool = true) throws {
@@ -174,9 +178,12 @@ final class SessionHostClientTests: XCTestCase {
                 XCTAssertEqual(fcntl(pty, F_SETFD, FD_CLOEXEC), 0)
                 XCTAssertEqual(fcntl(terminalFD, F_SETFD, FD_CLOEXEC), 0)
             }
+            let stderrPath = evidenceDirectory.appendingPathComponent("client-\(clients.count)-\(name.suffix(4)).stderr").path
             for fd in [STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO] {
                 if terminal {
                     XCTAssertEqual(posix_spawn_file_actions_adddup2(&actions, terminalFD, fd), 0)
+                } else if fd == STDERR_FILENO {
+                    XCTAssertEqual(posix_spawn_file_actions_addopen(&actions, fd, stderrPath, O_WRONLY | O_CREAT | O_APPEND, 0o600), 0)
                 } else {
                     XCTAssertEqual(posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", O_RDWR, 0), 0)
                 }
@@ -268,6 +275,10 @@ final class SessionHostClientTests: XCTestCase {
                 let deadline = Date().addingTimeInterval(3)
                 while kill(pid, 0) == 0 && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
                 XCTAssertEqual(kill(pid, 0), -1)
+            }
+            if FileManager.default.fileExists(atPath: paths.log) {
+                XCTAssertNoThrow(try FileManager.default.copyItem(at: URL(fileURLWithPath: paths.log),
+                                                                 to: evidenceDirectory.appendingPathComponent("host.log")))
             }
             try? FileManager.default.removeItem(at: directory)
         }

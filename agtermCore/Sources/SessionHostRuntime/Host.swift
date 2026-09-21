@@ -76,7 +76,10 @@ public final class Host {
                 }
                 return .ok(.init(state: .existing, leaderPid: pid))
             }
-        } catch { return failure(.before, "daemon inventory could not be read") }
+        } catch {
+            Self.log("daemon inventory failed for \(request.name): \(error)")
+            return failure(.before, "daemon inventory could not be read")
+        }
         guard now() < deadline else { return failure(.before, "deadline expired before creation") }
 
         let child: any HostChild
