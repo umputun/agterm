@@ -47,6 +47,8 @@ extension GhosttySurfaceView {
             super.keyDown(with: event)
             return
         }
+        // a covered pane takes no input: its first press asks for the lead instead
+        guard !PaneLead.consumes(event, in: self) else { return }
         // every keystroke is user activity: reset the auto-follow idle timer UNCONDITIONALLY, not gated on
         // the status-clear below, else typing in an idle session yanks the user to a blocked one mid-type.
         onUserInput?()
@@ -122,14 +124,14 @@ extension GhosttySurfaceView {
     override func doCommand(by _: Selector) {}
 
     override func keyUp(with event: NSEvent) {
-        guard let surface else { return }
+        guard let surface, !PaneLead.consumes(event, in: self) else { return }
         var ke = buildKeyEvent(from: event, action: GHOSTTY_ACTION_RELEASE)
         ke.text = nil
         _ = ghostty_surface_key(surface, ke)
     }
 
     override func flagsChanged(with event: NSEvent) {
-        guard let surface else { return }
+        guard let surface, !leadCovered else { return }
         var ke = buildKeyEvent(from: event, action: isFlagPress(event) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE)
         ke.text = nil
         _ = ghostty_surface_key(surface, ke)

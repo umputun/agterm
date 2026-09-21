@@ -444,7 +444,9 @@ struct WindowContentView: View {
     /// replaces another (split-survivor promotion): `updateNSView` cannot replace the view `makeNSView`
     /// returned, so session identity alone would keep hosting the torn-down prior primary.
     func primarySurfaceID(_ session: Session) -> String {
-        "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
+        // the revision is not observed, and a fresh attach bumps it with nothing else changing
+        _ = ZmxLeadBook.shared.attachments
+        return "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
     }
 
     /// Opacity of the mute wash, shared by the inactive split pane and the backdrop behind a floating panel

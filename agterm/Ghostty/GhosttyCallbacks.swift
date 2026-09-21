@@ -41,7 +41,15 @@ final class GhosttyCallbacks: @unchecked Sendable {
             // OSC 0/1/2 title, often from PROMPT_COMMAND or SSH; displayName prefers it to the cwd basename.
             guard let view = surfaceView(from: target), let ptr = action.action.set_title.title else { return true }
             let title = String(cString: ptr)
-            DispatchQueue.main.async { view.applyTitle(title) }
+            // the pane's zmx client reporting its role under the reserved prefix, never the pane's title
+            if let notice = ZmxLeadNotice(title: title) {
+                DispatchQueue.main.async { PaneLead.report(notice, from: view) }
+                return true
+            }
+            DispatchQueue.main.async {
+                // a static `title` in the user's config means program titles are not wanted
+                if !GhosttyApp.shared.staticTitleConfigured { view.applyTitle(title) }
+            }
             return true
         case GHOSTTY_ACTION_CELL_SIZE:
             // the cell pixel size changed (cmd +/- font size, or DPI): a trigger only — the view reads the

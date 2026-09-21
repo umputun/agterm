@@ -8,6 +8,8 @@ enum PaneHostIdentity {
     /// not cover every replacement; primary promotion is invalidated by its own split lifecycle changes.
     static func token(for slot: TerminalZoomSurface, in session: Session) -> String {
         _ = session.splitFocused
+        // a fresh attach replaces the slot's surface with nothing else observed changing
+        _ = ZmxLeadBook.shared.attachments
         guard let surface = slot.surface(in: session) else { return "none" }
         return "\(ObjectIdentifier(surface as AnyObject))"
     }
@@ -267,6 +269,7 @@ extension WindowContentView {
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
             }
             paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
+            PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText)
         }
         .hudPaneAnchor(pane)
         .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in

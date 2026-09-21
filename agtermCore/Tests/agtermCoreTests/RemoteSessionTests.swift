@@ -80,6 +80,22 @@ struct RemoteSessionTests {
         #expect(!argv.contains { $0.hasPrefix("ServerAlive") })
     }
 
+    @Test func attachPutsTheLeadWordsAheadOfTheExecutableAndOmitsThemByDefault() throws {
+        let lead = ZmxLeadAttachment(nonce: "abc123", claim: true)
+        let managed = try #require(try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint,
+                                                                   daemon: daemon, lead: lead).last)
+        let plain = try #require(try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint,
+                                                                 daemon: daemon).last)
+
+        let words = "'ZMX_MANAGED=abc123' 'ZMX_MANAGED_CLAIM=1' "
+        #expect(managed == plain.replacingOccurrences(of: "'" + endpoint.executable + "'",
+                                                       with: words + "'" + endpoint.executable + "'"))
+        #expect(!plain.contains("ZMX_MANAGED"))
+        let pane = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                       session: "work", pane: .left, lead: lead)
+        #expect(pane.contains("ZMX_MANAGED=abc123"))
+    }
+
     // MARK: - what the remote shell actually runs
 
     @Test func treeRunsTheFarSidesOwnBareForm() throws {

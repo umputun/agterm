@@ -72,7 +72,11 @@ public enum RemoteSession {
     /// `env` and `sh` are spelled absolutely because they are implementation primitives. The remote
     /// `agtermctl` in `treeCommand` is deliberately PATH-resolved instead — that one IS the user's
     /// installed CLI.
+    ///
+    /// `lead` opts the far zmx client into explicit leadership; an origin whose zmx predates it ignores
+    /// the two variables and the pane behaves as it did before.
     public static func attachCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
+                                     lead: ZmxLeadAttachment? = nil,
                                      connectTimeout: Int = 5) throws -> [String] {
         try validate(host: host)
         guard ZmxSupport.isDaemonName(daemon) else { throw InvocationError.invalidSession }
@@ -85,8 +89,9 @@ public enum RemoteSession {
             // `ZMX_SESSION` makes attach SWITCH session instead, never reaching the create-only guard,
             // and an inherited prefix resolves a name agterm never created.
             "/usr/bin/env", "ZMX_SESSION=", "ZMX_SESSION_PREFIX=", "ZMX_NO_DETACH_KEY=1",
-            "ZMX_DIR=" + endpoint.socketDirectory, endpoint.executable,
-            "attach", daemon, "/bin/sh", "-c", guardScript,
+            "ZMX_DIR=" + endpoint.socketDirectory,
+        ] + (lead?.assignments ?? []) + [
+            endpoint.executable, "attach", daemon, "/bin/sh", "-c", guardScript,
         ])
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
     }
@@ -98,9 +103,11 @@ public enum RemoteSession {
     /// agterm's to say: the picker is a keymap custom command the user supplies.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
+                                         lead: ZmxLeadAttachment? = nil,
                                          connectTimeout: Int = 5) throws -> String {
         let attach = CommandRestore.shellQuotedLine(
-            try attachCommand(host: host, endpoint: endpoint, daemon: daemon, connectTimeout: connectTimeout))
+            try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
+                              connectTimeout: connectTimeout))
         let label = CommandRestore.shellQuotedLine(
             ["agterm: \(session) (\(pane.rawValue)) on \(host) disconnected, exit"])
         // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a

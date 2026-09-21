@@ -286,6 +286,7 @@ extension ControlServer {
             guard surface.isRealized else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
+            if let covered = self.coveredText(surface, all: all, lines: lines) { return covered }
             guard let text = surface.readScreenText(all: all, lines: lines) else {
                 return ControlResponse(ok: false, error: "failed to read surface buffer")
             }
@@ -362,6 +363,7 @@ extension ControlServer {
         guard surface.isRealized else {
             return ControlResponse(ok: false, error: "surface not realized")
         }
+        if let covered = coveredCursor(surface, controlID: controlID) { return covered }
         guard let column = surface.readCursorColumn() else {
             return ControlResponse(ok: false, error: "failed to read cursor position")
         }
@@ -507,6 +509,13 @@ extension ControlServer {
     /// only reached once that probe has already failed.
     func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool,
                     pane: StatusPane?) async -> ControlResponse {
+        // a pane that does not lead its daemon takes scripted input through the daemon, never through
+        // its own surface, whose keystrokes the daemon drops
+        let session = store.session(withID: id)
+        let slot = pane == .right ? session?.splitSurface : (pane == .scratch ? nil : session?.surface)
+        if let surface = slot as? GhosttySurfaceView, let covered = coveredType(text, into: surface, session: id) {
+            return covered
+        }
         switch pane {
         case nil, .left:
             break

@@ -73,8 +73,8 @@ enum ZmxLaunch {
         }
     }
 
-    @MainActor static func configuration(paneIdentity: UUID?, pane: String, environment base: [String: String])
-        -> ZmxSupport.Configuration? {
+    @MainActor static func configuration(paneIdentity: UUID?, pane: String, environment base: [String: String],
+                                         lead: ZmxLeadAttachment? = nil) -> ZmxSupport.Configuration? {
         guard let paneIdentity else {
             logger.error("zmx configuration failed for \(pane, privacy: .public) pane: missing pane identity")
             return nil
@@ -83,7 +83,8 @@ enum ZmxLaunch {
                               environment: ProcessInfo.processInfo.environment,
                               passwordDatabaseShell: passwordDatabaseLoginShell(),
                               allowDebugOverride: allowDebugOverride)
-        let result = configurationResult(runtime: runtime, paneIdentity: paneIdentity, baseEnvironment: base)
+        let result = configurationResult(runtime: runtime, paneIdentity: paneIdentity, baseEnvironment: base,
+                                         lead: lead)
         switch result {
         case .success(let configuration): return configuration
         case .failure(let reason):
@@ -127,7 +128,7 @@ enum ZmxLaunch {
     }
 
     private static func configurationResult(runtime: Runtime, paneIdentity: UUID,
-                                            baseEnvironment: [String: String])
+                                            baseEnvironment: [String: String], lead: ZmxLeadAttachment? = nil)
         -> Result<ZmxSupport.Configuration, ZmxSupport.Rejection> {
         let bundledResources = runtime.bundleURL.appendingPathComponent("Contents/Resources/ghostty").path
         let resources = runtime.environment["GHOSTTY_RESOURCES_DIR"].flatMap { $0.isEmpty ? nil : $0 }
@@ -143,7 +144,8 @@ enum ZmxLaunch {
             baseEnvironment: baseEnvironment,
             inheritedZdotdir: runtime.environment["ZDOTDIR"],
             sessionHostExecutablePath: sessionHostExecutablePath(bundleURL: runtime.bundleURL, environment: runtime.environment,
-                                                                  allowDebugOverride: runtime.allowDebugOverride)
+                                                                  allowDebugOverride: runtime.allowDebugOverride),
+            lead: lead
         ))
     }
 }

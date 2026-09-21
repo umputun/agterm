@@ -14,17 +14,23 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     public let visible: Bool
     /// Actual zmx backing for primary/split surfaces; nil for ephemeral surfaces or older servers.
     public let backedByZmx: Bool?
+    /// Whether this pane's client leads its zmx daemon: `leader`, `follower` or `unowned`. A pane that
+    /// does not lead is covered and its reads come from the daemon. Nil until the pane's zmx reports a
+    /// role, which a zmx or an origin without explicit leadership never does.
+    public let lead: ZmxLeadRole?
 
     public init(id: String, kind: String, active: Bool, visible: Bool) {
         self.init(id: id, kind: kind, active: active, visible: visible, backedByZmx: nil)
     }
 
-    public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?) {
+    public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?,
+                lead: ZmxLeadRole? = nil) {
         self.id = id
         self.kind = kind
         self.active = active
         self.visible = visible
         self.backedByZmx = backedByZmx
+        self.lead = lead
     }
 }
 

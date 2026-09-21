@@ -188,10 +188,14 @@ extension ControlServer {
         let right = byRole[.right]
         let primary: String
         let split: String?
+        // attaching is the user asking for the session HERE, so every pane claims the lead at once
+        let leads = (left: ZmxLeadAttachment(claim: true), right: ZmxLeadAttachment(claim: true))
         do {
-            primary = try paneCommand(host: host, tree: tree, daemon: left, name: remote.name, pane: .left)
+            primary = try paneCommand(host: host, tree: tree, daemon: left, name: remote.name, pane: .left,
+                                      lead: leads.left)
             split = try right.map {
-                try paneCommand(host: host, tree: tree, daemon: $0, name: remote.name, pane: .right)
+                try paneCommand(host: host, tree: tree, daemon: $0, name: remote.name, pane: .right,
+                                lead: leads.right)
             }
         } catch {
             return ControlResponse(ok: false, error: "\(host) reported a session agterm cannot address")
@@ -219,9 +223,15 @@ extension ControlServer {
                                      axis: remote.splitAxis.flatMap(SplitAxis.init(rawValue:)) ?? .leftRight)
         }
         var daemons = [created.paneIdentity: left]
-        if let right, let local = created.splitPaneIdentity { daemons[local] = right }
+        ZmxLeadBook.shared.begin(leads.left, pane: created.paneIdentity)
+        if let right, let local = created.splitPaneIdentity {
+            daemons[local] = right
+            ZmxLeadBook.shared.begin(leads.right, pane: local)
+        }
+        let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name)
         store.bindRemote(RemoteBinding(remoteSessionID: remote.id, daemonsByLocalPane: daemons,
-                                       presentationVersion: tree.presentation), forSession: created.id)
+                                       presentationVersion: tree.presentation, origin: origin),
+                         forSession: created.id)
         // the row's created event fired inside `addSession`, before the binding existed
         startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck
@@ -231,9 +241,9 @@ extension ControlServer {
     }
 
     private func paneCommand(host: String, tree: ControlRemoteTree, daemon: String, name: String,
-                             pane: ZmxPaneRole) throws -> String {
+                             pane: ZmxPaneRole, lead: ZmxLeadAttachment) throws -> String {
         try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: daemon,
-                                            session: name, pane: pane)
+                                            session: name, pane: pane, lead: lead)
     }
 
     /// Kill the daemons the inventory shows as unclaimed and detached.

@@ -15,7 +15,7 @@ import time
 ZMX = sys.argv[1]
 ZDIR = "/tmp/zmx-e2e-%d" % os.getpid()
 NAME = "e2e"
-ROLE = re.compile(rb"\x1b\]777;notify;zmx-role;([A-Za-z0-9-]+):(\w+):(\d+)\x1b\\")
+ROLE = re.compile(rb"\x1b\]2;zmx-role;([A-Za-z0-9-]+):(\w+):(\d+)\x1b\\")
 
 
 def attach(nonce, rows, cols, claim):

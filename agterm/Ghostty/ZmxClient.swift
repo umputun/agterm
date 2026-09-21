@@ -17,6 +17,8 @@ final class ZmxClient {
         let timeout: TimeInterval
         // kill needs stderr diagnostics; list must exclude stderr notices.
         let mergesStderr: Bool
+        /// Written to the child's stdin, which is then closed. Nil leaves stdin inherited.
+        var input: Data?
     }
 
     enum CommandError: Error {
@@ -207,14 +209,38 @@ final class ZmxClient {
         }
     }
 
+    /// The daemon's own screen for `name`, which always has the leader's layout. Nil when the read
+    /// failed for any reason, a zmx without the query included: a caller must not fall back to a pane's
+    /// own surface, whose layout is the thing in doubt.
+    func screen(name: String, all: Bool) -> ZmxScreen? {
+        do {
+            return ZmxScreen(output: try invoke(["screen", name] + (all ? ["--all"] : [])))
+        } catch {
+            Self.logger.error("zmx screen failed for \(name, privacy: .public): \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Queues `bytes` as input to `name` without taking the lead. True means the daemon queued them, not
+    /// that the program read them. Never retried: a second attempt after an unclear failure types twice.
+    func type(name: String, bytes: [UInt8]) -> Bool {
+        do {
+            _ = try invoke(["type", name], input: Data(bytes))
+            return true
+        } catch {
+            Self.logger.error("zmx type failed for \(name, privacy: .public): \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     private func invoke(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
-                        mergesStderr: Bool = false) throws -> String {
+                        mergesStderr: Bool = false, input: Data? = nil) throws -> String {
         var environment = ProcessInfo.processInfo.environment
         environment["ZMX_DIR"] = socketDirectory
         environment.removeValue(forKey: "ZMX_SESSION")
         environment.removeValue(forKey: "ZMX_SESSION_PREFIX")
         return try runner(Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
-                                     timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr))
+                                     timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr, input: input))
     }
 
     nonisolated static func run(_ invocation: Invocation) throws -> String {
@@ -224,6 +250,8 @@ final class ZmxClient {
         process.environment = invocation.environment
         // drained while waiting: zmx writes the listing row by row, so a few daemons fill the pipe before exit
         let capture = try ProcessOutputCapture(attachingTo: process)
+        let stdin = invocation.input.map { _ in Pipe() }
+        if let stdin { process.standardInput = stdin }
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         do {
@@ -233,6 +261,10 @@ final class ZmxClient {
             throw error
         }
         capture.didLaunch()
+        if let stdin, let input = invocation.input {
+            try? stdin.fileHandleForWriting.write(contentsOf: input)
+            try? stdin.fileHandleForWriting.close()
+        }
         if finished.wait(timeout: .now() + invocation.timeout) == .timedOut {
             process.terminate()
             if finished.wait(timeout: .now() + terminationGrace) == .timedOut {

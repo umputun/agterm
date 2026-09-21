@@ -604,7 +604,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      var cfg = Cfg{
 diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 --- zmx-orig/src/main.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/main.zig	2026-09-20 18:31:08.006372788 -0500
++++ zmx/src/main.zig	2026-09-20 18:53:54.535153805 -0500
 @@ -249,6 +249,28 @@
              if (err == error.SessionUnresponsive) std.process.exit(1);
              return printError(io, "send failed: {s}", .{@errorName(err)});
@@ -649,8 +649,8 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
          \\  ZMX_NO_DETACH_KEY    Disables the ctrl+\ detach shortcut (set to any value)
 +        \\  ZMX_MANAGED          For a terminal that manages leadership itself: a token of letters,
 +        \\                       digits and dashes. The attaching client then leads only by claiming,
-+        \\                       never by typing, and reports its role to the terminal as
-+        \\                       OSC 777;notify;zmx-role;<token>:<unowned|leader|follower>:<generation>
++        \\                       never by typing, and reports its role to the terminal as the title
++        \\                       OSC 2;zmx-role;<token>:<unowned|leader|follower>:<generation>
 +        \\  ZMX_MANAGED_CLAIM    With ZMX_MANAGED, take the lead on attach even from a live leader
 +        \\                       (set to any value). Without it an attach leads only a session nobody leads
          \\
@@ -717,11 +717,13 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
  
 diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 --- zmx-orig/src/role.zig	1969-12-31 18:00:00.000000000 -0600
-+++ zmx/src/role.zig	2026-09-20 18:32:08.186243151 -0500
-@@ -0,0 +1,217 @@
++++ zmx/src/role.zig	2026-09-20 18:53:51.435402021 -0500
+@@ -0,0 +1,219 @@
 +//! Client side of explicit leadership: turns the daemon's Role messages into a
-+//! reserved OSC 777 notification on the client's own stdout, so the terminal
-+//! hosting `zmx attach` learns whether this client leads.
++//! title with a reserved prefix on the client's own stdout, so the terminal
++//! hosting `zmx attach` learns whether this client leads. A title and not a
++//! desktop notification: terminals rate-limit those, and a dropped report
++//! leaves the terminal wrong about a role the daemon enforces.
 +
 +const std = @import("std");
 +const ghostty_vt = @import("ghostty-vt");
@@ -744,8 +746,8 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +};
 +
 +/// The opt-in: `ZMX_MANAGED` holds a nonce chosen by the hosting terminal and
-+/// echoed in every notification, so output printed by a program inside the
-+/// session cannot pass for one. Null when unset or not a plain token.
++/// echoed in every report, so a title set by a program inside the session
++/// cannot pass for one. Null when unset or not a plain token.
 +pub fn nonceFromEnv() ?[]const u8 {
 +    const value = lib_posix.getenv("ZMX_MANAGED") orelse return null;
 +    return if (isNonce(value)) value else null;
@@ -829,7 +831,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +        const change = self.pending orelse return;
 +        self.pending = null;
 +        var buf: [NONCE_MAX + 64]u8 = undefined;
-+        const text = std.fmt.bufPrint(&buf, "\x1b]777;notify;zmx-role;{s}:{s}:{d}\x1b\\", .{
++        const text = std.fmt.bufPrint(&buf, "\x1b]2;zmx-role;{s}:{s}:{d}\x1b\\", .{
 +            self.nonce,
 +            @tagName(change.role),
 +            change.generation,
@@ -850,7 +852,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +    return .{ .generation = generation, .role = r };
 +}
 +
-+const leader_osc = "\x1b]777;notify;zmx-role;n1:leader:7\x1b\\";
++const leader_osc = "\x1b]2;zmx-role;n1:leader:7\x1b\\";
 +
 +test "isNonce accepts plain tokens only" {
 +    try testing.expect(isNonce("a1B-2"));
@@ -914,7 +916,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +    try relay.forward(testing.allocator, &out, "\x1b\\");
 +
 +    try testing.expect(std.mem.indexOf(u8, out.items, "unowned") == null);
-+    try testing.expect(std.mem.endsWith(u8, out.items, "\x1b]777;notify;zmx-role;n1:follower:6\x1b\\"));
++    try testing.expect(std.mem.endsWith(u8, out.items, "\x1b]2;zmx-role;n1:follower:6\x1b\\"));
 +}
 +
 +test "an unfinished sequence is cancelled at the deadline" {

@@ -44,4 +44,15 @@ struct KeystrokeSegmentsTests {
             .returnKey,
         ])
     }
+
+    @Test(arguments: [
+        ("echo hi", Array("echo hi".utf8)),
+        ("\n", [UInt8(0x0D)]),
+        ("one\r\ntwo\rthree\n", Array("one\rtwo\rthree\r".utf8)),
+        ("caf\u{E9}", Array("caf\u{E9}".utf8)),
+        ("", []),
+    ])
+    func ptyBytesSendOneCarriageReturnPerLineEnding(text: String, bytes: [UInt8]) {
+        #expect(KeystrokeSegments.ptyBytes(text) == bytes)
+    }
 }

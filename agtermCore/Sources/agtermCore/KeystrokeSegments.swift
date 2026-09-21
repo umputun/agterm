@@ -25,4 +25,15 @@ public enum KeystrokeSegments {
         }
         return segments
     }
+
+    /// The same keystrokes as the bytes a terminal in its default keyboard mode sends for them, for a
+    /// pane whose input cannot go through its own surface.
+    public static func ptyBytes(_ text: String) -> [UInt8] {
+        split(text).flatMap { segment -> [UInt8] in
+            switch segment {
+            case .text(let run): Array(run.utf8)
+            case .returnKey: [0x0D]
+            }
+        }
+    }
 }

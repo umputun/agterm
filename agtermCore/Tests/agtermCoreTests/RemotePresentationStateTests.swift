@@ -7,6 +7,21 @@ struct RemotePresentationStateTests {
     static let remoteLeft = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000001")!
     static let remoteRight = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
 
+    @Test func bindingKeepsWhatAFreshAttachOfAPaneNeeds() {
+        let local = UUID()
+        let daemon = ZmxSupport.daemonName(for: Self.remoteLeft)
+        let origin = RemoteBinding.Origin(host: "buildbox",
+                                          endpoint: ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z"),
+                                          sessionName: "work")
+        let binding = RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [local: daemon],
+                                    presentationVersion: 1, origin: origin)
+
+        #expect(binding.origin == origin)
+        #expect(binding.daemon(forLocalPane: local) == daemon)
+        #expect(binding.daemon(forLocalPane: UUID()) == nil)
+        #expect(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1).origin == nil)
+    }
+
     private func attached(version: Int? = 1, split: Bool = true, store: AppStore? = nil) throws -> (AppStore, Session) {
         let store = store ?? makeStore()
         let ws = store.addWorkspace(name: "work")

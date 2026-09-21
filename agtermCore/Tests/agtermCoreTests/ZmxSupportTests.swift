@@ -78,6 +78,31 @@ struct ZmxSupportTests {
         #expect(configuration.environment["ZMX_NO_DETACH_KEY"] == "1")
     }
 
+    @Test func leadAttachmentReachesTheAttachEnvironmentAndAnInheritedOneDoesNot() throws {
+        let resources = try makeResources(withLoader: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+        let inherited = ["ZMX_MANAGED": "stale", "ZMX_MANAGED_CLAIM": "1"]
+        func environment(lead: ZmxLeadAttachment?) throws -> [String: String] {
+            let inputs = ZmxSupport.Inputs(zmxExecutablePath: "/bin/echo", passwordDatabaseShell: "/bin/zsh",
+                                          resourcesDirectory: resources.path, stateDirectory: "/tmp/agterm-state",
+                                          paneIdentity: UUID(), baseEnvironment: inherited, inheritedZdotdir: nil,
+                                          lead: lead)
+            return try #require(ZmxSupport.configuration(for: inputs).value).environment
+        }
+
+        let unmanaged = try environment(lead: nil)
+        #expect(unmanaged["ZMX_MANAGED"] == nil)
+        #expect(unmanaged["ZMX_MANAGED_CLAIM"] == nil)
+
+        let recovering = try environment(lead: ZmxLeadAttachment(nonce: "n1", claim: false))
+        #expect(recovering["ZMX_MANAGED"] == "n1")
+        #expect(recovering["ZMX_MANAGED_CLAIM"] == nil)
+
+        let claiming = try environment(lead: ZmxLeadAttachment(nonce: "n2", claim: true))
+        #expect(claiming["ZMX_MANAGED"] == "n2")
+        #expect(claiming["ZMX_MANAGED_CLAIM"] == "1")
+    }
+
     @Test func environmentShellCannotOverrideUnsupportedPasswordDatabaseShell() throws {
         let resources = try makeResources(withLoader: true)
         defer { try? FileManager.default.removeItem(at: resources) }

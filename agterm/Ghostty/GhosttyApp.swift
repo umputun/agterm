@@ -580,6 +580,29 @@ final class GhosttyApp {
         try? FileManager.default.removeItem(atPath: tmp)
     }
 
+    /// Whether the user's config sets a static `title`. libghostty drops EVERY OSC title while that key is
+    /// set, the role reports a pane's zmx client sends as titles included, and the daemon enforces a role
+    /// the app would then never learn. So the key is cleared in every config build and its one effect in
+    /// agterm, ignoring the programs' own titles, is kept by the title callback reading this.
+    private(set) var staticTitleConfigured = false
+
+    private func clearStaticTitle(_ cfg: ghostty_config_t) {
+        let key = "title"
+        var value: UnsafePointer<CChar>?
+        let read = key.withCString { ghostty_config_get(cfg, &value, $0, UInt(key.utf8.count)) }
+        staticTitleConfigured = read && value.map { $0.pointee != 0 } ?? false
+        guard staticTitleConfigured else { return }
+        let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-title-\(UUID().uuidString).conf")
+        do {
+            try "title =\n".write(toFile: tmp, atomically: true, encoding: .utf8)
+        } catch {
+            logger.warning("title override write failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        tmp.withCString { ghostty_config_load_file(cfg, $0) }
+        try? FileManager.default.removeItem(atPath: tmp)
+    }
+
     private func loadConfig(_ inputs: ConfigInputs, extraOverlayPath: String? = nil) -> ghostty_config_t? {
         guard let cfg = ghostty_config_new() else { return nil }
 
@@ -623,6 +646,7 @@ final class GhosttyApp {
 
         ghostty_config_load_recursive_files(cfg)
         forceUnsupportedShellFeaturesOff(cfg)
+        clearStaticTitle(cfg)
         ghostty_config_finalize(cfg)
 
         let diagCount = ghostty_config_diagnostics_count(cfg)

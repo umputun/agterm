@@ -235,6 +235,11 @@ struct agtermApp: App {
                         NotificationManager.shared.actions = actions
                         NotificationManager.shared.library = library
                         NotificationManager.shared.start()
+                        let paneServices = surfaceServices
+                        PaneLead.reattach = { old, claim in Self.reattachPane(old, claim: claim, services: paneServices) }
+                        PaneLead.roleChanged = { [library] view in
+                            view.session.flatMap { library.store(forSession: $0.id) }?.leadRoleChanged()
+                        }
                         // drive the Dock badge (via UNUserNotifications) from the app-wide unseen total — the
                         // sidebar pills' Session.unseenCount summed across windows.
                         DockBadgeController.shared.library = library
@@ -395,12 +400,17 @@ struct agtermApp: App {
         // foreground pid, so it is never captured and restores via the exec `command` path, keeping close-on-exit.
         // `LaunchSeedProvider` owns the precedence between them and resolves it at spawn time, not here, so
         // the pending slots stay on the session until the pane really spawns.
+        // without the claim: a pane relaunched while another Mac leads its daemon comes back covered
+        let lead = ZmxLeadAttachment(claim: false)
         let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
-            ? ZmxLaunch.configuration(paneIdentity: session.paneIdentity, pane: "primary", environment: env)
+            ? ZmxLaunch.configuration(paneIdentity: session.paneIdentity, pane: "primary", environment: env, lead: lead)
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
                                                 active: ghostty.launchRestoreMode, configuration: zmx)
-        if disposition.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
+        if disposition.backedByZmx {
+            services.zmxForegroundResolver?.noteLifecycleChange()
+            ZmxLeadBook.shared.begin(lead, pane: session.paneIdentity)
+        }
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
@@ -408,6 +418,15 @@ struct agtermApp: App {
                                                policy: Self.launchSeedPolicy(ghostty, context: services.launchContext))
         view.launchSeed = provider
         services.spawnRegistry?.enqueue(view, key: session.paneIdentity, provider: provider)
+        Self.wirePane(view, session: session, store: store, services: services)
+        return view
+    }
+
+    /// The callbacks every session pane carries, whichever slot it sits in and whether a factory or a
+    /// fresh attach built it. Each one reads the surface's LIVE role, so nothing here is slot-specific.
+    @MainActor
+    private static func wirePane(_ view: GhosttySurfaceView, session: Session, store: AppStore,
+                                 services: SurfaceServices) {
         view.session = session
         let sessionID = session.id
         view.onExit = { [weak view] in
@@ -433,7 +452,33 @@ struct agtermApp: App {
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
-        return view
+    }
+
+    /// Replaces `old` with a fresh attach of the same pane in the same slot. None of the pane's close paths
+    /// run: the session, the daemon and the pane identity all stay, so the program inside keeps the
+    /// `AGTERM_PANE_ID` it was started with.
+    @MainActor
+    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, services: SurfaceServices) {
+        let lead = ZmxLeadAttachment(claim: claim)
+        guard let session = old.session, let store = services.library.store(forSession: session.id),
+              let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
+              let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
+        else { return }
+        let fontSize = old.currentFontSize() ?? session.fontSize
+        let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
+                                      command: launch.command, waitAfterCommand: launch.wait,
+                                      env: launch.environment, backedByZmx: old.backedByZmx)
+        view.isSplitPane = old.isSplitPane
+        Self.wirePane(view, session: session, store: store, services: services)
+        ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: true)
+        // the old client's exit must not close the pane the new one now owns
+        _ = old.claimProcessExit()
+        let hadFocus = old.window?.firstResponder === old
+        if session.searchSurface === old { old.endSearch() }
+        if old.isSplitPane { session.splitSurface = view } else { session.surface = view }
+        old.destroySurface()
+        if old.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
+        if hadFocus { view.focusAfterReparent() }
     }
 
     /// Shell-exit handler for BOTH pane factories, dispatched on the surface's CURRENT role, not the factory that
@@ -567,12 +612,16 @@ struct agtermApp: App {
         // the parent's window/workspace/session ids.
         // Creation, capture and override precedence matches the primary.
         let ghostty = GhosttyApp.shared
+        let lead = ZmxLeadAttachment(claim: false)
         let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
-            ? ZmxLaunch.configuration(paneIdentity: session.splitPaneIdentity, pane: "split", environment: env)
+            ? ZmxLaunch.configuration(paneIdentity: session.splitPaneIdentity, pane: "split", environment: env, lead: lead)
             : nil
         let disposition = ZmxLaunch.disposition(requested: ghostty.requestedRestoreMode,
                                                 active: ghostty.launchRestoreMode, configuration: zmx)
-        if disposition.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
+        if disposition.backedByZmx {
+            services.zmxForegroundResolver?.noteLifecycleChange()
+            if let identity = session.splitPaneIdentity { ZmxLeadBook.shared.begin(lead, pane: identity) }
+        }
         let cwd = session.localWorkingDirectory(reported: session.initialSplitCwd ?? session.effectiveCwd,
                                                 homeDirectory: NSHomeDirectory())
         let view = GhosttySurfaceView(workingDirectory: cwd,
@@ -583,30 +632,8 @@ struct agtermApp: App {
                                                policy: Self.launchSeedPolicy(ghostty, context: services.launchContext))
         view.launchSeed = provider
         services.spawnRegistry?.enqueue(view, key: session.splitPaneIdentity, provider: provider)
-        view.session = session
         view.isSplitPane = true
-        let sessionID = session.id
-        view.onExit = { [weak view] in
-            guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: services.library)
-        }
-        view.onFocusChange = { [weak view] focused in
-            guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
-            store.session(withID: sessionID)?.splitFocused = splitFocused
-            store.clearUnseen(sessionID)
-            NotificationManager.shared.clearDelivered(sessionID: sessionID)
-        }
-        // the focus-free half of the clear above, for the zoom-hosted case (see makeSurface).
-        view.onClearUnseen = {
-            store.clearUnseen(sessionID)
-            NotificationManager.shared.clearDelivered(sessionID: sessionID)
-        }
-        Self.wireStatusClear(view, store: store, sessionID: sessionID)
-        view.onUserInput = { store.noteUserActivity() }
-        view.onFontSizeChange = { [weak view] size in
-            Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
-        }
-        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
+        Self.wirePane(view, session: session, store: store, services: services)
         return view
     }
 
