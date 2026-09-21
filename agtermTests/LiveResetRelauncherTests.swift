@@ -14,7 +14,7 @@ final class LiveResetRelauncherTests: XCTestCase {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         record = dir.appendingPathComponent("record")
         fakeOpen = dir.appendingPathComponent("fake-open.sh")
-        try "#!/bin/sh\nprintf '%s\\n' \"$@\" > '\(record.path)'\n".write(to: fakeOpen, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\nprintf '%s\\n' \"$@\" > '\(record.path).tmp' && /bin/mv '\(record.path).tmp' '\(record.path)'\n".write(to: fakeOpen, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeOpen.path)
     }
 
