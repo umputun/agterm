@@ -29,7 +29,7 @@ final class RemoteLayoutCloseTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func replica() throws -> (Session, GhosttySurfaceView) {
+    private func replica(withPaneToken: Bool = false) throws -> (Session, GhosttySurfaceView) {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp",
                                                      command: "ssh origin", wait: true, remoteHost: "origin"))
@@ -39,7 +39,8 @@ final class RemoteLayoutCloseTests: XCTestCase {
         let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library),
                                                  zmxForegroundResolver: nil, spawnRegistry: nil,
                                                  launchContext: agtermApp.LaunchSpawnContext())
-        let view = agtermApp.makeSurface(for: session, store: store, env: [:], services: services)
+        let env = withPaneToken ? ["AGTERM_PANE_ID": session.paneIdentity.uuidString] : [:]
+        let view = agtermApp.makeSurface(for: session, store: store, env: env, services: services)
         session.surface = view
         return (session, view)
     }
@@ -48,6 +49,56 @@ final class RemoteLayoutCloseTests: XCTestCase {
         let replacement = UUID()
         agtermApp.applyRemoteLayout(PresentationLayout(panes: [replacement], primary: replacement, shown: false),
                                    store: store, sessionID: session.id, library: library)
+    }
+
+    func testHeldReplicaForgetsItsLeadAndClosesOnlyAfterConfirmedRemoval() async throws {
+        for removed in [false, true] {
+            let setupChanged = expectation(description: "fixture tree change delivered")
+            library.onControlEvent = { event in
+                if event.kind == .treeChanged { setupChanged.fulfill() }
+            }
+            let (session, view) = try replica(withPaneToken: true)
+            let identity = session.paneIdentity
+            let book = ZmxLeadBook.shared
+            defer {
+                book.forget(pane: identity)
+                view.teardown()
+                library.onControlEvent = nil
+            }
+            await fulfillment(of: [setupChanged], timeout: 2)
+            XCTAssertEqual(UUID(uuidString: view.paneToken), identity)
+            book.begin(ZmxLeadAttachment(nonce: "held-exit", claim: true), pane: identity)
+            let notice = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;held-exit:follower:1"))
+            XCTAssertEqual(book.apply(notice, pane: identity), .follower)
+            XCTAssertTrue(view.leadCovered)
+            if removed {
+                removeOriginPane(from: session)
+            } else {
+                agtermApp.applyRemoteLayout(PresentationLayout(panes: [origin], primary: origin, shown: false),
+                                           store: store, sessionID: session.id, library: library)
+            }
+            XCTAssertTrue(store.session(withID: session.id) === session)
+            let leadChanged = expectation(description: "held exit reports its lead change")
+            library.onControlEvent = { event in
+                if event.kind == .treeChanged { leadChanged.fulfill() }
+            }
+
+            try XCTUnwrap(view.onExitHeld)()
+
+            XCTAssertNil(book.role(pane: identity))
+            XCTAssertFalse(view.leadCovered)
+            if removed {
+                XCTAssertNil(store.session(withID: session.id))
+                XCTAssertTrue(view.isDestroyed)
+            } else {
+                XCTAssertTrue(session.surface === view)
+                XCTAssertTrue(store.session(withID: session.id) === session)
+                XCTAssertFalse(view.isDestroyed)
+                XCTAssertTrue(store.remotePaneIsHeld(identity, forSession: session.id))
+                XCTAssertTrue(session.commandWait)
+            }
+            await fulfillment(of: [leadChanged], timeout: 2)
+        }
     }
 
     func testLastReplicaClosesWhenRemovalPrecedesItsHeldExit() throws {
