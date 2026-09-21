@@ -444,7 +444,7 @@ extension ControlServer {
         }
 
         // the role can change across every wait below, so the owner is re-checked before each mutation
-        if let refusal = coveredRefusal(openSurface) { return refusal }
+        if let refusal = coveredRefusal((session.searchSurface as? GhosttySurfaceView) ?? openSurface) { return refusal }
         openSurface.expediteSpawn()
         // `searchActive` here means a prior open settled (set by the async START callback); two rapid
         // scripted opens could mis-toggle, but the GUI's single-⌘F path is the common case.

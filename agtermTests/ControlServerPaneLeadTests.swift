@@ -210,6 +210,32 @@ final class ControlServerPaneLeadTests: XCTestCase {
         XCTAssertNotEqual(session.searchNeedle, "needle")
     }
 
+    func testAnOpenSearchOnALeadingPaneStaysDrivableWhileFocusSitsOnACoveredSplit() async throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let split = UUID()
+        let owner = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                       env: ["AGTERM_PANE_ID": session.paneIdentity.uuidString], backedByZmx: true)
+        session.surface = owner
+        session.splitSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                                  env: ["AGTERM_PANE_ID": split.uuidString], backedByZmx: true)
+        session.splitPaneIdentity = split
+        session.splitFocused = true
+        session.searchActive = true
+        session.searchSurface = owner
+        for (identity, role) in [(session.paneIdentity, "leader"), (split, "follower")] {
+            panes.append(identity)
+            ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: identity)
+            _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:\(role):1")), pane: identity)
+        }
+
+        let next = await server.searchSession(session.id, store: store, text: nil, to: "next")
+
+        XCTAssertTrue(next.ok, next.error ?? "")
+    }
+
     func testSessionLeadReattachesOnlyACoveredPane() throws {
         let server = makeServer()
         let store = try XCTUnwrap(library.activeStore)
