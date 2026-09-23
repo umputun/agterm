@@ -277,16 +277,16 @@
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add `--markdown` to `hud open` (and the bare `hud` form) and `hud update`, with help naming the
+- [x] add `--markdown` to `hud open` (and the bare `hud` form) and `hud update`, with help naming the
   4096 cap and that a single newline is a soft break
-- [ ] add `--font-size` to `hud open` only, validated with the shared predicate; help says it is fixed for
+- [x] add `--font-size` to `hud open` only, validated with the shared predicate; help says it is fixed for
   the panel's life
-- [ ] add `--file PATH` to `hud open` (and the bare form) and `hud update`, mutually exclusive with the
+- [x] add `--file PATH` to `hud open` (and the bare form) and `hud update`, mutually exclusive with the
   message argument; read UTF-8, drop one trailing newline
-- [ ] write tests: flags set the arguments, omitted flags send nil, font range rejection, help text
-- [ ] write tests for `--file`: content becomes the message, one trailing newline dropped, message and
+- [x] write tests: flags set the arguments, omitted flags send nil, font range rejection, help text
+- [x] write tests for `--file`: content becomes the message, one trailing newline dropped, message and
   `--file` together rejected, neither rejected, missing file and invalid UTF-8 rejected before sending
-- [ ] run the new and changed tests
+- [x] run the new and changed tests
 
 ### Task 7: HUD font size in the app
 

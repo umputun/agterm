@@ -763,10 +763,51 @@ struct Session: ParsableCommand {
             return style ?? (spinner ? HudSpinner.defaultStyle.rawValue : nil)
         }
 
+        /// Open and update take the message either as the argument or from `--file`, exactly one of them.
+        static func validateMessageSource(_ message: String?, file: String?) throws {
+            if message == nil, file == nil { throw ValidationError("provide MESSAGE or --file") }
+            if message != nil, file != nil { throw ValidationError("MESSAGE and --file are mutually exclusive") }
+        }
+
+        /// messageText is the argument, or the UTF-8 contents of `file` less one trailing newline: files end
+        /// with one, and a plain panel rejects newlines. The dispatcher still applies every cap and rejection.
+        static func messageText(_ message: String?, file: String?) throws -> String {
+            guard let file else { return message ?? "" }
+            let data: Data
+            do {
+                data = try Data(contentsOf: URL(fileURLWithPath: file))
+            } catch {
+                throw ValidationError("cannot read --file \(file): \(error.localizedDescription)")
+            }
+            guard var text = String(data: data, encoding: .utf8) else {
+                throw ValidationError("--file \(file) is not valid UTF-8")
+            }
+            if text.hasSuffix("\n") { text.removeLast() }
+            return text
+        }
+
+        static func validateFontSize(_ points: Double?) throws {
+            if let points, !HudSpec.isValidFontSize(points) {
+                throw ValidationError(
+                    "font-size must be \(Int(HudSpec.fontSizeRange.lowerBound))...\(Int(HudSpec.fontSizeRange.upperBound)) points")
+            }
+        }
+
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(
                 abstract: "Post a message panel over the session; the session keeps focus and stays typable.")
-            @Argument(help: "Message shown in the panel.") var message: String
+            @Argument(help: "Message shown in the panel (omit with --file).") var message: String?
+            @Option(name: .long, help: "Read the message from FILE instead of the argument.") var file: String?
+            @Flag(name: .long, help: """
+                Render the message as markdown, up to \(HudSpec.maxMarkdownLength) characters. A single newline \
+                inside a paragraph is a soft break; end a line with two spaces or a backslash to break it.
+                """)
+            var markdown = false
+            @Option(name: .customLong("font-size"), help: """
+                The panel's own font size in points, \(Int(HudSpec.fontSizeRange.lowerBound))-\
+                \(Int(HudSpec.fontSizeRange.upperBound)); omit to use the session's. Fixed for the panel's life.
+                """)
+            var fontSize: Double?
             @Option(name: .long, help: "Dim second line under the message (e.g. what the caller is waiting on).") var detail: String?
             @Flag(name: .long, help: "Animate a spinner glyph in the panel, in the default style.")
             var spinner = false
@@ -812,6 +853,8 @@ struct Session: ParsableCommand {
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateHideAfter(hideAfter)
+                try Hud.validateMessageSource(message, file: file)
+                try Hud.validateFontSize(fontSize)
                 try Session.validateSizePercent(sizePercent)
                 try Overlay.validatePane(pane)
             }
@@ -819,11 +862,11 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionHudOpen, target: target.target,
                                args: options.withWindow(ControlArgs(
-                                   sizePercent: sizePercent, message: message, detail: detail,
-                                   spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   hideAfter: hideAfter,
+                                   sizePercent: sizePercent, message: try Hud.messageText(message, file: file),
+                                   detail: detail, spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   hideAfter: hideAfter, markdown: markdown ? true : nil,
                                    pane: pane, paneID: paneID, color: backgroundColor,
-                                   textColor: textColor, position: position)))
+                                   textColor: textColor, position: position, fontSize: fontSize)))
             }
         }
 
@@ -834,7 +877,10 @@ struct Session: ParsableCommand {
         struct Update: RequestCommand {
             static let configuration = CommandConfiguration(
                 abstract: "Replace the panel's text in place (no re-spawn, no blink).")
-            @Argument(help: "New message; it replaces the old one entirely.") var message: String
+            @Argument(help: "New message; it replaces the old one entirely (omit with --file).") var message: String?
+            @Option(name: .long, help: "Read the new message from FILE instead of the argument.") var file: String?
+            @Flag(name: .long, help: "Render the message as markdown; omit to return the panel to plain text.")
+            var markdown = false
             @Option(name: .long, help: "Dim second line under the message; omit to drop the old one.") var detail: String?
             @Flag(name: .long, help: "Keep (or start) the spinner in the default style; omit to stop it.")
             var spinner = false
@@ -868,6 +914,7 @@ struct Session: ParsableCommand {
                 try Hud.validatePosition(position)
                 try Hud.validateSpinnerStyle(spinnerStyle)
                 try Hud.validateHideAfter(hideAfter)
+                try Hud.validateMessageSource(message, file: file)
                 try Session.validateSizePercent(sizePercent)
                 try Overlay.validatePane(pane)
             }
@@ -875,9 +922,9 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionHudUpdate, target: target.target,
                                args: options.withWindow(ControlArgs(
-                                   sizePercent: sizePercent, message: message, detail: detail,
-                                   spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
-                                   hideAfter: hideAfter,
+                                   sizePercent: sizePercent, message: try Hud.messageText(message, file: file),
+                                   detail: detail, spinner: Hud.spinnerValue(spinner: spinner, style: spinnerStyle),
+                                   hideAfter: hideAfter, markdown: markdown ? true : nil,
                                    pane: pane, paneID: paneID, textColor: textColor, position: position)))
             }
         }

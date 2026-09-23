@@ -8,7 +8,6 @@ extension ControlDispatcher {
         if request.cmd == .sessionHudClose {
             return actions.closeHud(request.target, window: request.args?.window)
         }
-        // open and update validate identically — an update replaces the whole spec — so only the effect differs
         let post: (String?, String?, HudSpec, ControlHudPlacement) -> ControlResponse
         switch request.cmd {
         case .sessionHudOpen: post = actions.openHud
@@ -33,8 +32,9 @@ extension ControlDispatcher {
         case rejected(ControlResponse)
     }
 
-    /// Open and update take the same arguments and the same rejections — an update replaces the panel's whole
-    /// text rather than patching it, so an update with no message is a close the caller must ask for.
+    /// parseHudSpec validates open and update alike except for `fontSize`, which only open takes. An update
+    /// replaces the whole spec rather than patching it, so one with no message is a close the caller must ask
+    /// for.
     private func parseHudSpec(_ request: ControlRequest) -> HudSpecParse {
         let args = request.args
         let markdown = args?.markdown ?? false
