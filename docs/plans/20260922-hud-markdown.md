@@ -243,15 +243,15 @@
 - Modify: `agterm/Resources/hud/hud.sh`
 - Modify: `agtermCore/Tests/agtermCoreTests/HudHelperTests.swift`
 
-- [ ] parse the seventh header field, reset every tick; shift seven fields before frames
-- [ ] in literal mode print each row verbatim at the shared block offset, skip the blank-line dim switch
+- [x] parse the seventh header field, reset every tick; shift seven fields before frames
+- [x] in literal mode print each row verbatim at the shared block offset, skip the blank-line dim switch
   and per-line centering; plain mode unchanged
-- [ ] update the header comment to describe the field
-- [ ] write tests: literal rows verbatim with leading spaces kept, blank rows kept, spinner frames parsed
+- [x] update the header comment to describe the field
+- [x] write tests: literal rows verbatim with leading spaces kept, blank rows kept, spinner frames parsed
   after seven fields, plain output unchanged, malformed field treated as 0, plain → markdown → plain in
   one running helper, a one-row animated markdown HUD, equal-width first and continuation rows with a
   spinner, the one-row overflow marker with a spinner
-- [ ] run the new and changed tests
+- [x] run the new and changed tests
 
 ### Task 5: Dispatcher validation and protocol argument
 

@@ -4,18 +4,23 @@
 # One HUD-SPECIFIC environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes (the
 # surface also inherits the session environment and the overlay wrapper's own AGTERM_OVL_* pair):
 #
-#   <columns> <rows> <spinner> <pid> <interval> <textcolor> [frame...]
+#   <columns> <rows> <spinner> <pid> <interval> <textcolor> <blockwidth> [frame...]
 #                                the PANEL's own cell grid, which the text is centered in; spinner 1 shows
 #                                a glyph; pid is the app process that owns this panel; interval is the
 #                                sleep between ticks; textcolor is the SGR PARAMETERS of the panel's
 #                                foreground (38;2;r;g;b) or - for the terminal's own, wrapped in the escape
-#                                below rather than converted here; the frames, when present, are the
-#                                spinner's animation, one single-column glyph each, cycled in order.
+#                                below rather than converted here; blockwidth 0 is plain mode, any other
+#                                value marks a markdown body of finished rows that wide; the frames, when
+#                                present, are the spinner's animation, one single-column glyph each.
 #                                HudLayout and HudSpinner own the color encoding, the frames and the
 #                                interval, so a style or a color is an app-side edit and never one here
 #   message lines                wrapped by HudLayout
 #   (one empty line)             the separator HudLayout guarantees, when a detail follows
 #   detail lines                 rendered dimmed
+#
+# a markdown body (blockwidth > 0) is instead rows HudLayout.markdownBody already wrapped, styled with their
+# own SGR and clipped to the grid. they are printed verbatim at one shared offset: measuring them here would
+# count their escape bytes, and an empty row is spacing, not the detail separator.
 #
 # Everything an update may change lives in that file, re-read every tick, so `session.hud.update` repaints
 # in place; HudLayout.renderedBody owns why it rides there rather than in the environment. The grid is never
@@ -61,6 +66,7 @@ while [ -f "$file" ]; do
     owner=''
     glyph=''
     fg=''
+    blockw=0
 
     block=''
     sep=''
@@ -82,10 +88,11 @@ while [ -f "$file" ]; do
             # terminal's own foreground. Anything but digits and separators is dropped rather than wrapped,
             # so a malformed header cannot emit an arbitrary escape into the pane.
             case ${6:-} in ''|-|*[!0-9";"]*) ;; *) fg="${csi}${6}m" ;; esac
-            # what remains after the six fixed fields is the frame list. Shifting them off is what lets the
+            case ${7:-} in ''|*[!0-9]*) ;; *) blockw=$7 ;; esac
+            # what remains after the seven fixed fields is the frame list. Shifting them off is what lets the
             # frames stay variable-length, and eval indexes the rest without an array this shell lacks.
-            if [ "$spinner" = 1 ] && [ $# -gt 6 ]; then
-                shift 6
+            if [ "$spinner" = 1 ] && [ $# -gt 7 ]; then
+                shift 7
                 eval "glyph=\${$(( frame % $# + 1 ))}"
             else
                 # a spinning header that carried no frames would otherwise reserve the glyph's two cells and
@@ -97,6 +104,20 @@ while [ -f "$file" ]; do
         count=$(( count + 1 ))
         block="$block$sep"
         sep="$down"
+        if [ "$blockw" -gt 0 ]; then
+            pre=''
+            if [ "$spinner" = 1 ] && [ "$first" = 1 ]; then
+                pre="$glyph "
+            fi
+            first=0
+            [ -n "$pre$line" ] || continue
+            left=$(( (cols - blockw) / 2 ))
+            if [ "$left" -gt 0 ]; then
+                block="$block${csi}${left}C"
+            fi
+            block="$block$pre$line"
+            continue
+        fi
         if [ -z "$line" ]; then
             attr="${csi}2m"
             continue

@@ -33,14 +33,14 @@ struct HudHelperTests {
         private let proc = Process()
 
         init(_ body: String, cols: Int, rows: Int, spinner: HudSpinner? = nil, textColor: String? = nil,
-             ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
+             blockWidth: Int = 0, ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
             let fm = FileManager.default
             dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-hud-\(UUID().uuidString)")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             bodyFile = dir.appendingPathComponent("body")
             outFile = dir.appendingPathComponent("out")
-            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner,
-                                                   textColor: textColor, owner: ownerPid),
+            try Run.write(body, header: Run.header(grid: (cols, rows), spinner: spinner,
+                                                   textColor: textColor, blockWidth: blockWidth, owner: ownerPid),
                           to: bodyFile)
             fm.createFile(atPath: outFile.path, contents: nil)
 
@@ -57,12 +57,12 @@ struct HudHelperTests {
         /// Builds the header by hand rather than through `HudLayout.renderedBody`, so a test can hand the
         /// script a grid no message would produce; the FORMAT still has to match, which is the contract these
         /// tests exist to pin.
-        private static func header(cols: Int, rows: Int, spinner: HudSpinner?, textColor: String?,
-                                   owner: Int32) -> String {
+        private static func header(grid: (cols: Int, rows: Int), spinner: HudSpinner?, textColor: String?,
+                                   blockWidth: Int, owner: Int32) -> String {
             let interval = spinner?.interval ?? HudSpinner.staticInterval
             let frames = (spinner?.frames ?? []).map { " " + $0 }.joined()
             let color = textColor ?? HudLayout.noTextColor
-            return "\(cols) \(rows) \(spinner != nil ? 1 : 0) \(owner) \(interval) \(color)\(frames)\n"
+            return "\(grid.cols) \(grid.rows) \(spinner != nil ? 1 : 0) \(owner) \(interval) \(color) \(blockWidth)\(frames)\n"
         }
 
         private static func write(_ body: String, header: String, to file: URL) throws {
@@ -73,10 +73,10 @@ struct HudHelperTests {
         var running: Bool { proc.isRunning }
 
         func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: HudSpinner? = nil,
-                     textColor: String? = nil,
+                     textColor: String? = nil, blockWidth: Int = 0,
                      ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
-            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner,
-                                                   textColor: textColor, owner: ownerPid),
+            try Run.write(body, header: Run.header(grid: (cols, rows), spinner: spinner,
+                                                   textColor: textColor, blockWidth: blockWidth, owner: ownerPid),
                           to: bodyFile)
         }
         func removeBody() throws { try FileManager.default.removeItem(at: bodyFile) }
@@ -201,6 +201,59 @@ struct HudHelperTests {
         try "not a header\nvisible\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
         // the default 40-column box leaves 16 to the left of a 7-character line, where 21 would leave 7
         #expect(run.paints("\(Self.esc)[16Cvisible"))
+    }
+
+    @Test func aMarkdownBodyIsPaintedVerbatimAtOneSharedOffset() throws {
+        let run = try Run("  • a\n\(Self.esc)[1mb\(Self.esc)[22m\n", cols: 40, rows: 7, blockWidth: 5)
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[17C  • a", "\(Self.esc)[17C\(Self.esc)[1mb\(Self.esc)[22m"))
+    }
+
+    @Test func aMarkdownBlankRowIsSpacingNotTheDetailSeparator() throws {
+        let run = try Run("a\n\nb\n", cols: 40, rows: 7, blockWidth: 1)
+        defer { run.stop() }
+        #expect(run.paints("a\(Self.esc)[E\(Self.esc)[E\(Self.esc)[19Cb"))
+        #expect(!run.painted.contains("\(Self.esc)[2m"))
+    }
+
+    @Test func aMalformedBlockWidthPaintsInPlainMode() throws {
+        let run = try Run("hi\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("hi") }
+        let owner = ProcessInfo.processInfo.processIdentifier
+        try "40 7 0 \(owner) 0.5 - x\nhey\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+        #expect(run.paints("\(Self.esc)[18Chey"))
+    }
+
+    @Test func oneHelperSwitchesBetweenPlainAndMarkdown() throws {
+        let run = try Run("plain\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("plain") }
+        try run.rewrite("  md\n", blockWidth: 10)
+        #expect(run.paints("\(Self.esc)[15C  md"))
+        try run.rewrite("back\n")
+        #expect(run.paints("\(Self.esc)[18Cback"))
+        #expect(run.running)
+    }
+
+    @Test func aSpinningMarkdownBodyPutsTheGlyphInTheFirstRowsGutter() throws {
+        let run = try Run("a\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 9)
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[15C| a\(Self.esc)[E\(Self.esc)[15C  b", "\(Self.esc)[15C/ a"))
+    }
+
+    // an empty first row skipped its prepared glyph, so the spinner never appeared.
+    @Test func anEmptyFirstMarkdownRowStillCarriesTheSpinner() throws {
+        let run = try Run("\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 3)
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[18C| \(Self.esc)[E\(Self.esc)[18C  b", "\(Self.esc)[18C/ \(Self.esc)[E\(Self.esc)[18C  b"))
+    }
+
+    @Test func aOneRowSpinningMarkdownBodyAnimatesItsOverflowMarker() throws {
+        let marker = "\(Self.esc)[2m… 3 more\(Self.esc)[22m"
+        let run = try Run(marker + "\n", cols: 20, rows: 3, spinner: .bar, blockWidth: 10)
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[5C| " + marker, "\(Self.esc)[5C/ " + marker))
     }
 
     @Test func spinnerPrefixesTheFirstLineAndAdvances() throws {
