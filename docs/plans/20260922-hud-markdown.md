@@ -201,18 +201,18 @@
 - Create: `agtermCore/Sources/agtermCore/HudMarkdown.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/HudMarkdownTests.swift`
 
-- [ ] create `HudMarkdown` (internal enum, static functions) that parses with `.full` syntax, groups runs
+- [x] create `HudMarkdown` (internal enum, static functions) that parses with `.full` syntax, groups runs
   by block identity and emits unwrapped logical rows of `(text, style)` runs per the block rendering rules
-- [ ] resolve each run's style as the union of block and inline styles; map soft break to space and line
+- [x] resolve each run's style as the union of block and inline styles; map soft break to space and line
   break to a new row; split code blocks into lines and expand their tabs
-- [ ] replace control characters left in run text with U+FFFD, after the break and code-block mapping
-- [ ] write tests per block kind: paragraph with soft and hard breaks, headings 1–6 with nested strong,
+- [x] replace control characters left in run text with U+FFFD, after the break and code-block mapping
+- [x] write tests per block kind: paragraph with soft and hard breaks, headings 1–6 with nested strong,
   unordered and ordered lists (ordinal kept, `10.` width), nesting, `- a\n- b` and `- a\n\n- b` both tight,
   code block with a tab and blank lines, block quote, thematic break, table with a bold header and nested
   strong, image alt text, inline and block HTML literal
-- [ ] write tests for inline styles and safety: strong, emphasized, strikethrough, code, link label,
+- [x] write tests for inline styles and safety: strong, emphasized, strikethrough, code, link label,
   `&#27;` and `&#10;` neutralized while a hard break and code-block newlines survive
-- [ ] run the new tests
+- [x] run the new tests
 
 ### Task 3: Row wrapping, styling and clipping
 
