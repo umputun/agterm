@@ -58,6 +58,41 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.remotePresentation?.hudBridged, true)
     }
 
+    func testAMirroredHudKeepsMarkdownAndFontSizeOnOpenAndUpdate() throws {
+        let fix = try fixture()
+        let spec = HudSpec(message: "**deploying**", hideAfter: 600, markdown: true, fontSize: 18)
+
+        fix.server.showRemoteHud(PresentationHud(spec: spec, pane: nil, generation: 1, remaining: nil),
+                                 forSession: fix.session.id)
+
+        XCTAssertEqual(fix.session.hudSpec?.markdown, true)
+        XCTAssertEqual(fix.session.hudSpec?.fontSize, 18)
+        XCTAssertEqual(fix.session.hudFontSize, 18)
+        XCTAssertTrue(body(of: fix.session).contains("\u{1B}[1mdeploying\u{1B}[22m"))
+
+        let update = HudSpec(message: "**done**", hideAfter: 600, markdown: true, fontSize: 18)
+        fix.server.showRemoteHud(PresentationHud(spec: update, pane: nil, generation: 2, remaining: nil),
+                                 forSession: fix.session.id)
+
+        XCTAssertEqual(fix.session.hudSpec?.markdown, true)
+        XCTAssertEqual(fix.session.hudFontSize, 18)
+        XCTAssertTrue(body(of: fix.session).contains("\u{1B}[1mdone\u{1B}[22m"))
+    }
+
+    func testAnOriginReopenAtAnotherFontRecreatesTheReplicaAtIt() throws {
+        let fix = try fixture()
+        fix.server.showRemoteHud(PresentationHud(spec: HudSpec(message: "a", hideAfter: 600, fontSize: 12), pane: nil,
+                                                 generation: 1, remaining: nil), forSession: fix.session.id)
+        let generation = fix.session.overlaySlotGeneration
+
+        fix.server.showRemoteHud(nil, forSession: fix.session.id)
+        fix.server.showRemoteHud(PresentationHud(spec: HudSpec(message: "b", hideAfter: 600, fontSize: 30), pane: nil,
+                                                 generation: 3, remaining: nil), forSession: fix.session.id)
+
+        XCTAssertGreaterThan(fix.session.overlaySlotGeneration, generation, "the replica is a new surface")
+        XCTAssertEqual(fix.session.hudFontSize, 30)
+    }
+
     func testTheViewerCountsDownWhatIsLeftNotTheConfiguredInterval() throws {
         let fix = try fixture()
         let start = Date(timeIntervalSince1970: 1_789_000_000)

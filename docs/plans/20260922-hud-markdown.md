@@ -333,13 +333,13 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift`
 - Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] copy `markdown` and `fontSize` when rebuilding the mirrored `HudSpec`
-- [ ] confirm the receiving side applies no 256 cap to a markdown message
-- [ ] write tests: a markdown HUD with a font size round-trips through a presentation frame; a
+- [x] copy `markdown` and `fontSize` when rebuilding the mirrored `HudSpec`
+- [x] confirm the receiving side applies no 256 cap to a markdown message
+- [x] write tests: a markdown HUD with a font size round-trips through a presentation frame; a
   4096-character markdown message fits the frame limit
-- [ ] write hosted tests: bridged open and update carry both fields; an origin reopen with a different font
+- [x] write hosted tests: bridged open and update carry both fields; an origin reopen with a different font
   recreates the replica at the new size
-- [ ] run the new and changed tests
+- [x] run the new and changed tests
 
 ### Task 10: [Final] Update documentation
 - [ ] `plugins/agterm/skills/agterm/` (reference and examples): `--markdown`, `--font-size`, `--file`, the
