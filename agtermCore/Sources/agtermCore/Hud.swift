@@ -78,14 +78,12 @@ public struct HudSpec: Codable, Equatable, Sendable {
         case fontSize
     }
 
-    /// A copy carrying `color` in place of this spec's own background. `AppStore.updateHud` holds the LIVE
-    /// panel's color across an update with it: the surface reads that color once at creation, so a stored
-    /// spec carrying any other value would report a color the panel will never paint. `textColor` is NOT
-    /// held this way — it rides the header the helper re-reads, so an update's own value is what paints.
-    func withBackgroundColor(_ color: String?) -> HudSpec {
-        HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: color,
+    /// holdingCreationFields preserves the live background and font size, which the surface reads only at
+    /// creation.
+    func holdingCreationFields(of live: HudSpec) -> HudSpec {
+        HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: live.backgroundColor,
                 textColor: textColor, sizePercent: sizePercent, position: position, hideAfter: hideAfter,
-                markdown: markdown, fontSize: fontSize)
+                markdown: markdown, fontSize: live.fontSize)
     }
 
     func withSizePercent(_ percent: Int?) -> HudSpec {

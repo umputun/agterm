@@ -98,7 +98,8 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false, error: "no overlay")
             }
             if hud, let session,
-               !self.writeHudBody(session, pane: self.paneMetrics(for: session, pane: session.hudTargetPane)) {
+               !self.writeHudBody(session, pane: self.paneMetrics(for: session, pane: session.hudTargetPane,
+                                                                  fontSize: self.liveHudFontSize(session))) {
                 store.resizeOverlay(id, sizePercent: previousSize)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }

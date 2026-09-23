@@ -17,11 +17,14 @@ struct HudTests {
 
     // the live panel's color is held across an update; the auto-hide has to ride along or a recolor would
     // silently make a timed panel permanent.
-    @Test func holdingTheBackgroundColorKeepsTheAutoHide() {
-        let held = HudSpec(message: "deploying", hideAfter: 10).withBackgroundColor("#101010")
+    @Test func holdingTheCreationFieldsKeepsTheAutoHide() {
+        let held = HudSpec(message: "deploying", hideAfter: 10)
+            .holdingCreationFields(of: HudSpec(message: "live", backgroundColor: "#101010", fontSize: 18))
 
         #expect(held.hideAfter == 10)
         #expect(held.backgroundColor == "#101010")
+        #expect(held.fontSize == 18)
+        #expect(held.message == "deploying")
     }
 
     // 1e12 seconds is finite and positive and still traps the scheduler's nanosecond conversion, so finite
@@ -367,10 +370,10 @@ struct HudTests {
     @Test func copiesKeepMarkdownAndFontSize() {
         let spec = HudSpec(message: "# status", markdown: true, fontSize: 20)
 
-        let recolored = spec.withBackgroundColor("#101010")
+        let held = spec.holdingCreationFields(of: HudSpec(message: "live", fontSize: 20))
         let resized = spec.withSizePercent(40)
 
-        #expect(recolored.markdown && recolored.fontSize == 20)
+        #expect(held.markdown && held.fontSize == 20)
         #expect(resized.markdown && resized.fontSize == 20)
     }
 

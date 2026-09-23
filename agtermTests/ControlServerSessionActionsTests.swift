@@ -654,10 +654,59 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(session.hudPaneIdentity, rightIdentity)
         XCTAssertEqual(store.controlTree().workspaces[0].sessions.last?.hud?.pane, "right")
-        let rightSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .right))
-        let leftSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .left))
+        let rightSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .right, fontSize: server.liveHudFontSize(session)))
+        let leftSize = HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .left, fontSize: server.liveHudFontSize(session)))
         XCTAssertEqual(session.overlaySizePercent, rightSize.widthPercent)
         XCTAssertNotEqual(rightSize.widthPercent, leftSize.widthPercent)
+    }
+
+    func testTheHudIsMeasuredWithItsOwnFontThroughOpenZoomUpdateAndResize() throws {
+        let (store, session) = try makeHudSession()
+        session.splitPaneIdentity = UUID()
+        session.hasSplit = true
+        session.isSplit = true
+        session.surface = SessionRestoreTestSurface(paneToken: "left-token")
+        session.splitSurface = SessionRestoreTestSurface(paneToken: "right-token")
+        session.hudPaneFrames = HudPaneFrames(
+            left: HudPaneFrame(x: 0, y: 0, width: 1_600, height: 1_000),
+            right: HudPaneFrame(x: 1_604, y: 0, width: 400, height: 1_000)
+        )
+        store.setFontSize(session.id, 10)
+        let hudMetrics = server.paneMetrics(for: session, pane: .left, fontSize: 24)
+        let spec = HudSpec(message: String(repeating: "x", count: 30), detail: "d", fontSize: 24)
+        let size = HudLayout.panelSize(for: spec, pane: hudMetrics)
+        XCTAssertNotEqual(size, HudLayout.panelSize(for: spec, pane: server.paneMetrics(for: session, pane: .left, fontSize: 10)))
+
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: spec,
+                                     placement: ControlHudPlacement(pane: .left)).ok)
+
+        XCTAssertEqual(HudPanelSize(widthPercent: session.overlaySizePercent ?? 0, heightPercent: session.hudHeightPercent ?? 0), size)
+        XCTAssertEqual(headerGrid(session), gridField(HudLayout.paintGrid(for: spec, size: size, pane: hudMetrics)))
+
+        store.setFontSize(session.id, 12)
+        let update = HudSpec(message: String(repeating: "y", count: 40))
+        XCTAssertTrue(server.updateHud(session.id.uuidString, window: nil, spec: update,
+                                       placement: ControlHudPlacement(pane: .left)).ok)
+
+        let updated = HudLayout.panelSize(for: update, pane: hudMetrics)
+        XCTAssertNotEqual(updated, HudLayout.panelSize(for: update, pane: server.paneMetrics(for: session, pane: .left, fontSize: 12)))
+        XCTAssertEqual(HudPanelSize(widthPercent: session.overlaySizePercent ?? 0, heightPercent: session.hudHeightPercent ?? 0), updated)
+
+        XCTAssertTrue(server.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: 50).ok)
+
+        let resized = HudPanelSize(widthPercent: 50, heightPercent: updated.heightPercent)
+        let live = try XCTUnwrap(session.hudSpec)
+        XCTAssertEqual(headerGrid(session), gridField(HudLayout.paintGrid(for: live, size: resized, pane: hudMetrics)))
+        XCTAssertNotEqual(headerGrid(session), gridField(HudLayout.paintGrid(
+            for: live, size: resized, pane: server.paneMetrics(for: session, pane: .left, fontSize: 12))))
+    }
+
+    private func headerGrid(_ session: Session) -> String? {
+        bodyText(session)?.split(separator: "\n").first?.split(separator: " ").prefix(2).joined(separator: " ")
+    }
+
+    private func gridField(_ grid: (columns: Int, rows: Int)) -> String {
+        "\(grid.columns) \(grid.rows)"
     }
 
     func testHudPaneMetricsFallBackToADeckHostedSurfaceBeforeTheFrameCacheFills() throws {
@@ -671,7 +720,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         session.hudPaneFrames = HudPaneFrames()
         addTeardownBlock { window.orderOut(nil) }
 
-        let metrics = server.paneMetrics(for: session, pane: .left)
+        let metrics = server.paneMetrics(for: session, pane: .left, fontSize: server.liveHudFontSize(session))
 
         XCTAssertEqual(metrics.paneWidth, 640, accuracy: 0.001)
         XCTAssertEqual(metrics.paneHeight, 480, accuracy: 0.001)
@@ -689,7 +738,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         session.hudPaneFrames = HudPaneFrames()
         addTeardownBlock { window.orderOut(nil) }
 
-        let metrics = server.paneMetrics(for: session, pane: .left)
+        let metrics = server.paneMetrics(for: session, pane: .left, fontSize: server.liveHudFontSize(session))
 
         XCTAssertEqual(metrics.paneWidth, 0)
         XCTAssertEqual(metrics.paneHeight, 0)
@@ -892,9 +941,6 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(session.hudFile, file)
         XCTAssertEqual(bodyText(session), expectedBody(update))
         XCTAssertEqual(session.overlaySizePercent, 40)
-        // the grid rides in the body's header line, which is what lets a running helper re-centre. The
-        // trailing `- 0` is the no-text-color sentinel and plain mode's block width, spelled out because
-        // this pins the wire format.
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init),
                        "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 "
                            + "\(Self.ownerPid) \(HudSpinner.staticInterval) - 0")

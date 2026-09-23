@@ -687,8 +687,9 @@ struct agtermApp: App {
             command: spec.command,
             cwd: OverlayLaunchContext.cwd(explicit: spec.cwd, session: session, homeDirectory: NSHomeDirectory()),
             sessionEnvironment: env)
+        let fontSize = isHud ? session.hudFontSize ?? session.fontSize : session.fontSize
         let view = GhosttySurfaceView(workingDirectory: context.cwd,
-                                      fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
+                                      fontSize: fontSize.map(Float.init), command: overlayExitWrapper,
                                       waitAfterCommand: spec.wait, autoFocus: !isHud,
                                       env: context.localEnvironment(codeFile: codeFile, hudFile: hudFile))
         view.overlayCodeFile = codeFile

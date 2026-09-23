@@ -763,7 +763,6 @@ struct Session: ParsableCommand {
             return style ?? (spinner ? HudSpinner.defaultStyle.rawValue : nil)
         }
 
-        /// Open and update take the message either as the argument or from `--file`, exactly one of them.
         static func validateMessageSource(_ message: String?, file: String?) throws {
             if message == nil, file == nil { throw ValidationError("provide MESSAGE or --file") }
             if message != nil, file != nil { throw ValidationError("MESSAGE and --file are mutually exclusive") }

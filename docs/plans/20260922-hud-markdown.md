@@ -300,17 +300,17 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreHudTests.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift` and a hosted HUD test file
 
-- [ ] resolve the effective creation size into a local before measuring on open; `openHud` stores it after
+- [x] resolve the effective creation size into a local before measuring on open; `openHud` stores it after
   the replacing teardown; clear it on close, on a refused open and on a failed body write
-- [ ] measure the HUD cell from the stored `hudFontSize` in update and `overlay.resize`
-- [ ] create the HUD surface at `hudFontSize` in the overlay factory
-- [ ] hold the `fontSize` request across `updateHud`
-- [ ] write tests: store keeps the request and effective size across update, a replacing open with a
+- [x] measure the HUD cell from the stored `hudFontSize` in update and `overlay.resize`
+- [x] create the HUD surface at `hudFontSize` in the overlay factory
+- [x] hold the `fontSize` request across `updateHud`
+- [x] write tests: store keeps the request and effective size across update, a replacing open with a
   different font keeps the NEW request and effective size, a refused open leaves no `hudFontSize`, session
   zoom after open does not change the HUD's measurement
-- [ ] write hosted tests: the factory passes the HUD font to the surface; a HUD opened with `--font-size`
+- [x] write hosted tests: the factory passes the HUD font to the surface; a HUD opened with `--font-size`
   measures its panel from that size
-- [ ] run the new and changed tests
+- [x] run the new and changed tests
 
 ### Task 8: Geometry refresh
 

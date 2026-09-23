@@ -170,6 +170,72 @@ struct AppStoreHudTests {
         #expect(node.hud?.fontSize == nil)
     }
 
+    @Test func anUpdateKeepsTheLiveFontRequestAndEffectiveSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let size = HudPanelSize(widthPercent: 22, heightPercent: 9)
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "a", fontSize: 18), file: "/tmp/hud",
+                      size: size, fontSize: 18)
+
+        #expect(store.updateHud(session.id, spec: HudSpec(message: "b"), size: size))
+
+        #expect(session.hudSpec?.fontSize == 18)
+        #expect(session.hudSpec?.message == "b")
+        #expect(session.hudFontSize == 18)
+    }
+
+    @Test func aReplacingOpenTakesTheNewFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let size = HudPanelSize(widthPercent: 22, heightPercent: 9)
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "a", fontSize: 12), file: "/tmp/hud",
+                      size: size, fontSize: 12)
+
+        #expect(store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "b", fontSize: 48),
+                              file: "/tmp/hud", size: size, fontSize: 48))
+
+        #expect(session.hudSpec?.fontSize == 48)
+        #expect(session.hudFontSize == 48)
+    }
+
+    @Test func aRefusedOpenLeavesNoHudFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        #expect(store.openOverlay(session.id, command: "htop"))
+
+        #expect(!store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "a", fontSize: 20),
+                               file: "/tmp/hud", size: HudPanelSize(widthPercent: 22, heightPercent: 9), fontSize: 20))
+
+        #expect(session.hudFontSize == nil)
+    }
+
+    @Test func closingTheHudClearsItsFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "a"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 22, heightPercent: 9), fontSize: 13)
+
+        #expect(store.closeHud(session.id))
+
+        #expect(session.hudFontSize == nil)
+    }
+
+    @Test func aSessionZoomAfterOpenLeavesTheHudFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "a"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 22, heightPercent: 9), fontSize: 13)
+
+        store.setFontSize(session.id, 24)
+
+        #expect(session.hudFontSize == 13)
+    }
+
     @Test func theReadBackOmitsTextColorWhenTheCallerSetNone() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

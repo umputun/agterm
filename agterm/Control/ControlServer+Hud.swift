@@ -97,15 +97,18 @@ extension ControlServer {
                 pane = nil
             }
             let file = Self.bodyFile(for: id)
+            // resolved before measuring and stored only by the open: a replaced HUD's teardown clears the
+            // session's stored size, so reading it here would measure the predecessor's font.
+            let fontSize = spec.fontSize ?? session.fontSize ?? GhosttyApp.shared.baseFontSize
             // measured ONCE and threaded through: the sizing and the header describe the same panel, and
             // both a font lookup and a pane-geometry union would otherwise run twice per command.
-            let metrics = self.paneMetrics(for: session, pane: pane)
+            let metrics = self.paneMetrics(for: session, pane: pane, fontSize: fontSize)
             // open FIRST, write second: replacing a live HUD tears its surface down, and that teardown
             // deletes the body file at this same per-session path — writing first would lose it. The
             // header's grid also comes from the size the store RESOLVED, which only exists after this call.
             guard store.openHud(id, command: command, spec: spec, file: file,
                                 size: HudLayout.panelSize(for: spec, pane: metrics),
-                                paneIdentity: paneIdentity) else {
+                                paneIdentity: paneIdentity, fontSize: fontSize) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
             // the rolled-back HUD never realized a surface, and a replaced predecessor's file sits at this
@@ -146,7 +149,7 @@ extension ControlServer {
             case .rejected(let response): return response
             }
             let previousPaneIdentity = session.hudPaneIdentity
-            let metrics = self.paneMetrics(for: session, pane: pane)
+            let metrics = self.paneMetrics(for: session, pane: pane, fontSize: self.liveHudFontSize(session))
             store.updateHud(id, spec: spec, size: HudLayout.panelSize(for: spec, pane: metrics),
                             paneIdentity: paneIdentity)
             guard self.writeHudBody(session, pane: metrics) else {
@@ -180,13 +183,17 @@ extension ControlServer {
     /// shifts the centering by about a column, as the estimated cell already can.
     private static let windowPadding = (horizontal: 8.0, vertical: 6.0)
 
-    /// Cell size comes from the configured font. A scoped call reads the deck-frame cache, falling back to its
+    /// liveHudFontSize is the size the live HUD's surface was created at.
+    func liveHudFontSize(_ session: Session) -> Double {
+        session.hudFontSize ?? session.fontSize ?? GhosttyApp.shared.baseFontSize
+    }
+
+    /// paneMetrics measures the cell from `fontSize`, the HUD surface's own. A scoped call reads the deck-frame cache, falling back to its
     /// deck-hosted surface before the preference arrives; zoom and dashboard hosts are excluded. An unscoped
     /// call unions the live pane frames, so a hidden focused split contributes its one maximized surface.
     /// libghostty reports no cell metrics; an unmeasured session takes the cap.
-    func paneMetrics(for session: Session, pane: OverlayPane? = nil) -> PaneMetrics {
-        let cell = Self.cellSize(family: settingsModel.settings.fontFamily,
-                                 size: session.fontSize ?? GhosttyApp.shared.baseFontSize)
+    func paneMetrics(for session: Session, pane: OverlayPane? = nil, fontSize: Double) -> PaneMetrics {
+        let cell = Self.cellSize(family: settingsModel.settings.fontFamily, size: fontSize)
         let size: (width: Double, height: Double)
         if let pane, let frame = session.hudPaneFrames[pane] {
             size = (frame.width, frame.height)

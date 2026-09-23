@@ -69,6 +69,54 @@ final class ControlServerHudAutoHideTests: XCTestCase {
         XCTAssertNil(fix.server.hudAutoHide[fix.session.id])
     }
 
+    func testAnOpenMeasuresAndRecordsTheRequestedFontSize() throws {
+        let fix = try fixture()
+        XCTAssertTrue(try XCTUnwrap(fix.server.library.activeStore).closeHud(fix.session.id))
+
+        let response = fix.server.openHud(fix.session.id.uuidString, window: nil,
+                                          spec: HudSpec(message: "big", fontSize: 30), placement: ControlHudPlacement())
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(fix.session.hudFontSize, 30)
+        XCTAssertEqual(fix.server.liveHudFontSize(fix.session), 30)
+    }
+
+    func testAnOpenWithoutAFontSizeRecordsTheSessionsSize() throws {
+        let fix = try fixture()
+        XCTAssertTrue(try XCTUnwrap(fix.server.library.activeStore).closeHud(fix.session.id))
+        try XCTUnwrap(fix.server.library.activeStore).setFontSize(fix.session.id, 17)
+
+        let response = fix.server.openHud(fix.session.id.uuidString, window: nil,
+                                          spec: HudSpec(message: "same"), placement: ControlHudPlacement())
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(fix.session.hudFontSize, 17)
+    }
+
+    func testAnUpdateAndASessionZoomKeepTheOpenedFontSize() throws {
+        let fix = try fixture()
+        XCTAssertTrue(try XCTUnwrap(fix.server.library.activeStore).closeHud(fix.session.id))
+        _ = fix.server.openHud(fix.session.id.uuidString, window: nil,
+                               spec: HudSpec(message: "a", fontSize: 30), placement: ControlHudPlacement())
+        try XCTUnwrap(fix.server.library.activeStore).setFontSize(fix.session.id, 11)
+
+        let response = fix.server.updateHud(fix.session.id.uuidString, window: nil, spec: HudSpec(message: "b"))
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(fix.server.liveHudFontSize(fix.session), 30)
+        XCTAssertEqual(fix.session.hudSpec?.fontSize, 30)
+    }
+
+    func testTheMeasuredCellFollowsTheFontSizeItIsGiven() throws {
+        let fix = try fixture()
+
+        let small = fix.server.paneMetrics(for: fix.session, fontSize: 10)
+        let large = fix.server.paneMetrics(for: fix.session, fontSize: 30)
+
+        XCTAssertGreaterThan(large.cellWidth, small.cellWidth)
+        XCTAssertGreaterThan(large.cellHeight, small.cellHeight)
+    }
+
     @MainActor
     private final class HudSink: PresentationSink {
         var huds: [PresentationHud?] = []

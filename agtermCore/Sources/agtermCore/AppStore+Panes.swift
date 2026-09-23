@@ -401,8 +401,11 @@ extension AppStore {
     ///
     /// A live HUD is REPLACED (torn down and re-opened, so the helper picks up the new file), a live
     /// PROGRAM overlay refuses. False for an unknown session or an occupied program slot. NOT persisted.
+    /// `fontSize` is the effective size the caller measured with; it is stored only after `openOverlay` has
+    /// torn down a replaced HUD, whose teardown clears it.
     @discardableResult public func openHud(_ sessionID: UUID, command: String, spec: HudSpec, file: String,
-                                           size: HudPanelSize, paneIdentity: UUID? = nil) -> Bool {
+                                           size: HudPanelSize, paneIdentity: UUID? = nil,
+                                           fontSize: Double? = nil) -> Bool {
         guard openOverlay(sessionID, command: command,
                           sizePercent: HudLayout.clampSizePercent(size.widthPercent),
                           backgroundColor: spec.backgroundColor),
@@ -411,22 +414,23 @@ extension AppStore {
         session.hudPaneIdentity = paneIdentity
         session.hudFile = file
         session.hudHeightPercent = size.heightPercent
+        session.hudFontSize = fontSize
         return true
     }
 
     /// Rewrites a live HUD's message and size in place: the surface stays mounted and the helper re-reads
     /// its body file on the next tick, so the panel changes with no re-spawn and no blink. The file path is
     /// not an argument — an update rewrites the path `openHud` already gave the running helper, per
-    /// `HudLayout.renderedBody`. The background color is not an argument either in practice: the factory
-    /// reads it at creation, so the LIVE panel's color is carried into the stored spec and `spec`'s own is
-    /// dropped. Only a replacing `openHud` changes the color, and the read-back keeps naming what the panel
+    /// `HudLayout.renderedBody`. The background color and font size are not arguments either in practice: the
+    /// factory reads both at creation, so the LIVE panel's are carried into the stored spec and `spec`'s own
+    /// are dropped. Only a replacing `openHud` changes them, and the read-back keeps naming what the panel
     /// actually paints. False with no HUD up, which is the only failure: `resizeOverlay` refuses an empty
     /// slot alone, and a live HUD occupies one.
     @discardableResult public func updateHud(_ sessionID: UUID, spec: HudSpec, size: HudPanelSize,
                                              paneIdentity: UUID? = nil) -> Bool {
         guard let session = session(withID: sessionID), let live = session.hudSpec,
               session.hudActive else { return false }
-        session.hudSpec = spec.withBackgroundColor(live.backgroundColor)
+        session.hudSpec = spec.holdingCreationFields(of: live)
         session.hudPaneIdentity = paneIdentity
         session.hudHeightPercent = size.heightPercent
         resizeOverlay(sessionID, sizePercent: size.widthPercent)
