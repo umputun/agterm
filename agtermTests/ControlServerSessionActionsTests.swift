@@ -893,10 +893,11 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(bodyText(session), expectedBody(update))
         XCTAssertEqual(session.overlaySizePercent, 40)
         // the grid rides in the body's header line, which is what lets a running helper re-centre. The
-        // trailing `-` is the no-text-color sentinel, spelled out because this pins the wire format.
+        // trailing `- 0` is the no-text-color sentinel and plain mode's block width, spelled out because
+        // this pins the wire format.
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init),
                        "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 "
-                           + "\(Self.ownerPid) \(HudSpinner.staticInterval) -")
+                           + "\(Self.ownerPid) \(HudSpinner.staticInterval) - 0")
     }
 
     // the text color rides that same header, so an update recolors the live panel without re-opening the
@@ -912,7 +913,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
         XCTAssertEqual(session.overlaySlotGeneration, generation, "a recolor must not re-open the slot")
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init)?
-            .hasSuffix(" 38;2;126;192;126"), true)
+            .hasSuffix(" 38;2;126;192;126 0"), true)
         XCTAssertEqual(session.hudSpec?.textColor, "#7ec07e")
     }
 

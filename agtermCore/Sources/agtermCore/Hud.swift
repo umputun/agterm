@@ -372,10 +372,9 @@ public enum HudLayout {
     /// decides how BIG the panel is (through `widthPercent` and `heightPercent`); `panelGrid` decides where
     /// the text sits inside the panel that decision produced. Measured in `cellCount`'s unit.
     public static func box(for spec: HudSpec) -> (columns: Int, rows: Int) {
-        let lines = bodyLines(for: spec)
-        let widest = lines.map(cellCount).max() ?? 0
-        let content = max(widest + (spec.spinner != nil ? spinnerWidth : 0), 1)
-        return (columns: content + horizontalPadding * 2, rows: max(lines.count, 1) + verticalPadding * 2)
+        let widths = spec.markdown ? markdownRows(for: spec).map(HudMarkdown.width) : bodyLines(for: spec).map(cellCount)
+        let content = max((widths.max() ?? 0) + (spec.spinner != nil ? spinnerWidth : 0), 1)
+        return (columns: content + horizontalPadding * 2, rows: max(widths.count, 1) + verticalPadding * 2)
     }
 
     /// panelSize is the ONE place the two axes are decided together: the caller's `--size-percent` reaches
@@ -459,9 +458,11 @@ public enum HudLayout {
     }
 
     /// renderedBody returns the bytes written to `fileEnvKey`'s file: a
-    /// `<columns> <rows> <spinner> <pid> <interval> <textcolor> [frame...]` header line, then the wrapped
-    /// message block, a single empty line, and the wrapped detail block. Content lines are never empty, so
-    /// that one empty line is what tells the helper where the dimmed detail starts. The header is what lets
+    /// `<columns> <rows> <spinner> <pid> <interval> <textcolor> <blockwidth> [frame...]` header line, then
+    /// the body. `blockwidth` 0 is plain mode: the wrapped message block, a single empty line, and the
+    /// wrapped detail block, where content lines are never empty, so that one empty line is what tells the
+    /// helper where the dimmed detail starts. Any other `blockwidth` is markdown mode: finished rows from
+    /// `markdownBody`, which the helper prints verbatim at one shared offset. The header is what lets
     /// an update change the grid, the spinner or the text color without a re-spawn — the helper re-reads this
     /// file every tick and never consults its own environment for any of them.
     ///
@@ -481,9 +482,36 @@ public enum HudLayout {
                                     ownerPid: Int32) -> String {
         let interval = spec.spinner?.interval ?? HudSpinner.staticInterval
         let frames = (spec.spinner?.frames ?? []).map { " " + $0 }.joined()
+        let (lines, blockWidth) = spec.markdown ? markdownBody(for: spec, grid: grid) : (bodyLines(for: spec), 0)
         let header = "\(grid.columns) \(grid.rows) \(spec.spinner != nil ? 1 : 0) \(ownerPid) "
-            + interval + " " + foregroundSGR(spec.textColor) + frames + "\n"
-        return header + bodyLines(for: spec).map { $0 + "\n" }.joined()
+            + interval + " " + foregroundSGR(spec.textColor) + " \(blockWidth)" + frames + "\n"
+        return header + lines.map { $0 + "\n" }.joined()
+    }
+
+    /// markdownRows lays a markdown spec out unclipped: the message's rows at `maxColumns`, then, when a
+    /// detail is set, a blank row and the detail's rows dimmed.
+    static func markdownRows(for spec: HudSpec) -> [[HudMarkdown.Run]] {
+        var rows = HudMarkdown.rows(HudMarkdown.lines(spec.message), width: maxColumns)
+        let detail = wrap(spec.detail ?? "", columns: maxColumns)
+        guard !detail.isEmpty else { return rows }
+        rows.append([])
+        rows += detail.map { [HudMarkdown.Run(text: $0, style: .dim)] }
+        return rows
+    }
+
+    /// markdownBody clips the markdown rows to `grid` less its padding and the spinner's gutter, then indents
+    /// every row after the first by that gutter (the helper draws the glyph on the first). `blockWidth` is
+    /// the widest painted row, gutter included, and never 0, which the header reserves for plain mode.
+    static func markdownBody(for spec: HudSpec, grid: (columns: Int, rows: Int)) -> (lines: [String], blockWidth: Int) {
+        let gutter = spec.spinner != nil ? spinnerWidth : 0
+        let rows = HudMarkdown.fitted(markdownRows(for: spec), columns: grid.columns - horizontalPadding * 2 - gutter,
+                                      rows: grid.rows - verticalPadding * 2)
+        let blockWidth = max((rows.map(HudMarkdown.width).max() ?? 0) + gutter, 1)
+        let indent = String(repeating: " ", count: gutter)
+        let lines = rows.enumerated().map { index, row in
+            (index > 0 && !row.isEmpty ? indent : "") + HudMarkdown.sgr(row)
+        }
+        return (lines, blockWidth)
     }
 
     static func bodyLines(for spec: HudSpec) -> [String] {

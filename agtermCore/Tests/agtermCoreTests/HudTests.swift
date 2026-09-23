@@ -48,7 +48,7 @@ struct HudTests {
 
         #expect(box.columns == 1 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 1 + HudLayout.verticalPadding * 2)
-        #expect(HudLayout.renderedBody(for: HudSpec(message: ""), grid: box, ownerPid: 4242) == "5 3 0 4242 0.5 -\n")
+        #expect(HudLayout.renderedBody(for: HudSpec(message: ""), grid: box, ownerPid: 4242) == "5 3 0 4242 0.5 - 0\n")
     }
 
     @Test func longSingleWordIsBrokenAtMaxColumns() {
@@ -80,7 +80,7 @@ struct HudTests {
         let box = HudLayout.box(for: spec)
         let body = HudLayout.renderedBody(for: spec, grid: box, ownerPid: 4242)
 
-        #expect(body == "27 5 0 4242 0.5 -\ngathering options\n\nscanning 4 repositories\n")
+        #expect(body == "27 5 0 4242 0.5 - 0\ngathering options\n\nscanning 4 repositories\n")
         #expect(box.columns == 23 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 3 + HudLayout.verticalPadding * 2)
     }
@@ -89,7 +89,7 @@ struct HudTests {
         let spec = HudSpec(message: "working", detail: "   ")
         let body = HudLayout.renderedBody(for: spec, grid: HudLayout.box(for: spec), ownerPid: 4242)
 
-        #expect(body == "11 3 0 4242 0.5 -\nworking\n")
+        #expect(body == "11 3 0 4242 0.5 - 0\nworking\n")
     }
 
     // the header is the whole reason `session.hud.update` can grow the panel or start the spinner without
@@ -100,7 +100,7 @@ struct HudTests {
 
         let body = HudLayout.renderedBody(for: spec, grid: (columns: 30, rows: 9), ownerPid: 4242)
 
-        #expect(body == "30 9 1 4242 0.08 - ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏\nworking\n")
+        #expect(body == "30 9 1 4242 0.08 - 0 ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏\nworking\n")
     }
 
     // the frames ride the header so the helper holds no table; a static panel sends none and only carries
@@ -109,7 +109,7 @@ struct HudTests {
         let body = HudLayout.renderedBody(for: HudSpec(message: "working"), grid: (columns: 30, rows: 9),
                                           ownerPid: 4242)
 
-        #expect(body == "30 9 0 4242 0.5 -\nworking\n")
+        #expect(body == "30 9 0 4242 0.5 - 0\nworking\n")
     }
 
     // the header is word-split by the helper and `HudLayout.spinnerWidth` reserves exactly two cells, so a
@@ -215,7 +215,7 @@ struct HudTests {
         #expect(grid.rows == 3)
         #expect(box.columns == 22)
         #expect(box.rows == 3)
-        #expect(HudLayout.renderedBody(for: spec, grid: grid, ownerPid: 4242).hasPrefix("22 3 0 4242 0.5 -\n"))
+        #expect(HudLayout.renderedBody(for: spec, grid: grid, ownerPid: 4242).hasPrefix("22 3 0 4242 0.5 - 0\n"))
 
         // one line centered in three rows: one above, one below, and no empty half-panel under it
         #expect((grid.rows - HudLayout.bodyLines(for: spec).count) / 2 == 1)
@@ -294,6 +294,59 @@ struct HudTests {
         #expect(spec.detail == nil)
         #expect(spec.backgroundColor == nil)
         #expect(spec.sizePercent == nil)
+    }
+
+    @Test func aMarkdownBodyCarriesItsBlockWidthAndEncodedRows() {
+        let body = HudLayout.renderedBody(for: HudSpec(message: "**hi** there", markdown: true),
+                                          grid: (columns: 20, rows: 5), ownerPid: 4242)
+
+        #expect(body == "20 5 0 4242 0.5 - 8\n\u{1B}[1mhi\u{1B}[22m there\n")
+    }
+
+    @Test func aSpinningMarkdownBodyIndentsEveryRowAfterTheFirstByTheGutter() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "- a\n- bb", spinner: .bar, markdown: true),
+                                          grid: (columns: 20, rows: 6))
+
+        #expect(body.lines == ["• a", "  • bb"])
+        #expect(body.blockWidth == 4 + HudLayout.spinnerWidth)
+    }
+
+    @Test func aMarkdownBodyIsClippedToTheGridLessItsPadding() {
+        let message = (1...10).map { "- item \($0)" }.joined(separator: "\n")
+
+        let body = HudLayout.markdownBody(for: HudSpec(message: message, markdown: true), grid: (columns: 9, rows: 5))
+
+        #expect(body.lines == ["• it…", "• it…", "\u{1B}[2m… 8 \u{1B}[22m…"])
+        #expect(body.blockWidth == 5)
+    }
+
+    @Test func aOneRowSpinningMarkdownBodyShowsOnlyTheMarker() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "a\n\nb", spinner: .bar, markdown: true),
+                                          grid: (columns: 30, rows: 3))
+
+        #expect(body.lines == ["\u{1B}[2m… 3 more\u{1B}[22m"])
+        #expect(body.blockWidth == 8 + HudLayout.spinnerWidth)
+    }
+
+    @Test func anEmptyMarkdownBudgetStillWritesAMarkdownBlockWidth() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "a", markdown: true), grid: (columns: 4, rows: 2))
+
+        #expect(body.lines.isEmpty)
+        #expect(body.blockWidth == 1)
+    }
+
+    @Test func aMarkdownDetailFollowsABlankRowDimmed() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "x", detail: "d", markdown: true),
+                                          grid: (columns: 20, rows: 10))
+
+        #expect(body.lines == ["x", "", "\u{1B}[2md\u{1B}[22m"])
+    }
+
+    @Test func theMarkdownBoxMeasuresTheRenderedRows() {
+        let box = HudLayout.box(for: HudSpec(message: "# T\n\n- a\n- b", markdown: true))
+
+        #expect(box.rows == 4 + HudLayout.verticalPadding * 2)
+        #expect(box.columns == 3 + HudLayout.horizontalPadding * 2)
     }
 
     @Test func omittedMarkdownAndFontSizeDecodeToPlainAndInherited() throws {
@@ -417,6 +470,6 @@ struct HudTests {
         let header = HudLayout.renderedBody(for: spec, grid: (columns: 30, rows: 9), ownerPid: 4242)
             .split(separator: "\n")[0]
 
-        #expect(header == "30 9 1 4242 0.12 38;2;126;192;126 ◐ ◓ ◑ ◒")
+        #expect(header == "30 9 1 4242 0.12 38;2;126;192;126 0 ◐ ◓ ◑ ◒")
     }
 }

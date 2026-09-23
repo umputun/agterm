@@ -88,7 +88,9 @@
 - block quote: rows prefixed with `│ `.
 - thematic break: a row of `─` across the content width.
 - table: cells padded to the widest cell in their column and joined with ` │ `; header row bold. A table
-  wider than the content width is clipped like any other row.
+  wider than the content width is clipped like any other row. Cells and rows are placed by the parser's
+  column and row index; trailing all-empty body rows and an all-empty header are not rendered, because
+  the parser emits nothing for them.
 - image: its alt text. Raw HTML, inline or block: its source text, literal.
 - blocks are separated by one blank row; a nested block inherits its container's indent and prefix.
 
@@ -222,18 +224,18 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/HudMarkdownTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/HudTests.swift`
 
-- [ ] wrap logical rows at `maxColumns` over the visible stream across runs, with hanging indent for list
+- [x] wrap logical rows at `maxColumns` over the visible stream across runs, with hanging indent for list
   items and quote prefixes, and spinner indentation for rows after the first
-- [ ] generate self-contained SGR per row from resolved styles, reopening after a wrap and closing before
+- [x] generate self-contained SGR per row from resolved styles, reopening after a wrap and closing before
   a clip marker; detail rows 2/22
-- [ ] clip columns and rows against the grid in `renderedBody` per the clipping rules, then compute
+- [x] clip columns and rows against the grid in `renderedBody` per the clipping rules, then compute
   `blockWidth` (spinner gutter included, at least 1) and write it as the seventh header field (0 for plain)
-- [ ] make `box(for:)` use the rendered rows for a markdown spec
-- [ ] write tests: wrap across a style boundary, hanging indent for `•` and `10.`, heading `# **x** y`
+- [x] make `box(for:)` use the rendered rows for a markdown spec
+- [x] write tests: wrap across a style boundary, hanging indent for `•` and `10.`, heading `# **x** y`
   stays bold after the inner span, column and row clipping with markers, omission count, marker column
   clip, grids with 0 and 1 usable rows and columns, spinner on, no SGR split by a cut, text color kept,
   `box` for markdown specs, plain-mode body unchanged apart from the new header field
-- [ ] run the new and changed tests
+- [x] run the new and changed tests
 
 ### Task 4: Painter literal mode
 
