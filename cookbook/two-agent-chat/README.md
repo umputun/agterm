@@ -23,7 +23,7 @@ agterm 0.24.0 or later, which added `surface cursor`. The recipe refuses to type
 1. Copy `peer-chat.py` somewhere on your `PATH`, keeping the executable bit.
 2. Copy `SKILL-claude.md` to `~/.claude/skills/peer-chat/SKILL.md` and `SKILL-codex.md` to `~/.codex/skills/peer-chat/SKILL.md`. Both loaders require the installed file to be named exactly `SKILL.md`, so the suffix here only says which agent the file is for. Each one tells its own agent how to send, how to recognise an incoming message, and what it may not do to the other pane.
 3. Keep `peer-chat.py` on your `PATH`: both skills invoke it as a bare command and name no path. If you install it somewhere off `PATH` instead, prefix the command lines in both copies with its full path.
-4. If you start either agent through a wrapper script instead of as `claude` or `codex`, put that wrapper's name in the same file, as the `--target-command` value the agent should pass when sending to it. Without this the first send refuses, saying the target pane is not running the expected command.
+4. If you start either agent through a wrapper script instead of as `claude` or `codex`, put that wrapper's name in the same file, as the `--target-command` value the agent should pass when sending to it. Without this the first send refuses, saying the target pane is not running the expected command. If you also arrange the split the other way round, the sender must recognise its own wrapper on the target's usual side: set `PEER_CHAT_CLAUDE_COMMAND` or `PEER_CHAT_CODEX_COMMAND` to the wrapper's name in that agent's environment, for Codex through `shell_environment_policy.set` as in step 6. `--target-command` cannot do this, since it names the target.
 5. To let Codex reserve and send file-backed messages without separate approvals, add these two entries to `~/.codex/rules/default.rules`, creating the file if needed and using the command name or path from step 1:
 
    ```python
@@ -47,7 +47,7 @@ your message as one paragraph
 MSG
 ```
 
-`--to claude` sends the other way. Either agent can sit in either pane. The script looks for the target on its usual side first, Claude Code on the left and Codex on the right, and takes the other side only when the usual one runs the other agent, so a pane that could be the sender is never chosen. `--session` names a session explicitly; without it the script uses `AGTERM_SESSION_ID` when the caller has one, and otherwise looks for a single session whose target pane is running the expected agent. An explicit session is found across open windows, while `--window` constrains the lookup. The resolved window id stays pinned for the full send.
+`--to claude` sends the other way. Either agent can sit in either pane. The script looks for the target on its usual side first, Claude Code on the left and Codex on the right, and takes the other side only when the usual one runs the other agent, since anything else there could be the sender. Agents are recognised by name in the command lines agterm reports. When the usual side names both, as a launch prompt that mentions the other agent does, it gives way only if the program it runs is plainly the other agent, and otherwise keeps the send as before. In a Claude Code and Codex pair, a launch command that still misleads the script makes the send fail its prompt check after the retries instead of typing. `--session` names a session explicitly; without it the script uses `AGTERM_SESSION_ID` when the caller has one, and otherwise looks for a single session whose target pane is running the expected agent. An explicit session is found across open windows, while `--window` constrains the lookup. The resolved window id stays pinned for the full send.
 
 Claude Code normally sends to Codex with Return, the key Codex uses for steering an active turn. Codex can still queue it when its current state cannot accept a steer. Add `--queue` only for an informational note that can wait until the turn ends:
 
@@ -79,7 +79,7 @@ your message as one paragraph
 MSG
 ```
 
-A path works as well as a bare name; only the last component is compared. `PEER_CHAT_CLAUDE_COMMAND` and `PEER_CHAT_CODEX_COMMAND` do the same thing through the environment, for an agent that cannot easily add a flag. Only the pane being sent to is checked, so a wrapped Claude Code can still send to a plain Codex without any of this.
+A path works as well as a bare name; only the last component is compared. `PEER_CHAT_CLAUDE_COMMAND` and `PEER_CHAT_CODEX_COMMAND` do the same thing through the environment, for an agent that cannot easily add a flag. In the usual layout only the pane being sent to is checked, so a wrapped Claude Code can still send to a plain Codex without any of this. A reversed split also needs the sender's own wrapper name, as *Setup* step 4 describes.
 
 On success it prints `{"sent": N}` and exits 0. Any refusal or failure exits 1 with the reason on stderr, and an interrupt exits 130.
 

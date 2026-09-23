@@ -2681,6 +2681,55 @@ class PaneResolutionTests(unittest.TestCase):
             with self.subTest(target=target, left=left, right=right):
                 self.assertEqual(self.resolve(target, self.node(left, right)).pane, pane)
 
+    def test_reversed_wrapped_sender_is_pointed_at_its_variable(self) -> None:
+        cases = (
+            ("codex", ["codex"], ["cld"], "PEER_CHAT_CLAUDE_COMMAND", "cld", "left"),
+            ("claude", ["cdx"], ["claude"], "PEER_CHAT_CODEX_COMMAND", "cdx", "right"),
+        )
+        for target, left, right, variable, wrapper, pane in cases:
+            node = self.node(left, right)
+            with self.subTest(target=target):
+                with self.assertRaises(RuntimeError) as caught:
+                    self.resolve(target, node)
+
+                self.assertIn(f"set {variable} to its name", str(caught.exception))
+                self.assertNotIn("--target-command", str(caught.exception))
+                self.assertEqual(
+                    self.resolve(target, node, {variable: wrapper}).pane, pane
+                )
+
+    def test_launch_prompt_naming_the_other_agent_does_not_move_the_target(self) -> None:
+        codex = ["node", "/opt/homebrew/bin/codex", "work with claude on this"]
+        for right in (["claude"], ["claude", "talk to codex"]):
+            node = self.node(codex, right)
+            with self.subTest(right=right):
+                self.assertEqual(self.resolve("claude", node).pane, "right")
+                self.assertEqual(self.resolve("codex", node).pane, "left")
+
+    def test_usual_pane_naming_both_agents_stays_when_it_runs_the_target(self) -> None:
+        left = ["claude", "--add-dir", "/tmp/codex"]
+        for right in (["claude"], ["node", "/opt/homebrew/bin/codex"]):
+            with self.subTest(right=right):
+                self.assertEqual(
+                    self.resolve("claude", self.node(left, right)).pane, "left"
+                )
+
+    def test_doubtful_program_keeps_the_usual_pane(self) -> None:
+        cases = (
+            (["node", "--require", "/tmp/codex", "/opt/bin/claude"], ["claude"], {}),
+            (
+                ["agent", "claude", "codex"],
+                ["agent"],
+                {"PEER_CHAT_CLAUDE_COMMAND": "agent", "PEER_CHAT_CODEX_COMMAND": "agent"},
+            ),
+        )
+        for left, right, environment in cases:
+            with self.subTest(left=left):
+                self.assertEqual(
+                    self.resolve("claude", self.node(left, right), environment).pane,
+                    "left",
+                )
+
     def test_bound_pane_is_not_followed_after_the_agents_swap(self) -> None:
         bound = replace(CLAUDE_PROFILE, pane="right")
         swapped = self.node(["claude"], ["codex"])

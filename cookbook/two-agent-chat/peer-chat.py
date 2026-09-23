@@ -105,6 +105,8 @@ PROFILES = {
     "codex": Profile("right", "codex", "codex", "Chat from Claude: ", "\n"),
 }
 PANE_FIELDS = {"left": "foreground", "right": "splitForeground"}
+# a pane whose first word is one of these runs a script, and the script names the agent.
+INTERPRETER_RE = re.compile(r"node|bun|deno|python[0-9.]*|ruby|perl|sh|bash|zsh")
 
 
 class PromptBlocked(RuntimeError):
@@ -271,24 +273,53 @@ def pane_runs(info: dict[str, Any], pane: str, command: str) -> bool:
     return bool(info.get("hasSplit")) and runs(info.get(PANE_FIELDS[pane]), command)
 
 
+def peer_agent(profile: Profile) -> str:
+    return next(agent for agent in PROFILES if agent != profile.agent)
+
+
+def peer_command(profile: Profile) -> str | None:
+    try:
+        return configured_command(peer_agent(profile))
+    except ValueError:
+        return None
+
+
 def peer_runs(info: dict[str, Any], pane: str, profile: Profile) -> bool:
     """Whether the pane runs the other agent of the pair, by that agent's own command."""
-    peer = next(agent for agent in PROFILES if agent != profile.agent)
-    try:
-        command = configured_command(peer)
-    except ValueError:
-        return False
-    return pane_runs(info, pane, command)
+    command = peer_command(profile)
+    return command is not None and pane_runs(info, pane, command)
+
+
+def leading_command(foreground: Any) -> str | None:
+    """Name the program a pane runs, only when its command line leaves no doubt."""
+    if not isinstance(foreground, list) or not foreground:
+        return None
+    parts = [str(part) for part in foreground]
+    name = os.path.basename(parts[0])
+    if not INTERPRETER_RE.fullmatch(name):
+        return name
+    # an interpreter option can take a value, so only a script given straight after it counts.
+    if len(parts) > 1 and not parts[1].startswith("-"):
+        return os.path.basename(parts[1])
+    return None
 
 
 def target_pane(info: dict[str, Any], profile: Profile) -> str | None:
     home = profile.pane
     away = "right" if home == "left" else "left"
-    if pane_runs(info, home, profile.command):
+    home_runs = pane_runs(info, home, profile.command)
+    away_runs = pane_runs(info, away, profile.command)
+    peer_home = peer_runs(info, home, profile)
+    peer = peer_command(profile)
+    if home_runs and away_runs and peer_home and peer != profile.command:
+        # the usual pane names both agents, as a prompt or a path among its arguments can. It yields
+        # only when the program it runs is plainly the other agent; any doubt keeps it, as before.
+        home_runs = leading_command(info.get(PANE_FIELDS[home])) != peer
+    if home_runs:
         return home
     # agterm addresses panes by position, so the far pane is taken only when the profile's own pane
     # demonstrably holds the other agent; anything else there could be the caller itself.
-    if pane_runs(info, away, profile.command) and peer_runs(info, home, profile):
+    if away_runs and peer_home:
         return away
     return None
 
@@ -302,10 +333,11 @@ def missing_target(sid: str, info: dict[str, Any], profile: Profile) -> RuntimeE
         return RuntimeError(f"session {sid} has no split")
     away = "right" if profile.pane == "left" else "left"
     if pane_runs(info, away, profile.command):
+        peer = peer_agent(profile)
         return RuntimeError(
             f"{profile.agent} runs only in the {away} pane and the {profile.pane} pane "
-            "is not running the other agent, so it could be the sender; "
-            "for a wrapper, pass --target-command NAME"
+            f"is not running {peer}, so it could be the sender; if {peer} runs there "
+            f"through a wrapper, set PEER_CHAT_{peer.upper()}_COMMAND to its name"
         )
     return RuntimeError(
         f"{profile.agent} target pane is not running {profile.command!r}; "
@@ -379,7 +411,8 @@ def resolve_session(
         raise RuntimeError(
             "this checkout maps to no session running "
             f"{profile.agent} beside the other agent; "
-            "for a wrapper, pass --target-command NAME"
+            "for a wrapped target, pass --target-command NAME, and for a wrapped sender "
+            f"in a reversed split, set PEER_CHAT_{peer_agent(profile).upper()}_COMMAND"
         )
     raise RuntimeError(
         "more than one session shares this checkout; pass --session ID or launch "
