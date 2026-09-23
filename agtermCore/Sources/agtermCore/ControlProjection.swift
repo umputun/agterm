@@ -73,12 +73,19 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
     /// duration rather than the time left: each successful open or update restarts it, so a caller who wants
     /// a countdown holds its own clock from the call it made.
     public let hideAfter: Double
+    /// markdown reports whether the message renders as markdown. Always present; an absent key decodes as
+    /// false.
+    public let markdown: Bool
+    /// fontSize is the caller's requested point size, nil/omitted when the panel inherits the session's.
+    public let fontSize: Double?
 
     public init(message: String, detail: String? = nil, spinner: String = HudSpinner.noneName,
                 backgroundColor: String? = nil, textColor: String? = nil,
                 sizePercent: Int? = nil, heightPercent: Int? = nil, position: String,
-                pane: String? = nil, hideAfter: Double = 0) {
+                pane: String? = nil, hideAfter: Double = 0, markdown: Bool = false, fontSize: Double? = nil) {
         self.hideAfter = hideAfter
+        self.markdown = markdown
+        self.fontSize = fontSize
         self.message = message
         self.detail = detail
         self.spinner = spinner
@@ -88,6 +95,27 @@ public struct ControlHudNode: Codable, Sendable, Equatable {
         self.heightPercent = heightPercent
         self.position = position
         self.pane = pane
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case message, detail, spinner, backgroundColor, textColor, sizePercent, heightPercent, position, pane
+        case hideAfter, markdown, fontSize
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        message = try c.decode(String.self, forKey: .message)
+        detail = try c.decodeIfPresent(String.self, forKey: .detail)
+        spinner = try c.decode(String.self, forKey: .spinner)
+        backgroundColor = try c.decodeIfPresent(String.self, forKey: .backgroundColor)
+        textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
+        sizePercent = try c.decodeIfPresent(Int.self, forKey: .sizePercent)
+        heightPercent = try c.decodeIfPresent(Int.self, forKey: .heightPercent)
+        position = try c.decode(String.self, forKey: .position)
+        pane = try c.decodeIfPresent(String.self, forKey: .pane)
+        hideAfter = try c.decode(Double.self, forKey: .hideAfter)
+        markdown = try c.decodeIfPresent(Bool.self, forKey: .markdown) ?? false
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize)
     }
 }
 

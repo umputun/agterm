@@ -144,6 +144,32 @@ struct AppStoreHudTests {
         #expect(node.hud?.position == "bottom-center")
     }
 
+    @Test func theReadBackReportsMarkdownAndTheRequestedFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "**ok**", markdown: true, fontSize: 18),
+                      file: "/tmp/hud", size: HudPanelSize(widthPercent: 22, heightPercent: 9))
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.hud?.markdown == true)
+        #expect(node.hud?.fontSize == 18)
+    }
+
+    @Test func thePlainReadBackReportsMarkdownOffAndNoFontSize() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 22, heightPercent: 9))
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.hud?.markdown == false)
+        #expect(node.hud?.fontSize == nil)
+    }
+
     @Test func theReadBackOmitsTextColorWhenTheCallerSetNone() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

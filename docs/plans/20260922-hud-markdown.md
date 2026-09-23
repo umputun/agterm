@@ -187,13 +187,13 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/HudTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SnapshotRoundTripTests.swift`
 
-- [ ] add `markdown: Bool` and `fontSize: Double?` to `HudSpec` (init defaults, `decodeIfPresent`, coding
+- [x] add `markdown: Bool` and `fontSize: Double?` to `HudSpec` (init defaults, `decodeIfPresent`, coding
   keys) and carry both through `withBackgroundColor` and `withSizePercent`
-- [ ] add `HudSpec.maxMarkdownLength = 4096`, `HudSpec.fontSizeRange = 6...72` and its shared predicate
-- [ ] add `markdown` (absent decodes as false) and `fontSize` to `ControlHudNode` and its builder
-- [ ] write tests: spec decode without the keys, round trip with both set, copy methods keep both
-- [ ] write tests: read-back for both modes, font present and omitted, an older payload without the keys
-- [ ] run the new and changed tests
+- [x] add `HudSpec.maxMarkdownLength = 4096`, `HudSpec.fontSizeRange = 6...72` and its shared predicate
+- [x] add `markdown` (absent decodes as false) and `fontSize` to `ControlHudNode` and its builder
+- [x] write tests: spec decode without the keys, round trip with both set, copy methods keep both
+- [x] write tests: read-back for both modes, font present and omitted, an older payload without the keys
+- [x] run the new and changed tests
 
 ### Task 2: Markdown block renderer
 

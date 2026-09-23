@@ -1059,6 +1059,32 @@ struct ControlProtocolTests {
         #expect(decoded == hud)
     }
 
+    @Test func controlHudNodeRoundTripsMarkdownAndFontSize() throws {
+        let hud = ControlHudNode(message: "# status", position: "center", markdown: true, fontSize: 16)
+
+        let decoded = try JSONDecoder().decode(ControlHudNode.self, from: JSONEncoder().encode(hud))
+
+        #expect(decoded == hud)
+    }
+
+    @Test func controlHudNodeAlwaysReportsMarkdownAndOmitsAnInheritedFontSize() throws {
+        let json = String(decoding: try JSONEncoder().encode(ControlHudNode(message: "working", position: "center")),
+                          as: UTF8.self)
+
+        #expect(json.contains("\"markdown\":false"))
+        #expect(!json.contains("fontSize"))
+    }
+
+    // an app deployed but not restarted still serves a tree without the markdown key to a newer CLI.
+    @Test func controlHudNodeFromAnOlderServerDecodesAsPlain() throws {
+        let raw = #"{"message":"working","spinner":"none","position":"center","hideAfter":0}"#
+
+        let hud = try JSONDecoder().decode(ControlHudNode.self, from: Data(raw.utf8))
+
+        #expect(hud.markdown == false)
+        #expect(hud.fontSize == nil)
+    }
+
     @Test func treeSessionNodeToleratesMissingHud() throws {
         // a pre-`session.hud.open` server omits the key entirely, so it must decode as nil.
         let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +

@@ -296,6 +296,41 @@ struct HudTests {
         #expect(spec.sizePercent == nil)
     }
 
+    @Test func omittedMarkdownAndFontSizeDecodeToPlainAndInherited() throws {
+        let spec = try JSONDecoder().decode(HudSpec.self, from: Data(#"{"message":"working"}"#.utf8))
+
+        #expect(spec.markdown == false)
+        #expect(spec.fontSize == nil)
+    }
+
+    @Test func markdownAndFontSizeSurviveARoundTrip() throws {
+        let spec = HudSpec(message: "# status", markdown: true, fontSize: 14.5)
+
+        let decoded = try JSONDecoder().decode(HudSpec.self, from: JSONEncoder().encode(spec))
+
+        #expect(decoded == spec)
+    }
+
+    @Test func copiesKeepMarkdownAndFontSize() {
+        let spec = HudSpec(message: "# status", markdown: true, fontSize: 20)
+
+        let recolored = spec.withBackgroundColor("#101010")
+        let resized = spec.withSizePercent(40)
+
+        #expect(recolored.markdown && recolored.fontSize == 20)
+        #expect(resized.markdown && resized.fontSize == 20)
+    }
+
+    @Test(arguments: [6.0, 12.0, 72.0])
+    func fontSizesInsideTheRangeAreAccepted(_ points: Double) {
+        #expect(HudSpec.isValidFontSize(points))
+    }
+
+    @Test(arguments: [5.9, 72.5, 0, -12, Double.nan, Double.infinity])
+    func fontSizesOutsideTheRangeAreRejected(_ points: Double) {
+        #expect(!HudSpec.isValidFontSize(points))
+    }
+
     @Test(arguments: HudPosition.allCases) func everyPositionRoundTrips(position: HudPosition) throws {
         let spec = HudSpec(message: "working", detail: "soon", spinner: .braille,
                            backgroundColor: "#112233", sizePercent: 40, position: position)
