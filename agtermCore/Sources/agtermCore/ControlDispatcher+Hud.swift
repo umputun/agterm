@@ -37,19 +37,22 @@ extension ControlDispatcher {
     /// text rather than patching it, so an update with no message is a close the caller must ask for.
     private func parseHudSpec(_ request: ControlRequest) -> HudSpecParse {
         let args = request.args
+        let markdown = args?.markdown ?? false
         // blank joins absent: `HudLayout.wrap` drops whitespace-only text, so the panel would paint an empty
         // frame while `tree` reported a live HUD. `session.background text` refuses the same input.
-        guard let message = args?.message, !message.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard let message = args?.message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .rejected(ControlResponse(ok: false, error: "\(request.cmd.rawValue) requires a message"))
         }
         // the helper prints these bytes straight into a live terminal, so an escape sequence would paint
-        // outside the panel; a newline joins the rejected class because `detail` is the second line on offer.
-        guard !containsControlCharacters(message), !containsControlCharacters(args?.detail ?? "") else {
+        // outside the panel; a plain newline joins the rejected class because `detail` is the second line on
+        // offer, while markdown needs LF for its blocks and TAB for its indentation.
+        let messageIsSafe = markdown ? !containsMarkdownControlCharacters(message) : !containsControlCharacters(message)
+        guard messageIsSafe, !containsControlCharacters(args?.detail ?? "") else {
             return .rejected(ControlResponse(ok: false, error: "hud text must not contain control characters"))
         }
-        guard HudLayout.textLength(message) <= HudSpec.maxTextLength else {
-            return .rejected(ControlResponse(
-                ok: false, error: "hud message too long (max \(HudSpec.maxTextLength) characters)"))
+        let cap = markdown ? HudSpec.maxMarkdownLength : HudSpec.maxTextLength
+        guard HudLayout.textLength(message) <= cap else {
+            return .rejected(ControlResponse(ok: false, error: "hud message too long (max \(cap) characters)"))
         }
         guard HudLayout.textLength(args?.detail ?? "") <= HudSpec.maxTextLength else {
             return .rejected(ControlResponse(
@@ -60,6 +63,16 @@ extension ControlDispatcher {
         }
         if let textColor = args?.textColor, !WatermarkConfig.isValidColorHex(textColor) {
             return .rejected(ControlResponse(ok: false, error: "invalid text color: \(textColor) (#rrggbb)"))
+        }
+        if let fontSize = args?.fontSize {
+            guard request.cmd == .sessionHudOpen else {
+                return .rejected(ControlResponse(
+                    ok: false, error: "session.hud.update: --font-size is fixed at open; reopen the hud to change it"))
+            }
+            guard HudSpec.isValidFontSize(fontSize) else {
+                return .rejected(ControlResponse(
+                    ok: false, error: "session.hud.open: --font-size must be \(Int(HudSpec.fontSizeRange.lowerBound))...\(Int(HudSpec.fontSizeRange.upperBound)) points"))
+            }
         }
         if let percent = args?.sizePercent, !(1...100).contains(percent) {
             return .rejected(ControlResponse(ok: false,
@@ -95,6 +108,12 @@ extension ControlDispatcher {
         return .spec(HudSpec(message: message, detail: args?.detail, spinner: spinner,
                              backgroundColor: args?.color, textColor: args?.textColor,
                              sizePercent: args?.sizePercent, position: position,
-                             hideAfter: args?.hideAfter))
+                             hideAfter: args?.hideAfter, markdown: markdown, fontSize: args?.fontSize))
+    }
+
+    /// containsMarkdownControlCharacters is `containsControlCharacters` less LF and TAB, which markdown
+    /// structure needs; the renderer neutralizes what the parser decodes from entities.
+    private func containsMarkdownControlCharacters(_ text: String) -> Bool {
+        text.unicodeScalars.contains { ($0.value < 0x20 && $0 != "\n" && $0 != "\t") || $0.value == 0x7f }
     }
 }

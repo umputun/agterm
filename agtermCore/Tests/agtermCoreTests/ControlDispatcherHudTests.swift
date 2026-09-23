@@ -135,6 +135,114 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func markdownAcceptsNewlinesAndTabsAndCarriesTheModeToTheHost() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "# Tasks\n\n- build\n\t- test", markdown: true)))
+
+        #expect(response == ControlResponse(ok: true))
+        guard case .hudOpen(_, _, let spec, _) = try #require(actions.calls.first) else {
+            Issue.record("expected hudOpen, got \(actions.calls)")
+            return
+        }
+        #expect(spec.markdown)
+        #expect(spec.message == "# Tasks\n\n- build\n\t- test")
+    }
+
+    @Test(arguments: ["cr\rhere", "esc\u{1b}[2J", "del\u{7f}", "bell\u{07}"])
+    func markdownStillRejectsEveryOtherControlCharacter(message: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: message, markdown: true)))
+
+        #expect(response == ControlResponse(ok: false, error: "hud text must not contain control characters"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func markdownKeepsTheDetailPlainRules() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let newline = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "ok", detail: "two\nlines", markdown: true)))
+        let long = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen,
+            args: ControlArgs(message: "ok", detail: String(repeating: "d", count: HudSpec.maxTextLength + 1), markdown: true)))
+
+        #expect(newline == ControlResponse(ok: false, error: "hud text must not contain control characters"))
+        #expect(long == ControlResponse(ok: false, error: "hud detail too long (max 256 characters)"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func markdownCapsTheMessageAtItsOwnLength() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let atCap = String(repeating: "m", count: HudSpec.maxMarkdownLength)
+
+        let accepted = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: atCap, markdown: true)))
+        let rejected = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: atCap + "m", markdown: true)))
+
+        #expect(accepted == ControlResponse(ok: true))
+        #expect(rejected == ControlResponse(ok: false, error: "hud message too long (max 4096 characters)"))
+    }
+
+    @Test func aWhitespaceAndNewlineOnlyMarkdownMessageIsNoMessage() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: " \n\t\n ", markdown: true)))
+
+        #expect(response == ControlResponse(ok: false, error: "session.hud.open requires a message"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func openCarriesAFontSizeInsideTheRange() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let low = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen, args: ControlArgs(message: "a", fontSize: 6)))
+        let high = await dispatcher.dispatch(ControlRequest(cmd: .sessionHudOpen, args: ControlArgs(message: "a", fontSize: 72)))
+
+        #expect(low == ControlResponse(ok: true))
+        #expect(high == ControlResponse(ok: true))
+        guard case .hudOpen(_, _, let spec, _) = try #require(actions.calls.last) else {
+            Issue.record("expected hudOpen, got \(actions.calls)")
+            return
+        }
+        #expect(spec.fontSize == 72)
+    }
+
+    @Test(arguments: [5.5, 72.5, 0, -1])
+    func openRejectsAFontSizeOutsideTheRange(points: Double) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: "a", fontSize: points)))
+
+        #expect(response == ControlResponse(ok: false, error: "session.hud.open: --font-size must be 6...72 points"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func updateRejectsAFontSize() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudUpdate, args: ControlArgs(message: "a", fontSize: 14)))
+
+        #expect(response == ControlResponse(
+            ok: false, error: "session.hud.update: --font-size is fixed at open; reopen the hud to change it"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func rejectsOversizedMessageAndDetailWithoutCallingHost() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

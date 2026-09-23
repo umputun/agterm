@@ -261,15 +261,15 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherHudTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 
-- [ ] add `ControlArgs.markdown: Bool?` and `ControlArgs.fontSize: Double?`
-- [ ] in markdown mode allow LF and TAB in the message only, keep rejecting other control characters,
+- [x] add `ControlArgs.markdown: Bool?` and `ControlArgs.fontSize: Double?`
+- [x] in markdown mode allow LF and TAB in the message only, keep rejecting other control characters,
   apply the 4096 cap; plain mode keeps every current rejection
-- [ ] validate `fontSize` with the shared predicate on open; reject it on update
-- [ ] write tests: newline rejected in plain mode (existing test untouched), LF and TAB accepted with
+- [x] validate `fontSize` with the shared predicate on open; reject it on update
+- [x] write tests: newline rejected in plain mode (existing test untouched), LF and TAB accepted with
   markdown, CR and ESC rejected, 4096 boundary, detail still capped at 256, whitespace-and-newline-only
   message rejected, font range boundaries, font on update rejected
-- [ ] write protocol encode/decode tests for both arguments
-- [ ] run the new and changed tests
+- [x] write protocol encode/decode tests for both arguments
+- [x] run the new and changed tests
 
 ### Task 6: CLI flags
 

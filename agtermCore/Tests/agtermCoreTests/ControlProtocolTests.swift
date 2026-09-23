@@ -341,6 +341,24 @@ struct ControlProtocolTests {
         #expect(!json.contains("pane"))
     }
 
+    @Test func sessionHudOpenRoundTripsMarkdownAndFontSize() throws {
+        let request = ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
+                                     args: ControlArgs(message: "# t", markdown: true, fontSize: 18))
+
+        let decoded = try roundTrip(request)
+
+        #expect(decoded == request)
+        #expect(decoded.args?.markdown == true)
+        #expect(decoded.args?.fontSize == 18)
+    }
+
+    @Test func sessionHudOpenOmitsUnsetMarkdownAndFontSize() throws {
+        let json = String(data: try JSONEncoder().encode(ControlArgs(message: "working")), encoding: .utf8) ?? ""
+
+        #expect(!json.contains("markdown"))
+        #expect(!json.contains("fontSize"))
+    }
+
     @Test func sessionHudRawStringsMapToCommands() throws {
         #expect(Command(rawValue: "session.hud.open") == .sessionHudOpen)
         #expect(Command(rawValue: "session.hud.update") == .sessionHudUpdate)

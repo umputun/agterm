@@ -290,6 +290,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// it up until something closes it. Each successful open or update restarts the interval, so an update
     /// that omits it cancels the previous one, exactly as omitting `detail` drops the second line.
     public var hideAfter: Double?
+    /// markdown renders the HUD message as markdown for `session.hud.open`/`.update`; nil/omitted is plain.
+    /// An update omitting it returns the panel to plain text, the whole spec being replaced.
+    public var markdown: Bool?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
@@ -347,7 +350,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// exclusive with targets (the ids to open) and with the font flags — closing takes no other argument.
     public var close: Bool?
     /// The absolute cell font size in points for `dashboard` (the CLI's `--font-size`); must be positive.
-    /// Mutually exclusive with `autoSize`.
+    /// Mutually exclusive with `autoSize`. Also the HUD panel's point size for `session.hud.open`, nil to
+    /// inherit the session's, within `HudSpec.fontSizeRange`; `session.hud.update` rejects it because the
+    /// surface reads it once at creation.
     public var fontSize: Double?
     /// For `dashboard`, size the cells RELATIVE to the Settings default font size, shrinking as the grid
     /// grows so dense grids stay readable (the CLI's `--auto-size`). Mutually exclusive with `fontSize`.
@@ -365,7 +370,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 text: String? = nil, select: Bool? = nil, mode: String? = nil, axis: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
-                hideAfter: Double? = nil,
+                hideAfter: Double? = nil, markdown: Bool? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, selection: String? = nil,
                 buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
@@ -406,6 +411,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.detail = detail
         self.spinner = spinner
         self.hideAfter = hideAfter
+        self.markdown = markdown
         self.items = items
         self.prompt = prompt
         self.query = query
