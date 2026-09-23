@@ -344,6 +344,9 @@ extension WindowContentView {
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear { cachePaneFrames(paneFrames, for: session) }
             .onChange(of: paneFrames) { _, value in cachePaneFrames(value, for: session) }
+            .onChange(of: session.hudActive ? panelFrame.size : .zero, initial: true) { _, _ in
+                session.onHudGeometryChange?()
+            }
         }
         // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
         // intercepts clicks meant for the pane(s).

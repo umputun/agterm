@@ -107,6 +107,18 @@ final class ControlServerHudAutoHideTests: XCTestCase {
         XCTAssertEqual(fix.session.hudSpec?.fontSize, 30)
     }
 
+    func testClosingTheHudDropsItsGeometryHook() throws {
+        let fix = try fixture()
+        XCTAssertTrue(try XCTUnwrap(fix.server.library.activeStore).closeHud(fix.session.id))
+        XCTAssertTrue(fix.server.openHud(fix.session.id.uuidString, window: nil, spec: HudSpec(message: "a"),
+                                         placement: ControlHudPlacement()).ok)
+        XCTAssertNotNil(fix.session.onHudGeometryChange)
+
+        XCTAssertTrue(try XCTUnwrap(fix.server.library.activeStore).closeHud(fix.session.id))
+
+        XCTAssertNil(fix.session.onHudGeometryChange)
+    }
+
     func testTheMeasuredCellFollowsTheFontSizeItIsGiven() throws {
         let fix = try fixture()
 

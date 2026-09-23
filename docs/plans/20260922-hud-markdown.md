@@ -319,12 +319,12 @@
 - Modify: `agterm/Control/ControlServer+Hud.swift`
 - Modify: a hosted HUD test file
 
-- [ ] on a panel-frame change for a live HUD, rewrite its body from fresh `paneMetrics`, coalesced to one
+- [x] on a panel-frame change for a live HUD, rewrite its body from fresh `paneMetrics`, coalesced to one
   write per main-queue turn
-- [ ] cover the first realization after an unmeasured open
-- [ ] write hosted tests: shrinking the pane rewrites the header grid and re-clips a markdown body; a plain
-  HUD recenters
-- [ ] run the new and changed tests
+- [x] cover the first realization after an unmeasured open
+- [x] write hosted tests: the geometry hook rewrites a stale body once per burst and is dropped on close
+  (⚠️ the deck's size change reaching the hook needs a laid-out window; covered by the manual check)
+- [x] run the new and changed tests
 
 ### Task 9: Remote presentation
 

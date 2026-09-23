@@ -709,6 +709,67 @@ final class ControlServerSessionActionsTests: XCTestCase {
         "\(grid.columns) \(grid.rows)"
     }
 
+    func testAPaneShrinkReclipsAMarkdownHudOnceForABurst() async throws {
+        let (_, session) = try makeHudSession()
+        let message = (1...12).map { "- item \($0)" }.joined(separator: "\n")
+        let before = try openLeftPaneHud(session, spec: HudSpec(message: message, markdown: true))
+        XCTAssertFalse(before.contains("more"))
+
+        session.hudPaneFrames = HudPaneFrames(left: HudPaneFrame(x: 0, y: 0, width: 1_600, height: 400),
+                                              right: HudPaneFrame(x: 1_604, y: 0, width: 400, height: 400))
+        session.onHudGeometryChange?()
+        session.onHudGeometryChange?()
+        XCTAssertEqual(server.hudGeometryPending, [session.id])
+        await drainGeometry(session)
+
+        let after = try XCTUnwrap(bodyText(session))
+        XCTAssertEqual(after, try expectedLeftPaneBody(session))
+        XCTAssertNotEqual(after.split(separator: "\n").first, before.split(separator: "\n").first)
+        XCTAssertTrue(after.contains("… 10 more"))
+    }
+
+    func testAPaneShrinkRegridsAPlainHud() async throws {
+        let (_, session) = try makeHudSession()
+        let before = try openLeftPaneHud(session, spec: HudSpec(message: "working on it"))
+
+        session.hudPaneFrames = HudPaneFrames(left: HudPaneFrame(x: 0, y: 0, width: 700, height: 500),
+                                              right: HudPaneFrame(x: 704, y: 0, width: 400, height: 500))
+        session.onHudGeometryChange?()
+        await drainGeometry(session)
+
+        let after = try XCTUnwrap(bodyText(session))
+        XCTAssertEqual(after, try expectedLeftPaneBody(session))
+        XCTAssertNotEqual(after.split(separator: "\n").first, before.split(separator: "\n").first)
+    }
+
+    private func openLeftPaneHud(_ session: Session, spec: HudSpec) throws -> String {
+        session.splitPaneIdentity = UUID()
+        session.hasSplit = true
+        session.isSplit = true
+        session.surface = SessionRestoreTestSurface(paneToken: "left-token")
+        session.splitSurface = SessionRestoreTestSurface(paneToken: "right-token")
+        session.hudPaneFrames = HudPaneFrames(left: HudPaneFrame(x: 0, y: 0, width: 1_600, height: 1_000),
+                                              right: HudPaneFrame(x: 1_604, y: 0, width: 400, height: 1_000))
+        let response = server.openHud(session.id.uuidString, window: nil, spec: spec,
+                                      placement: ControlHudPlacement(pane: .left))
+        XCTAssertTrue(response.ok, response.error ?? "")
+        return try XCTUnwrap(bodyText(session))
+    }
+
+    private func drainGeometry(_ session: Session) async {
+        for _ in 0..<50 where server.hudGeometryPending.contains(session.id) { await Task.yield() }
+        XCTAssertTrue(server.hudGeometryPending.isEmpty)
+    }
+
+    private func expectedLeftPaneBody(_ session: Session) throws -> String {
+        let spec = try XCTUnwrap(session.hudSpec)
+        let size = HudPanelSize(widthPercent: try XCTUnwrap(session.overlaySizePercent),
+                                heightPercent: try XCTUnwrap(session.hudHeightPercent))
+        let metrics = server.paneMetrics(for: session, pane: .left, fontSize: server.liveHudFontSize(session))
+        return HudLayout.renderedBody(for: spec, grid: HudLayout.paintGrid(for: spec, size: size, pane: metrics),
+                                      ownerPid: Self.ownerPid)
+    }
+
     func testHudPaneMetricsFallBackToADeckHostedSurfaceBeforeTheFrameCacheFills() throws {
         let (_, session) = try makeHudSession()
         let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())

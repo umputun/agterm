@@ -467,6 +467,7 @@ public final class Session: Identifiable {
         let withdraw = onHudWithdrawn
         onHudDiscarded = nil
         onHudWithdrawn = nil
+        onHudGeometryChange = nil
         hudSpec = nil
         hudPaneIdentity = nil
         hudFile = nil
@@ -500,6 +501,10 @@ public final class Session: Identifiable {
     /// Cancels the app's auto-hide timer for this panel; `discardHudBody` calls and clears it. Every teardown
     /// that drops a HUD already routes through that one method, which is why the hook hangs there.
     public var onHudDiscarded: (() -> Void)?
+
+    /// onHudGeometryChange tells the app the live HUD panel's measured size changed, so it can rewrite the
+    /// grid in the body header; `discardHudBody` clears it with the rest of the HUD state.
+    @ObservationIgnored public var onHudGeometryChange: (() -> Void)?
 
     /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
     /// two occupants, so the deck's passivity exemptions and the program-overlay questions below cannot

@@ -117,6 +117,7 @@ extension ControlServer {
                 store.closeHud(id)
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
+            self.watchHudGeometry(session)
             self.armHudAutoHide(session, spec: spec)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -182,6 +183,21 @@ extension ControlServer {
     /// in owes it two columns and two rows. A user `ghostty.conf` overriding either is not tracked and
     /// shifts the centering by about a column, as the estimated cell already can.
     private static let windowPadding = (horizontal: 8.0, vertical: 6.0)
+
+    /// watchHudGeometry coalesces deck size notifications into body rewrites using the latest HUD state.
+    func watchHudGeometry(_ session: Session) {
+        let id = session.id
+        session.onHudGeometryChange = { [weak self, weak session] in
+            guard let self, self.hudGeometryPending.insert(id).inserted else { return }
+            Task { @MainActor [weak self, weak session] in
+                guard let self else { return }
+                self.hudGeometryPending.remove(id)
+                guard let session, session.hudActive else { return }
+                _ = self.writeHudBody(session, pane: self.paneMetrics(for: session, pane: session.hudTargetPane,
+                                                                    fontSize: self.liveHudFontSize(session)))
+            }
+        }
+    }
 
     /// liveHudFontSize is the size the live HUD's surface was created at.
     func liveHudFontSize(_ session: Session) -> Double {
