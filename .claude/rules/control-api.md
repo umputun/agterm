@@ -510,8 +510,24 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   rounded percent and the box is not — centering on the box can still strand the message by a column or a
   row, and a `--size-percent` width detaches them outright. `box` remains the fallback when nothing is
   measured. Every path that changes the panel's size — open, update, `overlay.resize` — must rewrite the
-  header through `ControlServer.writeHudBody`, which reads the size the STORE resolved; a window resize is
-  the one skew left, until the next update.
+  header through `ControlServer.writeHudBody`, which reads the size the STORE resolved. The deck's own size
+  change is the fourth: it calls `Session.onHudGeometryChange`, which `ControlServer.watchHudGeometry`
+  installs at open and coalesces into one rewrite per main-actor turn.
+- `--markdown` (`HudSpec.markdown`) renders standard markdown through Foundation's `.full` parser in
+  `HudMarkdown`, with no dialect of its own: a single LF inside a paragraph is a soft break, lists always
+  render tight because the parser does not say which a list was, and trailing all-empty table rows and an
+  all-empty header are lost because the parser emits nothing for them. The dispatcher allows LF and TAB in a
+  markdown message only, through its own check, leaving the shared `containsControlCharacters` untouched,
+  and caps it at `HudSpec.maxMarkdownLength`; the renderer replaces control characters the parser decoded
+  from entities. Text wraps at `maxColumns`, table rows stay intact, and all rows are clipped to the grid on
+  both axes in `renderedBody`, so the painter never measures them: the header's seventh field, `blockwidth`, is 0 for plain mode and the
+  painted width of the finished rows otherwise, and the helper prints those rows verbatim at one shared
+  offset. The painter draws the spinner glyph on the first row; the renderer indents the others by the gutter.
+- `--font-size` (`HudSpec.fontSize`, `HudSpec.fontSizeRange`) is open-only, like `--background-color`, because
+  the surface reads it at creation; update rejects it. `Session.hudFontSize` records the EFFECTIVE creation
+  size, resolved before measuring and stored by `AppStore.openHud` after a replaced HUD's teardown clears it,
+  and every later measurement (update, `overlay.resize`, geometry refresh) uses it, so a session zoom never
+  changes the cell a HUD is measured with. `hud.fontSize` reads back the request, omitted when inherited.
 - The helper forces `LC_CTYPE=UTF-8` on itself: `${#line}` counts BYTES otherwise, and a Dock-launched app
   inherits launchd's locale-less environment. Under it `${#line}` counts CODE POINTS, so the app measures in
   `HudLayout.cellCount` (Unicode scalars, precomposed first) rather than `String.count`, whose grapheme

@@ -1033,6 +1033,33 @@ shared with `session overlay open`, which means a second `session hud` replaces 
 `no overlay result: the slot holds a hud`. A HUD over
 a RUNNING program is refused instead: a message is replaceable, a program is not.
 
+### Keep a status board in a HUD
+
+A controller agent driving worker sessions can keep a short status board in a corner of its own session
+instead of printing it into its chat. Write the board to a file and post it with `--markdown`; `--font-size`
+keeps it small, and a later `update` replaces it in place:
+
+```bash
+cat > /tmp/status.md <<'EOF'
+## Workers
+- **api** refactor: tests green
+- **web** login page: waiting on review
+- **infra** migration: *blocked*, needs a token
+EOF
+
+agtermctl session hud --file /tmp/status.md --markdown --font-size 11 --position top-right \
+  --target "$AGTERM_SESSION_ID"
+
+# after rewriting the file
+agtermctl session hud update --file /tmp/status.md --markdown --position top-right \
+  --target "$AGTERM_SESSION_ID"
+```
+
+An update replaces the whole spec, so repeat `--markdown` and `--position`; the font stays what the panel
+opened with. A single newline inside a paragraph is a space, so keep entries as list items or end a line with
+two spaces. A board taller than the panel is clipped, its excess rows giving way to a dim `… N more`. The
+file is read once per command; nothing watches it, so push each change with an `update`.
+
 ## Navigate and manage windows
 
 ```bash

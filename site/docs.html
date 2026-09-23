@@ -2528,9 +2528,20 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               which turns it on by itself, with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">dot</span> blinking rather than
               animating — and an update may switch style in place;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> is the
-              exception, read once when the panel is created and kept — in the panel and in the read-back — across every
-              update, which is why an update does not take it at all.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--font-size</span> are the exceptions, read once when the panel is created and kept — in the panel and in
+              the read-back — across every update, which is why an update does not take them at all.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> turns the panel into a small board: headings, bold, lists, code blocks, quotes and
+              tables render, and the message may run to 4096 characters. Standard markdown rules apply, so a single newline
+              inside a paragraph is a space; use list items, or end a line with two spaces, to keep rows apart. A board taller
+              than the panel is clipped, its excess rows giving way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">… N more</span>. The file is read once per
+              command, so push each change with an update.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--file status.md</span> reads the message from a file, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--font-size PT</span> gives the panel its own
+              font size, set when it opens. A controller agent can keep one in a corner of its session with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud --file status.md --markdown --font-size 11 --position top-right</span> and refresh it with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud update --file status.md --markdown --position top-right</span>.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               It shares the overlay slot, so a second

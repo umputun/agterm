@@ -322,8 +322,9 @@
 - [x] on a panel-frame change for a live HUD, rewrite its body from fresh `paneMetrics`, coalesced to one
   write per main-queue turn
 - [x] cover the first realization after an unmeasured open
-- [x] write hosted tests: the geometry hook rewrites a stale body once per burst and is dropped on close
-  (⚠️ the deck's size change reaching the hook needs a laid-out window; covered by the manual check)
+- [x] write hosted tests: a cached-pane shrink re-grids a plain body and re-clips a markdown one, once per
+  burst; the hook is dropped on close (⚠️ the deck's size change reaching the hook needs a laid-out window;
+  covered by the manual check)
 - [x] run the new and changed tests
 
 ### Task 9: Remote presentation
@@ -342,11 +343,11 @@
 - [x] run the new and changed tests
 
 ### Task 10: [Final] Update documentation
-- [ ] `plugins/agterm/skills/agterm/` (reference and examples): `--markdown`, `--font-size`, `--file`, the
+- [x] `plugins/agterm/skills/agterm/` (reference and examples): `--markdown`, `--font-size`, `--file`, the
   cap, soft vs hard breaks, tight lists, a controller status panel example
-- [ ] `site/commands.html`: the three flags and the `markdown`/`fontSize` read-back fields; `site/docs.html`:
+- [x] `site/commands.html`: the three flags and the `markdown`/`fontSize` read-back fields; `site/docs.html`:
   HUD section
-- [ ] `.claude/rules/control-api.md`: the markdown mode contract (validation, header field, clipping,
+- [x] `.claude/rules/control-api.md`: the markdown mode contract (validation, header field, clipping,
   geometry refresh) and the font-size contract
 
 ### Task 11: Verify acceptance criteria

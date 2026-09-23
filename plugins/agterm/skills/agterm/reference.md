@@ -172,8 +172,9 @@ to restore the exact size),
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
-`{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter}`
-object: `detail`, `backgroundColor` and `textColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE
+`{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter,
+markdown, fontSize?}` object: `markdown` is always present, and `fontSize` is the `--font-size` the panel was
+opened with, omitted when it uses the session's; `detail`, `backgroundColor` and `textColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE
 10–80 share of the pane's WIDTH the panel takes (the app's measurement of the message, or the caller's
 `--size-percent` override, either way bounded so a message never covers the session; always present for a
 live HUD), `heightPercent` is the effective share of its HEIGHT, always measured from the message's rows
@@ -799,7 +800,7 @@ error keeps those names for compatibility.
   file. Errors `no overlay`, `overlay not realized` and `no overlay to read: the slot holds a hud` as
   `session overlay copy` does, plus `failed to read surface buffer` on a real read failure. It has no
   `no selection`: a blank realized screen is `ok` with an empty string.
-- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
+- `session hud [open] <message>|--file FILE [--markdown] [--font-size PT] [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
   — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
   as `session overlay open`, but carries a message rather than a program: it takes no input, the session
   keeps first responder and stays typable, and the terminal behind it is neither dimmed nor click-blocked.
@@ -830,7 +831,7 @@ error keeps those names for compatibility.
   without stopping its helper, and showing it restores the panel. Destroying the target closes the HUD.
   A corner is what keeps a long-lived panel out of the text the user is reading. The bare `top`/`bottom`
   this argument shipped with are still accepted for `top-center`/`bottom-center`, and `hud.position` reports
-  the canonical anchor whichever spelling was sent. The panel is measured from the message against the session's terminal font on BOTH
+  the canonical anchor whichever spelling was sent. The panel is measured from the message against its own font on BOTH
   axes separately — width from the longest wrapped line, height from the number of them — so a title and a
   subtitle give a wide, short panel rather than a square one. `--size-percent N` (1–100) overrides the WIDTH
   only; the height always follows the message, since a caller-set height could only strand it in an empty
@@ -841,9 +842,28 @@ error keeps those names for compatibility.
   background, rides the panel's body file, so an update can change it. Both read back, as
   `hud.backgroundColor` and `hud.textColor`. Message and detail are capped at 256 characters and
   reject control characters — newline included, since the panel prints straight into a live terminal and
-  `--detail` is the second line on offer. Errors `session.hud.open requires a message` on a missing or
+  `--detail` is the second line on offer.
+  `--markdown` renders the message as standard markdown (CommonMark plus GFM tables): headings, bold, italic,
+  strikethrough, nested lists, code blocks, block quotes, rules and tables; a link shows its label, an image its
+  alt text, and raw HTML stays literal. It raises the message cap to 4096 characters and allows newlines and tabs
+  in it; every other control character is still refused and the detail keeps the plain rules. Markdown
+  semantics apply: a single newline inside a paragraph is a space, so end a line with two spaces or a
+  backslash, or use list items, to keep rows apart; lists always render tight. Text wraps at 60 columns while
+  table rows stay intact, and the rows sit left-aligned as one block. What does not fit the panel is clipped:
+  a row too wide ends in `…`, and rows past the panel's height give way to a dim `… N more`, itself clipped
+  in a narrow panel. Trailing all-empty table rows and an all-empty header row are not shown.
+  `--file FILE` reads the message from a UTF-8 file instead of the argument, exactly one of the two, once per
+  command (nothing watches the file), dropping one trailing newline. `agtermctl` reads it before sending and
+  fails there with `cannot read --file <path>: <reason>` or `--file <path> is not valid UTF-8`; passing both or
+  neither fails with `MESSAGE and --file are mutually exclusive` or `provide MESSAGE or --file`, and every cap
+  still applies to what is sent. `--font-size PT` (6–72) sets the
+  panel's own font, used for its surface and its measurement; it is fixed for the panel's life, and omitting
+  it uses the session's size at open. A window resize or divider drag re-measures the panel by itself.
+  Errors `session.hud.open requires a message` on a missing or
   empty message, `hud text must not contain control characters`, `hud message too long (max 256
-  characters)` / `hud detail too long (max 256 characters)`, `invalid color: <value> (#rrggbb)`,
+  characters)` (4096 with `--markdown`) / `hud detail too long (max 256 characters)`,
+  `font-size must be 6...72 points` from the CLI (`session.hud.open: --font-size must be 6...72 points` from
+  the raw protocol), `invalid color: <value> (#rrggbb)`,
   `invalid text color: <value> (#rrggbb)`,
   `invalid position: <value> (top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right|top|bottom)`,
   `invalid spinner: <value> (bar|braille|circle|blocks|dot|none)`,
@@ -852,7 +872,7 @@ error keeps those names for compatibility.
   and `session.hud.open: --size-percent must be 1...100`.
   A second `hud` replaces the first; a `session overlay open` replaces a HUD, while a HUD over a RUNNING
   program is refused with `overlay already open` — a message is replaceable, a program is not.
-- `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
+- `session hud update <message>|--file FILE [--markdown] [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
   — repaint the live panel in place: no re-spawn, no blink, the panel does not flicker. It REPLACES the
   whole spec rather than patching it, so `--detail`, the spinner, `--position`, `--text-color`, and pane selectors must be
   repeated to survive and an omitted one drops. `--spinner-style` may name a DIFFERENT style than the panel
@@ -861,7 +881,10 @@ error keeps those names for compatibility.
   validation. Pane lifecycle differs: update accepts a hidden target, while a missing split errors
   `session has no split` instead of `pane not visible`. There is no `--background-color`: the surface reads
   that once at creation, so only a fresh `session hud` can change it, and `tree` keeps reporting the creation
-  color across updates. Errors `no hud` when none is up.
+  color across updates. The same holds for the font: `update` takes no `--font-size`, and a raw protocol
+  update carrying `fontSize` is refused with
+  `session.hud.update: --font-size is fixed at open; reopen the hud to change it`. `--markdown` must be repeated
+  like every other option, or the panel returns to plain text. Errors `no hud` when none is up.
 - `session hud close [--target] [--window W]` — take the panel down and delete its message file. Errors
   `no hud` when none is up, so it is not idempotent. A program overlay in the same slot is left alone;
   `session overlay close`, ⌘W, and closing the session or its window also tear a HUD down and delete that
