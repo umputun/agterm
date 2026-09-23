@@ -851,7 +851,9 @@ error keeps those names for compatibility.
   backslash, or use list items, to keep rows apart; lists always render tight. Text wraps at 60 columns while
   table rows stay intact, and the rows sit left-aligned as one block. What does not fit the panel is clipped:
   a row too wide ends in `…`, and rows past the panel's height give way to a dim `… N more`, itself clipped
-  in a narrow panel. Trailing all-empty table rows and an all-empty header row are not shown.
+  in a narrow panel. A table is framed in box-drawing borders with a rule under its header; trailing
+  all-empty table rows and an all-empty header row are not shown, the latter leaving no header rule.
+  A markdown message that renders nothing visible is refused like an empty one.
   `--file FILE` reads the message from a UTF-8 file instead of the argument, exactly one of the two, once per
   command (nothing watches the file), dropping one trailing newline. `agtermctl` reads it before sending and
   fails there with `cannot read --file <path>: <reason>` or `--file <path> is not valid UTF-8`; passing both or

@@ -90,21 +90,59 @@ struct HudMarkdownTests {
         #expect(lines.map(\.kind) == [.text, .text, .rule, .text, .text])
     }
 
-    @Test func aTablePadsItsColumnsAndBoldsTheHeader() {
-        let lines = HudMarkdown.lines("| task | state |\n|---|---|\n| build | ok |\n| lint **x** | running |")
+    @Test func aTableIsFramedWithAPaddedGridAndABoldHeader() {
+        let source = "| task | state |\n|---|---|\n| build | ok |\n| lint **x** | running |"
+        let lines = HudMarkdown.lines(source)
 
-        #expect(plain("| task | state |\n|---|---|\n| build | ok |\n| lint **x** | running |")
-            == ["task   │ state", "build  │ ok", "lint x │ running"])
-        #expect(lines[0].runs.filter { !$0.text.allSatisfy { $0 == " " } && $0.text != " │ " }
-            .allSatisfy { $0.style.contains(.bold) })
-        #expect(lines[2].runs.contains(HudMarkdown.Run(text: "x", style: .bold)))
+        #expect(plain(source) == [
+            "┌────────┬─────────┐",
+            "│ task   │ state   │",
+            "├────────┼─────────┤",
+            "│ build  │ ok      │",
+            "│ lint x │ running │",
+            "└────────┴─────────┘"
+        ])
+        #expect(lines[1].runs.filter { $0.text.contains(where: \.isLetter) }.allSatisfy { $0.style.contains(.bold) })
+        #expect(lines[1].runs.filter { $0.text.contains("│") }.allSatisfy { $0.style.isEmpty })
+        #expect(lines[4].runs.contains(HudMarkdown.Run(text: "x", style: .bold)))
+        #expect(Set(lines.map { HudMarkdown.width($0.runs) }).count == 1)
+    }
+
+    @Test func anAllEmptyHeaderLeavesNoHeaderRule() {
+        #expect(plain("|  |  |\n|---|---|\n| 1 | 2 |") == ["┌───┬───┐", "│ 1 │ 2 │", "└───┴───┘"])
+    }
+
+    @Test func aTableOpeningAListItemCarriesTheMarkerOnItsTopBorder() {
+        #expect(plain("- | a | b |\n  |---|---|\n  | 1 | 2 |")
+            == ["• ┌───┬───┐", "  │ a │ b │", "  ├───┼───┤", "  │ 1 │ 2 │", "  └───┴───┘"])
+    }
+
+    @Test func aTableAfterTextInAListItemHangsUnderIt() {
+        #expect(plain("- intro\n\n  | a |\n  |---|\n  | 1 |")
+            == ["• intro", "  ┌───┐", "  │ a │", "  ├───┤", "  │ 1 │", "  └───┘"])
+    }
+
+    @Test func aQuotedTableCarriesTheBarOnEveryFrameRow() {
+        #expect(plain("> | a |\n> |---|\n> | 1 |") == ["│ ┌───┐", "│ │ a │", "│ ├───┤", "│ │ 1 │", "│ └───┘"])
+    }
+
+    @Test func aFrameWiderThanThePanelEndsInTheEllipsis() {
+        let rows = HudMarkdown.rows(HudMarkdown.lines("| alpha | beta |\n|---|---|\n| 1 | 2 |"), width: 60)
+
+        let clipped = HudMarkdown.fitted(rows, columns: 6, rows: 10).map { $0.map(\.text).joined() }
+
+        #expect(clipped.first == "┌────…")
+        #expect(clipped.allSatisfy { HudLayout.cellCount($0) == 6 })
     }
 
     // foundation emits no run for an empty cell or an all-empty row, which shifted later cells left.
     @Test func emptyCellsAndRowsKeepTheirPlace() {
         let source = "| a | b | c |\n|---|---|---|\n|  | x | y |\n| p |  | r |\n| s | t |  |\n|  |  |  |\n| u | v | w |"
 
-        #expect(plain(source) == ["a │ b │ c", "  │ x │ y", "p │   │ r", "s │ t │ ", "  │   │ ", "u │ v │ w"])
+        #expect(plain(source) == [
+            "┌───┬───┬───┐", "│ a │ b │ c │", "├───┼───┼───┤", "│   │ x │ y │", "│ p │   │ r │", "│ s │ t │   │",
+            "│   │   │   │", "│ u │ v │ w │", "└───┴───┴───┘"
+        ])
     }
 
     @Test func anImageShowsItsAltTextAndHtmlStaysLiteral() {
@@ -180,10 +218,15 @@ struct HudMarkdownTests {
         #expect(laidOut("```\n    a b\n```", width: 6) == ["      ", "  a b"])
     }
 
-    @Test func aRuleFillsTheWidthAndATableNeverWraps() {
-        #expect(laidOut("---", width: 6) == ["──────"])
-        #expect(laidOut("| long header | other |\n|---|---|\n| x | y |", width: 6)
-            == ["long header │ other", "x           │ y"])
+    @Test func aRuleSpansTheWidestOtherRowAndATableNeverWraps() {
+        #expect(laidOut("---", width: 60) == ["───"])
+        #expect(laidOut("> ---", width: 60) == ["│ ───"])
+        #expect(laidOut("a heading of sorts\n\n---", width: 60) == ["a heading of sorts", "", String(repeating: "─", count: 18)])
+        #expect(laidOut("a heading of sorts\n\n---", width: 6).last == "──────")
+        #expect(laidOut("| long header | other |\n|---|---|\n| x | y |", width: 6) == [
+            "┌─────────────┬───────┐", "│ long header │ other │", "├─────────────┼───────┤", "│ x           │ y     │",
+            "└─────────────┴───────┘"
+        ])
     }
 
     @Test func aHeadingWithAnInnerStrongSpanEncodesAsOneBoldRun() {

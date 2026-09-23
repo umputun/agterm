@@ -86,11 +86,11 @@
 - code block: its lines verbatim (no inline styling), indented by 2 cells, tabs expanded to 4-column tab
   stops; wrapped like any row.
 - block quote: rows prefixed with `│ `.
-- thematic break: a row of `─` across the content width.
-- table: cells padded to the widest cell in their column and joined with ` │ `; header row bold. A table
-  wider than the content width is clipped like any other row. Cells and rows are placed by the parser's
-  column and row index; trailing all-empty body rows and an all-empty header are not rendered, because
-  the parser emits nothing for them.
+- table: framed in box-drawing borders (┌┬┐ top, ├┼┤ rule under the header, └┴┘ bottom), every cell padded
+  to its column; header row bold. A table wider than the content width is clipped like any other row. Cells
+  and rows are placed by the parser's column and row index; trailing all-empty body rows and an all-empty
+  header are not rendered, because the parser emits nothing for them (no header rule then).
+- thematic break: spans the widest other row, with at least 3 glyphs after any container prefix.
 - image: its alt text. Raw HTML, inline or block: its source text, literal.
 - blocks are separated by one blank row; a nested block inherits its container's indent and prefix.
 

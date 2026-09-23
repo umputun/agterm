@@ -1222,6 +1222,30 @@ struct CommandsTests {
         #expect(update.args?.message == "# Tasks\n\n- build  \n")
     }
 
+    @Test func sessionHudNormalizesCrlfLineEndingsFromAFile() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("hud-\(UUID().uuidString).md")
+        try Data("# Tasks\r\n\r\n- build\r\n".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        #expect(try request(["session", "hud", "--file", file.path, "--markdown"]).args?.message == "# Tasks\n\n- build")
+    }
+
+    @Test func sessionHudDropsACrlfTerminatorFromAPlainFile() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("hud-\(UUID().uuidString).txt")
+        try Data("done\r\n".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        #expect(try request(["session", "hud", "--file", file.path]).args?.message == "done")
+    }
+
+    @Test func sessionHudKeepsALoneCarriageReturnFromAFileForTheServerToRefuse() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("hud-\(UUID().uuidString).txt")
+        try Data("a\rb\n".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        #expect(try request(["session", "hud", "--file", file.path]).args?.message == "a\rb")
+    }
+
     @Test func sessionHudTakesExactlyOneMessageSource() {
         #expect(validationMessage(["session", "hud", "open"]) == "provide MESSAGE or --file")
         #expect(validationMessage(["session", "hud", "update"]) == "provide MESSAGE or --file")

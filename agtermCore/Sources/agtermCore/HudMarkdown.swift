@@ -42,7 +42,7 @@ enum HudMarkdown {
     static let codeIndent = "  "
     static let quoteBar = "│ "
     static let bullet = "• "
-    static let cellSeparator = " │ "
+    static let minRuleWidth = 3
     static let tabWidth = 4
 
     /// lines parses `source` as standard markdown. Blocks are separated by one blank row, except blocks
@@ -63,6 +63,13 @@ enum HudMarkdown {
                        block: run.presentationIntent?.components ?? [])
         }
         return walker.finish()
+    }
+
+    /// rendersVisibleText reports whether `source` lays out to at least one non-space cell.
+    static func rendersVisibleText(_ source: String) -> Bool {
+        rows(lines(source), width: HudLayout.maxColumns).contains { row in
+            row.contains { run in run.text.unicodeScalars.contains { !$0.properties.isWhitespace } }
+        }
     }
 
     /// sanitized replaces control characters the parser decoded from entities (`&#27;`, `&#10;`) so none can
@@ -200,28 +207,39 @@ enum HudMarkdown {
             inlineRows(block.segments, base: base).flatMap { $0 }
         }
 
+        /// flushTable frames the table in box-drawing borders, with a rule under the header when it has one.
+        /// The top border takes the container's lead, so a table opening a list item carries its marker once.
         private mutating func flushTable() {
             guard let pending = table else { return }
             table = nil
             let grid = pending.grid
             var widths = [Int](repeating: 0, count: pending.columns)
             for row in grid {
-                for (index, cell) in row.enumerated() {
-                    widths[index] = max(widths[index], cell.reduce(0) { $0 + HudLayout.cellCount($1.text) })
-                }
+                for (index, cell) in row.enumerated() { widths[index] = max(widths[index], HudMarkdown.width(cell)) }
             }
             let (lead, hang) = prefixes(pending.first.components.dropFirst(3))
-            let lines = grid.enumerated().map { offset, row -> Line in
-                var runs: [Run] = []
-                for (index, cell) in row.enumerated() {
-                    if index > 0 { runs.append(Run(text: HudMarkdown.cellSeparator, style: [])) }
-                    runs += cell
-                    let pad = widths[index] - cell.reduce(0) { $0 + HudLayout.cellCount($1.text) }
-                    if pad > 0, index < row.count - 1 { runs.append(Run(text: String(repeating: " ", count: pad), style: [])) }
-                }
-                return Line(lead: offset == 0 ? lead : hang, hang: hang, runs: runs, kind: .table)
+            func border(_ left: String, _ join: String, _ right: String) -> [Run] {
+                let segments = widths.map { String(repeating: "─", count: $0 + 2) }
+                return [Run(text: left + segments.joined(separator: join) + right, style: [])]
             }
-            emit(lines, for: pending.first)
+            func framed(_ row: [[Run]]) -> [Run] {
+                var runs = [Run(text: "│ ", style: [])]
+                for (index, cell) in row.enumerated() {
+                    if index > 0 { runs.append(Run(text: " ", style: [])) }
+                    runs += cell
+                    let pad = String(repeating: " ", count: widths[index] - HudMarkdown.width(cell) + 1)
+                    runs.append(Run(text: pad + "│", style: []))
+                }
+                return runs
+            }
+            var rows = [border("┌", "┬", "┐")]
+            for (offset, row) in grid.enumerated() {
+                rows.append(framed(row))
+                if offset == 0, pending.header != nil { rows.append(border("├", "┼", "┤")) }
+            }
+            rows.append(border("└", "┴", "┘"))
+            emit(rows.enumerated().map { Line(lead: $0.offset == 0 ? lead : hang, hang: hang, runs: $0.element, kind: .table) },
+                 for: pending.first)
         }
 
         private mutating func emit(_ lines: [Line], for block: Block) {
@@ -316,9 +334,12 @@ extension HudMarkdown {
     static let ruleGlyph = "─"
 
     /// rows wraps `lines` at `width` cells. Every row starts with its line's lead (first row) or hang
-    /// (continuations); a blank line is one empty row.
+    /// (continuations); a blank line is one empty row. A rule spans the widest other row, and its glyphs
+    /// number at least `minRuleWidth` after any container prefix.
     static func rows(_ lines: [Line], width: Int) -> [[Run]] {
-        lines.flatMap { wrapped($0, width: width) }
+        let widest = lines.filter { $0.kind != .rule }.flatMap { wrapped($0, width: width) }.map(HudMarkdown.width).max() ?? 0
+        let ruleWidth = min(max(widest, minRuleWidth), width)
+        return lines.flatMap { wrapped($0, width: $0.kind == .rule ? ruleWidth : width) }
     }
 
     /// fitted clips `rows` to a `columns` x `rows` budget. A row too wide keeps `columns - 1` cells and ends in
@@ -380,7 +401,7 @@ extension HudMarkdown {
         let leadWidth = HudLayout.cellCount(line.lead)
         switch line.kind {
         case .rule:
-            let glyphs = String(repeating: ruleGlyph, count: max(width - leadWidth, 1))
+            let glyphs = String(repeating: ruleGlyph, count: max(width - leadWidth, minRuleWidth))
             return [prefixed(line.lead, [Run(text: glyphs, style: [])])]
         case .table:
             return [prefixed(line.lead, line.runs)]

@@ -519,7 +519,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   all-empty header are lost because the parser emits nothing for them. The dispatcher allows LF and TAB in a
   markdown message only, through its own check, leaving the shared `containsControlCharacters` untouched,
   and caps it at `HudSpec.maxMarkdownLength`; the renderer replaces control characters the parser decoded
-  from entities. Text wraps at `maxColumns`, table rows stay intact, and all rows are clipped to the grid on
+  from entities. The dispatcher also refuses a markdown message that renders nothing visible
+  (`HudMarkdown.rendersVisibleText`).
+  A table renders framed in box-drawing borders with a header rule only when the header has cells, and a
+  thematic break spans the widest other row. Text wraps at `maxColumns`, table rows stay intact, and all rows are clipped to the grid on
   both axes in `renderedBody`, so the painter never measures them: the header's seventh field, `blockwidth`, is 0 for plain mode and the
   painted width of the finished rows otherwise, and the helper prints those rows verbatim at one shared
   offset. The painter draws the spinner glyph on the first row; the renderer indents the others by the gutter.

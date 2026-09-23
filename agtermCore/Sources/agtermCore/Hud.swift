@@ -29,9 +29,8 @@ public struct HudSpec: Codable, Equatable, Sendable {
     /// creation, like `backgroundColor`.
     public let fontSize: Double?
 
-    /// Cap on `message` and `detail` each, enforced by the dispatcher in `HudLayout.textLength`'s unit. The
-    /// panel wraps at `HudLayout.maxColumns` and is clamped to `HudLayout.maxSizePercent`, so longer text
-    /// cannot be shown.
+    /// maxTextLength caps `detail` and a plain `message` in `HudLayout.textLength`'s unit; a markdown message
+    /// takes `maxMarkdownLength` instead.
     public static let maxTextLength = 256
 
     /// The longest auto-hide on offer. A bound the SCHEDULER can convert: it turns seconds into nanoseconds in

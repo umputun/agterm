@@ -834,13 +834,15 @@ final class SettingsModel {
         return true
     }
 
-    /// Every live ghostty surface: all open windows' sessions (primary + split + scratch) and quick terminals.
+    /// Every live ghostty surface: all open windows' sessions (primary, split, scratch, and the session-wide
+    /// and pane overlays) and quick terminals.
     private func liveSurfaces() -> [GhosttySurfaceView] {
         var views = library.openIDs()
             .compactMap { library.store(for: $0) }
             .flatMap(\.workspaces)
             .flatMap(\.sessions)
-            .flatMap { [$0.surface, $0.splitSurface, $0.scratchSurface] }
+            .flatMap { [$0.surface, $0.splitSurface, $0.scratchSurface, $0.overlaySurface, $0.leftOverlaySurface,
+                        $0.rightOverlaySurface] }
             .compactMap { $0 as? GhosttySurfaceView }
         views += [QuickTerminalController.shared.currentSurface()].compactMap { $0 }
         return views

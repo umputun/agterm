@@ -768,8 +768,8 @@ struct Session: ParsableCommand {
             if message != nil, file != nil { throw ValidationError("MESSAGE and --file are mutually exclusive") }
         }
 
-        /// messageText is the argument, or the UTF-8 contents of `file` less one trailing newline: files end
-        /// with one, and a plain panel rejects newlines. The dispatcher still applies every cap and rejection.
+        /// messageText is the argument, or the UTF-8 contents of `file` with CRLF line endings normalized and
+        /// one trailing newline dropped: files end with one, and a plain panel rejects newlines. The dispatcher still applies every cap and rejection.
         static func messageText(_ message: String?, file: String?) throws -> String {
             guard let file else { return message ?? "" }
             let data: Data
@@ -781,6 +781,7 @@ struct Session: ParsableCommand {
             guard var text = String(data: data, encoding: .utf8) else {
                 throw ValidationError("--file \(file) is not valid UTF-8")
             }
+            text = text.replacingOccurrences(of: "\r\n", with: "\n")
             if text.hasSuffix("\n") { text.removeLast() }
             return text
         }

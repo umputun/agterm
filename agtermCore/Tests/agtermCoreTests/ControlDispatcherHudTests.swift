@@ -203,6 +203,30 @@ struct ControlDispatcherHudTests {
         #expect(actions.calls.isEmpty)
     }
 
+    // a source that renders nothing passed the blank check and opened an empty panel `tree` reported as live.
+    @Test(arguments: ["[x]: /y", "&#32;", "- "])
+    func markdownThatRendersNothingIsNoMessage(message: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: message, markdown: true)))
+
+        #expect(response == ControlResponse(ok: false, error: "session.hud.open requires a message"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: ["<!-- note -->\n\n[ref]: http://a", "---"])
+    func markdownThatPaintsOnlyLiteralHtmlOrARuleIsAMessage(message: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionHudOpen, args: ControlArgs(message: message, markdown: true)))
+
+        #expect(response == ControlResponse(ok: true))
+    }
+
     @Test func openCarriesAFontSizeInsideTheRange() async throws {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

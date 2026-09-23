@@ -54,6 +54,11 @@ extension ControlDispatcher {
         guard HudLayout.textLength(message) <= cap else {
             return .rejected(ControlResponse(ok: false, error: "hud message too long (max \(cap) characters)"))
         }
+        // markdown can render nothing from a non-blank source (a lone link reference definition, `&#32;`),
+        // which would paint the same empty frame the blank check above exists to refuse
+        guard !markdown || HudMarkdown.rendersVisibleText(message) else {
+            return .rejected(ControlResponse(ok: false, error: "\(request.cmd.rawValue) requires a message"))
+        }
         guard HudLayout.textLength(args?.detail ?? "") <= HudSpec.maxTextLength else {
             return .rejected(ControlResponse(
                 ok: false, error: "hud detail too long (max \(HudSpec.maxTextLength) characters)"))

@@ -1934,7 +1934,7 @@
                 backslash, or use list items; lists always render tight. Text wraps at 60 columns while table rows stay intact,
                 all left-aligned as one block. What does not fit is clipped: a row too wide ends in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">…</span>, and rows past the
                 panel's height give way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace">… N more</span>, itself clipped in a narrow panel. Trailing all-empty table
-                rows and an all-empty header row are not shown.
+                rows and an all-empty header row are not shown; a table is framed in box-drawing borders with a rule under its header.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--file FILE</span> reads the message from a UTF-8 file instead of the argument (exactly one of the two), once
                 per command with nothing watching it, dropping one trailing newline; an unreadable or non-UTF-8 file fails in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> before anything is sent. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--font-size PT</span> (6–72) sets the panel's own font for its surface and its measurement,
