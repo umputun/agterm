@@ -402,9 +402,7 @@ final class GhosttyApp {
         // theme change. The selection colors re-side from the passed-in `isDark`, never re-read from a view.
         resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs, isDark: isDark)
         if let derivedConfig { ghostty_config_free(derivedConfig) }
-        // the broadcast pushes the shared config (no background image, default font size) to every surface,
-        // wiping per-surface watermarks and zoom — re-assert them after. No-op without either; on the
-        // zoom-clearing reload paths the per-session fontSize was already nil'd, so only watermarks re-apply.
+        // restore per-surface overrides after the shared config broadcast
         for surface in surfaces {
             surface.reapplySessionConfigIfNeeded()
             if let staticTitle, surface.session != nil { surface.applyTitle(staticTitle) }

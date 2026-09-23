@@ -1930,7 +1930,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--markdown</span> renders the message as standard markdown (CommonMark plus GFM tables): headings, bold,
                 italic, strikethrough, nested lists, code blocks, block quotes, rules and tables, with a link showing its label and
                 raw HTML staying literal. It raises the message cap to 4096 characters and allows newlines and tabs in it; the
-                detail keeps the plain rules. A single newline inside a paragraph is a space, so end a line with two spaces or a
+                detail keeps the plain rules. A message that renders nothing visible is refused like an empty one. A single newline inside a paragraph is a space, so end a line with two spaces or a
                 backslash, or use list items; lists always render tight. Text wraps at 60 columns while table rows stay intact,
                 all left-aligned as one block. What does not fit is clipped: a row too wide ends in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">…</span>, and rows past the
                 panel's height give way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace">… N more</span>, itself clipped in a narrow panel. Trailing all-empty table

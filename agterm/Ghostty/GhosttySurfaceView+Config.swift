@@ -43,11 +43,9 @@ extension GhosttySurfaceView {
         ownedConfigs = [config]
     }
 
-    /// Re-assert the session's per-surface config (watermark and/or font zoom) after a global reload
-    /// broadcast the shared config here, wiping both; a no-op when the session carries neither. The
-    /// zoom-CLEARING reload paths nil `session.fontSize` first, so only a watermark re-applies there, while
-    /// the appearance flip (which skips the reset) carries each session's zoom across. Also re-emits an
-    /// active `dashboardFontOverride`, so a reload with the dashboard open can't strand the transient font.
+    /// reapplySessionConfigIfNeeded restores OSC colors, session watermarks/zoom, dashboard sizing, overlay
+    /// backgrounds and HUD creation fonts after a shared config reload. A zoom-clearing reload nils
+    /// `session.fontSize` first, so a session's zoom survives only the appearance flip.
     func reapplySessionConfigIfNeeded() {
         // a transient OSC-11 background wins over the persisted watermark and must survive the reload
         // broadcast that wiped it.
