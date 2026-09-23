@@ -37,7 +37,7 @@ If your `agtermctl` is not on `PATH` under that name, set `AGTERMCTL` to its ful
 
 ## Usage
 
-Open a split in the session you want to use, then start one agent in each pane yourself: Claude Code on the left, Codex on the right. Neither the script nor the skills start an agent, by design.
+Open a split in the session you want to use, then start one agent in each pane yourself: Claude Code in one and Codex in the other, either way round. Neither the script nor the skills start an agent, by design.
 
 Ask either agent to talk to the other, and it sends through the script:
 
@@ -47,7 +47,7 @@ your message as one paragraph
 MSG
 ```
 
-`--to claude` sends the other way. `--session` names a session explicitly; without it the script uses `AGTERM_SESSION_ID` when the caller has one, and otherwise looks for a single session whose target pane is running the expected agent. An explicit session is found across open windows, while `--window` constrains the lookup. The resolved window id stays pinned for the full send.
+`--to claude` sends the other way. Either agent can sit in either pane. The script looks for the target on its usual side first, Claude Code on the left and Codex on the right, and takes the other side only when the usual one runs the other agent, so a pane that could be the sender is never chosen. `--session` names a session explicitly; without it the script uses `AGTERM_SESSION_ID` when the caller has one, and otherwise looks for a single session whose target pane is running the expected agent. An explicit session is found across open windows, while `--window` constrains the lookup. The resolved window id stays pinned for the full send.
 
 Claude Code normally sends to Codex with Return, the key Codex uses for steering an active turn. Codex can still queue it when its current state cannot accept a steer. Add `--queue` only for an informational note that can wait until the turn ends:
 
@@ -125,7 +125,9 @@ The recipe deliberately does not start agents. Deciding that a pane is safe to t
 
 The two directions are not symmetric. Codex exposes both steering Return and queued Tab, while Claude Code exposes only its normal Return submission and manages busy input itself. Use `--queue` only for a Codex-bound note that needs no action during the current turn.
 
-It assumes Claude Code on the left and Codex on the right. Each agent's pane is fixed in the script's profiles, so a split arranged the other way sends every message to the wrong pane. A session with no split is refused outright, before any pane is read: without that check a send to the left pane would still pass after the right one had closed, which is no longer a two-agent layout at all.
+The target pane is chosen once per send, from agterm's view of which pane runs the agent named by `--to`, and every later read and write goes to that pane alone. If the agents swap panes during a send, the next check refuses instead of following the agent to the other side. A session with no split is refused outright, before any pane is read: without that check a send would still pass after the other pane had closed, which is no longer a two-agent layout at all.
+
+The other side is taken only when the usual one runs the other agent under its own command, so a wrapped peer on the usual side needs `PEER_CHAT_CLAUDE_COMMAND` or `PEER_CHAT_CODEX_COMMAND` for a reversed split to be recognised. Two agents of the same kind are not a supported pair: agterm addresses a pane by its position, and with the same agent on both sides the script sends to the usual side and has no way to tell a swapped split from the original.
 
 **Codex cannot see which pane it is in unless you tell it at launch.** It strips `AGTERM_SESSION_ID` from every tool subprocess, and nothing inside its sandbox recovers the value: reading a parent process is blocked outright. Without the launch injection in *Setup*, the script falls back to matching the git checkout, and every worktree of one repository maps to the same checkout, so two sessions open on the same repository are indistinguishable and the send refuses. That refusal is the correct outcome, not a bug, but it is why the injection is worth doing once in your Codex launcher instead of remembering per session.
 
