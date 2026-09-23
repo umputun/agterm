@@ -351,12 +351,12 @@
   geometry refresh) and the font-size contract
 
 ### Task 11: Verify acceptance criteria
-- [ ] verify plain HUD output is unchanged apart from the header field
-- [ ] verify every block and inline kind in Technical Details renders as specified
-- [ ] build the app (`make build`)
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint`
+- [x] verify plain HUD output is unchanged apart from the header field
+- [x] verify every block and inline kind in Technical Details renders as specified
+- [x] build the app (`make build`)
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint`
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
