@@ -138,6 +138,10 @@ Check these in order:
   and recreates them under the host; agterm quits and reopens itself, captured commands start again where
   possible, and the notification afterwards says how many sessions were covered. A session whose old process
   could not be confirmed gone gets no command restarted and the reset can be run again.
+- **After an update, an attached session still needs a key press, or a zmx change seems missing.** A live
+  session keeps the zmx it was created with through app updates. `agtermctl zmx list` marks such rows
+  `outdated`; Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) recreates them on the current
+  zmx, with the same cost as any reset: running work stops and agent conversations need resuming.
 - **Switching modes ends detached live processes.** Selecting Fresh shells or Re-run commands and restarting
   reaps the live daemons in this state directory. An unavailable launch that still requests Live sessions
   preserves its claimed daemons for a later eligible launch.

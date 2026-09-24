@@ -1011,9 +1011,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `zmx.reset` is Agterm ▸ Reset Live Sessions… without the dialog, and both run `LiveResetCoordinator`.
   The dispatcher refuses without `--force` before the host; the coordinator then refuses, in order, when
   Live is not both the configured and the launched mode, when the listing failed, when the claim walk is
-  incomplete or claims a pane twice, and when no pane is orphaned or app-attributed.
+  incomplete or claims a pane twice, and when no pane is selected.
   `LiveReset.select` in agtermCore joins `paneClaims()` to the listing; the dialog counts distinct sessions
-  and the reply carries `result.liveReset` (sessions, panes, pending) plus the dialog body as `text`.
+  and the reply carries `result.liveReset` (sessions, panes, pending, and `outdated` sessions when any) plus
+  the dialog body as `text`.
+- A pane is selected for one of two reasons, carried on each marker target. `outdated`: its daemon's
+  `created=` from `zmx list` is before the launch's `ZmxBuildRecord` cutoff, whatever its attribution, which
+  is what reaches supervised panes still running a zmx from before an update. `unsupervised`: otherwise, an
+  orphaned or app-attributed leader. A pane that qualifies for both is recorded as `outdated`.
+- `ZmxBuildRecord` is `zmx-build.json` in the state directory. The build phase copies `.zmx-build-stamp` into
+  the bundle as `Resources/zmx/BUILD`; `restoredRuntime` compares it with the record before
+  `LaunchOrchestration.run`, dates a different or missing id at the current whole second (zmx's `created`
+  resolution), and hands the cutoff to the consumer and the control server. Every app update replaces and
+  re-signs zmx, so a file time would flag every session after every update; only an id change moves the
+  cutoff. The first launch with no record treats every existing session as outdated once. The cutoff proves
+  only that a session predates the recorded change, so user text says "predate the last Live sessions update",
+  never that it runs an older zmx. No bundled id means no cutoff and no outdated selection.
   The connection thread quits only after it has written the reply to THAT request, decided from the
   request being `zmx.reset` and the response being ok, never from shared state: remote workers write
   other replies in parallel and must not quit the app. A reply that could not be written leaves the reset
@@ -1021,8 +1034,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The quit writes `live-reset.json` in the state directory only after the exit capture ran and the
   checked snapshot save succeeded, then spawns the relauncher; a relauncher that cannot start removes the
   marker. The next launch consumes the marker before any kill and only NARROWS it: a target is killed when
-  it is still claimed, still listed with the same leader pid and still orphaned; gone restores normally;
-  anything else is skipped. Every selected leader is polled whatever the batched kill reported, and a
+  it is still claimed, still listed with the same leader pid, and still qualifies for its reason (created
+  before the cutoff, or orphaned); gone restores normally; anything else is skipped. `consume` accepts marker
+  versions 1 and 2, and a version-1 target reads as `unsupervised`. Every selected leader is polled whatever the batched kill reported, and a
   survivor's pane gets neither its replay nor its durable command at that launch.
   A confirmed reset arms and skips the quit alert only while Live is still both modes
   (`armablePending`): a mode change after confirmation leaves the next launch unable to suppress a
@@ -1031,7 +1045,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   before the budget expires leaves every selected pane suppressed. The Help item shows a refusal in user
   words through `presentRefusal`; only a cancel is silent.
   Read-back is `liveReset` on the tree top level and the `zmx list` header, omitted when nothing is
-  pending and no launch consumed a marker. XCUITest exemption: the command quits the app, so its
+  pending and no launch consumed a marker. Each `zmx list` row carries `outdated: true` for a daemon created
+  before the cutoff, omitted otherwise. XCUITest exemption: the command quits the app, so its
   coverage is hosted and package tests plus the isolated acceptance run, like `restore.mode`.
 
 ## Remote sessions

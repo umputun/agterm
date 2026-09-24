@@ -165,19 +165,20 @@
 - [x] run the touched suites - must pass before task 4
 
 ### Task 4: Verify acceptance criteria
-- [ ] a supervised pane created before the recorded change is offered by the menu and by `zmx.reset --force`
-- [ ] an app update with an unchanged zmx build offers nothing new
-- [ ] isolated acceptance run: Debug instance with its own state dir and a session created; quit it, move
+- [x] a supervised pane created before the recorded change is offered by the menu and by `zmx.reset --force`
+- [x] an app update with an unchanged zmx build offers nothing new
+- [x] isolated acceptance run: Debug instance with its own state dir and a session created; quit it, move
       `changedAt` in `zmx-build.json` past the session's creation keeping the same id, relaunch (the cutoff is
       read once at launch), confirm the reset, and the pane comes back on a new zmx session
-- [ ] full `swift test`, `make test-app`, `make lint` and the build, once each
+- [x] full `swift test`, `make test-app`, `make lint` and the build, once each
 
 ### Task 5: [Final] Update documentation
-- [ ] `.claude/rules/control-api.md`: the reset section gains the outdated reason, the build record and the
+- [x] `.claude/rules/control-api.md`: the reset section gains the outdated reason, the build record and the
       narrowing rule
-- [ ] `site/docs.html` Reset Live Sessions text and `site/commands.html` for `zmx.reset` / `zmx list` fields
-- [ ] bundled `plugins/agterm/skills/agterm/` wherever the reset is described
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `site/docs.html` Reset Live Sessions text and `site/commands.html` for `zmx.reset` / `zmx list` fields
+- [x] bundled `plugins/agterm/skills/agterm/` wherever the reset is described
+- [x] ➕ `agtermctl zmx reset` help text in `agtermctlKit/ZmxCommands.swift`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - After deploying, run Agterm ▸ Reset Live Sessions… once on each Mac to move the sessions created before

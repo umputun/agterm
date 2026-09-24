@@ -46,13 +46,15 @@ struct Zmx: ParsableCommand {
 
     struct Reset: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Reset the live sessions this app does not supervise, then quit and reopen agterm.",
+            abstract: "Reset live sessions that are unsupervised or predate the recorded zmx update, then reopen.",
             discussion: """
             The same operation as Agterm > Reset Live Sessions, without the dialog. A live session created \
             before the session host existed keeps its own macOS permission identity, so every new version \
             of a tool in it asks for the microphone again. The reset ends those sessions' processes at the \
             next launch and recreates them under the host, starting their captured commands again where \
-            possible. Sessions already supervised are left alone.
+            possible. It also covers every session created before the recorded first launch with this zmx \
+            build: live sessions keep the zmx they started with through updates. Other supervised sessions \
+            are left alone.
 
             agterm quits and reopens itself right after answering. Running work in the affected sessions \
             stops, and agent conversations may need to be resumed by hand. Run from inside one of those \

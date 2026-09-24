@@ -1593,7 +1593,8 @@ is gone and one zmx could not read are different answers. A CLOSED window's pane
 clients. That is the resting state after you close a window, not a leak, which is why the owner's window
 state is its own column. `unknown` means the pane inventory was incomplete, so no row can be called an orphan.
 The header also carries `endpoint.executable` and `endpoint.socketDirectory`, which is what another machine
-needs to reach these daemons; a server older than remote sessions omits the key.
+needs to reach these daemons; a server older than remote sessions omits the key. A row whose daemon was
+created before the recorded first launch with this zmx build carries `outdated: true` (omitted otherwise).
 
 `agtermctl zmx prune` — kill the daemons no pane claims and nothing is attached to. It refuses outright on
 an incomplete or conflicted inventory. The gate is checked and revalidated rather than atomic: zmx has no
@@ -1614,12 +1615,14 @@ daemon of the pane you are typing in can kill the calling `agtermctl` before it 
 `agtermctl zmx reset --force` — Agterm ▸ Reset Live Sessions… without the dialog. A live session created
 before the session host existed keeps its own macOS permission identity, so every new version of a tool in
 it asks for the microphone again; the reset ends those sessions' processes at the next launch and recreates
-them under the host, starting their captured commands again where possible. agterm quits and reopens itself
+them under the host, starting their captured commands again where possible. It also covers every session
+whose daemon predates the recorded first launch with this zmx build: live sessions keep the zmx they started
+with through updates, so they miss a zmx change until recreated. agterm quits and reopens itself
 right after answering, so running work in the affected sessions stops and agent conversations may need to be
-resumed by hand; run from inside one of those sessions it kills the calling shell. Sessions already
-supervised are left alone. It refuses outside Live sessions mode, while a mode change waits for a restart,
+resumed by hand; run from inside one of those sessions it kills the calling shell. Other supervised
+sessions are left alone. It refuses outside Live sessions mode, while a mode change waits for a restart,
 on an incomplete pane inventory, and when nothing needs resetting. The reply carries `result.liveReset`
-with the session and pane counts; the next launch re-checks every session and only ever resets fewer than
+with the session and pane counts, plus `outdated` sessions when any; the next launch re-checks every session and only ever resets fewer than
 confirmed, and the tree's top-level `liveReset` reports `pending` until the quit and `last` for the launch
 that consumed the reset.
 

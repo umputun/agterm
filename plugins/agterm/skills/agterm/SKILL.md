@@ -629,7 +629,8 @@ stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --
 daemon and the process in it; all three are required because this kills a backend process that reaches a
 pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace ·
 `zmx reset --force` - Agterm ▸ Reset Live Sessions… without the dialog: ends every live session this app
-does not supervise at the next launch and recreates it under the session host, quitting and reopening
+does not supervise, or that predates the last Live sessions update, at the next launch and recreates it under
+the session host, quitting and reopening
 agterm right after the reply; refused outside Live mode, on an incomplete inventory, and with nothing to
 reset ·
 `zmx tree [HOST]` - attachable sessions across EVERY open window, on another Mac with a HOST or this app
