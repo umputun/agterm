@@ -428,7 +428,8 @@ Outside agterm (`AGTERM_ENABLED` unset) there is no overlay — fall back to `op
 
 A persistent backdrop behind the terminal grid (distinct from `show-image.sh`, which is a transient
 overlay). An image or rasterized-text watermark (auto-fitting the window, re-fitting on resize), or a
-solid terminal background color — per session, surviving a relaunch.
+solid terminal background color — per session, or per pane with `--pane`. The session default and left/right
+pane labels survive a relaunch; a scratch label ends with its scratch terminal.
 
 ```bash
 # rasterized text watermark on this session, faint

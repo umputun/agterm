@@ -61,8 +61,8 @@ extension AppStore {
         } else {
             session.backgroundWatermark = watermark
         }
-        // a `.text` watermark owns a rendered PNG; switching away leaves it unreferenced. `clear` and
-        // teardown sweep the same file, so this is only the eager reclaim for text→image/nil.
+        // a `.text` watermark owns a rendered PNG that switching away leaves unreferenced. for a pane override
+        // this is the only removal short of the pane closing: `clear --pane` sweeps nothing app-side.
         if previous?.kind == .text, watermark?.kind != .text {
             if let pane {
                 session.backgroundFileKey(for: pane).map { WatermarkStorage.removeRenderedText(sessionID: id, paneKey: $0) }

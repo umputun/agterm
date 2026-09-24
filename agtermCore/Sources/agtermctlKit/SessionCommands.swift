@@ -429,12 +429,6 @@ struct Session: ParsableCommand {
             + "are aliases). Omitted sets the session default, which every pane without an override inherits; "
             + "`clear --pane` returns that pane to the default."
 
-        static func args(_ base: ControlArgs, pane: String?) -> ControlArgs {
-            var args = base
-            args.pane = pane
-            return args
-        }
-
         /// Shared input validation against the host-free `WatermarkConfig`, so a bad value is a clean parse
         /// error before any socket round-trip, matching the server's rejection exactly. The enum checks
         /// reject `""` too, so no separate empty-string case is needed.
@@ -478,10 +472,9 @@ struct Session: ParsableCommand {
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(Background.args(ControlArgs(mode: "image", path: path, opacity: opacity,
-                                                                                    fit: fit, position: position,
-                                                                                    repeats: repeatImage ? true : nil),
-                                                                        pane: pane)))
+                               args: options.withWindow(ControlArgs(mode: "image", pane: pane, path: path, opacity: opacity,
+                                                                    fit: fit, position: position,
+                                                                    repeats: repeatImage ? true : nil)))
             }
         }
 
@@ -503,10 +496,8 @@ struct Session: ParsableCommand {
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(Background.args(ControlArgs(text: text, mode: "text", color: color,
-                                                                                    opacity: opacity, fit: fit,
-                                                                                    position: position),
-                                                                        pane: pane)))
+                               args: options.withWindow(ControlArgs(text: text, mode: "text", pane: pane, color: color,
+                                                                    opacity: opacity, fit: fit, position: position)))
             }
         }
 
@@ -525,7 +516,7 @@ struct Session: ParsableCommand {
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(Background.args(ControlArgs(mode: "color", color: color), pane: pane)))
+                               args: options.withWindow(ControlArgs(mode: "color", pane: pane, color: color)))
             }
         }
 
@@ -539,7 +530,7 @@ struct Session: ParsableCommand {
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(Background.args(ControlArgs(mode: "clear"), pane: pane)))
+                               args: options.withWindow(ControlArgs(mode: "clear", pane: pane)))
             }
         }
     }

@@ -416,9 +416,11 @@ omitted when expanded).
   it must not carry secrets. See examples.md.
 - `session background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `session background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
-  `session background color <#rrggbb>` · `session background clear` — composite an image (PNG/JPEG) or rasterized text
-  behind the terminal as a watermark (auto-fitting the window, re-fits on resize), or set a solid
-  terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
+  `session background color <#rrggbb>` · `session background clear`, each `[--pane left|right|scratch]` — composite an
+  image (PNG/JPEG) or rasterized text behind the terminal as a watermark (auto-fitting the window, re-fits on resize),
+  or set a solid terminal background color. Without `--pane` it is the session default, which survives restart;
+  `--pane` sets that pane's override instead (left/right survive restart, a scratch one ends with the scratch),
+  and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
 - `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
