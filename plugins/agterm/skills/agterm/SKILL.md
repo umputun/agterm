@@ -211,6 +211,7 @@ omitted before any set, and refreshed by every set including idle and a re-push 
 `now - statusChangedAt` is how long ago the status was last written; automatic and manual clears count
 too; ephemeral, so it does not survive a restart), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
+`paneBackgrounds` (per-pane overrides from `session background --pane`; an absent pane inherits `background`),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen`; omitted when zero), `commandWait`/`splitCommandWait` (whether either pane's `--command` was
 created with `--wait` to hold open after exit, the read side of `session new --wait`; each omitted for a

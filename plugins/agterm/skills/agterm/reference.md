@@ -224,7 +224,10 @@ other program),
 command string = the shell line that runs on the next launch; reported from persisted state, so a read
 after the override already fired still reports what is pinned), `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), `unseen`
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set),
+`paneBackgrounds` (the per-pane overrides set via `session background --pane`, a `{left?, right?,
+scratch?}` object of the same specs; an absent pane inherits `background`; never the effective value;
+omitted when no pane has one), `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
 when zero), `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in points of each pane —
 the read side of `font --pane`; each omitted when that pane isn't realized. `fontSize` tracks the
@@ -714,6 +717,12 @@ error keeps those names for compatibility.
   the requested presentation returns when Reduce Transparency is disabled. Errors on a malformed color
   (must be a `#rrggbb` hex value).
 - `session background clear [--target] [--window W]` — remove the session's background.
+- All four take `--pane left|right|scratch` (aliases `primary`/`top`, `split`/`bottom`): set or clear that
+  pane's own override instead of the session default. A pane without one inherits the default; `clear
+  --pane` returns it to inheriting; set/clear without `--pane` never touch overrides. The override follows
+  its terminal (`session swap`, a closed left pane promoting the right); left/right persist, a scratch
+  override ends with that scratch terminal. Errors `session has no split pane` / `session has no scratch
+  terminal` when the pane does not exist, and `--pane must be left, right, or scratch` on a bad name.
   Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. An image/text
   watermark makes the pane render OPAQUE, overriding window translucency (an image is invisible at 0
   background-opacity); a `color` instead honors the Settings window translucency. Read the current

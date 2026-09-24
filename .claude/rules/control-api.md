@@ -1390,6 +1390,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   must reapply color after `windowOpacity` updates, including within-range drags that do not reload.
 - `Fit`/`Position` are CaseIterable typed enums. Revalidate free-text path/color during emission.
   Tree reads the stored background specification. See [[libghostty]] for live OSC 11 precedence.
+- `--pane left|right|scratch` writes a per-pane override (`Session.paneBackgrounds`) over the session
+  default; a pane renders `override ?? default`, so the scratch keeps inheriting (#274). Set and clear
+  without `--pane` touch only the default; a pane clear returns that pane to inheriting.
+  Right needs `hasSplit`, scratch a live scratch surface; otherwise the request fails.
+- Overrides follow the terminal: `swapPanes` swaps left/right, `closePrimaryPane` promotes right to left,
+  `closeSplit` and `closeScratch` drop theirs. Left/right persist; scratch never does.
+  Text overrides render to `<sessionID>-<pane identity|scratch>.png`, removed with their pane.
+- A pane set applies to that surface only; a default change re-applies only inheriting panes, since
+  re-applying clears an overridden pane's OSC 11 latch. Tree `paneBackgrounds` lists overrides only,
+  never effective values, omitted when none.
+- Washes blend toward the pane's own solid color (`Session.washColorHex(for:)`). The floating backdrop
+  paints `backdropWashRegions` opaque and fades the group once, so no pane is muted twice.
 
 ## Documentation mirrors
 

@@ -442,6 +442,11 @@ agtermctl session background color '#3a0d0d' --target "$AGTERM_SESSION_ID"
 
 # remove it
 agtermctl session background clear --target "$AGTERM_SESSION_ID"
+
+# label each agent of a two-agent split; a pane override wins over the session default
+agtermctl session background text "DRIVER" --opacity 0.12 --pane left --target "$AGTERM_SESSION_ID"
+agtermctl session background text "PEER" --opacity 0.12 --pane right --target "$AGTERM_SESSION_ID"
+agtermctl session background clear --pane right --target "$AGTERM_SESSION_ID"   # back to the default
 ```
 
 `--opacity` is 0.0–1.0; `--fit` is `contain` (default) / `cover` / `stretch` / `none`; `--position` is

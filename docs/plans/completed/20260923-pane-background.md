@@ -172,15 +172,15 @@
 - [x] extend `testSessionBackgroundSetClearAndValidation`: pane override read back, swap, pane clear to
   inherit, `--pane right` without a split fails
 - [x] touched hosted classes via the direct scoped `xcodebuild -only-testing` call (11 pass)
-- [ ] run only the extended XCUITest method (awaiting approval: the UI-test rule asks before any XCUITest)
+- [x] run only the extended XCUITest method (approved; passes)
 
 ### Task 4: Verify and document
-- [ ] every Solution Overview rule has a test
-- [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint` with zero findings
-- [ ] `.claude/rules/control-api.md` Session backgrounds: override layer, precedence, lifecycle, read-back
-- [ ] `site/commands.html` session background entry: `--pane` and `paneBackgrounds`
-- [ ] `plugins/agterm/skills/agterm/` SKILL.md, reference and examples: `--pane` and a two-agent label example
-- [ ] move this plan to `docs/plans/completed/`
+- [x] every Solution Overview rule has a test
+- [x] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint` with zero findings
+- [x] `.claude/rules/control-api.md` Session backgrounds: override layer, precedence, lifecycle, read-back
+- [x] `site/commands.html` session background entry: `--pane` and `paneBackgrounds`
+- [x] `plugins/agterm/skills/agterm/` SKILL.md, reference and examples: `--pane` and a two-agent label example
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
