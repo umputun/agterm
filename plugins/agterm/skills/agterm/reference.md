@@ -717,17 +717,15 @@ error keeps those names for compatibility.
   the requested presentation returns when Reduce Transparency is disabled. Errors on a malformed color
   (must be a `#rrggbb` hex value).
 - `session background clear [--target] [--window W]` — remove the session's background.
+  An image/text watermark makes the pane render OPAQUE, overriding window translucency (an image is
+  invisible at 0 background-opacity); a `color` instead honors the Settings window translucency.
 - All four take `--pane left|right|scratch` (aliases `primary`/`top`, `split`/`bottom`): set or clear that
-  pane's own override instead of the session default. A pane without one inherits the default; `clear
-  --pane` returns it to inheriting; set/clear without `--pane` never touch overrides. The override follows
-  its terminal (`session swap`, a closed left pane promoting the right); left/right persist, a scratch
-  override ends with that scratch terminal. Errors `session has no split pane` / `session has no scratch
-  terminal` when the pane does not exist, and `--pane must be left, right, or scratch` on a bad name.
-  Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. An image/text
-  watermark makes the pane render OPAQUE, overriding window translucency (an image is invisible at 0
-  background-opacity); a `color` instead honors the Settings window translucency. Read the current
-  background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
-  omitted when none).
+  pane's own override instead of the persisted session default. A pane without one inherits the default;
+  `clear --pane` returns it to inheriting; set/clear without `--pane` never touch overrides. The override
+  follows its terminal (`session swap`, a closed left pane promoting the right); left/right persist, a
+  scratch override ends with that scratch terminal. Errors `session has no split pane` / `session has no
+  scratch terminal` when the pane does not exist, and `--pane must be left, right, or scratch` on a bad
+  name. Read the default from `background` and pane overrides from `paneBackgrounds` in `tree --json`.
 - `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
