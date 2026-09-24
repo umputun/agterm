@@ -458,8 +458,10 @@ struct AgentHooksInstallTests {
     }
 
     @Test func opencodePluginPathsUseOpenCodePluginsDirectory() {
-        #expect(AgentHooksInstall.opencodePluginDirectory(home: "/Users/me")
-                == "/Users/me/.config/opencode/plugins")
+        #expect(AgentHooksInstall.OpenCode.configurationDirectory(home: "/Users/me") == "/Users/me/.config/opencode")
+        #expect(AgentHooksInstall.OpenCode.configurationDirectory(home: "~") == "~/.config/opencode")
+        #expect(AgentHooksInstall.OpenCode.path(home: "/Users/me")
+                == "/Users/me/.config/opencode/plugins/agterm-status.js")
         #expect(AgentHooksInstall.opencodePluginPath(home: "/Users/me")
                 == "/Users/me/.config/opencode/plugins/agterm-status.js")
         #expect(AgentHooksInstall.opencodePluginRelativePath == "opencode/agterm-status.js")
@@ -477,6 +479,39 @@ struct AgentHooksInstallTests {
             existingContents: "export const Other = async () => ({})\n"
         ))
         #expect(!AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: true, existingContents: nil))
+    }
+
+    @Test func opencodeV2UsesASeparateTUIEntrypointAndOwnershipMarker() throws {
+        let version = AgentHooksInstall.OpenCode.Version.v2
+        #expect(AgentHooksInstall.OpenCode.path(home: "/Users/me", version: version) == "/Users/me/.config/opencode/plugins/agterm-v2/tui.js")
+        #expect(AgentHooksInstall.OpenCode.relativePath(version: version) == "opencode/agterm-v2/tui.js")
+        #expect(AgentHooksInstall.OpenCode.marker(version: version) == "// agterm-opencode-v2-status-plugin")
+        #expect(AgentHooksInstall.OpenCode.mayOverwrite(fileExists: false, existingContents: nil, version: version))
+        #expect(!AgentHooksInstall.OpenCode.mayOverwrite(fileExists: true, existingContents: nil, version: version))
+        #expect(!AgentHooksInstall.OpenCode.mayOverwrite(fileExists: true, existingContents: AgentHooksInstall.opencodePluginMarker, version: version))
+        #expect(!AgentHooksInstall.OpenCode.mayOverwrite(fileExists: true, existingContents: "export default { id: 'user' }", version: version))
+        #expect(AgentHooksInstall.OpenCode.mayOverwrite(fileExists: true, existingContents: "// agterm-opencode-v2-status-plugin\n", version: version))
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let bundled = root.appendingPathComponent("agterm/Resources/agent-status/" + AgentHooksInstall.OpenCode.relativePath(version: version))
+        #expect(try String(contentsOf: bundled, encoding: .utf8).contains(AgentHooksInstall.OpenCode.marker(version: version)))
+    }
+
+    @Test func opencodeMajorVersionAcceptsReleaseAndPrereleaseOutput() {
+        let outputs: [(String, AgentHooksInstall.OpenCode.Version)] = [
+            ("1.18.31\n", .v1), ("2.0.12\n", .v2), (" v2.0.12 \n", .v2),
+            ("2.1.0-beta.3+build.7", .v2), ("1.19.0-dev", .v1),
+            ("opencode v2.0.12\n", .v2), ("opencode 2.0.12\n", .v2),
+        ]
+        for (output, expected) in outputs {
+            #expect(AgentHooksInstall.OpenCode.Version(versionOutput: output) == expected)
+        }
+    }
+
+    @Test func opencodeMajorVersionRequiresUnambiguousSupportedVersion() {
+        for output in ["", "3.0.0", "0.0.0-dev", "2", "2.0", "2.x.1", "opencode version 2.0.12", "warning\n2.0.12", "1.18.31\n2.0.12"] {
+            #expect(AgentHooksInstall.OpenCode.Version(versionOutput: output) == nil)
+        }
     }
 
     @Test func fishIntegrationExportsAnExistingAgentRegexOverride() throws {

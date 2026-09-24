@@ -3311,7 +3311,8 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               When OpenCode has already created
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode</span>,
-              the installer also adds a lifecycle plugin at
+              the installer runs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opencode --version</span>
+              and installs the matching plugin. OpenCode v1 uses
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-status.js</span>:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">busy</span>/<span
@@ -3334,6 +3335,21 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               is ignored so it does not double-fire with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>.
               Restart OpenCode after installing it.
+            </p>
+
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              For OpenCode v2, the installer uses
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-v2/tui.js</span>.
+              This CLI plugin reports the selected OpenCode session and its descendants into the current agterm pane,
+              even when several clients share a server. Background tabs, ancestors, and sibling sessions are excluded.
+              Running work, retries, and recovering compaction stay active; pending permissions and questions are blocked
+              until all are answered or cancelled. Success or user interruption completes only when the family is no longer busy;
+              a terminal failure stays blocked across sibling completion until work resumes.
+              Switching sessions, reconnecting, and unloading the plugin refresh or clear the indicator.
+              Detection uses agterm's PATH, also checking /usr/local/bin and /opt/homebrew/bin.
+              If the version cannot be determined, choose v1 or v2 in the installer, or skip OpenCode.
+              No npm dependencies or configuration edits are needed. Re-run the installer after switching major versions,
+              then restart OpenCode.
             </p>
 
             <h3

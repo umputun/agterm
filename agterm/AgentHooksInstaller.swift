@@ -14,6 +14,7 @@ import agtermCore
 @MainActor
 enum AgentHooksInstaller {
     private struct InstallError: Error { let message: String }
+    private static var isRunning = false
 
     /// The bundled `Contents/Resources/agent-status`, nil when the build skipped bundling (a bare
     /// `swift build`).
@@ -64,12 +65,12 @@ enum AgentHooksInstaller {
     }
 
     // OpenCode plugin-install outcome (same shape as Pi; host term is plugin, not extension).
-    private enum OpenCodeResult {
-        case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noOpenCode
+    enum OpenCodeResult {
+        case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noOpenCode, unknownVersion
 
         var isWarning: Bool {
             switch self {
-            case .userOwned, .unreadable, .writeFailed: return true
+            case .userOwned, .unreadable, .writeFailed, .unknownVersion: return true
             case .installed, .alreadyConfigured, .noOpenCode: return false
             }
         }
@@ -80,37 +81,42 @@ enum AgentHooksInstaller {
         let settingsSkipped: Bool
         let codex: CodexResult
         let pi: PiResult
-        let opencode: OpenCodeResult
+        let opencode: (version: AgentHooksInstall.OpenCode.Version?, result: OpenCodeResult)
 
         var isWarning: Bool {
-            settingsSkipped || codex.isWarning || pi.isWarning || opencode.isWarning
+            settingsSkipped || codex.isWarning || pi.isWarning || opencode.result.isWarning
         }
     }
 
     /// Run the install and show a result alert.
     static func run() {
-        do {
-            let outcome = try install()
-            present(style: outcome.isWarning ? .warning : .informational,
-                    title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                    text: successText(outcome),
-                    docs: outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
-        } catch let error as InstallError {
-            present(style: .warning, title: "Install Failed", text: error.message)
-        } catch {
-            present(style: .warning, title: "Install Failed", text: error.localizedDescription)
+        guard !isRunning else { return }
+        isRunning = true
+        Task {
+            defer { isRunning = false }
+            do {
+                let outcome = try await install()
+                present(style: outcome.isWarning ? .warning : .informational,
+                        title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
+                        text: successText(outcome),
+                        docs: outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
+            } catch let error as InstallError {
+                present(style: .warning, title: "Install Failed", text: error.message)
+            } catch {
+                present(style: .warning, title: "Install Failed", text: error.localizedDescription)
+            }
         }
     }
 
     // every step runs regardless of an earlier one's outcome; each reports its own result.
-    private static func install() throws -> InstallOutcome {
+    private static func install() async throws -> InstallOutcome {
         try copyBundledFolder()
         try bakeAgtermctlPath()
         let settingsSkipped = try mergeClaudeSettings()
         try appendShellRC()
         let codex = try mergeCodexConfig()
         let pi = try installPiExtension()
-        let opencode = try installOpenCodePlugin()
+        let opencode = try await installOpenCodePlugin()
         return InstallOutcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, opencode: opencode)
     }
 
@@ -263,34 +269,39 @@ enum AgentHooksInstaller {
         return .installed
     }
 
-    // install OpenCode's auto-discovered global plugin only when ~/.config/opencode exists. same ownership /
+    // install OpenCode's auto-discovered global plugin only when its config exists. same ownership /
     // degrade-to-warning policy as Pi, and no backup.
-    private static func installOpenCodePlugin() throws -> OpenCodeResult {
+    static func installOpenCodePlugin(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        scriptDirectory: URL = destinationFolder,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) async throws -> (version: AgentHooksInstall.OpenCode.Version?, result: OpenCodeResult) {
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        let opencodeDirectory = home.appendingPathComponent(".config/opencode")
-        guard fm.fileExists(atPath: opencodeDirectory.path) else { return .noOpenCode }
+        guard fm.fileExists(atPath: AgentHooksInstall.OpenCode.configurationDirectory(home: home.path)) else { return (nil, .noOpenCode) }
+        var detected = await OpenCodeVersionProbe.detect(environment: environment)
+        if detected == nil { detected = chooseOpenCodeVersion() }
+        guard let version = detected else { return (nil, .unknownVersion) }
 
-        let source = destinationFolder.appendingPathComponent(AgentHooksInstall.opencodePluginRelativePath)
+        let source = scriptDirectory.appendingPathComponent(AgentHooksInstall.OpenCode.relativePath(version: version))
         guard fm.fileExists(atPath: source.path) else {
-            throw InstallError(message: "The OpenCode status plugin is not bundled in this build.")
+            throw InstallError(message: "The OpenCode \(version.rawValue) status plugin is not bundled in this build.")
         }
         let sourceContents = try String(contentsOf: source, encoding: .utf8)
-        guard sourceContents.contains(AgentHooksInstall.opencodePluginMarker) else {
-            throw InstallError(message: "The bundled OpenCode status plugin is missing its ownership marker.")
+        guard sourceContents.contains(AgentHooksInstall.OpenCode.marker(version: version)) else {
+            throw InstallError(message: "The bundled OpenCode \(version.rawValue) status plugin is missing its ownership marker.")
         }
 
-        let destination = URL(fileURLWithPath: AgentHooksInstall.opencodePluginPath(home: home.path))
+        let destination = URL(fileURLWithPath: AgentHooksInstall.OpenCode.path(home: home.path, version: version))
         let existing: String?
         do {
             existing = try readExistingConfig(at: destination)
         } catch {
-            return .unreadable
+            return (version, .unreadable)
         }
-        guard AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: existing != nil, existingContents: existing) else {
-            return .userOwned
+        guard AgentHooksInstall.OpenCode.mayOverwrite(fileExists: existing != nil, existingContents: existing, version: version) else {
+            return (version, .userOwned)
         }
-        guard existing != sourceContents else { return .alreadyConfigured }
+        guard existing != sourceContents else { return (version, .alreadyConfigured) }
 
         do {
             try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -298,9 +309,9 @@ enum AgentHooksInstaller {
             let mode = AgentHooksInstall.posixMode(ofFile: target.path)
             try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
         } catch {
-            return .writeFailed
+            return (version, .writeFailed)
         }
-        return .installed
+        return (version, .installed)
     }
 
     // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when anything changes.
@@ -348,7 +359,7 @@ enum AgentHooksInstaller {
         \(claudeLine)
         \(codexText(outcome.codex))
         \(piText(outcome.pi))
-        \(opencodeText(outcome.opencode))
+        \(opencodeText(outcome.opencode.result, version: outcome.opencode.version))
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
         Open a new terminal for the shell integration to take effect.
@@ -397,22 +408,25 @@ enum AgentHooksInstaller {
     }
 
     // OpenCode's plugin-install outcome. plugins load on the next OpenCode start.
-    private static func opencodeText(_ opencode: OpenCodeResult) -> String {
+    static func opencodeText(_ opencode: OpenCodeResult, version: AgentHooksInstall.OpenCode.Version?) -> String {
+        let name = version.map { "OpenCode \($0.rawValue)" } ?? "OpenCode"
+        let directory = AgentHooksInstall.OpenCode.configurationDirectory(home: "~")
+        let path = version.map { AgentHooksInstall.OpenCode.path(home: "~", version: $0) } ?? directory + "/plugins/"
         switch opencode {
         case .installed:
-            return "OpenCode lifecycle plugin installed to ~/.config/opencode/plugins/agterm-status.js. Restart OpenCode."
+            return "\(name) status plugin installed to \(path). Restart OpenCode."
         case .alreadyConfigured:
-            return "OpenCode lifecycle plugin is already current at ~/.config/opencode/plugins/agterm-status.js."
+            return "\(name) status plugin is already current at \(path)."
         case .userOwned:
-            return "~/.config/opencode/plugins/agterm-status.js is user-owned, so agterm left it untouched."
+            return "\(path) is user-owned, so the \(name) plugin was left untouched."
         case .unreadable:
-            return "~/.config/opencode/plugins/agterm-status.js exists but could not be read, so agterm left it untouched."
+            return "\(path) could not be read, so the \(name) plugin was left untouched."
         case .writeFailed:
-            return "OpenCode's lifecycle plugin couldn't be written to ~/.config/opencode/plugins/ (check that directory's permissions), so it was skipped."
+            return "\(name) plugin couldn't be written to \(path) (check permissions), so it was skipped."
         case .noOpenCode:
-            return "No ~/.config/opencode found, so OpenCode's lifecycle plugin was skipped. "
-                + "Coarse shell detection for opencode is off by default — status comes from the lifecycle plugin "
-                + "once ~/.config/opencode exists. Start OpenCode once, then run this again."
+            return "No \(directory) found, so the \(name) plugin was skipped. Start OpenCode once, then run this again."
+        case .unknownVersion:
+            return "OpenCode version could not be determined, so its status plugin was skipped. Run this again and choose the installed version."
         }
     }
 
@@ -432,6 +446,25 @@ enum AgentHooksInstaller {
             alert.addButton(withTitle: "Open Docs")
         }
         return alert
+    }
+
+    static func makeOpenCodeVersionAlert() -> NSAlert {
+        let alert = NSAlert()
+        alert.messageText = "Choose OpenCode Version"
+        alert.informativeText = "opencode --version did not identify a supported version. Choose the version you use, or skip OpenCode and install the other hooks."
+        alert.addButton(withTitle: "Skip OpenCode")
+        for version in AgentHooksInstall.OpenCode.Version.allCases {
+            alert.addButton(withTitle: "OpenCode \(version.rawValue)")
+        }
+        return alert
+    }
+
+    private static func chooseOpenCodeVersion() -> AgentHooksInstall.OpenCode.Version? {
+        let response = makeOpenCodeVersionAlert().runModal()
+        let index = response.rawValue - NSApplication.ModalResponse.alertSecondButtonReturn.rawValue
+        let versions = AgentHooksInstall.OpenCode.Version.allCases
+        guard versions.indices.contains(index) else { return nil }
+        return versions[index]
     }
 
     private static func present(style: NSAlert.Style, title: String, text: String, docs: URL? = nil) {
