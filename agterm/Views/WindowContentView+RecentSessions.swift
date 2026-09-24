@@ -75,7 +75,8 @@ extension WindowContentView {
         if let session = store.session(withID: id) {
             SessionPopoverRow(
                 title: session.displayName,
-                subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)",
+                subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
+                remote: session.remoteHost != nil,
                 status: nil,
                 statusColorHex: nil,
                 statusShape: nil,
@@ -157,6 +158,7 @@ extension WindowContentView {
                     SessionPopoverRow(
                         title: entry.session.displayName,
                         subtitle: library.attentionSubtitle(entry),
+                        remote: entry.session.remoteHost != nil,
                         status: entry.session.agentIndicator.status,
                         statusColorHex: entry.session.agentIndicator.color,
                         statusShape: entry.session.agentIndicator.shape,
@@ -210,6 +212,7 @@ extension WindowContentView {
 private struct SessionPopoverRow: View {
     let title: String
     let subtitle: String
+    let remote: Bool
     let status: AgentStatus?
     let statusColorHex: String?
     let statusShape: StatusShape?
@@ -223,7 +226,7 @@ private struct SessionPopoverRow: View {
     var body: some View {
         Button(action: onSelect) {
             SessionSwitcherRow(title: title, subtitle: subtitle, foreground: foreground,
-                               status: status, statusColorHex: statusColorHex, statusShape: statusShape)
+                               status: status, statusColorHex: statusColorHex, statusShape: statusShape, remote: remote)
                 .background(hovering && isEnabled ? hoverColor : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())

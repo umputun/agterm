@@ -208,7 +208,8 @@ struct SessionSwitcherOverlay: View {
     @ViewBuilder private func row(_ id: UUID, selected: Bool) -> some View {
         if let session = store.session(withID: id) {
             SessionSwitcherRow(title: session.displayName,
-                               subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)")
+                               subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
+                               remote: session.remoteHost != nil)
                 .background(selected ? Color.accentColor.opacity(0.25) : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
@@ -238,6 +239,8 @@ struct SessionSwitcherRow: View {
     var status: AgentStatus?
     var statusColorHex: String?
     var statusShape: StatusShape?
+    /// Leads the title with the sidebar's cloud glyph, for a session attached from another Mac.
+    var remote = false
 
     /// Read from the non-observable `GhosttyApp` — both the Ctrl-Tab overlay and the popovers mount fresh
     /// on every open, so neither renders a stale size.
@@ -251,9 +254,12 @@ struct SessionSwitcherRow: View {
         HStack {
             if let status { StatusGlyph(status: status, colorHex: statusColorHex, shape: statusShape) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: metrics.base))
-                    .foregroundStyle(foreground ?? Color.primary)
+                HStack(spacing: metrics.scaled(4)) {
+                    if remote { Image(systemName: "cloud").accessibilityLabel("Remote") }
+                    Text(title)
+                }
+                .font(.system(size: metrics.base))
+                .foregroundStyle(foreground ?? Color.primary)
                 Text(subtitle)
                     .font(.system(size: metrics.secondary))
                     .foregroundStyle(foreground.map { $0.opacity(0.6) } ?? Color.secondary)

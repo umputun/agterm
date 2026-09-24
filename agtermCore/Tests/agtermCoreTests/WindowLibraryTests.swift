@@ -1933,6 +1933,15 @@ final class WindowLibraryTests {
         #expect(library.attentionSubtitle(entry) == "workspace 1 · \(session.subtitleDetail)")
     }
 
+    @Test func attentionSubtitleNamesTheHostOfARemoteSession() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        let entry = try #require(library.attentionAcrossWindows.first)
+        #expect(library.attentionSubtitle(entry) == "workspace 1 · buildbox · \(session.subtitleDetail)")
+    }
+
     private final class Flag: @unchecked Sendable {
         private(set) var isSet = false
         func set() { isSet = true }

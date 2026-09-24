@@ -233,6 +233,14 @@ struct SessionTests {
         #expect(session.subtitleDetail == "/Users/user")
     }
 
+    @Test func switcherDetailLeadsWithHostOnlyForRemoteSession() {
+        let local = Session(initialCwd: "/Users/user/dev/foo")
+        #expect(local.switcherDetail == "/Users/user/dev/foo")
+        let remote = Session(initialCwd: "/Users/user", remoteHost: "192.168.1.33")
+        remote.currentCwd = "/Users/user/.dot-files"
+        #expect(remote.switcherDetail == "192.168.1.33 · /Users/user/.dot-files")
+    }
+
     @Test func subtitleDetailUsesCwdForPlainLocalSession() {
         let session = Session(initialCwd: "/Users/user/dev/foo")
         #expect(session.subtitleDetail == "/Users/user/dev/foo")

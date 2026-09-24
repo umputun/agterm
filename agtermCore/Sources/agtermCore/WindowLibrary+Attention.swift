@@ -28,7 +28,7 @@ extension WindowLibrary {
     /// to say where it lives.
     public func attentionSubtitle(_ entry: AttentionEntry) -> String {
         let workspace = stores[entry.window.id]?.workspace(forSession: entry.session.id)?.name ?? ""
-        let detail = "\(workspace) · \(entry.session.subtitleDetail)"
+        let detail = "\(workspace) · \(entry.session.switcherDetail)"
         return openIDs().count > 1 ? "\(entry.window.name) · \(detail)" : detail
     }
 }
