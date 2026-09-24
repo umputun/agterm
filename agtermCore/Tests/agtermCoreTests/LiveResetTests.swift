@@ -357,6 +357,28 @@ struct LiveResetTests {
         #expect(!text.body.lowercased().contains("zmx"))
     }
 
+    @Test(arguments: [
+        (sessions: 1, outdated: 1, sentence: "1 live session will be reset. It predates the last Live sessions update"),
+        (sessions: 3, outdated: 3, sentence: "3 live sessions will be reset. They all predate the last Live sessions update"),
+        (sessions: 3, outdated: 1, sentence: "3 live sessions will be reset. 1 of them predates the last Live sessions update"),
+        (sessions: 3, outdated: 2, sentence: "3 live sessions will be reset. 2 of them predate the last Live sessions update"),
+    ])
+    func dialogTextNamesTheSessionsThatPredateTheUpdate(sessions: Int, outdated: Int, sentence: String) {
+        let text = LiveReset.dialogText(sessionCount: sessions, outdatedSessions: outdated)
+        #expect(text.body.hasPrefix(sentence))
+        #expect(text.body.contains("will be recreated on the current one. Agterm quits and reopens itself"))
+        #expect(!text.body.lowercased().contains("zmx"))
+    }
+
+    @Test func outdatedSessionCountCountsASplitSessionOnce() {
+        let selection = LiveReset.Selection(targets: [Self.target(Self.paneA, leader: 10, reason: .outdated),
+                                                      Self.target(Self.paneASplit, leader: 11, reason: .outdated),
+                                                      Self.target(Self.paneB, session: Self.sessionB, leader: 12)],
+                                            inventoryComplete: true)
+        #expect(selection.sessionCount == 2)
+        #expect(selection.outdatedSessionCount == 1)
+    }
+
     @Test func notificationIsSilentWhenEverySessionWasReset() {
         let outcome = LiveReset.Outcome(panes: .init(confirmed: 2, killed: 2, gone: 0, skipped: 0), unconfirmed: [],
                                         sessions: .init(affected: 2, reset: 2, partial: 0, unconfirmed: 0), inventoryFailed: false)

@@ -176,6 +176,23 @@ struct ZmxCommandsTests {
         #expect(rendered.contains("win \(claim.windowID.uuidString.prefix(8))"))
     }
 
+    @Test func aDaemonCreatedBeforeTheCutoffIsMarkedOutdated() throws {
+        let old = UUID(), current = UUID()
+        let output = """
+        name=\(ZmxSupport.daemonName(for: old))\tpid=10\tclients=1\tcreated=999\tcwd=/tmp
+        name=\(ZmxSupport.daemonName(for: current))\tpid=11\tclients=1\tcreated=1000\tcwd=/tmp
+        """
+        let result = ZmxInventory.join(observed: try ZmxListParser.parse(output), claims: [], inventoryComplete: false)
+        let status = ControlRestoreStatus(configured: .live, requestedAtLaunch: .live, active: .live, unavailableReason: nil)
+        let inventory = ControlZmxInventory(restore: status, result: result, outdatedBefore: Date(timeIntervalSince1970: 1000))
+
+        let flags = Dictionary(uniqueKeysWithValues: inventory.entries.map { ($0.daemon, $0.outdated) })
+        #expect(flags == [ZmxSupport.daemonName(for: old): true, ZmxSupport.daemonName(for: current): Bool?.none])
+        let rendered = SocketClient.formatZmx(inventory).split(separator: "\n")
+        #expect(rendered.contains { $0.hasPrefix(ZmxSupport.daemonName(for: old)) && $0.contains("running outdated") })
+        #expect(rendered.contains { $0.hasPrefix(ZmxSupport.daemonName(for: current)) && !$0.contains("outdated") })
+    }
+
     @Test func anIncompleteInventorySaysSoBeforeItsRows() {
         let status = ControlRestoreStatus(configured: .none, requestedAtLaunch: .none, active: .none,
                                           unavailableReason: nil)

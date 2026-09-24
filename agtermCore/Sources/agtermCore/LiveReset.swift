@@ -66,6 +66,7 @@ public enum LiveReset {
         }
 
         public var sessionCount: Int { Set(targets.map(\.sessionID)).count }
+        public var outdatedSessionCount: Int { Set(targets.filter { $0.reason == .outdated }.map(\.sessionID)).count }
     }
 
     /// select picks a pane created before `outdatedBefore` as outdated whatever its attribution, and
@@ -93,7 +94,7 @@ public enum LiveReset {
         return Selection(targets: targets, inventoryComplete: claims.complete && !conflicted)
     }
 
-    static func isOutdated(created: Date?, cutoff: Date?) -> Bool {
+    public static func isOutdated(created: Date?, cutoff: Date?) -> Bool {
         guard let created, let cutoff else { return false }
         return created < cutoff
     }
@@ -225,12 +226,20 @@ public enum LiveReset {
     public static let markerFilename = "live-reset.json"
     public static let consumedFilename = "live-reset.consumed.json"
 
-    public static func dialogText(sessionCount: Int) -> (title: String, body: String) {
+    public static func dialogText(sessionCount: Int, outdatedSessions: Int = 0) -> (title: String, body: String) {
         let noun = sessionCount == 1 ? "live session" : "live sessions"
         return (title: "Reset Live Sessions?",
-                body: "\(sessionCount) \(noun) will be reset. Agterm quits and reopens itself right away with your "
+                body: "\(sessionCount) \(noun) will be reset. " + outdatedSentence(outdatedSessions, of: sessionCount)
+                    + "Agterm quits and reopens itself right away with your "
                     + "sessions and layout. Commands that were running in those sessions are started again where "
                     + "possible; other work running in them stops, and agent conversations may need to be resumed by hand.")
+    }
+
+    private static func outdatedSentence(_ outdated: Int, of total: Int) -> String {
+        guard outdated > 0 else { return "" }
+        let tail = "the last Live sessions update and will be recreated on the current one. "
+        if outdated == total { return (total == 1 ? "It predates " : "They all predate ") + tail }
+        return outdated == 1 ? "1 of them predates " + tail : "\(outdated) of them predate " + tail
     }
 
     public static func notificationText(outcome: Outcome) -> String? {

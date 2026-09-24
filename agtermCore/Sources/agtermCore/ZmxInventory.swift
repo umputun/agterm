@@ -87,6 +87,7 @@ public struct ZmxInventoryRow: Equatable, Sendable {
     public let leaderPID: Int32?
     /// Nil for a foreign daemon, an orphan, and a conflicted name — no single pane owns any of them.
     public let claim: ZmxPaneClaim?
+    public let createdAt: Date?
 }
 
 /// The joined inventory. `inventoryComplete` is false when the claim walk could not account for
@@ -133,12 +134,14 @@ public enum ZmxInventory {
         let observation: ZmxDaemonObservation
         let clients: Int?
         let leaderPID: Int32?
+        let createdAt: Date?
 
         init(_ record: ZmxSessionRecord) {
             daemon = record.name
             observation = record.clients == nil ? .unreadable : .running
             clients = record.clients
             leaderPID = record.leaderPID
+            createdAt = record.createdAt
         }
 
         init(absent daemon: String) {
@@ -146,6 +149,7 @@ public enum ZmxInventory {
             observation = .absent
             clients = nil
             leaderPID = nil
+            createdAt = nil
         }
 
         func row(claims: [ZmxPaneClaim], isConflicted: Bool, inventoryComplete: Bool) -> ZmxInventoryRow {
@@ -164,7 +168,7 @@ public enum ZmxInventory {
                 state = .foreign
             }
             return ZmxInventoryRow(daemon: daemon, state: state, observation: observation,
-                                   clients: clients, leaderPID: leaderPID, claim: claim)
+                                   clients: clients, leaderPID: leaderPID, claim: claim, createdAt: createdAt)
         }
     }
 }

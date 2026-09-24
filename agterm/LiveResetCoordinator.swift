@@ -45,8 +45,7 @@ final class LiveResetCoordinator {
     var activeMode: () -> RestoreMode
     /// How a confirmed reset ends the process; injectable so a hosted test can count it instead.
     var terminate: () -> Void
-    /// The dialog, given the session count; injectable so a hosted test can answer it.
-    var confirm: @MainActor (Int) -> Bool = LiveResetCoordinator.confirmAlert
+    var confirm: @MainActor (LiveReset.Selection) -> Bool = LiveResetCoordinator.confirmAlert
     /// How a menu refusal reaches the user; injectable so a hosted test can read it.
     var presentRefusal: @MainActor (Refusal) -> Void = LiveResetCoordinator.refusalAlert
     private(set) var pending: LiveReset.Selection?
@@ -76,7 +75,7 @@ final class LiveResetCoordinator {
         guard let selection = selection() else { return .refused(.listingFailed) }
         guard selection.inventoryComplete else { return .refused(.inventoryIncomplete) }
         guard !selection.targets.isEmpty else { return .refused(.nothingToReset) }
-        if !confirmed, !confirm(selection.sessionCount) { return .cancelled }
+        if !confirmed, !confirm(selection) { return .cancelled }
         pending = selection
         return .confirmed(selection)
     }
@@ -95,8 +94,8 @@ final class LiveResetCoordinator {
         terminate()
     }
 
-    private static func confirmAlert(sessionCount: Int) -> Bool {
-        let text = LiveReset.dialogText(sessionCount: sessionCount)
+    private static func confirmAlert(_ selection: LiveReset.Selection) -> Bool {
+        let text = LiveReset.dialogText(sessionCount: selection.sessionCount, outdatedSessions: selection.outdatedSessionCount)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = text.title

@@ -56,9 +56,11 @@ extension ControlServer {
         case .cancelled:
             return ControlResponse(ok: false, error: "zmx.reset was cancelled")
         case .confirmed(let selection):
-            let status = ControlLiveResetStatus(sessions: selection.sessionCount, panes: selection.targets.count, pending: true)
-            return ControlResponse(ok: true, result: ControlResult(text: LiveReset.dialogText(sessionCount: selection.sessionCount).body,
-                                                                    liveReset: status))
+            let outdated = selection.outdatedSessionCount
+            let status = ControlLiveResetStatus(sessions: selection.sessionCount, panes: selection.targets.count, pending: true,
+                                                outdated: outdated > 0 ? outdated : nil)
+            let text = LiveReset.dialogText(sessionCount: selection.sessionCount, outdatedSessions: outdated).body
+            return ControlResponse(ok: true, result: ControlResult(text: text, liveReset: status))
         }
     }
 
@@ -83,8 +85,8 @@ extension ControlServer {
         let walk = library.paneClaims()
         let result = ZmxInventory.join(observed: observed, claims: walk.claims,
                                        inventoryComplete: walk.complete)
-        let inventory = ControlZmxInventory(restore: restoreStatus(), result: result,
-                                            endpoint: client.endpoint, liveReset: liveResetReadback())
+        let inventory = ControlZmxInventory(restore: restoreStatus(), result: result, endpoint: client.endpoint,
+                                            liveReset: liveResetReadback(), outdatedBefore: zmxOutdatedBefore)
         return ControlResponse(ok: true, result: ControlResult(zmx: inventory))
     }
 }
@@ -141,7 +143,8 @@ extension ControlServer {
                                             result: ZmxInventory.join(observed: observed,
                                                                       claims: walk.claims,
                                                                       inventoryComplete: walk.complete),
-                                            endpoint: client.endpoint, liveReset: liveResetReadback())
+                                            endpoint: client.endpoint, liveReset: liveResetReadback(),
+                                            outdatedBefore: zmxOutdatedBefore)
         // a live store IS the open-window test, the same one `openCounts` uses: a closed window has no
         // store, and its panes are not attachable from here anyway
         let windows = library.windows.compactMap { entry in

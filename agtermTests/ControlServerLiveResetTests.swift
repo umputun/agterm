@@ -109,6 +109,35 @@ final class ControlServerLiveResetTests: XCTestCase {
                                                             leaderPID: 210, reason: .outdated)])
     }
 
+    func testResetReplyNamesTheOutdatedSessions() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let rows = "name=\(ZmxSupport.daemonName(for: session.paneIdentity))\tpid=210\tclients=1\tcreated=999"
+        let supervised = LiveAttributionProbe(responsible: { _ in .live(100) }, hostPID: { _ in 100 }, appPID: 300)
+        let server = makeServer(liveReset: makeCoordinator(), runner: { _ in rows }, probe: supervised,
+                                outdatedBefore: Date(timeIntervalSince1970: 1000))
+
+        let response = server.resetLiveSessions()
+
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(response.result?.liveReset, ControlLiveResetStatus(sessions: 1, panes: 1, pending: true, outdated: 1))
+        XCTAssertTrue(response.result?.text?.contains("It predates the last Live sessions update") == true)
+    }
+
+    func testZmxListMarksAnOutdatedDaemon() throws {
+        let fixture = try addOrphanedSession()
+        let server = makeServer(liveReset: makeCoordinator(), runner: { _ in fixture.rows + "\tcreated=999" },
+                                outdatedBefore: Date(timeIntervalSince1970: 1000))
+
+        let response = server.listZmxDaemons()
+
+        let entries = try XCTUnwrap(response.result?.zmx?.entries)
+        let daemon = ZmxSupport.daemonName(for: fixture.session.paneIdentity)
+        XCTAssertEqual(entries.first { $0.daemon == daemon }?.outdated, true)
+        XCTAssertEqual(entries.filter { $0.daemon != daemon }.compactMap(\.outdated), [])
+    }
+
     func testLiveResetSelectionIsNilWhenTheListingFails() {
         XCTAssertNil(makeServer(liveReset: makeCoordinator(), runner: { _ in throw ZmxClient.CommandError.timedOut }).liveResetSelection())
     }

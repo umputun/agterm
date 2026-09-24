@@ -1920,6 +1920,24 @@ struct ControlProtocolTests {
         #expect(decoded.result?.liveReset?.pending == true)
     }
 
+    @Test func liveResetStatusOmitsOutdatedUnlessSet() throws {
+        let plain = try JSONEncoder().encode(ControlLiveResetStatus(sessions: 2, panes: 3, pending: true))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("outdated"))
+        let status = ControlLiveResetStatus(sessions: 2, panes: 3, pending: true, outdated: 1)
+        #expect(try JSONDecoder().decode(ControlLiveResetStatus.self, from: JSONEncoder().encode(status)) == status)
+    }
+
+    @Test func zmxEntryCarriesOutdatedOnlyWhenTrue() throws {
+        let row = ZmxInventoryRow(daemon: "agterm-a", state: .orphan, observation: .running, clients: 0, leaderPID: 1,
+                                  claim: nil, createdAt: Date(timeIntervalSince1970: 999))
+        let old = ControlZmxEntry(row: row, outdatedBefore: Date(timeIntervalSince1970: 1000))
+        #expect(old.outdated == true)
+        let current = ControlZmxEntry(row: row, outdatedBefore: Date(timeIntervalSince1970: 999))
+        #expect(current.outdated == nil)
+        #expect(!String(decoding: try JSONEncoder().encode(current), as: UTF8.self).contains("outdated"))
+        #expect(ControlZmxEntry(row: row).outdated == nil)
+    }
+
     @Test func liveResetReadbackRoundTrips() throws {
         let readback = ControlLiveResetReadback(pending: 3, last: Self.liveResetOutcome)
         let tree = ControlTree(workspaces: [], liveReset: readback)

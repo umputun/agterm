@@ -150,14 +150,19 @@
 - Modify: matching tests (`LiveResetTests`, `ZmxInventoryTests`, agtermctlKit tests, `LiveResetCoordinatorTests`,
   `ControlServerZmxTests`)
 
-- [ ] dialog body counts sessions and names how many predate the last zmx update; `zmx.reset`'s `text`
+- [x] dialog body counts sessions and names how many predate the last zmx update; `zmx.reset`'s `text`
       carries the same body
-- [ ] `ControlLiveResetStatus.outdated` in sessions, and an `outdated` flag carried from the observed record
+- [x] `ControlLiveResetStatus.outdated` in sessions, and an `outdated` flag carried from the observed record
       through the inventory join to `zmx list` daemon rows, omitted when false
-- [ ] `agtermctl zmx list` human output marks outdated rows
-- [ ] write tests: dialog text with and without outdated sessions (a split session counts once), payload
+- [x] `agtermctl zmx list` human output marks outdated rows
+- [x] ➕ the join carries only `createdAt` on `ZmxInventoryRow`; the cutoff is applied in
+      `ControlZmxEntry.init(row:outdatedBefore:)` via `ControlZmxInventory`, so the four `join` call sites stay
+      unchanged and only the two `ControlZmxInventory` builders pass `zmxOutdatedBefore`
+- [x] ➕ the dialog says "predate the last Live sessions update": the existing dialog test keeps zmx out of
+      user text
+- [x] write tests: dialog text with and without outdated sessions (a split session counts once), payload
       encoding and omission, and `zmx list` rows built from real `zmx list` output
-- [ ] run the touched suites - must pass before task 4
+- [x] run the touched suites - must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 - [ ] a supervised pane created before the recorded change is offered by the menu and by `zmx.reset --force`

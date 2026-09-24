@@ -42,7 +42,7 @@ final class LiveResetCoordinatorTests: XCTestCase {
         let log = Log()
         let coordinator = LiveResetCoordinator(settingsModel: settingsModel, selection: { selection },
                                                activeMode: { .live }, terminate: { log.terminations += 1 })
-        coordinator.confirm = { log.confirmations.append($0); return answer }
+        coordinator.confirm = { log.confirmations.append($0.sessionCount); return answer }
         coordinator.presentRefusal = { log.refusals.append($0) }
         return (coordinator, log)
     }

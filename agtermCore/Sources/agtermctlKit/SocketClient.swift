@@ -364,7 +364,8 @@ struct SocketClient {
             owner = "\(shortID(sessionID)) \(path)\(pane)\(windowID)"
         }
         let state = entry.windowState.map { "\(entry.state) [\($0) window]" } ?? entry.state
-        return "\(entry.daemon)  \(state)  \(entry.observation)  \(clients)  \(owner)"
+        let observation = entry.outdated == true ? "\(entry.observation) outdated" : entry.observation
+        return "\(entry.daemon)  \(state)  \(observation)  \(clients)  \(owner)"
     }
 
     /// The prefix a caller pastes into `--target`/`--window`. Eight hex digits is not GUARANTEED unique,

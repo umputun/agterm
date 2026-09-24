@@ -37,6 +37,15 @@ struct ZmxInventoryTests {
         #expect(row.claim?.sessionName == "build")
     }
 
+    @Test func rowsCarryTheObservedCreationTimeAndNoneForAnAbsentDaemon() throws {
+        let observed = [ZmxSessionRecord(name: Self.nameA, clients: 1, leaderPID: 42, createdAt: Date(timeIntervalSince1970: 7))]
+        let absent = UUID()
+        let result = ZmxInventory.join(observed: observed, claims: [Self.claim(Self.paneA), Self.claim(absent)],
+                                       inventoryComplete: true)
+        #expect(try Self.row(result, Self.nameA).createdAt == Date(timeIntervalSince1970: 7))
+        #expect(try Self.row(result, ZmxSupport.daemonName(for: absent)).createdAt == nil)
+    }
+
     @Test func unmatchedDaemonIsOrphanOnlyWhenTheInventoryIsComplete() throws {
         let observed = [ZmxSessionRecord(name: Self.nameA, clients: 0, leaderPID: 42)]
         let complete = ZmxInventory.join(observed: observed, claims: [], inventoryComplete: true)
