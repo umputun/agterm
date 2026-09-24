@@ -27,13 +27,53 @@ public enum AgentHooksInstall {
     /// extension, preserving a user-authored integration.
     public static let piExtensionMarker = "// agterm-pi-status-extension"
 
-    /// The bundled OpenCode plugin's path relative to the agent-status package, and its destination filename.
-    public static let opencodePluginRelativePath = "opencode/agterm-status.js"
-    static let opencodePluginName = "agterm-status.js"
+    public static let opencodePluginRelativePath = OpenCode.relativePath()
+    public static let opencodePluginMarker = OpenCode.marker()
 
-    /// Ownership sentinel in the bundled OpenCode plugin, same policy as `piExtensionMarker`. Named `*Plugin*`
-    /// (not `*Extension*`) because OpenCode's host term is plugin — a deliberate divergence from `piExtension*`.
-    public static let opencodePluginMarker = "// agterm-opencode-status-plugin"
+    public enum OpenCode {
+        public enum Version: String, CaseIterable, Sendable {
+            case v1, v2
+
+            public init?(versionOutput: String) {
+                var output = versionOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                let prefix = "opencode "
+                if output.hasPrefix(prefix) { output.removeFirst(prefix.count) }
+                let pattern = #"^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"#
+                guard output.range(of: pattern, options: .regularExpression) != nil else { return nil }
+                let version = output.hasPrefix("v") ? String(output.dropFirst()) : output
+                switch version.split(separator: ".").first {
+                case "1": self = .v1
+                case "2": self = .v2
+                default: return nil
+                }
+            }
+        }
+
+        public static func relativePath(version: Version = .v1) -> String {
+            "opencode/" + pluginName(for: version)
+        }
+
+        public static func marker(version: Version = .v1) -> String {
+            version == .v1 ? "// agterm-opencode-status-plugin" : "// agterm-opencode-v2-status-plugin"
+        }
+
+        public static func configurationDirectory(home: String) -> String {
+            home + "/.config/opencode"
+        }
+
+        public static func path(home: String, version: Version = .v1) -> String {
+            configurationDirectory(home: home) + "/plugins/" + pluginName(for: version)
+        }
+
+        public static func mayOverwrite(fileExists: Bool, existingContents: String?, version: Version = .v1) -> Bool {
+            guard fileExists else { return true }
+            return existingContents?.contains(marker(version: version)) == true
+        }
+
+        private static func pluginName(for version: Version) -> String {
+            version == .v1 ? "agterm-status.js" : "agterm-v2/tui.js"
+        }
+    }
 
     /// The shell integration scripts sourced from the user's rc files / config.fish, relative to the script
     /// directory.
@@ -89,20 +129,14 @@ public enum AgentHooksInstall {
         return existingContents.contains(piExtensionMarker)
     }
 
-    /// The destination directory for OpenCode's auto-discovered global plugins.
-    static func opencodePluginDirectory(home: String) -> String {
-        home + "/.config/opencode/plugins"
-    }
-
+    // These wrappers and the legacy constants above preserve agterm-linux's versionless v1 API.
+    // Removing them breaks its integration installer; macOS callers use OpenCode with an explicit version.
     public static func opencodePluginPath(home: String) -> String {
-        opencodePluginDirectory(home: home) + "/" + opencodePluginName
+        OpenCode.path(home: home)
     }
 
-    /// Whether the OpenCode plugin destination is safe to replace; same ownership policy as Pi.
     public static func mayOverwriteOpenCodePlugin(fileExists: Bool, existingContents: String?) -> Bool {
-        guard fileExists else { return true }
-        guard let existingContents else { return false }
-        return existingContents.contains(opencodePluginMarker)
+        OpenCode.mayOverwrite(fileExists: fileExists, existingContents: existingContents)
     }
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid JSON

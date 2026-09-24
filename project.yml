@@ -198,9 +198,14 @@ targets:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - agtermUITests
+      - path: agtermUITests
+        excludes:
+          - InstallerHost
     dependencies:
       - target: agterm
+      - target: OpenCodeInstallerTestHost
+        link: false
+        embed: false
       - package: agtermCore
     settings:
       base:
@@ -214,6 +219,25 @@ targets:
         # the runner is ad-hoc signed; hardened runtime on the test bundle causes
         # a Team-ID mismatch when the runner loads the xctest bundle.
         ENABLE_HARDENED_RUNTIME: NO
+
+  OpenCodeInstallerTestHost:
+    type: application
+    platform: macOS
+    sources:
+      - agtermUITests/InstallerHost
+      - agterm/AgentHooksInstaller.swift
+      - agterm/OpenCodeVersionProbe.swift
+      - agterm/ProcessOutputCapture.swift
+      - path: agterm/Resources/agent-status
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: agtermCore
+      - sdk: AppKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agterm.installer-tests
+        GENERATE_INFOPLIST_FILE: YES
 
   agtermTests:
     type: bundle.unit-test

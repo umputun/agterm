@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+import agtermCore
 @testable import agterm
 
 /// NSAlert sizes itself to fit `informativeText`, with no scroll and no height cap, so any text long enough
@@ -46,5 +47,34 @@ final class AgentHooksInstallerTests: XCTestCase {
     func testDocsURLPointsAtTheManualMergeAnchor() throws {
         let url = try XCTUnwrap(AgentHooksInstaller.codexManualDocsURL)
         XCTAssertEqual(url.absoluteString, "https://agterm.com/docs#codex-hooks-manual")
+    }
+
+    func testOpenCodeOutcomesNameTheVersionAndStayOnOneLine() {
+        let results: [AgentHooksInstaller.OpenCodeResult] = [.installed, .alreadyConfigured, .userOwned, .unreadable, .writeFailed, .noOpenCode]
+        for version in AgentHooksInstall.OpenCode.Version.allCases {
+            for result in results {
+                let text = AgentHooksInstaller.opencodeText(result, version: version)
+                XCTAssertTrue(text.contains("OpenCode \(version.rawValue)"))
+                XCTAssertFalse(text.contains("\n"))
+            }
+            let installed = AgentHooksInstaller.opencodeText(.installed, version: version)
+            XCTAssertTrue(installed.contains(AgentHooksInstall.OpenCode.path(home: "~", version: version)))
+            XCTAssertTrue(installed.contains("Restart OpenCode"))
+        }
+    }
+
+    func testUnknownOpenCodeVersionOffersSkipAndSupportedVersions() {
+        let alert = AgentHooksInstaller.makeOpenCodeVersionAlert()
+        let titles = ["Skip OpenCode"] + AgentHooksInstall.OpenCode.Version.allCases.map { "OpenCode \($0.rawValue)" }
+        XCTAssertEqual(alert.buttons.map(\.title), titles)
+        XCTAssertTrue(alert.informativeText.contains("opencode --version"))
+    }
+
+    func testUndetectedOpenCodeVersionDoesNotClaimInstallation() {
+        let result = AgentHooksInstaller.OpenCodeResult.unknownVersion
+        let text = AgentHooksInstaller.opencodeText(result, version: nil)
+        XCTAssertTrue(result.isWarning)
+        XCTAssertTrue(text.contains("skipped"))
+        XCTAssertFalse(text.contains("\n"))
     }
 }
