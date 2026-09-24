@@ -972,6 +972,21 @@ struct ControlProtocolTests {
         #expect(decoded.background == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsPaneBackgroundsAndOmitsInheritingPanes() throws {
+        let overrides = PaneBackgrounds(right: BackgroundWatermark(kind: .text, text: "PEER"))
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         backedByZmx: nil, paneBackgrounds: overrides)
+        let data = try JSONEncoder().encode(session)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let panes = try #require(object["paneBackgrounds"] as? [String: Any])
+        #expect(Set(panes.keys) == ["right"])
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: data)
+        #expect(decoded.paneBackgrounds == overrides)
+
+        let plain = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        #expect(!(String(data: try JSONEncoder().encode(plain), encoding: .utf8) ?? "").contains("paneBackgrounds"))
+    }
+
     @Test func treeSessionNodeRoundTripsWithUnseen() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: false, split: false, unseen: 3)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

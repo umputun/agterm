@@ -342,6 +342,7 @@ public final class AppStore {
                                           statusShape: idle ? nil : session.agentIndicator.shape?.rawValue,
                                           statusChangedAt: session.statusChangedAt?.timeIntervalSince1970,
                                           background: session.backgroundWatermark,
+                                          paneBackgrounds: session.paneBackgrounds.isEmpty ? nil : session.paneBackgrounds,
                                           unseen: session.unseenCount > 0 ? session.unseenCount : nil,
                                           fontSize: fontSize(session),
                                           splitFontSize: splitFontSize(session),

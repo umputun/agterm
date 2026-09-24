@@ -37,9 +37,12 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
 
 public struct ControlSessionBackgroundOptions: Equatable, Sendable {
     public let watermark: BackgroundWatermark?
+    /// pane selects the override to write; nil writes the session default.
+    public let pane: StatusPane?
 
-    public init(watermark: BackgroundWatermark?) {
+    public init(watermark: BackgroundWatermark?, pane: StatusPane? = nil) {
         self.watermark = watermark
+        self.pane = pane
     }
 }
 

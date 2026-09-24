@@ -425,6 +425,16 @@ struct Session: ParsableCommand {
             subcommands: [Image.self, Text.self, Color.self, Clear.self]
         )
 
+        static let paneHelp = "Set only this pane's override: left, right, or scratch (primary/top and split/bottom "
+            + "are aliases). Omitted sets the session default, which every pane without an override inherits; "
+            + "`clear --pane` returns that pane to the default."
+
+        static func args(_ base: ControlArgs, pane: String?) -> ControlArgs {
+            var args = base
+            args.pane = pane
+            return args
+        }
+
         /// Shared input validation against the host-free `WatermarkConfig`, so a bad value is a clean parse
         /// error before any socket round-trip, matching the server's rejection exactly. The enum checks
         /// reject `""` too, so no separate empty-string case is needed.
@@ -457,16 +467,21 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Fit: contain (default), cover, stretch, or none.") var fit: String?
             @Option(name: .long, help: "Position: center (default) or an edge/corner anchor (top-left, bottom-right, …).") var position: String?
             @Flag(name: .customLong("repeat"), help: "Tile the image to fill blank space.") var repeatImage = false
+            @Option(name: .long, help: ArgumentHelp(Background.paneHelp)) var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            func validate() throws { try Background.validate(fit: fit, position: position, opacity: opacity, path: path) }
+            func validate() throws {
+                try Background.validate(fit: fit, position: position, opacity: opacity, path: path)
+                try validatePaneArgument(pane)
+            }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(ControlArgs(mode: "image", path: path, opacity: opacity,
-                                                                    fit: fit, position: position,
-                                                                    repeats: repeatImage ? true : nil)))
+                               args: options.withWindow(Background.args(ControlArgs(mode: "image", path: path, opacity: opacity,
+                                                                                    fit: fit, position: position,
+                                                                                    repeats: repeatImage ? true : nil),
+                                                                        pane: pane)))
             }
         }
 
@@ -477,17 +492,21 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Opacity 0.0-1.0 (default 1.0).") var opacity: Double?
             @Option(name: .long, help: "Fit: contain (default), cover, stretch, or none.") var fit: String?
             @Option(name: .long, help: "Position: center (default) or an edge/corner anchor (top-left, bottom-right, …).") var position: String?
+            @Option(name: .long, help: ArgumentHelp(Background.paneHelp)) var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
             func validate() throws {
                 try Background.validate(fit: fit, position: position, opacity: opacity, color: color, text: text)
+                try validatePaneArgument(pane)
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(ControlArgs(text: text, mode: "text", color: color,
-                                                                    opacity: opacity, fit: fit, position: position)))
+                               args: options.withWindow(Background.args(ControlArgs(text: text, mode: "text", color: color,
+                                                                                    opacity: opacity, fit: fit,
+                                                                                    position: position),
+                                                                        pane: pane)))
             }
         }
 
@@ -495,25 +514,32 @@ struct Session: ParsableCommand {
             static let configuration = CommandConfiguration(
                 abstract: "Set a solid background color for the terminal (honors the Settings window translucency).")
             @Argument(help: "Background color as #rrggbb.") var color: String
+            @Option(name: .long, help: ArgumentHelp(Background.paneHelp)) var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            func validate() throws { try Background.validate(color: color) }
+            func validate() throws {
+                try Background.validate(color: color)
+                try validatePaneArgument(pane)
+            }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(ControlArgs(mode: "color", color: color)))
+                               args: options.withWindow(Background.args(ControlArgs(mode: "color", color: color), pane: pane)))
             }
         }
 
         struct Clear: RequestCommand {
             static let configuration = CommandConfiguration(abstract: "Remove the session's background (watermark or solid color).")
+            @Option(name: .long, help: ArgumentHelp(Background.paneHelp)) var pane: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
+            func validate() throws { try validatePaneArgument(pane) }
+
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,
-                               args: options.withWindow(ControlArgs(mode: "clear")))
+                               args: options.withWindow(Background.args(ControlArgs(mode: "clear"), pane: pane)))
             }
         }
     }

@@ -25,6 +25,24 @@ struct AppStoreTreeProjectionTests {
         #expect(decoded.workspaces.first?.sessions.first == node)
     }
 
+    @Test func paneBackgroundsProjectOverridesOnlyNeverTheInheritedDefault() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let tint = BackgroundWatermark(kind: .color, colorHex: "#201414")
+        let peer = BackgroundWatermark(kind: .text, text: "PEER")
+        session.backgroundWatermark = tint
+
+        let defaultOnly = try #require(store.controlTree().workspaces.first?.sessions.first)
+        #expect(defaultOnly.background == tint)
+        #expect(defaultOnly.paneBackgrounds == nil)
+
+        session.paneBackgrounds.right = peer
+        let overridden = try #require(store.controlTree().workspaces.first?.sessions.first)
+        #expect(overridden.background == tint)
+        #expect(overridden.paneBackgrounds == PaneBackgrounds(right: peer))
+    }
+
     @Test func attributionIsOmittedForOrdinaryAndRemotePanes() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "ordinary")

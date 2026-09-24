@@ -255,6 +255,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
     public let background: BackgroundWatermark?
+    /// paneBackgrounds is the read side of `session.background --pane`: overrides only, never effective values,
+    /// so an absent pane inherits `background`; omitted when no pane has one.
+    public let paneBackgrounds: PaneBackgrounds?
     /// The session's unseen-notification badge count; nil/omitted when zero. `notify` (and terminal OSC
     /// 9/777) raise it, `session.seen` clears it. Ephemeral like `status` — never persisted, resets on restart.
     public let unseen: Int?
@@ -312,7 +315,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
                 statusShape: String? = nil, statusChangedAt: Double? = nil,
-                background: BackgroundWatermark? = nil, unseen: Int? = nil,
+                background: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
@@ -353,6 +356,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.statusShape = statusShape
         self.statusChangedAt = statusChangedAt
         self.background = background
+        self.paneBackgrounds = paneBackgrounds
         self.unseen = unseen
         self.fontSize = fontSize
         self.splitFontSize = splitFontSize

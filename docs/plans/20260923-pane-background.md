@@ -140,12 +140,12 @@
 - Tests: `ControlDispatcherTests.swift`, `agtermctlKitTests/CommandsTests.swift`,
   `AppStoreTreeProjectionTests.swift`, `ControlProtocolTests.swift`
 
-- [ ] `ControlSessionBackgroundOptions.pane` parsed with `parsePane`; `--pane` on the four CLI subcommands
-- [ ] `ControlSessionNode.paneBackgrounds`, omitted when empty, overrides only (never effective values);
+- [x] `ControlSessionBackgroundOptions.pane` parsed with `parsePane`; `--pane` on the four CLI subcommands
+- [x] `ControlSessionNode.paneBackgrounds`, omitted when empty, overrides only (never effective values);
   compatibility initializer unchanged
-- [ ] tests: each pane and alias, unknown pane rejected, omitted stays nil, CLI encoding for all four modes,
+- [x] tests: each pane and alias, unknown pane rejected, omitted stays nil, CLI encoding for all four modes,
   projection with default/overrides/both, JSON omits empty, decode round trip
-- [ ] `cd agtermCore && swift test` for the touched suites
+- [x] `cd agtermCore && swift test` for the touched suites
 
 ### Task 3: App side: apply, surface resolution, washes, end-to-end
 

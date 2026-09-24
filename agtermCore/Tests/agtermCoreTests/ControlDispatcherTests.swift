@@ -1189,6 +1189,30 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test(arguments: [("left", StatusPane.left), ("split", .right), ("bottom", .right), ("scratch", .scratch)])
+    func sessionBackgroundPassesTheParsedPane(raw: String, pane: StatusPane) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionBackgroundResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionBackground, target: "session",
+                                                     args: ControlArgs(mode: "clear", pane: raw)))
+
+        #expect(actions.calls == [.sessionBackground(target: "session", window: nil,
+                                                     ControlSessionBackgroundOptions(watermark: nil, pane: pane))])
+    }
+
+    @Test func sessionBackgroundRejectsAnUnknownPaneBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground, args: ControlArgs(mode: "color", pane: "middle", color: "#102030")))
+
+        #expect(response == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionBackgroundRejectsInvalidInputsBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

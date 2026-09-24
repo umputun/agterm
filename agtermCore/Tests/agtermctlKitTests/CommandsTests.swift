@@ -1934,6 +1934,27 @@ struct CommandsTests {
         #expect(try request(["session", "background", "clear"]) == expected)
     }
 
+    @Test func sessionBackgroundPaneEncodesForEveryMode() throws {
+        #expect(try request(["session", "background", "image", "/tmp/bg.png", "--pane", "right"])
+            == ControlRequest(cmd: .sessionBackground, target: "active",
+                              args: ControlArgs(mode: "image", pane: "right", path: "/tmp/bg.png")))
+        #expect(try request(["session", "background", "text", "PEER", "--pane", "split"])
+            == ControlRequest(cmd: .sessionBackground, target: "active",
+                              args: ControlArgs(text: "PEER", mode: "text", pane: "split")))
+        #expect(try request(["session", "background", "color", "#201414", "--pane", "left"])
+            == ControlRequest(cmd: .sessionBackground, target: "active",
+                              args: ControlArgs(mode: "color", pane: "left", color: "#201414")))
+        #expect(try request(["session", "background", "clear", "--pane", "scratch"])
+            == ControlRequest(cmd: .sessionBackground, target: "active", args: ControlArgs(mode: "clear", pane: "scratch")))
+    }
+
+    @Test func sessionBackgroundRejectsBadPane() {
+        #expect(validationMessage(["session", "background", "clear", "--pane", "middle"])
+            == "--pane must be left, right, or scratch")
+        #expect(validationMessage(["session", "background", "color", "#201414", "--pane", "top-left"])
+            == "--pane must be left, right, or scratch")
+    }
+
     @Test func sessionBackgroundRejectsBadFit() {
         #expect(validationMessage(["session", "background", "image", "/tmp/bg.png", "--fit", "fill"]) != nil)
     }

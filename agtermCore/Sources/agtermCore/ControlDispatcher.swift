@@ -779,8 +779,12 @@ public struct ControlDispatcher {
             return ControlResponse(ok: false,
                                    error: "invalid background mode: \(request.args?.mode ?? "") (image|text|color|clear)")
         }
-        return actions.setSessionBackground(request.target, window: request.args?.window,
-                                            options: ControlSessionBackgroundOptions(watermark: watermark))
+        switch parsePane(request.args?.pane) {
+        case .pane(let pane):
+            return actions.setSessionBackground(request.target, window: request.args?.window,
+                                                options: ControlSessionBackgroundOptions(watermark: watermark, pane: pane))
+        case .rejected(let rejection): return rejection
+        }
     }
 
     /// How much of a buffer a read covers, or the rejection its arm returns as-is. Shared by `session.text`
