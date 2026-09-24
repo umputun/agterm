@@ -315,11 +315,12 @@ the pane becomes `orphaned`; the same happens to panes whose session host dies. 
 `orphaned` pane remain responsible for themselves until the pane is replaced. Restarting agterm does not
 repair this.
 
-Agterm ▸ Reset Live Sessions… replaces every `orphaned` and `app` pane at once. The dialog says how many
+Agterm ▸ Reset Live Sessions… replaces every `orphaned` and `app` pane at once, and every pane whose daemon
+was created before the recorded first launch with this zmx build, whatever its attribution. The dialog says how many
 live sessions it resets; on Reset, agterm quits, ends those sessions' processes at the next launch and
 reopens itself with the same sessions and layout, starting each captured command again where possible.
 Other work running in those sessions stops, and agent conversations may need to be resumed by hand.
-Sessions already marked `supervisor` are left alone. A notification afterwards says how many sessions
+Other `supervisor` sessions are left alone. A notification afterwards says how many sessions
 the reset covered; a session whose old process could not be confirmed gone gets no command restarted,
 and the reset can be run again. `agtermctl zmx reset --force` does the same without the dialog.
 

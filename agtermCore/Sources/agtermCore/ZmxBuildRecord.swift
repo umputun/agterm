@@ -3,18 +3,13 @@ import Foundation
 /// ZmxBuildRecord is when this state directory first launched the zmx build it names. Live sessions keep
 /// their daemons through app updates, so a daemon created before `changedAt` predates that launch.
 public struct ZmxBuildRecord: Codable, Equatable, Sendable {
-    public static let filename = "zmx-build.json"
+    static let filename = "zmx-build.json"
 
-    public let id: String
-    public let changedAt: Date
-
-    public init(id: String, changedAt: Date) {
-        self.id = id
-        self.changedAt = changedAt
-    }
+    let id: String
+    let changedAt: Date
 
     /// advanced floors `now` to whole seconds, the resolution of zmx's `created` time.
-    public static func advanced(from previous: ZmxBuildRecord?, bundledID: String, now: Date) -> ZmxBuildRecord {
+    static func advanced(from previous: ZmxBuildRecord?, bundledID: String, now: Date) -> ZmxBuildRecord {
         if let previous, previous.id == bundledID { return previous }
         return ZmxBuildRecord(id: bundledID, changedAt: Date(timeIntervalSince1970: floor(now.timeIntervalSince1970)))
     }
