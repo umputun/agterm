@@ -43,6 +43,7 @@ enum LiveResetConsumer {
         let claimed: Set<UUID>? = claims.complete ? Set(claims.claims.map(\.paneIdentity)) : nil
         let records = client.sessionRecords(timeout: min(deps.listTimeout, max(remaining(), 0.1)))
         let narrowed = LiveReset.narrow(marker: marker, claimed: claimed, records: records,
+                                        outdatedBefore: deps.outdatedBefore,
                                         classify: deps.probe.classifier(endpoint: client.endpoint))
         let kill = narrowed.kill
         var survivors: Set<pid_t> = []

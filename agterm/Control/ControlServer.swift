@@ -166,6 +166,8 @@ final class ControlServer {
     /// backend is unavailable rather than pretending an empty listing.
     let zmxClient: ZmxClient?
     let liveAttributionProbe: LiveAttributionProbe
+    /// zmxOutdatedBefore is the launch's `ZmxBuildRecord` cutoff; nil turns the outdated reset reason off.
+    let zmxOutdatedBefore: Date?
 
     /// Runs the ssh invocations behind the remote commands. Injectable so hosted tests drive them against
     /// a fake instead of a second Mac.
@@ -190,6 +192,7 @@ final class ControlServer {
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
+         zmxOutdatedBefore: Date? = nil,
          liveAttributionProbe: LiveAttributionProbe = LiveAttributionProbe(),
          remoteRunner: (any RemoteCommandRunner)? = nil,
          statusSoundPlayer: StatusSoundPlayer = .shared,
@@ -204,6 +207,7 @@ final class ControlServer {
         self.launchRestoreMode = launchRestoreMode
         self.zmxForegroundResolver = zmxForegroundResolver
         self.zmxClient = zmxClient
+        self.zmxOutdatedBefore = zmxOutdatedBefore
         self.liveAttributionProbe = liveAttributionProbe
         self.identity = identity
         self.resolver = ControlTargetResolver(library: library)

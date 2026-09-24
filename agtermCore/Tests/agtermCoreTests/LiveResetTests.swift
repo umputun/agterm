@@ -16,12 +16,17 @@ struct LiveResetTests {
                      sessionID: session, sessionName: "build")
     }
 
-    private static func record(_ pane: UUID, leader: Int32?) -> ZmxSessionRecord {
-        ZmxSessionRecord(name: ZmxSupport.daemonName(for: pane), clients: 0, leaderPID: leader)
+    private static let cutoff = Date(timeIntervalSince1970: 1000)
+
+    private static func record(_ pane: UUID, leader: Int32?, created: TimeInterval? = nil) -> ZmxSessionRecord {
+        ZmxSessionRecord(name: ZmxSupport.daemonName(for: pane), clients: 0, leaderPID: leader,
+                         createdAt: created.map { Date(timeIntervalSince1970: $0) })
     }
 
-    private static func target(_ pane: UUID, session: UUID = sessionA, leader: Int32) -> LiveReset.Target {
-        LiveReset.Target(paneIdentity: pane, sessionID: session, daemon: ZmxSupport.daemonName(for: pane), leaderPID: leader)
+    private static func target(_ pane: UUID, session: UUID = sessionA, leader: Int32,
+                               reason: LiveReset.Reason = .unsupervised) -> LiveReset.Target {
+        LiveReset.Target(paneIdentity: pane, sessionID: session, daemon: ZmxSupport.daemonName(for: pane), leaderPID: leader,
+                         reason: reason)
     }
 
     private static func classifier(_ table: [String: SessionHost.Attribution]) -> (String, Int32) -> SessionHost.Attribution {
@@ -44,6 +49,41 @@ struct LiveResetTests {
         #expect(selection.targets == [Self.target(Self.paneA, leader: 10), Self.target(Self.paneB, session: Self.sessionB, leader: 11)])
         #expect(selection.inventoryComplete)
         #expect(selection.sessionCount == 2)
+    }
+
+    @Test(arguments: [SessionHost.Attribution.supervisor, .unknown, .orphaned, .app])
+    func selectTakesAPaneCreatedBeforeTheCutoffAsOutdatedWhateverItsAttribution(_ attribution: SessionHost.Attribution) {
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10, created: 999)]
+
+        let selection = LiveReset.select(claims: claims, records: records, outdatedBefore: Self.cutoff,
+                                         classify: { _, _ in attribution })
+
+        #expect(selection.targets == [Self.target(Self.paneA, leader: 10, reason: .outdated)])
+    }
+
+    @Test(arguments: [(created: TimeInterval?.some(1000), cutoff: Date?.some(cutoff)),
+                      (created: TimeInterval?.some(1500), cutoff: Date?.some(cutoff)),
+                      (created: TimeInterval?.none, cutoff: Date?.some(cutoff)),
+                      (created: TimeInterval?.some(999), cutoff: Date?.none)])
+    func selectLeavesACurrentOrUndatedSupervisedPaneAlone(created: TimeInterval?, cutoff: Date?) {
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10, created: created)]
+
+        let selection = LiveReset.select(claims: claims, records: records, outdatedBefore: cutoff,
+                                         classify: { _, _ in .supervisor })
+
+        #expect(selection.targets.isEmpty)
+    }
+
+    @Test func selectKeepsTheUnsupervisedReasonForACurrentPane() {
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10, created: 1000)]
+
+        let selection = LiveReset.select(claims: claims, records: records, outdatedBefore: Self.cutoff,
+                                         classify: { _, _ in .orphaned })
+
+        #expect(selection.targets == [Self.target(Self.paneA, leader: 10, reason: .unsupervised)])
     }
 
     @Test func selectExcludesPanesWithoutAReadableLeader() {
@@ -89,6 +129,43 @@ struct LiveResetTests {
         #expect(narrowed.dispositions == [Self.target(Self.paneA, leader: 10): .kill])
         #expect(narrowed.kill == [Self.target(Self.paneA, leader: 10)])
         #expect(!narrowed.inventoryFailed)
+    }
+
+    @Test(arguments: [SessionHost.Attribution.supervisor, .unknown])
+    func narrowKillsAnOutdatedTargetWhateverItsAttribution(_ attribution: SessionHost.Attribution) {
+        let target = Self.target(Self.paneA, leader: 10, reason: .outdated)
+        let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: [Self.paneA],
+                                        records: [Self.record(Self.paneA, leader: 10, created: 999)],
+                                        outdatedBefore: Self.cutoff, classify: { _, _ in attribution })
+
+        #expect(narrowed.kill == [target])
+    }
+
+    @Test(arguments: [SessionHost.Attribution.supervisor, .unknown])
+    func narrowStillSkipsAnUnsupervisedTargetThatIsNoLongerOrphaned(_ attribution: SessionHost.Attribution) {
+        let target = Self.target(Self.paneA, leader: 10)
+        let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: [Self.paneA],
+                                        records: [Self.record(Self.paneA, leader: 10, created: 999)],
+                                        outdatedBefore: Self.cutoff, classify: { _, _ in attribution })
+
+        #expect(narrowed.dispositions[target] == .skipped)
+    }
+
+    @Test(arguments: [
+        (claimed: false, leader: Int32?.some(10), created: TimeInterval?.some(999), cutoff: Date?.some(cutoff)),
+        (claimed: true, leader: Int32?.some(11), created: TimeInterval?.some(999), cutoff: Date?.some(cutoff)),
+        (claimed: true, leader: Int32?.some(10), created: TimeInterval?.some(1000), cutoff: Date?.some(cutoff)),
+        (claimed: true, leader: Int32?.some(10), created: TimeInterval?.none, cutoff: Date?.some(cutoff)),
+        (claimed: true, leader: Int32?.some(10), created: TimeInterval?.some(999), cutoff: Date?.none),
+    ])
+    func narrowSkipsAnOutdatedTargetThatNoLongerQualifies(claimed: Bool, leader: Int32?, created: TimeInterval?,
+                                                          cutoff: Date?) {
+        let target = Self.target(Self.paneA, leader: 10, reason: .outdated)
+        let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: claimed ? [Self.paneA] : [],
+                                        records: [Self.record(Self.paneA, leader: leader, created: created)],
+                                        outdatedBefore: cutoff, classify: { _, _ in .orphaned })
+
+        #expect(narrowed.dispositions[target] == .skipped)
     }
 
     @Test func narrowMarksAMissingDaemonGone() {
@@ -218,7 +295,7 @@ struct LiveResetTests {
         #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(LiveReset.consumedFilename).path))
     }
 
-    @Test(arguments: ["not json", "{\"version\":2,\"createdAt\":0,\"targets\":[]}"])
+    @Test(arguments: ["not json", "{\"version\":3,\"createdAt\":0,\"targets\":[]}"])
     func markerStoreRemovesAnInvalidMarkerAndReportsIt(contents: String) throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -228,6 +305,33 @@ struct LiveResetTests {
         #expect(throws: LiveResetMarkerStore.Failure.invalid) { try store.consume() }
         #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(LiveReset.markerFilename).path))
         #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(LiveReset.consumedFilename).path))
+    }
+
+    @Test func markerStoreConsumesAVersionOneMarkerAsUnsupervised() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LiveResetMarkerStore(directory: dir)
+        let v1 = """
+        {"version":1,"createdAt":0,"targets":[{"paneIdentity":"\(Self.paneA.uuidString)",\
+        "sessionID":"\(Self.sessionA.uuidString)","daemon":"\(ZmxSupport.daemonName(for: Self.paneA))","leaderPID":10}]}
+        """
+        try v1.write(to: dir.appendingPathComponent(LiveReset.markerFilename), atomically: true, encoding: .utf8)
+
+        let consumed = try #require(try store.consume())
+
+        #expect(consumed.version == 1)
+        #expect(consumed.targets == [Self.target(Self.paneA, leader: 10, reason: .unsupervised)])
+    }
+
+    @Test func markerStoreRoundTripsAnOutdatedTarget() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LiveResetMarkerStore(directory: dir)
+        let marker = Self.marker([Self.target(Self.paneA, leader: 10, reason: .outdated)])
+
+        try store.write(marker)
+
+        #expect(try store.consume() == marker)
     }
 
     @Test func markerStoreRemoveClearsBothFiles() throws {

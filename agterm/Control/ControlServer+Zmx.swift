@@ -62,11 +62,10 @@ extension ControlServer {
         }
     }
 
-    /// The panes Agterm ▸ Reset Live Sessions… would reset: every claim, open or saved, whose daemon leader
-    /// is orphaned or attributed to this app. Nil when the listing failed, which refuses the action.
+    /// liveResetSelection covers open and saved panes; nil when the listing failed, which refuses the action.
     func liveResetSelection() -> LiveReset.Selection? {
         guard let zmxClient, let records = zmxClient.sessionRecords() else { return nil }
-        return LiveReset.select(claims: library.paneClaims(), records: records,
+        return LiveReset.select(claims: library.paneClaims(), records: records, outdatedBefore: zmxOutdatedBefore,
                                 classify: liveAttributionProbe.classifier(endpoint: zmxClient.endpoint))
     }
 

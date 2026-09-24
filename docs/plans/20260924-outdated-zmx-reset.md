@@ -125,18 +125,18 @@
 - Modify: `agtermTests/LiveResetConsumerTests.swift`, `agtermTests/ControlServerLiveResetTests.swift`
 - Modify: `agterm/Control/ControlServer.swift` (injected `outdatedBefore`)
 
-- [ ] parse `created=` into `ZmxSessionRecord.createdAt`, nil for zero or malformed values
-- [ ] add `Target.reason`, bump the marker to version 2, let `consume()` accept versions 1 and 2, and select
+- [x] parse `created=` into `ZmxSessionRecord.createdAt`, nil for zero or malformed values
+- [x] add `Target.reason`, bump the marker to version 2, let `consume()` accept versions 1 and 2, and select
       panes created before the cutoff as `outdated` whatever their attribution
-- [ ] narrow an `outdated` target by claim, same leader and still before the cutoff; `unsupervised` unchanged
-- [ ] pass the recorded `changedAt` from the selection join and from `LiveResetConsumer`
-- [ ] write tests: parser (present, absent, zero, malformed, and the other parser callers unaffected), select
+- [x] narrow an `outdated` target by claim, same leader and still before the cutoff; `unsupervised` unchanged
+- [x] pass the recorded `changedAt` from the selection join and from `LiveResetConsumer`
+- [x] write tests: parser (present, absent, zero, malformed, and the other parser callers unaffected), select
       (outdated only, unsupervised only, both recorded as outdated, no cutoff, same-second daemon current),
       narrow (outdated kill, replaced leader, created after cutoff), a v1 marker file consumed from disk
-- [ ] write paired tests: a pane with both reasons at confirmation is killed as outdated when its leader reads
+- [x] write paired tests: a pane with both reasons at confirmation is killed as outdated when its leader reads
       `unknown` or `supervisor` at consumption, while an unsupervised-only or v1 target with that attribution
       is still skipped; an outdated target is skipped when the launch has no cutoff
-- [ ] run the touched agtermCore suites and the two hosted classes - must pass before task 3
+- [x] run the touched agtermCore suites and the two hosted classes - must pass before task 3
 
 ### Task 3: Say why in the dialog, the reply and the read-back
 

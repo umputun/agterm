@@ -13,10 +13,22 @@ struct ZmxLifecycleTests {
         """
 
         #expect(try ZmxListParser.parse(output) == [
-            ZmxSessionRecord(name: "agterm-a", clients: 0, leaderPID: 10),
-            ZmxSessionRecord(name: "agterm-b", clients: 2, leaderPID: 11),
+            ZmxSessionRecord(name: "agterm-a", clients: 0, leaderPID: 10, createdAt: Date(timeIntervalSince1970: 1)),
+            ZmxSessionRecord(name: "agterm-b", clients: 2, leaderPID: 11, createdAt: Date(timeIntervalSince1970: 1)),
             ZmxSessionRecord(name: "agterm-busy", clients: nil),
         ])
+    }
+
+    @Test(arguments: [
+        ("\tcreated=1790000000", Date?.some(Date(timeIntervalSince1970: 1_790_000_000))),
+        ("", Date?.none),
+        ("\tcreated=0", Date?.none),
+        ("\tcreated=wat", Date?.none),
+        ("\tcreated=-5", Date?.none),
+    ])
+    func listParserReadsCreationTimeWithoutEverThrowingOnIt(field: String, expected: Date?) throws {
+        let records = try ZmxListParser.parse("name=agterm-a\tpid=10\tclients=0\(field)\n")
+        #expect(records == [ZmxSessionRecord(name: "agterm-a", clients: 0, leaderPID: 10, createdAt: expected)])
     }
 
     @Test func listParserRejectsPartialOutputInsteadOfReapingFromIt() {

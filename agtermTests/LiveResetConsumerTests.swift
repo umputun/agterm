@@ -16,6 +16,8 @@ final class LiveResetConsumerTests: XCTestCase {
     private var listFails = false
     private var killFails = false
     private var alive: Set<pid_t> = []
+    private var supervised = false
+    private var outdatedBefore: Date?
     private var clock = ContinuousClock.Instant.now
 
     override func setUp() async throws {
@@ -34,6 +36,8 @@ final class LiveResetConsumerTests: XCTestCase {
             listFails = false
             killFails = false
             alive = []
+            supervised = false
+            outdatedBefore = nil
         }
     }
 
@@ -66,9 +70,11 @@ final class LiveResetConsumerTests: XCTestCase {
     }
 
     private func dependencies() -> LiveResetConsumer.Dependencies {
+        let responsible: (pid_t) -> SessionHost.ResponsibleProcess = supervised ? { _ in .live(400) } : { .live($0) }
         var deps = LiveResetConsumer.Dependencies(
             markerStore: store,
-            probe: LiveAttributionProbe(responsible: { .live($0) }, hostPID: { _ in nil }, appPID: 300))
+            probe: LiveAttributionProbe(responsible: responsible, hostPID: { _ in 400 }, appPID: 300))
+        deps.outdatedBefore = outdatedBefore
         deps.poll = ZmxClient.LeaderPoll(now: { [self] in clock }, sleep: { [self] in clock = clock.advanced(by: $0) })
         deps.isAlive = { [self] in alive.contains($0) }
         return deps
@@ -80,9 +86,9 @@ final class LiveResetConsumerTests: XCTestCase {
         return try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
     }
 
-    private func target(_ session: Session, leader: Int32) -> LiveReset.Target {
+    private func target(_ session: Session, leader: Int32, reason: LiveReset.Reason = .unsupervised) -> LiveReset.Target {
         LiveReset.Target(paneIdentity: session.paneIdentity, sessionID: session.id,
-                         daemon: ZmxSupport.daemonName(for: session.paneIdentity), leaderPID: leader)
+                         daemon: ZmxSupport.daemonName(for: session.paneIdentity), leaderPID: leader, reason: reason)
     }
 
     private func row(_ session: Session, leader: Int32) -> String {
@@ -122,6 +128,31 @@ final class LiveResetConsumerTests: XCTestCase {
 
         XCTAssertEqual(kills, [["kill", ZmxSupport.daemonName(for: kept.paneIdentity), "--force"]])
         XCTAssertEqual(outcome.panes, LiveReset.PaneCounts(confirmed: 3, killed: 1, gone: 0, skipped: 2))
+    }
+
+    func testOutdatedTargetIsKilledWhileItsLeaderReadsSupervised() throws {
+        let session = try addSession()
+        supervised = true
+        outdatedBefore = Date(timeIntervalSince1970: 1000)
+        rows = [row(session, leader: 10) + "\tcreated=999"]
+        try store.write(LiveReset.Marker(targets: [target(session, leader: 10, reason: .outdated)]))
+
+        let outcome = try XCTUnwrap(run())
+
+        XCTAssertEqual(kills, [["kill", ZmxSupport.daemonName(for: session.paneIdentity), "--force"]])
+        XCTAssertEqual(outcome.panes.killed, 1)
+    }
+
+    func testOutdatedTargetIsSkippedWithoutACutoff() throws {
+        let session = try addSession()
+        supervised = true
+        rows = [row(session, leader: 10) + "\tcreated=999"]
+        try store.write(LiveReset.Marker(targets: [target(session, leader: 10, reason: .outdated)]))
+
+        let outcome = try XCTUnwrap(run())
+
+        XCTAssertTrue(kills.isEmpty)
+        XCTAssertEqual(outcome.panes.skipped, 1)
     }
 
     func testFailedListingKillsNothing() throws {

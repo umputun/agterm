@@ -4,15 +4,18 @@ public struct ZmxSessionRecord: Equatable, Sendable {
     public let name: String
     public let clients: Int?
     public let leaderPID: Int32?
+    /// createdAt is when the daemon started, in whole seconds; nil when zmx reported none.
+    public let createdAt: Date?
 
     public init(name: String, clients: Int?) {
         self.init(name: name, clients: clients, leaderPID: nil)
     }
 
-    public init(name: String, clients: Int?, leaderPID: Int32?) {
+    public init(name: String, clients: Int?, leaderPID: Int32?, createdAt: Date? = nil) {
         self.name = name
         self.clients = clients
         self.leaderPID = leaderPID
+        self.createdAt = createdAt
     }
 }
 
@@ -31,6 +34,7 @@ public enum ZmxListParser {
             var name: String?
             var clients: Int?
             var leaderPID: Int32?
+            var createdAt: Date?
             var hasError = false
             for field in line.split(separator: "\t", omittingEmptySubsequences: false) {
                 if field.hasPrefix("name=") {
@@ -43,13 +47,18 @@ public enum ZmxListParser {
                     let raw = String(field.dropFirst("pid=".count))
                     guard let value = Int32(raw), value > 0 else { throw ParseError.invalidLeaderPID(raw) }
                     leaderPID = value
+                } else if field.hasPrefix("created=") {
+                    // invalid creation metadata must not break reap or host discovery
+                    if let value = Int64(field.dropFirst("created=".count)), value > 0 {
+                        createdAt = Date(timeIntervalSince1970: TimeInterval(value))
+                    }
                 } else if field.hasPrefix("err=") {
                     hasError = true
                 }
             }
             guard let name, !name.isEmpty else { throw ParseError.missingName }
             guard clients != nil || hasError else { throw ParseError.missingClients(name) }
-            return ZmxSessionRecord(name: name, clients: clients, leaderPID: leaderPID)
+            return ZmxSessionRecord(name: name, clients: clients, leaderPID: leaderPID, createdAt: createdAt)
         }
     }
 }

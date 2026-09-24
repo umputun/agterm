@@ -46,13 +46,15 @@ final class ControlServerLiveResetTests: XCTestCase {
 
     private func makeServer(liveReset: LiveResetCoordinator, runner: @escaping ZmxClient.Runner,
                             probe: LiveAttributionProbe = orphanProbe,
+                            outdatedBefore: Date? = nil,
                             remoteRunner: (any RemoteCommandRunner)? = nil,
                             responseWriter: @escaping ControlServer.ResponseWriter = ControlServer.writeResponse) -> ControlServer {
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: runner)
         let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
         let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
                                    identity: AppIdentity(version: "test", commit: "test"), zmxForegroundResolver: resolver,
-                                   zmxClient: client, liveAttributionProbe: probe, remoteRunner: remoteRunner,
+                                   zmxClient: client, zmxOutdatedBefore: outdatedBefore, liveAttributionProbe: probe,
+                                   remoteRunner: remoteRunner,
                                    socketPath: socketPath, responseWriter: responseWriter)
         liveReset.selection = { [weak server] in server?.liveResetSelection() }
         server.liveReset = liveReset
@@ -85,6 +87,26 @@ final class ControlServerLiveResetTests: XCTestCase {
                                                             daemon: ZmxSupport.daemonName(for: orphaned.paneIdentity), leaderPID: 200)])
         XCTAssertEqual(selection.sessionCount, 1)
         XCTAssertTrue(selection.inventoryComplete)
+    }
+
+    func testLiveResetSelectionTakesASupervisedPaneCreatedBeforeTheCutoffAsOutdated() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        let outdated = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let current = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let rows = [
+            "name=\(ZmxSupport.daemonName(for: outdated.paneIdentity))\tpid=210\tclients=1\tcreated=999",
+            "name=\(ZmxSupport.daemonName(for: current.paneIdentity))\tpid=220\tclients=1\tcreated=1000",
+        ].joined(separator: "\n")
+        let supervised = LiveAttributionProbe(responsible: { _ in .live(100) }, hostPID: { _ in 100 }, appPID: 300)
+        let server = makeServer(liveReset: makeCoordinator(), runner: { _ in rows }, probe: supervised,
+                                outdatedBefore: Date(timeIntervalSince1970: 1000))
+
+        let selection = try XCTUnwrap(server.liveResetSelection())
+
+        XCTAssertEqual(selection.targets, [LiveReset.Target(paneIdentity: outdated.paneIdentity, sessionID: outdated.id,
+                                                            daemon: ZmxSupport.daemonName(for: outdated.paneIdentity),
+                                                            leaderPID: 210, reason: .outdated)])
     }
 
     func testLiveResetSelectionIsNilWhenTheListingFails() {

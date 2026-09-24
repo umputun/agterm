@@ -10,18 +10,40 @@ public enum LiveReset {
         public let sessionID: UUID
         public let daemon: String
         public let leaderPID: Int32
+        public let reason: Reason
 
-        public init(paneIdentity: UUID, sessionID: UUID, daemon: String, leaderPID: Int32) {
+        public init(paneIdentity: UUID, sessionID: UUID, daemon: String, leaderPID: Int32,
+                    reason: Reason = .unsupervised) {
             self.paneIdentity = paneIdentity
             self.sessionID = sessionID
             self.daemon = daemon
             self.leaderPID = leaderPID
+            self.reason = reason
         }
+
+        /// init(from:) reads a version-1 target, which has no reason, as unsupervised.
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            paneIdentity = try container.decode(UUID.self, forKey: .paneIdentity)
+            sessionID = try container.decode(UUID.self, forKey: .sessionID)
+            daemon = try container.decode(String.self, forKey: .daemon)
+            leaderPID = try container.decode(Int32.self, forKey: .leaderPID)
+            reason = try container.decodeIfPresent(Reason.self, forKey: .reason) ?? .unsupervised
+        }
+    }
+
+    /// Reason is why a pane was selected. `unsupervised`: its leader is orphaned or attributed to the app.
+    /// `outdated`: its daemon was created before this state directory's recorded zmx build change.
+    public enum Reason: String, Codable, Sendable {
+        case unsupervised, outdated
     }
 
     /// The confirmed set written at quit and consumed once at the next launch.
     public struct Marker: Codable, Equatable, Sendable {
-        public static let currentVersion = 1
+        public static let currentVersion = 2
+        /// supportedVersions lists what `LiveResetMarkerStore.consume` accepts: a reset confirmed under the
+        /// previous version still runs after an update.
+        public static let supportedVersions: Set<Int> = [1, 2]
         public let version: Int
         public let createdAt: Date
         public let targets: [Target]
@@ -33,8 +55,7 @@ public enum LiveReset {
         }
     }
 
-    /// What the dialog offers: the panes whose process is not supervised, and whether the walk that
-    /// found them was complete. An incomplete walk, or one pane claimed twice, forbids the action.
+    /// Selection is what the dialog offers. An incomplete walk, or one pane claimed twice, forbids the action.
     public struct Selection: Equatable, Sendable {
         public let targets: [Target]
         public let inventoryComplete: Bool
@@ -47,31 +68,46 @@ public enum LiveReset {
         public var sessionCount: Int { Set(targets.map(\.sessionID)).count }
     }
 
-    public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord],
+    /// select picks a pane created before `outdatedBefore` as outdated whatever its attribution, and
+    /// otherwise an orphaned or app-attributed one as unsupervised. A nil cutoff selects no outdated pane.
+    public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord], outdatedBefore: Date? = nil,
                               classify: (String, Int32) -> SessionHost.Attribution) -> Selection {
         let leaders = ZmxLeaderMap.leaders(in: records)
+        let created = createdTimes(in: records)
         var seen: Set<UUID> = []
         var conflicted = false
         let targets = claims.claims.compactMap { claim -> Target? in
             guard seen.insert(claim.paneIdentity).inserted else { conflicted = true; return nil }
             let name = ZmxSupport.daemonName(for: claim.paneIdentity)
             guard let leader = leaders[name] else { return nil }
+            func target(_ reason: Reason) -> Target {
+                Target(paneIdentity: claim.paneIdentity, sessionID: claim.sessionID, daemon: name, leaderPID: leader,
+                       reason: reason)
+            }
+            if isOutdated(created: created[name], cutoff: outdatedBefore) { return target(.outdated) }
             switch classify(name, leader) {
-            case .orphaned, .app:
-                return Target(paneIdentity: claim.paneIdentity, sessionID: claim.sessionID, daemon: name, leaderPID: leader)
-            case .supervisor, .unknown:
-                return nil
+            case .orphaned, .app: return target(.unsupervised)
+            case .supervisor, .unknown: return nil
             }
         }
         return Selection(targets: targets, inventoryComplete: claims.complete && !conflicted)
+    }
+
+    static func isOutdated(created: Date?, cutoff: Date?) -> Bool {
+        guard let created, let cutoff else { return false }
+        return created < cutoff
+    }
+
+    private static func createdTimes(in records: [ZmxSessionRecord]) -> [String: Date] {
+        Dictionary(records.compactMap { record in record.createdAt.map { (record.name, $0) } },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     public enum Disposition: String, Codable, Equatable, Sendable {
         case kill, gone, skipped
     }
 
-    /// The marker re-checked against the launch's own claims and listing. Only narrows: a target is
-    /// killed when it is still claimed, still listed with the same leader, and still orphaned.
+    /// Narrowed is the marker re-checked against this launch's claims and listing; it only narrows.
     public struct Narrowed: Equatable, Sendable {
         public let dispositions: [Target: Disposition]
         public let inventoryFailed: Bool
@@ -86,7 +122,10 @@ public enum LiveReset {
         }
     }
 
+    /// narrow kills an outdated target that is still created before `outdatedBefore`, and an unsupervised one
+    /// that is still orphaned; both must still be claimed and listed with the same leader.
     public static func narrow(marker: Marker, claimed: Set<UUID>?, records: [ZmxSessionRecord]?,
+                              outdatedBefore: Date? = nil,
                               classify: (String, Int32) -> SessionHost.Attribution) -> Narrowed {
         guard let records, let claimed else {
             let skipped = Dictionary(marker.targets.map { ($0, Disposition.skipped) }, uniquingKeysWith: { first, _ in first })
@@ -97,11 +136,12 @@ public enum LiveReset {
         for target in marker.targets {
             guard claimed.contains(target.paneIdentity) else { dispositions[target] = .skipped; continue }
             guard let record = byName[target.daemon] else { dispositions[target] = .gone; continue }
-            guard record.leaderPID == target.leaderPID, classify(target.daemon, target.leaderPID) == .orphaned else {
-                dispositions[target] = .skipped
-                continue
+            guard record.leaderPID == target.leaderPID else { dispositions[target] = .skipped; continue }
+            let qualifies = switch target.reason {
+            case .outdated: isOutdated(created: record.createdAt, cutoff: outdatedBefore)
+            case .unsupervised: classify(target.daemon, target.leaderPID) == .orphaned
             }
-            dispositions[target] = .kill
+            dispositions[target] = qualifies ? .kill : .skipped
         }
         return Narrowed(dispositions: dispositions, inventoryFailed: false)
     }
@@ -232,7 +272,7 @@ public struct LiveResetMarkerStore {
     }
 
     /// Nil when no marker exists. Throws `.invalid`, after removing the file, for anything that does not
-    /// decode as the current version; any other error is the rename failing, and the caller must then
+    /// decode as a supported version; any other error is the rename failing, and the caller must then
     /// treat the reset as not authorized.
     public func consume() throws -> LiveReset.Marker? {
         let files = FileManager.default
@@ -243,7 +283,7 @@ public struct LiveResetMarkerStore {
         decoder.dateDecodingStrategy = .secondsSince1970
         guard let data = try? Data(contentsOf: consumed),
               let value = try? decoder.decode(LiveReset.Marker.self, from: data),
-              value.version == LiveReset.Marker.currentVersion else {
+              LiveReset.Marker.supportedVersions.contains(value.version) else {
             try? files.removeItem(at: consumed)
             throw Failure.invalid
         }
