@@ -152,11 +152,16 @@ targets:
           license_dest="$CODESIGNING_FOLDER_PATH/Contents/Resources/zmx/LICENSE"
           [ -x "$zmx_src" ] || { echo "staged zmx not found at $zmx_src" >&2; exit 1; }
           [ -f "$license_src" ] || { echo "zmx license not found at $license_src" >&2; exit 1; }
+          # the build id the app compares against its state directory's record to date a zmx change
+          stamp_src="$SRCROOT/.zmx-build-stamp"
+          stamp_dest="$CODESIGNING_FOLDER_PATH/Contents/Resources/zmx/BUILD"
+          [ -f "$stamp_src" ] || { echo "zmx build stamp not found at $stamp_src" >&2; exit 1; }
           mkdir -p "$(dirname "$cli_dest")" "$(dirname "$license_dest")"
           cp -f "$src" "$cli_dest"
           cp -f "$host_src" "$host_dest"
           cp -f "$zmx_src" "$zmx_dest"
           cp -f "$license_src" "$license_dest"
+          cp -f "$stamp_src" "$stamp_dest"
           # ad-hoc sign the helpers + re-seal the app (Debug/normal builds). Developer ID signing for
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).

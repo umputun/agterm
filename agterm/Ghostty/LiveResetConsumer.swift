@@ -19,6 +19,8 @@ enum LiveResetConsumer {
         var budget: Duration = .seconds(15)
         var listTimeout: TimeInterval = 3
         var killTimeout: TimeInterval = 5
+        /// outdatedBefore is the launch's `ZmxBuildRecord` cutoff; nil skips every outdated target.
+        var outdatedBefore: Date?
     }
 
     /// Nil when no marker was armed; an unreadable or undecodable marker is discarded and kills nothing.

@@ -44,7 +44,7 @@
 ## Solution Overview
 - The app bundles the zmx build id as `Contents/Resources/zmx/BUILD`, copied from `.zmx-build-stamp` by the
   same build phase that copies zmx.
-- At launch, inside `LaunchOrchestration` and before the reset marker is consumed, the app compares the
+- At launch, before `LaunchOrchestration.run` consumes the reset marker, the app compares the
   bundled id with `zmx-build.json` in the state directory. A different or missing record is replaced with
   `{id, changedAt}`, where `changedAt` is now floored to whole seconds. Unchanged records keep their
   `changedAt`, so an app update that ships the same zmx build flags nothing.
@@ -100,20 +100,19 @@
 **Files:**
 - Modify: `project.yml`
 - Create: `agtermCore/Sources/agtermCore/ZmxBuildRecord.swift`
-- Modify: `agterm/Ghostty/LiveResetConsumer.swift` (`LaunchOrchestration`), `agterm/agtermApp.swift`
+- Modify: `agterm/Ghostty/LiveResetConsumer.swift` (`Dependencies.outdatedBefore`), `agterm/agtermApp.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/ZmxBuildRecordTests.swift`
-- Modify: the hosted `LaunchOrchestration` tests in `agtermTests/LiveResetConsumerTests.swift`
 
-- [ ] copy `.zmx-build-stamp` to `Contents/Resources/zmx/BUILD` in the zmx build phase, failing the build when
+- [x] copy `.zmx-build-stamp` to `Contents/Resources/zmx/BUILD` in the zmx build phase, failing the build when
       it is missing, as the zmx copy does
-- [ ] add `ZmxBuildRecord` with `advanced(from:bundledID:now:)` and load/save of `zmx-build.json` in the state
+- [x] add `ZmxBuildRecord` with `advanced(from:bundledID:now:)` and load/save of `zmx-build.json` in the state
       directory
-- [ ] in `LaunchOrchestration`, read the bundled id (trimmed) and advance the record before the marker is
-      consumed; hand the resulting cutoff to the consumer and keep it for the control server
-- [ ] write tests: no record, same id keeps `changedAt`, new id resets it, floored seconds, unreadable record
-      treated as absent, missing bundle resource means no cutoff
-- [ ] write a hosted test that the record is advanced before the marker is consumed
-- [ ] run `swift test --filter ZmxBuildRecordTests` and the app build - must pass before task 2
+- [x] ➕ compute the cutoff (`ZmxBuildRecord.launchCutoff`) in `restoredRuntime` before `LaunchOrchestration.run`
+      and pass it in `LiveResetConsumer.Dependencies.outdatedBefore` and `RestoredRuntime`; the call order in
+      `restoredRuntime` replaces advancing inside `LaunchOrchestration` plus an ordering test
+- [x] write tests: no record, same id keeps `changedAt`, new id resets it, floored seconds, unreadable record
+      treated as absent, missing or blank bundled id means no cutoff
+- [x] run `swift test --filter ZmxBuildRecordTests` and the app build - must pass before task 2
 
 ### Task 2: Select and narrow outdated panes
 
