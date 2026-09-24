@@ -53,15 +53,27 @@ extension AppStore {
     /// the app target can gate its (retained, teardown-only-freed) per-surface config apply on a real change
     /// — without that a scripted set-loop keeps appending owned configs. The store owns only the spec; the
     /// C-boundary apply lives app-side in `ControlServer`/`GhosttySurfaceView`.
+    /// A nil `pane` writes the session default and leaves every pane override in place; a pane writes that
+    /// pane's override, where nil returns it to inheriting the default.
     @discardableResult
-    public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID) -> Bool {
-        guard let session = session(withID: id), session.backgroundWatermark != watermark else { return false }
-        let previous = session.backgroundWatermark
-        session.backgroundWatermark = watermark
-        // a `.text` watermark owns a rendered `<id>.png`; switching away leaves it unreferenced. `clear` and
+    public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID,
+                                       pane: StatusPane? = nil) -> Bool {
+        guard let session = session(withID: id) else { return false }
+        let previous = pane.map { session.paneBackgrounds[$0] } ?? session.backgroundWatermark
+        guard previous != watermark else { return false }
+        if let pane {
+            session.paneBackgrounds[pane] = watermark
+        } else {
+            session.backgroundWatermark = watermark
+        }
+        // a `.text` watermark owns a rendered PNG; switching away leaves it unreferenced. `clear` and
         // teardown sweep the same file, so this is only the eager reclaim for text→image/nil.
         if previous?.kind == .text, watermark?.kind != .text {
-            WatermarkStorage.removeRenderedText(sessionID: id)
+            if let pane {
+                session.backgroundFileKey(for: pane).map { WatermarkStorage.removeRenderedText(sessionID: id, paneKey: $0) }
+            } else {
+                WatermarkStorage.removeRenderedText(sessionID: id)
+            }
         }
         save()
         return true

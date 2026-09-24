@@ -147,6 +147,9 @@ extension AppStore {
         (session.leftOverlayExitCode, session.rightOverlayExitCode) =
             (session.rightOverlayExitCode, session.leftOverlayExitCode)
         session.remoteOverlays.swapPanes()
+        // rendered text files are keyed by pane identity, which swapped above, so they follow without a move
+        (session.paneBackgrounds.left, session.paneBackgrounds.right) =
+            (session.paneBackgrounds.right, session.paneBackgrounds.left)
 
         var indicator = session.agentIndicator
         if indicator.status == .idle {
@@ -174,6 +177,15 @@ extension AppStore {
         guard session.agentIndicator.status != .idle,
               (session.agentIndicator.statusPane ?? .left) == owner else { return }
         setAgentIndicator(AgentIndicator(), forSession: session.id)
+    }
+
+    /// Drops a departing pane's background override and its rendered text file. Called before the pane's
+    /// identity is released, since the file is named by it.
+    private func dropPaneBackground(_ pane: StatusPane, of session: Session) {
+        if session.paneBackgrounds[pane]?.kind == .text, let key = session.backgroundFileKey(for: pane) {
+            WatermarkStorage.removeRenderedText(sessionID: session.id, paneKey: key)
+        }
+        session.paneBackgrounds[pane] = nil
     }
 
     /// Closes the split pane: hides it AND tears down its surface, so a later split starts a fresh shell.
@@ -204,6 +216,7 @@ extension AppStore {
         session.splitCwd = nil
         session.splitTitle = nil
         session.initialSplitCwd = nil
+        dropPaneBackground(.right, of: session)
         session.splitPaneIdentity = nil
         // the right pane is gone: drop its persisted pin, captured/creation commands, and armed payloads so a
         // fresh split is a plain shell. `restore.capture` can fill the capture slot mid-run, so it matters too.
@@ -248,6 +261,9 @@ extension AppStore {
         session.surface = survivor
         session.splitSurface = nil
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
+        // the survivor's override moves left with it; its text file is keyed by the identity promoted below
+        dropPaneBackground(.left, of: session)
+        (session.paneBackgrounds.left, session.paneBackgrounds.right) = (session.paneBackgrounds.right, nil)
         session.paneIdentity = session.splitPaneIdentity ?? UUID()
         session.splitPaneIdentity = nil
         let wasShown = session.isSplit
@@ -506,6 +522,8 @@ extension AppStore {
         if session.searchSurface === scratch { session.clearSearch() }
         // the `.scratch`-tagged block loses its owning surface here; a main/split tag survives (helper guards).
         clearIndicatorOwnedByPane(.scratch, of: session)
+        // a respawned scratch runs another program, so a label for the old one must not carry over
+        dropPaneBackground(.scratch, of: session)
         scratch.teardown()
         session.scratchSurface = nil
         return true

@@ -480,7 +480,7 @@ extension AppStore {
             session.teardownPaneOverlays()
             session.scratchSurface?.teardown()
             session.discardHudBody() // a HUD whose surface never realized has no teardown to delete its body file
-            WatermarkStorage.removeRenderedText(sessionID: session.id)
+            WatermarkStorage.removeAllRenderedText(sessionID: session.id)
             removeFromRecency(session.id)
         }
     }

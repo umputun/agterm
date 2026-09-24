@@ -78,6 +78,7 @@ struct AppStorePaneSwapTests {
         let splitAxis: SplitAxis
         let splitRatio: Double?
         let splitFocused: Bool
+        let paneBackgrounds: PaneBackgrounds
 
         @MainActor init(_ session: Session) {
             surface = session.surface.map { ObjectIdentifier($0) }
@@ -114,6 +115,7 @@ struct AppStorePaneSwapTests {
             splitAxis = session.splitAxis
             splitRatio = session.splitRatio
             splitFocused = session.splitFocused
+            paneBackgrounds = session.paneBackgrounds
         }
     }
 
@@ -159,6 +161,9 @@ struct AppStorePaneSwapTests {
         session.setPaneOverlayExitCode(9, pane: .right)
         session.agentIndicator = AgentIndicator(status: .blocked, statusPane: .left)
         session.statusChangedAt = Date(timeIntervalSince1970: 123)
+        session.paneBackgrounds = PaneBackgrounds(left: BackgroundWatermark(kind: .text, text: "DRIVER"),
+                                                  right: BackgroundWatermark(kind: .color, colorHex: "#201414"),
+                                                  scratch: BackgroundWatermark(kind: .text, text: "SCRATCH"))
         return Fixture(store: store, session: session, primary: primary, split: split,
                        leftOverlay: leftOverlay, rightOverlay: rightOverlay)
     }
@@ -203,6 +208,9 @@ struct AppStorePaneSwapTests {
         #expect(session.splitAxis == .topBottom)
         #expect(session.splitRatio == 0.3)
         #expect(session.splitFocused)
+        #expect(session.paneBackgrounds == PaneBackgrounds(left: BackgroundWatermark(kind: .color, colorHex: "#201414"),
+                                                           right: BackgroundWatermark(kind: .text, text: "DRIVER"),
+                                                           scratch: BackgroundWatermark(kind: .text, text: "SCRATCH")))
     }
 
     @Test func swappedPaneIdentitiesStayPairedThroughHiddenSplitRestore() throws {

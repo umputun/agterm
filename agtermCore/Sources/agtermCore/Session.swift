@@ -215,6 +215,9 @@ public final class Session: Identifiable {
     /// after a global config reload. Persisted, so it survives a relaunch (`.text` re-renders its PNG).
     @ObservationIgnored public var backgroundWatermark: BackgroundWatermark?
 
+    /// Per-pane overrides of `backgroundWatermark`; see `PaneBackgrounds`.
+    @ObservationIgnored public var paneBackgrounds = PaneBackgrounds()
+
     /// A command to run as the session's process instead of the login shell (kitty's `launch <cmd>`, ghostty's
     /// `command`), set via `session.new --command`. The surface factory reads it once; the session closes when
     /// the command exits. Persisted, so a command session — e.g. an `ssh …` shortcut, which escapes the

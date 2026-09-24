@@ -49,6 +49,7 @@ extension AppStore {
                         splitInitialCommand: session.splitInitialCommand,
                         splitCommandWait: session.splitCommandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark,
+                        paneBackgrounds: session.paneBackgrounds.persisted,
                         restoreCommand: session.restoreCommand,
                         splitRestoreCommand: session.splitRestoreCommand,
                         context: session.context)
@@ -94,6 +95,8 @@ extension AppStore {
         session.splitCommandWait = hasSplit ? (snapshot.splitCommandWait ?? false) : false
         session.wasRestored = true
         session.backgroundWatermark = snapshot.backgroundWatermark
+        session.paneBackgrounds = PaneBackgrounds(left: snapshot.paneBackgrounds?.left,
+                                                  right: hasSplit ? snapshot.paneBackgrounds?.right : nil)
         session.restoreCommand = snapshot.restoreCommand
         session.splitRestoreCommand = hasSplit ? snapshot.splitRestoreCommand : nil
         if launchRestore {

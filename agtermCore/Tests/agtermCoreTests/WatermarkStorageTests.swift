@@ -54,4 +54,44 @@ struct WatermarkStorageTests {
         WatermarkStorage.removeRenderedText(sessionID: id, stateDir: stateDir)
         #expect(!FileManager.default.fileExists(atPath: url.path))
     }
+
+    @Test func paneKeyNamesItsOwnFileAndRemovalTakesOnlyThatFile() throws {
+        let stateDir = try makeTempStateDir()
+        defer { try? FileManager.default.removeItem(at: stateDir) }
+        let id = UUID()
+        WatermarkStorage.ensureDirectory(stateDir: stateDir)
+        let sessionFile = WatermarkStorage.renderedTextURL(sessionID: id, stateDir: stateDir)
+        let paneFile = WatermarkStorage.renderedTextURL(sessionID: id, paneKey: "scratch", stateDir: stateDir)
+        #expect(paneFile.lastPathComponent == "\(id.uuidString)-scratch.png")
+        try Data("png".utf8).write(to: sessionFile)
+        try Data("png".utf8).write(to: paneFile)
+
+        WatermarkStorage.removeRenderedText(sessionID: id, paneKey: "scratch", stateDir: stateDir)
+        #expect(!FileManager.default.fileExists(atPath: paneFile.path))
+        #expect(FileManager.default.fileExists(atPath: sessionFile.path))
+
+        try Data("png".utf8).write(to: paneFile)
+        WatermarkStorage.removeRenderedText(sessionID: id, stateDir: stateDir)
+        #expect(!FileManager.default.fileExists(atPath: sessionFile.path))
+        #expect(FileManager.default.fileExists(atPath: paneFile.path))
+    }
+
+    @Test func removeAllRenderedTextSweepsOneSessionsFilesOnly() throws {
+        let stateDir = try makeTempStateDir()
+        defer { try? FileManager.default.removeItem(at: stateDir) }
+        let id = UUID()
+        let other = UUID()
+        WatermarkStorage.ensureDirectory(stateDir: stateDir)
+        let doomed = [WatermarkStorage.renderedTextURL(sessionID: id, stateDir: stateDir),
+                      WatermarkStorage.renderedTextURL(sessionID: id, paneKey: UUID().uuidString, stateDir: stateDir),
+                      WatermarkStorage.renderedTextURL(sessionID: id, paneKey: "scratch", stateDir: stateDir)]
+        let kept = [WatermarkStorage.renderedTextURL(sessionID: other, stateDir: stateDir),
+                    WatermarkStorage.renderedTextURL(sessionID: other, paneKey: "scratch", stateDir: stateDir)]
+        for url in doomed + kept { try Data("png".utf8).write(to: url) }
+
+        WatermarkStorage.removeAllRenderedText(sessionID: id, stateDir: stateDir)
+        #expect(doomed.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        #expect(kept.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        WatermarkStorage.removeAllRenderedText(sessionID: UUID(), stateDir: stateDir.appendingPathComponent("absent"))
+    }
 }

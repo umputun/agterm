@@ -534,7 +534,7 @@ public final class WindowLibrary {
         let sessionIDsToSweep: [UUID] = stores[id].map { $0.workspaces.flatMap(\.sessions).map(\.id) }
             ?? persistenceStore(for: id).load().workspaces.flatMap(\.sessions).map(\.id)
         for sessionID in sessionIDsToSweep {
-            WatermarkStorage.removeRenderedText(sessionID: sessionID, stateDir: directory)
+            WatermarkStorage.removeAllRenderedText(sessionID: sessionID, stateDir: directory)
         }
         stores[id] = nil
         openSetVersion += 1

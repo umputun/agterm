@@ -182,6 +182,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitCommandWait: Bool?
     /// The session's background watermark (image or rasterized text); nil = none. `.text` re-renders its PNG.
     public var backgroundWatermark: BackgroundWatermark?
+    /// Left/right pane overrides of `backgroundWatermark`; nil = none. The scratch override is never persisted.
+    public var paneBackgrounds: PaneBackgrounds?
     /// The main pane's restore-command override (`session.restore`), winning over `foregroundCommand` and
     /// `initialCommand` on the next launch. Tri-state: nil = no override, `""` = a plain shell, a command =
     /// that shell line. Sticky — unlike `foregroundCommand` it is not consumed, so it fires every restart.
@@ -196,7 +198,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
                 initialCommand: String? = nil, commandWait: Bool? = nil,
                 splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
-                backgroundWatermark: BackgroundWatermark? = nil,
+                backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
                 context: String? = nil) {
         self.id = id
@@ -218,6 +220,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.splitInitialCommand = splitInitialCommand
         self.splitCommandWait = splitCommandWait
         self.backgroundWatermark = backgroundWatermark
+        self.paneBackgrounds = paneBackgrounds
         self.restoreCommand = restoreCommand
         self.splitRestoreCommand = splitRestoreCommand
         self.context = context
@@ -227,7 +230,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case id, paneIdentity, splitPaneIdentity, customName, cwd, isSplit, hasSplit, splitAxis
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
-        case splitInitialCommand, splitCommandWait, backgroundWatermark
+        case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
         case restoreCommand, splitRestoreCommand, context
     }
 
@@ -259,6 +262,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         splitInitialCommand = (try? c.decodeIfPresent(String.self, forKey: .splitInitialCommand)) ?? nil
         splitCommandWait = (try? c.decodeIfPresent(Bool.self, forKey: .splitCommandWait)) ?? nil
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
+        paneBackgrounds = (try? c.decodeIfPresent(PaneBackgrounds.self, forKey: .paneBackgrounds)) ?? nil
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
