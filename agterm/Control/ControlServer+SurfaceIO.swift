@@ -239,9 +239,7 @@ extension ControlServer {
         }
     }
 
-    /// Apply a session's watermark to its realized surfaces: the named pane only, or for a default change
-    /// every pane still inheriting it. Re-applying an overridden pane would drop its live OSC 11 latch for
-    /// nothing. A never-realized one (nil) applies the spec itself on creation (`createSurface`).
+    // a default change skips overridden panes: re-applying one would drop its live OSC 11 latch
     private func applyWatermark(to session: Session, pane: StatusPane?) {
         let slots: [(StatusPane, (any TerminalSurface)?)] = [(.left, session.surface), (.right, session.splitSurface),
                                                              (.scratch, session.scratchSurface)]

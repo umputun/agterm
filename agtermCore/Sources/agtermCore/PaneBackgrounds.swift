@@ -13,6 +13,7 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
         self.scratch = scratch
     }
 
+    /// isEmpty is true when every pane inherits.
     public var isEmpty: Bool { left == nil && right == nil && scratch == nil }
 
     public subscript(pane: StatusPane) -> BackgroundWatermark? {
@@ -77,10 +78,8 @@ public extension Session {
         return watermark.colorHex
     }
 
-    /// backdropWashRegions lists a floating overlay's backdrop wash layers back to front. The caller paints
-    /// them opaque and applies the mute once to the flattened group; a pane layer stacked on a translucent
-    /// default wash would dim that pane twice. The scratch covers both panes, so it alone decides the color
-    /// while shown, and a pane overlay washes against its own background, not the pane's.
+    /// backdropWashRegions lists a floating overlay's backdrop wash layers back to front, for the caller to
+    /// paint opaque and mute once as a group.
     func backdropWashRegions(paneFrames: HudPaneFrames) -> [BackdropWashRegion] {
         if scratchActive { return [BackdropWashRegion(frame: nil, colorHex: washColorHex(for: .scratch))] }
         let sessionHex = backgroundWatermark?.kind == .color ? backgroundWatermark?.colorHex : nil

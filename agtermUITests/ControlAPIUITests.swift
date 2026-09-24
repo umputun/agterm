@@ -537,9 +537,9 @@ final class ControlAPIUITests: ControlAPITestCase {
             swapped = try sendCommand(#"{"cmd":"session.swap","target":"\#(sid)"}"#)
             if swapped["ok"] as? Bool != true { Thread.sleep(forTimeInterval: 0.2) }
         }
-        XCTAssertNotNil(pollSessionNode(sid, timeout: 3) { paneText($0, "left") == "PEER" && paneText($0, "right") == nil }, "the label follows the swap: \(swapped)")
+        XCTAssertNotNil(try pollSessionNode(sid, timeout: 3) { paneText($0, "left") == "PEER" && paneText($0, "right") == nil }, "the label follows the swap: \(swapped)")
         XCTAssertEqual(try sendCommand(background(#""mode":"clear","pane":"left""#))["ok"] as? Bool, true)
-        XCTAssertNotNil(pollSessionNode(sid, timeout: 3) { $0["paneBackgrounds"] == nil && $0["background"] != nil }, "a pane clear returns it to the default")
+        XCTAssertNotNil(try pollSessionNode(sid, timeout: 3) { $0["paneBackgrounds"] == nil && $0["background"] != nil }, "a pane clear returns it to the default")
 
         let cleared = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"clear"}}"#)
         XCTAssertEqual(cleared["ok"] as? Bool, true, "session.background clear should succeed: \(cleared)")
