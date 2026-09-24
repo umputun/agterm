@@ -260,7 +260,8 @@ extension WindowContentView {
                              isActive: gates.focusable && focused && !gates.overlaid && !covered,
                              deckVisible: gates.visible && !covered,
                              onScreen: gates.onScreen && !covered)
-                    .overlay { paneDim(!focused, session: session) }
+                    .overlay { paneDim(!focused, session: session,
+                                       color: washColor(hex: session.washColorHex(for: pane == .left ? .left : .right))) }
                     .modifier(PaneOverlayCover(covered: covered))
                     .id(pane == .left ? hostPrefix
                         : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
@@ -309,8 +310,10 @@ extension WindowContentView {
                     // carries the backdrop mute: a floating panel leaves the session live behind it, so the
                     // same wash `paneDim` puts on an inactive split pane marks it inactive here. Full stays
                     // clear — its panes are already hidden, and a wash would tint the window backing.
-                    (style.backdrop ? washColor(for: session).opacity(muteWashOpacity) : Color.clear)
-                        .contentShape(Rectangle())
+                    ZStack {
+                        if style.backdrop { backdropWash(session, paneFrames: paneFrames) }
+                        Color.clear.contentShape(Rectangle())
+                    }
                     // `viewOnly` is the NSView-level half of the same passivity, and the layer that OWNS it:
                     // `mouseDown` makes the surface first responder, which would swallow every keystroke the
                     // user meant for the session, and the dashboard learned that `.allowsHitTesting(false)`
@@ -351,6 +354,24 @@ extension WindowContentView {
         // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
         // intercepts clicks meant for the pane(s).
         .allowsHitTesting(live && session.overlayActive && deckHostsSurface(session: session, surface: .overlay))
+    }
+
+    /// backdropWash paints `Session.backdropWashRegions` opaque and fades the flattened group once, so a pane
+    /// region over the default never mutes that pane twice.
+    private func backdropWash(_ session: Session, paneFrames: HudPaneFrames) -> some View {
+        ZStack {
+            ForEach(Array(session.backdropWashRegions(paneFrames: paneFrames).enumerated()), id: \.offset) { _, region in
+                if let frame = region.frame.map(CGRect.init) {
+                    washColor(hex: region.colorHex).frame(width: frame.width, height: frame.height)
+                        .position(x: frame.midX, y: frame.midY)
+                } else {
+                    washColor(hex: region.colorHex)
+                }
+            }
+        }
+        .compositingGroup()
+        .opacity(muteWashOpacity)
+        .allowsHitTesting(false)
     }
 
     private func cachePaneFrames(_ frames: HudPaneFrames, for session: Session) {
@@ -395,17 +416,17 @@ extension WindowContentView {
     /// background: a translucent wash of the terminal background, so background pixels blend bg→bg and text
     /// pixels text→bg. Strength 0 renders nothing; clicks pass through, so it stays focusable. Suppressed
     /// while a floating panel washes the whole backdrop, which already covers this pane — the two would
-    /// stack to a stronger mute here than on the pane beside it. `color` overrides the blend target for a
-    /// surface that does not render the session's background; the pane itself takes the default.
-    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session, color: Color? = nil) -> some View {
+    /// stack to a stronger mute here than on the pane beside it. `color` is the background the dimmed
+    /// surface itself renders.
+    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session, color: Color) -> some View {
         if dimmed, muteWashOpacity > 0, !backdropWashActive(session: session) {
-            (color ?? washColor(for: session)).opacity(muteWashOpacity).allowsHitTesting(false)
+            color.opacity(muteWashOpacity).allowsHitTesting(false)
         }
     }
 
     /// The blend target for a PANE OVERLAY's wash: its own `--background-color` when it set one, else the
     /// theme. An overlay surface is sessionless and never inherits the session's background — only the
-    /// scratch does, through `watermarkSession` — so `washColor(for:)` would blend bg→OTHER-bg and shift
+    /// scratch does, through `watermarkSession` — so the pane's color would blend bg→OTHER-bg and shift
     /// the background instead of fading the text. Gated on the renderer's own hex predicate, so the wash
     /// tracks exactly what `applyOverlayBackgroundColor` painted rather than a value it rejected.
     private func overlayWashColor(_ session: Session, pane: OverlayPane) -> Color {

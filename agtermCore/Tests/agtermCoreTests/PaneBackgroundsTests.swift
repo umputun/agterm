@@ -115,6 +115,58 @@ struct PaneBackgroundsTests {
         #expect(restored.paneBackgrounds == PaneBackgrounds(left: driver))
     }
 
+    @Test func washColorIsTheEffectiveSolidColorOnly() throws {
+        let session = try makeSplitSession().session
+        session.backgroundWatermark = tint
+        session.paneBackgrounds.right = peer
+        #expect(session.washColorHex(for: .left) == "#201414")
+        #expect(session.washColorHex(for: .right) == nil)
+        session.paneBackgrounds.scratch = BackgroundWatermark(kind: .color, colorHex: "#102030")
+        #expect(session.washColorHex(for: .scratch) == "#102030")
+    }
+
+    @Test func backdropRegionsLayerEachPaneOverTheSessionDefault() throws {
+        let session = try makeSplitSession().session
+        session.backgroundWatermark = tint
+        session.paneBackgrounds.right = BackgroundWatermark(kind: .color, colorHex: "#102030")
+        let left = HudPaneFrame(x: 0, y: 0, width: 400, height: 300)
+        let right = HudPaneFrame(x: 401, y: 0, width: 399, height: 300)
+
+        #expect(session.backdropWashRegions(paneFrames: HudPaneFrames(left: left, right: right)) == [
+            BackdropWashRegion(frame: nil, colorHex: "#201414"),
+            BackdropWashRegion(frame: left, colorHex: "#201414"),
+            BackdropWashRegion(frame: right, colorHex: "#102030"),
+        ])
+    }
+
+    @Test func backdropRegionsTakeAPaneOverlaysOwnBackground() throws {
+        let session = try makeSplitSession().session
+        session.paneBackgrounds.left = tint
+        session.paneBackgrounds.right = tint
+        session.setPaneOverlay(PaneOverlay(command: "top", backgroundColor: "#0a0b0c"), pane: .left)
+        session.setPaneOverlay(PaneOverlay(command: "htop"), pane: .right)
+        let left = HudPaneFrame(x: 0, y: 0, width: 400, height: 300)
+        let right = HudPaneFrame(x: 401, y: 0, width: 399, height: 300)
+
+        #expect(session.backdropWashRegions(paneFrames: HudPaneFrames(left: left, right: right)) == [
+            BackdropWashRegion(frame: nil, colorHex: nil),
+            BackdropWashRegion(frame: left, colorHex: "#0a0b0c"),
+            BackdropWashRegion(frame: right, colorHex: nil),
+        ])
+    }
+
+    @Test func backdropRegionsUseOnlyTheScratchWhileItIsShown() throws {
+        let session = try makeSplitSession().session
+        session.backgroundWatermark = tint
+        session.paneBackgrounds.right = BackgroundWatermark(kind: .color, colorHex: "#102030")
+        session.scratchActive = true
+        let frames = HudPaneFrames(left: HudPaneFrame(x: 0, y: 0, width: 400, height: 300))
+
+        #expect(session.backdropWashRegions(paneFrames: frames) == [BackdropWashRegion(frame: nil, colorHex: "#201414")])
+        session.paneBackgrounds.scratch = peer
+        #expect(session.backdropWashRegions(paneFrames: frames) == [BackdropWashRegion(frame: nil, colorHex: nil)])
+    }
+
     private func makeSplitSession() throws -> (store: AppStore, session: Session) {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

@@ -220,22 +220,32 @@ extension ControlServer {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
+            // an override for a pane that does not exist would outlive nothing and land on the next one
+            if options.pane == .right, !session.hasSplit {
+                return ControlResponse(ok: false, error: "session has no split pane")
+            }
+            if options.pane == .scratch, session.scratchSurface == nil {
+                return ControlResponse(ok: false, error: "session has no scratch terminal")
+            }
             // gate on a real change: applyWatermark RETAINS a per-surface config freed only on teardown, so
             // re-applying an unchanged spec (a scripted set-loop) leaks owned configs. the store no-ops too.
-            guard store.setBackgroundWatermark(watermark, forSession: id) else {
+            guard store.setBackgroundWatermark(watermark, forSession: id, pane: options.pane) else {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
-            // clearing a `.text` watermark drops its rendered PNG so the state dir doesn't accumulate.
-            if watermark == nil { WatermarkStorage.removeRenderedText(sessionID: id) }
-            applyWatermark(to: session)
+            // clearing a `.text` default drops its rendered PNG so the state dir doesn't accumulate.
+            if watermark == nil, options.pane == nil { WatermarkStorage.removeRenderedText(sessionID: id) }
+            applyWatermark(to: session, pane: options.pane)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
-    /// Apply a session's watermark spec to its realized main + split + scratch surfaces. A never-realized one
-    /// (nil) is skipped — it applies the spec itself on creation (`GhosttySurfaceView.createSurface`).
-    private func applyWatermark(to session: Session) {
-        for surface in [session.surface, session.splitSurface, session.scratchSurface] {
+    /// Apply a session's watermark to its realized surfaces: the named pane only, or for a default change
+    /// every pane still inheriting it. Re-applying an overridden pane would drop its live OSC 11 latch for
+    /// nothing. A never-realized one (nil) applies the spec itself on creation (`createSurface`).
+    private func applyWatermark(to session: Session, pane: StatusPane?) {
+        let slots: [(StatusPane, (any TerminalSurface)?)] = [(.left, session.surface), (.right, session.splitSurface),
+                                                             (.scratch, session.scratchSurface)]
+        for (slot, surface) in slots where pane == slot || (pane == nil && session.paneBackgrounds[slot] == nil) {
             (surface as? GhosttySurfaceView)?.applyWatermarkFromSession()
         }
     }

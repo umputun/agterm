@@ -52,10 +52,47 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
     }
 }
 
+/// BackdropWashRegion is one layer of a floating overlay's backdrop wash: `frame` nil covers the whole
+/// detail frame, and `colorHex` nil means the theme background.
+public struct BackdropWashRegion: Equatable, Sendable {
+    public let frame: HudPaneFrame?
+    public let colorHex: String?
+
+    public init(frame: HudPaneFrame?, colorHex: String?) {
+        self.frame = frame
+        self.colorHex = colorHex
+    }
+}
+
 public extension Session {
     /// effectiveBackground is what a pane renders: its own override, else the session default.
     func effectiveBackground(for pane: StatusPane) -> BackgroundWatermark? {
         paneBackgrounds[pane] ?? backgroundWatermark
+    }
+
+    /// washColorHex is the solid color a pane renders, which its text-fading wash must blend toward; nil
+    /// for the theme background, including under an image or text watermark.
+    func washColorHex(for pane: StatusPane) -> String? {
+        guard let watermark = effectiveBackground(for: pane), watermark.kind == .color else { return nil }
+        return watermark.colorHex
+    }
+
+    /// backdropWashRegions lists a floating overlay's backdrop wash layers back to front. The caller paints
+    /// them opaque and applies the mute once to the flattened group; a pane layer stacked on a translucent
+    /// default wash would dim that pane twice. The scratch covers both panes, so it alone decides the color
+    /// while shown, and a pane overlay washes against its own background, not the pane's.
+    func backdropWashRegions(paneFrames: HudPaneFrames) -> [BackdropWashRegion] {
+        if scratchActive { return [BackdropWashRegion(frame: nil, colorHex: washColorHex(for: .scratch))] }
+        let sessionHex = backgroundWatermark?.kind == .color ? backgroundWatermark?.colorHex : nil
+        var regions = [BackdropWashRegion(frame: nil, colorHex: sessionHex)]
+        for pane in OverlayPane.allCases {
+            guard let frame = paneFrames[pane] else { continue }
+            // the overlay's hex through the renderer's own predicate, so the wash matches what it painted
+            let overlayHex = paneOverlay(pane).map { $0.backgroundColor.flatMap { WatermarkConfig.isValidColorHex($0) ? $0 : nil } }
+            let hex = overlayHex ?? washColorHex(for: pane == .left ? .left : .right)
+            regions.append(BackdropWashRegion(frame: frame, colorHex: hex))
+        }
+        return regions
     }
 
     /// backgroundFileKey names a pane override's rendered text file: the pane identity, which follows the

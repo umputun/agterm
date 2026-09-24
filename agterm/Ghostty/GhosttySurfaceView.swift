@@ -700,7 +700,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // `watermarkSession`, sessionless overlay/quick skip it. ALSO re-applies a standalone
         // `dashboardFontOverride` for a member realizing AFTER the dashboard set the transient font, since
         // `applyWatermarkFromSession` honors `dashboardFontOverride ?? session.fontSize`.
-        if (session ?? watermarkSession)?.backgroundWatermark != nil || dashboardFontOverride != nil {
+        if effectiveWatermark != nil || dashboardFontOverride != nil {
             applyWatermarkFromSession()
         }
         // an overlay surface with its own background color applies it here too — the overlay is sessionless,

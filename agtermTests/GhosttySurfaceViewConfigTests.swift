@@ -37,6 +37,26 @@ final class GhosttySurfaceViewConfigTests: XCTestCase {
         return (settings, view)
     }
 
+    func testTheBackgroundPaneFollowsTheViewsRoleAndPicksItsOverride() {
+        let session = Session(initialCwd: "/tmp")
+        session.backgroundWatermark = BackgroundWatermark(kind: .color, colorHex: "#201414")
+        session.paneBackgrounds.right = BackgroundWatermark(kind: .text, text: "PEER")
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), fontSize: 12, command: "/bin/cat")
+        XCTAssertNil(view.effectiveWatermark)
+
+        view.session = session
+        XCTAssertEqual(view.backgroundPane, .left)
+        XCTAssertEqual(view.effectiveWatermark, session.backgroundWatermark)
+        view.setPaneRole(.split)
+        XCTAssertEqual(view.backgroundPane, .right)
+        XCTAssertEqual(view.effectiveWatermark, session.paneBackgrounds.right)
+
+        view.session = nil
+        view.watermarkSession = session
+        XCTAssertEqual(view.backgroundPane, .scratch)
+        XCTAssertEqual(view.effectiveWatermark, session.backgroundWatermark)
+    }
+
     // a config reload reset a hud to the default font while its measurement kept the creation size.
     func testAConfigReloadKeepsAHudsCreationFontSize() throws {
         let fix = try fixture(fontSize: 9) { $0.hudBodyFile = "/tmp/agterm-hud-config-\(UUID().uuidString)" }

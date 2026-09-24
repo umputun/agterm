@@ -525,6 +525,22 @@ final class ControlAPIUITests: ControlAPITestCase {
         let tooLong = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"\#(longText)"}}"#)
         XCTAssertEqual(tooLong["ok"] as? Bool, false, "an over-long watermark text should be rejected")
 
+        let background = { (args: String) in #"{"cmd":"session.background","target":"\#(sid)","args":{\#(args)}}"# }
+        let paneText = { (node: [String: Any], pane: String) in ((node["paneBackgrounds"] as? [String: Any])?[pane] as? [String: Any])?["text"] as? String }
+        XCTAssertEqual(try sendCommand(background(#""mode":"text","text":"PEER","pane":"right""#))["error"] as? String, "session has no split pane")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sid)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try sendCommand(background(#""mode":"text","text":"PEER","pane":"right""#))["ok"] as? Bool, true)
+        let labelled = try XCTUnwrap(pollSessionNode(sid, timeout: 3) { paneText($0, "right") == "PEER" && paneText($0, "left") == nil })
+        XCTAssertEqual((labelled["background"] as? [String: Any])?["colorHex"] as? String, "#ff0000", "the default reads back beside the override")
+        var swapped: [String: Any] = [:]
+        for _ in 0..<20 where swapped["ok"] as? Bool != true {
+            swapped = try sendCommand(#"{"cmd":"session.swap","target":"\#(sid)"}"#)
+            if swapped["ok"] as? Bool != true { Thread.sleep(forTimeInterval: 0.2) }
+        }
+        XCTAssertNotNil(pollSessionNode(sid, timeout: 3) { paneText($0, "left") == "PEER" && paneText($0, "right") == nil }, "the label follows the swap: \(swapped)")
+        XCTAssertEqual(try sendCommand(background(#""mode":"clear","pane":"left""#))["ok"] as? Bool, true)
+        XCTAssertNotNil(pollSessionNode(sid, timeout: 3) { $0["paneBackgrounds"] == nil && $0["background"] != nil }, "a pane clear returns it to the default")
+
         let cleared = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"clear"}}"#)
         XCTAssertEqual(cleared["ok"] as? Bool, true, "session.background clear should succeed: \(cleared)")
 

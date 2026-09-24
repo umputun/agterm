@@ -27,8 +27,11 @@ extension GhosttySurfaceView {
         // dedupe key, and a stale value would swallow an identical follow-up OSC 11. the reload / opacity
         // / dashboard re-assert paths guard on the latch BEFORE calling this, so no live OSC is dropped.
         oscBackgroundColorHex = nil
-        let resolvedImagePath = WatermarkRenderer.materialize(session.backgroundWatermark, sessionID: session.id)
-        let overlay = WatermarkConfig.overlayText(watermark: session.backgroundWatermark,
+        let pane = backgroundPane
+        let watermark = session.effectiveBackground(for: pane)
+        let paneKey = session.paneBackgrounds[pane] == nil ? nil : session.backgroundFileKey(for: pane)
+        let resolvedImagePath = WatermarkRenderer.materialize(watermark, sessionID: session.id, paneKey: paneKey)
+        let overlay = WatermarkConfig.overlayText(watermark: watermark,
                                                   resolvedImagePath: resolvedImagePath, fontSize: currentEffectiveFontSize(),
                                                   windowOpacity: GhosttyApp.shared.windowOpacity)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
@@ -43,6 +46,18 @@ extension GhosttySurfaceView {
         ownedConfigs = [config]
     }
 
+    /// backgroundPane is the pane whose session background this surface renders: the scratch is the one
+    /// view linked only through `watermarkSession`, and `isSplitPane` follows swap and promotion.
+    var backgroundPane: StatusPane {
+        if session == nil, watermarkSession != nil { return .scratch }
+        return isSplitPane ? .right : .left
+    }
+
+    /// effectiveWatermark is the background this surface renders, nil for none or a sessionless surface.
+    var effectiveWatermark: BackgroundWatermark? {
+        (session ?? watermarkSession)?.effectiveBackground(for: backgroundPane)
+    }
+
     /// reapplySessionConfigIfNeeded restores OSC colors, session watermarks/zoom, dashboard sizing, overlay
     /// backgrounds and HUD creation fonts after a shared config reload. A zoom-clearing reload nils
     /// `session.fontSize` first, so a session's zoom survives only the appearance flip.
@@ -55,7 +70,7 @@ extension GhosttySurfaceView {
             return
         }
         let configSession = session ?? watermarkSession
-        guard configSession?.backgroundWatermark != nil || configSession?.fontSize != nil || dashboardFontOverride != nil else {
+        guard effectiveWatermark != nil || configSession?.fontSize != nil || dashboardFontOverride != nil else {
             return
         }
         applyWatermarkFromSession()
@@ -68,7 +83,7 @@ extension GhosttySurfaceView {
     func reapplyColorBackgroundIfNeeded() {
         // an OSC-11 background bakes the opacity like a `.color` watermark, so it must re-emit too.
         if let hex = oscBackgroundColorHex { applyOSCBackground(hex); return }
-        guard (session ?? watermarkSession)?.backgroundWatermark?.kind == .color else { return }
+        guard effectiveWatermark?.kind == .color else { return }
         applyWatermarkFromSession()
     }
 
@@ -132,8 +147,7 @@ extension GhosttySurfaceView {
     /// The background color this surface's OWN config carries: a `.color` session watermark, else a
     /// sessionless overlay's `--background-color`. Nil when the surface runs the plain base config.
     private func surfaceOwnBackgroundHex() -> String? {
-        if let watermark = (session ?? watermarkSession)?.backgroundWatermark, watermark.kind == .color,
-           let hex = watermark.colorHex {
+        if let watermark = effectiveWatermark, watermark.kind == .color, let hex = watermark.colorHex {
             return hex
         }
         return overlayBackgroundColorHex

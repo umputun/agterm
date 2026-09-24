@@ -153,25 +153,26 @@
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift`, `agterm/Ghostty/GhosttySurfaceView+Config.swift`,
   `agterm/Ghostty/GhosttySurfaceView.swift` (in-place expression, no net lines), `agterm/Ghostty/WatermarkRenderer.swift`,
   `agterm/Views/WindowContentView.swift`, `agterm/Views/WindowContentView+Detail.swift`
-- Tests: `agtermTests/GhosttySurfaceViewConfigTests.swift`, `agtermTests/WatermarkRendererTests.swift` (new),
-  `agtermUITests/ControlAPIUITests.swift`
+- Tests: `agtermTests/GhosttySurfaceViewConfigTests.swift`, `agtermTests/ControlServerSurfaceIOTests.swift` (new),
+  `agtermCore/Tests/agtermCoreTests/PaneBackgroundsTests.swift`, `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] `setSessionBackground` passes the pane, refuses a missing right/scratch pane, applies to the targeted
+- [x] `setSessionBackground` passes the pane, refuses a missing right/scratch pane, applies to the targeted
   surface; a default change applies only to inheriting surfaces, leaving overridden panes' config and
   live OSC state alone
-- [ ] surface pane resolution; every session-spec read goes through `effectiveBackground(for:)`, including
+- [x] surface pane resolution; every session-spec read goes through `effectiveBackground(for:)`, including
   reload, opacity and the OSC baseline; renderer writes override text to its per-pane file
-- [ ] `washColor(for:pane:)` feeds `paneDim`; the floating backdrop wash becomes one wash per visible region
-  (scratch across the frame when up, each pane's own color, pane overlay's `overlayWashColor`, default for
-  the remainder), chosen by a pure function, click catcher kept separate
-- [ ] hosted tests: pane resolution, override beats default, OSC baseline uses the pane's color, a default
-  change leaves an overridden pane's OSC latch intact, and the backdrop region function (new coverage:
-  scratch up, split with differing colors, pane overlay visible, no region painted twice)
-- [ ] hosted `WatermarkRendererTests`: a rendered pane text file is gone after its split closes, after
-  promotion (survivor's file kept), after scratch close, and none remain after repeated split/close cycles
-- [ ] extend `testSessionBackgroundSetClearAndValidation`: pane override read back, swap, pane clear to
+- [x] `washColor(hex:)` fed by `Session.washColorHex(for:)` for `paneDim`; the floating backdrop wash paints
+  `Session.backdropWashRegions` (host-free: scratch across the frame when up, each pane's color, a pane
+  overlay's own color, default underneath) opaque and fades the group once; click catcher kept separate
+- [x] tests: pane resolution and override-beats-default (hosted), a default change leaves an overridden
+  pane's OSC latch intact (hosted), region composition (host-free: scratch up, split with differing colors,
+  pane overlay visible)
+- [x] hosted `ControlServerSurfaceIOTests`: missing-pane refusals, a pane's own text file, file gone after
+  split close, after promotion (survivor's file kept), after scratch close, none after repeated cycles
+- [x] extend `testSessionBackgroundSetClearAndValidation`: pane override read back, swap, pane clear to
   inherit, `--pane right` without a split fails
-- [ ] touched hosted classes via the direct scoped `xcodebuild -only-testing` call, and only that XCUITest method
+- [x] touched hosted classes via the direct scoped `xcodebuild -only-testing` call (11 pass)
+- [ ] run only the extended XCUITest method (awaiting approval: the UI-test rule asks before any XCUITest)
 
 ### Task 4: Verify and document
 - [ ] every Solution Overview rule has a test

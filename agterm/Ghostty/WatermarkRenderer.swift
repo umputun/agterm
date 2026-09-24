@@ -18,12 +18,13 @@ enum WatermarkRenderer {
 
     /// The resolved PNG/JPEG path for `watermark`, rendering the `.text` PNG as a side effect:
     /// - `.image` → the user's file path (nil if missing or an unsupported format);
-    /// - `.text` → a per-session PNG in `WatermarkStorage.directoryURL()` rendered from the string + color
+    /// - `.text` → the session's PNG, or a pane override's when `paneKey` is set, in
+    ///   `WatermarkStorage.directoryURL()` rendered from the string + color
     ///   (nil if the text is empty/over-length or rendering fails);
     /// - `.color` → nil (a solid color needs no image; `WatermarkConfig.overlayText` emits `background`).
     /// Returns nil for a nil watermark. Re-rendered on every call so a `.text` PNG always reflects the
     /// current string/color (cheap; called only on set/clear/reload, not per frame).
-    static func materialize(_ watermark: BackgroundWatermark?, sessionID: UUID) -> String? {
+    static func materialize(_ watermark: BackgroundWatermark?, sessionID: UUID, paneKey: String? = nil) -> String? {
         guard let watermark else { return nil }
         switch watermark.kind {
         case .color:
@@ -38,7 +39,7 @@ enum WatermarkRenderer {
             guard let text = watermark.text, WatermarkConfig.isValidText(text) else { return nil }
             let color = NSColor(agtermHex: watermark.colorHex) ?? GhosttyApp.shared.terminalForegroundColor ?? .white
             WatermarkStorage.ensureDirectory()
-            let url = WatermarkStorage.renderedTextURL(sessionID: sessionID)
+            let url = WatermarkStorage.renderedTextURL(sessionID: sessionID, paneKey: paneKey)
             return renderText(text, color: color, to: url) ? url.path : nil
         }
     }
