@@ -41,7 +41,7 @@ press ctrl+v in the program.
 ## How it works
 
 The chord runs the script with the session's `AGT_SESSION_HOST`. The script writes the clipboard's PNG
-to a temp file, copies it to the same path on the host with scp, and runs a small `sh` script over ssh
+to a temp file, streams it to the same path on the host over ssh, and runs a small `sh` script over ssh
 that puts the file on the host's clipboard and deletes it. When the ssh account is the one logged in to
 that Mac's desktop, a command run over ssh writes the clipboard Claude Code and codex read there.
 

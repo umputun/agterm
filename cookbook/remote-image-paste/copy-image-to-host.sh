@@ -9,9 +9,9 @@ trap 'rm -f "$f"' EXIT
 osascript -e "set fh to open for access POSIX file \"$f\" with write permission" \
   -e 'write (the clipboard as «class PNGf») to fh' -e 'close access fh' >/dev/null || exit 1
 
-scp -q -o BatchMode=yes "$f" "$AGT_SESSION_HOST:$f" || exit 1
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$AGT_SESSION_HOST" "umask 077; cat > '$f'" <"$f" || exit 1
 # use sh syntax regardless of the remote account shell
-ssh -o BatchMode=yes "$AGT_SESSION_HOST" sh -s -- "$f" <<'EOF' || exit 1
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$AGT_SESSION_HOST" sh -s -- "$f" <<'EOF' || exit 1
 osascript -e "set the clipboard to (read (POSIX file \"$1\") as «class PNGf»)" >/dev/null
 rc=$?
 rm -f "$1"
