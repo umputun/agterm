@@ -24,23 +24,20 @@ public enum WatermarkStorage {
         return dir
     }
 
-    /// The rendered-text PNG path: `<stateDir>/watermarks/<sessionID>.png` for the session default, or
+    /// renderedTextURL is `<stateDir>/watermarks/<sessionID>.png` for the session default, or
     /// `<sessionID>-<paneKey>.png` for a pane override (`Session.backgroundFileKey(for:)`).
     public static func renderedTextURL(sessionID: UUID, paneKey: String? = nil, stateDir: URL? = nil) -> URL {
         let name = paneKey.map { "\(sessionID.uuidString)-\($0)" } ?? sessionID.uuidString
         return directoryURL(stateDir: stateDir).appendingPathComponent("\(name).png")
     }
 
-    /// Remove one rendered `.text` PNG (best effort): the session default's, or one pane override's. A no-op
-    /// when none exists. A `.text` watermark always re-renders its PNG on apply, so an over-eager removal is
-    /// self-healing.
+    /// removeRenderedText deletes the default's or one pane override's PNG; the next apply re-renders it.
     public static func removeRenderedText(sessionID: UUID, paneKey: String? = nil, stateDir: URL? = nil) {
         try? FileManager.default.removeItem(at: renderedTextURL(sessionID: sessionID, paneKey: paneKey,
                                                                 stateDir: stateDir))
     }
 
-    /// Remove every rendered `.text` PNG a session owns, default and pane overrides alike. For permanent
-    /// session removal, which leaves nothing to re-render them.
+    /// removeAllRenderedText deletes every PNG a session owns, for permanent session removal.
     public static func removeAllRenderedText(sessionID: UUID, stateDir: URL? = nil) {
         let dir = directoryURL(stateDir: stateDir)
         let id = sessionID.uuidString

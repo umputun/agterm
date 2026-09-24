@@ -48,13 +48,8 @@ extension AppStore {
         }
     }
 
-    /// Sets (or clears) a session's background watermark and persists it; clean no-op for an unknown id or an
-    /// unchanged spec, so a repeated `session.background` is idempotent. Returns whether the spec CHANGED, so
-    /// the app target can gate its (retained, teardown-only-freed) per-surface config apply on a real change
-    /// — without that a scripted set-loop keeps appending owned configs. The store owns only the spec; the
-    /// C-boundary apply lives app-side in `ControlServer`/`GhosttySurfaceView`.
-    /// A nil `pane` writes the session default and leaves every pane override in place; a pane writes that
-    /// pane's override, where nil returns it to inheriting the default.
+    /// setBackgroundWatermark writes the session default when `pane` is nil, leaving pane overrides in
+    /// place, or that pane's override, where nil returns the pane to inheriting. Returns whether it changed.
     @discardableResult
     public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID,
                                        pane: StatusPane? = nil) -> Bool {

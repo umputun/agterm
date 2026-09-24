@@ -179,8 +179,7 @@ extension AppStore {
         setAgentIndicator(AgentIndicator(), forSession: session.id)
     }
 
-    /// Drops a departing pane's background override and its rendered text file. Called before the pane's
-    /// identity is released, since the file is named by it.
+    // drops a departing pane's override and its text file; call it before the identity naming the file goes.
     private func dropPaneBackground(_ pane: StatusPane, of session: Session) {
         if session.paneBackgrounds[pane]?.kind == .text, let key = session.backgroundFileKey(for: pane) {
             WatermarkStorage.removeRenderedText(sessionID: session.id, paneKey: key)

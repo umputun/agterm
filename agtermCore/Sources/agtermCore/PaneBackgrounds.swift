@@ -1,9 +1,6 @@
 import Foundation
 
-/// PaneBackgrounds holds per-pane `session.background` overrides layered over a session's
-/// `backgroundWatermark`. A nil pane inherits the session default, so an explicit override never breaks the
-/// scratch inheriting it (#274). Overrides follow their terminal: `AppStore` swaps, promotes and drops them
-/// with the pane, and only left/right persist because the scratch never does.
+/// PaneBackgrounds holds per-pane overrides of a session's `backgroundWatermark`; a nil pane inherits it.
 public struct PaneBackgrounds: Codable, Sendable, Equatable {
     public var left: BackgroundWatermark?
     public var right: BackgroundWatermark?
@@ -16,7 +13,6 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
         self.scratch = scratch
     }
 
-    /// Whether no pane carries an override.
     public var isEmpty: Bool { left == nil && right == nil && scratch == nil }
 
     public subscript(pane: StatusPane) -> BackgroundWatermark? {
@@ -36,7 +32,7 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
         }
     }
 
-    /// The snapshot form: left/right only, nil when neither is set.
+    /// persisted is the snapshot form: left/right only, nil when neither is set.
     var persisted: PaneBackgrounds? {
         let kept = PaneBackgrounds(left: left, right: right)
         return kept.isEmpty ? nil : kept
@@ -46,8 +42,8 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
         case left, right, scratch
     }
 
-    /// Lossy per pane, like `SessionSnapshot`: an undecodable override drops to inherit without costing the
-    /// other panes or the session.
+    // lossy per pane, like `SessionSnapshot`: an undecodable override drops to inherit without costing the
+    // other panes or the session.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         left = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .left)) ?? nil
@@ -57,13 +53,13 @@ public struct PaneBackgrounds: Codable, Sendable, Equatable {
 }
 
 public extension Session {
-    /// The background a pane renders: its own override, else the session default.
+    /// effectiveBackground is what a pane renders: its own override, else the session default.
     func effectiveBackground(for pane: StatusPane) -> BackgroundWatermark? {
         paneBackgrounds[pane] ?? backgroundWatermark
     }
 
-    /// The rendered-text file key for a pane's override: the pane identity, which follows the terminal
-    /// across swap and promotion, or `scratch`. Nil for a right pane that does not exist.
+    /// backgroundFileKey names a pane override's rendered text file: the pane identity, which follows the
+    /// terminal across swap and promotion, or `scratch`. Nil for a right pane that does not exist.
     func backgroundFileKey(for pane: StatusPane) -> String? {
         switch pane {
         case .left: paneIdentity.uuidString

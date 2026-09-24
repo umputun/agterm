@@ -215,7 +215,7 @@ public final class Session: Identifiable {
     /// after a global config reload. Persisted, so it survives a relaunch (`.text` re-renders its PNG).
     @ObservationIgnored public var backgroundWatermark: BackgroundWatermark?
 
-    /// Per-pane overrides of `backgroundWatermark`; see `PaneBackgrounds`.
+    /// paneBackgrounds overrides `backgroundWatermark` per pane.
     @ObservationIgnored public var paneBackgrounds = PaneBackgrounds()
 
     /// A command to run as the session's process instead of the login shell (kitty's `launch <cmd>`, ghostty's

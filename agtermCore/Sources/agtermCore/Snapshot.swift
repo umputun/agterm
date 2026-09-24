@@ -182,7 +182,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitCommandWait: Bool?
     /// The session's background watermark (image or rasterized text); nil = none. `.text` re-renders its PNG.
     public var backgroundWatermark: BackgroundWatermark?
-    /// Left/right pane overrides of `backgroundWatermark`; nil = none. The scratch override is never persisted.
+    /// paneBackgrounds holds the left/right overrides of `backgroundWatermark`; the scratch's is never persisted.
     public var paneBackgrounds: PaneBackgrounds?
     /// The main pane's restore-command override (`session.restore`), winning over `foregroundCommand` and
     /// `initialCommand` on the next launch. Tri-state: nil = no override, `""` = a plain shell, a command =
