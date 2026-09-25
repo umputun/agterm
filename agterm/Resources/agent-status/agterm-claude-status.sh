@@ -5,9 +5,12 @@
 # agent) inherits the spawner's AGTERM_* environment, so its own hooks would repaint the SPAWNER's
 # row. This adapter keeps that ownership question inside the installed hook package: decide from
 # process topology, not terminal state. The hook is a descendant of the agent that fired it, so
-# exactly one agent binary between here and the pane means "I am the pane's agent"; a second one
-# means another agent spawned mine, so stay silent. A tty test cannot answer this — a headless lane
-# that legitimately owns its pane has none, and a worker under script/expect gets a fresh pty anyway.
+# exactly one agent between here and the pane means "I am the pane's agent"; a second one means
+# another agent spawned mine, so stay silent. A consecutive run of one name counts once: a launcher
+# that runs the real binary without `exec` leaves one agent wearing several pids, while a spawned
+# worker always has the shell its tool call started between it and the spawner. A tty test cannot
+# answer this — a headless lane that legitimately owns its pane has none, and a worker under
+# script/expect gets a fresh pty anyway.
 #
 # It fails OPEN (reports) whenever the chain is unreadable or severed, e.g. a detached worker whose
 # spawner already exited: a missed guard is the behavior without this adapter, while a false silence
@@ -41,6 +44,7 @@ is_agent() {
 }
 
 agents=0
+prev_agent=
 p=$PPID
 for _ in 1 2 3 4 5 6 7 8; do
   [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null || break
@@ -64,7 +68,12 @@ for _ in 1 2 3 4 5 6 7 8; do
       ;;
   esac
 
-  is_agent "$base" && agents=$((agents + 1))
+  if is_agent "$base"; then
+    [ "$base" = "$prev_agent" ] || agents=$((agents + 1))
+    prev_agent=$base
+  else
+    prev_agent=
+  fi
   [ "$agents" -gt 1 ] && exit 0        # a second agent above mine: I am a worker, not the pane's agent
   case "$base" in login | agterm) break ;; esac # reached the pane boundary
   p=$ppid

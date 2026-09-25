@@ -94,7 +94,20 @@ struct ClaudeStatusHookTests {
     @Test func spawnedWorkerStaysSilent() throws {
         // a second agent above ours means another agent spawned this one, so its status belongs to a session
         // that is not the pane's — the row it would repaint is the SPAWNER's
-        let result = try run(chain: ["login", "claude", "claude"], args: ["completed", "--auto-reset"])
+        let result = try run(chain: ["login", "claude", "zsh", "claude"], args: ["completed", "--auto-reset"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
+    @Test func nonExecLauncherChainCountsAsOneAgent() throws {
+        let result = try run(chain: ["login", "claude", "claude", "node:claude"], args: ["active", "--blink"])
+        #expect(result.calls == ["active --blink"])
+        #expect(result.exit == 0)
+    }
+
+    @Test func workerUnderLauncherChainStaysSilent() throws {
+        let result = try run(chain: ["login", "claude", "claude", "zsh", "claude", "claude"],
+                             args: ["completed", "--auto-reset"])
         #expect(result.calls.isEmpty)
         #expect(result.exit == 0)
     }
@@ -149,7 +162,7 @@ struct ClaudeStatusHookTests {
     @Test func runtimeHostedAgentIsCountedThroughArgv1() throws {
         // a node/bun-hosted CLI presents as `node …/claude`, so argv[0] alone would miss it and the worker
         // would report. Counting it makes this the same two-agent chain as above.
-        let result = try run(chain: ["login", "claude", "node:claude"], args: ["active", "--blink"])
+        let result = try run(chain: ["login", "claude", "zsh", "node:claude"], args: ["active", "--blink"])
         #expect(result.calls.isEmpty)
         #expect(result.exit == 0)
     }
