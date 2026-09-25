@@ -113,7 +113,7 @@ The recipe deliberately does not start agents. Deciding that a pane is safe to t
 
 **A busy composer is waited out, but only for about forty seconds.** If the other pane fails its pre-write checks, the script retries five times at ten-second intervals, printing each attempt to stderr, then gives up with exit 1 and types nothing. A pane left sitting on a dialog therefore costs about forty seconds before the send fails instead of blocking forever.
 
-**A multi-row Codex shortcut overlay is treated as busy.** The parser ignores one trailing status row. It does not strip a whole indented region because shortcut rows and modal choices have the same shape; the send therefore retries and refuses until a multi-row overlay closes.
+**Codex footer rows are recognised by position alone.** The parser ignores one trailing footer row, or two when a blank row separates them from the composer, as with a status line above the shortcut hint. It never strips a longer indented region, because shortcut rows and modal choices have the same shape, so a layout with more trailing rows is treated as busy and the send retries and refuses until it changes.
 
 **Highly repetitive input can be refused after the opening scrolls away.** A rendered suffix such as a long run of one character can align with both the complete message and one missing part of the current event. The script stops and cleans up when it cannot distinguish those states.
 

@@ -526,6 +526,45 @@ class CodexLivePromptTextTests(unittest.TestCase):
                     "Ask Codex to do anything",
                 )
 
+    def test_live_prompt_accepts_two_footer_rows_below_a_blank(self) -> None:
+        screen = (
+            "› Ask Codex to do anything\n"
+            "\n"
+            "  GPT-6-Astra high · Context 100% left · /Volumes/Data/Devzone/over…\n"
+            "  ? for shortcuts\n"
+        )
+
+        self.assertEqual(
+            LIVE_PROMPT_TEXT(PROFILES["codex"], screen),
+            "Ask Codex to do anything",
+        )
+
+    def test_wrapped_composer_keeps_its_rows_above_two_footer_rows(self) -> None:
+        screen = (
+            "» Chat from Claude: a long reply whose first row wraps\n"
+            "  onto a second row and remains in the composer\n"
+            "\n"
+            "  repo · master · gpt-5.6 high\n"
+            "  Context 100% left\n"
+        )
+
+        self.assertEqual(
+            LIVE_PROMPT_TEXT(PROFILES["codex"], screen),
+            "Chat from Claude: a long reply whose first row wraps\nonto a second "
+            "row and remains in the composer",
+        )
+
+    def test_three_trailing_indented_rows_are_not_live(self) -> None:
+        screen = (
+            "» Ask Codex to do anything\n"
+            "\n"
+            "  /keymap customize\n"
+            "  repo · master · gpt-5.6 high\n"
+            "  ? / esc close\n"
+        )
+
+        self.assertIsNone(LIVE_PROMPT_TEXT(PROFILES["codex"], screen))
+
     def test_transcript_history_above_live_prompt_is_ignored(self) -> None:
         screen = (
             "› earlier prompt\n"
