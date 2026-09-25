@@ -17,6 +17,8 @@ final class PaneLeadTests: XCTestCase {
         panes.forEach(ZmxLeadBook.shared.forget)
         PaneLead.reattach = nil
         PaneLead.roleChanged = nil
+        panes.forEach(RemoteReconnectBook.shared.cancel)
+        PaneLead.waitToReconnect = nil
         try await super.tearDown()
     }
 
@@ -125,5 +127,55 @@ final class PaneLeadTests: XCTestCase {
 
         XCTAssertFalse(PaneLead.consumes(try key(.keyDown, code: 0), in: view))
         XCTAssertFalse(PaneLead.consumes(try key(.keyUp, code: 0), in: view))
+    }
+
+    func testALostLinkFromTheCurrentAttachmentParksThePaneCoveredWhenItHadReportedARole() throws {
+        var parked: [(GhosttySurfaceView, Bool)] = []
+        PaneLead.waitToReconnect = { parked.append(($0, $1)) }
+        let (reporting, _) = pane(nonce: "a")
+        PaneLead.report(try notice("a:leader:1"), from: reporting)
+        let (silent, _) = pane(nonce: "b")
+
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;a:lost")), from: reporting)
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;b:lost")), from: silent)
+
+        XCTAssertEqual(parked.map(\.0), [reporting, silent])
+        XCTAssertEqual(parked.map(\.1), [true, false])
+    }
+
+    func testAReconnectThatLostTheLinkBeforeItsFirstReportStillParksCovered() throws {
+        var parked: [Bool] = []
+        PaneLead.waitToReconnect = { parked.append($1) }
+        let (view, identity) = pane(nonce: "old")
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "fresh", claim: false), pane: identity, reattaching: true)
+
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;fresh:lost")), from: view)
+
+        XCTAssertEqual(parked, [true])
+    }
+
+    func testALostLinkWithAnotherAttachmentsNonceIsDropped() throws {
+        var parked = 0
+        PaneLead.waitToReconnect = { _, _ in parked += 1 }
+        let (view, _) = pane(nonce: "current")
+
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;forged:lost")), from: view)
+
+        XCTAssertEqual(parked, 0)
+    }
+
+    func testAKeyOnAWaitingPaneRetriesNowAndNeverReachesTheTerminal() throws {
+        let (view, identity) = pane()
+        let book = RemoteReconnectBook.shared
+        book.wait(pane: identity, session: UUID(), host: "mini", cover: false, now: Date())
+        _ = book.due(now: Date())
+        _ = book.finished(pane: identity, ok: false, now: Date().addingTimeInterval(3600))
+
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: view))
+        XCTAssertTrue(PaneLead.consumes(try key(.keyUp, code: 0), in: view))
+        XCTAssertFalse(PaneLead.consumes(try key(.keyDown, code: 13, flags: .command), in: view), "a Command chord reaches Ghostty's keybinds")
+
+        XCTAssertEqual(book.due(now: Date()), [identity])
+        XCTAssertTrue(reattached.isEmpty, "a retry is a probe, never a claim")
     }
 }

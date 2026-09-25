@@ -47,7 +47,7 @@ extension WindowLibrary {
     /// holding its workspace, then the requested store. Session before workspace because an old snapshot
     /// can leave one session in two windows, where the stale workspace rebuilds the copy just closed.
     private func restoreDestination(for item: RecentClosedItem, requested: AppStore?) -> AppStore? {
-        if item.kind == .session, let id = item.session?.snapshot.id, let owner = storeHoldingSession(id) {
+        if item.kind == .session, let id = item.session?.snapshot.id, let owner = store(holdingSession: id) {
             return owner
         }
         if let owner = storeHoldingWorkspace(of: item) { return owner }
@@ -69,9 +69,9 @@ extension WindowLibrary {
     }
 
     /// The open store holding `sessionID`, live or parked in a pending close.
-    private func storeHoldingSession(_ sessionID: UUID) -> AppStore? {
+    public func store(holdingSession sessionID: UUID) -> AppStore? {
         openStores().first {
-            $0.session(withID: sessionID) != nil || $0.pendingHeldSessionIDs().contains(sessionID)
+            $0.session(withID: sessionID) != nil || $0.pendingCloseSession(withID: sessionID) != nil
         }
     }
 

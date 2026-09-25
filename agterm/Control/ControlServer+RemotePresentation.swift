@@ -111,17 +111,18 @@ extension ControlServer {
         }
     }
 
-    private func startRemoteTick() {
+    func startRemoteTick() {
         guard remoteTick == nil else { return }
         remoteTick = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                guard !self.remoteClients.isEmpty else {
+                guard !self.remoteClients.isEmpty || !RemoteReconnectBook.shared.isEmpty else {
                     self.remoteTick = nil
                     return
                 }
                 for client in self.remoteClients.values { client.tick() }
+                self.tickReconnects()
             }
         }
     }

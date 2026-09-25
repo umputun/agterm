@@ -241,6 +241,14 @@ struct agtermApp: App {
                         PaneLead.roleChanged = { [library] view in
                             view.session.flatMap { library.store(forSession: $0.id) }?.leadRoleChanged()
                         }
+                        PaneLead.reconnect = { old, cover in
+                            Self.reattachPane(old, claim: false, cover: cover, services: paneServices)
+                        }
+                        PaneLead.waitToReconnect = { [weak server = controlServer, library] view, cover in
+                            guard let session = view.session, let store = library.store(holdingSession: session.id) else { return }
+                            Self.remotePaneStopped(view, store: store, sessionID: session.id, library: library)
+                            server?.waitToReconnect(view, cover: cover)
+                        }
                         // drive the Dock badge (via UNUserNotifications) from the app-wide unseen total — the
                         // sidebar pills' Session.unseenCount summed across windows.
                         DockBadgeController.shared.library = library
@@ -463,28 +471,38 @@ struct agtermApp: App {
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
-        // an attach that ended holds on its exit prompt, a failed take-over included: no client is left to
-        // report a role, and a cover would hide the line saying what died and swallow the key that closes it
         view.onExitHeld = { [weak view] in
             guard let view else { return }
-            if let pane = UUID(uuidString: view.paneToken) {
-                ZmxLeadBook.shared.forget(pane: pane)
-                store.leadRoleChanged()
+            // the wrapper is gone, so no key can end a wait; a replaced surface's late exit is not this pane's
+            if let pane = UUID(uuidString: view.paneToken),
+               view.session?.surface === view || view.session?.splitSurface === view {
+                RemoteReconnectBook.shared.cancel(pane: pane)
             }
-            Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: services.library)
+            Self.remotePaneStopped(view, store: store, sessionID: sessionID, library: services.library)
         }
+    }
+
+    /// An attach that stopped, on its exit prompt (a failed take-over included) or waiting to reconnect:
+    /// no client is left to report a role, and a cover would hide the line saying what happened.
+    @MainActor
+    static func remotePaneStopped(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary) {
+        if let pane = UUID(uuidString: view.paneToken) {
+            ZmxLeadBook.shared.forget(pane: pane)
+            store.leadRoleChanged()
+        }
+        Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: library)
     }
 
     /// Replaces `old` with a fresh attach of the same pane in the same slot. None of the pane's close paths
     /// run: the session, the daemon and the pane identity all stay, so the program inside keeps the
     /// `AGTERM_PANE_ID` it was started with.
-    @MainActor
-    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, services: SurfaceServices) {
+    @MainActor @discardableResult
+    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, services: SurfaceServices) -> Bool {
         let lead = ZmxLeadAttachment(claim: claim)
         guard let session = old.session, let store = services.library.store(forSession: session.id),
               let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
               let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
-        else { return }
+        else { return false }
         // a dashboard cell's transient font is not the pane's: seeding from it would persist the small size
         let fontSize = old.dashboardFontOverride == nil ? old.currentFontSize() ?? session.fontSize : session.fontSize
         let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
@@ -493,7 +511,7 @@ struct agtermApp: App {
         view.isSplitPane = old.isSplitPane
         Self.wirePane(view, session: session, store: store, services: services)
         view.dashboardFontOverride = old.dashboardFontOverride
-        ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: true)
+        ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: cover)
         // the old client's exit must not close the pane the new one now owns
         _ = old.claimProcessExit()
         let hadFocus = old.window?.firstResponder === old
@@ -509,6 +527,7 @@ struct agtermApp: App {
         old.destroySurface()
         if old.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
         if hadFocus { view.focusAfterReparent() }
+        return true
     }
 
     /// Shell-exit handler for BOTH pane factories, dispatched on the surface's CURRENT role, not the factory that

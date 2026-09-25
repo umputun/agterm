@@ -439,6 +439,20 @@ final class WindowLibraryTests {
         #expect(store.selectedSessionID == session.id)
     }
 
+    @Test func theStoreHoldingASessionIsFoundWhileItsCloseCanBeUndone() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp", name: "grace"))
+        #expect(library.store(holdingSession: session.id) === store)
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+        #expect(library.store(forSession: session.id) == nil)
+        #expect(library.store(holdingSession: session.id) === store)
+
+        store.finalizeAllPendingCloses()
+        #expect(library.store(holdingSession: session.id) == nil)
+    }
+
     @Test func reopeningRecentDuringGraceRestoresPendingSessionWithoutRebuildingSnapshot() {
         let library = WindowLibrary(directory: directory)
         let store = try! #require(library.activeStore)

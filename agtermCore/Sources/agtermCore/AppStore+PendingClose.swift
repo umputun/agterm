@@ -80,6 +80,11 @@ extension AppStore {
         }
     }
 
+    /// The live object of a session hidden by an undoable close, nil for a visible or finalized one.
+    public func pendingCloseSession(withID sessionID: UUID) -> Session? {
+        pendingCloseMembers().first { $0.session.id == sessionID }?.session
+    }
+
     /// Hide a session from the visible tree but keep its surfaces alive for a short undo window.
     /// If the grace expires, `finalizePendingClose` performs the same teardown as `closeSession`.
     @discardableResult

@@ -133,4 +133,14 @@ struct AppStoreRemoteLayoutTests {
         #expect(sink.frames.count == 2)
         #expect(store.presentationSnapshot(forSession: session.id).layout == nil)
     }
+
+    @Test func aReplicaThatAttachedAgainIsNoLongerHeld() throws {
+        let (store, session) = try attached()
+        store.remotePaneHeld(session.paneIdentity, forSession: session.id)
+        #expect(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
+
+        store.remotePaneResumed(session.paneIdentity, forSession: session.id)
+
+        #expect(!store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
+    }
 }

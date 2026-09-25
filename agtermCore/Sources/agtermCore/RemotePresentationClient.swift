@@ -76,11 +76,6 @@ public struct RemotePresentationEffects {
 public final class RemotePresentationClient {
     /// The origin pings every 10 seconds, so three missed is a dead link and not a quiet one.
     static let staleAfter: TimeInterval = 30
-    static let firstCap: TimeInterval = 30
-    static let lateCap: TimeInterval = 300
-    /// Failures in a row before the cap grows. A laptop asleep for the night should not be retried every
-    /// thirty seconds, and should never be given up on either.
-    static let failuresBeforeLateCap = 8
 
     private let argv: [String]
     private let presentationVersion: Int?
@@ -248,9 +243,7 @@ public final class RemotePresentationClient {
         report(.failed(reason))
         // the role goes with the link it was granted to
         report(.mirror)
-        let cap = failures > Self.failuresBeforeLateCap ? Self.lateCap : Self.firstCap
-        let delay = min(pow(2, Double(min(failures - 1, 30))), cap)
-        retryAt = now().addingTimeInterval(delay)
+        retryAt = now().addingTimeInterval(RemoteRetryBackoff.delay(afterFailures: failures))
     }
 
     private func dropLink() {
