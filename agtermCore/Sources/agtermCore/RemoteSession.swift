@@ -95,8 +95,9 @@ public enum RemoteSession {
         ])
         var argv = sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
         // ssh's own disconnect chatter lands wherever the remote program left the cursor; the pane command
-        // prints the one line that matters
-        argv.insert(contentsOf: ["-o", "LogLevel=QUIET"], at: argv.count - 2)
+        // prints the one line that matters. ERROR rather than QUIET: a takeover or an unowned reattach runs
+        // with no probe first, and a refused key or a changed host key must still say so.
+        argv.insert(contentsOf: ["-o", "LogLevel=ERROR"], at: argv.count - 2)
         return argv
     }
 
@@ -106,8 +107,9 @@ public enum RemoteSession {
     /// It names the host, the session and the exit status. On ssh's own failure, 255, it shows a reconnecting
     /// bar, reports that under `RemoteLinkNotice` and waits on `cat` for the app to attach the pane again;
     /// `cat` ends with the app's pty. The mouse and focus reporting a remote program left on is switched off
-    /// first, or those reports would echo onto the kept screen. Without a lead nonce nothing could be
-    /// believed, so it exits.
+    /// first, or those reports would echo onto the kept screen, and echo goes with the cursor: a paste or a
+    /// wheel scroll would otherwise print under the bar, and Ghostty draws its password lock in place of the
+    /// cursor while echo is off. Without a lead nonce nothing could be believed, so it exits.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
                                          lead: ZmxLeadAttachment? = nil,
@@ -127,7 +129,7 @@ public enum RemoteSession {
             let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
             script = "\(attach); status=$?; if [ \"$status\" -eq 255 ]; then "
                 + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "
-                + "cat >/dev/null; else \(report); fi; exit \"$status\""
+                + "printf '\\033[?25l'; stty -echo 2>/dev/null; cat >/dev/null; else \(report); fi; exit \"$status\""
         }
         // libghostty runs this as `exec -l <command>`: bare, the exec replaces the shell with ssh and nothing
         // after it runs. `env` takes the exec instead, and a plain `sh` beneath it reads no login profile.
