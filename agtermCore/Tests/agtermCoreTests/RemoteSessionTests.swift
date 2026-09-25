@@ -216,6 +216,19 @@ struct RemoteSessionTests {
         #expect(try fake.calls().first?.first == "attach", "the diagnostic runs AFTER the attach")
     }
 
+    @Test func thePaneCommandSurvivesTheExecGhosttyRunsItUnder() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 23)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left)
+        // libghostty on macOS runs a surface command as `bash -c "exec -l <command>"`
+        let run = try fake.runShell("exec -l " + command, shell: "/bin/bash")
+
+        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit 23\n")
+        #expect(run.status == 23)
+    }
+
     @Test func thePaneCommandKeepsTheSshExitStatusRatherThanPrintfsZero() throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
