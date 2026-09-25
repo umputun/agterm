@@ -1118,8 +1118,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   window size, and carries no lifetime deadline. Both pass `BatchMode=yes`, so key-based non-interactive
   auth is a precondition and a host-key or password prompt is a failure rather than a question a
   dispatcher could answer. The host is refused rather than escaped; paths and the remote command are
-  argv-quoted. The pane attach alone adds `LogLevel=QUIET`: ssh's disconnect chatter would land wherever the
-  remote program left the cursor, at the cost of hiding ssh's own failure reason, auth included.
+  argv-quoted. The pane attach alone adds `LogLevel=ERROR`: ssh's disconnect chatter would land wherever the
+  remote program left the cursor, while a refused key or a changed host key still prints its reason.
 - Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
   host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
   character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed

@@ -55,7 +55,12 @@ enum PaneLead {
         if RemoteReconnectBook.shared.waiting(pane: pane), let pane {
             // Command chords outside the menu still reach Ghostty's keybinds
             guard !event.modifierFlags.contains(.command) else { return false }
-            if event.type == .keyDown, !event.isARepeat { RemoteReconnectBook.shared.retryNow(pane: pane, now: Date()) }
+            if event.type == .keyDown, !event.isARepeat {
+                // latched like a takeover key: still held when the fresh surface arrives, its repeats would
+                // otherwise reach a covered pane and take the lead with a claim
+                takeoverKeyCode = event.keyCode
+                RemoteReconnectBook.shared.retryNow(pane: pane, now: Date())
+            }
             return true
         }
         guard view.leadCovered else { return false }

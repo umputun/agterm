@@ -77,7 +77,7 @@ struct RemoteSessionTests {
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
         #expect(argv.prefix(9) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-                                   "-o", "LogLevel=QUIET", "buildbox"])
+                                   "-o", "LogLevel=ERROR", "buildbox"])
         #expect(!argv.contains { $0.hasPrefix("ServerAlive") })
     }
 
@@ -286,7 +286,7 @@ struct RemoteSessionTests {
         #expect(text == "\u{1B}[0m\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1006l\u{1B}[?1004l"
             + "\u{1B}[?2004l\u{1B}[?2031l\u{1B}[?2048l\r\n"
             + "\u{1B}[30;43m Connection to buildbox lost · reconnecting… · any key retries now \u{1B}[K\u{1B}[0m\n"
-            + "\u{1B}]2;agterm-remote;n1:lost\u{07}")
+            + "\u{1B}]2;agterm-remote;n1:lost\u{07}\u{1B}[?25l", "echo goes off with the cursor, so no lock glyph")
         #expect(run.process.terminationStatus == 255)
     }
 
