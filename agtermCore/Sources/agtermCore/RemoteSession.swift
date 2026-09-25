@@ -93,14 +93,21 @@ public enum RemoteSession {
         ] + (lead?.assignments ?? []) + [
             endpoint.executable, "attach", daemon, "/bin/sh", "-c", guardScript,
         ])
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
+        var argv = sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
+        // ssh's own disconnect chatter lands wherever the remote program left the cursor; the pane command
+        // prints the one line that matters
+        argv.insert(contentsOf: ["-o", "LogLevel=QUIET"], at: argv.count - 2)
+        return argv
     }
 
     /// The pane's command: the attach, then one line saying what died. `commandWait` holds the pane on
     /// Ghostty's own press-any-key prompt, so this sits under the last remote screen until it is read.
     ///
-    /// It names the host, the session and the exit status and stops there. How to get back is not
-    /// agterm's to say: the picker is a keymap custom command the user supplies.
+    /// It names the host, the session and the exit status. On ssh's own failure, 255, it shows a reconnecting
+    /// bar, reports that under `RemoteLinkNotice` and waits on `cat` for the app to attach the pane again;
+    /// `cat` ends with the app's pty. The mouse and focus reporting a remote program left on is switched off
+    /// first, or those reports would echo onto the kept screen. Without a lead nonce nothing could be
+    /// believed, so it exits.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
                                          lead: ZmxLeadAttachment? = nil,
@@ -112,10 +119,25 @@ public enum RemoteSession {
             ["agterm: \(session) (\(pane.rawValue)) on \(host) disconnected, exit"])
         // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a
         // clean one to anything that looks at the exit code
-        let script = "\(attach); status=$?; printf '%s %s\\n' \(label) \"$status\"; exit \"$status\""
+        let report = "printf '%s %s\\n' \(label) \"$status\""
+        var script = "\(attach); status=$?; \(report); exit \"$status\""
+        if let lead {
+            let bar = CommandRestore.shellQuotedLine(["Connection to \(host) lost · reconnecting… · any key retries now"])
+            let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: lead.nonce)])
+            let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
+            script = "\(attach); status=$?; if [ \"$status\" -eq 255 ]; then "
+                + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "
+                + "cat >/dev/null; else \(report); fi; exit \"$status\""
+        }
         // libghostty runs this as `exec -l <command>`: bare, the exec replaces the shell with ssh and nothing
         // after it runs. `env` takes the exec instead, and a plain `sh` beneath it reads no login profile.
         return CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c", script])
+    }
+
+    /// One ssh invocation that only proves the host answers again, before a waiting pane is attached anew.
+    public static func probeCommand(host: String) throws -> [String] {
+        try validate(host: host)
+        return sshArguments(host: host, connectTimeout: 5, interactive: false) + ["true"]
     }
 
     private static func sshArguments(host: String, connectTimeout: Int, interactive: Bool) -> [String] {

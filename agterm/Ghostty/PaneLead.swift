@@ -12,6 +12,11 @@ enum PaneLead {
     static var reattach: ((_ old: GhosttySurfaceView, _ claim: Bool) -> Void)?
     /// Tells the pane's store that read-back changed.
     static var roleChanged: ((_ view: GhosttySurfaceView) -> Void)?
+    /// Parks a pane whose ssh lost the connection until the host answers again. Installed by the app.
+    static var waitToReconnect: ((_ view: GhosttySurfaceView, _ cover: Bool) -> Void)?
+    /// Attaches a parked pane again without the claim, covered until its first report when `cover`. False
+    /// when nothing was attached.
+    static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool) -> Bool)?
 
     /// The key that took a pane over, swallowed until it is released so neither its repeats nor its
     /// release reach the program through the new surface.
@@ -27,6 +32,15 @@ enum PaneLead {
         if role == .unowned { reattach?(view, false) }
     }
 
+    /// The attach wrapper's lost-connection report. Only the pane's current attachment is believed, and
+    /// only an origin that reported a role before will report one after the attach, so only it is covered.
+    /// A reconnect that lost the link before its first report inherits that from the attach it replaced.
+    static func linkLost(_ notice: RemoteLinkNotice, from view: GhosttySurfaceView) {
+        guard !view.isDestroyed, let pane = UUID(uuidString: view.paneToken),
+              ZmxLeadBook.shared.states[pane]?.attachment.nonce == notice.nonce else { return }
+        waitToReconnect?(view, ZmxLeadBook.shared.role(pane: pane) != nil || ZmxLeadBook.shared.reattaching(pane: pane))
+    }
+
     /// True when `event` belongs to a takeover and must not reach the terminal.
     static func consumes(_ event: NSEvent, in view: GhosttySurfaceView) -> Bool {
         // the takeover key's release can land on the destroyed old view, or on nothing while the new one
@@ -37,6 +51,13 @@ enum PaneLead {
             return true
         }
         if event.type == .keyDown, event.isARepeat, event.keyCode == takeoverKeyCode { return true }
+        let pane = UUID(uuidString: view.paneToken)
+        if RemoteReconnectBook.shared.waiting(pane: pane), let pane {
+            // Command chords outside the menu still reach Ghostty's keybinds
+            guard !event.modifierFlags.contains(.command) else { return false }
+            if event.type == .keyDown, !event.isARepeat { RemoteReconnectBook.shared.retryNow(pane: pane, now: Date()) }
+            return true
+        }
         guard view.leadCovered else { return false }
         // a modifier alone is not the press the cover asks for, and app shortcuts stay the app's
         guard event.type == .keyDown, !event.modifierFlags.contains(.command) else { return true }

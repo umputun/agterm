@@ -76,7 +76,8 @@ struct RemoteSessionTests {
 
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
-        #expect(argv.prefix(7) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox"])
+        #expect(argv.prefix(9) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                                   "-o", "LogLevel=QUIET", "buildbox"])
         #expect(!argv.contains { $0.hasPrefix("ServerAlive") })
     }
 
@@ -94,6 +95,14 @@ struct RemoteSessionTests {
         let pane = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
                                                        session: "work", pane: .left, lead: lead)
         #expect(pane.contains("ZMX_MANAGED=abc123"))
+    }
+
+    @Test func theProbeOnlyAsksTheHostToAnswer() throws {
+        #expect(try RemoteSession.probeCommand(host: "buildbox")
+            == ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox", "true"])
+        #expect(throws: RemoteSession.InvocationError.invalidHost) {
+            try RemoteSession.probeCommand(host: "-oProxyCommand=touch /tmp/pwned")
+        }
     }
 
     // MARK: - what the remote shell actually runs
@@ -259,6 +268,54 @@ struct RemoteSessionTests {
         #expect(!FileManager.default.fileExists(atPath: marker), "the name is data, never shell syntax")
     }
 
+    @Test func aLostConnectionSaysItIsReconnectingReportsItAndWaits() async throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 255)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left,
+                                                          lead: ZmxLeadAttachment(nonce: "n1", claim: true))
+
+        let run = try fake.startShell(command)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(run.process.isRunning, "the pane holds until the app replaces it")
+        try run.input.fileHandleForWriting.close()
+        run.process.waitUntilExit()
+        let text = String(decoding: run.output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+
+        #expect(text == "\u{1B}[0m\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1006l\u{1B}[?1004l"
+            + "\u{1B}[?2004l\u{1B}[?2031l\u{1B}[?2048l\r\n"
+            + "\u{1B}[30;43m Connection to buildbox lost · reconnecting… · any key retries now \u{1B}[K\u{1B}[0m\n"
+            + "\u{1B}]2;agterm-remote;n1:lost\u{07}")
+        #expect(run.process.terminationStatus == 255)
+    }
+
+    @Test(arguments: [0, 1, 23] as [Int32])
+    func anyOtherExitKeepsTodaysLineAndStatus(_ code: Int32) throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: code)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left,
+                                                          lead: ZmxLeadAttachment(nonce: "n1", claim: true))
+        let run = try fake.runShell(command)
+
+        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit \(code)\n")
+        #expect(run.status == code)
+    }
+
+    @Test func withoutALeadNonceALostConnectionExitsAsBefore() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 255)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left)
+        let run = try fake.runShell(command)
+
+        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit 255\n")
+        #expect(run.status == 255)
+    }
+
     // MARK: - validation
 
     @Test func emptyHostIsRefused() {
@@ -377,6 +434,16 @@ private struct FakeRemote {
     /// appends, so these never resolve the machine's own agtermctl and drive the live terminal.
     func runShell(_ remote: String, shell: String = "/bin/sh",
                   exporting extra: [String: String] = [:]) throws -> (status: Int32, stdout: String) {
+        let run = try startShell(remote, shell: shell, exporting: extra)
+        try run.input.fileHandleForWriting.close()
+        let data = run.output.fileHandleForReading.readDataToEndOfFile()
+        run.process.waitUntilExit()
+        return (run.process.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    /// Starts `remote` with stdin on a pipe, for a command that waits on its terminal.
+    func startShell(_ remote: String, shell: String = "/bin/sh",
+                    exporting extra: [String: String] = [:]) throws -> (process: Process, input: Pipe, output: Pipe) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
         process.arguments = ["-c", remote]
@@ -384,13 +451,12 @@ private struct FakeRemote {
         environment["PATH"] = root.path + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
         environment.merge(extra) { _, new in new }
         process.environment = environment
-        let pipe = Pipe()
-        process.standardOutput = pipe
+        let input = Pipe(), output = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
         process.standardError = Pipe()
         try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+        return (process, input, output)
     }
 
     func calls() throws -> [[String]] {

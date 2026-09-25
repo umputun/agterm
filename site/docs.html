@@ -2740,7 +2740,8 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               attaching the row again, and a replica closed here stays closed. Older origins leave the layout alone.
               Confirmed origin removal closes its replica without requiring a keypress, even if it already shows a disconnect
               prompt. The last replica waits for its ssh exit and may then close the row; automatic primary removal is skipped
-              while a local split is pending. An ordinary connection failure still holds the disconnect line for you to read.
+              while a local split is pending. An ordinary connection failure still shows the disconnect line, reconnecting on its own when
+              ssh itself failed and otherwise holding for a keypress.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect, which is retried after
@@ -2772,8 +2773,13 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
               side. Scripts typing into a covered pane on the Mac the session runs on still work, and so do their reads of
               its screen: both go through the session itself, not the covered view. When you close the session the panes
               on the far side uncover by themselves. Both Macs need an agterm with this behaviour; against an older one
-              the attach still arrives at the other Mac's size until you type. When a connection drops, the pane holds on Ghostty's press-any-key prompt under one line naming the
-              host, the session, the pane and the exit status.
+              the attach still arrives at the other Mac's size until you type. When a connection drops, the pane keeps its last screen. If ssh
+              itself failed (exit 255, which is also what a refused login gives), a bar under it names the host and says it is reconnecting,
+              without ssh's own reason, and agterm attaches the pane again once the host answers, retried on the
+              schedule the stream uses; any key retries at once and ⌘W still closes the pane. The pane comes back without taking the lead, so
+              if the other Mac leads it by then, it arrives covered, and also while the other Mac still counts this Mac's dropped connection
+              as the leader, which clears by itself once that connection times out. Any other exit prints one line naming the host, the
+              session, the pane and the exit status, and holds on Ghostty's press-any-key prompt.
             </p>
 
             <div
