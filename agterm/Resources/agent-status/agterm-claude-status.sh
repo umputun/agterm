@@ -6,11 +6,13 @@
 # row. This adapter keeps that ownership question inside the installed hook package: decide from
 # process topology, not terminal state. The hook is a descendant of the agent that fired it, so
 # exactly one agent between here and the pane means "I am the pane's agent"; a second one means
-# another agent spawned mine, so stay silent. A consecutive run of one name counts once: a launcher
-# that runs the real binary without `exec` leaves one agent wearing several pids, while a spawned
-# worker always has the shell its tool call started between it and the spawner. A tty test cannot
-# answer this — a headless lane that legitimately owns its pane has none, and a worker under
-# script/expect gets a fresh pty anyway.
+# another agent spawned mine, so stay silent. A consecutive run of one name counts once, because a
+# launcher that runs the real binary without `exec` leaves one agent wearing several pids. A worker
+# is therefore caught only when a surviving process, such as its tool call's shell, separates it
+# from a same-name spawner. A direct child is accepted as reporting: a hook whose whole command is
+# `claude -p ...` runs through `sh -c`, which execs it, and that worker repaints the owner's row.
+# A tty test cannot answer this — a headless lane that legitimately owns its pane has none, and a
+# worker under script/expect gets a fresh pty anyway.
 #
 # It fails OPEN (reports) whenever the chain is unreadable or severed, e.g. a detached worker whose
 # spawner already exited: a missed guard is the behavior without this adapter, while a false silence
