@@ -95,4 +95,4 @@
       `site/commands.html`, `site/docs.html`, `.claude/rules/control-api.md`
 
 ### Task 6: Verify
-- [ ] full gates, revmux loop, move this plan to `docs/plans/completed/`
+- [x] full gates, revmux loop, move this plan to `docs/plans/completed/`
