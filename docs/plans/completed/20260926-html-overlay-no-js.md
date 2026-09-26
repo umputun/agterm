@@ -55,4 +55,4 @@
       default, the read-back, and that Open in Browser uses the browser's own JavaScript settings
 
 ### Task 5: Verify
-- [ ] full gates, codex review, move this plan to `docs/plans/completed/`
+- [x] full gates, codex review, move this plan to `docs/plans/completed/`
