@@ -260,6 +260,23 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         return color.usingColorSpace(.sRGB) ?? color
     }
 
+    func testAPageRunsItsOwnScriptOnlyWithJs() throws {
+        let id = try activeSessionID()
+        try writePage("scripted.html", title: "no script", body: "<p>scripted</p><script>document.title = 'script ran'</script>")
+        let file = pageDir.appendingPathComponent("scripted.html").path
+        for javascript in [false, true] {
+            let flag = javascript ? #","javascript":true"# : ""
+            let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(file)"\#(flag)}}"#)
+            XCTAssertEqual(open["ok"] as? Bool, true, "open should succeed: \(open)")
+            let title = javascript ? "script ran" : "no script"
+            XCTAssertTrue(pollPage(id: id) {
+                $0["state"] as? String == "loaded" && $0["title"] as? String == title && $0["javascript"] as? Bool == javascript
+            }, "with javascript \(javascript) the page should report title \(title)")
+            XCTAssertTrue(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)["ok"] as? Bool == true)
+            XCTAssertTrue(pollOverlay(id: id, expected: false))
+        }
+    }
+
     private func writePage(_ name: String, title: String, body: String) throws {
         let html = "<!doctype html><html><head><title>\(title)</title></head><body>\(body)</body></html>"
         try html.write(to: pageDir.appendingPathComponent(name), atomically: true, encoding: .utf8)

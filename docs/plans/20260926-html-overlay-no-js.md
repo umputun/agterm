@@ -44,9 +44,9 @@
 - [x] hosted suite passes
 
 ### Task 3: UI tests
-- [ ] UI tests whose pages need script pass `--js`; a page whose script sets its title opens through the control
+- [x] UI tests whose pages need script pass `--js`; a page whose script sets its title opens through the control
       API without the flag (script did not run, `javascript: false`) and with `--js` (it ran, `javascript: true`)
-- [ ] build-for-testing; the HTML UI class runs at the gates
+- [x] build-for-testing; the HTML UI class runs at the gates
 
 ### Task 4: Documentation and skill
 - [ ] SKILL.md: static HTML/CSS/SVG is the artifact recipe; enable `--js` only when the interaction or the
