@@ -46,6 +46,11 @@ final class GhosttyCallbacks: @unchecked Sendable {
                 DispatchQueue.main.async { PaneLead.report(notice, from: view) }
                 return true
             }
+            // the attach wrapper saying ssh lost the connection, never the pane's title
+            if let notice = RemoteLinkNotice(title: title) {
+                DispatchQueue.main.async { PaneLead.linkLost(notice, from: view) }
+                return true
+            }
             // a static `title` in the user's config stands in for every title a program sets
             DispatchQueue.main.async { view.applyTitle(GhosttyApp.shared.staticTitle ?? title) }
             return true

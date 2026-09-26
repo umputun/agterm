@@ -47,4 +47,9 @@ extension AppStore {
     public func remotePaneIsHeld(_ local: UUID, forSession id: UUID) -> Bool {
         session(withID: id)?.remotePresentation?.heldPanes.contains(local) == true
     }
+
+    /// The held replica attached again.
+    public func remotePaneResumed(_ local: UUID, forSession id: UUID) {
+        session(withID: id)?.remotePresentation?.heldPanes.remove(local)
+    }
 }

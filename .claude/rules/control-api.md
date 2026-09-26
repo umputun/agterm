@@ -1118,7 +1118,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   window size, and carries no lifetime deadline. Both pass `BatchMode=yes`, so key-based non-interactive
   auth is a precondition and a host-key or password prompt is a failure rather than a question a
   dispatcher could answer. The host is refused rather than escaped; paths and the remote command are
-  argv-quoted.
+  argv-quoted. The pane attach alone adds `LogLevel=ERROR`: ssh's disconnect chatter would land wherever the
+  remote program left the cursor, while a refused key or a changed host key still prints its reason.
 - Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
   host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
   character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed
@@ -1167,13 +1168,21 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a session; it never falls back or raises another window. The old `attachRemoteSession(host:session:)`
   witness remains callable. Hosts implementing only that form accept untargeted calls and refuse explicit
   window placement through the new overload's default.
-- The local cwd is this machine's home, not the remote one: libghostty chdirs the ssh process here and a
+- The local cwd is this machine's home, not the remote one: libghostty chdirs the pane process here and a
   path that exists on the far side may not exist locally. The attached shell reports its real cwd through
   the terminal stream.
 - Both panes set `commandWait`/`splitCommandWait`, so `shouldCloseOnChildExitAction` returns false, Ghostty
   holds its own press-any-key prompt, and the wrapper's one sanitized line — host, session, pane, exit
-  status — can be read under the last remote screen. It says nothing about reconnecting: the picker is a
-  keymap custom command the user supplies. There is NO timer, notification or session-wide coalescing.
+  status — can be read under the last remote screen. The wrapper runs as `/usr/bin/env /bin/sh -c`, since
+  libghostty's `exec -l` would otherwise replace the shell with ssh and drop it. On ssh's own 255 it instead
+  resets the reporting modes the remote left on, shows a reconnecting bar naming the host, reports `RemoteLinkNotice` (`OSC 2;agterm-remote;<lead nonce>:lost`, intercepted beside
+  `zmx-role;`) and waits on `cat`, which ends with the app's pty. The pane then never reaches `onExitHeld`;
+  `PaneLead.linkLost` believes only the current attachment's nonce and runs the same `remotePaneStopped`
+  cleanup. `RemoteReconnectBook` probes (`RemoteSession.probeCommand`) on the remote tick with
+  `RemoteRetryBackoff`, and a host that answers gets `reattachPane(claim: false)`, covered only when the
+  origin had reported a role, and `remotePaneResumed`. Re-running the attach in the shell was rejected: it
+  would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
+  chords pass.
   The held exit reaches the app at once through `onExitHeld`, which forgets the pane's lead and records the
   hold for remote layout, but it carries no ssh status: `/usr/bin/login` discards it. Each pane holding and
   closing on its own is also right when one half of a split dies.
@@ -1220,7 +1229,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   held after ssh exited. If it is the last realized replica, it stays until its ssh exits, then the row
   may close and following stops. Automatic primary removal is skipped while a local split is pending.
   A layout never removes a local replacement. Losing the stream alone keeps the panes; an ordinary ssh
-  disconnect still shows the disconnect line and holds for a keypress.
+  disconnect still shows the disconnect line, held or reconnecting per the exit-255 bullet above.
 - A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
   second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
   identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
@@ -1343,10 +1352,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the program keeps its `AGTERM_PANE_ID`. The cover stays up from the swap until the new client's
   first report. An open search owned by the old surface is cleared synchronously, since END_SEARCH
   answers through a callback `destroySurface` clears first; a dashboard cell's transient font is carried
-  as the override and never seeds the new surface's own size. `wirePane`'s `onExitHeld` drops the
-  pane's lead state when an attach ends on its exit prompt, a failed take-over included, or the cover
-  would hide the line saying what died and swallow the key that closes it. The launch attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is
-  gone, locally as for an attached pane, so a vanished session ends the pane. An attached pane is
+  as the override and never seeds the new surface's own size. `remotePaneStopped` drops the pane's
+  lead state when an attach ends on its exit prompt or waits to reconnect, a failed take-over included,
+  or the cover would hide the line saying what died and swallow the key that closes it. The launch
+  attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is gone, locally as for an
+  attached pane, so a vanished session ends the pane. An attached pane is
   rebuilt from `RemoteBinding.Origin`, never from the pane's first command line, which carries that
   attachment's nonce.
 - The takeover key is consumed with its repeats and its release, and a Command chord on a covered pane

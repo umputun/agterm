@@ -1660,8 +1660,8 @@ window leaves the frontmost window unchanged. `SESSION` is the
 new local session's `id`; read `remoteHost` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. Everything reported
 here is a failure found before that point — a connection that starts and later drops is an ordinary pane
-exit, which holds on Ghostty's press-any-key prompt under one line naming the host, the session, the pane
-and the exit status.
+exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself; any other exit prints
+one line naming the host, the session, the pane and the exit status and holds on Ghostty's press-any-key prompt.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
@@ -1679,7 +1679,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   and attaching the row again, and a replica closed here stays closed. Older origins leave layout alone.
 - Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
   left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
-  split prevents automatic primary removal; an ordinary disconnect still holds for a keypress.
+  split prevents automatic primary removal; an ordinary disconnect still shows the disconnect line, held
+  or reconnecting per the attach section above.
 - `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect. Retries

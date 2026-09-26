@@ -110,6 +110,28 @@ struct AppStorePendingCloseTests {
         #expect(members.first?.workspaceName == "workspace 1")
     }
 
+    @Test(arguments: ["session", "batch", "workspace"])
+    func aPendingCloseSessionIsFoundOnlyUntilUndoOrFinalize(path: String) {
+        let store = store()
+        let first = addSession(store, name: "one")
+        let second = addSession(store, name: "two")
+        store.workspaces.append(Workspace(name: "staying", sessions: []))
+        #expect(store.pendingCloseSession(withID: first.id) == nil, "a visible row is not pending")
+
+        switch path {
+        case "session": #expect(store.softCloseSession(first.id, grace: 60))
+        case "batch": #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        default: #expect(store.softRemoveWorkspace(store.workspaces[0].id, grace: 60))
+        }
+        #expect(store.pendingCloseSession(withID: first.id) === first)
+        #expect(store.undoPendingClose())
+        #expect(store.pendingCloseSession(withID: first.id) == nil)
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        store.finalizeAllPendingCloses()
+        #expect(store.pendingCloseSession(withID: first.id) == nil)
+    }
+
     @Test func finalizingTheGraceDropsTheClaim() {
         let store = store()
         let session = addSession(store, name: "build")
