@@ -151,6 +151,10 @@ C-boundary concurrency before changing the bridge.
 - Manual Debug UI work uses a separate `open -n` instance with isolated state and short socket. Address
   its CLI with `--socket` after the subcommand. Stop only its known PID with SIGTERM; clean quit triggers
   the visible quit-confirmation alert. Use clean quit only when testing its final cwd/running-command flush.
+- A stopped Debug instance can leave its Dock tile; a click on it relaunches the bundle with no
+  `AGTERM_STATE_DIR`, onto the live state and daemons, and its quit rewrites the live windows files.
+  After SIGTERM, confirm the tile is gone with `lsappinfo list | grep agterm.debug` and tell Eugene when
+  one lingers.
 - A manual-test pane opens in `$HOME`, and a pane restored from a daemon keeps whatever directory it had.
   Never type a bare `claude` into one. Always send `cd <dir> && claude` with a directory Claude Code
   already trusts, `~/dev.umputun/agterm` by default. A session rooted at `$HOME` treats every dotfile and
