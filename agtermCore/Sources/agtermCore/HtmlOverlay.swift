@@ -138,18 +138,15 @@ public struct HtmlOverlayTheme: Equatable, Sendable {
         return ":where(html) { \(look)--agterm-background: \(background); --agterm-foreground: \(foreground); \(slots)}"
     }
 
-    /// script installs or replaces the stylesheet in element `agterm-theme`; it runs at document start,
-    /// before the page's own styles, and again on a theme change.
+    /// script prepends the stylesheet as element `agterm-theme`; it runs at document start, before the page's
+    /// own styles.
     public func script(themed: Bool) -> String {
         """
         (() => {
-          let style = document.getElementById('agterm-theme');
-          if (!style) {
-            style = document.createElement('style');
-            style.id = 'agterm-theme';
-            document.documentElement.prepend(style);
-          }
+          const style = document.createElement('style');
+          style.id = 'agterm-theme';
           style.textContent = '\(stylesheet(themed: themed))';
+          document.documentElement.prepend(style);
         })();
         """
     }

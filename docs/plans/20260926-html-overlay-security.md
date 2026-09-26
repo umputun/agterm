@@ -65,13 +65,13 @@
 - [x] core suites pass
 
 ### Task 2: Theme without live script
-- [ ] failing hosted tests: during a theme change a page `getElementById` override is never called and a page
+- [x] failing hosted tests: during a theme change a page `getElementById` override is never called and a page
       MutationObserver never sees user activation, across the reload; a granted file page navigated to
       `b.html` shows `b.html` with the new variables after the change; an unchanged theme does not reload;
       a URL page keeps its old variables until reloaded
-- [ ] user script in an isolated content world, no `evaluateJavaScript` in `applyTheme`; file pages reload
+- [x] user script in an isolated content world, no `evaluateJavaScript` in `applyTheme`; file pages reload
       on a theme change
-- [ ] hosted suite passes
+- [x] hosted suite passes
 
 ### Task 3: Confirmed external opens and Open in Browser
 - [ ] failing hosted tests: a page clicking links in a loop gets one prompt and zero opens when denied, and no

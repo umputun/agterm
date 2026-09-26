@@ -105,6 +105,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var overlay: HtmlOverlay
     private weak var store: AppStore?
     private var appliedRevision: Int
+    private var theme: HtmlOverlayTheme
+    private static let themeWorld = WKContentWorld.world(name: "agterm-theme")
     private var observations: [NSKeyValueObservation] = []
     // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
     // policy cancel of its redirect reports failed rather than leaving the page loading
@@ -118,6 +120,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         self.store = store
         self.backgroundColor = backgroundColor
         appliedRevision = overlay.reloadRevision
+        self.theme = theme
         let configuration = WKWebViewConfiguration()
         // an in-memory store per page: cookies and storage last as long as this overlay and reach no other
         configuration.websiteDataStore = .nonPersistent()
@@ -128,7 +131,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // opaque canvas, since a web app styled against it would lose its background here.
         if case .file = overlay.source { webView.setValue(false, forKey: "drawsBackground") }
         super.init()
-        applyTheme(theme)
+        installTheme()
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.setAccessibilityIdentifier("htmlOverlay.page")
@@ -153,15 +156,22 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         loadOriginal()
     }
 
-    /// applyTheme sets the theme for later loads and restyles the document already shown; only a file page
-    /// takes it as its look, a URL page gets the variables alone.
+    /// applyTheme gives later loads a changed theme. A file page wears it and reloads what it shows; a URL page
+    /// gets the variables alone, at its next load. Nothing runs in the live document: script the app evaluates
+    /// there carries a user gesture that the page's own code can borrow.
     func applyTheme(_ theme: HtmlOverlayTheme) {
-        let script = theme.script(themed: themed)
+        guard theme != self.theme else { return }
+        self.theme = theme
+        installTheme()
+        if themed { reloadShown() }
+    }
+
+    private func installTheme() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        controller.addUserScript(WKUserScript(source: theme.script(themed: themed), injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true, in: Self.themeWorld))
         if themed { webView.underPageBackgroundColor = NSColor(agtermHex: theme.background) }
-        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
     private var themed: Bool {
@@ -174,8 +184,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         self.overlay = overlay
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
+        if overlay.reloadTarget == .current { reloadShown() } else { loadOriginal() }
+    }
+
+    private func reloadShown() {
         // before a first commit WebKit has nothing to reload, so the source is loaded again instead
-        if overlay.reloadTarget == .current, !textLoaded, webView.url != nil {
+        if !textLoaded, webView.url != nil {
             loadPending = true
             webView.reload()
         } else {

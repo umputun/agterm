@@ -59,6 +59,15 @@ private final class LoopbackServer: @unchecked Sendable {
 }
 
 @MainActor
+private final class PageProbe: NSObject, WKScriptMessageHandler {
+    var messages: [String] = []
+
+    func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
+        if let body = message.body as? String { messages.append(body) }
+    }
+}
+
+@MainActor
 final class HtmlOverlayRegistryTests: XCTestCase {
     private final class StubSurface: PaneRoleMutableSurface {
         let paneToken: String
@@ -165,13 +174,45 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(plain.alphaComponent, 0, accuracy: 0.01, "an unstyled page must leave the themed backing visible")
     }
 
-    func testAThemeChangeRestylesAnOpenPage() async throws {
-        try write("plain.html", "<title>P</title><p>short</p>")
-        let page = registry.page(for: try open(file: "plain.html"), store: store)
-        try await waitFor("loaded") { self.current?.loadState == .loaded }
+    func testAThemeChangeReloadsTheFilePageShownAndAnUnchangedThemeDoesNot() async throws {
+        let page = registry.page(for: try open(grant: pages.path), store: store)
+        try await waitFor("a loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
+        _ = try await page.webView.evaluateJavaScript("location.href = 'b.html'")
+        try await waitFor("b loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "B" }
+
+        page.applyTheme(registry.theme(backgroundColor: nil))
+        XCTAssertFalse(page.webView.isLoading)
         page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
+        XCTAssertTrue(page.webView.isLoading)
+        try await waitForVariable("--agterm-foreground", "#102030", in: page.webView)
+        XCTAssertEqual(current?.current?.title, "B")
         let color = try await page.webView.evaluateJavaScript("getComputedStyle(document.documentElement).color")
         XCTAssertEqual(color as? String, "rgb(16, 32, 48)")
+    }
+
+    func testAThemeChangeHandsThePageNoUserActivation() async throws {
+        try write("hostile.html", """
+            <title>H</title><script>
+            const report = m => webkit.messageHandlers.probe.postMessage(m + ':' + navigator.userActivation.isActive);
+            const byID = document.getElementById.bind(document);
+            document.getElementById = id => { report('hook'); return byID(id) };
+            new MutationObserver(() => report('mutation'))
+              .observe(document.documentElement, {subtree: true, childList: true, attributes: true, characterData: true});
+            addEventListener('pagehide', () => report('pagehide'));
+            report('ready');
+            </script>
+            """)
+        for grant in [nil, pages.path] {
+            let probe = PageProbe()
+            let page = registry.page(for: try open(file: "hostile.html", grant: grant), store: store)
+            page.webView.configuration.userContentController.add(probe, name: "probe")
+            try await waitFor("first load") { probe.messages.contains("ready:false") }
+            page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
+            try await waitFor("reloaded") { probe.messages.filter { $0.hasPrefix("ready") }.count == 2 }
+            XCTAssertEqual(probe.messages.filter { $0.hasSuffix(":true") }, [], "grant \(String(describing: grant))")
+            XCTAssertFalse(probe.messages.contains { $0.hasPrefix("hook") }, "\(probe.messages)")
+            XCTAssertTrue(store.closeOverlay(session.id))
+        }
     }
 
     func testTheFileAloneGrantKeepsSiblingScriptsOut() async throws {
@@ -365,8 +406,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
         let palette = (0..<16).map { String(format: "#%02x%02x%02x", $0, 0x40, 0x80) }
         page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true, palette: palette))
-        let changed = try await variable("--agterm-color-1", in: page.webView)
-        XCTAssertEqual(changed, "#014080")
+        try await waitForVariable("--agterm-color-1", "#014080", in: page.webView)
         let background = try await variable("--agterm-background", in: page.webView)
         XCTAssertEqual(background, "#000000")
     }
@@ -381,11 +421,14 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let before = try await bottomPixel(page.webView)
         XCTAssertEqual(before.alphaComponent, 1, accuracy: 0.01)
         XCTAssertEqual(before.redComponent, 1, accuracy: 0.02, "a url page must keep the browser's white canvas: \(before)")
+        let initial = try await variable("--agterm-background", in: page.webView)
         page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+        let kept = try await variable("--agterm-background", in: page.webView)
+        XCTAssertEqual(kept, initial, "a url page takes a theme change only at its next load")
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+        try await waitForVariable("--agterm-background", "#101010", in: page.webView)
         let scheme = try await page.webView.evaluateJavaScript("getComputedStyle(document.documentElement).colorScheme")
         XCTAssertEqual(scheme as? String, "normal")
-        let background = try await variable("--agterm-background", in: page.webView)
-        XCTAssertEqual(background, "#101010", "the variables still reach a url page")
         let after = try await bottomPixel(page.webView)
         XCTAssertEqual(after.redComponent, 1, accuracy: 0.02, "a theme change must not darken a url page: \(after)")
     }
@@ -424,6 +467,14 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private func variable(_ name: String, in view: WKWebView) async throws -> String? {
         let value = try await view.evaluateJavaScript("getComputedStyle(document.documentElement).getPropertyValue('\(name)').trim()")
         return value as? String
+    }
+
+    private func waitForVariable(_ name: String, _ expected: String, in view: WKWebView) async throws {
+        let deadline = Date().addingTimeInterval(10)
+        while try await variable(name, in: view) != expected {
+            guard Date() < deadline else { return XCTFail("\(name) never became \(expected)") }
+            try await Task.sleep(for: .milliseconds(50))
+        }
     }
 
     private func write(_ name: String, _ body: String) throws {
