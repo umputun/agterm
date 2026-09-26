@@ -795,7 +795,7 @@ error keeps those names for compatibility.
   runs; CDN scripts and images load. A clicked http(s) link, or a link opening a new window, opens in the
   default browser only after the user confirms a prompt naming its origin and URL; one prompt at a time,
   and after Cancel the page asks nothing more until the user clicks or types in it. Popups, JS dialogs,
-  file-chooser requests, dropped files and camera/microphone requests are refused. Mutually exclusive with a COMMAND, `--wait` and `--block`.
+  file-chooser requests, dropped or pasted files and camera/microphone requests are refused. Mutually exclusive with a COMMAND, `--wait` and `--block`.
   Refused `overlay already open` over a program or another page, and while another Mac presents the
   session. Read back `htmlOverlays` in `tree --json`: `{pane?, file?, cwd?, url?, state, error?, page?,
   title?, canGoBack?, canGoForward?, navigation?}`, one of `file`/`url` set, `state` being `loading`,

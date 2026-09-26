@@ -624,6 +624,41 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNotEqual(view.draggingEntered(FakeDrag(text, over: view)), [])
     }
 
+    func testAPageRefusesAPastedFileAndTakesPastedText() async throws {
+        try "PASTE-SECRET".write(to: pages.appendingPathComponent("secret.txt"), atomically: true, encoding: .utf8)
+        try write("paste.html", """
+            <title>P</title><textarea id="t"></textarea><script>
+            document.addEventListener('paste', e => {
+              const d = e.clipboardData;
+              webkit.messageHandlers.probe.postMessage('paste:' + d.files.length + ':' + d.getData('text/plain'));
+              for (const f of d.files) { f.text().then(t => webkit.messageHandlers.probe.postMessage('file:' + t)); }
+            });
+            </script>
+            """)
+        let probe = PageProbe()
+        let page = registry.page(for: try open(file: "paste.html"), store: store)
+        page.webView.configuration.userContentController.add(probe, name: "probe")
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        window.makeFirstResponder(page.webView)
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('t').focus(); true")
+
+        let files = NSPasteboard(name: NSPasteboard.Name("agterm-test-\(UUID().uuidString)"))
+        defer { files.releaseGlobally() }
+        files.clearContents()
+        files.writeObjects([pages.appendingPathComponent("secret.txt") as NSURL])
+        XCTAssertFalse(page.webView.readSelection(from: files))
+
+        let text = NSPasteboard(name: NSPasteboard.Name("agterm-test-\(UUID().uuidString)"))
+        defer { text.releaseGlobally() }
+        text.clearContents()
+        text.setString("plain words", forType: .string)
+        XCTAssertTrue(page.webView.readSelection(from: text))
+        try await waitFor("text pasted") { probe.messages.contains("paste:0:plain words") }
+        XCTAssertFalse(probe.messages.contains { $0.hasPrefix("file:") || $0.hasPrefix("paste:1") }, "\(probe.messages)")
+    }
+
     func testNavigatingAPageThatWasNeverShownIsRefused() {
         XCTAssertEqual(registry.navigate(UUID(), .back), OverlayHtmlError.notRealized)
     }

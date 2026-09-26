@@ -492,22 +492,45 @@ final class HtmlOverlayWebView: WKWebView {
         return became
     }
 
-    // a dropped file reaches the page's script with its contents, so drags carrying files are refused while
-    // text and links still drop
+    // a dropped or pasted file reaches the page's script with its contents, so a drag or paste carrying files
+    // is refused while text and links still go through; in a terminal the same paste gives only a path
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        Self.carriesFiles(sender) ? [] : super.draggingEntered(sender)
+        Self.carriesFiles(sender.draggingPasteboard) ? [] : super.draggingEntered(sender)
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        Self.carriesFiles(sender) ? [] : super.draggingUpdated(sender)
+        Self.carriesFiles(sender.draggingPasteboard) ? [] : super.draggingUpdated(sender)
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        Self.carriesFiles(sender) ? false : super.performDragOperation(sender)
+        Self.carriesFiles(sender.draggingPasteboard) ? false : super.performDragOperation(sender)
     }
 
-    private static func carriesFiles(_ info: any NSDraggingInfo) -> Bool {
-        let pasteboard = info.draggingPasteboard
+    // the paste selectors are absent from Swift's WKWebView interface, so forwarding uses the base IMP
+    @objc(paste:) func pasteRefusingFiles(_ sender: Any?) {
+        forwardPaste(#selector(pasteRefusingFiles(_:)), sender)
+    }
+
+    @objc(pasteAsPlainText:) func pasteAsPlainTextRefusingFiles(_ sender: Any?) {
+        forwardPaste(#selector(pasteAsPlainTextRefusingFiles(_:)), sender)
+    }
+
+    @objc(readSelectionFromPasteboard:) func readSelection(from pasteboard: NSPasteboard) -> Bool {
+        let selector = #selector(readSelection(from:))
+        guard !Self.carriesFiles(pasteboard), let method = class_getInstanceMethod(WKWebView.self, selector) else { return false }
+        typealias Read = @convention(c) (AnyObject, Selector, NSPasteboard) -> Bool
+        return unsafeBitCast(method_getImplementation(method), to: Read.self)(self, selector, pasteboard)
+    }
+
+    private func forwardPaste(_ selector: Selector, _ sender: Any?) {
+        guard !Self.carriesFiles(.general), let method = class_getInstanceMethod(WKWebView.self, selector) else {
+            return NSSound.beep()
+        }
+        typealias Paste = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
+        unsafeBitCast(method_getImplementation(method), to: Paste.self)(self, selector, sender as AnyObject?)
+    }
+
+    private static func carriesFiles(_ pasteboard: NSPasteboard) -> Bool {
         let promises = Set(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
         return pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
             || pasteboard.types?.contains(where: promises.contains) == true

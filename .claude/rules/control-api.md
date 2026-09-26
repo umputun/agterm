@@ -461,7 +461,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   skips the prompt; it opens with the default browser app, never the file type's app, which could run it.
 - The panel always has an app-drawn identity strip (`HtmlOverlay.identity`: the file shown or the origin)
   that the page cannot cover or retitle, with the close button; `--navigation` adds the buttons. The page
-  title reaches only `tree`, where agents must treat it as untrusted. Page views refuse drags carrying files.
+  title reaches only `tree`, where agents must treat it as untrusted. Page views refuse drags and pastes
+  carrying files; WKWebView's paste commands exist only at runtime, so they are overridden by selector.
 - Every toolbar button has a control twin through the same store/registry path: reload is
   `overlay.reload --current` (bare `overlay.reload` loads the original source), back/forward/browser is
   `overlay.navigate`. A page never takes the remote program-job path:
