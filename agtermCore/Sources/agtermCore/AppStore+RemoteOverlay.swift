@@ -140,7 +140,7 @@ extension AppStore {
     }
 
     private func localOverlayHolds(_ pane: OverlayPane?, in session: Session) -> Bool {
-        guard let pane else { return session.programOverlayActive }
+        guard let pane else { return session.coverOverlayActive }
         return session.paneOverlay(pane) != nil
     }
 

@@ -214,35 +214,35 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/TerminalZoomTests.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`
 
-- [ ] slot rules, test first: HTML open replaces a HUD, is refused over a program or another page
+- [x] slot rules, test first: HTML open replaces a HUD, is refused over a program or another page
       (session-wide and per pane) and while a presenter owns the session, clears the prior exit code and
       bumps the slot generation; reload bumps only `reloadRevision`; load state round-trips by occupant id,
       including for a soft-closed session; soft-close keeps the HTML slot until finalization; HTML never
       enters the remote program-job handoff
-- [ ] occupant identity, test first: `swapPanes` with two HTML pages keeps each id with its page; promotion
+- [x] occupant identity, test first: `swapPanes` with two HTML pages keeps each id with its page; promotion
       moves the right page's id to the left slot; close, reload and load-state writes after either move
       reach the moved slot
-- [ ] pane retention, test first: `dropUnrealizedPaneOverlays` keeps an HTML slot; hiding and re-showing
+- [x] pane retention, test first: `dropUnrealizedPaneOverlays` keeps an HTML slot; hiding and re-showing
       the split keeps the page slot and its id
-- [ ] `HtmlOverlaySpec` (grant containment, `occupantID`), `HtmlLoadState`, added to `PaneOverlay` and the
+- [x] `HtmlOverlaySpec` (grant containment, `occupantID`), `HtmlLoadState`, added to `PaneOverlay` and the
       session-wide slot without removing any public member
-- [ ] refusal enums, test first: open, reload and the result/copy/text HTML checks return typed failures
+- [x] refusal enums, test first: open, reload and the result/copy/text HTML checks return typed failures
       from store methods; HUD over a page refused
-- [ ] teardown funnel, test first: `overlay.close` (session-wide and each pane), session close, workspace
+- [x] teardown funnel, test first: `overlay.close` (session-wide and each pane), session close, workspace
       delete, hard finalization of pending closes and split close each fire the HTML release hook exactly
       once; a program pane closed with `closePaneOverlay` still reports its exit code afterwards
-- [ ] predicate split, test first: `htmlOverlayActive`, `coverOverlayActive` and pane equivalents; all 19
+- [x] predicate split, test first: `htmlOverlayActive`, `coverOverlayActive` and pane equivalents; all 19
       `programOverlayActive` reads classified (cover vs terminal-program) and the classification recorded
       in `control-api.md`'s overlay section; focus targets stay terminal-only under HTML while the cover
       predicate is true (`topmostSurface`/`focusTarget` nil under a page); `TerminalZoom` treats an HTML cover as covering but never as a zoom target, and
       bare `resolveTarget` returns nil under a session-wide page and under a page on the focused pane
       (left and right)
-- [ ] navigation policy, test first: `HtmlNavigationPolicy.decide` table over frame navigations: initial
+- [x] navigation policy, test first: `HtmlNavigationPolicy.decide` table over frame navigations: initial
       file load and same-file anchors (allow), user-activated main-frame http(s) (openExternal),
       non-activated http(s) redirects and script navigation (cancel), `file:` inside the grant main frame
       and subframe (allow), `file:` outside the grant (cancel), new-window targets (cancel), other schemes
       (cancel)
-- [ ] `swift test --filter` for the touched suites passes
+- [x] `swift test --filter` for the touched suites passes
 
 ### Task 2: Control surface: protocol, dispatcher, read-back and agtermctl
 

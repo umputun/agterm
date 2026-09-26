@@ -408,6 +408,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The same predicate governs focus routing: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
   `onScreenSurface`, `AppActions.searchTarget`'s scratch rung, and the scratch factory's `suppressAutoFocus`.
   A raw `overlayActive` read at any of them hands first responder or a buffer read to the HUD painter.
+- An HTML page (`Session.htmlOverlay`, `PaneOverlay.html`) is a third occupant: it covers and owns input
+  like a program but has no terminal surface, zoom target or exit status. `programOverlayActive` excludes
+  it; `coverOverlayActive` (program or page) is the input-exclusion question. Cover sites: `gates.overlaid`,
+  the click catcher, `backdropWashActive`, the scratch focus gate, the overlay-close refocus key,
+  `suppressAutoFocus`, `searchTarget`'s scratch rung, `DeckPaneGates.coverActive`, the tree `overlay` field,
+  the remote overlay's local-hold check, and zoom's `uncovered`/`paneVisible`. Program-only sites:
+  `TerminalView.viewOnly`, zoom's `.overlay` and pane-overlay arms, and `overlay.result`'s running check.
+  Under a page `topmostSurface` and `focusTarget` return nil, never the hidden pane, and zoom's
+  `resolveTarget` returns nil. `dropUnrealizedPaneOverlays` never drops a page, which has no surface to
+  realize. Every path that empties a slot holding a page fires `HtmlOverlayReleases` once: `closeOverlay`,
+  `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace and
+  pending-close teardown.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,
   and session close tear a HUD down. `overlay.result` refuses with `OverlayHudError.noResult` because
