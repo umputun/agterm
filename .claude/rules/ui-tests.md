@@ -41,6 +41,8 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   teardown so they cannot leak into later tests.
 - Pass a temporary `AGTERM_STATE_DIR` in the launch environment; `agtermApp.restoredStore()` honors it.
   Verify the native `Open Directory...` panel manually.
+- OpenCode installation UI tests use `OpenCodeInstallerTestHost`, which compiles the production installer
+  sources and targets a temporary home. Never invoke the global installers in the real app from a UI test.
 - **Use `app.launchForUITest()`, never `app.launch()`.** FB11763863 on macOS 15+/Xcode 16+, including
   Xcode 26, can leave a
   process-launched SwiftUI `WindowGroup` with a Dock icon and AX elements but no `NSWindow`, task, or

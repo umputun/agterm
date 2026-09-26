@@ -3,7 +3,7 @@ import Testing
 
 /// Resolves a qualifying `node` for OpenCodeStatusHookTests. Kept outside the suite type so
 /// `@Suite(.enabled(if:))` can reference it without a circular macro resolution on the suite itself.
-private enum OpenCodeStatusHookSupport {
+enum OpenCodeStatusHookSupport {
     /// First `node` on PATH that meets the module-syntax-detection floor (≥ 20.19 or ≥ 22.7), or nil.
     /// Suite-gated via `.enabled(if:)` so older/missing Node skips visibly rather than failing the
     /// import of the plugin's bare `.js` (no package.json above it).

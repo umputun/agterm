@@ -60,10 +60,13 @@ paths:
   and drifts from it silently.
 - Install Pi only when `~/.pi/agent` exists. Start is active; settle only after retries, compaction, and
   queued continuations. Pi exposes no reliable blocked event, so never infer it from prose.
-- Install OpenCode only when its config exists and export only `AgtermStatusPlugin`; the legacy loader
+- Install OpenCode only when its config exists; v1 exports only `AgtermStatusPlugin`, as the legacy loader
   treats every export as a plugin. Busy/retry and replies are active; asked permission/question is blocked.
   Latch a busy terminal error across sibling idle. Skip abort; defer ContextOverflow until idle unless busy
   resumes. Ignore deprecated `session.idle`.
+- OpenCode v2 uses a separate dependency-free CLI entrypoint, `plugins/agterm-v2/tui.js`, with its own marker.
+  Install the detected major, offering a choice or skip when unknown.
+  Status follows the client's selected session and descendants; lifecycle details live in the plugin and its tests.
 - Preserve unmarked Pi/OpenCode files and require restart or reload. Host-free `AgentHooksInstall` owns
   merge, marker, backup, and optional-agent policy.
 - Skill installation targets every existing Claude/Codex skill root, creating Claude only when neither
