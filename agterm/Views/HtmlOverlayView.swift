@@ -30,10 +30,9 @@ struct HtmlOverlayView: View {
                 .overlay(alignment: .topTrailing) {
                     if !overlay.navigation {
                         // a fixed dark disc, so no page color can hide the only mouse exit
-                        button("xmark", "Close", "htmlOverlay.close", enabled: true) {
+                        button("xmark", "Close", "htmlOverlay.close", enabled: true, tint: .white) {
                             store.closeHtmlOverlay(overlay.id)
                         }
-                        .foregroundStyle(.white)
                         .padding(6)
                         .background(Color.black.opacity(0.6), in: Circle())
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
@@ -105,16 +104,44 @@ struct HtmlOverlayView: View {
         }
     }
 
-    private func button(_ symbol: String, _ label: String, _ identifier: String, enabled: Bool,
+    private func button(_ symbol: String, _ label: String, _ identifier: String, enabled: Bool, tint: Color? = nil,
                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(HtmlToolbarButtonStyle(tint: tint ?? foreground))
         .disabled(!enabled)
         .help(label)
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
+    }
+}
+
+/// HtmlToolbarButtonStyle draws the page panel's buttons in the theme's text color, which a plain borderless
+/// style would keep at full strength whether disabled or pressed: it dims a disabled button, darkens a pressed
+/// one and marks the hovered one.
+private struct HtmlToolbarButtonStyle: ButtonStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        HtmlToolbarButton(configuration: configuration, tint: tint)
+    }
+}
+
+private struct HtmlToolbarButton: View {
+    let configuration: ButtonStyleConfiguration
+    let tint: Color
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovered = false
+
+    var body: some View {
+        configuration.label
+            .foregroundStyle(tint.opacity(isEnabled ? (configuration.isPressed ? 0.55 : 1) : 0.3))
+            .frame(width: 22, height: 20)
+            .background(RoundedRectangle(cornerRadius: 5)
+                .fill(tint.opacity(configuration.isPressed ? 0.22 : hovered && isEnabled ? 0.1 : 0)))
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
     }
 }
 
