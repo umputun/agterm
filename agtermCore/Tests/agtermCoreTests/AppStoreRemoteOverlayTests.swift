@@ -42,6 +42,8 @@ struct AppStoreRemoteOverlayTests {
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         if split { store.toggleSplit(session.id) }
+        setLead(.follower, pane: session.paneIdentity)
+        if let pane = session.splitPaneIdentity { setLead(.follower, pane: pane) }
         guard presented else { return (session, nil) }
         let hello = PresentationHello(version: 1, kinds: [], mode: .presenter)
         let id = try hub.subscribe(session: session.id, hello: hello, sink: presenter) { PresentationSnapshot(status: nil, hud: nil) }
@@ -61,6 +63,86 @@ struct AppStoreRemoteOverlayTests {
     }
 
     private struct OpenFailed: Error {}
+
+    private func setLead(_ role: ZmxLeadRole?, pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let role, let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
+    }
+
+    @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?],
+          [nil, .unowned, .leader, .follower] as [ZmxLeadRole?])
+    func aSessionOverlayRequiresEveryPaneToFollow(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
+        let (session, _) = try origin(split: true)
+        setLead(left, pane: session.paneIdentity)
+        setLead(right, pane: try #require(session.splitPaneIdentity))
+        let remote = left == .follower && right == .follower
+
+        let result = open(session)
+
+        if remote {
+            _ = try job(of: result)
+        } else {
+            #expect(result == .notPresented)
+            #expect(session.remoteOverlays.slots.isEmpty)
+            #expect(!presenter.bodies.contains { if case .overlayRequest = $0 { true } else { false } })
+        }
+    }
+
+    @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?], OverlayPane.allCases)
+    func aPaneOverlayUsesOnlyItsOwnLead(role: ZmxLeadRole?, pane: OverlayPane) throws {
+        let (session, _) = try origin(split: true)
+        let right = try #require(session.splitPaneIdentity)
+        setLead(pane == .left ? role : .leader, pane: session.paneIdentity)
+        setLead(pane == .right ? role : .leader, pane: right)
+
+        let result = open(session, pane: pane)
+
+        if role == .follower {
+            _ = try job(of: result)
+        } else {
+            #expect(result == .notPresented)
+            #expect(session.remoteOverlays.slots.isEmpty)
+        }
+    }
+
+    @Test func overlayRoutingFollowsSwappedPaneIdentities() throws {
+        let (session, _) = try origin(split: true)
+        realizeSplit(session)
+        setLead(.leader, pane: session.paneIdentity)
+        #expect(store.swapPanes(session.id) == nil)
+
+        _ = try job(of: open(session, pane: .left))
+        #expect(open(session, pane: .right) == .notPresented)
+        #expect(open(session) == .notPresented)
+    }
+
+    @Test func aRemoteOverlayStillResizesAndClosesAfterTakingTheLeadHere() throws {
+        let (session, _) = try origin()
+        let job = try job(of: open(session))
+        setLead(.leader, pane: session.paneIdentity)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: 40) == true)
+        #expect(presenter.bodies.last == .overlayResize(PresentationOverlayChange(job: job, sizePercent: 40)))
+        #expect(store.closeRemoteOverlay(session.id, pane: nil))
+        #expect(presenter.bodies.last == .overlayClose(PresentationOverlayChange(job: job)))
+        #expect(jobs.job(job)?.state == .finished(.canceled))
+    }
+
+    @Test func losingAPresenterLeavesALocalOverlayAlone() throws {
+        let (session, id) = try origin()
+        setLead(.leader, pane: session.paneIdentity)
+        #expect(open(session) == .notPresented)
+        #expect(store.openOverlay(session.id, command: "top"))
+
+        hub.unsubscribe(try #require(id))
+
+        #expect(session.programOverlayActive)
+        #expect(session.overlayCommand == "top")
+        #expect(session.remoteOverlays.slots.isEmpty)
+    }
 
     @Test func aSessionWithoutAPresenterOpensItsOverlayHere() throws {
         let (session, _) = try origin(presented: false)

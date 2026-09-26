@@ -649,7 +649,9 @@ notifications, HUD and the layout of attached panes over a stream that reconnect
 ([details](reference.md#restore)); read
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. One
 attached row per session holds the presenter role: an `ask open` or `session overlay open` newly aimed at
-the session on the origin is handed to it, the overlay's program still runs once on the origin, and a remote
+the session on the origin is handed to it only when the target pane reports `follower` there, or every
+existing pane does for session-wide placement. Mixed, unknown or unowned roles stay local; one already
+open stays where it is when the lead changes. The overlay's program still runs once on the origin, and a remote
 `overlay close` replies when the cancel is requested
 ([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm

@@ -30,6 +30,8 @@ struct AppStoreRemoteAskTests {
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         if split { store.toggleSplit(session.id) }
+        setLead(.follower, pane: session.paneIdentity)
+        if let pane = session.splitPaneIdentity { setLead(.follower, pane: pane) }
         guard presented else { return (session, nil) }
         let hello = PresentationHello(version: 1, kinds: [], mode: .presenter)
         let id = try hub.subscribe(session: session.id, hello: hello, sink: presenter) {
@@ -45,6 +47,83 @@ struct AppStoreRemoteAskTests {
     }
 
     private func owner(of session: Session) -> Int { hub.presenterGeneration(session: session.id) }
+
+    private func setLead(_ role: ZmxLeadRole?, pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let role, let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
+    }
+
+    @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?],
+          [nil, .unowned, .leader, .follower] as [ZmxLeadRole?])
+    func aSessionAskRequiresEveryPaneToFollow(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
+        let (session, _) = try origin(split: true)
+        setLead(left, pane: session.paneIdentity)
+        setLead(right, pane: try #require(session.splitPaneIdentity))
+        let remote = left == .follower && right == .follower
+
+        let result = store.presentAskRemotely(ask(), in: session, paneIdentity: nil, window: Self.window)
+
+        #expect(result == (remote ? true : nil))
+        #expect(session.askPresentedRemotely == remote)
+        if !remote {
+            #expect(session.askPending == nil)
+            #expect(!presenter.bodies.contains { if case .askRequest = $0 { true } else { false } })
+        }
+    }
+
+    @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?], OverlayPane.allCases)
+    func aPaneAskUsesOnlyItsOwnLead(role: ZmxLeadRole?, pane: OverlayPane) throws {
+        let (session, _) = try origin(split: true)
+        let right = try #require(session.splitPaneIdentity)
+        setLead(pane == .left ? role : .leader, pane: session.paneIdentity)
+        setLead(pane == .right ? role : .leader, pane: right)
+        let identity = pane == .left ? session.paneIdentity : right
+
+        let result = store.presentAskRemotely(ask(), in: session, paneIdentity: identity, window: Self.window)
+
+        #expect(result == (role == .follower ? true : nil))
+        #expect(session.askPresentedRemotely == (role == .follower))
+    }
+
+    @Test func askRoutingFollowsSwappedPaneIdentities() throws {
+        let (session, _) = try origin(split: true)
+        session.surface = SpySurface(paneToken: "primary")
+        session.splitSurface = SpySurface(paneToken: "split")
+        setLead(.leader, pane: session.paneIdentity)
+        #expect(store.swapPanes(session.id) == nil)
+
+        #expect(store.presentAskRemotely(ask(), in: session, paneIdentity: session.splitPaneIdentity, window: Self.window) == nil)
+        #expect(store.presentAskRemotely(ask(), in: session, paneIdentity: session.paneIdentity, window: Self.window) == true)
+    }
+
+    @Test func aRemoteAskStillCancelsAfterTakingTheLeadHere() throws {
+        let (session, _) = try origin()
+        let pending = ask()
+        #expect(store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window) == true)
+        setLead(.leader, pane: session.paneIdentity)
+
+        session.cancelAsk(id: pending.id)
+
+        #expect(presenter.bodies.last == .askDismiss(PresentationAskRef(id: pending.id, owner: owner(of: session))))
+        #expect(AskRegistry.shared.result(for: pending.id)?.result.result == .cancelled)
+    }
+
+    @Test func losingAPresenterLeavesALocalAskAlone() throws {
+        let (session, id) = try origin()
+        setLead(.leader, pane: session.paneIdentity)
+        let pending = ask()
+        #expect(store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window) == nil)
+        #expect(session.openAsk(pending))
+        hub.onPresenterLost = { [store] in _ = store.takeBackRemoteAsk(forSession: $0) }
+
+        hub.unsubscribe(try #require(id))
+
+        #expect(session.askPending?.id == pending.id)
+        #expect(!session.askPresentedRemotely)
+    }
 
     @Test func aSessionAskGoesToThePresenterAloneAndIsNotDrawnHere() throws {
         let (session, _) = try origin()

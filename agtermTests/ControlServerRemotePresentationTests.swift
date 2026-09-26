@@ -564,6 +564,11 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     func testAnAskAndAnOverlayJobHandedToTheViewerCompleteOnTheOrigin() throws {
         let pair = try bridgedPair()
         let (server, origin, viewer) = (pair.server, pair.origin, pair.viewer)
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: origin.paneIdentity)
+        let notice = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1"))
+        _ = ZmxLeadBook.shared.apply(notice, pane: origin.paneIdentity)
+        defer { ZmxLeadBook.shared.forget(pane: origin.paneIdentity) }
         let ask = PendingAsk(id: UUID().uuidString, title: "deploy?",
                              buttons: [ControlAskButton(id: "yes", label: "Yes"), ControlAskButton(id: "no", label: "No")])
 

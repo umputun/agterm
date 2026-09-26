@@ -2753,8 +2753,10 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               One Mac attached to a session <em>presents</em> it, the first to ask while nobody does, and its row's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">presentation</span> reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mode: presenter</span>. A question (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ask</span>) or a program overlay a
-              program then opens in that session is handed to the presenting Mac, where you are, and the answer or the program's exit status still
-              reaches the program on the other side. The overlay's program runs once, on the other Mac, inside an ssh terminal this
+              program then opens in that session is handed to the presenting Mac, where you are, only while the other Mac follows
+              another Mac's lead in its pane, or in every pane for one covering the whole session. Otherwise it opens on the other Mac,
+              and one already open stays where it is when the lead changes. The answer or the program's exit status still
+              reaches the program on the other side. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this
               Mac opens for it. If this Mac refuses a question, it goes back to the other side; if it cannot show an overlay, the
               overlay fails rather than opening over there. Closing such an overlay from a script asks for it to end, and its
               result says how it did.

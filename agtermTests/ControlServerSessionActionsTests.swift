@@ -1066,6 +1066,10 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
     @discardableResult
     private func present(_ session: Session) throws -> (PresenterSink, PresentationHub.SubscriberID) {
+        for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) {
+            ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: pane)
+            _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: pane)
+        }
         server.attachPresentationHub()
         let sink = PresenterSink()
         let id = try server.presentationHub.subscribe(
@@ -1077,6 +1081,21 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
     private func remoteJob(_ session: Session) throws -> String {
         try XCTUnwrap(session.remoteOverlays.slot(nil)?.job)
+    }
+
+    func testAnOverlayOpensHereWhileThisMacLeadsAPresentedSession() throws {
+        let (store, session) = try addSession()
+        store.toggleSplit(session.id)
+        let (sink, _) = try present(session)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: session.paneIdentity)
+        ZmxLeadBook.shared.forget(pane: try XCTUnwrap(session.splitPaneIdentity))
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: overlayOptions(follow: false))
+
+        XCTAssertTrue(response.ok)
+        XCTAssertTrue(session.programOverlayActive)
+        XCTAssertTrue(session.remoteOverlays.slots.isEmpty)
+        XCTAssertFalse(sink.bodies.contains { if case .overlayRequest = $0 { true } else { false } })
     }
 
     func testAnOverlayForAPresentedSessionGoesToTheViewerAndCoversNothingHere() throws {

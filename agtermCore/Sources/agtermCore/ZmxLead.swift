@@ -172,6 +172,12 @@ public final class ZmxLeadBook {
 }
 
 extension Session {
+    /// Remote presentation requires the target pane, or every existing pane, to follow on this Mac.
+    func followsRemotely(paneIdentity: UUID?) -> Bool {
+        let panes = paneIdentity.map { [$0] } ?? ([self.paneIdentity] + [splitPaneIdentity].compactMap { $0 })
+        return panes.allSatisfy { ZmxLeadBook.shared.role(pane: $0) == .follower }
+    }
+
     /// The identity of the pane behind a surface slot, nil for the ephemeral ones, which have no daemon.
     public func paneIdentity(for surface: TerminalZoomSurface) -> UUID? {
         switch surface {

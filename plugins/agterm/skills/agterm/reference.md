@@ -1696,8 +1696,10 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   while the stream was down. Clearing it here gives the row back to the origin's status.
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
   whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect.
-  While a session has a presenter, an `ask open` or `session overlay open` newly aimed at it on the origin
-  is handed to the presenting Mac, and the caller on the origin gets the answer or the exit status as usual.
+  An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
+  when the target pane reports `follower` there, or every existing pane does for session-wide placement.
+  Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
+  The caller on the origin gets the answer or the exit status as usual.
 - A handed-over ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on
   screen), or one whose stream drops, goes back to the origin and waits there like a local one. If the
   origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.

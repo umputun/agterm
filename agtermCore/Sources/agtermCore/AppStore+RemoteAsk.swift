@@ -3,14 +3,15 @@ import Foundation
 // MARK: - Asks handed to the viewer presenting a session, on the origin
 
 extension AppStore {
-    /// Hands a session-associated ask to the viewer presenting `session`. Nil when no viewer does, so the
-    /// caller opens it here; false when the session's ask slot is taken.
+    /// Hands a session-associated ask to its presenter when the target follows remotely.
+    /// Nil leaves it local; false means the session's ask slot is taken.
     ///
     /// The ask keeps the session's slot and its result on this Mac, marked as presented elsewhere, so every
     /// cancel and teardown path that already ends an ask here ends this one too and tells the presenter.
     public func presentAskRemotely(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
                                    window: WindowInfo.ID) -> Bool? {
-        guard let hub = presentationHub, hub.hasPresenter(session: session.id) else { return nil }
+        guard let hub = presentationHub, hub.hasPresenter(session: session.id),
+              session.followsRemotely(paneIdentity: paneIdentity) else { return nil }
         let owner = hub.presenterGeneration(session: session.id)
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return false }
         AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))

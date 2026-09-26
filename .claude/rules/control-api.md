@@ -1253,8 +1253,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A stream a viewer opens asks for the PRESENTER role. The origin grants it to one stream per session and
   refuses the rest, which stay mirrors and ask again only on their own reconnect; an origin predating the
   role answers mirror. The role goes with its stream. Read back the viewer's `presentation.mode` and the
-  origin's `presenters.presenter`. While a session has a presenter, a newly opened session-associated ask or
-  program overlay is handed to it; one already open stays where it is.
+  origin's `presenters.presenter`. A newly opened session-associated ask or program overlay goes to that
+  presenter only when its target pane reports `follower` on the origin, or every existing pane does for
+  session-wide placement; mixed, unknown or unowned roles stay local.
+  One already open stays where it is when the lead changes.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
   a replica, `ask.replica`, whose answer carries only the button id and is checked against the stored
   buttons. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its

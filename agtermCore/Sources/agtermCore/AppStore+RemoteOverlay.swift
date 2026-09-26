@@ -2,7 +2,7 @@ import Foundation
 
 /// What `openRemoteOverlay` did with a request.
 public enum RemoteOverlayOpen: Equatable, Sendable {
-    /// No viewer presents the session; the caller opens the overlay here.
+    /// The caller opens the overlay here.
     case notPresented
     /// The slot holds an overlay, local or remote.
     case slotTaken
@@ -27,6 +27,7 @@ extension AppStore {
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
+        guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
         guard let frame = try? OverlayJobFrame.context(context).line(),
               frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one

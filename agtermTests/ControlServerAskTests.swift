@@ -534,6 +534,33 @@ final class ControlServerAskTests: XCTestCase {
                        ControlSessionAsk(id: ask.id, remote: true))
     }
 
+    func testATerminalAskStaysHereWhileThisMacLeadsAPresentedSession() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let (sink, _) = try present(session)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: session.paneIdentity)
+        let ask = makeTerminalAsk()
+
+        XCTAssertTrue(open(ask).ok)
+
+        XCTAssertEqual(session.askPending, ask)
+        XCTAssertFalse(session.askPresentedRemotely)
+        XCTAssertFalse(sink.bodies.contains { if case .askRequest = $0 { true } else { false } })
+    }
+
+    func testATargetedGuiAskStaysHereWhileThisMacLeadsAPresentedSession() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let controller = register(try XCTUnwrap(library.activeWindowID))
+        let (sink, _) = try present(session)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: session.paneIdentity)
+        let ask = makeAsk()
+
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+
+        XCTAssertEqual(controller.pendingAsk?.id, ask.id)
+        XCTAssertFalse(session.askPresentedRemotely)
+        XCTAssertFalse(sink.bodies.contains { if case .askRequest = $0 { true } else { false } })
+    }
+
     func testATargetedGuiAskWithAPresenterLeavesTheWindowSlotFree() throws {
         let session = try XCTUnwrap(library.activeStore?.activeSession)
         let controller = register(try XCTUnwrap(library.activeWindowID))
@@ -644,6 +671,10 @@ final class ControlServerAskTests: XCTestCase {
 
     @discardableResult
     private func present(_ session: Session) throws -> (PresenterSink, PresentationHub.SubscriberID) {
+        for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) {
+            ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: pane)
+            _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: pane)
+        }
         server.attachPresentationHub()
         let sink = PresenterSink()
         let id = try server.presentationHub.subscribe(
