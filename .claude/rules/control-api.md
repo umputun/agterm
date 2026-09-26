@@ -155,6 +155,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
+  `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
@@ -418,8 +419,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Under a page `topmostSurface` and `focusTarget` return nil, never the hidden pane, and zoom's
   `resolveTarget` returns nil. `dropUnrealizedPaneOverlays` never drops a page, which has no surface to
   realize. Every path that empties a slot holding a page fires `HtmlOverlayReleases` once: `closeOverlay`,
-  `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace and
-  pending-close teardown.
+  `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace,
+  pending-close and window teardown. The app's `HtmlOverlayRegistry` keys web views by the page's id, which
+  travels inside the slot value, so swaps, promotion and the soft-close window move the page intact.
+- `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
+  WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
+  `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all.
+- A page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)` rule
+  for scheme and text color, injected at document start. The background is NOT in CSS: the web view draws no
+  canvas (`drawsBackground`, the one private key) and the panel paints the theme or `--background-color`
+  behind it, so an authored `html` or `body` background still fills the canvas. `.agtermAppearanceChanged`
+  restyles open pages.
+- The toolbar is opt-in per open (`--navigation`, read back as `navigation`); without it the panel has a
+  fixed dark close disc no page color can hide.
+- Every toolbar button has a control twin through the same store/registry path: reload is
+  `overlay.reload --current` (bare `overlay.reload` loads the original file), back/forward/browser is
+  `overlay.navigate`. The title is display only. A page never takes the remote program-job path:
+  `open --html` is refused while a presenter owns the session, and one already open stays local.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,
   and session close tear a HUD down. `overlay.result` refuses with `OverlayHudError.noResult` because

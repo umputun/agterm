@@ -328,6 +328,11 @@
       on close and on soft-close finalization), navigator-to-policy mapping, a local subresource inside the
       grant loading, and reload after an in-grant navigation from a.html to b.html returning to a.html;
       run with `-only-testing:agtermTests/HtmlOverlayRegistryTests`
+- [x] ➕ theme default (Eugene): unstyled pages take the terminal theme; the web view draws no canvas and the
+      panel paints the theme or `--background-color`, so authored `html`/`body` backgrounds still fill it
+- [x] ➕ toolbar opt-in via `--navigation` (Eugene); without it a fixed dark close disc
+- [x] ➕ codex review fixes: ask/picker focus arbitration, reload reaching a hidden pane's page, drop
+      registration only while on screen, `--background-color` reaching the page
 - [x] ➕ no `--cwd` loads the file's text (WebKit widens a single-file grant to its folder); the folder grant
       is pinned by `testAFolderGrantKeepsFilesOutsideItOut`
 - [x] XCUITest cases in `ControlHtmlOverlayUITests`: session-wide and `--pane right` open, content visible,
@@ -336,18 +341,20 @@
       page after the command palette closes; run only those methods
 
 ### Task 4: Verify acceptance criteria
-- [ ] every Overview/Solution Overview item implemented, including presenter refusal and grant containment
-- [ ] edge cases: missing file (failed state with error), file outside grant, reload after the file changed,
+- [x] every Overview/Solution Overview item implemented, including presenter refusal and grant containment
+- [x] edge cases: missing file (failed state with error), file outside grant, reload after the file changed,
       session close with undo then restore
-- [ ] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] ➕ fixed the `SplitRatioAccessorTests` fixture race the full hosted run exposed (a layout pass between async
+      setUp and the body let the attached probe seed ratio 0.5)
 
 ### Task 5: [Final] Update documentation
-- [ ] `.claude/rules/control-api.md`: `.overlay.reload` in the public catalog (line ~157), HTML variant,
+- [x] `.claude/rules/control-api.md`: `.overlay.reload` in the public catalog (line ~157), HTML variant,
       predicate classification, teardown funnel, refusals, read-back, remote rule
-- [ ] `plugins/agterm/skills/agterm/`: `overlay open --html`, `overlay reload`, read-back fields
-- [ ] `site/commands.html` (arguments, read-back) and `site/docs.html` (user guide section); `site/index.html`
-      if the feature earns a home-page mention
-- [ ] `ARCHITECTURE.md` if the app adapter/registry split needs a line
+- [x] `plugins/agterm/skills/agterm/`: `overlay open --html`, `overlay reload`, read-back fields
+- [x] `site/commands.html` (arguments, read-back), `site/docs.html` (user guide section) and `site/llms.txt`;
+      `site/index.html` left for Eugene to decide
+- [x] `ARCHITECTURE.md` if the app adapter/registry split needs a line
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

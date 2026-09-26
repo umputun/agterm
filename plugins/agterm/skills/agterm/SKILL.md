@@ -85,7 +85,8 @@ holds a tree of **workspaces**, each holding **sessions**. A session has a prima
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
 An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving
-the sibling pane visible and usable. The same session-wide slot also holds a **HUD**
+the sibling pane visible and usable. `--html FILE` puts a local HTML page there instead of a
+program, which is how to show the user an artifact you generated. The same session-wide slot also holds a **HUD**
 (`session hud`), a small passive panel carrying a message instead of a program. A HUD can use the
 whole session or one pane as its placement bounds. The session keeps focus and stays typable
 under it.

@@ -485,6 +485,9 @@
                 pane-scoped overlay — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left"]</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the HTML pages in the overlay slots as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file, cwd?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?}</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
                 slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?}</span>, where
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> names the effective style or
@@ -1746,6 +1749,42 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span> errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a hud is always floating: pass --size-percent, not --full</span>
                 — full size would cover the session the message is about.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay open --html FILE [--cwd DIR] [--navigation] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show a local HTML file, such as an artifact an agent generated, in the overlay slot instead of running a program. Placement, sizing, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span>, ⌘W and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay close</span> work as for a program; a page never exits on its own. By default the panel carries only a small close button; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span> adds a toolbar with back, forward, reload, the page title and open in browser.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> the page has no file access (it is loaded from the file's text), so keep it self-contained. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd DIR</span> it may read files inside DIR, which must contain FILE. A page that styles nothing takes the terminal theme's colors, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> replacing the background; any CSS the page sets wins. JavaScript runs and CDN assets load; a clicked http(s) link opens in the default browser, while popups, dialogs, file-chooser requests and camera or microphone requests are refused. Mutually exclusive with a command, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span>; refused while another Mac presents the session.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Read it back from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay result</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">copy</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span> refuse a page.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay reload [--current] [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.reload</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Reload an HTML overlay: the file it was opened with, or with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--current</span> the page it shows now. Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">the overlay is not an html page</span>.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay navigate back|forward|browser [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.navigate</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Step an HTML overlay's history, or open its current page in the default browser. Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no page to go back to</span> / <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no page to go forward to</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">html overlay not realized</span> for a page never shown yet.
               </p>
             </div>
 

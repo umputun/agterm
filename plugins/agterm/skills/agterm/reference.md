@@ -170,6 +170,8 @@ to restore the exact size),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
+`htmlOverlays` (the HTML pages in the overlay slots, see `session overlay open --html`; `overlay` and
+`paneOverlays` count them as covers too),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
 `{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter,
@@ -775,6 +777,30 @@ error keeps those names for compatibility.
   panel) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
   would cover the session the message is about. The resize rewrites the body header itself, so the panel
   re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
+- `session overlay open --html FILE [--cwd DIR] [--navigation] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+  — show a local HTML file (an artifact you generated: a report, chart or prototype) in the overlay slot
+  instead of running a program. Same placement, sizing, `--follow`, ⌘W and `session overlay close` as a
+  program overlay; a page never exits on its own, so close it when done. By default the panel carries only
+  a small close button; `--navigation` adds a toolbar (back, forward, reload, the page title, open in
+  browser), worth it when the page links to others. Without `--cwd` the page gets NO file access
+  (it is loaded from the file's text), so keep it self-contained: inline CSS/JS, or CDN URLs. With
+  `--cwd DIR` the page may read files inside DIR, relative links and assets work, and FILE must be inside
+  DIR. Relative paths resolve against your shell's directory. A page that styles nothing takes the
+  terminal theme's background, text color and light/dark scheme (`--background-color` replaces the
+  background); any CSS the page sets wins. JavaScript runs; CDN scripts and images
+  load. A clicked http(s) link opens in the default browser; popups, JS dialogs, file-chooser requests and
+  camera/microphone requests are refused. Mutually exclusive with a COMMAND, `--wait` and `--block`.
+  Refused `overlay already open` over a program or another page, and while another Mac presents the
+  session. Read back `htmlOverlays` in `tree --json`: `{pane?, file, cwd?, state, error?, page?, title?,
+  canGoBack?, canGoForward?, navigation?}`, `state` being `loading`, `loaded` or `failed`. `loaded` does not prove
+  every CDN asset arrived.
+- `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
+  overlay: the file it was opened with (after you rewrote the artifact), or with `--current` the page it
+  shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.
+- `session overlay navigate back|forward|browser [--pane left|right] [--target] [--window W]` — step the
+  page's history, or open its current page in the default browser. Errors `no page to go back to` /
+  `no page to go forward to`, `html overlay not realized` for a page never shown yet, and the two
+  `reload` errors.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
   `--pane` closes that split pane's overlay; omit it for the session-wide one. It also takes a HUD down,
   as a courtesy — the slot is the same one. For an overlay shown on another Mac (see Remote sessions) the
@@ -798,7 +824,8 @@ error keeps those names for compatibility.
   `no overlay` with nothing in the slot, `overlay not realized` in the moment after `open` before its
   terminal is up, `no selection` when nothing is selected, and
   `no overlay to read: the slot holds a hud` for a HUD, whose text is agterm's own, and
-  `overlay is shown on another Mac` for one a presenting Mac draws.
+  `overlay is shown on another Mac` for one a presenting Mac draws, and
+  `no overlay to read: the slot holds an html page` for a page.
 - `session overlay text [--all] [--lines N] [--pane left|right] [--target] [--window W]` — returns
   `result.text` with the overlay's terminal buffer. `session text` reads the surface UNDERNEATH — its
   `--pane right` returns the shell, not the program drawn over it. `--all` and `--lines N` mean what they do
