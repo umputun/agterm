@@ -38,6 +38,14 @@ struct OverlayCommandsTests {
         #expect(req.args?.cwd == URL(fileURLWithPath: cwd).appendingPathComponent("out").standardizedFileURL.path)
     }
 
+    @Test func urlOpenSendsTheAddressUntouched() throws {
+        let req = try request(["session", "overlay", "open", "--url", "http://localhost:5173/a/../b", "--navigation"])
+        #expect(req.args?.url == "http://localhost:5173/a/../b")
+        #expect(req.args?.html == nil)
+        #expect(req.args?.cwd == nil)
+        #expect(req.args?.navigation == true)
+    }
+
     @Test func aProgramOpenLeavesItsCwdAsTyped() throws {
         let req = try request(["session", "overlay", "open", "revdiff", "--cwd", "repo"])
         #expect(req.args?.command == "revdiff")
@@ -51,6 +59,11 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--wait"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--block"],
         ["session", "overlay", "open", "revdiff", "--navigation"],
+        ["session", "overlay", "open", "revdiff", "--url", "http://localhost:5173/"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--url", "http://localhost:5173/"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--wait"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--block"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--cwd", "/tmp"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))

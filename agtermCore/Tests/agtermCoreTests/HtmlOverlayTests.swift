@@ -25,7 +25,11 @@ struct HtmlOverlayTests {
     }
 
     private func page(_ file: String = "/tmp/a/report.html", grant: String? = nil) -> HtmlOverlay {
-        HtmlOverlay(file: file, grantRoot: grant)
+        HtmlOverlay(source: .file(path: file, grantRoot: grant))
+    }
+
+    private func web(_ url: String) throws -> HtmlOverlay {
+        HtmlOverlay(source: .url(try #require(URL(string: url))))
     }
 
     private func split() {
@@ -83,6 +87,62 @@ struct HtmlOverlayTests {
                           _ decision: HtmlNavigationDecision) throws {
         let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
         #expect(HtmlNavigationPolicy.decide(action, overlay: page(grant: grant)) == decision)
+    }
+
+    @Test(arguments: [
+        ("http://localhost:5173/about", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
+        ("http://LOCALHOST:5173/", .mainFrame, true, .allow),
+        ("http://localhost:5174/", .mainFrame, false, .cancel),
+        ("http://localhost:5174/", .mainFrame, true, .openExternal),
+        ("https://localhost:5173/", .mainFrame, false, .cancel),
+        ("https://example.com/", .mainFrame, true, .openExternal),
+        ("https://example.com/", .mainFrame, false, .cancel),
+        ("https://example.com/embed", .subframe, false, .allow),
+        ("http://localhost:5173/", .newWindow, true, .openExternal),
+        ("http://localhost:5173/", .newWindow, false, .cancel),
+        ("about:blank", .mainFrame, false, .allow),
+        ("about:srcdoc", .subframe, false, .allow),
+        ("file:///tmp/a/report.html", .mainFrame, true, .cancel),
+        ("file:///tmp/a/report.html", .subframe, false, .cancel),
+        ("mailto:a@example.com", .mainFrame, true, .cancel),
+    ])
+    func urlPagePolicy(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
+                       _ decision: HtmlNavigationDecision) throws {
+        let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: try web("http://localhost:5173/")) == decision)
+    }
+
+    @Test(arguments: [
+        ("http://example.com/", "http://EXAMPLE.com:80/a", true),
+        ("https://example.com/", "https://example.com:443/b", true),
+        ("HTTPS://example.com/", "https://example.com/", true),
+        ("http://example.com/", "https://example.com/", false),
+        ("http://example.com/", "http://example.com:8080/", false),
+        ("http://example.com/", "http://www.example.com/", false),
+        ("http://[::1]:8080/", "http://[::1]:8080/x", true),
+    ])
+    func originEquality(_ lhs: String, _ rhs: String, _ same: Bool) throws {
+        let left = try #require(URL(string: lhs).flatMap(HtmlOrigin.init))
+        let right = try #require(URL(string: rhs).flatMap(HtmlOrigin.init))
+        #expect((left == right) == same)
+    }
+
+    @Test(arguments: [
+        ("http://localhost:5173/", true),
+        ("https://example.com/docs?q=1#top", true),
+        ("HTTPS://example.com", true),
+        ("http://127.0.0.1:8000", true),
+        ("http://[::1]:8080/", true),
+        ("ftp://example.com/", false),
+        ("file:///tmp/r.html", false),
+        ("localhost:5173", false),
+        ("/tmp/r.html", false),
+        ("http://", false),
+        ("javascript:alert(1)", false),
+        ("", false),
+    ])
+    func webURLAcceptsOnlyAbsoluteHttpWithAHost(_ text: String, _ valid: Bool) {
+        #expect((HtmlSource.webURL(text) != nil) == valid)
     }
 
     @Test func sessionWideOpenReplacesAHudAndClearsThePriorResult() throws {
@@ -395,12 +455,12 @@ struct HtmlOverlayTests {
         #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: page("/tmp/r.html"), sizePercent: nil) == nil)
         #expect(session.topmostHtmlOverlay == nil)
         session.splitFocused = true
-        #expect(session.topmostHtmlOverlay?.file == "/tmp/r.html")
+        #expect(session.topmostHtmlOverlay?.source == .file(path: "/tmp/r.html", grantRoot: nil))
         session.scratchActive = true
         #expect(session.topmostHtmlOverlay == nil)
         session.scratchActive = false
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page("/tmp/w.html"), sizePercent: nil) == nil)
-        #expect(session.topmostHtmlOverlay?.file == "/tmp/w.html")
+        #expect(session.topmostHtmlOverlay?.source == .file(path: "/tmp/w.html", grantRoot: nil))
     }
 
     @Test func theThemeStylesheetYieldsToAnyPageRule() {

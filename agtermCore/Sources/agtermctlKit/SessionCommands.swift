@@ -553,10 +553,15 @@ struct Session: ParsableCommand {
 
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(
-                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing an HTML page with --html.")
-            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html.") var command: String?
+                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing a page with --html or --url.")
+            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html or --url.") var command: String?
             @Option(name: .long, help: "Show this local HTML file instead of running COMMAND.") var html: String?
-            @Flag(name: .long, help: "With --html, show the toolbar: back, forward, reload, title, open in browser.")
+            @Option(name: .long, help: """
+                Show this http or https URL instead of running COMMAND; links to its own origin load in place. \
+                localhost means the Mac running agterm.
+                """)
+            var url: String?
+            @Flag(name: .long, help: "With --html or --url, show the toolbar: back, forward, reload, title, open in browser.")
             var navigation = false
             @Option(name: .long, help: """
                 Working directory (default: the session's current directory). With --html, grants read access \
@@ -581,9 +586,12 @@ struct Session: ParsableCommand {
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
-                if (command == nil) == (html == nil) { throw ValidationError("provide COMMAND or --html, not both") }
-                if html != nil, wait || block { throw ValidationError("--html cannot be combined with --wait or --block") }
-                if navigation, html == nil { throw ValidationError("--navigation requires --html") }
+                if [command, html, url].compactMap({ $0 }).count != 1 {
+                    throw ValidationError("provide exactly one of COMMAND, --html or --url")
+                }
+                if command == nil, wait || block { throw ValidationError("a page cannot be combined with --wait or --block") }
+                if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
+                if url != nil, cwd != nil { throw ValidationError("--cwd cannot be combined with --url") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
@@ -601,7 +609,7 @@ struct Session: ParsableCommand {
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
                                                                      pane: pane, color: backgroundColor,
                                                                      html: html.map(Overlay.absolutePath),
-                                                                     navigation: navigation ? true : nil)))
+                                                                     navigation: navigation ? true : nil, url: url)))
             }
 
             /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable

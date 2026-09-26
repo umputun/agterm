@@ -377,14 +377,16 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     }
 }
 
-/// ControlHtmlOverlayNode is one HTML page in an overlay slot. `file` is what was opened and what
+/// ControlHtmlOverlayNode is one HTML page in an overlay slot. `file` or `url` is what was opened and what
 /// `session.overlay.reload` loads; `page` is where the user has navigated since, nil until the first load.
 public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     /// pane is the pane role, omitted for the session-wide slot.
     public let pane: String?
-    public let file: String
-    /// cwd is the read grant, omitted when it is the file alone.
+    /// file and url name the source; exactly one is set.
+    public let file: String?
+    /// cwd is a file page's read grant, omitted when it has none.
     public let cwd: String?
+    public let url: String?
     /// state is `loading`, `loaded` or `failed`.
     public let state: String
     public let error: String?
@@ -396,11 +398,13 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     /// navigation is true when the toolbar is shown, omitted otherwise.
     public let navigation: Bool?
 
-    public init(pane: String?, file: String, cwd: String?, state: String, error: String?, page: String? = nil,
-                title: String? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil, navigation: Bool? = nil) {
+    public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
+                error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
+                canGoForward: Bool? = nil, navigation: Bool? = nil) {
         self.pane = pane
         self.file = file
         self.cwd = cwd
+        self.url = url
         self.state = state
         self.error = error
         self.page = page

@@ -157,8 +157,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         self.overlay = overlay
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
-        // a text-loaded page cannot navigate anywhere, so its current page is the original file
-        if overlay.reloadTarget == .current, overlay.grantRoot != nil {
+        if overlay.reloadTarget == .current, !textLoaded {
             webView.reload()
         } else {
             loadOriginal()
@@ -190,23 +189,35 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
+    // a file page without a grant is loaded from its text: it sits at about:blank and cannot navigate, so
+    // the file it came from is both its current page and what the user is looking at
+    private var textLoaded: Bool {
+        if case .file(_, nil) = overlay.source { return true }
+        return false
+    }
+
     private func loadOriginal() {
-        let file = URL(fileURLWithPath: overlay.file)
-        if let root = overlay.grantRoot {
-            webView.loadFileURL(file, allowingReadAccessTo: URL(fileURLWithPath: root))
-            return
-        }
-        do {
-            webView.loadHTMLString(try String(contentsOf: file, encoding: .utf8), baseURL: nil)
-        } catch {
-            store?.setHtmlLoadState(id, state: .failed, error: error.localizedDescription)
+        switch overlay.source {
+        case .url(let url):
+            webView.load(URLRequest(url: url))
+        case .file(let path, let grantRoot?):
+            webView.loadFileURL(URL(fileURLWithPath: path), allowingReadAccessTo: URL(fileURLWithPath: grantRoot))
+        case .file(let path, nil):
+            do {
+                webView.loadHTMLString(try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8), baseURL: nil)
+            } catch {
+                store?.setHtmlLoadState(id, state: .failed, error: error.localizedDescription)
+            }
         }
     }
 
-    // a text-loaded page sits at about:blank, so the file it came from is what the user is looking at
     private var pageURL: URL {
-        guard let url = webView.url, url.scheme != "about" else { return URL(fileURLWithPath: overlay.file) }
-        return url
+        if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
+        if let url = webView.url, url.scheme != "about" { return url }
+        switch overlay.source {
+        case .file(let path, _): return URL(fileURLWithPath: path)
+        case .url(let url): return url
+        }
     }
 
     private func reportPage() {

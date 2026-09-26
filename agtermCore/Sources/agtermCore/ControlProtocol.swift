@@ -368,8 +368,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var html: String?
     /// current makes `session.overlay.reload` reload the page the user navigated to, not the original file.
     public var current: Bool?
-    /// navigation gives an `--html` overlay its toolbar.
+    /// navigation gives an `--html` or `--url` overlay its toolbar.
     public var navigation: Bool?
+    /// url is the web page `session.overlay.open --url` shows instead of running `command`.
+    public var url: String?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -396,7 +398,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
-                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil) {
+                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -474,6 +476,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.html = html
         self.current = current
         self.navigation = navigation
+        self.url = url
     }
 }
 
@@ -646,8 +649,14 @@ public enum OverlayHudError {
 /// OverlayHtmlError holds the error strings for `session.overlay.*` against an HTML page.
 public enum OverlayHtmlError {
     public static let commandAndHtml = "session.overlay.open takes a command or --html, not both"
+    public static let commandAndURL = "session.overlay.open takes a command or --url, not both"
+    public static let htmlAndURL = "session.overlay.open takes --html or --url, not both"
     public static let waitWithHtml = "session.overlay.open: --wait cannot be combined with --html"
-    public static let navigationWithoutHtml = "session.overlay.open: --navigation requires --html"
+    public static let waitWithURL = "session.overlay.open: --wait cannot be combined with --url"
+    /// cwdWithURL: a web page reads no local files, so there is no grant to give it.
+    public static let cwdWithURL = "session.overlay.open: --cwd cannot be combined with --url"
+    public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
+    public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

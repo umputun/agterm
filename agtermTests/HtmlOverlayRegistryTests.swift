@@ -167,7 +167,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     private func open(pane: OverlayPane? = nil, file: String = "a.html", grant: String? = nil) throws -> HtmlOverlay {
-        let overlay = HtmlOverlay(file: pages.appendingPathComponent(file).path, grantRoot: grant)
+        let overlay = HtmlOverlay(source: .file(path: pages.appendingPathComponent(file).path, grantRoot: grant))
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: pane, overlay: overlay, sizePercent: nil))
         return overlay
     }

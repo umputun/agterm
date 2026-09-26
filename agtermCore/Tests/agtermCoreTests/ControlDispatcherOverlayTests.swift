@@ -380,7 +380,13 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(cwd: "/tmp/r.html", html: "/tmp/r.html"), "session.overlay.open: cwd must be a directory containing the html file"),
         (ControlArgs(html: "r.html"), "session.overlay.open: html file must be an absolute path"),
         (ControlArgs(sizePercent: 50, pane: "left", html: "/tmp/r.html"), PaneOverlayError.sizePercentConflict),
-        (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutHtml),
+        (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutPage),
+        (ControlArgs(html: "/tmp/r.html", url: "http://localhost:5173/"), OverlayHtmlError.htmlAndURL),
+        (ControlArgs(command: "cat", url: "http://localhost:5173/"), OverlayHtmlError.commandAndURL),
+        (ControlArgs(wait: true, url: "http://localhost:5173/"), OverlayHtmlError.waitWithURL),
+        (ControlArgs(cwd: "/tmp", url: "http://localhost:5173/"), OverlayHtmlError.cwdWithURL),
+        (ControlArgs(url: "ftp://example.com/"), OverlayHtmlError.invalidURL),
+        (ControlArgs(url: "localhost:5173"), OverlayHtmlError.invalidURL),
     ])
     func htmlOpenRejectsInvalidInputsBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
         let actions = MockControlActions()
@@ -404,9 +410,28 @@ struct ControlDispatcherOverlayTests {
 
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: nil,
-                         ControlSessionOverlayOpenOptions(command: "", cwd: "/tmp", wait: false, sizePercent: nil,
+                         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
                                                           backgroundColor: "#102030", follow: true, pane: .right,
-                                                          html: "/tmp/a/r.html", navigation: true))
+                                                          page: .file(path: "/tmp/a/r.html", grantRoot: "/tmp"),
+                                                          navigation: true))
+        ])
+    }
+
+    @Test func urlOpenRoutesTheWebPageWithItsToolbar() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session",
+            args: ControlArgs(sizePercent: 60, navigation: true, url: "http://localhost:5173/app")
+        ))
+
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 60,
+                                                          backgroundColor: nil,
+                                                          page: .url(try #require(URL(string: "http://localhost:5173/app"))),
+                                                          navigation: true))
         ])
     }
 

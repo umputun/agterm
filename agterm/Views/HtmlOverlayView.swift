@@ -52,7 +52,7 @@ struct HtmlOverlayView: View {
             button("arrow.clockwise", "Reload", "htmlOverlay.reload", enabled: true) {
                 registry.reload(overlay.id, target: .current, store: store)
             }
-            Text(overlay.current?.title ?? URL(fileURLWithPath: overlay.current?.page ?? overlay.file).lastPathComponent)
+            Text(overlay.current?.title ?? fallbackTitle)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity)
@@ -69,6 +69,15 @@ struct HtmlOverlayView: View {
         .padding(.horizontal, 10)
         .frame(height: 28)
         .background(background)
+    }
+
+    private var fallbackTitle: String {
+        switch overlay.source {
+        case .file(let path, _):
+            URL(fileURLWithPath: overlay.current?.page ?? path).lastPathComponent
+        case .url(let url):
+            overlay.current.flatMap { URL(string: $0.page)?.host } ?? url.host ?? url.absoluteString
+        }
     }
 
     private func button(_ symbol: String, _ label: String, _ identifier: String, enabled: Bool,

@@ -111,16 +111,19 @@
   AppStoreTreeProjectionTests}.swift`, `agtermctlKitTests/OverlayCommandsTests.swift`,
   `MockControlActions.swift` if the action signature changes
 
-- [ ] failing tests first: source/origin equality (case, default ports), URL policy rows (same origin
+- [x] failing tests first: source/origin equality (case, default ports), URL policy rows (same origin
       activated or not, cross origin clicked vs redirect, subframe http, about:, file: refused, new window),
       file-page rows unchanged
-- [ ] `HtmlSource` enum on `HtmlOverlay`; `grantError` moves under the file case; origin helper
-- [ ] URL branch in `HtmlNavigationPolicy.decide`
-- [ ] failing dispatcher and CLI tests: `--url` exclusivity, invalid schemes/hosts refused, `--url`
+- [x] `HtmlSource` enum on `HtmlOverlay`; `grantError` moves under the file case; origin helper
+- [x] URL branch in `HtmlNavigationPolicy.decide`
+- [x] failing dispatcher and CLI tests: `--url` exclusivity, invalid schemes/hosts refused, `--url`
       passes through unnormalized, `--url --navigation` is forwarded (both layers accept it with a URL);
       projection `file` xor `url`, `cwd` only for files
-- [ ] `ControlArgs.url`, dispatcher validation and open path, projection fields, CLI `--url` flag and help
-- [ ] `swift test --filter` the touched suites pass
+- [x] `ControlArgs.url`, dispatcher validation and open path, projection fields, CLI `--url` flag and help
+- [x] `swift test --filter` the touched suites pass
+- [x] ➕ app call sites moved to the source model so the app builds: `openSessionOverlay` routes
+      `options.page`, `loadOriginal` switches on the source (a URL loads with `load(URLRequest)`), and
+      `apply` reloads the current page for every source except a text-loaded file
 
 ### Task 2: WebKit adapter: URL loading, per-page storage, failure reporting and error panel
 
@@ -129,11 +132,11 @@
   `agterm/Control/ControlServer+SessionActions.swift`, `agterm/Info.plist`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`, `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] `openSessionOverlay` routes a URL source through the page path (reservation checks, follow,
-      presenter refusal) before any program or remote-job handling
+- [x] `openSessionOverlay` routes a URL source through the page path (reservation checks, follow,
+      presenter refusal) before any program or remote-job handling (done in Task 1)
 - [ ] per-page `WKWebsiteDataStore.nonPersistent()` on the configuration before `WKWebView` is created
-- [ ] `loadOriginal` loads a URL source with `load(URLRequest)`; `apply` honors `--current` for URL pages
-      too, not only file pages with a grant
+- [x] `loadOriginal` loads a URL source with `load(URLRequest)`; `apply` honors `--current` for URL pages
+      too, not only file pages with a grant (done in Task 1)
 - [ ] track the load attempt in flight; `decidePolicyFor` reports a cancelled main-frame navigation of
       that attempt as `failed` with the blocked destination; a clicked link sent to the browser leaves
       the loaded page alone

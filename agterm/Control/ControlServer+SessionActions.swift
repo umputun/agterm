@@ -28,8 +28,8 @@ extension ControlServer: ControlActions {
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            if let html = options.html {
-                return openHtmlOverlay(in: store, sessionID: id, html: html, options: options)
+            if let page = options.page {
+                return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }
             if let response = openRemoteOverlay(in: store, sessionID: id, options: options) { return response }
             if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
@@ -58,12 +58,12 @@ extension ControlServer: ControlActions {
     }
 
     // a page never takes the remote program-job path: the store refuses it while a presenter owns the session
-    private func openHtmlOverlay(in store: AppStore, sessionID id: UUID, html: String,
+    private func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
                                  options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
             return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
         }
-        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: HtmlOverlay(file: html, grantRoot: options.cwd,
+        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: HtmlOverlay(source: page,
                                                                                     navigation: options.navigation),
                                                sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))

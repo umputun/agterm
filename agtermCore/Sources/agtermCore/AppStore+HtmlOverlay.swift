@@ -124,11 +124,16 @@ extension AppStore {
         let slots: [(String?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
             + OverlayPane.allCases.map { ($0.rawValue, session.paneOverlay($0)?.html) }
         let nodes = slots.compactMap { pane, page in
-            page.map {
-                ControlHtmlOverlayNode(pane: pane, file: $0.file, cwd: $0.grantRoot, state: $0.loadState.rawValue,
-                                       error: $0.loadError, page: $0.current?.page, title: $0.current?.title,
-                                       canGoBack: $0.current?.canGoBack, canGoForward: $0.current?.canGoForward,
-                                       navigation: $0.navigation ? true : nil)
+            page.map { page in
+                var file: String?, cwd: String?, url: String?
+                switch page.source {
+                case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
+                case .url(let address): url = address.absoluteString
+                }
+                return ControlHtmlOverlayNode(pane: pane, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
+                                              error: page.loadError, page: page.current?.page, title: page.current?.title,
+                                              canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
+                                              navigation: page.navigation ? true : nil)
             }
         }
         return nodes.isEmpty ? nil : nodes

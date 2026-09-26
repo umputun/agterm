@@ -5,10 +5,12 @@ extension ControlDispatcher {
     func dispatchSessionOverlayCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .sessionOverlayOpen:
-            let html = request.args?.html
             let command = request.args?.command ?? ""
-            if let rejection = Self.overlayContentRejection(command: command, html: html, args: request.args) {
-                return rejection
+            let page: HtmlSource?
+            switch Self.overlayContent(command: command, args: request.args) {
+            case .rejected(let response): return response
+            case .program: page = nil
+            case .page(let source): page = source
             }
             if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
                 return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
@@ -27,13 +29,13 @@ extension ControlDispatcher {
             return actions.openSessionOverlay(request.target, window: request.args?.window,
                                               options: ControlSessionOverlayOpenOptions(
                                                 command: command,
-                                                cwd: request.args?.cwd,
+                                                cwd: page == nil ? request.args?.cwd : nil,
                                                 wait: request.args?.wait ?? false,
                                                 sizePercent: request.args?.sizePercent,
                                                 backgroundColor: request.args?.color,
                                                 follow: request.args?.follow ?? false,
                                                 pane: pane,
-                                                html: html,
+                                                page: page,
                                                 navigation: request.args?.navigation ?? false
                                               ))
         case .sessionOverlayReload:
@@ -102,18 +104,34 @@ extension ControlDispatcher {
         }
     }
 
-    // exactly one of a program or a page; a page takes no --wait and must sit inside its --cwd grant
-    private static func overlayContentRejection(command: String, html: String?, args: ControlArgs?) -> ControlResponse? {
-        guard let html else {
-            if args?.navigation == true { return ControlResponse(ok: false, error: OverlayHtmlError.navigationWithoutHtml) }
-            return command.isEmpty ? ControlResponse(ok: false, error: "session.overlay.open requires a command") : nil
+    private enum OverlayContent {
+        case rejected(ControlResponse)
+        case program
+        case page(HtmlSource)
+    }
+
+    private static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
+        let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        switch (args?.html, args?.url) {
+        case (nil, nil):
+            if args?.navigation == true { return reject(OverlayHtmlError.navigationWithoutPage) }
+            return command.isEmpty ? reject("session.overlay.open requires a command") : .program
+        case (.some, .some):
+            return reject(OverlayHtmlError.htmlAndURL)
+        case (.some(let html), nil):
+            if !command.isEmpty { return reject(OverlayHtmlError.commandAndHtml) }
+            if args?.wait == true { return reject(OverlayHtmlError.waitWithHtml) }
+            if let error = HtmlOverlay.grantError(file: html, grantRoot: args?.cwd) {
+                return reject("session.overlay.open: \(error)")
+            }
+            return .page(.file(path: html, grantRoot: args?.cwd))
+        case (nil, .some(let text)):
+            if !command.isEmpty { return reject(OverlayHtmlError.commandAndURL) }
+            if args?.wait == true { return reject(OverlayHtmlError.waitWithURL) }
+            if args?.cwd != nil { return reject(OverlayHtmlError.cwdWithURL) }
+            guard let url = HtmlSource.webURL(text) else { return reject(OverlayHtmlError.invalidURL) }
+            return .page(.url(url))
         }
-        if !command.isEmpty { return ControlResponse(ok: false, error: OverlayHtmlError.commandAndHtml) }
-        if args?.wait == true { return ControlResponse(ok: false, error: OverlayHtmlError.waitWithHtml) }
-        if let error = HtmlOverlay.grantError(file: html, grantRoot: args?.cwd) {
-            return ControlResponse(ok: false, error: "session.overlay.open: \(error)")
-        }
-        return nil
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on
