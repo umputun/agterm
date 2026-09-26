@@ -428,8 +428,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
   frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
   http(s) subframe loads, and a redirect elsewhere during an unclicked load is refused. A clicked link's
-  redirect reaches the policy as `.linkActivated` (WebKit reuses the triggering action), so it opens in the
-  browser like the click and the retained page stays `loaded`. `HtmlOverlayPage.loadPending` makes every
+  redirect reaches the policy as `.linkActivated` (WebKit reuses the triggering action), so it is handled
+  like the click and the retained page stays `loaded`. `HtmlOverlayPage.loadPending` makes every
   load in flight (explicit, or started by the page) end `loaded` or `failed`: a policy cancel of its main
   frame reports `navigation blocked: URL` and the `WebKitErrorDomain` 102 that follows is ignored. An
   unreported 102, WebKit dropping a response it cannot show, restores `loaded` over a document the web
@@ -441,7 +441,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
   WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
   `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the
-  file itself is refused.
+  file itself is refused, as are `/` and the home directory.
 - A FILE page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)`
   rule for scheme and text color, injected at document start. Its background is NOT in CSS: the file web view
   draws no canvas (`drawsBackground`, the one private key) and the panel paints the theme or
@@ -449,12 +449,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Every page's rule, a URL page's included, defines `--agterm-background`, `--agterm-foreground` and
   `--agterm-color-0..15` (`GhosttyApp.terminalPalette`, slots kept, an invalid entry omitted). A URL page gets
   only those variables and keeps the browser's opaque canvas, because a web app styled against a white canvas
-  turns unreadable over the theme backing. `.agtermAppearanceChanged` restyles open pages of both kinds.
-- The toolbar is opt-in per open (`--navigation`, read back as `navigation`); without it the panel has a
-  fixed dark close disc no page color can hide.
+  turns unreadable over the theme backing. Inject the rule at document start in a dedicated content world.
+  Do not evaluate theme scripts in a live document: page callbacks can inherit evaluation's user gesture.
+  Reload file pages only when their computed theme changes; URL pages receive new variables on their next
+  load. The appearance notification also fires for unrelated settings.
+- A synthetic `a.click()` reaches the policy exactly like a real click (`.linkActivated`, button 0, no
+  flags), so every hand-off the page starts goes through `HtmlBrowser.confirm`, a nonblocking sheet with
+  Cancel as default; nothing in control dispatch waits on it. One pending prompt per page, a decline silences the
+  page until a native key or mouse event reaches its view, and closing, hiding or detaching the view ends
+  the prompt without opening. Open in Browser (toolbar or `navigate browser`) is an explicit request and
+  skips the prompt; it opens with the default browser app, never the file type's app, which could run it.
+- The panel always has an app-drawn identity strip (`HtmlOverlay.identity`: the file shown or the origin)
+  that the page cannot cover or retitle, with the close button; `--navigation` adds the buttons. The page
+  title reaches only `tree`, where agents must treat it as untrusted. Page views refuse drags carrying files.
 - Every toolbar button has a control twin through the same store/registry path: reload is
-  `overlay.reload --current` (bare `overlay.reload` loads the original file), back/forward/browser is
-  `overlay.navigate`. The title is display only. A page never takes the remote program-job path:
+  `overlay.reload --current` (bare `overlay.reload` loads the original source), back/forward/browser is
+  `overlay.navigate`. A page never takes the remote program-job path:
   `open --html` is refused while a presenter owns the session, and one already open stays local.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,

@@ -91,7 +91,7 @@
 - [x] hosted and UI tests pass
 
 ### Task 5: Documentation
-- [ ] skill: untrusted title, grant guard, external-open confirmation, theme on reload; reference,
+- [x] skill: untrusted title, grant guard, external-open confirmation, theme on reload; reference,
       `site/commands.html`, `site/docs.html`, `.claude/rules/control-api.md`
 
 ### Task 6: Verify

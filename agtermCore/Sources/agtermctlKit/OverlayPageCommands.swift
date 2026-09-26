@@ -29,7 +29,7 @@ extension Session.Overlay {
 
     struct Navigate: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Step an HTML overlay's history back or forward, or open its current page in the default browser.")
+            abstract: "Step an HTML overlay's history back or forward, or open the page in the default browser.")
         @Argument(help: "back, forward, or browser.") var step: String
         @Option(name: .long, help: "Navigate that split pane's page (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
         var pane: String?

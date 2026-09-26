@@ -200,10 +200,8 @@ public enum HtmlNavigationDecision: Sendable {
     case allow, openExternal, cancel
 }
 
-/// HtmlNavigationPolicy decides frame navigations for a page overlay. A file page stays inside its explicit
-/// grant; a URL page stays on its original URL's origin in the main frame. A clicked http(s) link leaving
-/// either boundary opens in the default browser, its redirects included, since WebKit reports a redirect with
-/// the click's navigation type; a redirect elsewhere during a load nobody clicked is refused.
+/// HtmlNavigationPolicy bounds file navigation by its grant and URL main-frame navigation by its origin.
+/// openExternal requires app confirmation because WebKit reports synthetic clicks as link activations.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
         let scheme = action.url.scheme?.lowercased()
