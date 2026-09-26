@@ -170,7 +170,7 @@ to restore the exact size),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
-`htmlOverlays` (the HTML pages in the overlay slots, see `session overlay open --html`; `overlay` and
+`htmlOverlays` (the pages in the overlay slots, see `session overlay open --html` and `--url`; `overlay` and
 `paneOverlays` count them as covers too),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
@@ -791,12 +791,23 @@ error keeps those names for compatibility.
   load. A clicked http(s) link opens in the default browser; popups, JS dialogs, file-chooser requests and
   camera/microphone requests are refused. Mutually exclusive with a COMMAND, `--wait` and `--block`.
   Refused `overlay already open` over a program or another page, and while another Mac presents the
-  session. Read back `htmlOverlays` in `tree --json`: `{pane?, file, cwd?, state, error?, page?, title?,
-  canGoBack?, canGoForward?, navigation?}`, `state` being `loading`, `loaded` or `failed`. `loaded` does not prove
-  every CDN asset arrived.
+  session. Read back `htmlOverlays` in `tree --json`: `{pane?, file?, cwd?, url?, state, error?, page?,
+  title?, canGoBack?, canGoForward?, navigation?}`, one of `file`/`url` set, `state` being `loading`,
+  `loaded` or `failed`; a failed page also shows its error in the panel. `loaded` does not prove every CDN
+  asset arrived.
+- `session overlay open --url URL [--navigation] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+  — show a web page by URL in the overlay slot, typically a dev server you are running
+  (`http://localhost:5173/`) or a docs page. Everything above for `--html` applies, except that URL must be
+  an absolute http or https URL (`--url must be an absolute http or https URL`) and `--cwd` is refused. The
+  server must be reachable from the Mac running agterm; `localhost` means that Mac. Plain http works for
+  local addresses (localhost, `.local`, IP literals); use https for public hosts. The page is pinned to
+  its origin: same-origin navigations and redirects load in place, a clicked link elsewhere opens in the
+  default browser, and a redirect to another origin fails the load with `navigation blocked: URL`. Each
+  overlay gets its own in-memory browser storage, gone when it closes. Reload loads the URL again; read
+  back `url` in `htmlOverlays`.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
-  overlay: the file it was opened with (after you rewrote the artifact), or with `--current` the page it
-  shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.
+  overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
+  page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.
 - `session overlay navigate back|forward|browser [--pane left|right] [--target] [--window W]` — step the
   page's history, or open its current page in the default browser. Errors `no page to go back to` /
   `no page to go forward to`, `html overlay not realized` for a page never shown yet, and the two

@@ -423,6 +423,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace,
   pending-close and window teardown. The app's `HtmlOverlayRegistry` keys web views by the page's id, which
   travels inside the slot value, so swaps, promotion and the soft-close window move the page intact.
+- A page's source is `HtmlSource`: a file with its grant, or a URL (`--url`, absolute http/https, no
+  `--cwd`). The dispatcher parses it once and the host gets `options.page`; the tree reports `file` or
+  `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
+  frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
+  http(s) subframe loads, and a redirect elsewhere is refused. `HtmlOverlayPage.loadPending` makes every
+  explicit load (open, bare or `--current` reload) end `loaded` or `failed`: a policy cancel of its main
+  frame reports `navigation blocked: URL`, since WebKit's own report of that cancel is `WebKitErrorDomain`
+  102, which is ignored. A failed page shows its error in the panel.
+- Every page gets its own `WKWebsiteDataStore.nonPersistent()`, set before the web view exists, so browser
+  storage lives exactly as long as the overlay and is shared with no other. `NSAllowsLocalNetworking` in
+  Info.plist lets plain http reach local addresses (not only loopback, and for file pages too); public
+  http stays subject to ATS.
 - `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
   WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
   `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the

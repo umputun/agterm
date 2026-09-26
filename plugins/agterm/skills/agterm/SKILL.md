@@ -1,10 +1,10 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, through its agtermctl CLI and local control socket. Use when
+  Drive agterm, a native macOS terminal, through its agtermctl CLI and control socket. Use when
   running inside an agterm session and asked to control the terminal: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
-  and read its exit status; show a generated HTML artifact in an overlay;
+  and read its exit status; preview HTML files, URLs or dev servers in an overlay;
   post a HUD panel or a desktop notification; show a native picker or a question dialog; display an
   image inline; type into a session, copy its selection or search its
   scrollback; manage windows; change font size; set the theme; reload or edit the keymap, event hooks
@@ -16,8 +16,8 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
-  show an image inline, show this HTML page or artifact, preview the report you generated, search the
-  scrollback, attach a session from another Mac, what recipes are there,
+  show an image inline, show this HTML page or artifact, preview the report you generated, show this URL
+  or the running dev server, search the scrollback, attach a session from another Mac, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -426,7 +426,7 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--wait] [--block] | --html FILE [--navigation]) [--cwd DIR] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation] | --url URL [--navigation]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay reload [--current] [--pane left|right]` ·
@@ -723,7 +723,21 @@ agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriti
 - Leave the page up for the user, who dismisses it with ⌘W or its close button. Call
   `session overlay close` only when the page is no longer wanted, never right after it loads.
 - A successful open means the page was accepted. `tree --json` reports it under `htmlOverlays` with
-  `state` `loading`, `loaded` or `failed`; `loaded` does not prove every CDN asset arrived.
+  `state` `loading`, `loaded` or `failed`; `loaded` does not prove every CDN asset arrived. A failed
+  load also shows its error in the panel.
+
+To show a web app you are running, or a docs page, open it by URL instead:
+
+```bash
+agtermctl session overlay open --url http://localhost:5173/ --target "$AGTERM_SESSION_ID" --follow
+```
+
+- The server must already be running and reachable from the Mac running agterm; `localhost` means that
+  Mac, not a remote shell's. Plain http works for local addresses; use https for public hosts.
+- Links to the same origin load in place and a clicked link elsewhere opens in the browser. A redirect to
+  another origin fails the load with `navigation blocked`, so open the final address.
+- `--cwd` does not apply. Each overlay has its own in-memory browser storage, so cookies and logins last
+  only while it is open.
 
 reference.md has the full detail under `session overlay open --html`: slot conflicts and the refusals,
 including `--wait`, `--block` and `session overlay result`, which a page has no use for. Outside agterm (see

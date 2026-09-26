@@ -159,12 +159,12 @@
       nothing committed yet loads the source again; hosted tests for both, failing without the fix
 
 ### Task 3: Documentation
-- [ ] `plugins/agterm/skills/agterm/`: the description's HTML phrase becomes a compact "preview HTML
+- [x] `plugins/agterm/skills/agterm/`: the description's HTML phrase becomes a compact "preview HTML
       files, URLs or dev servers" trigger, shortening other wording to stay within 1024; `when_to_use`
       adds a dev-server preview phrase; the HTML artifact section and command summary gain `--url` with
       the reachable-from-this-Mac note; `reference.md` entry and read-back fields
-- [ ] `site/commands.html`, `site/docs.html`, `site/llms.txt`
-- [ ] `.claude/rules/control-api.md`: source model, origin rule, first-load failure, per-page storage, ATS
+- [x] `site/commands.html`, `site/docs.html`, `site/llms.txt`
+- [x] `.claude/rules/control-api.md`: source model, origin rule, first-load failure, per-page storage, ATS
 
 ### Task 4: Verify acceptance criteria
 - [ ] every Overview and Solution Overview item implemented

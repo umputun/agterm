@@ -485,8 +485,8 @@
                 pane-scoped overlay — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left"]</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the HTML pages in the overlay slots as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file, cwd?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?}</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the pages in the overlay slots as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?}</span>, one of file and url set,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
                 slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?}</span>, where
@@ -1764,7 +1764,19 @@
                 Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> the page has no file access (it is loaded from the file's text), so keep it self-contained. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd DIR</span> it may read files inside DIR, which must contain FILE. A page that styles nothing takes the terminal theme's colors, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> replacing the background; any CSS the page sets wins. JavaScript runs and CDN assets load; a clicked http(s) link opens in the default browser, while popups, dialogs, file-chooser requests and camera or microphone requests are refused. Mutually exclusive with a command, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span>; refused while another Mac presents the session.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Read it back from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay result</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">copy</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span> refuse a page.
+                Read it back from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span>; a failed page also shows its error in the panel. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay result</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">copy</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span> refuse a page.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay open --url URL [--navigation] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show a web page by URL in the overlay slot, typically a dev server you are running or a docs page. Everything about <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> applies, except that URL must be an absolute http or https URL and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> is refused.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The server must be reachable from the Mac running agterm, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">localhost</span> points. Plain http works for local addresses (localhost, .local, IP literals); use https for public hosts. The page is pinned to its origin: same-origin navigations and redirects load in place, a clicked link elsewhere opens in the default browser, and a redirect to another origin fails the load with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">navigation blocked</span>. Each overlay has its own in-memory browser storage, gone when it closes. Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">url</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span>.
               </p>
             </div>
 
@@ -1774,7 +1786,7 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.reload</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Reload an HTML overlay: the file it was opened with, or with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--current</span> the page it shows now. Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">the overlay is not an html page</span>.
+                Reload an HTML overlay: the file or URL it was opened with, or with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--current</span> the page it shows now. Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">the overlay is not an html page</span>.
               </p>
             </div>
 
