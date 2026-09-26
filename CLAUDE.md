@@ -243,6 +243,8 @@ C-boundary concurrency before changing the bridge.
 - Event arguments must appear in `EventFormatter.human`, not only JSON payloads.
 - Control API, keymap, and model changes also update bundled
   `plugins/agterm/skills/agterm/`, the sole source for installed Claude/Codex copies.
+  A capability agents should discover unprompted needs a trigger in SKILL.md's `description` and a section
+  or pointer there; a reference.md entry alone is insufficient for discovery.
 - `site/docs.html` is the canonical user guide and `site/commands.html` the canonical command reference.
   `README.md` is the product synopsis: pitch, install, the model, and the control-API demo.
   `site/llms.txt` is the crawler-oriented summary and discovery index.

@@ -358,9 +358,9 @@
       predicate classification, teardown funnel, refusals, read-back, remote rule
 - [x] `plugins/agterm/skills/agterm/`: `overlay open --html`, `overlay reload`, read-back fields
 - [x] `site/commands.html` (arguments, read-back), `site/docs.html` (user guide section) and `site/llms.txt`;
-      `site/index.html` left for Eugene to decide
+      `site/index.html` unchanged (Eugene declined a feature line)
 - [x] `ARCHITECTURE.md` if the app adapter/registry split needs a line
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual verification in an isolated Debug instance (short `/tmp` `AGTERM_STATE_DIR`, never the live socket)*
