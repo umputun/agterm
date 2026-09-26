@@ -195,6 +195,34 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertEqual(field.value as? String ?? "", "", "no keystroke may reach the page behind the ask")
     }
 
+    func testClickingASessionPageBesideAPaneAskKeepsTheKeyboardAfterThePalette() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should be shown")
+        XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
+        let field = app.webViews.textFields["field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "the page's field should render")
+
+        let ask = try openAsk([["id": "ok", "label": "OK"]], target: id, options: ["pane": "right"])
+        XCTAssertTrue(askButton("ok").waitForExistence(timeout: 10), "the pane ask should show over the page")
+        field.click()
+        app.typeText("abc")
+        XCTAssertTrue(poll(until: (field.value as? String ?? "").contains("abc"), timeout: 5),
+                      "a click on the page beside the ask should give the page the keyboard")
+
+        app.menuBars.menuBarItems["Navigate"].click()
+        let palette = app.menuItems["Command Palette"]
+        XCTAssertTrue(palette.waitForExistence(timeout: 5))
+        palette.click()
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeText("xyz")
+        XCTAssertTrue(poll(until: (field.value as? String ?? "").contains("abcxyz"), timeout: 5),
+                      "the page should keep the keyboard after the palette closes: \(field.value ?? "nil")")
+        XCTAssertEqual(try askResult(ask)["result"] as? String, "pending")
+    }
+
     private func bottomPixel(of element: XCUIElement) throws -> NSColor {
         let image = element.screenshot().image
         let cg = try XCTUnwrap(image.cgImage(forProposedRect: nil, context: nil, hints: nil))

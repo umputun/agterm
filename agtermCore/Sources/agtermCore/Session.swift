@@ -288,11 +288,9 @@ public final class Session: Identifiable {
     /// is later shown, and the exit capture writes it back untouched until then.
     @ObservationIgnored public var pendingSplitForegroundCommand: [String]?
 
-    /// Whether the session-wide overlay slot is OCCUPIED, by either of its two occupants: a caller's PROGRAM
-    /// (`session.overlay.open`, which covers the session and owns first responder) or a passive HUD message
-    /// (`session.hud.open`, which covers nothing). Raw, so it answers only "occupied" — ask
-    /// `programOverlayActive` or `hudActive` for which, and never this, wherever the answer decides focus,
-    /// coverage, or input. Control-channel only and ephemeral; the detail pane shows and hides it.
+    /// overlayActive says the session-wide slot is occupied, by a covering program or page or by a passive HUD.
+    /// Where focus, coverage or input is decided, ask `coverOverlayActive`, `programOverlayActive` or
+    /// `hudActive` instead. Ephemeral and control-channel only.
     public var overlayActive: Bool = false
 
     /// The overlay's surface, created on open and torn down when its `overlayCommand` exits or the control
@@ -519,21 +517,16 @@ public final class Session: Identifiable {
     /// grid in the body header; `discardHudBody` clears it with the rest of the HUD state.
     @ObservationIgnored public var onHudGeometryChange: (() -> Void)?
 
-    /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
-    /// two occupants, so the deck's passivity exemptions and the program-overlay questions below cannot
-    /// disagree about which is up.
+    /// hudActive says the slot holds a passive HUD; the one predicate separating it from the covers.
     public var hudActive: Bool { overlayActive && hudSpec != nil }
 
     /// programOverlayActive: the slot runs a CALLER'S PROGRAM, either coverage variant, the terminal-surface
     /// question. Neither a HUD nor a page counts; "a session-wide cover owns input" is `coverOverlayActive`.
     public var programOverlayActive: Bool { overlayActive && !hudActive && htmlOverlay == nil }
 
-    /// Whether a FULL-coverage PROGRAM overlay is up: `overlayActive` with no size percent. It hides
-    /// everything beneath — the pane(s) AND a shown scratch — so its translucent background reveals the
-    /// window backing, never a covered surface: under window translucency every surface renders fully
-    /// transparent, so anything left visible below would bleed through. A floating (sized) overlay is not a
-    /// cover. `!hudActive` keeps it a question about a running program even if a HUD ever reaches the slot
-    /// without a size percent; a HUD covers nothing and must never hide the session behind it.
+    /// fullOverlayActive says a program or page covers the whole session, with no size percent. It hides the
+    /// panes and a shown scratch, since under window translucency anything left visible would bleed through.
+    /// A HUD never counts, whatever its size.
     public var fullOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent == nil }
 
     /// The left pane's overlay, covering that pane only and leaving the sibling live; nil means none is up,

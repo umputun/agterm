@@ -140,10 +140,10 @@
   `topmostSurface` to `GhosttySurfaceView`. Input in the page calls `noteUserActivity`, so auto-follow
   cannot switch sessions while the user is working in it.
 - **Navigation.** The policy governs frame navigations only; subresource requests (CDN scripts, images)
-  never reach it and load normally. Only user-activated main-frame `http`/`https` link clicks open in the
-  default browser (and are cancelled in the view). Unsolicited redirects, subframe navigations off the
-  grant, new-window requests (`targetFrame == nil`, including `target=_blank`, and `createWebViewWith`
-  returning nil) and any other scheme are blocked. File navigations outside
+  never reach it and load normally. User-activated `http`/`https` link clicks open in the default browser
+  whatever frame or window they target, `target=_blank` included (and are cancelled in the view).
+  Unsolicited redirects, subframe navigations off the grant, other new-window requests (`targetFrame == nil`,
+  and `createWebViewWith` returning nil) and any other scheme are blocked. File navigations outside
   the grant are cancelled, never handed to the browser. In-page anchors and same-file loads are allowed.
 - **Remote.** Renders on the Mac serving the command. `open --html` is refused while a presenter owns the
   session (`PresentationHub.hasPresenter`); an already-open page stays local when a presenter arrives,
@@ -154,7 +154,7 @@
   open in browser, the page's `<title>`, and close. The toolbar's reload reloads the CURRENT page, like a
   browser; `overlay.reload` reloads the ORIGINAL file, which is what an agent wants after rewriting its
   artifact. Open in browser hands the current page to the default browser, which also covers what the
-  overlay blocks (popups, uploads, JS dialogs, `target=_blank`). Every button except the title has a control
+  overlay blocks (popups, uploads, JS dialogs). Every button except the title has a control
   twin: `session.overlay.reload --current` and `session.overlay.navigate back|forward|browser`, both taking
   `--pane`. The read-back reports the current page, title and `canGoBack`/`canGoForward` beside the original
   file.
@@ -347,6 +347,11 @@
 - [x] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
 - [x] ➕ fixed the `SplitRatioAccessorTests` fixture race the full hosted run exposed (a layout pass between async
       setUp and the body let the attached probe seed ratio 0.5)
+- [x] ➕ revmux round 1 minors (Eugene): refuse a `--cwd` naming the page file itself, open clicked http(s)
+      links targeting a new window or subframe in the browser, internal `HtmlOverlayTheme.stylesheet`,
+      predicate contract docs pointed at `coverOverlayActive`
+- [x] ➕ reproduce the session-wide page plus pane ask focus case (click the page over the uncovered pane,
+      open and close the palette, check who takes Return); reproduced, a page click now selects the uncovered pane
 
 ### Task 5: [Final] Update documentation
 - [x] `.claude/rules/control-api.md`: `.overlay.reload` in the public catalog (line ~157), HTML variant,

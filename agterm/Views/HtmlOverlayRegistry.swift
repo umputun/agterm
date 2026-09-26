@@ -127,6 +127,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard let slot = store?.htmlOverlaySlot(id), let pane = slot.pane else { return }
             slot.session.splitFocused = pane == .right
         }
+        // mirrors deferMouseToAsk: a click on a session-wide page beside a pane ask selects the uncovered pane,
+        // or the next refocus hands the keys back to the ask
+        webView.onClick = { [weak store] in
+            guard let slot = store?.htmlOverlaySlot(id), slot.pane == nil, let target = slot.session.askTargetPane else { return }
+            slot.session.splitFocused = target == .left
+        }
         webView.onUserInput = { [weak store] in store?.noteUserActivity() }
         observations = [
             webView.observe(\.title) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
@@ -179,6 +185,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         webView.onFocus = nil
+        webView.onClick = nil
         webView.onUserInput = nil
         webView.removeFromSuperview()
     }
@@ -272,6 +279,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 final class HtmlOverlayWebView: WKWebView {
     var pageID: UUID?
     var onFocus: (() -> Void)?
+    var onClick: (() -> Void)?
     var onUserInput: (() -> Void)?
     private var parkedDragTypes: [NSPasteboard.PasteboardType] = []
 
@@ -315,6 +323,7 @@ final class HtmlOverlayWebView: WKWebView {
     override func mouseDown(with event: NSEvent) {
         onUserInput?()
         onFocus?()
+        onClick?()
         super.mouseDown(with: event)
     }
 }

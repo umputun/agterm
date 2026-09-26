@@ -31,18 +31,22 @@ public struct HtmlOverlay: Equatable, Sendable {
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
-    /// must sit inside the grant by whole path components, so `/a/bc` is not inside `/a/b`.
+    /// must sit strictly inside the grant by whole path components, so `/a/bc` is not inside `/a/b`. A grant naming the
+    /// file itself is refused: WebKit widens a single-file grant to the file's whole folder.
     public static func grantError(file: String, grantRoot: String?) -> String? {
         guard file.hasPrefix("/") else { return "html file must be an absolute path" }
         guard let grantRoot else { return nil }
         guard grantRoot.hasPrefix("/") else { return "cwd must be an absolute path" }
+        guard components(grantRoot) != components(file) else { return "cwd must be a directory containing the html file" }
         return contains(grantRoot, file) ? nil : "html file is outside cwd"
     }
 
     static func contains(_ root: String, _ path: String) -> Bool {
-        let rootParts = URL(fileURLWithPath: root).standardizedFileURL.pathComponents
-        let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
-        return parts.starts(with: rootParts)
+        components(path).starts(with: components(root))
+    }
+
+    private static func components(_ path: String) -> [String] {
+        URL(fileURLWithPath: path).standardizedFileURL.pathComponents
     }
 }
 
@@ -91,7 +95,7 @@ public struct HtmlOverlayTheme: Equatable, Sendable {
         self.dark = dark
     }
 
-    public var stylesheet: String {
+    var stylesheet: String {
         ":where(html) { color-scheme: \(dark ? "dark" : "light"); color: \(foreground); }"
     }
 
@@ -140,19 +144,19 @@ public enum HtmlNavigationDecision: Sendable {
 }
 
 /// HtmlNavigationPolicy decides frame navigations for an HTML overlay: files inside the grant (none without
-/// one) and `about:` (the text-loaded page, blank and srcdoc frames) load in place, a clicked main-frame
-/// http(s) link opens in the default browser, and everything else is blocked, new windows included.
+/// one) and `about:` (the text-loaded page, blank and srcdoc frames) load in place, a clicked http(s) link opens
+/// in the default browser whatever frame or window it targets, and everything else is blocked.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
+        let scheme = action.url.scheme?.lowercased()
+        if scheme == "http" || scheme == "https" { return action.userActivated ? .openExternal : .cancel }
         if action.target == .newWindow { return .cancel }
-        switch action.url.scheme?.lowercased() {
+        switch scheme {
         case "file":
             guard let root = overlay.grantRoot else { return .cancel }
             return HtmlOverlay.contains(root, action.url.path) ? .allow : .cancel
         case "about":
             return .allow
-        case "http", "https":
-            return action.target == .mainFrame && action.userActivated ? .openExternal : .cancel
         default:
             return .cancel
         }

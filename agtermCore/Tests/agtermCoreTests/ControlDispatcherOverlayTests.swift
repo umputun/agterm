@@ -377,6 +377,7 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(command: "cat", html: "/tmp/r.html"), OverlayHtmlError.commandAndHtml),
         (ControlArgs(wait: true, html: "/tmp/r.html"), OverlayHtmlError.waitWithHtml),
         (ControlArgs(cwd: "/tmp/a", html: "/tmp/b/r.html"), "session.overlay.open: html file is outside cwd"),
+        (ControlArgs(cwd: "/tmp/r.html", html: "/tmp/r.html"), "session.overlay.open: cwd must be a directory containing the html file"),
         (ControlArgs(html: "r.html"), "session.overlay.open: html file must be an absolute path"),
         (ControlArgs(sizePercent: 50, pane: "left", html: "/tmp/r.html"), PaneOverlayError.sizePercentConflict),
         (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutHtml),

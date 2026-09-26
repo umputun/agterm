@@ -395,18 +395,19 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from
   [[menu-actions]]'s shared-action-seam rule because there is nothing here for a human to invoke by hand.
-- Passivity is four deck exemptions plus two NSView-level gates, all reading ONE predicate,
-  `Session.programOverlayActive` (`overlayActive && !hudActive`): `gates.overlaid`, the floating click
-  catcher, `backdropWashActive`, the scratch's focus gate, `TerminalView.viewOnly` on the panel, and the
-  program-only key for the overlay-close refocus. `viewOnly` owns the NSView layer, where `mouseDown` makes
-  a surface first responder; the panel's ancestor `.allowsHitTesting(false)` currently blocks the click
-  before that, so the two are belt and braces and neither is the place to economise.
+- Passivity is four deck exemptions plus two NSView-level gates, each reading an occupant predicate and
+  never the raw slot: `gates.overlaid`, the floating click catcher, `backdropWashActive`, the scratch's focus
+  gate, `TerminalView.viewOnly` on the panel, and the cover-only key for the overlay-close refocus. The HTML
+  bullet below says which read `coverOverlayActive` and which `programOverlayActive`. `viewOnly` owns the
+  NSView layer, where `mouseDown` makes a surface first responder; the panel's ancestor
+  `.allowsHitTesting(false)` currently blocks the click before that, so the two are belt and braces and
+  neither is the place to economise.
   Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
   close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
   `.id` carries `Session.overlaySlotGeneration`, or a replacement keeping `overlayActive` true never re-runs
   `makeNSView` and `updateNSView` hits a torn-down view.
-- The same predicate governs focus routing: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
+- The occupant predicates govern focus routing too: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
   `onScreenSurface`, `AppActions.searchTarget`'s scratch rung, and the scratch factory's `suppressAutoFocus`.
   A raw `overlayActive` read at any of them hands first responder or a buffer read to the HUD painter.
 - An HTML page (`Session.htmlOverlay`, `PaneOverlay.html`) is a third occupant: it covers and owns input
@@ -424,7 +425,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   travels inside the slot value, so swaps, promotion and the soft-close window move the page intact.
 - `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
   WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
-  `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all.
+  `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the
+  file itself is refused.
 - A page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)` rule
   for scheme and text color, injected at document start. The background is NOT in CSS: the web view draws no
   canvas (`drawsBackground`, the one private key) and the panel paints the theme or `--background-color`
