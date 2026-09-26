@@ -1,8 +1,9 @@
 import SwiftUI
 import agtermCore
 
-/// HtmlOverlayView is an HTML overlay's panel content: the toolbar over the page. Every button goes through
-/// the same store and registry paths as `session.overlay.reload` and `session.overlay.navigate`.
+/// HtmlOverlayView is an HTML overlay's panel content: the page, under the toolbar with `--navigation` or
+/// with only a floating close button without it. Every button goes through the same store and registry
+/// paths as `session.overlay.reload` and `session.overlay.navigate`.
 struct HtmlOverlayView: View {
     let store: AppStore
     let session: Session
@@ -19,9 +20,23 @@ struct HtmlOverlayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            if overlay.navigation { toolbar }
             HtmlWebViewHost(store: store, session: session, overlay: overlay, backgroundColor: backgroundColor,
                             isActive: isActive, visible: visible)
+                .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
+                .overlay(alignment: .topTrailing) {
+                    if !overlay.navigation {
+                        // a fixed dark disc, so no page color can hide the only mouse exit
+                        button("xmark", "Close", "htmlOverlay.close", enabled: true) {
+                            store.closeHtmlOverlay(overlay.id)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(Color.black.opacity(0.6), in: Circle())
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                        .padding(8)
+                    }
+                }
         }
     }
 

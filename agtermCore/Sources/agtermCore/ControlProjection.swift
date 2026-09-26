@@ -393,9 +393,11 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let title: String?
     public let canGoBack: Bool?
     public let canGoForward: Bool?
+    /// navigation is true when the toolbar is shown, omitted otherwise.
+    public let navigation: Bool?
 
     public init(pane: String?, file: String, cwd: String?, state: String, error: String?, page: String? = nil,
-                title: String? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil) {
+                title: String? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil, navigation: Bool? = nil) {
         self.pane = pane
         self.file = file
         self.cwd = cwd
@@ -405,6 +407,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.title = title
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
+        self.navigation = navigation
     }
 }
 

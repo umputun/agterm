@@ -556,9 +556,11 @@ struct Session: ParsableCommand {
                 abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing an HTML page with --html.")
             @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html.") var command: String?
             @Option(name: .long, help: "Show this local HTML file instead of running COMMAND.") var html: String?
+            @Flag(name: .long, help: "With --html, show the toolbar: back, forward, reload, title, open in browser.")
+            var navigation = false
             @Option(name: .long, help: """
-                Working directory (default: the session's current directory). With --html, the directory the page \
-                may read from (default: the file alone); the page still resolves relative links beside its own file.
+                Working directory (default: the session's current directory). With --html, grants read access \
+                inside this directory; relative links resolve beside FILE. Without --cwd, the page has no file access.
                 """)
             var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
@@ -581,6 +583,7 @@ struct Session: ParsableCommand {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
                 if (command == nil) == (html == nil) { throw ValidationError("provide COMMAND or --html, not both") }
                 if html != nil, wait || block { throw ValidationError("--html cannot be combined with --wait or --block") }
+                if navigation, html == nil { throw ValidationError("--navigation requires --html") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
@@ -597,7 +600,8 @@ struct Session: ParsableCommand {
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
                                                                      pane: pane, color: backgroundColor,
-                                                                     html: html.map(Overlay.absolutePath))))
+                                                                     html: html.map(Overlay.absolutePath),
+                                                                     navigation: navigation ? true : nil)))
             }
 
             /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable

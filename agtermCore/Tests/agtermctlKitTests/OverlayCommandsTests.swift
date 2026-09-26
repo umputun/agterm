@@ -26,6 +26,9 @@ struct OverlayCommandsTests {
         #expect(req.args?.command == nil)
         #expect(req.args?.pane == "right")
         #expect(req.args?.color == "#102030")
+        #expect(req.args?.navigation == nil)
+        let withToolbar = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--navigation"])
+        #expect(withToolbar.args?.navigation == true)
     }
 
     @Test func aRelativePageResolvesAgainstTheCallersDirectory() throws {
@@ -47,6 +50,7 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "revdiff", "--html", "/tmp/r.html"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--wait"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--block"],
+        ["session", "overlay", "open", "revdiff", "--navigation"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))

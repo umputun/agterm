@@ -24,9 +24,10 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let pane: OverlayPane?
     /// html is the page to show instead of running `command`, which is then empty; `cwd` is then the grant.
     public let html: String?
+    public let navigation: Bool
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
-                follow: Bool = false, pane: OverlayPane? = nil, html: String? = nil) {
+                follow: Bool = false, pane: OverlayPane? = nil, html: String? = nil, navigation: Bool = false) {
         self.command = command
         self.cwd = cwd
         self.wait = wait
@@ -35,6 +36,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
         self.follow = follow
         self.pane = pane
         self.html = html
+        self.navigation = navigation
     }
 }
 

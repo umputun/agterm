@@ -95,19 +95,25 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNotEqual(view.registeredDraggedTypes, parked)
     }
 
-    func testAnUnstyledPageTakesTheThemeAndAStyledOneKeepsItsOwn() async throws {
-        try write("plain.html", "<title>P</title>")
-        try write("styled.html", "<title>S</title><style>html { background-color: rgb(1, 2, 3) }</style>")
-        let plain = registry.page(for: try open(file: "plain.html"), store: store, backgroundColor: "#102030")
-        try await waitFor("plain loaded") { self.current?.loadState == .loaded }
-        let plainColor = try await plain.webView.evaluateJavaScript("getComputedStyle(document.documentElement).backgroundColor")
-        XCTAssertEqual(plainColor as? String, "rgb(16, 32, 48)")
+    func testAnAuthoredBodyBackgroundFillsTheCanvasAndAnUnstyledPageStaysTransparent() async throws {
+        try write("body.html", "<title>W</title><style>body { background: white; color: black }</style><p>short</p>")
+        let styled = try await snapshotPixel(file: "body.html")
+        XCTAssertEqual(styled.alphaComponent, 1, accuracy: 0.01)
+        XCTAssertEqual(styled.redComponent, 1, accuracy: 0.02)
         XCTAssertTrue(store.closeOverlay(session.id))
 
-        let styled = registry.page(for: try open(file: "styled.html"), store: store, backgroundColor: "#102030")
-        try await waitFor("styled loaded") { self.current?.loadState == .loaded }
-        let styledColor = try await styled.webView.evaluateJavaScript("getComputedStyle(document.documentElement).backgroundColor")
-        XCTAssertEqual(styledColor as? String, "rgb(1, 2, 3)")
+        try write("plain.html", "<title>P</title><p>short</p>")
+        let plain = try await snapshotPixel(file: "plain.html")
+        XCTAssertEqual(plain.alphaComponent, 0, accuracy: 0.01, "an unstyled page must leave the themed backing visible")
+    }
+
+    func testAThemeChangeRestylesAnOpenPage() async throws {
+        try write("plain.html", "<title>P</title><p>short</p>")
+        let page = registry.page(for: try open(file: "plain.html"), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
+        let color = try await page.webView.evaluateJavaScript("getComputedStyle(document.documentElement).color")
+        XCTAssertEqual(color as? String, "rgb(16, 32, 48)")
     }
 
     func testTheFileAloneGrantKeepsSiblingScriptsOut() async throws {
@@ -138,6 +144,22 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     private var current: HtmlOverlay? { session.htmlOverlay ?? session.paneOverlay(.left)?.html }
+
+    private func snapshotPixel(file: String) async throws -> NSColor {
+        let page = registry.page(for: try open(file: file), store: store)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        page.webView.frame = window.contentView?.bounds ?? .zero
+        window.contentView?.addSubview(page.webView)
+        try await waitFor("\(file) loaded") { self.current?.loadState == .loaded }
+        let image = try await page.webView.takeSnapshot(configuration: nil)
+        let rep = try XCTUnwrap(image.representations.first as? NSBitmapImageRep
+            ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil).map(NSBitmapImageRep.init(cgImage:)))
+        let color = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh - 10))
+        return color.usingColorSpace(.sRGB) ?? color
+    }
 
     private func write(_ name: String, _ body: String) throws {
         try "<!doctype html><html><body>\(body)</body></html>"

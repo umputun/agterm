@@ -33,7 +33,8 @@ extension ControlDispatcher {
                                                 backgroundColor: request.args?.color,
                                                 follow: request.args?.follow ?? false,
                                                 pane: pane,
-                                                html: html
+                                                html: html,
+                                                navigation: request.args?.navigation ?? false
                                               ))
         case .sessionOverlayReload:
             switch parseOverlayPane(request.args?.pane) {
@@ -104,6 +105,7 @@ extension ControlDispatcher {
     // exactly one of a program or a page; a page takes no --wait and must sit inside its --cwd grant
     private static func overlayContentRejection(command: String, html: String?, args: ControlArgs?) -> ControlResponse? {
         guard let html else {
+            if args?.navigation == true { return ControlResponse(ok: false, error: OverlayHtmlError.navigationWithoutHtml) }
             return command.isEmpty ? ControlResponse(ok: false, error: "session.overlay.open requires a command") : nil
         }
         if !command.isEmpty { return ControlResponse(ok: false, error: OverlayHtmlError.commandAndHtml) }

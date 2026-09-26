@@ -402,7 +402,8 @@ struct HtmlOverlayTests {
 
     @Test func theThemeStylesheetYieldsToAnyPageRule() {
         let theme = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true)
-        #expect(theme.stylesheet == ":where(html) { color-scheme: dark; background-color: #102030; color: #e0e0e0; }")
+        #expect(theme.stylesheet == ":where(html) { color-scheme: dark; color: #e0e0e0; }")
+        #expect(theme.background == "#102030")
         #expect(theme.script.contains(theme.stylesheet))
         #expect(theme.script.contains("agterm-theme"))
     }

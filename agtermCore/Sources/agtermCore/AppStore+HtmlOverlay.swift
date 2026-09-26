@@ -127,7 +127,8 @@ extension AppStore {
             page.map {
                 ControlHtmlOverlayNode(pane: pane, file: $0.file, cwd: $0.grantRoot, state: $0.loadState.rawValue,
                                        error: $0.loadError, page: $0.current?.page, title: $0.current?.title,
-                                       canGoBack: $0.current?.canGoBack, canGoForward: $0.current?.canGoForward)
+                                       canGoBack: $0.current?.canGoBack, canGoForward: $0.current?.canGoForward,
+                                       navigation: $0.navigation ? true : nil)
             }
         }
         return nodes.isEmpty ? nil : nodes

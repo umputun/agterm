@@ -10,6 +10,9 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// grantRoot is the directory WebKit may read from. nil grants no file access at all: the app loads the
     /// file's text rather than its URL, because WebKit reads a single-file grant as the file's whole folder.
     public let grantRoot: String?
+    /// navigation shows the toolbar (back, forward, reload, title, browser); without it the panel carries
+    /// only a close button and the page gets the full height.
+    public let navigation: Bool
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -20,10 +23,11 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
-    public init(file: String, grantRoot: String? = nil, id: UUID = UUID()) {
+    public init(file: String, grantRoot: String? = nil, navigation: Bool = false, id: UUID = UUID()) {
         self.id = id
         self.file = file
         self.grantRoot = grantRoot
+        self.navigation = navigation
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
@@ -70,8 +74,9 @@ public enum HtmlNavigation: String, CaseIterable, Sendable {
 }
 
 /// HtmlOverlayTheme is the default look a page gets when it styles nothing itself: the terminal theme's
-/// background, text color and light/dark scheme. Every rule has zero specificity, so any CSS the page
-/// defines wins.
+/// background, text color and light/dark scheme. The stylesheet carries only the scheme and text color, at
+/// zero specificity; the background is painted behind a transparent web view instead, because a CSS
+/// background on `html` would stop an authored `body` background from filling the canvas.
 public struct HtmlOverlayTheme: Equatable, Sendable {
     public let background: String
     public let foreground: String
@@ -87,7 +92,7 @@ public struct HtmlOverlayTheme: Equatable, Sendable {
     }
 
     public var stylesheet: String {
-        ":where(html) { color-scheme: \(dark ? "dark" : "light"); background-color: \(background); color: \(foreground); }"
+        ":where(html) { color-scheme: \(dark ? "dark" : "light"); color: \(foreground); }"
     }
 
     /// script installs or replaces the stylesheet in element `agterm-theme`; it runs at document start,

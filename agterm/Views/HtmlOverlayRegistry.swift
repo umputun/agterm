@@ -114,6 +114,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         appliedRevision = overlay.reloadRevision
         webView = HtmlOverlayWebView(frame: .zero, configuration: WKWebViewConfiguration())
         webView.pageID = overlay.id
+        // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
+        // themed panel behind it while authored backgrounds still paint.
+        webView.setValue(false, forKey: "drawsBackground")
         super.init()
         applyTheme(theme)
         webView.navigationDelegate = self

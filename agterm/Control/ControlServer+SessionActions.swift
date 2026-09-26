@@ -63,7 +63,8 @@ extension ControlServer: ControlActions {
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
             return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
         }
-        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: HtmlOverlay(file: html, grantRoot: options.cwd),
+        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: HtmlOverlay(file: html, grantRoot: options.cwd,
+                                                                                    navigation: options.navigation),
                                                sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))
         }

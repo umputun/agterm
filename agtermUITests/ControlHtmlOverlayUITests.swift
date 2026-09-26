@@ -37,9 +37,20 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the page")
     }
 
-    func testToolbarAndControlNavigateTheSameHistory() throws {
+    func testWithoutNavigationThePageHasOnlyAFloatingCloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
+        XCTAssertTrue(app.webViews.staticTexts["hello artifact"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["htmlOverlay.back"].exists, "no toolbar without --navigation")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the floating close button should close the page")
+    }
+
+    func testToolbarAndControlNavigateTheSameHistory() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(openRequest(id, navigation: true))["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: self.sessionTreeNode(id).flatMap { ($0["htmlOverlays"] as? [[String: Any]])?.first?["navigation"] as? Bool } == true,
+                           timeout: 10), "the tree should report the toolbar")
         let link = app.webViews.links["next page"]
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the link should render")
         link.click()
@@ -143,6 +154,26 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollOverlay(id: id, expected: false), "⌘W should close the page")
     }
 
+    func testTheBackingShowsUnderAnUnstyledPageAndAnAuthoredBodyCoversIt() throws {
+        let id = try activeSessionID()
+        try writePage("plain.html", title: "Plain", body: "<p>plain page</p>")
+        try writePage("white.html", title: "White", body: "<style>body { background: white }</style><p>white page</p>")
+
+        let plain = pageDir.appendingPathComponent("plain.html").path
+        XCTAssertEqual(try sendCommand(##"{"cmd":"session.overlay.open","target":"\##(id)","args":{"html":"\##(plain)","color":"#c02040"}}"##)["ok"] as? Bool, true)
+        XCTAssertTrue(app.webViews.staticTexts["plain page"].waitForExistence(timeout: 10))
+        let backing = try bottomPixel(of: app.webViews.firstMatch)
+        XCTAssertEqual(backing.redComponent, 0xC0 / 255.0, accuracy: 0.08, "the --background-color backing should show: \(backing)")
+        XCTAssertEqual(backing.blueComponent, 0x40 / 255.0, accuracy: 0.08, "\(backing)")
+        XCTAssertTrue(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)["ok"] as? Bool == true)
+
+        let white = pageDir.appendingPathComponent("white.html").path
+        XCTAssertEqual(try sendCommand(##"{"cmd":"session.overlay.open","target":"\##(id)","args":{"html":"\##(white)","color":"#c02040"}}"##)["ok"] as? Bool, true)
+        XCTAssertTrue(app.webViews.staticTexts["white page"].waitForExistence(timeout: 10))
+        let page = try bottomPixel(of: app.webViews.firstMatch)
+        XCTAssertGreaterThan(page.blueComponent, 0.9, "an authored body background should fill the viewport: \(page)")
+    }
+
     func testAnAskOverAPageKeepsTheKeyboardWhenFocusIsRestored() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
@@ -164,15 +195,24 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertEqual(field.value as? String ?? "", "", "no keystroke may reach the page behind the ask")
     }
 
+    private func bottomPixel(of element: XCUIElement) throws -> NSColor {
+        let image = element.screenshot().image
+        let cg = try XCTUnwrap(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        let rep = NSBitmapImageRep(cgImage: cg)
+        let color = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh - 12))
+        return color.usingColorSpace(.sRGB) ?? color
+    }
+
     private func writePage(_ name: String, title: String, body: String) throws {
         let html = "<!doctype html><html><head><title>\(title)</title></head><body>\(body)</body></html>"
         try html.write(to: pageDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
     }
 
-    private func openRequest(_ id: String, pane: String? = nil) -> String {
+    private func openRequest(_ id: String, pane: String? = nil, navigation: Bool = false) -> String {
         let file = pageDir.appendingPathComponent("a.html").path
         let paneArg = pane.map { #","pane":"\#($0)""# } ?? ""
-        return #"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(file)","cwd":"\#(pageDir.path)"\#(paneArg)}}"#
+        let navigationArg = navigation ? #","navigation":true"# : ""
+        return #"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(file)","cwd":"\#(pageDir.path)"\#(paneArg)\#(navigationArg)}}"#
     }
 
     private func sessionTreeNode(_ id: String) -> [String: Any]? {

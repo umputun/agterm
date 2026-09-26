@@ -368,6 +368,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var html: String?
     /// current makes `session.overlay.reload` reload the page the user navigated to, not the original file.
     public var current: Bool?
+    /// navigation gives an `--html` overlay its toolbar.
+    public var navigation: Bool?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -394,7 +396,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
-                html: String? = nil, current: Bool? = nil) {
+                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -471,6 +473,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.mru = mru
         self.html = html
         self.current = current
+        self.navigation = navigation
     }
 }
 
@@ -644,6 +647,7 @@ public enum OverlayHudError {
 public enum OverlayHtmlError {
     public static let commandAndHtml = "session.overlay.open takes a command or --html, not both"
     public static let waitWithHtml = "session.overlay.open: --wait cannot be combined with --html"
+    public static let navigationWithoutHtml = "session.overlay.open: --navigation requires --html"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

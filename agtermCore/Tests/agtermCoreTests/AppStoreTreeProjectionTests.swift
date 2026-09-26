@@ -576,7 +576,7 @@ struct AppStoreTreeProjectionTests {
         session.splitSurface = SpySurface(paneToken: "right")
         #expect(store.controlTree().workspaces[0].sessions[0].htmlOverlays == nil)
 
-        let wide = HtmlOverlay(file: "/tmp/a/wide.html", grantRoot: "/tmp/a")
+        let wide = HtmlOverlay(file: "/tmp/a/wide.html", grantRoot: "/tmp/a", navigation: true)
         let right = HtmlOverlay(file: "/tmp/r.html")
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: right, sizePercent: nil) == nil)
@@ -589,7 +589,8 @@ struct AppStoreTreeProjectionTests {
         #expect(node.paneOverlays == ["right"])
         #expect(node.htmlOverlays == [
             ControlHtmlOverlayNode(pane: nil, file: "/tmp/a/wide.html", cwd: "/tmp/a", state: "loading", error: nil,
-                                   page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false),
+                                   page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false,
+                                   navigation: true),
             ControlHtmlOverlayNode(pane: "right", file: "/tmp/r.html", cwd: nil, state: "failed", error: "not found"),
         ])
         let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(store.controlTree()))

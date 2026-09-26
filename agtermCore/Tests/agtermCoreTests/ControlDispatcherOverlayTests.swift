@@ -379,6 +379,7 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(cwd: "/tmp/a", html: "/tmp/b/r.html"), "session.overlay.open: html file is outside cwd"),
         (ControlArgs(html: "r.html"), "session.overlay.open: html file must be an absolute path"),
         (ControlArgs(sizePercent: 50, pane: "left", html: "/tmp/r.html"), PaneOverlayError.sizePercentConflict),
+        (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutHtml),
     ])
     func htmlOpenRejectsInvalidInputsBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
         let actions = MockControlActions()
@@ -396,14 +397,15 @@ struct ControlDispatcherOverlayTests {
 
         _ = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayOpen, target: "session",
-            args: ControlArgs(cwd: "/tmp", follow: true, pane: "right", color: "#102030", html: "/tmp/a/r.html")
+            args: ControlArgs(cwd: "/tmp", follow: true, pane: "right", color: "#102030", html: "/tmp/a/r.html",
+                              navigation: true)
         ))
 
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: nil,
                          ControlSessionOverlayOpenOptions(command: "", cwd: "/tmp", wait: false, sizePercent: nil,
                                                           backgroundColor: "#102030", follow: true, pane: .right,
-                                                          html: "/tmp/a/r.html"))
+                                                          html: "/tmp/a/r.html", navigation: true))
         ])
     }
 
