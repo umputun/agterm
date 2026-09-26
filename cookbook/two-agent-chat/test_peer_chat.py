@@ -65,6 +65,7 @@ SPLIT_NODE = {
     "splitForeground": ["codex"],
 }
 CODEX_FOOTER = "  repo · master · gpt-5.6 high · Context 0% used"
+CODEX_NOTICE = " " * 55 + "⚠ 1 warning · f2 to view"
 
 
 def stepping_time(step: float = 0.11) -> Mock:
@@ -554,6 +555,51 @@ class CodexLivePromptTextTests(unittest.TestCase):
             "row and remains in the composer",
         )
 
+    def test_live_prompt_accepts_a_notice_alone_below_the_status_row(self) -> None:
+        screen = (
+            "› Chat from Claude: hello\n"
+            "\n"
+            "  GPT-6-Astra medium · sysadm · Context 0% used · weekly 4% left\n"
+            f"{CODEX_NOTICE}\n"
+        )
+
+        self.assertEqual(
+            LIVE_PROMPT_TEXT(PROFILES["codex"], screen), "Chat from Claude: hello"
+        )
+
+    def test_live_prompt_accepts_a_notice_beside_the_shortcut_hint(self) -> None:
+        screen = (
+            "› Ask Codex to do anything\n"
+            "\n"
+            "  GPT-6-Astra medium · sysadm · Context 0% used · weekly 4%\n"
+            "  ← for agents · ? for shortcuts                       ⚠ 1 warning · f2 to view\n"
+        )
+
+        self.assertEqual(
+            LIVE_PROMPT_TEXT(PROFILES["codex"], screen),
+            "Ask Codex to do anything",
+        )
+
+    def test_wrapped_composer_keeps_its_rows_above_a_notice_footer(self) -> None:
+        screen = (
+            "» Chat from Claude: a long reply whose first row wraps\n"
+            "  onto a second row and remains in the composer\n"
+            "\n"
+            "  repo · master · gpt-5.6 high\n"
+            f"{CODEX_NOTICE}\n"
+        )
+
+        self.assertEqual(
+            LIVE_PROMPT_TEXT(PROFILES["codex"], screen),
+            "Chat from Claude: a long reply whose first row wraps\nonto a second "
+            "row and remains in the composer",
+        )
+
+    def test_notice_without_a_status_row_is_not_live(self) -> None:
+        screen = f"› Chat from Claude: hello\n\n{CODEX_NOTICE}\n"
+
+        self.assertIsNone(LIVE_PROMPT_TEXT(PROFILES["codex"], screen))
+
     def test_three_trailing_indented_rows_are_not_live(self) -> None:
         screen = (
             "» Ask Codex to do anything\n"
@@ -561,6 +607,17 @@ class CodexLivePromptTextTests(unittest.TestCase):
             "  /keymap customize\n"
             "  repo · master · gpt-5.6 high\n"
             "  ? / esc close\n"
+        )
+
+        self.assertIsNone(LIVE_PROMPT_TEXT(PROFILES["codex"], screen))
+
+    def test_three_trailing_rows_ending_in_a_notice_are_not_live(self) -> None:
+        screen = (
+            "» Ask Codex to do anything\n"
+            "\n"
+            "  /keymap customize\n"
+            "  repo · master · gpt-5.6 high\n"
+            f"{CODEX_NOTICE}\n"
         )
 
         self.assertIsNone(LIVE_PROMPT_TEXT(PROFILES["codex"], screen))
