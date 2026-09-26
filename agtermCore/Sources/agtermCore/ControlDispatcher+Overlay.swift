@@ -36,7 +36,8 @@ extension ControlDispatcher {
                                                 follow: request.args?.follow ?? false,
                                                 pane: pane,
                                                 page: page,
-                                                navigation: request.args?.navigation ?? false
+                                                navigation: request.args?.navigation ?? false,
+                                                javascript: request.args?.javascript ?? false
                                               ))
         case .sessionOverlayReload:
             switch parseOverlayPane(request.args?.pane) {
@@ -115,6 +116,7 @@ extension ControlDispatcher {
         switch (args?.html, args?.url) {
         case (nil, nil):
             if args?.navigation == true { return reject(OverlayHtmlError.navigationWithoutPage) }
+            if args?.javascript == true { return reject(OverlayHtmlError.javascriptWithoutPage) }
             return command.isEmpty ? reject("session.overlay.open requires a command") : .program
         case (.some, .some):
             return reject(OverlayHtmlError.htmlAndURL)

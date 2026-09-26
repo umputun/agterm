@@ -25,9 +25,11 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     /// page is the file or web page to show instead of running `command`, which is then empty, as is `cwd`.
     public let page: HtmlSource?
     public let navigation: Bool
+    public let javascript: Bool
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
-                follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false) {
+                follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
+                javascript: Bool = false) {
         self.command = command
         self.cwd = cwd
         self.wait = wait
@@ -37,6 +39,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
         self.pane = pane
         self.page = page
         self.navigation = navigation
+        self.javascript = javascript
     }
 }
 

@@ -397,10 +397,12 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let canGoForward: Bool?
     /// navigation is true when the toolbar is shown, omitted otherwise.
     public let navigation: Bool?
+    /// javascript says whether the page may run its own scripts.
+    public let javascript: Bool
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
-                canGoForward: Bool? = nil, navigation: Bool? = nil) {
+                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false) {
         self.pane = pane
         self.file = file
         self.cwd = cwd
@@ -412,6 +414,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
         self.navigation = navigation
+        self.javascript = javascript
     }
 }
 

@@ -372,6 +372,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var navigation: Bool?
     /// url is the web page `session.overlay.open --url` shows instead of running `command`.
     public var url: String?
+    /// javascript lets an `--html` or `--url` page run its own scripts (`--js`); off by default.
+    public var javascript: Bool?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -398,7 +400,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
-                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil) {
+                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
+                javascript: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -477,6 +480,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.current = current
         self.navigation = navigation
         self.url = url
+        self.javascript = javascript
     }
 }
 
@@ -657,6 +661,7 @@ public enum OverlayHtmlError {
     public static let cwdWithURL = "session.overlay.open: --cwd cannot be combined with --url"
     public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
     public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
+    public static let javascriptWithoutPage = "session.overlay.open: --js requires --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

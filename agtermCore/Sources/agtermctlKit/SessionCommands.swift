@@ -563,6 +563,7 @@ struct Session: ParsableCommand {
             var url: String?
             @Flag(name: .long, help: "With --html or --url, show the toolbar: back, forward, reload, title, open in browser.")
             var navigation = false
+            @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
             @Option(name: .long, help: """
                 Working directory (default: the session's current directory). With --html, grants read access \
                 inside this directory; relative links resolve beside FILE. Without --cwd, the page has no file access.
@@ -591,6 +592,7 @@ struct Session: ParsableCommand {
                 }
                 if command == nil, wait || block { throw ValidationError("a page cannot be combined with --wait or --block") }
                 if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
+                if javascript, command != nil { throw ValidationError("--js requires --html or --url") }
                 if url != nil, cwd != nil { throw ValidationError("--cwd cannot be combined with --url") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
@@ -609,7 +611,8 @@ struct Session: ParsableCommand {
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
                                                                      pane: pane, color: backgroundColor,
                                                                      html: html.map(Overlay.absolutePath),
-                                                                     navigation: navigation ? true : nil, url: url)))
+                                                                     navigation: navigation ? true : nil, url: url,
+                                                                     javascript: javascript ? true : nil)))
             }
 
             /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable

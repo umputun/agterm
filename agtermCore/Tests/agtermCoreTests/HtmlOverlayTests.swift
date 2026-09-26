@@ -161,6 +161,12 @@ struct HtmlOverlayTests {
         #expect(HtmlSource.origin(of: try #require(URL(string: address))) == origin)
     }
 
+    @Test func pageJavaScriptIsOffUnlessAsked() {
+        let source = HtmlSource.file(path: "/a/r.html", grantRoot: nil)
+        #expect(!HtmlOverlay(source: source).javascript)
+        #expect(HtmlOverlay(source: source, javascript: true).javascript)
+    }
+
     @Test func fileIdentityIsTheFileShownNeverTheTitle() {
         var overlay = HtmlOverlay(source: .file(path: "/a/docs/index.html", grantRoot: "/a/docs"))
         #expect(overlay.identity == "index.html")

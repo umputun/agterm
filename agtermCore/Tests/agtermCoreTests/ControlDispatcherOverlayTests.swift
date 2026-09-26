@@ -384,6 +384,7 @@ struct ControlDispatcherOverlayTests {
          "session.overlay.open: cwd must not be / or the home directory"),
         (ControlArgs(sizePercent: 50, pane: "left", html: "/tmp/r.html"), PaneOverlayError.sizePercentConflict),
         (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutPage),
+        (ControlArgs(command: "cat", javascript: true), OverlayHtmlError.javascriptWithoutPage),
         (ControlArgs(html: "/tmp/r.html", url: "http://localhost:5173/"), OverlayHtmlError.htmlAndURL),
         (ControlArgs(command: "cat", url: "http://localhost:5173/"), OverlayHtmlError.commandAndURL),
         (ControlArgs(wait: true, url: "http://localhost:5173/"), OverlayHtmlError.waitWithURL),
@@ -408,7 +409,7 @@ struct ControlDispatcherOverlayTests {
         _ = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayOpen, target: "session",
             args: ControlArgs(cwd: "/tmp", follow: true, pane: "right", color: "#102030", html: "/tmp/a/r.html",
-                              navigation: true)
+                              navigation: true, javascript: true)
         ))
 
         #expect(actions.calls == [
@@ -416,17 +417,18 @@ struct ControlDispatcherOverlayTests {
                          ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
                                                           backgroundColor: "#102030", follow: true, pane: .right,
                                                           page: .file(path: "/tmp/a/r.html", grantRoot: "/tmp"),
-                                                          navigation: true))
+                                                          navigation: true, javascript: true))
         ])
     }
 
-    @Test func urlOpenRoutesTheWebPageWithItsToolbar() async throws {
+    @Test(arguments: [Bool?.none, true])
+    func urlOpenRoutesTheWebPageWithItsToolbar(_ javascript: Bool?) async throws {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
         _ = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayOpen, target: "session",
-            args: ControlArgs(sizePercent: 60, navigation: true, url: "http://localhost:5173/app")
+            args: ControlArgs(sizePercent: 60, navigation: true, url: "http://localhost:5173/app", javascript: javascript)
         ))
 
         #expect(actions.calls == [
@@ -434,7 +436,7 @@ struct ControlDispatcherOverlayTests {
                          ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 60,
                                                           backgroundColor: nil,
                                                           page: .url(try #require(URL(string: "http://localhost:5173/app"))),
-                                                          navigation: true))
+                                                          navigation: true, javascript: javascript == true))
         ])
     }
 

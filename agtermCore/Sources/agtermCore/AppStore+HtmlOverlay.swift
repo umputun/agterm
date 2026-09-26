@@ -133,7 +133,7 @@ extension AppStore {
                 return ControlHtmlOverlayNode(pane: pane, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
                                               error: page.loadError, page: page.current?.page, title: page.current?.title,
                                               canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
-                                              navigation: page.navigation ? true : nil)
+                                              navigation: page.navigation ? true : nil, javascript: page.javascript)
             }
         }
         return nodes.isEmpty ? nil : nodes

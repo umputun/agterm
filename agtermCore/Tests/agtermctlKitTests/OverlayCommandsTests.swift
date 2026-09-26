@@ -27,8 +27,10 @@ struct OverlayCommandsTests {
         #expect(req.args?.pane == "right")
         #expect(req.args?.color == "#102030")
         #expect(req.args?.navigation == nil)
-        let withToolbar = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--navigation"])
+        #expect(req.args?.javascript == nil)
+        let withToolbar = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--navigation", "--js"])
         #expect(withToolbar.args?.navigation == true)
+        #expect(withToolbar.args?.javascript == true)
     }
 
     @Test func aRelativePageResolvesAgainstTheCallersDirectory() throws {
@@ -39,11 +41,12 @@ struct OverlayCommandsTests {
     }
 
     @Test func urlOpenSendsTheAddressUntouched() throws {
-        let req = try request(["session", "overlay", "open", "--url", "http://localhost:5173/a/../b", "--navigation"])
+        let req = try request(["session", "overlay", "open", "--url", "http://localhost:5173/a/../b", "--navigation", "--js"])
         #expect(req.args?.url == "http://localhost:5173/a/../b")
         #expect(req.args?.html == nil)
         #expect(req.args?.cwd == nil)
         #expect(req.args?.navigation == true)
+        #expect(req.args?.javascript == true)
     }
 
     @Test func aProgramOpenLeavesItsCwdAsTyped() throws {
@@ -59,6 +62,7 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--wait"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--block"],
         ["session", "overlay", "open", "revdiff", "--navigation"],
+        ["session", "overlay", "open", "revdiff", "--js"],
         ["session", "overlay", "open", "revdiff", "--url", "http://localhost:5173/"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--url", "http://localhost:5173/"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--wait"],

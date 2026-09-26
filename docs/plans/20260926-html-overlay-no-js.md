@@ -24,13 +24,13 @@
 ## Implementation Steps
 
 ### Task 1: Model and control API
-- [ ] failing core tests: `HtmlOverlay.javascript` defaults to false; the dispatcher passes `--js` through for
+- [x] failing core tests: `HtmlOverlay.javascript` defaults to false; the dispatcher passes `--js` through for
       `--html` and `--url` and refuses it without a page; the tree node reports `javascript` as an explicit
       true or false; the CLI parses `--js` and refuses it with a command
-- [ ] `HtmlOverlay(source:navigation:javascript:id:)`, `ControlArgs.javascript`, `OverlayHtmlError.jsWithoutPage`,
+- [x] `HtmlOverlay(source:navigation:javascript:id:)`, `ControlArgs.javascript`, `OverlayHtmlError.jsWithoutPage`,
       dispatcher, CLI flag, `ControlHtmlOverlayNode.javascript`, `ControlSessionOverlayOpenOptions.javascript`, and
       the app factory in `ControlServer+SessionActions.swift` (`openHtmlOverlay`) passing it into `HtmlOverlay`
-- [ ] core suites pass
+- [x] core suites pass
 
 ### Task 2: WebKit setting
 - [ ] failing hosted tests: without the flag, inline, external and iframe scripts do not run for a
