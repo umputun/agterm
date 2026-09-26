@@ -356,7 +356,8 @@ public final class AppStore {
                                           splitCwd: session.hasSplit ? session.cwd(for: .right) : nil,
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
                                           presentation: presentationNode(of: session), presenters: presentersNode(of: session),
-                                          remoteOverlays: remoteOverlayNodes(of: session))
+                                          remoteOverlays: remoteOverlayNodes(of: session),
+                                          htmlOverlays: htmlOverlayNodes(session))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

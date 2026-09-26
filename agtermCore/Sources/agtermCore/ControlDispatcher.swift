@@ -96,6 +96,9 @@ public protocol ControlActions {
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
+    func reloadSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, current: Bool) -> ControlResponse
+    func navigateSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                                navigation: HtmlNavigation) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
     /// The overlay's own current selection, the arm `session.copy` cannot reach: that one addresses the pane
     /// UNDER the overlay, and the selection the user made is on the surface covering it. `pane` nil reads
@@ -201,8 +204,8 @@ public struct ControlDispatcher {
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
-                .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionOverlayCopy,
-                .sessionOverlayText, .sessionBackground,
+                .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
+                .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText, .sessionBackground,
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun:
@@ -624,8 +627,8 @@ public struct ControlDispatcher {
         case .sessionSearch:
             return await actions.searchSession(request.target, window: request.args?.window,
                                                text: request.args?.text, to: request.args?.to)
-        case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
-             .sessionOverlayCopy, .sessionOverlayText:
+        case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload,
+             .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText:
             return dispatchSessionOverlayCommand(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)

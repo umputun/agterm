@@ -161,6 +161,30 @@ struct HtmlOverlayTests {
         #expect(session.overlaySlotGeneration == generation)
     }
 
+    @Test func reloadOfTheCurrentPageKeepsWhatTheUserNavigatedTo() throws {
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(grant: "/tmp/a"), sizePercent: nil) == nil)
+        let overlayID = try #require(session.htmlOverlay?.id)
+        let info = HtmlPageInfo(page: "/tmp/a/b.html", title: "B", canGoBack: true, canGoForward: false)
+        store.setHtmlPage(overlayID, info)
+
+        #expect(store.reloadHtmlOverlay(session.id, pane: nil, target: .current) == nil)
+        #expect(session.htmlOverlay?.reloadTarget == .current)
+        #expect(session.htmlOverlay?.current == info)
+        #expect(store.reloadHtmlOverlay(session.id, pane: nil) == nil)
+        #expect(session.htmlOverlay?.reloadTarget == .original)
+        #expect(session.htmlOverlay?.current == nil)
+        #expect(session.htmlOverlay?.reloadRevision == 2)
+    }
+
+    @Test func aPageCommandIsRefusedOnAnEmptySlotOrAProgram() {
+        split()
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == .noOverlay)
+        #expect(store.openPaneOverlay(session.id, pane: .left, command: "htop") == nil)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: .left) == .notHtml)
+        #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: page(), sizePercent: nil) == nil)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: .right) == nil)
+    }
+
     @Test func reloadIsRefusedOnAnEmptySlotOrAProgram() {
         split()
         #expect(store.reloadHtmlOverlay(session.id, pane: nil) == .noOverlay)

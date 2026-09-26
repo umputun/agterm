@@ -5,14 +5,19 @@ import Foundation
 /// follows it; every adapter callback addresses the page by that id.
 public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
-    /// Absolute, standardized path of the page, which is also its base URL.
+    /// file is the absolute, standardized path of the page, which is also its base URL.
     public let file: String
-    /// Directory WebKit may read from; nil grants the file alone.
+    /// grantRoot is the directory WebKit may read from; nil grants the file alone.
     public let grantRoot: String?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
-    /// Bumped by `AppStore.reloadHtmlOverlay`; the adapter re-loads `file` when it changes.
+    /// current is what the web view shows now, as the adapter last reported it; nil until the first load
+    /// finishes and after a reload of the original file.
+    public var current: HtmlPageInfo?
+    /// reloadRevision is bumped by `AppStore.reloadHtmlOverlay`; when it changes the adapter reloads what
+    /// `reloadTarget` names.
     public var reloadRevision = 0
+    public var reloadTarget = HtmlReloadTarget.original
 
     public init(file: String, grantRoot: String? = nil, id: UUID = UUID()) {
         self.id = id
@@ -20,10 +25,10 @@ public struct HtmlOverlay: Equatable, Sendable {
         self.grantRoot = grantRoot
     }
 
-    /// The path passed to WebKit's `allowingReadAccessTo`.
+    /// readAccessPath is the path passed to WebKit's `allowingReadAccessTo`.
     public var readAccessPath: String { grantRoot ?? file }
 
-    /// Why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
+    /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
     /// must sit inside the grant by whole path components, so `/a/bc` is not inside `/a/b`.
     public static func grantError(file: String, grantRoot: String?) -> String? {
         guard file.hasPrefix("/") else { return "html file must be an absolute path" }
@@ -37,6 +42,33 @@ public struct HtmlOverlay: Equatable, Sendable {
         let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
         return parts.starts(with: rootParts)
     }
+}
+
+/// HtmlPageInfo is the page the web view shows and where its history can go; `page` differs from the
+/// overlay's `file` after an in-grant navigation.
+public struct HtmlPageInfo: Equatable, Sendable {
+    public let page: String
+    public let title: String?
+    public let canGoBack: Bool
+    public let canGoForward: Bool
+
+    public init(page: String, title: String?, canGoBack: Bool, canGoForward: Bool) {
+        self.page = page
+        self.title = title
+        self.canGoBack = canGoBack
+        self.canGoForward = canGoForward
+    }
+}
+
+/// HtmlReloadTarget is what a reload loads: the file the overlay was opened with (`overlay.reload`, the
+/// artifact an agent rewrote) or the page the user navigated to (`--current`, the toolbar button).
+public enum HtmlReloadTarget: Sendable {
+    case original, current
+}
+
+/// HtmlNavigation is a history step or hand-off `session.overlay.navigate` and the toolbar perform.
+public enum HtmlNavigation: String, CaseIterable, Sendable {
+    case back, forward, browser
 }
 
 /// HtmlLoadState is the page's load progress as the app's web view last reported it.

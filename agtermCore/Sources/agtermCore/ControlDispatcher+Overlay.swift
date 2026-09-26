@@ -5,8 +5,10 @@ extension ControlDispatcher {
     func dispatchSessionOverlayCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .sessionOverlayOpen:
-            guard let command = request.args?.command, !command.isEmpty else {
-                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+            let html = request.args?.html
+            let command = request.args?.command ?? ""
+            if let rejection = Self.overlayContentRejection(command: command, html: html, args: request.args) {
+                return rejection
             }
             if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
                 return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
@@ -30,8 +32,26 @@ extension ControlDispatcher {
                                                 sizePercent: request.args?.sizePercent,
                                                 backgroundColor: request.args?.color,
                                                 follow: request.args?.follow ?? false,
-                                                pane: pane
+                                                pane: pane,
+                                                html: html
                                               ))
+        case .sessionOverlayReload:
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.reloadSessionOverlay(request.target, window: request.args?.window, pane: pane,
+                                                    current: request.args?.current ?? false)
+            }
+        case .sessionOverlayNavigate:
+            guard let navigation = request.args?.to.flatMap(HtmlNavigation.init(rawValue:)) else {
+                return ControlResponse(ok: false, error: OverlayHtmlError.navigation)
+            }
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.navigateSessionOverlay(request.target, window: request.args?.window, pane: pane,
+                                                      navigation: navigation)
+            }
         case .sessionOverlayClose:
             switch parseOverlayPane(request.args?.pane) {
             case .rejected(let response): return response
@@ -79,6 +99,19 @@ extension ControlDispatcher {
         default:
             preconditionFailure("dispatchSessionOverlayCommand called for \(request.cmd.rawValue)")
         }
+    }
+
+    // exactly one of a program or a page; a page takes no --wait and must sit inside its --cwd grant
+    private static func overlayContentRejection(command: String, html: String?, args: ControlArgs?) -> ControlResponse? {
+        guard let html else {
+            return command.isEmpty ? ControlResponse(ok: false, error: "session.overlay.open requires a command") : nil
+        }
+        if !command.isEmpty { return ControlResponse(ok: false, error: OverlayHtmlError.commandAndHtml) }
+        if args?.wait == true { return ControlResponse(ok: false, error: OverlayHtmlError.waitWithHtml) }
+        if let error = HtmlOverlay.grantError(file: html, grantRoot: args?.cwd) {
+            return ControlResponse(ok: false, error: "session.overlay.open: \(error)")
+        }
+        return nil
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on

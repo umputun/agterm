@@ -90,8 +90,8 @@
   never treats an HTML slot as unrealized (it has no TerminalSurface even when fully loaded).
 - **Read grant.** `--cwd DIR` is the WebKit read grant (`loadFileURL(_:allowingReadAccessTo:)`) and FILE
   must resolve inside it. Omitted `--cwd` grants the file alone. The page's base URL is always the file's
-  own URL, never rebased onto `--cwd`. The CLI normalizes both paths (relative FILE against the caller's
-  cwd, standardized, symlinks resolved) before sending them.
+  own URL, never rebased onto `--cwd`. The CLI makes both paths absolute against the caller's cwd and
+  standardizes them before sending; symlinks are kept, so `/tmp` and `/private/tmp` do not mix.
 - **Slot rules.** `--html` replaces a HUD (like a program does), is refused over a running program or
   another page in the same slot (`overlay already open` / `pane overlay already open`), clears the
   previous process exit code on open, and bumps `overlaySlotGeneration`. A HUD over a page is refused
@@ -146,8 +146,16 @@
 - **Remote.** Renders on the Mac serving the command. `open --html` is refused while a presenter owns the
   session (`PresentationHub.hasPresenter`); an already-open page stays local when a presenter arrives,
   and close/reload keep working. HTML never enters `openRemoteOverlay`'s program-job path.
-- **Dismissal.** Command-W, `overlay.close`, and a small close button on the panel. Escape goes to the
-  page. No timer: a preview is intentionally persistent.
+- **Dismissal.** Command-W, `overlay.close`, and the toolbar's close button. Escape goes to the page. No
+  timer: a preview is intentionally persistent.
+- **Toolbar.** A thin bar along the panel's top edge: back and forward (disabled with nowhere to go), reload,
+  open in browser, the page's `<title>`, and close. The toolbar's reload reloads the CURRENT page, like a
+  browser; `overlay.reload` reloads the ORIGINAL file, which is what an agent wants after rewriting its
+  artifact. Open in browser hands the current page to the default browser, which also covers what the
+  overlay blocks (popups, uploads, JS dialogs, `target=_blank`). Every button except the title has a control
+  twin: `session.overlay.reload --current` and `session.overlay.navigate back|forward|browser`, both taking
+  `--pane`. The read-back reports the current page, title and `canGoBack`/`canGoForward` beside the original
+  file.
 - **Out of v1:** JS-to-native bridge / result reporting, stdin input, suspending hidden pages, remote
   forwarding.
 
@@ -172,7 +180,8 @@
   `OverlayHtmlError.noResult`, `.noRead`, `.notHtml` (reload on a program), `.presenter`,
   `.commandAndHtml`, `.waitWithHtml`, `.fileOutsideGrant`.
 - Read-back on `ControlSessionNode`: `htmlOverlays: [ControlHtmlOverlayNode]?` with
-  `pane` (nil for session-wide), `file`, `grantRoot`, `state`, `error`; session-wide size stays in
+  `pane` (nil for session-wide), `file`, `cwd` (the grant), `state`, `error`, and the current `page` and
+  `title` the adapter reports; session-wide size stays in
   `overlaySizePercent`. `overlay` (tree) reports any covering overlay, program or HTML; `paneOverlays`
   keeps listing covered panes of either kind. Terminal surface nodes and surface zoom availability stay
   terminal-only; `htmlOverlays` carries the content distinction.
@@ -261,18 +270,20 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 
-- [ ] dispatcher, test first (argument validation only): exactly one of command/html; `--wait` with html
+- [x] dispatcher, test first (argument validation only): exactly one of command/html; `--wait` with html
       refused; file outside grant refused; `--pane` + `--size-percent` still refused; reload argument
       shape. Slot-state refusals are Task 1's store tests; the `OverlayHtmlError` messages are the mapping
       of those enums, tested once here
-- [ ] `ControlSessionOverlayOpenOptions` gains `html` additively; `ControlActions.reloadSessionOverlay` has a
+- [x] `ControlSessionOverlayOpenOptions` gains `html` additively; `ControlActions.reloadSessionOverlay` has a
       default in `ControlActionsDefaults.swift`
-- [ ] read-back, test first: `htmlOverlays` for session-wide and both panes with state and error, and
+- [x] read-back, test first: `htmlOverlays` for session-wide and both panes with state and error, and
       `overlay`/`paneOverlays` under an HTML cover
-- [ ] agtermctl, test first: COMMAND optional only with `--html`; both or neither rejected; `--wait` and
+- [x] agtermctl, test first: COMMAND optional only with `--html`; both or neither rejected; `--wait` and
       `--block` rejected with `--html`; relative FILE and `--cwd` resolved against the caller's cwd and
       standardized; `session overlay reload --pane` request shape; `--cwd` help states its HTML meaning
-- [ ] `swift test` for `agtermCoreTests` and `agtermctlKitTests` touched suites passes
+- [x] ➕ `session.overlay.reload --current` and `session.overlay.navigate back|forward|browser` (toolbar twins):
+      dispatcher, defaults, CLI (`OverlayPageCommands.swift`) and read-back of page/title/history, tested
+- [x] `swift test` for `agtermCoreTests` and `agtermctlKitTests` touched suites passes
 
 ### Task 3: WKWebView adapter, deck wiring, focus and Command-W
 
@@ -295,8 +306,10 @@
       session switches, pane swap/promotion and hide/show, released when the store closes or finalizes the
       slot; `loadFileURL` with `spec.readAccessPath`; reload re-loads `spec.file` on `reloadRevision` change
 - [ ] `HtmlOverlayView` + navigator: delegate decisions to `HtmlNavigationPolicy`, open externals via
-      `NSWorkspace`, report loading/loaded/failed (including WebContent termination) to the store, paint
-      `--background-color` as backing, close button calling the store close
+      `NSWorkspace`, report loading/loaded/failed (including WebContent termination), current page and
+      title to the store, paint `--background-color` as backing
+- [ ] toolbar: back/forward bound to the web view's history (disabled when unavailable), reload of the
+      current page, open in browser, page title, close calling the store close
 - [ ] mount it in `overlayPanel` (session-wide, full or floating via `OverlayPanelStyle`) and in `deckPane`
       (pane cover); HTML is never mounted in the zoom hosts
 - [ ] focus: a page on the focused pane or session-wide takes first responder on open, one on an unfocused

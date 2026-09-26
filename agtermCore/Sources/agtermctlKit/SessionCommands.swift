@@ -538,7 +538,8 @@ struct Session: ParsableCommand {
     struct Overlay: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
-            subcommands: [Open.self, Close.self, Resize.self, Result.self, Copy.self, Text.self, RunJob.self]
+            subcommands: [Open.self, Close.self, Resize.self, Reload.self, Navigate.self, Result.self, Copy.self, Text.self,
+                          RunJob.self]
         )
 
         /// `--pane` validation for the overlay commands: the two pane roles only, deliberately NOT the shared
@@ -551,9 +552,15 @@ struct Session: ParsableCommand {
         }
 
         struct Open: RequestCommand {
-            static let configuration = CommandConfiguration(abstract: "Open an overlay running COMMAND; it closes when COMMAND exits.")
-            @Argument(help: "Program to run in the overlay (e.g. revdiff).") var command: String
-            @Option(name: .long, help: "Working directory (default: the session's current directory).") var cwd: String?
+            static let configuration = CommandConfiguration(
+                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing an HTML page with --html.")
+            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html.") var command: String?
+            @Option(name: .long, help: "Show this local HTML file instead of running COMMAND.") var html: String?
+            @Option(name: .long, help: """
+                Working directory (default: the session's current directory). With --html, the directory the page \
+                may read from (default: the file alone); the page still resolves relative links beside its own file.
+                """)
+            var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
             @Flag(name: .long, help: "Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the program's own output file).") var block = false
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
@@ -572,6 +579,8 @@ struct Session: ParsableCommand {
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
+                if (command == nil) == (html == nil) { throw ValidationError("provide COMMAND or --html, not both") }
+                if html != nil, wait || block { throw ValidationError("--html cannot be combined with --wait or --block") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
@@ -584,9 +593,11 @@ struct Session: ParsableCommand {
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
-                               args: options.withWindow(ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil,
+                               args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
+                                                                     command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
-                                                                     pane: pane, color: backgroundColor)))
+                                                                     pane: pane, color: backgroundColor,
+                                                                     html: html.map(Overlay.absolutePath))))
             }
 
             /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable
