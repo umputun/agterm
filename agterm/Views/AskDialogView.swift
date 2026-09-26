@@ -530,8 +530,9 @@ struct AskKeyCatcher: NSViewRepresentable {
                   input.store.selectedSessionID == input.session.id,
                   input.actions.library.activeWindowID == input.windowID, window.isKeyWindow,
                   input.actions.palette?.mode == nil, !input.actions.renamePending,
-                  !input.actions.quickTerminal.holdsKey,
-                  let surface = input.session.topmostSurface as? GhosttySurfaceView, !surface.askBlocksFocus else { return }
+                  !input.actions.quickTerminal.holdsKey else { return }
+            if HtmlOverlayRegistry.shared.focusCover(of: input.session) { return }
+            guard let surface = input.session.topmostSurface as? GhosttySurfaceView, !surface.askBlocksFocus else { return }
             window.makeFirstResponder(surface)
         }
 

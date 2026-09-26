@@ -1,13 +1,13 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, through its agtermctl CLI and local control socket. Use when
+  Drive agterm, a native macOS terminal, through its agtermctl CLI. Use when
   running inside an agterm session and asked to control the terminal: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
-  and read its exit status; post a HUD panel or a desktop notification; show a native picker or a
-  question dialog; display an image inline; type into a session, copy its selection or search its
-  scrollback; manage windows; change font size; set the theme; reload or edit the keymap, event hooks
-  and agterm-scoped ghostty config; subscribe to status,
+  and read its exit status; create and show HTML explainers or reports, URLs or dev servers in an overlay;
+  post a HUD or a desktop notification; show a picker or question dialog; display an image inline; type
+  into a session, copy its selection or search its scrollback; manage windows; change font size; set the
+  theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; subscribe to status,
   notification, lifecycle, pane-visibility and tree-change events.
   Covers the window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees,
   attaching a session running on another Mac, the cookbook recipes, the running version, and diagnosing
@@ -15,7 +15,8 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
-  show an image inline, search the scrollback, attach a session from another Mac, what recipes are there,
+  show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
+  it, preview the report you generated, show this URL or the running dev server, search the scrollback, attach a session from another Mac, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -85,7 +86,8 @@ holds a tree of **workspaces**, each holding **sessions**. A session has a prima
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
 An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving
-the sibling pane visible and usable. The same session-wide slot also holds a **HUD**
+the sibling pane visible and usable. `--html FILE` puts a local HTML page there instead of a
+program, which is how to show the user an artifact you generated. The same session-wide slot also holds a **HUD**
 (`session hud`), a small passive panel carrying a message instead of a program. A HUD can use the
 whole session or one pane as its placement bounds. The session keeps focus and stays typable
 under it.
@@ -423,13 +425,16 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation] | --url URL [--navigation]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
+  `session overlay reload [--current] [--pane left|right]` ·
+  `session overlay navigate back|forward|browser [--pane left|right]` ·
   `session overlay result [--pane left|right]` ·
   `session overlay copy [--pane left|right]` ·
-  `session overlay text [--all] [--lines N] [--pane left|right]` — run a program on top of a session; `--block`
-  waits and exits with its status.
+  `session overlay text [--all] [--lines N] [--pane left|right]` — run a program (or show an HTML page, see
+  [Displaying an HTML artifact](#displaying-an-html-artifact)) on top of a session; `--block`
+  waits for a PROGRAM to exit and exits with its status.
   `session overlay copy` returns the selection made INSIDE the overlay and `session overlay text` its terminal buffer:
   `session copy` and `session text` both address the pane the overlay COVERS, so a selection made in the
   overlay reads there as `no selection` and `session text --pane right` returns the shell underneath.
@@ -693,6 +698,69 @@ in it, so a large screenshot needs no resizing beforehand.
 Do NOT print graphics escapes to your own tool stdout (the agent harness escapes the control bytes)
 and do NOT run an image viewer in your tool shell (no controlling terminal). The overlay is what makes
 it render. Outside agterm (`AGTERM_ENABLED` unset) there is no overlay — fall back to `open <image>`.
+
+## Displaying an HTML artifact
+
+When the user asks for something as an HTML page, or to see a page you generated (an explainer, a report,
+a chart, a table, a diagram, a UI prototype), write it to a file and open it in an overlay with `--html`.
+It renders in a web view: JavaScript runs, CDN scripts and images load, and a clicked http(s) link opens
+in the default browser.
+
+```bash
+agtermctl session overlay open --html /tmp/report.html --target "$AGTERM_SESSION_ID" --follow
+agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriting the file
+```
+
+- Target your own session's id; `--follow` switches the user to it, so pass it only to show the page
+  now, not for a background preview.
+- Without `--cwd` the page has NO file access, so keep it self-contained: inline CSS and JS, CDN URLs,
+  data URIs. `--cwd DIR` grants read access to an asset directory that must contain FILE; relative URLs
+  still resolve beside FILE.
+- `--navigation` adds a toolbar (back, forward, reload, title, open in browser); use it when the page
+  links to other pages. Without it the panel has only a small close button.
+- `--size-percent N` makes it a floating panel, `--pane left|right` puts it over one split pane.
+- Build the page from the terminal theme, not a palette of your own, so it looks native in a dark or
+  light theme (see below). A palette the user asks for wins.
+- Leave the page up for the user, who dismisses it with ⌘W or its close button. Call
+  `session overlay close` only when the page is no longer wanted, never right after it loads.
+- A successful open means the page was accepted. `tree --json` reports it under `htmlOverlays` with
+  `state` `loading`, `loaded` or `failed`; `loaded` does not prove every CDN asset arrived. A failed
+  load also shows its error in the panel.
+
+To show a web app you are running, or a docs page, open it by URL instead:
+
+```bash
+agtermctl session overlay open --url http://localhost:5173/ --target "$AGTERM_SESSION_ID" --follow
+```
+
+- The server must already be running and reachable from the Mac running agterm; `localhost` means that
+  Mac, not a remote shell's. Plain http works for local addresses; use https for public hosts.
+- Links to the same origin load in place. A clicked link to another origin, or one whose redirect leaves
+  the origin, opens in the browser and the page stays. A redirect elsewhere during a load nobody clicked (the
+  URL you opened, a reload) fails it with `navigation blocked`, so open the final address.
+- `--cwd` does not apply. Each overlay has its own in-memory browser storage, so cookies and logins last
+  only while it is open.
+
+Every page gets the terminal theme as CSS variables: `--agterm-background`, `--agterm-foreground` and
+`--agterm-color-0` to `--agterm-color-15`, the theme's ANSI palette by slot (1 red, 2 green, 3 yellow, 4 blue,
+5 magenta, 6 cyan; 8 to 15 their bright forms). A file page also gets the theme's text color and light or
+dark scheme by default, over the theme background. Use the variables at the point of use with a fallback,
+alias them to your own names, and derive panels and borders with `color-mix`:
+
+```css
+body { background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText); }
+.page { --ok: var(--agterm-color-2, green); --bad: var(--agterm-color-1, red); --accent: var(--agterm-color-4, blue); }
+.card { background: color-mix(in srgb, var(--agterm-foreground, CanvasText) 6%, transparent);
+        border: 1px solid color-mix(in srgb, var(--agterm-foreground, CanvasText) 15%, transparent); }
+```
+
+Never declare `--agterm-*` yourself, on `:root` or anywhere: your value would replace the theme's. They
+follow a theme change live. A `--url` page keeps browser styling: it gets the variables, which apply nothing
+unless the page uses them, and none of the default look.
+
+reference.md has the full detail under `session overlay open --html`: slot conflicts and the refusals,
+including `--wait`, `--block` and `session overlay result`, which a page has no use for. Outside agterm (see
+[Am I inside agterm?](#am-i-inside-agterm)) `open <file>` is the fallback.
 
 ## Troubleshooting and reporting
 

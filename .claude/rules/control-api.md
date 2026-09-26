@@ -155,6 +155,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
+  `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
@@ -394,20 +395,67 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from
   [[menu-actions]]'s shared-action-seam rule because there is nothing here for a human to invoke by hand.
-- Passivity is four deck exemptions plus two NSView-level gates, all reading ONE predicate,
-  `Session.programOverlayActive` (`overlayActive && !hudActive`): `gates.overlaid`, the floating click
-  catcher, `backdropWashActive`, the scratch's focus gate, `TerminalView.viewOnly` on the panel, and the
-  program-only key for the overlay-close refocus. `viewOnly` owns the NSView layer, where `mouseDown` makes
-  a surface first responder; the panel's ancestor `.allowsHitTesting(false)` currently blocks the click
-  before that, so the two are belt and braces and neither is the place to economise.
+- Passivity is four deck exemptions plus two NSView-level gates, each reading an occupant predicate and
+  never the raw slot: `gates.overlaid`, the floating click catcher, `backdropWashActive`, the scratch's focus
+  gate, `TerminalView.viewOnly` on the panel, and the cover-only key for the overlay-close refocus. The HTML
+  bullet below says which read `coverOverlayActive` and which `programOverlayActive`. `viewOnly` owns the
+  NSView layer, where `mouseDown` makes a surface first responder; the panel's ancestor
+  `.allowsHitTesting(false)` currently blocks the click before that, so the two are belt and braces and
+  neither is the place to economise.
   Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
   close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
   `.id` carries `Session.overlaySlotGeneration`, or a replacement keeping `overlayActive` true never re-runs
   `makeNSView` and `updateNSView` hits a torn-down view.
-- The same predicate governs focus routing: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
+- The occupant predicates govern focus routing too: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
   `onScreenSurface`, `AppActions.searchTarget`'s scratch rung, and the scratch factory's `suppressAutoFocus`.
   A raw `overlayActive` read at any of them hands first responder or a buffer read to the HUD painter.
+- An HTML page (`Session.htmlOverlay`, `PaneOverlay.html`) is a third occupant: it covers and owns input
+  like a program but has no terminal surface, zoom target or exit status. `programOverlayActive` excludes
+  it; `coverOverlayActive` (program or page) is the input-exclusion question. Cover sites: `gates.overlaid`,
+  the click catcher, `backdropWashActive`, the scratch focus gate, the overlay-close refocus key,
+  `suppressAutoFocus`, `searchTarget`'s scratch rung, `DeckPaneGates.coverActive`, the tree `overlay` field,
+  the remote overlay's local-hold check, and zoom's `uncovered`/`paneVisible`. Program-only sites:
+  `TerminalView.viewOnly`, zoom's `.overlay` and pane-overlay arms, and `overlay.result`'s running check.
+  Under a page `topmostSurface` and `focusTarget` return nil, never the hidden pane, and zoom's
+  `resolveTarget` returns nil. `dropUnrealizedPaneOverlays` never drops a page, which has no surface to
+  realize. Every path that empties a slot holding a page fires `HtmlOverlayReleases` once: `closeOverlay`,
+  `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace,
+  pending-close and window teardown. The app's `HtmlOverlayRegistry` keys web views by the page's id, which
+  travels inside the slot value, so swaps, promotion and the soft-close window move the page intact.
+- A page's source is `HtmlSource`: a file with its grant, or a URL (`--url`, absolute http/https, no
+  `--cwd`). The dispatcher parses it once and the host gets `options.page`; the tree reports `file` or
+  `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
+  frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
+  http(s) subframe loads, and a redirect elsewhere during an unclicked load is refused. A clicked link's
+  redirect reaches the policy as `.linkActivated` (WebKit reuses the triggering action), so it opens in the
+  browser like the click and the retained page stays `loaded`. `HtmlOverlayPage.loadPending` makes every
+  load in flight (explicit, or started by the page) end `loaded` or `failed`: a policy cancel of its main
+  frame reports `navigation blocked: URL` and the `WebKitErrorDomain` 102 that follows is ignored. An
+  unreported 102, WebKit dropping a response it cannot show, restores `loaded` over a document the web
+  content process still shows, and fails a load that never committed. A failed page shows its error in the panel.
+- Every page gets its own `WKWebsiteDataStore.nonPersistent()`, set before the web view exists, so browser
+  storage lives exactly as long as the overlay and is shared with no other. `NSAllowsLocalNetworking` in
+  Info.plist lets plain http reach local addresses (not only loopback, and for file pages too); public
+  http stays subject to ATS.
+- `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
+  WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
+  `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the
+  file itself is refused.
+- A FILE page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)`
+  rule for scheme and text color, injected at document start. Its background is NOT in CSS: the file web view
+  draws no canvas (`drawsBackground`, the one private key) and the panel paints the theme or
+  `--background-color` behind it, so an authored `html` or `body` background still fills the canvas.
+- Every page's rule, a URL page's included, defines `--agterm-background`, `--agterm-foreground` and
+  `--agterm-color-0..15` (`GhosttyApp.terminalPalette`, slots kept, an invalid entry omitted). A URL page gets
+  only those variables and keeps the browser's opaque canvas, because a web app styled against a white canvas
+  turns unreadable over the theme backing. `.agtermAppearanceChanged` restyles open pages of both kinds.
+- The toolbar is opt-in per open (`--navigation`, read back as `navigation`); without it the panel has a
+  fixed dark close disc no page color can hide.
+- Every toolbar button has a control twin through the same store/registry path: reload is
+  `overlay.reload --current` (bare `overlay.reload` loads the original file), back/forward/browser is
+  `overlay.navigate`. The title is display only. A page never takes the remote program-job path:
+  `open --html` is refused while a presenter owns the session, and one already open stays local.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,
   and session close tear a HUD down. `overlay.result` refuses with `OverlayHudError.noResult` because

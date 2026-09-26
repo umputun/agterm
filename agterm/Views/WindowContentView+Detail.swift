@@ -138,7 +138,7 @@ extension WindowContentView {
                 // a full overlay renders above the scratch, so it gates focus on top of `focusable` (matching
                 // makeScratchSurface's autoFocus suppression); `deckVisible` keeps drops to an on-screen one.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
-                             isActive: focusable && !session.programOverlayActive,
+                             isActive: focusable && !session.coverOverlayActive,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey,
                              onScreen: deckInteractive && isActive && !fullOverlay)
                     .opacity(fullOverlay ? 0 : 1)
@@ -172,19 +172,19 @@ extension WindowContentView {
         // so drive the bounded retry the split-collapse survivor uses. Only the visible session reclaims focus:
         // the quick terminal owns it while it covers the window, and its own hide re-grabs the cover.
         //
-        // Keyed on `programOverlayActive`, not the raw slot: a HUD never took first responder, so reclaiming
+        // Keyed on `coverOverlayActive`, not the raw slot: a HUD never took first responder, so reclaiming
         // it on the HUD's close would instead YANK focus out of whatever holds it — an open ⌘F search field,
         // an in-progress sidebar rename — and `retryReparentFocus` re-grabs for ~0.36s.
-        .onChange(of: session.programOverlayActive) { _, isOpen in
+        .onChange(of: session.coverOverlayActive) { _, isOpen in
             if !isOpen, deckInteractive, isActive, !quickTerminal.holdsKey {
-                (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+                HtmlOverlayRegistry.shared.refocus(session)
             }
         }
         // the scratch needs the same retry on SHOW too: its surface is kept alive across hides, so a re-show
         // remounts it and `autoFocus`'s one-shot latch won't re-fire.
         .onChange(of: session.scratchActive) { _, _ in
             guard deckInteractive, isActive, !quickTerminal.holdsKey else { return }
-            (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+            HtmlOverlayRegistry.shared.refocus(session)
         }
         // the deck is the authority on which panes it lays out, so it also retires a pane overlay whose pane
         // stopped being laid out before its surface ever realized — `AppStore.toggleSplit` covers show/hide,
@@ -196,7 +196,7 @@ extension WindowContentView {
         // a closing pane overlay un-hides its pane and loses the same race.
         .onChange(of: session.openPaneOverlays) { before, after in
             guard after.count < before.count, deckInteractive, isActive, !quickTerminal.holdsKey else { return }
-            (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+            HtmlOverlayRegistry.shared.refocus(session)
         }
     }
 
@@ -320,10 +320,18 @@ extension WindowContentView {
                     // alone is not what stops AppKit routing a click there. `deckVisible: live` is deliberate
                     // too — a passive panel registers no drag types and writes no mouse cursor, so a file drop
                     // keeps reaching the pane behind it.
-                    TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                                 makeSurface: { makeOverlaySurface($0, nil) },
-                                 isActive: live, deckVisible: live, viewOnly: !style.interactive,
-                                 onScreen: onScreen)
+                    Group {
+                        if let page = session.htmlOverlay, session.htmlOverlayActive {
+                            HtmlOverlayView(store: store, session: session, overlay: page,
+                                            backgroundColor: session.overlayBackgroundColor, isActive: live,
+                                            visible: live, foreground: chromeText, background: terminalColor)
+                        } else {
+                            TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
+                                         makeSurface: { makeOverlaySurface($0, nil) },
+                                         isActive: live, deckVisible: live, viewOnly: !style.interactive,
+                                         onScreen: onScreen)
+                        }
+                    }
                         .frame(width: panelFrame.width, height: panelFrame.height)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
                         // still-visible session; full = translucent and chromeless (libghostty draws only the
@@ -396,7 +404,14 @@ extension WindowContentView {
             && deckHostsSurface(session: session, surface: pane.zoomSurface)
         GeometryReader { geo in
             ZStack {
-                if active {
+                if active, let page = session.paneOverlay(pane)?.html {
+                    // keyed on the page, so a swap or promotion moves its web view instead of reusing a host
+                    HtmlOverlayView(store: store, session: session, overlay: page,
+                                    backgroundColor: session.paneOverlay(pane)?.backgroundColor, isActive: isActive,
+                                    visible: deckVisible, foreground: chromeText, background: terminalColor)
+                        .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
+                        .id("\(session.id.uuidString)-html-\(page.id.uuidString)")
+                } else if active {
                     // chromeless and translucent like the full session overlay: libghostty draws only the
                     // terminal, and the pane below is hidden so the window backing shows through.
                     TerminalView(session: session, surfaceKeyPath: pane.surfaceSlot,
@@ -455,11 +470,11 @@ struct DeckPaneGates {
     /// `visible` without the quick-terminal focus term: what actually paints, for `deckOnScreen`.
     let onScreen: Bool
 
-    /// Whether a session-wide cover is up: a caller's PROGRAM in the overlay slot, or the scratch. A HUD is
+    /// Whether a session-wide cover is up: a caller's PROGRAM or page in the overlay slot, or the scratch. A HUD is
     /// exempt — it is a message, not a program, and the session under it must keep first responder and stay
     /// clickable, which is the whole difference between the two occupants of that slot.
     @MainActor static func coverActive(_ session: Session) -> Bool {
-        session.programOverlayActive || session.scratchActive
+        session.coverOverlayActive || session.scratchActive
     }
 }
 

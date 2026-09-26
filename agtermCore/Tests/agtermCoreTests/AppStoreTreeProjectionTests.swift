@@ -566,4 +566,34 @@ struct AppStoreTreeProjectionTests {
 
         #expect(store.controlTree().workspaces[0].sessions[0].presentation?.mode == "presenter")
     }
+
+    @Test func htmlOverlaysProjectEachPageWithItsLoadState() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        store.toggleSplit(session.id)
+        session.surface = SpySurface(paneToken: "left")
+        session.splitSurface = SpySurface(paneToken: "right")
+        #expect(store.controlTree().workspaces[0].sessions[0].htmlOverlays == nil)
+
+        let wide = HtmlOverlay(source: .file(path: "/tmp/a/wide.html", grantRoot: "/tmp/a"), navigation: true)
+        let right = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: right, sizePercent: nil) == nil)
+        store.setHtmlLoadState(right.id, state: .failed, error: "not found")
+        store.setHtmlPage(wide.id, HtmlPageInfo(page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false))
+
+        let node = store.controlTree().workspaces[0].sessions[0]
+        #expect(node.overlay)
+        #expect(node.overlaySizePercent == 70)
+        #expect(node.paneOverlays == ["right"])
+        #expect(node.htmlOverlays == [
+            ControlHtmlOverlayNode(pane: nil, file: "/tmp/a/wide.html", cwd: "/tmp/a", state: "loading", error: nil,
+                                   page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false,
+                                   navigation: true),
+            ControlHtmlOverlayNode(pane: "right", url: "http://localhost:5173/", state: "failed", error: "not found"),
+        ])
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(store.controlTree()))
+        #expect(decoded.workspaces[0].sessions[0] == node)
+    }
 }

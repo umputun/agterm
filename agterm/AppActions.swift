@@ -876,7 +876,7 @@ final class AppActions {
     /// searchable, else the active session's focused pane. Full overlay and quick terminal are unsearchable
     /// (blocked by `coverHidesActiveSession`); a FLOATING overlay leaves the pane visible, so it targets it.
     private func searchTarget() -> GhosttySurfaceView? {
-        if let session = store?.activeSession, session.scratchActive, !session.programOverlayActive {
+        if let session = store?.activeSession, session.scratchActive, !session.coverOverlayActive {
             return session.topmostSurface as? GhosttySurfaceView
         }
         // the focused pane hidden under its OWN overlay has no searchable target: the overlay is unsearchable

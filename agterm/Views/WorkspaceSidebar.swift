@@ -753,6 +753,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             if renameController.isEditing { return }
             let window = outlineView?.window
             if let window, window.firstResponder is NSText { return }
+            if let session = store.activeSession, HtmlOverlayRegistry.shared.focusCover(of: session) { return }
             if let window, let surface = store.activeSession?.topmostSurface as? GhosttySurfaceView, surface.window === window {
                 guard !surface.deferFocusToAsk() else { return }
                 window.makeFirstResponder(surface)

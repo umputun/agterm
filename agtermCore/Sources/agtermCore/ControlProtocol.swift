@@ -46,6 +46,8 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayOpen = "session.overlay.open"
     case sessionOverlayClose = "session.overlay.close"
     case sessionOverlayResize = "session.overlay.resize"
+    case sessionOverlayReload = "session.overlay.reload"
+    case sessionOverlayNavigate = "session.overlay.navigate"
     case sessionOverlayResult = "session.overlay.result"
     case sessionOverlayCopy = "session.overlay.copy"
     case sessionOverlayText = "session.overlay.text"
@@ -233,7 +235,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for `workspace.go`
     /// (`next`|`prev`|`previous` — a workspace has no attention state and no ends to jump to), for the
     /// reorder form of `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for
-    /// `session.search` (`next`|`prev`|`close`).
+    /// `session.search` (`next`|`prev`|`close`), and `session.overlay.navigate` (`back`|`forward`|`browser`).
     public var to: String?
     /// Anchor session (id / unique prefix / `active`) to place a session right AFTER, for the placement form
     /// of `session.new`/`session.move`. The anchor carries its own workspace (resolved across the whole
@@ -361,6 +363,15 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// fewer if the window has fewer) instead of explicit ids (the CLI's `--mru`). Mutually exclusive with
     /// `targets`/`close`, composes with the font flags; resolved app-side, which needs the store's recency.
     public var mru: Bool?
+    /// html is the absolute path of the page `session.overlay.open --html` shows instead of running `command`; `cwd`
+    /// is then WebKit's read grant.
+    public var html: String?
+    /// current makes `session.overlay.reload` reload the page the user navigated to, not the original file.
+    public var current: Bool?
+    /// navigation gives an `--html` or `--url` overlay its toolbar.
+    public var navigation: Bool?
+    /// url is the web page `session.overlay.open --url` shows instead of running `command`.
+    public var url: String?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -386,7 +397,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 opacity: Double? = nil, fit: String? = nil,
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
-                close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil) {
+                close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
+                html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -461,6 +473,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.fontSize = fontSize
         self.autoSize = autoSize
         self.mru = mru
+        self.html = html
+        self.current = current
+        self.navigation = navigation
+        self.url = url
     }
 }
 
@@ -628,6 +644,31 @@ public enum OverlayHudError {
     public static let noRead = "no overlay to read: the slot holds a hud"
     /// The body file the helper reads could not be written, so the panel would paint nothing or stale text.
     public static let writeFailed = "could not write the hud message"
+}
+
+/// OverlayHtmlError holds the error strings for `session.overlay.*` against an HTML page.
+public enum OverlayHtmlError {
+    public static let commandAndHtml = "session.overlay.open takes a command or --html, not both"
+    public static let commandAndURL = "session.overlay.open takes a command or --url, not both"
+    public static let htmlAndURL = "session.overlay.open takes --html or --url, not both"
+    public static let waitWithHtml = "session.overlay.open: --wait cannot be combined with --html"
+    public static let waitWithURL = "session.overlay.open: --wait cannot be combined with --url"
+    /// cwdWithURL: a web page reads no local files, so there is no grant to give it.
+    public static let cwdWithURL = "session.overlay.open: --cwd cannot be combined with --url"
+    public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
+    public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
+    /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
+    public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
+    public static let noOverlay = "no overlay"
+    public static let notHtml = "the overlay is not an html page"
+    public static let navigation = "session.overlay.navigate requires back, forward or browser"
+    /// noHistory: the page has nowhere to go in that direction.
+    public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
+    /// notRealized: the page has not been shown yet, so there is no web view to drive.
+    public static let notRealized = "html overlay not realized"
+    /// noResult and noRead: a page runs no program, so there is no exit status and no terminal text.
+    public static let noResult = "no overlay result: the slot holds an html page"
+    public static let noRead = "no overlay to read: the slot holds an html page"
 }
 
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections

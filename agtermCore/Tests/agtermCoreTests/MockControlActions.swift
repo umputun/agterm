@@ -81,6 +81,8 @@ final class MockControlActions: ControlActions {
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
+        case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
+        case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
         case overlayResult(target: String?, window: String?, pane: OverlayPane?)
         case overlayCopy(target: String?, window: String?, pane: OverlayPane?)
@@ -570,6 +572,17 @@ final class MockControlActions: ControlActions {
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         calls.append(.overlayOpen(target: target, window: window, options))
         return nextOverlayOpenResponse
+    }
+
+    func reloadSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, current: Bool) -> ControlResponse {
+        calls.append(.overlayReload(target: target, window: window, pane: pane, current: current))
+        return ControlResponse(ok: true)
+    }
+
+    func navigateSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                                navigation: HtmlNavigation) -> ControlResponse {
+        calls.append(.overlayNavigate(target: target, window: window, pane: pane, navigation))
+        return ControlResponse(ok: true)
     }
 
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {

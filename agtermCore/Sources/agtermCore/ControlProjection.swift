@@ -303,6 +303,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// Overlay slots a viewer presenting this session holds, on the origin; omitted when none is held. Such
     /// an overlay covers nothing here, so `overlay` and `paneOverlays` leave it out.
     public let remoteOverlays: [ControlRemoteOverlayNode]?
+    /// htmlOverlays lists the pages in this session's overlay slots, session-wide first then left and right;
+    /// omitted when none is open. `overlay` and `paneOverlays` report their slots as covered too.
+    public let htmlOverlays: [ControlHtmlOverlayNode]?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
@@ -321,7 +324,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
                 liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
-                remoteOverlays: [ControlRemoteOverlayNode]? = nil) {
+                remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -370,10 +373,50 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.presentation = presentation
         self.presenters = presenters
         self.remoteOverlays = remoteOverlays
+        self.htmlOverlays = htmlOverlays
     }
 }
 
-/// An overlay slot of an origin session held by the viewer presenting it, as `tree` reports it.
+/// ControlHtmlOverlayNode is one HTML page in an overlay slot. `file` or `url` is what was opened and what
+/// `session.overlay.reload` loads; `page` is where the user has navigated since, nil until the first load.
+public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
+    /// pane is the pane role, omitted for the session-wide slot.
+    public let pane: String?
+    /// file and url name the source; exactly one is set.
+    public let file: String?
+    /// cwd is a file page's read grant, omitted when it has none.
+    public let cwd: String?
+    public let url: String?
+    /// state is `loading`, `loaded` or `failed`.
+    public let state: String
+    public let error: String?
+    /// page, title and the history flags are omitted until the web view first reports them.
+    public let page: String?
+    public let title: String?
+    public let canGoBack: Bool?
+    public let canGoForward: Bool?
+    /// navigation is true when the toolbar is shown, omitted otherwise.
+    public let navigation: Bool?
+
+    public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
+                error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
+                canGoForward: Bool? = nil, navigation: Bool? = nil) {
+        self.pane = pane
+        self.file = file
+        self.cwd = cwd
+        self.url = url
+        self.state = state
+        self.error = error
+        self.page = page
+        self.title = title
+        self.canGoBack = canGoBack
+        self.canGoForward = canGoForward
+        self.navigation = navigation
+    }
+}
+
+/// ControlRemoteOverlayNode is an overlay slot of an origin session held by the viewer presenting it, as
+/// `tree` reports it.
 public struct ControlRemoteOverlayNode: Codable, Sendable, Equatable {
     /// The pane role, omitted for the session-wide slot.
     public let pane: String?

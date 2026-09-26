@@ -138,6 +138,9 @@ extension ControlServer {
         if session.remoteOverlays.slot(pane) != nil {
             return .rejected(ControlResponse(ok: false, error: OverlayResultError.shownElsewhere))
         }
+        if session.htmlCovers(pane) {
+            return .rejected(ControlResponse(ok: false, error: OverlayHtmlError.noRead))
+        }
         let occupied: Bool
         let surface: (any TerminalSurface)?
         if let pane {

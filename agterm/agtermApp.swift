@@ -172,7 +172,7 @@ struct agtermApp: App {
                         let qtVisible = QuickTerminalController.shared.holdsKey
                         return Self.makeScratchSurface(for: session, store: store,
                                                        env: surfaceEnv(for: session, pane: .scratch),
-                                                       suppressAutoFocus: session.programOverlayActive || qtVisible,
+                                                       suppressAutoFocus: session.coverOverlayActive || qtVisible,
                                                        actions: actions)
                     },
                     captureOnExit: captureOnExit,
@@ -537,6 +537,8 @@ struct agtermApp: App {
         }
         // focus the surviving (now maximized) pane, else the session reselected to; the collapse/switch re-hosts
         // the target, hence the retry. `topmostSurface` prefers an overlay/scratch cover over the pane it hides.
+        if let survivor = store.session(withID: sessionID) ?? store.activeSession,
+           HtmlOverlayRegistry.shared.focusCover(of: survivor) { return }
         let target = store.session(withID: sessionID)?.topmostSurface ?? store.activeSession?.topmostSurface
         (target as? GhosttySurfaceView)?.focusAfterReparent()
     }
@@ -602,6 +604,7 @@ struct agtermApp: App {
             // is pending, but its async END must not return focus behind it.
             guard PickRegistry.shared.controller(for: windowID)?.modalPending != true else { return }
             actions.resignDismissedFieldEditor(for: windowID)
+            if HtmlOverlayRegistry.shared.focusCover(of: session) { return }
             if let surface = session.topmostSurface as? GhosttySurfaceView, !surface.deferFocusToAsk() { surface.focusAfterReparent() }
         }
         view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }

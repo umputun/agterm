@@ -5,6 +5,15 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
+    func reloadSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?, current _: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.reload"))
+    }
+
+    func navigateSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?,
+                                navigation _: HtmlNavigation) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.navigate"))
+    }
+
     func openAsk(_: PendingAsk, target _: String?, window _: String?,
                  placement _: ControlAskPlacement, follow _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("ask.open"))

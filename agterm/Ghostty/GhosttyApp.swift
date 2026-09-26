@@ -33,6 +33,8 @@ final class GhosttyApp {
     /// Terminal foreground from the resolved config. The chrome (sidebar rows, title-bar text + buttons) uses
     /// it so non-terminal text tracks the theme, not the system label color. Nil when unread.
     private(set) var terminalForegroundColor: NSColor?
+    /// terminalPalette is the 16 ANSI colors of the resolved config as `#rrggbb`, by slot; empty when unread.
+    private(set) var terminalPalette: [String] = []
     /// Whether the active theme reads as dark, by perceived luminance of the WASHED sidebar background (theme
     /// background plus sidebar-tint wash) — the color the disclosure triangle sits on, so a strong tint pushing
     /// a near-threshold theme past the midpoint still classifies right. Pins AppKit-drawn chrome to the theme,
@@ -420,6 +422,7 @@ final class GhosttyApp {
         lastConfigInputs = inputs
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
+        terminalPalette = Self.palette(from: config)
         refreshSelectionColors(isDark: isDark)
     }
 
@@ -659,6 +662,15 @@ final class GhosttyApp {
             }
         }
         return cfg
+    }
+
+    private static func palette(from config: ghostty_config_t) -> [String] {
+        var palette = ghostty_config_palette_s()
+        let key = "palette"
+        guard key.withCString({ ghostty_config_get(config, &palette, $0, UInt(key.utf8.count)) }) else { return [] }
+        return withUnsafeBytes(of: palette.colors) { raw in
+            raw.bindMemory(to: ghostty_config_color_s.self).prefix(16).map { String(format: "#%02x%02x%02x", $0.r, $0.g, $0.b) }
+        }
     }
 
     /// A named color key (e.g. `background`, `foreground`) from the resolved config as an opaque `NSColor`,

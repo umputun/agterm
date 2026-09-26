@@ -103,6 +103,7 @@ final class SplitRatioAccessorTests: XCTestCase {
     // pins the macOS 27 fixture overwrite: an enclosing setPosition can undo the probe's first restore
     func testAFreshSplitSeedsTheDefaultRatioRatherThanTheMountedFrames() {
         probe.removeFromSuperview()
+        session.splitRatio = nil
         split.setPosition(320, ofDividerAt: 0)
         split.layoutSubtreeIfNeeded()
         XCTAssertNil(session.splitRatio)

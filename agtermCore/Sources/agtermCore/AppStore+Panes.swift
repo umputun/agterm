@@ -396,6 +396,8 @@ extension AppStore {
         session.overlayActive = false
         session.overlaySurface?.teardown()
         session.overlaySurface = nil
+        HtmlOverlayReleases.shared.release(session.htmlOverlay)
+        session.htmlOverlay = nil
         session.overlayCommand = nil
         session.overlayCwd = nil
         session.overlayWait = false
@@ -490,6 +492,7 @@ extension AppStore {
     /// on explicit close and when the program exits. No-op (false) with no overlay on that pane.
     @discardableResult public func closePaneOverlay(_ sessionID: UUID, pane: OverlayPane) -> Bool {
         guard let session = session(withID: sessionID), let overlay = session.paneOverlay(pane) else { return false }
+        HtmlOverlayReleases.shared.release(overlay.html)
         session.setPaneOverlay(nil, pane: pane)
         session.paneOverlaySurface(pane)?.teardown()
         session.setPaneOverlaySurface(nil, pane: pane)
