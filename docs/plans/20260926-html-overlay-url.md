@@ -134,21 +134,29 @@
 
 - [x] `openSessionOverlay` routes a URL source through the page path (reservation checks, follow,
       presenter refusal) before any program or remote-job handling (done in Task 1)
-- [ ] per-page `WKWebsiteDataStore.nonPersistent()` on the configuration before `WKWebView` is created
+- [x] per-page `WKWebsiteDataStore.nonPersistent()` on the configuration before `WKWebView` is created
 - [x] `loadOriginal` loads a URL source with `load(URLRequest)`; `apply` honors `--current` for URL pages
       too, not only file pages with a grant (done in Task 1)
-- [ ] track the load attempt in flight; `decidePolicyFor` reports a cancelled main-frame navigation of
+- [x] track the load attempt in flight; `decidePolicyFor` reports a cancelled main-frame navigation of
       that attempt as `failed` with the blocked destination; a clicked link sent to the browser leaves
       the loaded page alone
-- [ ] themed error panel in `HtmlOverlayView` for a `failed` page, cleared by reload
-- [ ] declare `NSAllowsLocalNetworking` in `agterm/Info.plist`
-- [ ] hosted tests with an in-process listener: load, same-origin redirect, blocked cross-origin
+- [x] themed error panel in `HtmlOverlayView` for a `failed` page, cleared by reload
+- [x] declare `NSAllowsLocalNetworking` in `agterm/Info.plist`
+- [x] hosted tests with an in-process listener: load, same-origin redirect, blocked cross-origin
       redirect on open ends failed, a loaded page whose reload is redirected off-origin ends failed,
       connection refused ends failed, `/a` -> `/b` then `--current` stays on `/b` and bare reload returns
-      to `/a`, cookie/localStorage survive reload but not a new overlay, error panel shown, plain http
-      on `localhost`/`127.0.0.1`/`::1` loads
-- [ ] one XCUITest: `--url` to a test listener renders and ⌘W closes
-- [ ] run the touched hosted and UI tests
+      to `/a`, cookie/localStorage survive reload but not a new overlay, plain http on
+      `localhost`/`127.0.0.1`/`::1` loads (the error panel is checked in the XCUITest, where it renders)
+- [x] one XCUITest: `--url` to a test listener renders and ⌘W closes, and a refused connection shows the
+      error panel; the runner's sandbox cannot bind, so the app serves the page from a background
+      session running `/usr/bin/python3 -m http.server`
+- [x] run the touched hosted and UI tests
+- [x] ➕ a policy cancel reaches `didFailProvisionalNavigation` as `WebKitErrorDomain` 102 ("Frame load
+      interrupted"), not `WKError.errorDomain`; the ignore now matches it, so the blocked-load message stands
+- [x] ➕ a blocked script navigation on a loaded page leaves it loaded (hosted test)
+- [x] ➕ codex review: a load the page starts itself also counts as pending (set on provisional start), so
+      a same-origin hop redirected off-origin fails instead of staying loading; a `--current` reload with
+      nothing committed yet loads the source again; hosted tests for both, failing without the fix
 
 ### Task 3: Documentation
 - [ ] `plugins/agterm/skills/agterm/`: the description's HTML phrase becomes a compact "preview HTML

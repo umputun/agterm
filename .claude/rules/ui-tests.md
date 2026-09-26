@@ -124,3 +124,7 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   `RestoreCommandUITests.testRestoreReRunsShellScriptWrapper` uses `sh -c 'tee ...; true'` so `sh` remains
   foreground. Do not execute a script from the runner's sandboxed temp dir; the app can write there but
   cannot exec it.
+- The runner's sandbox grants `network.client` only, so an `NWListener` in the test fails `bind` with
+  EPERM. A test needing an HTTP server has the app run it in a background session
+  (`session.new` with `/usr/bin/python3 -m http.server PORT --bind 127.0.0.1 --directory DIR`) and polls
+  it from the runner as a client; see `ControlHtmlOverlayUITests`.

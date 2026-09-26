@@ -105,6 +105,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private weak var store: AppStore?
     private var appliedRevision: Int
     private var observations: [NSKeyValueObservation] = []
+    // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
+    // policy cancel of its redirect reports failed rather than leaving the page loading
+    private var loadPending = false
 
     init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme) {
         id = overlay.id
@@ -112,7 +115,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         self.store = store
         self.backgroundColor = backgroundColor
         appliedRevision = overlay.reloadRevision
-        webView = HtmlOverlayWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        // an in-memory store per page: cookies and storage last as long as this overlay and reach no other
+        configuration.websiteDataStore = .nonPersistent()
+        webView = HtmlOverlayWebView(frame: .zero, configuration: configuration)
         webView.pageID = overlay.id
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
         // themed panel behind it while authored backgrounds still paint.
@@ -157,7 +163,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         self.overlay = overlay
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
-        if overlay.reloadTarget == .current, !textLoaded {
+        // before a first commit WebKit has nothing to reload, so the source is loaded again instead
+        if overlay.reloadTarget == .current, !textLoaded, webView.url != nil {
+            loadPending = true
             webView.reload()
         } else {
             loadOriginal()
@@ -197,6 +205,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func loadOriginal() {
+        loadPending = true
         switch overlay.source {
         case .url(let url):
             webView.load(URLRequest(url: url))
@@ -206,7 +215,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             do {
                 webView.loadHTMLString(try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8), baseURL: nil)
             } catch {
-                store?.setHtmlLoadState(id, state: .failed, error: error.localizedDescription)
+                fail(error.localizedDescription)
             }
         }
     }
@@ -231,18 +240,23 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .cancel }
         let target: HtmlNavigationTarget = action.targetFrame.map { $0.isMainFrame ? .mainFrame : .subframe } ?? .newWindow
-        let decision = HtmlNavigationPolicy.decide(
-            HtmlNavigationAction(url: url, target: target, userActivated: action.navigationType == .linkActivated),
-            overlay: overlay)
+        let userActivated = action.navigationType == .linkActivated
+        let decision = HtmlNavigationPolicy.decide(HtmlNavigationAction(url: url, target: target, userActivated: userActivated),
+                                                   overlay: overlay)
         if decision == .openExternal { NSWorkspace.shared.open(url) }
+        if decision == .cancel, target == .mainFrame, !userActivated, loadPending {
+            fail("navigation blocked: \(url.absoluteString)")
+        }
         return decision == .allow ? .allow : .cancel
     }
 
     func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
+        loadPending = true
         store?.setHtmlLoadState(id, state: .loading, error: nil)
     }
 
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
+        loadPending = false
         store?.setHtmlLoadState(id, state: .loaded, error: nil)
         reportPage()
     }
@@ -256,15 +270,22 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webViewWebContentProcessDidTerminate(_: WKWebView) {
-        store?.setHtmlLoadState(id, state: .failed, error: "web content process terminated")
+        fail("web content process terminated")
     }
 
-    // a navigation this policy cancelled, or one superseded by the next, is not a failed page
+    // a navigation this policy cancelled, or one superseded by the next, is not a failed page: the policy
+    // reports its own cancel of a pending load, and the superseding load has its own outcome
     private func reportFailure(_ error: Error) {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
-        if nsError.domain == WKError.errorDomain, nsError.code == 102 { return }
-        store?.setHtmlLoadState(id, state: .failed, error: nsError.localizedDescription)
+        // a policy cancel arrives as "Frame load interrupted", 102 in the legacy WebKit domain, not WKError's
+        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return }
+        fail(nsError.localizedDescription)
+    }
+
+    private func fail(_ message: String) {
+        loadPending = false
+        store?.setHtmlLoadState(id, state: .failed, error: message)
     }
 
     func webView(_: WKWebView, createWebViewWith _: WKWebViewConfiguration, for _: WKNavigationAction,

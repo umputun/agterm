@@ -223,6 +223,30 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertEqual(try askResult(ask)["result"] as? String, "pending")
     }
 
+    func testAUrlPageRendersClosesWithCommandWAndARefusedOneShowsTheError() throws {
+        let id = try activeSessionID()
+        try writePage("served.html", title: "Served", body: "<p>served page</p>")
+        let port = Int.random(in: 40000..<60000)
+        let server = #"/usr/bin/python3 -m http.server \#(port) --bind 127.0.0.1 --directory \#(pageDir.path)"#
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.new","args":{"command":"\#(server)","noSelect":true}}"#)["ok"] as? Bool, true)
+        let served = "http://127.0.0.1:\(port)/served.html"
+        XCTAssertTrue(poll(until: (try? Data(contentsOf: URL(string: served)!)) != nil, timeout: 15), "the page server should start")
+        let open = { (url: String) in
+            try self.sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"url":"\#(url)"}}"#)
+        }
+
+        XCTAssertEqual(try open(served)["ok"] as? Bool, true)
+        XCTAssertTrue(app.webViews.staticTexts["served page"].waitForExistence(timeout: 10), "the served page should render")
+        XCTAssertTrue(pollPage(id: id) { $0["url"] as? String == served && $0["file"] == nil })
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "⌘W should close the url page")
+
+        XCTAssertEqual(try open("http://127.0.0.1:\(port + 1)/")["ok"] as? Bool, true)
+        XCTAssertTrue(app.descendants(matching: .any)["htmlOverlay.error"].waitForExistence(timeout: 10),
+                      "a refused connection should show the error panel")
+        XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "failed" })
+    }
+
     private func bottomPixel(of element: XCUIElement) throws -> NSColor {
         let image = element.screenshot().image
         let cg = try XCTUnwrap(image.cgImage(forProposedRect: nil, context: nil, hints: nil))

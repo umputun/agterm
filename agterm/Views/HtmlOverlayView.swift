@@ -24,6 +24,9 @@ struct HtmlOverlayView: View {
             HtmlWebViewHost(store: store, session: session, overlay: overlay, backgroundColor: backgroundColor,
                             isActive: isActive, visible: visible)
                 .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
+                .overlay {
+                    if overlay.loadState == .failed { failure }
+                }
                 .overlay(alignment: .topTrailing) {
                     if !overlay.navigation {
                         // a fixed dark disc, so no page color can hide the only mouse exit
@@ -69,6 +72,28 @@ struct HtmlOverlayView: View {
         .padding(.horizontal, 10)
         .frame(height: 28)
         .background(background)
+    }
+
+    // over the page so a failed load never reads as a blank one; reload replaces it with the loading state
+    private var failure: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 24))
+            Text("The page could not be loaded")
+                .font(.headline)
+            if let error = overlay.loadError {
+                Text(error)
+                    .font(.system(size: 12))
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
+        }
+        .foregroundStyle(foreground)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("htmlOverlay.error")
     }
 
     private var fallbackTitle: String {
