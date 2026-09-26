@@ -811,7 +811,8 @@ error keeps those names for compatibility.
   `--pane` reads that pane's overlay; omit it for the session-wide one. A HUD runs the app's own painter,
   not a caller's program, so there is no status to report and the session-wide arm errors
   `no overlay result: the slot holds a hud`; the `--pane` arm still reads the separate pane-overlay slot,
-  since HUD pane scope changes placement without changing slot ownership. For an overlay shown on another
+  since HUD pane scope changes placement without changing slot ownership. An HTML page has no exit status
+  either and errors `no overlay result: the slot holds an html page` on either arm. For an overlay shown on another
   Mac the result is readable once its job ends, even while a held `--wait` surface there keeps the slot or
   a HUD opened here during the run holds it. A job with no exit code errors `overlay ended: launch-failed`,
   `overlay ended: canceled` or `overlay ended: unknown` (its helper stopped reporting, which does not prove

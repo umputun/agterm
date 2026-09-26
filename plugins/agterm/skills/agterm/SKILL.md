@@ -4,8 +4,9 @@ description: >
   Drive agterm, a native macOS terminal, through its agtermctl CLI and local control socket. Use when
   running inside an agterm session and asked to control the terminal: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
-  and read its exit status; post a HUD panel or a desktop notification; show a native picker or a
-  question dialog; display an image inline; type into a session, copy its selection or search its
+  and read its exit status; show a generated HTML artifact in an overlay;
+  post a HUD panel or a desktop notification; show a native picker or a question dialog; display an
+  image inline; type into a session, copy its selection or search its
   scrollback; manage windows; change font size; set the theme; reload or edit the keymap, event hooks
   and agterm-scoped ghostty config; subscribe to status,
   notification, lifecycle, pane-visibility and tree-change events.
@@ -15,7 +16,8 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
-  show an image inline, search the scrollback, attach a session from another Mac, what recipes are there,
+  show an image inline, show this HTML page or artifact, preview the report you generated, search the
+  scrollback, attach a session from another Mac, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -424,13 +426,16 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--wait] [--block] | --html FILE [--navigation]) [--cwd DIR] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
+  `session overlay reload [--current] [--pane left|right]` ·
+  `session overlay navigate back|forward|browser [--pane left|right]` ·
   `session overlay result [--pane left|right]` ·
   `session overlay copy [--pane left|right]` ·
-  `session overlay text [--all] [--lines N] [--pane left|right]` — run a program on top of a session; `--block`
-  waits and exits with its status.
+  `session overlay text [--all] [--lines N] [--pane left|right]` — run a program (or show an HTML page, see
+  [Displaying an HTML artifact](#displaying-an-html-artifact)) on top of a session; `--block`
+  waits for a PROGRAM to exit and exits with its status.
   `session overlay copy` returns the selection made INSIDE the overlay and `session overlay text` its terminal buffer:
   `session copy` and `session text` both address the pane the overlay COVERS, so a selection made in the
   overlay reads there as `no selection` and `session text --pane right` returns the shell underneath.
@@ -694,6 +699,35 @@ in it, so a large screenshot needs no resizing beforehand.
 Do NOT print graphics escapes to your own tool stdout (the agent harness escapes the control bytes)
 and do NOT run an image viewer in your tool shell (no controlling terminal). The overlay is what makes
 it render. Outside agterm (`AGTERM_ENABLED` unset) there is no overlay — fall back to `open <image>`.
+
+## Displaying an HTML artifact
+
+To show the user an HTML page you generated (a report, chart, table, diagram or UI prototype), write it
+to a file and open it in an overlay with `--html`. It renders in a web view: JavaScript runs, CDN scripts
+and images load, and a clicked http(s) link opens in the default browser.
+
+```bash
+agtermctl session overlay open --html /tmp/report.html --target "$AGTERM_SESSION_ID" --follow
+agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriting the file
+```
+
+- Target your own session's id; `--follow` switches the user to it, so pass it only to show the page
+  now, not for a background preview.
+- Without `--cwd` the page has NO file access, so keep it self-contained: inline CSS and JS, CDN URLs,
+  data URIs. `--cwd DIR` grants read access to an asset directory that must contain FILE; relative URLs
+  still resolve beside FILE.
+- `--navigation` adds a toolbar (back, forward, reload, title, open in browser); use it when the page
+  links to other pages. Without it the panel has only a small close button.
+- `--size-percent N` makes it a floating panel, `--pane left|right` puts it over one split pane.
+- An unstyled page takes the terminal theme's colors; any CSS the page sets wins.
+- Leave the page up for the user, who dismisses it with ⌘W or its close button. Call
+  `session overlay close` only when the page is no longer wanted, never right after it loads.
+- A successful open means the page was accepted. `tree --json` reports it under `htmlOverlays` with
+  `state` `loading`, `loaded` or `failed`; `loaded` does not prove every CDN asset arrived.
+
+reference.md has the full detail under `session overlay open --html`: slot conflicts and the refusals,
+including `--wait`, `--block` and `session overlay result`, which a page has no use for. Outside agterm (see
+[Am I inside agterm?](#am-i-inside-agterm)) `open <file>` is the fallback.
 
 ## Troubleshooting and reporting
 
