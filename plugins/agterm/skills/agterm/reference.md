@@ -804,8 +804,9 @@ error keeps those names for compatibility.
   an absolute http or https URL (`--url must be an absolute http or https URL`) and `--cwd` is refused. The
   server must be reachable from the Mac running agterm; `localhost` means that Mac. Plain http works for
   local addresses (localhost, `.local`, IP literals); use https for public hosts. The page is pinned to
-  its origin: same-origin navigations and redirects load in place, a clicked link elsewhere opens in the
-  default browser, and a redirect to another origin fails the load with `navigation blocked: URL`. A URL
+  its origin: same-origin navigations and redirects load in place; a clicked link elsewhere, or a clicked
+  link's redirect elsewhere, opens in the default browser and leaves the page loaded; a redirect to another
+  origin during a load nobody clicked (open, reload) fails it with `navigation blocked: URL`. A URL
   page keeps browser styling: an opaque browser canvas and no theme text color or scheme, only the
   theme variables, which apply nothing unless the page uses them; `--background-color` therefore only
   changes `--agterm-background`, never the browser canvas. Each

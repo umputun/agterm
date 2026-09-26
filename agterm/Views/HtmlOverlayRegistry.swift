@@ -295,7 +295,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
         // "Frame load interrupted", 102 in the legacy WebKit domain: a policy cancel this page already reported,
-        // or WebKit dropping a response it cannot show, which leaves any document already shown in place
+        // a clicked link's redirect handed to the browser, or WebKit dropping a response it cannot show; each
+        // leaves any document already shown in place
         if nsError.domain == "WebKitErrorDomain", nsError.code == 102 {
             guard loadPending else { return }
             guard committed else { return fail(nsError.localizedDescription) }

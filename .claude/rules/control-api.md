@@ -427,7 +427,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--cwd`). The dispatcher parses it once and the host gets `options.page`; the tree reports `file` or
   `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
   frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
-  http(s) subframe loads, and a redirect elsewhere is refused. `HtmlOverlayPage.loadPending` makes every
+  http(s) subframe loads, and a redirect elsewhere during an unclicked load is refused. A clicked link's
+  redirect reaches the policy as `.linkActivated` (WebKit reuses the triggering action), so it opens in the
+  browser like the click and the retained page stays `loaded`. `HtmlOverlayPage.loadPending` makes every
   load in flight (explicit, or started by the page) end `loaded` or `failed`: a policy cancel of its main
   frame reports `navigation blocked: URL` and the `WebKitErrorDomain` 102 that follows is ignored. An
   unreported 102, WebKit dropping a response it cannot show, restores `loaded` over a document the web

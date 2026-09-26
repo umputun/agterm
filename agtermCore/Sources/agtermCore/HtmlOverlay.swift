@@ -107,8 +107,9 @@ public enum HtmlNavigation: String, CaseIterable, Sendable {
 /// HtmlOverlayTheme is the terminal theme as a page sees it. Every page gets it as custom properties
 /// (`--agterm-background`, `--agterm-foreground`, `--agterm-color-0` to `15`) that apply nothing until the page
 /// uses them; a themed page, one agterm shows from a file, also gets the scheme and text color as its default
-/// look. All of it sits at zero specificity. The background is painted behind a transparent web view instead of
-/// set in CSS, because a CSS background on `html` would stop an authored `body` background filling the canvas.
+/// look. All of it sits at zero specificity. A file page's background is painted behind its transparent web view
+/// instead of set in CSS, because a CSS background on `html` would stop an authored `body` background filling
+/// the canvas.
 public struct HtmlOverlayTheme: Equatable, Sendable {
     public let background: String
     public let foreground: String
@@ -178,8 +179,9 @@ public enum HtmlNavigationDecision: Sendable {
 }
 
 /// HtmlNavigationPolicy decides frame navigations for a page overlay. A file page stays inside its explicit
-/// grant; a URL page stays on its original URL's origin in the main frame, so a redirect elsewhere is
-/// refused. A clicked http(s) link leaving either boundary opens in the default browser.
+/// grant; a URL page stays on its original URL's origin in the main frame. A clicked http(s) link leaving
+/// either boundary opens in the default browser, its redirects included, since WebKit reports a redirect with
+/// the click's navigation type; a redirect elsewhere during a load nobody clicked is refused.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
         let scheme = action.url.scheme?.lowercased()

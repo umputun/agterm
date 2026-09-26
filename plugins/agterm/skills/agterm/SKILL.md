@@ -735,8 +735,9 @@ agtermctl session overlay open --url http://localhost:5173/ --target "$AGTERM_SE
 
 - The server must already be running and reachable from the Mac running agterm; `localhost` means that
   Mac, not a remote shell's. Plain http works for local addresses; use https for public hosts.
-- Links to the same origin load in place and a clicked link elsewhere opens in the browser. A redirect to
-  another origin fails the load with `navigation blocked`, so open the final address.
+- Links to the same origin load in place. A clicked link to another origin, or one whose redirect leaves
+  the origin, opens in the browser and the page stays. A redirect elsewhere during a load nobody clicked (the
+  URL you opened, a reload) fails it with `navigation blocked`, so open the final address.
 - `--cwd` does not apply. Each overlay has its own in-memory browser storage, so cookies and logins last
   only while it is open.
 
