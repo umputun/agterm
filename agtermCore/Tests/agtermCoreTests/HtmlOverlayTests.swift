@@ -153,6 +153,14 @@ struct HtmlOverlayTests {
         #expect(overlay.identity == identity)
     }
 
+    @Test(arguments: [
+        ("https://trusted.example@attacker.example/path", "https://attacker.example"),
+        ("http://127.0.0.1:5173/", "http://127.0.0.1:5173"),
+    ])
+    func originNamesTheRealHost(_ address: String, _ origin: String) throws {
+        #expect(HtmlSource.origin(of: try #require(URL(string: address))) == origin)
+    }
+
     @Test func fileIdentityIsTheFileShownNeverTheTitle() {
         var overlay = HtmlOverlay(source: .file(path: "/a/docs/index.html", grantRoot: "/a/docs"))
         #expect(overlay.identity == "index.html")

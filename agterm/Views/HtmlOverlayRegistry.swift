@@ -111,7 +111,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var prompt: UUID?
     private var dismissPrompt: (() -> Void)?
     // a declined prompt silences the page until real input reaches its view: script can click links in a
-    // loop, but it cannot make mouse or key events
+    // loop, but it cannot make native mouse or key events
     private var promptsSilenced = false
     private var onScreen = true
     private var theme: HtmlOverlayTheme
@@ -156,6 +156,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard let slot = store?.htmlOverlaySlot(id), slot.pane == nil, let target = slot.session.askTargetPane else { return }
             slot.session.splitFocused = target == .left
         }
+        // a split collapse or pane move takes the view out of its window with no visibility update
+        webView.onDetach = { [weak self] in self?.endPrompt() }
         webView.onUserInput = { [weak self, weak store] in
             self?.promptsSilenced = false
             store?.noteUserActivity()
@@ -240,6 +242,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.onFocus = nil
         webView.onClick = nil
         webView.onUserInput = nil
+        webView.onDetach = nil
         webView.removeFromSuperview()
     }
 
@@ -424,9 +427,9 @@ struct SystemBrowser: HtmlBrowser {
     func confirm(_ url: URL, over view: NSView, _ done: @escaping (Bool) -> Void) -> (() -> Void)? {
         guard let window = view.window, window.attachedSheet == nil else { return nil }
         let alert = NSAlert()
-        alert.messageText = "Open this link in your browser?"
+        alert.messageText = "Open \(HtmlSource.origin(of: url) ?? url.absoluteString) in your browser?"
         alert.informativeText = url.absoluteString
-        // Cancel first makes it the Return default, so typing meant for the page cannot approve a surprise prompt
+        // cancel first makes it the Return default, so typing meant for the page cannot approve a surprise prompt
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Open")
         alert.beginSheetModal(for: window) { done($0 == .alertSecondButtonReturn) }
@@ -449,6 +452,7 @@ final class HtmlOverlayWebView: WKWebView {
     var onFocus: (() -> Void)?
     var onClick: (() -> Void)?
     var onUserInput: (() -> Void)?
+    var onDetach: (() -> Void)?
     private var parkedDragTypes: [NSPasteboard.PasteboardType] = []
 
     /// setDropsEnabled keeps a page that is not on screen out of drag-destination lookup, which SwiftUI
@@ -475,6 +479,11 @@ final class HtmlOverlayWebView: WKWebView {
 
     var holdsFocus: Bool {
         (window?.firstResponder as? NSView)?.isDescendant(of: self) == true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { onDetach?() }
     }
 
     override func becomeFirstResponder() -> Bool {

@@ -1,4 +1,5 @@
 import Network
+import SwiftUI
 import WebKit
 import XCTest
 @testable import agterm
@@ -93,6 +94,24 @@ private final class FakeDrag: NSObject, @preconcurrency NSDraggingInfo {
                                 searchOptions _: [NSPasteboard.ReadingOptionKey: Any] = [:],
                                 using _: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
     func resetSpringLoading() {}
+}
+
+@MainActor @Observable
+private final class Mount {
+    var shown = true
+}
+
+private struct MountedPage: View {
+    let mount: Mount
+    let store: AppStore
+    let session: Session
+    let overlay: HtmlOverlay
+
+    var body: some View {
+        if mount.shown {
+            HtmlWebViewHost(store: store, session: session, overlay: overlay, backgroundColor: nil, isActive: false, visible: true)
+        }
+    }
 }
 
 @MainActor
@@ -530,6 +549,34 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         _ = try await page.webView.evaluateJavaScript("document.getElementById('x').click()")
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertEqual(browser.prompts.count, 1)
+    }
+
+    func testUnmountingThePageEndsItsPromptAndARemountAsksAgain() async throws {
+        try write("link.html", #"<title>L</title><a id="x" href="https://example.com/x">x</a>"#)
+        let overlay = try open(file: "link.html")
+        let mount = Mount()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: MountedPage(mount: mount, store: store, session: session, overlay: overlay))
+        defer { window.orderOut(nil) }
+        try await waitFor("mounted") { self.registry.existing(overlay.id)?.webView.window != nil }
+        let page = try XCTUnwrap(registry.existing(overlay.id))
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('x').click()")
+        try await waitFor("prompt") { self.browser.prompts.count == 1 }
+
+        mount.shown = false
+        try await waitFor("unmounted") { page.webView.window == nil }
+        XCTAssertEqual(browser.dismissals, 1)
+        browser.answers[0](true)
+        XCTAssertEqual(browser.opened, [], "an answer after the page left its window opens nothing")
+
+        mount.shown = true
+        try await waitFor("remounted") { page.webView.window != nil }
+        XCTAssertTrue(registry.existing(overlay.id) === page)
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('x').click()")
+        try await waitFor("asked again") { self.browser.prompts.count == 2 }
     }
 
     func testOpenInBrowserOpensTheOriginalFileAndFailsWithoutABrowser() async throws {

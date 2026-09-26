@@ -86,6 +86,11 @@ public struct HtmlOverlay: Equatable, Sendable {
     }
 }
 
+extension HtmlSource {
+    /// origin returns an HTTP(S) origin without URL credentials, nil for other schemes.
+    public static func origin(of url: URL) -> String? { HtmlOrigin(url)?.display }
+}
+
 extension HtmlOverlay {
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
     /// page writes and could dress as a prompt: the file shown, or the origin a URL page is confined to.
