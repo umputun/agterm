@@ -198,9 +198,9 @@ theme instead of its own palette; `--url` pages render like a browser.
 - [x] ➕ toolbar buttons (Eugene): own button style so disabled back/forward dim and a press or hover shows
 
 ### Task 5: Verify acceptance criteria
-- [ ] every Overview and Solution Overview item implemented
-- [ ] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] every Overview and Solution Overview item implemented
+- [x] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - Manual check against a real dev server (Vite or similar) with hot reload, and a public https docs page.
