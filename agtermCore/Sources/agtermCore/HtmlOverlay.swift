@@ -104,31 +104,38 @@ public enum HtmlNavigation: String, CaseIterable, Sendable {
     case back, forward, browser
 }
 
-/// HtmlOverlayTheme is the default look a page gets when it styles nothing itself: the terminal theme's
-/// background, text color and light/dark scheme. The stylesheet carries only the scheme and text color, at
-/// zero specificity; the background is painted behind a transparent web view instead, because a CSS
-/// background on `html` would stop an authored `body` background from filling the canvas.
+/// HtmlOverlayTheme is the terminal theme as a page sees it. Every page gets it as custom properties
+/// (`--agterm-background`, `--agterm-foreground`, `--agterm-color-0` to `15`) that apply nothing until the page
+/// uses them; a themed page, one agterm shows from a file, also gets the scheme and text color as its default
+/// look. All of it sits at zero specificity. The background is painted behind a transparent web view instead of
+/// set in CSS, because a CSS background on `html` would stop an authored `body` background filling the canvas.
 public struct HtmlOverlayTheme: Equatable, Sendable {
     public let background: String
     public let foreground: String
     public let dark: Bool
+    /// palette holds the 16 ANSI colors by slot, an invalid entry kept empty so the others keep their index;
+    /// empty when the theme did not supply exactly 16.
+    public let palette: [String]
 
     /// init takes `#rrggbb` colors; anything else falls back to a plain dark or light pair, since the values
     /// end up inside a stylesheet.
-    public init(background: String, foreground: String, dark: Bool) {
+    public init(background: String, foreground: String, dark: Bool, palette: [String] = []) {
         let valid = WatermarkConfig.isValidColorHex(background) && WatermarkConfig.isValidColorHex(foreground)
         self.background = valid ? background : (dark ? "#1e1e1e" : "#ffffff")
         self.foreground = valid ? foreground : (dark ? "#d4d4d4" : "#1e1e1e")
         self.dark = dark
+        self.palette = palette.count == 16 ? palette.map { WatermarkConfig.isValidColorHex($0) ? $0 : "" } : []
     }
 
-    var stylesheet: String {
-        ":where(html) { color-scheme: \(dark ? "dark" : "light"); color: \(foreground); }"
+    func stylesheet(themed: Bool) -> String {
+        let look = themed ? "color-scheme: \(dark ? "dark" : "light"); color: \(foreground); " : ""
+        let slots = palette.enumerated().compactMap { $1.isEmpty ? nil : "--agterm-color-\($0): \($1); " }.joined()
+        return ":where(html) { \(look)--agterm-background: \(background); --agterm-foreground: \(foreground); \(slots)}"
     }
 
     /// script installs or replaces the stylesheet in element `agterm-theme`; it runs at document start,
     /// before the page's own styles, and again on a theme change.
-    public var script: String {
+    public func script(themed: Bool) -> String {
         """
         (() => {
           let style = document.getElementById('agterm-theme');
@@ -137,7 +144,7 @@ public struct HtmlOverlayTheme: Equatable, Sendable {
             style.id = 'agterm-theme';
             document.documentElement.prepend(style);
           }
-          style.textContent = '\(stylesheet)';
+          style.textContent = '\(stylesheet(themed: themed))';
         })();
         """
     }

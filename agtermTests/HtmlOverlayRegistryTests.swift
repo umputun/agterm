@@ -1,4 +1,5 @@
 import Network
+import WebKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -312,6 +313,46 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(fresh as? String, "null|")
     }
 
+    func testTheAppReadsSixteenPaletteColorsFromTheTheme() {
+        let palette = GhosttyApp.shared.terminalPalette
+        XCTAssertEqual(palette.count, 16)
+        XCTAssertTrue(palette.allSatisfy { WatermarkConfig.isValidColorHex($0) }, "\(palette)")
+    }
+
+    func testAFilePageGetsThePaletteAndFollowsAThemeChange() async throws {
+        try write("plain.html", "<title>P</title><p>short</p>")
+        let page = registry.page(for: try open(file: "plain.html"), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        let initial = try await variable("--agterm-color-1", in: page.webView)
+        XCTAssertEqual(initial, GhosttyApp.shared.terminalPalette[1])
+
+        let palette = (0..<16).map { String(format: "#%02x%02x%02x", $0, 0x40, 0x80) }
+        page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true, palette: palette))
+        let changed = try await variable("--agterm-color-1", in: page.webView)
+        XCTAssertEqual(changed, "#014080")
+        let background = try await variable("--agterm-background", in: page.webView)
+        XCTAssertEqual(background, "#000000")
+    }
+
+    func testAUrlPageKeepsTheBrowserCanvasThroughAThemeChange() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>app</title><body style=\"color: #333\"><p>app text</p></body>")])
+        let page = registry.page(for: try openURL("http://127.0.0.1:\(port)/"), store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "app" }
+
+        let before = try await bottomPixel(page.webView)
+        XCTAssertEqual(before.alphaComponent, 1, accuracy: 0.01)
+        XCTAssertEqual(before.redComponent, 1, accuracy: 0.02, "a url page must keep the browser's white canvas: \(before)")
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+        let scheme = try await page.webView.evaluateJavaScript("getComputedStyle(document.documentElement).colorScheme")
+        XCTAssertEqual(scheme as? String, "normal")
+        let background = try await variable("--agterm-background", in: page.webView)
+        XCTAssertEqual(background, "#101010", "the variables still reach a url page")
+        let after = try await bottomPixel(page.webView)
+        XCTAssertEqual(after.redComponent, 1, accuracy: 0.02, "a theme change must not darken a url page: \(after)")
+    }
+
     func testNavigatingAPageThatWasNeverShownIsRefused() {
         XCTAssertEqual(registry.navigate(UUID(), .back), OverlayHtmlError.notRealized)
     }
@@ -320,18 +361,32 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
     private func snapshotPixel(file: String) async throws -> NSColor {
         let page = registry.page(for: try open(file: file), store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("\(file) loaded") { self.current?.loadState == .loaded }
+        return try await bottomPixel(page.webView)
+    }
+
+    private func host(_ view: NSView) throws -> NSWindow {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
                               backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        defer { window.orderOut(nil) }
-        page.webView.frame = window.contentView?.bounds ?? .zero
-        window.contentView?.addSubview(page.webView)
-        try await waitFor("\(file) loaded") { self.current?.loadState == .loaded }
-        let image = try await page.webView.takeSnapshot(configuration: nil)
+        view.frame = try XCTUnwrap(window.contentView).bounds
+        window.contentView?.addSubview(view)
+        return window
+    }
+
+    private func bottomPixel(_ view: WKWebView) async throws -> NSColor {
+        let image = try await view.takeSnapshot(configuration: nil)
         let rep = try XCTUnwrap(image.representations.first as? NSBitmapImageRep
             ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil).map(NSBitmapImageRep.init(cgImage:)))
         let color = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh - 10))
         return color.usingColorSpace(.sRGB) ?? color
+    }
+
+    private func variable(_ name: String, in view: WKWebView) async throws -> String? {
+        let value = try await view.evaluateJavaScript("getComputedStyle(document.documentElement).getPropertyValue('\(name)').trim()")
+        return value as? String
     }
 
     private func write(_ name: String, _ body: String) throws {

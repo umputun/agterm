@@ -787,7 +787,10 @@ error keeps those names for compatibility.
   `--cwd DIR` the page may read files inside DIR, relative links and assets work, and FILE must be inside
   DIR. Relative paths resolve against your shell's directory. A page that styles nothing takes the
   terminal theme's background, text color and light/dark scheme (`--background-color` replaces the
-  background); any CSS the page sets wins. JavaScript runs; CDN scripts and images
+  background); any CSS the page sets wins. Every page also gets the theme as CSS variables,
+  `--agterm-background` (the overlay's backing), `--agterm-foreground` and `--agterm-color-0`..`15` (the ANSI
+  palette by slot), updated live on a theme change; build generated pages from them, with a fallback at
+  each use, and never declare them in the page. JavaScript runs; CDN scripts and images
   load. A clicked http(s) link opens in the default browser; popups, JS dialogs, file-chooser requests and
   camera/microphone requests are refused. Mutually exclusive with a COMMAND, `--wait` and `--block`.
   Refused `overlay already open` over a program or another page, and while another Mac presents the
@@ -802,7 +805,10 @@ error keeps those names for compatibility.
   server must be reachable from the Mac running agterm; `localhost` means that Mac. Plain http works for
   local addresses (localhost, `.local`, IP literals); use https for public hosts. The page is pinned to
   its origin: same-origin navigations and redirects load in place, a clicked link elsewhere opens in the
-  default browser, and a redirect to another origin fails the load with `navigation blocked: URL`. Each
+  default browser, and a redirect to another origin fails the load with `navigation blocked: URL`. A URL
+  page keeps browser styling: an opaque browser canvas and no theme text color or scheme, only the
+  theme variables, which apply nothing unless the page uses them; `--background-color` therefore only
+  changes `--agterm-background`, never the browser canvas. Each
   overlay gets its own in-memory browser storage, gone when it closes. Reload loads the URL again; read
   back `url` in `htmlOverlays`.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML

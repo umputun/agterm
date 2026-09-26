@@ -439,11 +439,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
   `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the
   file itself is refused.
-- A page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)` rule
-  for scheme and text color, injected at document start. The background is NOT in CSS: the web view draws no
-  canvas (`drawsBackground`, the one private key) and the panel paints the theme or `--background-color`
-  behind it, so an authored `html` or `body` background still fills the canvas. `.agtermAppearanceChanged`
-  restyles open pages.
+- A FILE page's default style is the terminal theme (`HtmlOverlayTheme`): a zero-specificity `:where(html)`
+  rule for scheme and text color, injected at document start. Its background is NOT in CSS: the file web view
+  draws no canvas (`drawsBackground`, the one private key) and the panel paints the theme or
+  `--background-color` behind it, so an authored `html` or `body` background still fills the canvas.
+- Every page's rule, a URL page's included, defines `--agterm-background`, `--agterm-foreground` and
+  `--agterm-color-0..15` (`GhosttyApp.terminalPalette`, slots kept, an invalid entry omitted). A URL page gets
+  only those variables and keeps the browser's opaque canvas, because a web app styled against a white canvas
+  turns unreadable over the theme backing. `.agtermAppearanceChanged` restyles open pages of both kinds.
 - The toolbar is opt-in per open (`--navigation`, read back as `navigation`); without it the panel has a
   fixed dark close disc no page color can hide.
 - Every toolbar button has a control twin through the same store/registry path: reload is

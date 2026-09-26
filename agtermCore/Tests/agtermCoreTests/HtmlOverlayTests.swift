@@ -465,16 +465,55 @@ struct HtmlOverlayTests {
 
     @Test func theThemeStylesheetYieldsToAnyPageRule() {
         let theme = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true)
-        #expect(theme.stylesheet == ":where(html) { color-scheme: dark; color: #e0e0e0; }")
+        #expect(theme.stylesheet(themed: true)
+            == ":where(html) { color-scheme: dark; color: #e0e0e0; --agterm-background: #102030; --agterm-foreground: #e0e0e0; }")
         #expect(theme.background == "#102030")
-        #expect(theme.script.contains(theme.stylesheet))
-        #expect(theme.script.contains("agterm-theme"))
+        #expect(theme.script(themed: true).contains(theme.stylesheet(themed: true)))
+        #expect(theme.script(themed: true).contains("agterm-theme"))
+    }
+
+    @Test func aUrlPageGetsTheVariablesWithoutTheLook() {
+        let theme = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true, palette: palette())
+        let css = theme.stylesheet(themed: false)
+        #expect(!css.contains("color-scheme"))
+        #expect(!css.contains(" color:"))
+        #expect(css.hasPrefix(":where(html) { --agterm-background: #102030; --agterm-foreground: #e0e0e0; --agterm-color-0: #000000;"))
+        #expect(theme.script(themed: false).contains(css))
+    }
+
+    @Test func thePaletteKeepsItsAnsiSlots() {
+        let css = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true, palette: palette())
+            .stylesheet(themed: true)
+        #expect(css.contains("--agterm-color-1: #010000; "))
+        #expect(css.contains("--agterm-color-15: #0f0000; }"))
+    }
+
+    @Test func anInvalidPaletteEntryOmitsOnlyItsOwnSlot() {
+        var entries = palette()
+        entries[3] = "red; } body { display: none"
+        let css = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true, palette: entries)
+            .stylesheet(themed: true)
+        #expect(!css.contains("--agterm-color-3:"))
+        #expect(!css.contains("display"))
+        #expect(css.contains("--agterm-color-4: #040000;"))
+    }
+
+    @Test(arguments: [0, 8, 17])
+    func aPaletteOfTheWrongSizeOmitsEverySlot(_ count: Int) {
+        let css = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true,
+                                   palette: Array(palette(count).prefix(count)))
+            .stylesheet(themed: true)
+        #expect(!css.contains("--agterm-color-"))
+    }
+
+    private func palette(_ count: Int = 16) -> [String] {
+        (0..<count).map { String(format: "#%02x0000", $0) }
     }
 
     @Test func aMalformedThemeColorFallsBackToAPlainPair() {
         let theme = HtmlOverlayTheme(background: "red; } body { display: none", foreground: "#ffffff", dark: false)
         #expect(theme.background == "#ffffff")
         #expect(theme.foreground == "#1e1e1e")
-        #expect(!theme.stylesheet.contains("display"))
+        #expect(!theme.stylesheet(themed: true).contains("display"))
     }
 }

@@ -166,7 +166,33 @@
 - [x] `site/commands.html`, `site/docs.html`, `site/llms.txt`
 - [x] `.claude/rules/control-api.md`: source model, origin rule, first-load failure, per-page storage, ATS
 
-### Task 4: Verify acceptance criteria
+### Task 4: ➕ Theme variables and generated-page guidance (Eugene)
+
+Every page gets the terminal theme as CSS custom properties, so a page an agent writes can be built from the
+theme instead of its own palette; `--url` pages render like a browser.
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/HtmlOverlay.swift`, `agterm/Ghostty/GhosttyApp.swift`,
+  `agterm/Views/HtmlOverlayRegistry.swift`, docs as in Task 3
+- Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`, `agtermTests/HtmlOverlayRegistryTests.swift`
+
+- [x] failing core tests: the themed rule carries `color-scheme`, `color`, `--agterm-background`,
+      `--agterm-foreground` and `--agterm-color-0..15`; the unthemed rule carries only the variables; an
+      invalid palette entry omits its own slot, a palette of the wrong size omits all slots
+- [x] `HtmlOverlayTheme` gains `palette` and `script(themed:)`; no dark flag
+- [x] `GhosttyApp` reads `palette` from the config `resolveThemeColors` uses and keeps the first 16 as hex
+- [x] a file page keeps the themed script, the transparent canvas and the painted backing; a URL page gets
+      the unthemed script and keeps the browser's opaque canvas, and no re-theme touches its
+      `underPageBackgroundColor`
+- [x] hosted tests: a file page reads `--agterm-color-N` equal to the app palette and follows `applyTheme`;
+      a URL page with `body { color: #333 }` and no background keeps an opaque browser canvas before and
+      after `applyTheme` (pixel check) while still exposing the variables; `GhosttyApp` reports 16 entries
+- [x] skill: the description gains "create and show HTML explainers or reports", `when_to_use`
+      HTML-specific phrases; the HTML section teaches use-site fallbacks, page-owned aliases, palette slots
+      for accents, never declaring `--agterm-*` on `:root`, a user-requested palette wins, and URL pages keep
+      browser styling; reference, site pages and control-api updated
+
+### Task 5: Verify acceptance criteria
 - [ ] every Overview and Solution Overview item implemented
 - [ ] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
 - [ ] move this plan to `docs/plans/completed/`

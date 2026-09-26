@@ -39,7 +39,8 @@ final class HtmlOverlayRegistry {
         let srgb = background.usingColorSpace(.sRGB) ?? background
         return HtmlOverlayTheme(background: background.agtermHexString ?? "", foreground: foreground.agtermHexString ?? "",
                                 dark: ThemeBrightness.isDark(red: srgb.redComponent, green: srgb.greenComponent,
-                                                             blue: srgb.blueComponent))
+                                                             blue: srgb.blueComponent),
+                                palette: GhosttyApp.shared.terminalPalette)
     }
 
     private func refreshThemes() {
@@ -121,8 +122,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView = HtmlOverlayWebView(frame: .zero, configuration: configuration)
         webView.pageID = overlay.id
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
-        // themed panel behind it while authored backgrounds still paint.
-        webView.setValue(false, forKey: "drawsBackground")
+        // themed panel behind it while authored backgrounds still paint. A URL page keeps the browser's
+        // opaque canvas, since a web app styled against it would lose its background here.
+        if case .file = overlay.source { webView.setValue(false, forKey: "drawsBackground") }
         super.init()
         applyTheme(theme)
         webView.navigationDelegate = self
@@ -149,13 +151,20 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         loadOriginal()
     }
 
-    /// applyTheme sets the default style for later loads and restyles the document already shown.
+    /// applyTheme sets the theme for later loads and restyles the document already shown; only a file page
+    /// takes it as its look, a URL page gets the variables alone.
     func applyTheme(_ theme: HtmlOverlayTheme) {
+        let script = theme.script(themed: themed)
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: theme.script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
-        webView.evaluateJavaScript(theme.script, completionHandler: nil)
+        controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if themed { webView.underPageBackgroundColor = NSColor(agtermHex: theme.background) }
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    private var themed: Bool {
+        if case .file = overlay.source { return true }
+        return false
     }
 
     /// apply takes the model's latest value and reloads when its revision moved.
