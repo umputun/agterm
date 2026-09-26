@@ -60,7 +60,7 @@ function sessionState(info) {
   return {
     parentID: info.parentID,
     running: false,
-    completed: info.outcome === "succeeded" || info.outcome === "interrupted",
+    completed: info.outcome === "succeeded",
     failed: info.outcome === "failed",
     idleAt: info.time?.idle,
     permissions: new Set(),
@@ -129,8 +129,9 @@ function applyEvent(states, event) {
 
 function aggregate(states) {
   const values = [...states.values()];
-  if (values.some(item => item.failed || item.permissions.size || item.forms.size)) return BLOCKED;
+  if (values.some(item => item.permissions.size || item.forms.size)) return BLOCKED;
   if (values.some(item => item.running)) return ACTIVE;
+  if (values.some(item => item.failed)) return BLOCKED;
   return values.some(item => item.completed) ? COMPLETED : IDLE;
 }
 
@@ -170,8 +171,8 @@ const EVENTS = new Set([
  * Plugin.define is an identity function, so the plain definition needs no runtime SDK import.
  *
  * `states` covers the selected session and descendants, not every session on the shared server.
- * Pending requests and terminal failures hold BLOCKED across sibling completion; only a settled
- * family completes. Step errors may recover through retry/compaction and never settle a turn here.
+ * Pending requests hold BLOCKED; running work takes precedence over latched failures, which prevent
+ * completion once the family settles. Step errors may recover and never settle a turn here.
  * Selection/reconnect replaces the snapshot, then replays events received during that read.
  * `generation` keeps queued reports from a previous selection or plugin lifetime off this pane.
  */
@@ -228,6 +229,13 @@ export default {
             // A previous turn's failed child must not block an already-running new parent turn.
             for (const item of snapshot.values()) {
               if (item.idleAt <= root.idleAt) item.failed = false;
+            }
+          } else {
+            // Without a turn-start time, only the idle root's own outcome can settle its last turn.
+            for (const [id, item] of snapshot) {
+              if (id === target) continue;
+              item.failed = false;
+              item.completed = false;
             }
           }
           for (const event of pending.events) applyEvent(snapshot, event);

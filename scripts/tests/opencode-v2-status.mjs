@@ -98,16 +98,23 @@ test("pending requests stay blocked until the last permission or form settles", 
   });
 });
 
-test("a failed child stays blocked across sibling completion, then clears for the next run", async () => {
+test("a failed child allows ongoing work but blocks completion until the next run", async () => {
   await fixture(async ({ event, waitFor, statuses }) => {
     await waitFor("idle");
     event("session.execution.started", { sessionID: "root" });
     event("session.execution.started", { sessionID: "child" });
+    await waitFor("active --blink");
     event("session.execution.failed", { sessionID: "child", error: { type: "provider.authentication" } });
-    await waitFor("blocked");
+    await delay(30);
+    assert.equal(statuses().at(-1), "active --blink");
+    assert.ok(!statuses().includes("blocked"));
+    event("session.created", { sessionID: "sibling", parentID: "root" });
+    event("session.execution.started", { sessionID: "sibling" });
     event("session.execution.succeeded", { sessionID: "root" });
     await delay(30);
-    assert.equal(statuses().at(-1), "blocked");
+    assert.equal(statuses().at(-1), "active --blink");
+    event("session.execution.succeeded", { sessionID: "sibling" });
+    await waitFor("blocked");
     event("session.execution.started", { sessionID: "root" });
     await waitFor("active --blink");
     event("session.execution.succeeded", { sessionID: "root" });
@@ -189,6 +196,41 @@ test("reconnect replaces lost requests and busy state with a fresh snapshot", as
     records.set("root", { id: "root", outcome: "succeeded" });
     event("server.connected");
     await waitFor("completed --auto-reset");
+  });
+});
+
+test("hydration keeps an idle root's failed last run blocked", async () => {
+  await fixture(async ({ waitFor }) => {
+    await waitFor("blocked");
+  }, { sessions: [{ id: "root", outcome: "failed" }] });
+});
+
+test("hydration completes a succeeded root despite an older failed child", async () => {
+  await fixture(async ({ waitFor, statuses }) => {
+    await waitFor("completed --auto-reset");
+    assert.ok(!statuses().includes("blocked"));
+  }, {
+    sessions: [{ id: "root", outcome: "succeeded", time: { idle: 20 } },
+      { id: "child", parentID: "root", outcome: "failed", time: { idle: 10 } }],
+  });
+});
+
+test("hydration leaves a root interrupted by shutdown idle", async () => {
+  await fixture(async ({ waitFor, statuses }) => {
+    await waitFor("idle");
+    await delay(100);
+    assert.deepEqual(statuses(), ["idle"]);
+  }, { sessions: [{ id: "root", outcome: "interrupted" }] });
+});
+
+test("hydration leaves an interrupted root idle despite an older succeeded child", async () => {
+  await fixture(async ({ waitFor, statuses }) => {
+    await waitFor("idle");
+    await delay(100);
+    assert.deepEqual(statuses(), ["idle"]);
+  }, {
+    sessions: [{ id: "root", outcome: "interrupted", time: { idle: 20 } },
+      { id: "child", parentID: "root", outcome: "succeeded", time: { idle: 10 } }],
   });
 });
 
@@ -322,8 +364,10 @@ test("server shutdown or superseding a run is not reported as a completed turn",
 });
 
 test("hydration does not revive a child failure from a previous parent turn", async () => {
-  await fixture(async ({ waitFor }) => {
+  await fixture(async ({ event, waitFor }) => {
     await waitFor("active --blink");
+    event("session.execution.succeeded", { sessionID: "root" });
+    await waitFor("completed --auto-reset");
   }, {
     active: { root: {} },
     sessions: [{ id: "root", outcome: "succeeded", time: { idle: 20 } },
@@ -332,7 +376,9 @@ test("hydration does not revive a child failure from a previous parent turn", as
 });
 
 test("hydration retains a child failure during the current parent turn", async () => {
-  await fixture(async ({ waitFor }) => {
+  await fixture(async ({ event, waitFor }) => {
+    await waitFor("active --blink");
+    event("session.execution.succeeded", { sessionID: "root" });
     await waitFor("blocked");
   }, {
     active: { root: {} },
