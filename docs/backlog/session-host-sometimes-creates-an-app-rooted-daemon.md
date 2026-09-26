@@ -49,3 +49,13 @@ clients keep stderr on their PTY. Every run retains these files and, when presen
 The host log includes the underlying initial inventory error and connection rejection errors.
 Preserve those files and the test result before investigating a recurrence.
 Do not change deadlines or fallback policy without identifying the failing path.
+
+Second sighting, 2026-09-26, in `agtermTests/SessionHostAcceptanceTests.swift`
+`testPrimaryDaemonLostAfterInventoryIsRecreatedByHost`: the recreated daemon's leader reported
+responsible process 88892 instead of the session host 90216. It failed once in a full hosted run
+(977 tests) and passed in the full run before it and in an isolated rerun of the class. The session-host
+log for that run holds `agterm-session-host[90241] ... host stage=started message=attach client exited or
+failed before readiness` at 01:43:48, inside the failing test's window, which matches the second route
+above (`started` failure, bare attach from the app's child). The correlation is by time only; the pid in
+that line is not the host pid the test recorded, and the retained `shc-FF830277-...` files from that minute
+are empty.
