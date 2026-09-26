@@ -483,6 +483,27 @@ final class HtmlOverlayWebView: WKWebView {
         return became
     }
 
+    // a dropped file reaches the page's script with its contents, so drags carrying files are refused while
+    // text and links still drop
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        Self.carriesFiles(sender) ? [] : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        Self.carriesFiles(sender) ? [] : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        Self.carriesFiles(sender) ? false : super.performDragOperation(sender)
+    }
+
+    private static func carriesFiles(_ info: any NSDraggingInfo) -> Bool {
+        let pasteboard = info.draggingPasteboard
+        let promises = Set(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+        return pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+            || pasteboard.types?.contains(where: promises.contains) == true
+    }
+
     override func keyDown(with event: NSEvent) {
         onUserInput?()
         super.keyDown(with: event)

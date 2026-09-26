@@ -68,6 +68,34 @@ private final class PageProbe: NSObject, WKScriptMessageHandler {
 }
 
 @MainActor
+private final class FakeDrag: NSObject, @preconcurrency NSDraggingInfo {
+    let draggingPasteboard: NSPasteboard
+    let draggingDestinationWindow: NSWindow?
+    let draggingLocation: NSPoint
+
+    init(_ pasteboard: NSPasteboard, over view: NSView) {
+        draggingPasteboard = pasteboard
+        draggingDestinationWindow = view.window
+        draggingLocation = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+    }
+
+    var draggingSourceOperationMask: NSDragOperation { .every }
+    var draggedImageLocation: NSPoint { draggingLocation }
+    var draggedImage: NSImage? { nil }
+    var draggingSource: Any? { nil }
+    var draggingSequenceNumber: Int { 1 }
+    var draggingFormation: NSDraggingFormation = .default
+    var animatesToDestination = false
+    var numberOfValidItemsForDrop = 1
+    var springLoadingHighlight: NSSpringLoadingHighlight { .none }
+    func slideDraggedImage(to _: NSPoint) {}
+    func enumerateDraggingItems(options _: NSDraggingItemEnumerationOptions = [], for _: NSView?, classes _: [AnyClass],
+                                searchOptions _: [NSPasteboard.ReadingOptionKey: Any] = [:],
+                                using _: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
+    func resetSpringLoading() {}
+}
+
+@MainActor
 private final class FakeBrowser: HtmlBrowser {
     var prompts: [URL] = []
     var answers: [(Bool) -> Void] = []
@@ -528,6 +556,25 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
         XCTAssertNil(registry.navigate(page.id, .browser))
         XCTAssertEqual(browser.opened, [try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/b?q=1"))])
+    }
+
+    func testAPageRefusesDraggedFilesAndTakesDraggedText() throws {
+        let view = registry.page(for: try open(), store: store).webView
+        let window = try host(view)
+        defer { window.orderOut(nil) }
+        let files = NSPasteboard(name: NSPasteboard.Name("agterm-test-\(UUID().uuidString)"))
+        defer { files.releaseGlobally() }
+        files.clearContents()
+        files.writeObjects([pages.appendingPathComponent("b.html") as NSURL])
+        let text = NSPasteboard(name: NSPasteboard.Name("agterm-test-\(UUID().uuidString)"))
+        defer { text.releaseGlobally() }
+        text.clearContents()
+        text.setString("plain words", forType: .string)
+
+        XCTAssertEqual(view.draggingEntered(FakeDrag(files, over: view)), [])
+        XCTAssertEqual(view.draggingUpdated(FakeDrag(files, over: view)), [])
+        XCTAssertFalse(view.performDragOperation(FakeDrag(files, over: view)))
+        XCTAssertNotEqual(view.draggingEntered(FakeDrag(text, over: view)), [])
     }
 
     func testNavigatingAPageThatWasNeverShownIsRefused() {

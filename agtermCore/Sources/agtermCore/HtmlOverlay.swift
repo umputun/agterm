@@ -30,6 +30,12 @@ struct HtmlOrigin: Equatable {
         self.host = host
         port = url.port ?? (scheme == "https" ? 443 : 80)
     }
+
+    /// display spells the origin as a user compares it: the port only when it is not the scheme's default.
+    var display: String {
+        let name = host.contains(":") ? "[\(host)]" : host
+        return port == (scheme == "https" ? 443 : 80) ? "\(scheme)://\(name)" : "\(scheme)://\(name):\(port)"
+    }
 }
 
 /// HtmlOverlay is a page occupying an overlay slot (`session.overlay.open --html` or `--url`) in place of a
@@ -38,8 +44,7 @@ struct HtmlOrigin: Equatable {
 public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
     public let source: HtmlSource
-    /// navigation shows the toolbar (back, forward, reload, title, browser); without it the panel carries
-    /// only a close button and the page gets the full height.
+    /// navigation adds back, forward, reload and browser buttons to the panel's identity strip.
     public let navigation: Bool
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
@@ -78,6 +83,17 @@ public struct HtmlOverlay: Equatable, Sendable {
 
     private static func components(_ path: String) -> [String] {
         URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+    }
+}
+
+extension HtmlOverlay {
+    /// identity names what the panel shows from what the app loaded, never from the page's title, which the
+    /// page writes and could dress as a prompt: the file shown, or the origin a URL page is confined to.
+    public var identity: String {
+        switch source {
+        case .file(let path, _): URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .url(let url): HtmlOrigin(url)?.display ?? url.absoluteString
+        }
     }
 }
 

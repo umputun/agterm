@@ -1,9 +1,9 @@
 import SwiftUI
 import agtermCore
 
-/// HtmlOverlayView is an HTML overlay's panel content: the page, under the toolbar with `--navigation` or
-/// with only a floating close button without it. Every button goes through the same store and registry
-/// paths as `session.overlay.reload` and `session.overlay.navigate`.
+/// HtmlOverlayView is an HTML overlay's panel content: the page under an app-drawn strip naming its source,
+/// which the page cannot cover, with navigation buttons for `--navigation`. Every button goes through the
+/// same store and registry paths as `session.overlay.reload` and `session.overlay.navigate`.
 struct HtmlOverlayView: View {
     let store: AppStore
     let session: Session
@@ -20,47 +20,40 @@ struct HtmlOverlayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if overlay.navigation { toolbar }
+            strip
             HtmlWebViewHost(store: store, session: session, overlay: overlay, backgroundColor: backgroundColor,
                             isActive: isActive, visible: visible)
                 .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
                 .overlay {
                     if overlay.loadState == .failed { failure }
                 }
-                .overlay(alignment: .topTrailing) {
-                    if !overlay.navigation {
-                        // a fixed dark disc, so no page color can hide the only mouse exit
-                        button("xmark", "Close", "htmlOverlay.close", enabled: true, tint: .white) {
-                            store.closeHtmlOverlay(overlay.id)
-                        }
-                        .padding(6)
-                        .background(Color.black.opacity(0.6), in: Circle())
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                        .padding(8)
-                    }
-                }
         }
     }
 
-    private var toolbar: some View {
+    private var strip: some View {
         let registry = HtmlOverlayRegistry.shared
         return HStack(spacing: 10) {
-            button("chevron.left", "Back", "htmlOverlay.back", enabled: overlay.current?.canGoBack == true) {
-                _ = registry.navigate(overlay.id, .back)
+            if overlay.navigation {
+                button("chevron.left", "Back", "htmlOverlay.back", enabled: overlay.current?.canGoBack == true) {
+                    _ = registry.navigate(overlay.id, .back)
+                }
+                button("chevron.right", "Forward", "htmlOverlay.forward", enabled: overlay.current?.canGoForward == true) {
+                    _ = registry.navigate(overlay.id, .forward)
+                }
+                button("arrow.clockwise", "Reload", "htmlOverlay.reload", enabled: true) {
+                    registry.reload(overlay.id, target: .current, store: store)
+                }
             }
-            button("chevron.right", "Forward", "htmlOverlay.forward", enabled: overlay.current?.canGoForward == true) {
-                _ = registry.navigate(overlay.id, .forward)
-            }
-            button("arrow.clockwise", "Reload", "htmlOverlay.reload", enabled: true) {
-                registry.reload(overlay.id, target: .current, store: store)
-            }
-            Text(overlay.current?.title ?? fallbackTitle)
+            Text(overlay.identity)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("htmlOverlay.title")
-            button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
-                _ = registry.navigate(overlay.id, .browser)
+                .help(overlay.current?.page ?? sourceText)
+                .accessibilityIdentifier("htmlOverlay.identity")
+            if overlay.navigation {
+                button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
+                    _ = registry.navigate(overlay.id, .browser)
+                }
             }
             button("xmark", "Close", "htmlOverlay.close", enabled: true) {
                 store.closeHtmlOverlay(overlay.id)
@@ -95,21 +88,19 @@ struct HtmlOverlayView: View {
         .accessibilityIdentifier("htmlOverlay.error")
     }
 
-    private var fallbackTitle: String {
+    private var sourceText: String {
         switch overlay.source {
-        case .file(let path, _):
-            URL(fileURLWithPath: overlay.current?.page ?? path).lastPathComponent
-        case .url(let url):
-            overlay.current.flatMap { URL(string: $0.page)?.host } ?? url.host ?? url.absoluteString
+        case .file(let path, _): path
+        case .url(let url): url.absoluteString
         }
     }
 
-    private func button(_ symbol: String, _ label: String, _ identifier: String, enabled: Bool, tint: Color? = nil,
+    private func button(_ symbol: String, _ label: String, _ identifier: String, enabled: Bool,
                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
         }
-        .buttonStyle(HtmlToolbarButtonStyle(tint: tint ?? foreground))
+        .buttonStyle(HtmlToolbarButtonStyle(tint: foreground))
         .disabled(!enabled)
         .help(label)
         .accessibilityLabel(label)

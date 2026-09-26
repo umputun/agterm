@@ -84,11 +84,11 @@
 - [x] hosted suite passes
 
 ### Task 4: File drops and identity strip
-- [ ] failing hosted test: a page view refuses a drag carrying a file URL and accepts plain text
-- [ ] dragging overrides on `HtmlOverlayWebView`
-- [ ] identity strip in `HtmlOverlayView`, toolbar shows the identity; UI tests assert the source text stays
+- [x] failing hosted test: a page view refuses a drag carrying a file URL and accepts plain text
+- [x] dragging overrides on `HtmlOverlayWebView`
+- [x] identity strip in `HtmlOverlayView`, toolbar shows the identity; UI tests assert the source text stays
       shown for a page whose title imitates a prompt, with and without `--navigation`
-- [ ] hosted and UI tests pass
+- [x] hosted and UI tests pass
 
 ### Task 5: Documentation
 - [ ] skill: untrusted title, grant guard, external-open confirmation, theme on reload; reference,

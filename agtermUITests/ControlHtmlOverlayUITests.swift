@@ -8,7 +8,7 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         try await super.setUp()
         pageDir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-html-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: pageDir, withIntermediateDirectories: true)
-        try writePage("a.html", title: "Artifact A",
+        try writePage("a.html", title: "agterm: enter your password",
                       body: #"<p>hello artifact</p><a href="b.html">next page</a><input aria-label="field">"#)
         try writePage("b.html", title: "Artifact B", body: "<p>second page</p>")
     }
@@ -22,7 +22,7 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         let id = try activeSessionID()
         let open = try sendCommand(openRequest(id))
         XCTAssertEqual(open["ok"] as? Bool, true, "html open should succeed: \(open)")
-        XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "loaded" && $0["title"] as? String == "Artifact A" },
+        XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "loaded" && $0["title"] as? String == "agterm: enter your password" },
                       "the page should load and report its title")
         XCTAssertTrue(app.webViews.staticTexts["hello artifact"].waitForExistence(timeout: 10), "the page should render")
 
@@ -37,13 +37,15 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the page")
     }
 
-    func testWithoutNavigationThePageHasOnlyAFloatingCloseButton() throws {
+    func testWithoutNavigationThePageShowsItsSourceAndACloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
         XCTAssertTrue(app.webViews.staticTexts["hello artifact"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["htmlOverlay.back"].exists, "no toolbar without --navigation")
+        XCTAssertTrue(pollPage(id: id) { $0["title"] as? String == "agterm: enter your password" })
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "a.html", "the strip names the file, never the page title")
+        XCTAssertFalse(app.buttons["htmlOverlay.back"].exists, "no navigation buttons without --navigation")
         app.buttons["htmlOverlay.close"].click()
-        XCTAssertTrue(pollOverlay(id: id, expected: false), "the floating close button should close the page")
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
     }
 
     func testToolbarAndControlNavigateTheSameHistory() throws {
@@ -53,9 +55,12 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
                            timeout: 10), "the tree should report the toolbar")
         let link = app.webViews.links["next page"]
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the link should render")
+        XCTAssertTrue(pollPage(id: id) { $0["title"] as? String == "agterm: enter your password" })
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "a.html", "the toolbar names the file, never the page title")
         link.click()
         XCTAssertTrue(pollPage(id: id) { ($0["page"] as? String)?.hasSuffix("/b.html") == true && $0["canGoBack"] as? Bool == true },
                       "clicking a link inside the grant should navigate in place")
+        XCTAssertTrue(poll(until: self.app.staticTexts["htmlOverlay.identity"].value as? String == "b.html", timeout: 10))
 
         app.buttons["htmlOverlay.back"].click()
         XCTAssertTrue(pollPage(id: id) { ($0["page"] as? String)?.hasSuffix("/a.html") == true }, "the toolbar back button should step back")

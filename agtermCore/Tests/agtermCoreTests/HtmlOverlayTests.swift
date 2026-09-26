@@ -142,6 +142,25 @@ struct HtmlOverlayTests {
     }
 
     @Test(arguments: [
+        ("http://localhost:5173/app?x=1", "http://localhost:5173"),
+        ("https://Example.com:443/docs", "https://example.com"),
+        ("http://example.com:8080/", "http://example.com:8080"),
+        ("http://[::1]:8080/", "http://[::1]:8080"),
+    ])
+    func urlIdentityIsTheOrigin(_ address: String, _ identity: String) throws {
+        var overlay = HtmlOverlay(source: .url(try #require(URL(string: address))))
+        overlay.current = HtmlPageInfo(page: address, title: "agterm: enter your password", canGoBack: false, canGoForward: false)
+        #expect(overlay.identity == identity)
+    }
+
+    @Test func fileIdentityIsTheFileShownNeverTheTitle() {
+        var overlay = HtmlOverlay(source: .file(path: "/a/docs/index.html", grantRoot: "/a/docs"))
+        #expect(overlay.identity == "index.html")
+        overlay.current = HtmlPageInfo(page: "/a/docs/b.html", title: "agterm: enter your password", canGoBack: true, canGoForward: false)
+        #expect(overlay.identity == "b.html")
+    }
+
+    @Test(arguments: [
         ("http://localhost:5173/", true),
         ("https://example.com/docs?q=1#top", true),
         ("HTTPS://example.com", true),
