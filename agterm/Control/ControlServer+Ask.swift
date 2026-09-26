@@ -91,9 +91,9 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue))
     }
 
-    /// Hands a session-associated ask to the viewer presenting that session, nil when none does. Visibility
-    /// here is irrelevant, since nothing is drawn here; the pane only has to exist, and the viewer refuses one
-    /// it cannot show. `follow` raises nothing for the same reason.
+    /// Hands a session-associated ask to the viewer presenting that session, or returns nil for the caller to
+    /// handle locally. Visibility here is irrelevant, since nothing is drawn here; the pane only has to exist,
+    /// and the viewer refuses one it cannot show. `follow` raises nothing for the same reason.
     private func presentAskRemotely(_ ask: PendingAsk, in store: AppStore, sessionID: UUID,
                                     placement: ControlAskPlacement) -> ControlResponse? {
         guard store.presentationHub?.hasPresenter(session: sessionID) == true,

@@ -99,8 +99,8 @@ extension ControlServer {
         stream.send(.cancel)
     }
 
-    /// Hands an overlay to the viewer presenting the session; nil when no viewer does, so the caller opens it
-    /// here. The launch context is built as a local overlay's would be, from this Mac's session.
+    /// Hands an overlay to the viewer presenting the session, or returns nil for the caller to handle locally.
+    /// The launch context is built as a local overlay's would be, from this Mac's session.
     func openRemoteOverlay(in store: AppStore, sessionID: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {
         guard let session = store.session(withID: sessionID) else { return nil }
         let context = OverlayLaunchContext(
