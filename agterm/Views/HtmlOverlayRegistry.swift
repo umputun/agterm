@@ -8,6 +8,8 @@ import agtermCore
 @MainActor
 final class HtmlOverlayRegistry {
     static let shared = HtmlOverlayRegistry()
+    /// browser receives every URL a page hands off; pages created later use whatever is set here.
+    var browser: any HtmlBrowser = SystemBrowser()
     private var pages: [UUID: HtmlOverlayPage] = [:]
     private var appearanceObserver: NSObjectProtocol?
 
@@ -26,7 +28,7 @@ final class HtmlOverlayRegistry {
     func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil) -> HtmlOverlayPage {
         if let page = pages[overlay.id] { return page }
         let page = HtmlOverlayPage(overlay: overlay, store: store, backgroundColor: backgroundColor,
-                                   theme: theme(backgroundColor: backgroundColor))
+                                   theme: theme(backgroundColor: backgroundColor), browser: browser)
         pages[overlay.id] = page
         return page
     }
@@ -105,6 +107,13 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var overlay: HtmlOverlay
     private weak var store: AppStore?
     private var appliedRevision: Int
+    private let browser: any HtmlBrowser
+    private var prompt: UUID?
+    private var dismissPrompt: (() -> Void)?
+    // a declined prompt silences the page until real input reaches its view: script can click links in a
+    // loop, but it cannot make mouse or key events
+    private var promptsSilenced = false
+    private var onScreen = true
     private var theme: HtmlOverlayTheme
     private static let themeWorld = WKContentWorld.world(name: "agterm-theme")
     private var observations: [NSKeyValueObservation] = []
@@ -114,8 +123,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
 
-    init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme) {
+    init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme, browser: any HtmlBrowser) {
         id = overlay.id
+        self.browser = browser
         self.overlay = overlay
         self.store = store
         self.backgroundColor = backgroundColor
@@ -146,7 +156,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard let slot = store?.htmlOverlaySlot(id), slot.pane == nil, let target = slot.session.askTargetPane else { return }
             slot.session.splitFocused = target == .left
         }
-        webView.onUserInput = { [weak store] in store?.noteUserActivity() }
+        webView.onUserInput = { [weak self, weak store] in
+            self?.promptsSilenced = false
+            store?.noteUserActivity()
+        }
         observations = [
             webView.observe(\.title) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
             webView.observe(\.url) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
@@ -206,12 +219,20 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard webView.canGoForward else { return OverlayHtmlError.noHistory(.forward) }
             webView.goForward()
         case .browser:
-            NSWorkspace.shared.open(pageURL)
+            guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
         }
         return nil
     }
 
+    /// setOnScreen takes whether the page is shown; a page out of sight asks nothing, and its pending prompt
+    /// goes with it.
+    func setOnScreen(_ onScreen: Bool) {
+        self.onScreen = onScreen
+        if !onScreen { endPrompt() }
+    }
+
     func close() {
+        endPrompt()
         observations.removeAll()
         webView.stopLoading()
         webView.navigationDelegate = nil
@@ -245,6 +266,50 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    // a file page opens its own file, never one it navigated to; a URL page opens what it shows, which its
+    // policy keeps within the original origin
+    private var browserURL: URL {
+        switch overlay.source {
+        case .file(let path, _):
+            return URL(fileURLWithPath: path)
+        case .url(let original):
+            guard let url = webView.url, url.scheme == "http" || url.scheme == "https" else { return original }
+            return url
+        }
+    }
+
+    // a page's own hand-off asks first, one prompt at a time; a request while one is up is dropped
+    private func askToOpen(_ url: URL) {
+        guard onScreen, prompt == nil, !promptsSilenced else { return }
+        let token = UUID()
+        prompt = token
+        let dismiss = browser.confirm(url, over: webView) { [weak self] approved in self?.answer(token, url, approved) }
+        guard prompt == token else { return }
+        guard let dismiss else {
+            prompt = nil
+            return
+        }
+        dismissPrompt = dismiss
+    }
+
+    private func answer(_ token: UUID, _ url: URL, _ approved: Bool) {
+        guard prompt == token else { return }
+        prompt = nil
+        dismissPrompt = nil
+        if approved {
+            _ = browser.open(url)
+        } else {
+            promptsSilenced = true
+        }
+    }
+
+    private func endPrompt() {
+        let dismiss = dismissPrompt
+        prompt = nil
+        dismissPrompt = nil
+        dismiss?()
+    }
+
     private var pageURL: URL {
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
         if let url = webView.url, url.scheme != "about" { return url }
@@ -268,7 +333,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         let userActivated = action.navigationType == .linkActivated
         let decision = HtmlNavigationPolicy.decide(HtmlNavigationAction(url: url, target: target, userActivated: userActivated),
                                                    overlay: overlay)
-        if decision == .openExternal { NSWorkspace.shared.open(url) }
+        if decision == .openExternal { askToOpen(url) }
         if decision == .cancel, target == .mainFrame, !userActivated, loadPending {
             fail("navigation blocked: \(url.absoluteString)")
         }
@@ -343,6 +408,38 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_: WKWebView, decideMediaCapturePermissionsFor _: WKSecurityOrigin, initiatedBy _: WKFrameInfo,
                  type _: WKMediaCaptureType) async -> WKPermissionDecision { .deny }
+}
+
+/// HtmlBrowser hands a page's URLs to the user's web browser. `confirm` puts a nonblocking prompt over `view`,
+/// calls `done` once with the answer, and returns what dismisses it, or nil when it could show nothing.
+@MainActor
+protocol HtmlBrowser {
+    func confirm(_ url: URL, over view: NSView, _ done: @escaping (Bool) -> Void) -> (() -> Void)?
+    func open(_ url: URL) -> Bool
+}
+
+/// SystemBrowser opens with the default web browser whatever the URL's type, so a file shows as a page rather
+/// than going to the app its type maps to.
+struct SystemBrowser: HtmlBrowser {
+    func confirm(_ url: URL, over view: NSView, _ done: @escaping (Bool) -> Void) -> (() -> Void)? {
+        guard let window = view.window, window.attachedSheet == nil else { return nil }
+        let alert = NSAlert()
+        alert.messageText = "Open this link in your browser?"
+        alert.informativeText = url.absoluteString
+        // Cancel first makes it the Return default, so typing meant for the page cannot approve a surprise prompt
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Open")
+        alert.beginSheetModal(for: window) { done($0 == .alertSecondButtonReturn) }
+        return { [weak window] in window?.endSheet(alert.window, returnCode: .abort) }
+    }
+
+    func open(_ url: URL) -> Bool {
+        guard let web = URL(string: "https://example.com"), let app = NSWorkspace.shared.urlForApplication(toOpen: web) else {
+            return false
+        }
+        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        return true
+    }
 }
 
 /// HtmlOverlayWebView reports focus and input to the model: a click on a pane page moves split focus like a

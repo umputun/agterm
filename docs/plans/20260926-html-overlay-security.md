@@ -74,14 +74,14 @@
 - [x] hosted suite passes
 
 ### Task 3: Confirmed external opens and Open in Browser
-- [ ] failing hosted tests: a page clicking links in a loop gets one prompt and zero opens when denied, and no
+- [x] failing hosted tests: a page clicking links in a loop gets one prompt and zero opens when denied, and no
       second prompt until a real event reaches the view; an approval opens exactly the confirmed URL; requests
       while a sheet is up are dropped; closing the overlay with a sheet up opens nothing; a control request
       completes while a sheet is up; Open in Browser on a file page navigated elsewhere opens the original
       file with the browser application, and fails when none resolves; a URL page whose script moved it from
       `/a` to `/b` opens `/b`
-- [ ] opener and confirmation seam on the registry; `decidePolicyFor` and `navigate(.browser)` go through it
-- [ ] hosted suite passes
+- [x] opener and confirmation seam on the registry; `decidePolicyFor` and `navigate(.browser)` go through it
+- [x] hosted suite passes
 
 ### Task 4: File drops and identity strip
 - [ ] failing hosted test: a page view refuses a drag carrying a file URL and accepts plain text

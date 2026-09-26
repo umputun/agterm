@@ -164,6 +164,7 @@ struct HtmlWebViewHost: NSViewRepresentable {
     func updateNSView(_ view: HtmlOverlayWebView, context: Context) {
         HtmlOverlayRegistry.shared.existing(overlay.id)?.apply(overlay)
         view.setDropsEnabled(visible)
+        HtmlOverlayRegistry.shared.existing(overlay.id)?.setOnScreen(visible)
         guard isActive else {
             context.coordinator.didFocus = false
             if view.holdsFocus { view.window?.makeFirstResponder(nil) }

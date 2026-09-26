@@ -68,6 +68,27 @@ private final class PageProbe: NSObject, WKScriptMessageHandler {
 }
 
 @MainActor
+private final class FakeBrowser: HtmlBrowser {
+    var prompts: [URL] = []
+    var answers: [(Bool) -> Void] = []
+    var dismissals = 0
+    var opened: [URL] = []
+    var available = true
+
+    func confirm(_ url: URL, over _: NSView, _ done: @escaping (Bool) -> Void) -> (() -> Void)? {
+        prompts.append(url)
+        answers.append(done)
+        return { self.dismissals += 1 }
+    }
+
+    func open(_ url: URL) -> Bool {
+        guard available else { return false }
+        opened.append(url)
+        return true
+    }
+}
+
+@MainActor
 final class HtmlOverlayRegistryTests: XCTestCase {
     private final class StubSurface: PaneRoleMutableSurface {
         let paneToken: String
@@ -84,6 +105,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private var store: AppStore!
     private var session: Session!
     private let registry = HtmlOverlayRegistry.shared
+    private let browser = FakeBrowser()
 
     override func setUp() async throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-html-reg-\(UUID().uuidString)")
@@ -93,6 +115,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let workspace = store.addWorkspace(name: "work")
         session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         registry.install()
+        registry.browser = browser
         try write("a.html", #"<title>A</title><script src="s.js"></script><a href="b.html">b</a>"#)
         try write("b.html", "<title>B</title>")
         try "document.title = 'script ran'".write(to: pages.appendingPathComponent("s.js"), atomically: true, encoding: .utf8)
@@ -100,6 +123,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
     override func tearDown() async throws {
         servers.forEach { $0.stop() }
+        registry.browser = SystemBrowser()
         store.closeSession(session.id)
         try? FileManager.default.removeItem(at: directory)
     }
@@ -431,6 +455,79 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(scheme as? String, "normal")
         let after = try await bottomPixel(page.webView)
         XCTAssertEqual(after.redComponent, 1, accuracy: 0.02, "a theme change must not darken a url page: \(after)")
+    }
+
+    func testAPageClickingLinksInALoopOpensOnlyWhatTheUserApproves() async throws {
+        try write("loop.html", #"<title>L</title><a id="x" href="https://example.com/x">x</a>"#
+            + "<script>setInterval(() => document.getElementById('x').click(), 20)</script>")
+        let page = registry.page(for: try open(file: "loop.html"), store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        let target = try XCTUnwrap(URL(string: "https://example.com/x"))
+
+        try await waitFor("first prompt") { self.browser.prompts.count == 1 }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(browser.prompts.count, 1, "requests while a prompt is up are dropped")
+        browser.answers[0](true)
+        XCTAssertEqual(browser.opened, [target])
+
+        try await waitFor("second prompt") { self.browser.prompts.count == 2 }
+        browser.answers[1](false)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(browser.prompts.count, 2, "a declined page asks nothing more")
+
+        page.webView.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0)))
+        try await waitFor("asked again after real input") { self.browser.prompts.count == 3 }
+        XCTAssertEqual(browser.prompts, [target, target, target])
+
+        XCTAssertTrue(store.closeOverlay(session.id))
+        XCTAssertEqual(browser.dismissals, 1)
+        browser.answers[2](true)
+        XCTAssertEqual(browser.opened, [target], "an answer after close opens nothing")
+    }
+
+    func testAPageOutOfSightAsksNothingAndLosesItsPrompt() async throws {
+        try write("link.html", #"<title>L</title><a id="x" href="https://example.com/x">x</a>"#)
+        let page = registry.page(for: try open(file: "link.html"), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('x').click()")
+        try await waitFor("prompt") { self.browser.prompts.count == 1 }
+
+        page.setOnScreen(false)
+        XCTAssertEqual(browser.dismissals, 1)
+        browser.answers[0](true)
+        XCTAssertEqual(browser.opened, [])
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('x').click()")
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(browser.prompts.count, 1)
+    }
+
+    func testOpenInBrowserOpensTheOriginalFileAndFailsWithoutABrowser() async throws {
+        let page = try open(grant: pages.path)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("a loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
+        _ = try await live.webView.evaluateJavaScript("location.href = 'b.html'")
+        try await waitFor("b loaded") { self.current?.current?.title == "B" }
+
+        XCTAssertNil(registry.navigate(page.id, .browser))
+        XCTAssertEqual(browser.opened, [pages.appendingPathComponent("a.html")])
+        XCTAssertEqual(browser.prompts, [])
+        browser.available = false
+        XCTAssertEqual(registry.navigate(page.id, .browser), OverlayHtmlError.noBrowser)
+    }
+
+    func testOpenInBrowserOpensTheUrlPageShown() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/a": .init(body: "<title>a</title>"), "/b?q=1": .init(body: "<title>b</title>")])
+        let page = try openURL("http://127.0.0.1:\(port)/a")
+        let live = registry.page(for: page, store: store)
+        try await waitFor("a loaded") { self.current?.current?.title == "a" && self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = '/b?q=1'")
+        try await waitFor("b loaded") { self.current?.current?.title == "b" && self.current?.loadState == .loaded }
+
+        XCTAssertNil(registry.navigate(page.id, .browser))
+        XCTAssertEqual(browser.opened, [try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/b?q=1"))])
     }
 
     func testNavigatingAPageThatWasNeverShownIsRefused() {
