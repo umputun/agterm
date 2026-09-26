@@ -271,6 +271,43 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         try await waitFor("recovered") { self.current?.loadState == .loaded && self.current?.current?.title == "recovered" }
     }
 
+    func testAFirstLoadWebKitCannotDisplayFails() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/build.zip": .init(headers: ["Content-Type": "application/octet-stream"], body: "PK")])
+        _ = registry.page(for: try openURL("http://127.0.0.1:\(port)/build.zip"), store: store)
+        try await waitFor("failed") { self.current?.loadState == .failed }
+        XCTAssertNotNil(current?.loadError)
+    }
+
+    func testAnUndisplayableNavigationLeavesALoadedPageLoaded() async throws {
+        let port = try await serve(.ipv4(.loopback), [
+            "/": .init(body: "<title>home</title>"),
+            "/build.zip": .init(headers: ["Content-Type": "application/octet-stream"], body: "PK"),
+        ])
+        let live = registry.page(for: try openURL("http://127.0.0.1:\(port)/"), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "home" }
+        _ = try await live.webView.evaluateJavaScript("location.href = '/build.zip'")
+        try await Task.sleep(for: .milliseconds(300))
+        try await waitFor("back to loaded") { self.current?.loadState == .loaded }
+        XCTAssertNil(current?.loadError)
+        XCTAssertEqual(current?.current?.title, "home")
+    }
+
+    func testAReloadWebKitCannotDisplayKeepsTheShownPage() async throws {
+        let server = try LoopbackServer(.ipv4(.loopback), routes: ["/": .init(body: "<title>home</title>")])
+        servers.append(server)
+        let port = try await server.start()
+        let page = try openURL("http://127.0.0.1:\(port)/")
+        _ = registry.page(for: page, store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "home" }
+
+        server.set("/", .init(headers: ["Content-Type": "application/octet-stream"], body: "PK"))
+        XCTAssertNil(registry.reload(page.id, target: .original, store: store))
+        try await Task.sleep(for: .milliseconds(300))
+        try await waitFor("back to the shown page") { self.current?.loadState == .loaded && self.current?.current?.title == "home" }
+        XCTAssertNil(current?.loadError)
+        XCTAssertEqual(current?.current?.page, "http://127.0.0.1:\(port)/")
+    }
+
     func testARefusedConnectionFails() async throws {
         let server = try LoopbackServer(.ipv4(.loopback), routes: [:])
         let port = try await server.start()

@@ -192,6 +192,11 @@ theme instead of its own palette; `--url` pages render like a browser.
       for accents, never declaring `--agterm-*` on `:root`, a user-requested palette wins, and URL pages keep
       browser styling; reference, site pages and control-api updated
 
+- [x] ➕ revmux round 2 (major): a 102 no policy cancel reported (an undisplayable response) restores
+      `loaded` over a still-shown document or fails a first load; hosted tests for a first load, a page
+      navigation and a reload of undisplayable content
+- [x] ➕ toolbar buttons (Eugene): own button style so disabled back/forward dim and a press or hover shows
+
 ### Task 5: Verify acceptance criteria
 - [ ] every Overview and Solution Overview item implemented
 - [ ] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`

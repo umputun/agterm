@@ -109,6 +109,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
     // policy cancel of its redirect reports failed rather than leaving the page loading
     private var loadPending = false
+    // a document this web content process still shows, which an interrupted load leaves in place
+    private var committed = false
 
     init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme) {
         id = overlay.id
@@ -264,6 +266,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         store?.setHtmlLoadState(id, state: .loading, error: nil)
     }
 
+    func webView(_: WKWebView, didCommit _: WKNavigation!) {
+        committed = true
+    }
+
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
         loadPending = false
         store?.setHtmlLoadState(id, state: .loaded, error: nil)
@@ -279,6 +285,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webViewWebContentProcessDidTerminate(_: WKWebView) {
+        committed = false
         fail("web content process terminated")
     }
 
@@ -287,8 +294,16 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func reportFailure(_ error: Error) {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
-        // a policy cancel arrives as "Frame load interrupted", 102 in the legacy WebKit domain, not WKError's
-        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return }
+        // "Frame load interrupted", 102 in the legacy WebKit domain: a policy cancel this page already reported,
+        // or WebKit dropping a response it cannot show, which leaves any document already shown in place
+        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 {
+            guard loadPending else { return }
+            guard committed else { return fail(nsError.localizedDescription) }
+            loadPending = false
+            store?.setHtmlLoadState(id, state: .loaded, error: nil)
+            reportPage()
+            return
+        }
         fail(nsError.localizedDescription)
     }
 

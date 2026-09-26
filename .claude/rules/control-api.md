@@ -428,9 +428,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
   frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
   http(s) subframe loads, and a redirect elsewhere is refused. `HtmlOverlayPage.loadPending` makes every
-  explicit load (open, bare or `--current` reload) end `loaded` or `failed`: a policy cancel of its main
-  frame reports `navigation blocked: URL`, since WebKit's own report of that cancel is `WebKitErrorDomain`
-  102, which is ignored. A failed page shows its error in the panel.
+  load in flight (explicit, or started by the page) end `loaded` or `failed`: a policy cancel of its main
+  frame reports `navigation blocked: URL` and the `WebKitErrorDomain` 102 that follows is ignored. An
+  unreported 102, WebKit dropping a response it cannot show, restores `loaded` over a document the web
+  content process still shows, and fails a load that never committed. A failed page shows its error in the panel.
 - Every page gets its own `WKWebsiteDataStore.nonPersistent()`, set before the web view exists, so browser
   storage lives exactly as long as the overlay and is shared with no other. `NSAllowsLocalNetworking` in
   Info.plist lets plain http reach local addresses (not only loopback, and for file pages too); public
