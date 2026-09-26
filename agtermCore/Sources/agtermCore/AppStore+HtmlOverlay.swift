@@ -102,6 +102,24 @@ extension AppStore {
         updateHtmlOverlay(id) { $0.current = info }
     }
 
+    /// htmlOverlaySlot finds the slot holding page `id` in a visible session, nil once the page left it.
+    public func htmlOverlaySlot(_ id: UUID) -> (session: Session, pane: OverlayPane?)? {
+        for session in workspaces.flatMap(\.sessions) {
+            if session.htmlOverlayActive, session.htmlOverlay?.id == id { return (session, nil) }
+            if let pane = OverlayPane.allCases.first(where: { session.paneOverlay($0)?.html?.id == id }) {
+                return (session, pane)
+            }
+        }
+        return nil
+    }
+
+    /// closeHtmlOverlay closes page `id` wherever its slot now is: the toolbar's close button, whose view
+    /// cannot trust the pane it was built for after a swap.
+    @discardableResult public func closeHtmlOverlay(_ id: UUID) -> Bool {
+        guard let slot = htmlOverlaySlot(id) else { return false }
+        return slot.pane.map { closePaneOverlay(slot.session.id, pane: $0) } ?? closeOverlay(slot.session.id)
+    }
+
     func htmlOverlayNodes(_ session: Session) -> [ControlHtmlOverlayNode]? {
         let slots: [(String?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
             + OverlayPane.allCases.map { ($0.rawValue, session.paneOverlay($0)?.html) }

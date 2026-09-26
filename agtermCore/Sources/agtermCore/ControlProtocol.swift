@@ -649,6 +649,10 @@ public enum OverlayHtmlError {
     public static let noOverlay = "no overlay"
     public static let notHtml = "the overlay is not an html page"
     public static let navigation = "session.overlay.navigate requires back, forward or browser"
+    /// noHistory: the page has nowhere to go in that direction.
+    public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
+    /// notRealized: the page has not been shown yet, so there is no web view to drive.
+    public static let notRealized = "html overlay not realized"
     /// noResult and noRead: a page runs no program, so there is no exit status and no terminal text.
     public static let noResult = "no overlay result: the slot holds an html page"
     public static let noRead = "no overlay to read: the slot holds an html page"

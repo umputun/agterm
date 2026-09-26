@@ -191,7 +191,8 @@ extension AppActions {
         if palette?.mode != nil { return }
         if pickActive(for: library.activeWindowID) { return }
         if quickTerminal.holdsKey { return }
-        if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
+        let pageCovers = store?.activeSession.map { HtmlOverlayRegistry.shared.focusCover(of: $0) } ?? false
+        if !pageCovers, let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             guard !view.deferFocusToAsk() else { return }
             window.makeFirstResponder(view)
         }
@@ -245,7 +246,9 @@ extension AppActions {
         // the quick-terminal panel owns focus above EVERY window, not just this session's; its own hide
         // restores the session.
         if quickTerminal.holdsKey { return }
-        if let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
+        let pageMayCover = session.coverOverlayActive || session.paneOverlayIsHtml(wantSplit ? .right : .left)
+        let pageCovers = pageMayCover && HtmlOverlayRegistry.shared.focusCover(of: session)
+        if !pageCovers, let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
             guard !view.deferFocusToAsk() else { return }
             window.makeFirstResponder(view)
         }

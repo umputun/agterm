@@ -17,6 +17,14 @@ extension Session {
         return paneOverlayIsHtml(pane)
     }
 
+    /// topmostHtmlOverlay is the page that takes the keyboard when focus returns to this session, in the
+    /// order `topmostSurface` resolves covers; nil when a terminal is on top.
+    public var topmostHtmlOverlay: HtmlOverlay? {
+        if htmlOverlayActive { return htmlOverlay }
+        if programOverlayActive || scratchActive { return nil }
+        return focusedOverlayPane.flatMap { paneOverlay($0)?.html }
+    }
+
     /// teardownOverlaySlot discards the session-wide occupant where the whole session goes away; a page has
     /// no surface, so tearing down `overlaySurface` alone would leave it running.
     public func teardownOverlaySlot() {

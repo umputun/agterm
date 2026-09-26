@@ -54,15 +54,13 @@ struct HtmlOverlayTests {
         #expect((HtmlOverlay.grantError(file: file, grantRoot: grant) == nil) == valid)
     }
 
-    @Test func readAccessIsTheFileAloneWithoutAGrant() {
-        #expect(page().readAccessPath == "/tmp/a/report.html")
-        #expect(page(grant: "/tmp").readAccessPath == "/tmp")
-    }
-
     @Test(arguments: [
-        ("file:///tmp/a/report.html", HtmlNavigationTarget.mainFrame, false, String?.none, HtmlNavigationDecision.allow),
-        ("file:///tmp/a/report.html#section", .mainFrame, true, nil, .allow),
+        ("file:///tmp/a/report.html", HtmlNavigationTarget.mainFrame, false, String?.none, HtmlNavigationDecision.cancel),
+        ("file:///tmp/a/report.html", .mainFrame, false, "/tmp/a", .allow),
+        ("file:///tmp/a/report.html#section", .mainFrame, true, "/tmp/a", .allow),
         ("file:///tmp/a/other.html", .mainFrame, true, nil, .cancel),
+        ("about:blank", .mainFrame, false, nil, .allow),
+        ("about:blank#section", .mainFrame, true, nil, .allow),
         ("file:///tmp/a/other.html", .mainFrame, true, "/tmp/a", .allow),
         ("file:///tmp/a/frame.html", .subframe, false, "/tmp/a", .allow),
         ("file:///etc/passwd", .mainFrame, true, "/tmp/a", .cancel),
@@ -368,5 +366,51 @@ struct HtmlOverlayTests {
         let node = try #require(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
         #expect(node.overlay)
         #expect(node.overlaySizePercent == 40)
+    }
+
+    @Test func aPageIsFoundAndClosedByItsIdentityAfterASwap() throws {
+        split()
+        let released = recordReleases()
+        #expect(store.openHtmlOverlay(session.id, pane: .left, overlay: page(), sizePercent: nil) == nil)
+        let id = try #require(session.paneOverlay(.left)?.html?.id)
+        #expect(store.swapPanes(session.id) == nil)
+
+        let slot = try #require(store.htmlOverlaySlot(id))
+        #expect(slot.session === session)
+        #expect(slot.pane == .right)
+        #expect(store.closeHtmlOverlay(id))
+        #expect(session.paneOverlay(.right) == nil)
+        #expect(released() == [id])
+        #expect(!store.closeHtmlOverlay(id))
+        #expect(store.htmlOverlaySlot(id) == nil)
+    }
+
+    @Test func theTopmostPageFollowsWhatCoversTheFocusedPane() throws {
+        split()
+        session.splitFocused = false
+        #expect(session.topmostHtmlOverlay == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: page("/tmp/r.html"), sizePercent: nil) == nil)
+        #expect(session.topmostHtmlOverlay == nil)
+        session.splitFocused = true
+        #expect(session.topmostHtmlOverlay?.file == "/tmp/r.html")
+        session.scratchActive = true
+        #expect(session.topmostHtmlOverlay == nil)
+        session.scratchActive = false
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page("/tmp/w.html"), sizePercent: nil) == nil)
+        #expect(session.topmostHtmlOverlay?.file == "/tmp/w.html")
+    }
+
+    @Test func theThemeStylesheetYieldsToAnyPageRule() {
+        let theme = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true)
+        #expect(theme.stylesheet == ":where(html) { color-scheme: dark; background-color: #102030; color: #e0e0e0; }")
+        #expect(theme.script.contains(theme.stylesheet))
+        #expect(theme.script.contains("agterm-theme"))
+    }
+
+    @Test func aMalformedThemeColorFallsBackToAPlainPair() {
+        let theme = HtmlOverlayTheme(background: "red; } body { display: none", foreground: "#ffffff", dark: false)
+        #expect(theme.background == "#ffffff")
+        #expect(theme.foreground == "#1e1e1e")
+        #expect(!theme.stylesheet.contains("display"))
     }
 }

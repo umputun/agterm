@@ -80,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // then re-side the config to the launch appearance, while NSApp exists and no scene has mounted —
         // a dark launch otherwise strips the env, restore replay and command off every restored surface.
         GhosttyApp.shared.syncLaunchColorScheme()
+        HtmlOverlayRegistry.shared.install()
         scheduleRestoredWindowReconciliation(reason: "did-finish-launching")
         NotificationCenter.default.addObserver(self, selector: #selector(menuBeganTracking),
                                                name: NSMenu.didBeginTrackingNotification, object: nil)

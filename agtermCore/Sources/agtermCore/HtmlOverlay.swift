@@ -5,9 +5,10 @@ import Foundation
 /// follows it; every adapter callback addresses the page by that id.
 public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
-    /// file is the absolute, standardized path of the page, which is also its base URL.
+    /// file is the absolute, standardized path of the page, and its base URL when a `grantRoot` is set.
     public let file: String
-    /// grantRoot is the directory WebKit may read from; nil grants the file alone.
+    /// grantRoot is the directory WebKit may read from. nil grants no file access at all: the app loads the
+    /// file's text rather than its URL, because WebKit reads a single-file grant as the file's whole folder.
     public let grantRoot: String?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
@@ -24,9 +25,6 @@ public struct HtmlOverlay: Equatable, Sendable {
         self.file = file
         self.grantRoot = grantRoot
     }
-
-    /// readAccessPath is the path passed to WebKit's `allowingReadAccessTo`.
-    public var readAccessPath: String { grantRoot ?? file }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
     /// must sit inside the grant by whole path components, so `/a/bc` is not inside `/a/b`.
@@ -71,6 +69,44 @@ public enum HtmlNavigation: String, CaseIterable, Sendable {
     case back, forward, browser
 }
 
+/// HtmlOverlayTheme is the default look a page gets when it styles nothing itself: the terminal theme's
+/// background, text color and light/dark scheme. Every rule has zero specificity, so any CSS the page
+/// defines wins.
+public struct HtmlOverlayTheme: Equatable, Sendable {
+    public let background: String
+    public let foreground: String
+    public let dark: Bool
+
+    /// init takes `#rrggbb` colors; anything else falls back to a plain dark or light pair, since the values
+    /// end up inside a stylesheet.
+    public init(background: String, foreground: String, dark: Bool) {
+        let valid = WatermarkConfig.isValidColorHex(background) && WatermarkConfig.isValidColorHex(foreground)
+        self.background = valid ? background : (dark ? "#1e1e1e" : "#ffffff")
+        self.foreground = valid ? foreground : (dark ? "#d4d4d4" : "#1e1e1e")
+        self.dark = dark
+    }
+
+    public var stylesheet: String {
+        ":where(html) { color-scheme: \(dark ? "dark" : "light"); background-color: \(background); color: \(foreground); }"
+    }
+
+    /// script installs or replaces the stylesheet in element `agterm-theme`; it runs at document start,
+    /// before the page's own styles, and again on a theme change.
+    public var script: String {
+        """
+        (() => {
+          let style = document.getElementById('agterm-theme');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = 'agterm-theme';
+            document.documentElement.prepend(style);
+          }
+          style.textContent = '\(stylesheet)';
+        })();
+        """
+    }
+}
+
 /// HtmlLoadState is the page's load progress as the app's web view last reported it.
 public enum HtmlLoadState: String, Codable, Sendable {
     case loading, loaded, failed
@@ -98,15 +134,16 @@ public enum HtmlNavigationDecision: Sendable {
     case allow, openExternal, cancel
 }
 
-/// HtmlNavigationPolicy decides frame navigations for an HTML overlay: files inside the grant and `about:`
-/// (blank and srcdoc frames) load in place, a clicked main-frame http(s) link opens in the default browser,
-/// and everything else is blocked, new windows included.
+/// HtmlNavigationPolicy decides frame navigations for an HTML overlay: files inside the grant (none without
+/// one) and `about:` (the text-loaded page, blank and srcdoc frames) load in place, a clicked main-frame
+/// http(s) link opens in the default browser, and everything else is blocked, new windows included.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
         if action.target == .newWindow { return .cancel }
         switch action.url.scheme?.lowercased() {
         case "file":
-            return HtmlOverlay.contains(overlay.readAccessPath, action.url.path) ? .allow : .cancel
+            guard let root = overlay.grantRoot else { return .cancel }
+            return HtmlOverlay.contains(root, action.url.path) ? .allow : .cancel
         case "about":
             return .allow
         case "http", "https":

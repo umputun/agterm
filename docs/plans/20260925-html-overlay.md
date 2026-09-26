@@ -89,7 +89,9 @@
   back to `.primary`, which under an HTML cover is the hidden pane), and `dropUnrealizedPaneOverlays`
   never treats an HTML slot as unrealized (it has no TerminalSurface even when fully loaded).
 - **Read grant.** `--cwd DIR` is the WebKit read grant (`loadFileURL(_:allowingReadAccessTo:)`) and FILE
-  must resolve inside it. Omitted `--cwd` grants the file alone. The page's base URL is always the file's
+  must resolve inside it. Omitted `--cwd` grants no file access: WebKit reads a single-file grant as the
+  file's whole folder (measured in a hosted test), so the app loads the file's TEXT with no base URL instead,
+  and relative links and assets need `--cwd`. The page's base URL is always the file's
   own URL, never rebased onto `--cwd`. The CLI makes both paths absolute against the caller's cwd and
   standardizes them before sending; symlinks are kept, so `/tmp` and `/private/tmp` do not mix.
 - **Slot rules.** `--html` replaces a HUD (like a program does), is refused over a running program or
@@ -300,30 +302,35 @@
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift`
 - Modify: `project.yml` (link WebKit if not implicit)
+- Modify: `agterm/Control/ControlServer.swift`
+- Modify: `agterm/AppDelegate.swift`
 - Create: `agtermTests/HtmlOverlayRegistryTests.swift`
+- Create: `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] `HtmlOverlayRegistry`: one WKWebView per `occupantID`, created on first mount, reused across remounts,
+- [x] `HtmlOverlayRegistry`: one WKWebView per `occupantID`, created on first mount, reused across remounts,
       session switches, pane swap/promotion and hide/show, released when the store closes or finalizes the
       slot; `loadFileURL` with `spec.readAccessPath`; reload re-loads `spec.file` on `reloadRevision` change
-- [ ] `HtmlOverlayView` + navigator: delegate decisions to `HtmlNavigationPolicy`, open externals via
+- [x] `HtmlOverlayView` + navigator: delegate decisions to `HtmlNavigationPolicy`, open externals via
       `NSWorkspace`, report loading/loaded/failed (including WebContent termination), current page and
       title to the store, paint `--background-color` as backing
-- [ ] toolbar: back/forward bound to the web view's history (disabled when unavailable), reload of the
+- [x] toolbar: back/forward bound to the web view's history (disabled when unavailable), reload of the
       current page, open in browser, page title, close calling the store close
-- [ ] mount it in `overlayPanel` (session-wide, full or floating via `OverlayPanelStyle`) and in `deckPane`
+- [x] mount it in `overlayPanel` (session-wide, full or floating via `OverlayPanelStyle`) and in `deckPane`
       (pane cover); HTML is never mounted in the zoom hosts
-- [ ] focus: a page on the focused pane or session-wide takes first responder on open, one on an unfocused
+- [x] focus: a page on the focused pane or session-wide takes first responder on open, one on an unfocused
       pane or in a background session does not; clicking a pane page sets `splitFocused`; focus restore
       after a palette, quick terminal or session switch, `focusSplitPane`, split collapse, search end,
       sidebar click and ask dismissal all go through the one focus-target helper; page input calls `noteUserActivity`; refocus-on-close keys on the cover predicate; Command-W
       ladder closes an HTML cover (session-wide and focused pane)
-- [ ] control server maps the Task 1 failure enums to responses and dispatches reload; window close calls the
+- [x] control server maps the Task 1 failure enums to responses and dispatches reload; window close calls the
       teardown funnel; the UI delegate denies media capture, JS dialogs and file upload
-- [ ] hosted tests for the registry lifetime (remount reuse, swap and promotion keep the right view, release
+- [x] hosted tests for the registry lifetime (remount reuse, swap and promotion keep the right view, release
       on close and on soft-close finalization), navigator-to-policy mapping, a local subresource inside the
       grant loading, and reload after an in-grant navigation from a.html to b.html returning to a.html;
       run with `-only-testing:agtermTests/HtmlOverlayRegistryTests`
-- [ ] XCUITest cases in `ControlOverlaySplitUITests`: session-wide and `--pane right` open, content visible,
+- [x] ➕ no `--cwd` loads the file's text (WebKit widens a single-file grant to its folder); the folder grant
+      is pinned by `testAFolderGrantKeepsFilesOutsideItOut`
+- [x] XCUITest cases in `ControlHtmlOverlayUITests`: session-wide and `--pane right` open, content visible,
       Command-W and close button close, reload keeps the cover, result refused, click the right-pane page
       then Command-W closes the right page, a background open does not steal focus, focus returns to the
       page after the command palette closes; run only those methods

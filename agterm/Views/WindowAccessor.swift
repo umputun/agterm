@@ -176,7 +176,7 @@ struct WindowAccessor: NSViewRepresentable {
                     for session in store.workspaces.flatMap(\.sessions) {
                         session.surface?.teardown()
                         session.splitSurface?.teardown()
-                        session.overlaySurface?.teardown()
+                        session.teardownOverlaySlot()
                         session.teardownPaneOverlays()
                         session.scratchSurface?.teardown()
                         session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
