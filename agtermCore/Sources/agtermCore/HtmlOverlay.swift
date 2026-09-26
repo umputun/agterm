@@ -59,11 +59,15 @@ public struct HtmlOverlay: Equatable, Sendable {
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
     /// must sit strictly inside the grant by whole path components, so `/a/bc` is not inside `/a/b`. A grant naming the
-    /// file itself is refused: WebKit widens a single-file grant to the file's whole folder.
-    public static func grantError(file: String, grantRoot: String?) -> String? {
+    /// file itself is refused: WebKit widens a single-file grant to the file's whole folder. `/` and `home` are
+    /// refused as overly broad grants.
+    public static func grantError(file: String, grantRoot: String?, home: String = NSHomeDirectory()) -> String? {
         guard file.hasPrefix("/") else { return "html file must be an absolute path" }
         guard let grantRoot else { return nil }
         guard grantRoot.hasPrefix("/") else { return "cwd must be an absolute path" }
+        guard ![components("/"), components(home)].contains(components(grantRoot)) else {
+            return "cwd must not be / or the home directory"
+        }
         guard components(grantRoot) != components(file) else { return "cwd must be a directory containing the html file" }
         return contains(grantRoot, file) ? nil : "html file is outside cwd"
     }

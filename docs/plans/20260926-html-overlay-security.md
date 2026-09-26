@@ -59,10 +59,10 @@
 ## Implementation Steps
 
 ### Task 1: Grant guard in agtermCore
-- [ ] failing tests: `--cwd /` and `--cwd` equal to the home directory are refused, a subdirectory of home
+- [x] failing tests: `--cwd /` and `--cwd` equal to the home directory are refused, a subdirectory of home
       is not; dispatcher refusal message
-- [ ] `grantError` takes the home directory (default `NSHomeDirectory()`) and refuses it and `/`
-- [ ] core suites pass
+- [x] `grantError` takes the home directory (default `NSHomeDirectory()`) and refuses it and `/`
+- [x] core suites pass
 
 ### Task 2: Theme without live script
 - [ ] failing hosted tests: during a theme change a page `getElementById` override is never called and a page

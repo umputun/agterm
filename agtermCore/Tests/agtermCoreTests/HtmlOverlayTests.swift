@@ -60,6 +60,20 @@ struct HtmlOverlayTests {
     }
 
     @Test(arguments: [
+        ("/", false),
+        ("/Users/me", false),
+        ("/Users/me/", false),
+        ("/Users/me/./", false),
+        ("/Users/me/docs", true),
+        ("/Users", true),
+    ])
+    func grantRefusesRootAndHome(_ grant: String, _ valid: Bool) {
+        let error = HtmlOverlay.grantError(file: "/Users/me/docs/report.html", grantRoot: grant, home: "/Users/me")
+        #expect((error == nil) == valid)
+        if !valid { #expect(error == "cwd must not be / or the home directory") }
+    }
+
+    @Test(arguments: [
         ("file:///tmp/a/report.html", HtmlNavigationTarget.mainFrame, false, String?.none, HtmlNavigationDecision.cancel),
         ("file:///tmp/a/report.html", .mainFrame, false, "/tmp/a", .allow),
         ("file:///tmp/a/report.html#section", .mainFrame, true, "/tmp/a", .allow),
