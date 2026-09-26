@@ -211,7 +211,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     func testLoadReportsStateTitleAndHistoryAndReloadReturnsToTheOriginal() async throws {
-        let page = try open(grant: pages.path)
+        let page = try open(grant: pages.path, javascript: true)
         let live = registry.page(for: page, store: store)
         try await waitFor("loaded with the script") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
 
@@ -246,7 +246,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     func testAThemeChangeReloadsTheFilePageShownAndAnUnchangedThemeDoesNot() async throws {
-        let page = registry.page(for: try open(grant: pages.path), store: store)
+        let page = registry.page(for: try open(grant: pages.path, javascript: true), store: store)
         try await waitFor("a loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
         _ = try await page.webView.evaluateJavaScript("location.href = 'b.html'")
         try await waitFor("b loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "B" }
@@ -275,7 +275,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
             """)
         for grant in [nil, pages.path] {
             let probe = PageProbe()
-            let page = registry.page(for: try open(file: "hostile.html", grant: grant), store: store)
+            let page = registry.page(for: try open(file: "hostile.html", grant: grant, javascript: true), store: store)
             page.webView.configuration.userContentController.add(probe, name: "probe")
             try await waitFor("first load") { probe.messages.contains("ready:false") }
             page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
@@ -287,7 +287,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     func testTheFileAloneGrantKeepsSiblingScriptsOut() async throws {
-        let page = try open()
+        let page = try open(javascript: true)
         _ = registry.page(for: page, store: store)
         try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title != nil }
         XCTAssertEqual(current?.current?.title, "A")
@@ -296,7 +296,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     func testAFolderGrantKeepsFilesOutsideItOut() async throws {
         try "document.title = 'outside ran'".write(to: directory.appendingPathComponent("outside.js"), atomically: true, encoding: .utf8)
         try write("c.html", #"<title>C</title><script src="../outside.js"></script>"#)
-        let page = try open(file: "c.html", grant: pages.path)
+        let page = try open(file: "c.html", grant: pages.path, javascript: true)
         _ = registry.page(for: page, store: store)
         try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title != nil }
         XCTAssertEqual(current?.current?.title, "C")
@@ -349,7 +349,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     func testABlockedNavigationLeavesALoadedPageLoaded() async throws {
-        let page = try open(grant: pages.path)
+        let page = try open(grant: pages.path, javascript: true)
         let live = registry.page(for: page, store: store)
         try await waitFor("loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
         _ = try await live.webView.evaluateJavaScript("location.href = 'https://example.com/'")
@@ -507,7 +507,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     func testAPageClickingLinksInALoopOpensOnlyWhatTheUserApproves() async throws {
         try write("loop.html", #"<title>L</title><a id="x" href="https://example.com/x">x</a>"#
             + "<script>setInterval(() => document.getElementById('x').click(), 20)</script>")
-        let page = registry.page(for: try open(file: "loop.html"), store: store)
+        let page = registry.page(for: try open(file: "loop.html", javascript: true), store: store)
         let window = try host(page.webView)
         defer { window.orderOut(nil) }
         let target = try XCTUnwrap(URL(string: "https://example.com/x"))
@@ -580,7 +580,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     }
 
     func testOpenInBrowserOpensTheOriginalFileAndFailsWithoutABrowser() async throws {
-        let page = try open(grant: pages.path)
+        let page = try open(grant: pages.path, javascript: true)
         let live = registry.page(for: page, store: store)
         try await waitFor("a loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "script ran" }
         _ = try await live.webView.evaluateJavaScript("location.href = 'b.html'")
@@ -636,7 +636,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
             </script>
             """)
         let probe = PageProbe()
-        let page = registry.page(for: try open(file: "paste.html"), store: store)
+        let page = registry.page(for: try open(file: "paste.html", javascript: true), store: store)
         page.webView.configuration.userContentController.add(probe, name: "probe")
         let window = try host(page.webView)
         defer { window.orderOut(nil) }
@@ -657,6 +657,56 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertTrue(page.webView.readSelection(from: text))
         try await waitFor("text pasted") { probe.messages.contains("paste:0:plain words") }
         XCTAssertFalse(probe.messages.contains { $0.hasPrefix("file:") || $0.hasPrefix("paste:1") }, "\(probe.messages)")
+    }
+
+    func testPageScriptRunsOnlyWhenTheOverlayAllowsIt() async throws {
+        let body = #"<title>S</title><p id="i">static</p><script>document.getElementById('i').textContent = 'inline'</script>"#
+            + #"<script src="ext.js"></script><iframe srcdoc="<script>parent.document.documentElement.dataset.frame = 'ran'</script>"></iframe>"#
+        try write("scripts.html", body)
+        try "document.documentElement.dataset.ext = 'ran'".write(to: pages.appendingPathComponent("ext.js"), atomically: true, encoding: .utf8)
+        let port = try await serve(.ipv4(.loopback), [
+            "/": .init(body: "<!doctype html><html><body>\(body)</body></html>"),
+            "/ext.js": .init(headers: ["Content-Type": "text/javascript"], body: "document.documentElement.dataset.ext = 'ran'"),
+        ])
+        let text = "<!doctype html><html><body>" + body.replacingOccurrences(
+            of: #"<script src="ext.js">"#, with: #"<script src="data:text/javascript,document.documentElement.dataset.ext='ran'">"#)
+            + "</body></html>"
+        try text.write(to: pages.appendingPathComponent("text.html"), atomically: true, encoding: .utf8)
+
+        for javascript in [false, true] {
+            let sources: [(String, () throws -> HtmlOverlay)] = [
+                ("text-loaded", { try self.open(file: "text.html", javascript: javascript) }),
+                ("granted", { try self.open(file: "scripts.html", grant: self.pages.path, javascript: javascript) }),
+                ("url", { try self.openURL("http://127.0.0.1:\(port)/", javascript: javascript) }),
+            ]
+            for (name, make) in sources {
+                let page = registry.page(for: try make(), store: store)
+                try await waitFor("\(name) loaded") { self.current?.loadState == .loaded }
+                try await Task.sleep(for: .milliseconds(300))
+                let seen = try await scriptEffects(page.webView)
+                let expected = javascript ? "inline|ran|ran" : "static|none|none"
+                XCTAssertEqual(seen, expected, "\(name) with javascript \(javascript)")
+                let background = try await variable("--agterm-background", in: page.webView)
+                XCTAssertFalse(background?.isEmpty ?? true, "\(name) keeps the theme variables")
+                XCTAssertTrue(store.closeOverlay(session.id))
+            }
+        }
+    }
+
+    func testPageScriptStaysOffThroughReloadAndNavigation() async throws {
+        try write("one.html", #"<title>one</title><p id="i">static</p><script>document.getElementById('i').textContent = 'inline'</script>"#)
+        try write("two.html", #"<title>two</title><p id="i">static</p><script>document.getElementById('i').textContent = 'inline'</script>"#)
+        let overlay = try open(file: "one.html", grant: pages.path)
+        let page = registry.page(for: overlay, store: store)
+        try await waitFor("one loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "one" }
+        XCTAssertNil(registry.reload(overlay.id, target: .current, store: store))
+        try await waitFor("one reloaded") { self.current?.loadState == .loaded }
+        let afterReload = try await page.webView.evaluateJavaScript("document.getElementById('i').textContent")
+        XCTAssertEqual(afterReload as? String, "static")
+        _ = try await page.webView.evaluateJavaScript("location.href = 'two.html'")
+        try await waitFor("two loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "two" }
+        let afterNavigation = try await page.webView.evaluateJavaScript("document.getElementById('i').textContent")
+        XCTAssertEqual(afterNavigation as? String, "static")
     }
 
     func testNavigatingAPageThatWasNeverShownIsRefused() {
@@ -703,19 +753,29 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         }
     }
 
+    private func scriptEffects(_ view: WKWebView) async throws -> String? {
+        let value = try await view.evaluateJavaScript("""
+            [document.getElementById('i').textContent, document.documentElement.dataset.ext || 'none',
+             document.documentElement.dataset.frame || 'none'].join('|')
+            """)
+        return value as? String
+    }
+
     private func write(_ name: String, _ body: String) throws {
         try "<!doctype html><html><body>\(body)</body></html>"
             .write(to: pages.appendingPathComponent(name), atomically: true, encoding: .utf8)
     }
 
-    private func open(pane: OverlayPane? = nil, file: String = "a.html", grant: String? = nil) throws -> HtmlOverlay {
-        let overlay = HtmlOverlay(source: .file(path: pages.appendingPathComponent(file).path, grantRoot: grant))
+    private func open(pane: OverlayPane? = nil, file: String = "a.html", grant: String? = nil,
+                      javascript: Bool = false) throws -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .file(path: pages.appendingPathComponent(file).path, grantRoot: grant),
+                                  javascript: javascript)
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: pane, overlay: overlay, sizePercent: nil))
         return overlay
     }
 
-    private func openURL(_ address: String) throws -> HtmlOverlay {
-        let overlay = HtmlOverlay(source: .url(try XCTUnwrap(URL(string: address))))
+    private func openURL(_ address: String, javascript: Bool = false) throws -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .url(try XCTUnwrap(URL(string: address))), javascript: javascript)
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
         return overlay
     }

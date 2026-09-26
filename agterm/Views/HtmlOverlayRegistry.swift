@@ -134,6 +134,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         let configuration = WKWebViewConfiguration()
         // an in-memory store per page: cookies and storage last as long as this overlay and reach no other
         configuration.websiteDataStore = .nonPersistent()
+        // the page's own scripts only; the theme user script and app evaluation run either way
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript
         webView = HtmlOverlayWebView(frame: .zero, configuration: configuration)
         webView.pageID = overlay.id
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the

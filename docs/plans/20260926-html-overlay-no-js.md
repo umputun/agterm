@@ -33,15 +33,15 @@
 - [x] core suites pass
 
 ### Task 2: WebKit setting
-- [ ] failing hosted tests: without the flag, inline, external and iframe scripts do not run for a
+- [x] failing hosted tests: without the flag, inline, external and iframe scripts do not run for a
       text-loaded page (iframe through `srcdoc`, since the navigation policy blocks remote and ungranted file
       frames), a granted page and a URL page, while theme variables and file styling still apply; with
       the flag they run; the setting holds across reload and a same-origin navigation
-- [ ] `configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript` before the web
+- [x] `configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript` before the web
       view exists
-- [ ] existing hosted tests that need page script (hook and observer, click loop, paste listener, storage,
+- [x] existing hosted tests that need page script (hook and observer, click loop, paste listener, storage,
       title, redirect-by-script) open with JavaScript on
-- [ ] hosted suite passes
+- [x] hosted suite passes
 
 ### Task 3: UI tests
 - [ ] UI tests whose pages need script pass `--js`; a page whose script sets its title opens through the control
