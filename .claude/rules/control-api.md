@@ -453,6 +453,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Do not evaluate theme scripts in a live document: page callbacks can inherit evaluation's user gesture.
   Reload file pages only when their computed theme changes; URL pages receive new variables on their next
   load. The appearance notification also fires for unrelated settings.
+- A page's own JavaScript is off unless opened with `--js` (`HtmlOverlay.javascript`, read back as
+  `javascript`): `allowsContentJavaScript` is set on the configuration before the web view exists, and
+  nothing enables it later. User scripts and native `evaluateJavaScript` still run, so the theme survives,
+  and a test cannot use evaluation to show page script ran; tests that need page script open with it on.
 - A synthetic `a.click()` reaches the policy exactly like a real click (`.linkActivated`, button 0, no
   flags), so every hand-off the page starts goes through `HtmlBrowser.confirm`, a nonblocking sheet with
   Cancel as default; nothing in control dispatch waits on it. One pending prompt per page, a decline silences the

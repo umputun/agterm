@@ -49,9 +49,9 @@
 - [x] build-for-testing; the HTML UI class runs at the gates
 
 ### Task 4: Documentation and skill
-- [ ] SKILL.md: static HTML/CSS/SVG is the artifact recipe; enable `--js` only when the interaction or the
+- [x] SKILL.md: static HTML/CSS/SVG is the artifact recipe; enable `--js` only when the interaction or the
       web app needs it; the dev-server example passes `--js`; description stays within 1024
-- [ ] reference.md, `site/commands.html`, `site/docs.html`, `.claude/rules/control-api.md`: the flag, the
+- [x] reference.md, `site/commands.html`, `site/docs.html`, `.claude/rules/control-api.md`: the flag, the
       default, the read-back, and that Open in Browser uses the browser's own JavaScript settings
 
 ### Task 5: Verify

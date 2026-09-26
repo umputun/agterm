@@ -561,7 +561,7 @@ struct Session: ParsableCommand {
                 localhost means the Mac running agterm.
                 """)
             var url: String?
-            @Flag(name: .long, help: "With --html or --url, show the toolbar: back, forward, reload, title, open in browser.")
+            @Flag(name: .long, help: "With --html or --url, add navigation buttons: back, forward, reload, open in browser.")
             var navigation = false
             @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
             @Option(name: .long, help: """

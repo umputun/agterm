@@ -12,8 +12,8 @@ extension Session.Overlay {
 
     struct Reload: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Reload an HTML overlay: the file it was opened with, or with --current the page shown now.")
-        @Flag(name: .long, help: "Reload the page the overlay shows now instead of the original file.") var current = false
+            abstract: "Reload an HTML overlay: the file or URL it was opened with, or with --current the page shown now.")
+        @Flag(name: .long, help: "Reload the page the overlay shows now instead of the original file or URL.") var current = false
         @Option(name: .long, help: "Reload that split pane's page (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
         var pane: String?
         @OptionGroup var target: TargetOptions
