@@ -202,4 +202,28 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: fresh), "a fresh press is the takeover the cover asks for")
         XCTAssertEqual(reattached.map(\.claim), [true])
     }
+
+    func testAKeyHeldSinceBeforeTheDropCannotTakeTheLeadAfterTheSwap() throws {
+        let (view, identity) = pane()
+        PaneLead.report(try notice("n:leader:1"), from: view)
+        XCTAssertFalse(PaneLead.consumes(try key(.keyDown, code: 0), in: view), "pressed while the pane still leads")
+
+        let book = RemoteReconnectBook.shared
+        book.wait(pane: identity, session: UUID(), host: "mini", cover: true, now: Date())
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0, repeating: true), in: view), "only repeats arrive while waiting")
+
+        _ = book.due(now: Date())
+        _ = book.finished(pane: identity, ok: true, now: Date())
+        let fresh = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                       env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "fresh", claim: false), pane: identity, reattaching: true)
+        PaneLead.report(try notice("fresh:follower:2"), from: fresh)
+        XCTAssertTrue(fresh.leadCovered)
+
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0, repeating: true), in: fresh))
+        XCTAssertTrue(reattached.isEmpty, "a repeat is never the press the cover asks for")
+        XCTAssertTrue(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: fresh))
+        XCTAssertEqual(reattached.map(\.claim), [true], "a fresh press still claims")
+    }
 }

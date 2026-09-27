@@ -46,9 +46,9 @@ public final class RemoteReconnectBook {
         public let host: String
         /// The origin reported lead roles, so the fresh attach will too and may be covered until it does.
         public let cover: Bool
-        public fileprivate(set) var failures = 0
-        public fileprivate(set) var retryAt: Date
-        public fileprivate(set) var probing = false
+        fileprivate(set) var failures = 0
+        fileprivate(set) var retryAt: Date
+        fileprivate(set) var probing = false
     }
 
     public private(set) var entries: [UUID: Entry] = [:]

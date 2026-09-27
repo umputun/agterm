@@ -276,6 +276,8 @@ struct RemoteSessionTests {
                                                           session: "build", pane: .left,
                                                           lead: ZmxLeadAttachment(nonce: "n1", claim: true))
 
+        // the fake gives the wrapper a pipe, so stty fails silently there: the command text is what pins it
+        #expect(command.contains("stty -echo 2>/dev/null; cat >/dev/null"))
         let run = try fake.startShell(command)
         try await Task.sleep(for: .milliseconds(300))
         #expect(run.process.isRunning, "the pane holds until the app replaces it")

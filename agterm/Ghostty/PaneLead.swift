@@ -68,6 +68,8 @@ enum PaneLead {
         guard event.type == .keyDown, !event.modifierFlags.contains(.command) else { return true }
         // already on its way: the fresh surface is covered too until its first report
         guard !ZmxLeadBook.shared.reattaching(pane: UUID(uuidString: view.paneToken)) else { return true }
+        // a key held since before a drop sends only repeats while the pane waits, so it was never latched
+        guard !event.isARepeat else { return true }
         takeoverKeyCode = event.keyCode
         reattach?(view, true)
         return true
