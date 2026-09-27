@@ -225,6 +225,35 @@ struct RemoteSessionTests {
         #expect(try fake.calls().first?.first == "attach", "the diagnostic runs AFTER the attach")
     }
 
+    @Test(arguments: zip(["serveraliveinterval 0", "serveraliveinterval 15", "user kuzma"], [true, false, false]))
+    func keepAliveIsAddedOnlyWhenTheUsersConfigSetsNone(config: String, added: Bool) throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 23, config: config)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left)
+        let run = try fake.runShell(command)
+
+        let calls = fake.sshCalls()
+        #expect(calls.first == "-G buildbox")
+        let attach = try #require(calls.last)
+        let keepAlive = "-o ServerAliveInterval=5 -o ServerAliveCountMax=2 buildbox"
+        #expect(attach.contains(keepAlive) == added)
+        #expect(run.status == 23)
+    }
+
+    @Test func aReconnectingPaneAlsoGetsTheKeepAlive() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 23, config: "serveraliveinterval 0")
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "build", pane: .left,
+                                                          lead: ZmxLeadAttachment(nonce: "n1", claim: false))
+        _ = try fake.runShell(command)
+
+        #expect(try #require(fake.sshCalls().last).contains("-o ServerAliveInterval=5 -o ServerAliveCountMax=2 buildbox"))
+    }
+
     @Test func thePaneCommandSurvivesTheExecGhosttyRunsItUnder() throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
@@ -360,12 +389,14 @@ private struct FakeRemote {
     private let log: URL
     private let zmxDirLog: URL
     private let zmxEnvLog: URL
+    private let sshLog: URL
 
     init(directoryName: String = "fake-remote-\(UUID().uuidString)") throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(directoryName, isDirectory: true)
         log = root.appendingPathComponent("calls.log")
         zmxDirLog = root.appendingPathComponent("zmxdir.log")
         zmxEnvLog = root.appendingPathComponent("zmxenv.log")
+        sshLog = root.appendingPathComponent("ssh.log")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         // the command under test appends the REAL install directories to PATH, so a test that forgets
         // `installAgtermctl` would otherwise resolve the machine's own CLI and drive the live terminal.
@@ -394,13 +425,21 @@ private struct FakeRemote {
     }
 
     /// Stands in for ssh by running its LAST argument through a shell, which is what the real one does
-    /// with the remote command.
-    func installSSH(exitCode: Int32? = nil) throws {
+    /// with the remote command. `config` answers `ssh -G` the way a real ssh dumps its effective config.
+    func installSSH(exitCode: Int32? = nil, config: String? = nil) throws {
         let body = exitCode.map { "exit \($0)" } ?? #"/bin/sh -c "$last""#
+        let dump = config.map { "if [ \"$1\" = -G ]; then printf '%s\\n' '\($0)'; exit 0; fi" } ?? ""
         try write(name: "ssh", script: """
+        printf '%s\\n' "$*" >> '\(sshLog.path)'
         for a in "$@"; do last=$a; done
+        \(dump)
         \(body)
         """)
+    }
+
+    /// Every ssh call, its arguments joined by spaces.
+    func sshCalls() -> [String] {
+        ((try? String(contentsOf: sshLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
     }
 
     func installZmx() throws -> String {

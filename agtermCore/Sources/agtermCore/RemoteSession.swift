@@ -112,20 +112,25 @@ public enum RemoteSession {
                                          session: String, pane: ZmxPaneRole,
                                          lead: ZmxLeadAttachment? = nil,
                                          connectTimeout: Int = 5) throws -> String {
-        let attach = CommandRestore.shellQuotedLine(
-            try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
-                              connectTimeout: connectTimeout))
+        let argv = try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
+                                     connectTimeout: connectTimeout)
+        // a nonzero keepalive in the user's config wins; ssh -G cannot tell an explicit 0 from unset
+        let keepAlive = "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G", host])
+            + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
+            + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
+        let attach = CommandRestore.shellQuotedLine(Array(argv.dropLast(2))) + " $ka "
+            + CommandRestore.shellQuotedLine(Array(argv.suffix(2)))
         let label = CommandRestore.shellQuotedLine(
             ["agterm: \(session) (\(pane.rawValue)) on \(host) disconnected, exit"])
         // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a
         // clean one to anything that looks at the exit code
         let report = "printf '%s %s\\n' \(label) \"$status\""
-        var script = "\(attach); status=$?; \(report); exit \"$status\""
+        var script = "\(keepAlive); \(attach); status=$?; \(report); exit \"$status\""
         if let lead {
             let bar = CommandRestore.shellQuotedLine(["Connection to \(host) lost · reconnecting… · any key retries now"])
             let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: lead.nonce)])
             let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
-            script = "\(attach); status=$?; if [ \"$status\" -eq 255 ]; then "
+            script = "\(keepAlive); \(attach); status=$?; if [ \"$status\" -eq 255 ]; then "
                 + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "
                 + "printf '\\033[?25l'; stty -echo 2>/dev/null; cat >/dev/null; else \(report); fi; exit \"$status\""
         }

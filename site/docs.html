@@ -2921,7 +2921,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               schedule the stream uses; any key retries at once and ⌘W still closes the session. The last screen is replaced when the host answers, before the new connection is up, so if the link drops again right away the pane waits on an empty terminal with only the bar. The pane comes back without taking the lead, so
               if the other Mac leads it by then, it arrives covered, and also while the other Mac still counts this Mac's dropped connection
               as the leader, which clears by itself once that connection times out. Any other exit prints one line naming the host, the
-              session, the pane and the exit status, and holds on Ghostty's press-any-key prompt.
+              session, the pane and the exit status, and holds on Ghostty's press-any-key prompt. A dead connection is
+              noticed in about ten seconds: agterm adds ssh keepalive options unless your own ssh config sets a nonzero
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ServerAliveInterval</span>.
             </p>
 
             <div

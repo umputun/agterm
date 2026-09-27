@@ -1237,6 +1237,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   argv-quoted. The pane attach alone adds `LogLevel=ERROR`: ssh's disconnect chatter would land wherever the
   remote program left the cursor, while a takeover or an unowned reattach runs with no probe first, so a
   refused key or a changed host key must still print its reason.
+  The pane wrapper also adds `ServerAliveInterval=5`/`ServerAliveCountMax=2` before the host when `ssh -G`
+  reports `serveraliveinterval 0`, so a dead link ends in about 10 s unless the user's config sets a nonzero one.
+  An explicit `ServerAliveInterval 0` reads the same as unset and gets the default.
 - Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
   host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
   character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed
