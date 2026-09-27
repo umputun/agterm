@@ -3514,7 +3514,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               even when several clients share a server. Background tabs, ancestors, and sibling sessions are excluded.
               Running work, retries, and recovering compaction stay active; pending permissions and questions are blocked
               until all are answered or cancelled. Success or user interruption completes only when the family is no longer busy;
-              a terminal failure stays blocked across sibling completion until work resumes.
+              a terminal failure becomes blocked once the family stops working and stays blocked until the next run.
               Switching sessions, reconnecting, and unloading the plugin refresh or clear the indicator.
               Detection uses agterm's PATH, also checking /usr/local/bin and /opt/homebrew/bin.
               If the version cannot be determined, choose v1 or v2 in the installer, or skip OpenCode.

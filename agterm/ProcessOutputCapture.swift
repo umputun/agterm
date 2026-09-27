@@ -4,6 +4,9 @@ import Foundation
 /// its exit. The read ends belong to their `PipeReader` from the start; the parent's write ends are
 /// released by `didLaunch` or `cancel`, whichever comes first.
 final class ProcessOutputCapture {
+    /// Grace for SIGTERM before SIGKILL and for output pipes to close after process exit.
+    static let terminationGrace: TimeInterval = 0.25
+
     struct Output {
         let stdout: String
         let stderr: String

@@ -152,12 +152,14 @@ async function loadFamily(client, sessionID, states, active, signal) {
   state.permissions = new Set(permissions.map(item => item.id));
   state.forms = new Set(forms.map(item => item.id));
   states.set(sessionID, state);
+  const children = [];
   let cursor;
   do {
     const page = await client.session.list({ parentID: sessionID, cursor }, { signal });
-    for (const child of page.data) await loadFamily(client, child.id, states, active, signal);
+    children.push(...page.data);
     cursor = page.cursor?.next;
   } while (cursor);
+  await Promise.all(children.map(child => loadFamily(client, child.id, states, active, signal)));
 }
 
 const EVENTS = new Set([
@@ -202,13 +204,15 @@ export default {
       pendingReport = enqueue(args, generation);
     };
 
-    function refresh() {
+    function refresh(selectionChanged = false) {
       hydration?.controller.abort();
-      generation++;
       states = new Map();
       retryAt = 0;
-      last = undefined;
-      publish(IDLE);
+      if (selectionChanged) {
+        generation++;
+        last = undefined;
+        publish(IDLE);
+      }
       if (!selected) {
         hydration = undefined;
         return;
@@ -257,7 +261,7 @@ export default {
       const id = route.type === "session" ? route.sessionID : null;
       if (id !== selected) {
         selected = id;
-        refresh();
+        refresh(true);
       } else if (retryAt && Date.now() >= retryAt) {
         refresh();
       }

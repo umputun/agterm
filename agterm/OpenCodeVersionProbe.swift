@@ -4,9 +4,11 @@ import agtermCore
 enum OpenCodeVersionProbe {
     static func detect(environment: [String: String], timeout: TimeInterval = 3,
                        executableURL: URL = URL(fileURLWithPath: "/usr/bin/env")) async -> AgentHooksInstall.OpenCode.Version? {
-        await Task.detached(priority: .userInitiated) {
-            run(environment: environment, timeout: timeout, executableURL: executableURL)
-        }.value
+        await withCheckedContinuation { continuation in
+            Thread.detachNewThread {
+                continuation.resume(returning: run(environment: environment, timeout: timeout, executableURL: executableURL))
+            }
+        }
     }
 
     private static func run(environment: [String: String], timeout: TimeInterval,
@@ -31,14 +33,14 @@ enum OpenCodeVersionProbe {
         capture.didLaunch()
         if finished.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
-            if finished.wait(timeout: .now() + 0.2) == .timedOut {
+            if finished.wait(timeout: .now() + ProcessOutputCapture.terminationGrace) == .timedOut {
                 kill(process.processIdentifier, SIGKILL)
                 process.waitUntilExit()
             }
             return nil
         }
         guard process.terminationStatus == 0,
-              let output = capture.collect(until: .now() + 0.2) else { return nil }
+              let output = capture.collect(until: .now() + ProcessOutputCapture.terminationGrace) else { return nil }
         return AgentHooksInstall.OpenCode.Version(versionOutput: output.stdout)
     }
 }

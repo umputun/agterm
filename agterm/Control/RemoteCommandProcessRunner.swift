@@ -6,9 +6,7 @@ import agtermCore
 /// The deadline is the caller's, not ssh's: `ConnectTimeout` ends at the handshake and cannot bound a
 /// remote command that never returns.
 struct RemoteCommandProcessRunner: RemoteCommandRunner {
-    /// Grace between SIGTERM and SIGKILL, and for the output to close after exit, matching
-    /// `ZmxClient.terminationGrace`.
-    private static let terminationGrace: TimeInterval = 0.25
+    private static let terminationGrace = ProcessOutputCapture.terminationGrace
 
     func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
         await withCheckedContinuation { continuation in

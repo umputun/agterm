@@ -460,7 +460,7 @@ struct AgentHooksInstallTests {
     @Test func opencodePluginPathsUseOpenCodePluginsDirectory() {
         #expect(AgentHooksInstall.OpenCode.configurationDirectory(home: "/Users/me") == "/Users/me/.config/opencode")
         #expect(AgentHooksInstall.OpenCode.configurationDirectory(home: "~") == "~/.config/opencode")
-        #expect(AgentHooksInstall.OpenCode.path(home: "/Users/me")
+        #expect(AgentHooksInstall.OpenCode.path(home: "/Users/me", version: .v1)
                 == "/Users/me/.config/opencode/plugins/agterm-status.js")
         #expect(AgentHooksInstall.opencodePluginPath(home: "/Users/me")
                 == "/Users/me/.config/opencode/plugins/agterm-status.js")
@@ -483,6 +483,9 @@ struct AgentHooksInstallTests {
 
     @Test func opencodeV2UsesASeparateTUIEntrypointAndOwnershipMarker() throws {
         let version = AgentHooksInstall.OpenCode.Version.v2
+        #expect(AgentHooksInstall.opencodePluginPath(home: "/Users/me", version: version) == "/Users/me/.config/opencode/plugins/agterm-v2/tui.js")
+        #expect(AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: true, existingContents: "// agterm-opencode-v2-status-plugin\n", version: version))
+        #expect(!AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: true, existingContents: AgentHooksInstall.opencodePluginMarker, version: version))
         #expect(AgentHooksInstall.OpenCode.path(home: "/Users/me", version: version) == "/Users/me/.config/opencode/plugins/agterm-v2/tui.js")
         #expect(AgentHooksInstall.OpenCode.relativePath(version: version) == "opencode/agterm-v2/tui.js")
         #expect(AgentHooksInstall.OpenCode.marker(version: version) == "// agterm-opencode-v2-status-plugin")

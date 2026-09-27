@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 import plugin from "../../agterm/Resources/agent-status/opencode/agterm-v2/tui.js";
 
 async function fixture(run, { selected = "root", sessions, active = {}, env = {}, configure } = {}) {
@@ -49,6 +49,7 @@ async function fixture(run, { selected = "root", sessions, active = {}, env = {}
   try {
     configure?.({ context, permissions, forms });
     cleanup = await plugin.setup(context);
+    await nextTurn();
     await run({
       context, records, permissions, forms, active, calls, statuses, waitFor, handlers,
       select: (id) => { route = id ? { type: "session", sessionID: id } : { type: "home" }; },
@@ -70,11 +71,9 @@ test("selected session and descendants report to the client's pane", async () =>
     event("session.execution.started", { sessionID: "child" });
     event("session.execution.succeeded", { sessionID: "child" });
     event("session.execution.failed", { sessionID: "other", error: { type: "unknown" } });
-    await delay(30);
-    assert.equal(statuses().at(-1), "active --blink");
     event("session.execution.succeeded", { sessionID: "root" });
     await waitFor("completed --auto-reset");
-    assert.ok(!statuses().includes("blocked"));
+    assert.deepEqual(statuses(), ["idle", "active --blink", "completed --auto-reset"]);
     assert.ok(calls().every(line => line.startsWith("pane-a|right|stable-a|") && line.includes("isolated.sock|")));
   });
 });
@@ -88,31 +87,34 @@ test("pending requests stay blocked until the last permission or form settles", 
     await waitFor("blocked");
     event("session.retry.scheduled", { sessionID: "root" });
     event("permission.replied", { sessionID: "root", requestID: "p1" });
-    await delay(30);
-    assert.equal(statuses().at(-1), "blocked");
-    event("form.cancelled", { sessionID: "child", id: "f1" });
-    await waitFor("active --blink");
-    event("form.created", { form: { sessionID: "global", id: "unattributed" } });
     event("session.execution.succeeded", { sessionID: "root" });
+    event("form.cancelled", { sessionID: "child", id: "f1" });
     await waitFor("completed --auto-reset");
+    event("form.created", { form: { sessionID: "global", id: "unattributed" } });
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "completed --auto-reset", "active --blink"]);
   });
 });
 
 test("a failed child allows ongoing work but blocks completion until the next run", async () => {
-  await fixture(async ({ event, waitFor, statuses }) => {
+  await fixture(async ({ event, waitFor }) => {
     await waitFor("idle");
     event("session.execution.started", { sessionID: "root" });
     event("session.execution.started", { sessionID: "child" });
     await waitFor("active --blink");
     event("session.execution.failed", { sessionID: "child", error: { type: "provider.authentication" } });
-    await delay(30);
-    assert.equal(statuses().at(-1), "active --blink");
-    assert.ok(!statuses().includes("blocked"));
+    event("permission.asked", { sessionID: "root", id: "p1" });
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "root", requestID: "p1" });
+    await waitFor("active --blink");
     event("session.created", { sessionID: "sibling", parentID: "root" });
     event("session.execution.started", { sessionID: "sibling" });
     event("session.execution.succeeded", { sessionID: "root" });
-    await delay(30);
-    assert.equal(statuses().at(-1), "active --blink");
+    event("permission.asked", { sessionID: "sibling", id: "p2" });
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "sibling", requestID: "p2" });
+    await waitFor("active --blink");
     event("session.execution.succeeded", { sessionID: "sibling" });
     await waitFor("blocked");
     event("session.execution.started", { sessionID: "root" });
@@ -130,8 +132,11 @@ test("recoverable step overflow and retry do not block, terminal overflow does",
     event("session.step.failed", { sessionID: "root", error: { type: "context.overflow" } });
     event("session.compaction.started", { sessionID: "root" });
     event("session.retry.scheduled", { sessionID: "root" });
-    await delay(30);
-    assert.equal(statuses().at(-1), "active --blink");
+    event("session.execution.succeeded", { sessionID: "root" });
+    await waitFor("completed --auto-reset");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "completed --auto-reset", "active --blink"]);
     event("session.execution.failed", { sessionID: "root", error: { type: "context.overflow" } });
     await waitFor("blocked");
   });
@@ -153,10 +158,9 @@ test("selecting a child excludes its parent and siblings", async () => {
     await waitFor("idle");
     event("permission.asked", { sessionID: "root", id: "parent-permission" });
     event("session.execution.started", { sessionID: "other" });
-    await delay(30);
-    assert.equal(statuses().at(-1), "idle");
     event("session.execution.started", { sessionID: "child" });
     await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink"]);
   }, { selected: "child" });
 });
 
@@ -170,6 +174,28 @@ test("initial hydration includes running descendants and existing requests", asy
   }, { active: { child: {} }, configure: ({ permissions }) => permissions.set("child", [{ id: "p1" }]) });
 });
 
+test("slow RPCs hydrate a large family with a pending permission", async () => {
+  await fixture(async ({ event, waitFor }) => {
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "child-49", requestID: "p1" });
+    await waitFor("active --blink");
+  }, {
+    sessions: [{ id: "root" }, ...Array.from({ length: 50 }, (_, index) => ({ id: `child-${index}`, parentID: "root" }))],
+    active: { root: {} },
+    configure: ({ context, permissions }) => {
+      permissions.set("child-49", [{ id: "p1" }]);
+      for (const [owner, name] of [[context.client.session, "active"], [context.client.session, "get"],
+        [context.client.session, "list"], [context.client.permission, "list"], [context.client.session.form, "list"]]) {
+        const original = owner[name];
+        owner[name] = async (args, options) => {
+          await delay(110, undefined, { signal: options?.signal ?? args?.signal });
+          return original(args, options);
+        };
+      }
+    },
+  });
+});
+
 test("switching to another session or home clears the previous blocked status without a server event", async () => {
   await fixture(async ({ event, waitFor, select, statuses }) => {
     await waitFor("idle");
@@ -178,10 +204,9 @@ test("switching to another session or home clears the previous blocked status wi
     select("other");
     await waitFor("idle");
     event("permission.asked", { sessionID: "root", id: "p2" });
-    await delay(30);
-    assert.equal(statuses().at(-1), "idle");
     event("session.execution.started", { sessionID: "other" });
     await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "blocked", "idle", "active --blink"]);
     select(null);
     await waitFor("idle");
   });
@@ -196,6 +221,34 @@ test("reconnect replaces lost requests and busy state with a fresh snapshot", as
     records.set("root", { id: "root", outcome: "succeeded" });
     event("server.connected");
     await waitFor("completed --auto-reset");
+  });
+});
+
+for (const [outcome, status] of [["failed", "blocked"], ["succeeded", "completed --auto-reset"]]) {
+  test(`reconnect does not resend an unchanged ${status} status`, async () => {
+    await fixture(async ({ event, waitFor, statuses }) => {
+      await waitFor(status);
+      event("server.connected");
+      await nextTurn();
+      event("session.execution.started", { sessionID: "root" });
+      await waitFor("active --blink");
+      assert.deepEqual(statuses(), ["idle", status, "active --blink"]);
+    }, { sessions: [{ id: "root", outcome }] });
+  });
+}
+
+test("reconnect preserves a queued report for the same selection", async () => {
+  await fixture(async ({ event, waitFor, records, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    records.set("root", { id: "root", outcome: "failed" });
+    event("session.execution.failed", { sessionID: "root" });
+    event("server.connected");
+    await waitFor("blocked");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink"]);
   });
 });
 
@@ -216,18 +269,20 @@ test("hydration completes a succeeded root despite an older failed child", async
 });
 
 test("hydration leaves a root interrupted by shutdown idle", async () => {
-  await fixture(async ({ waitFor, statuses }) => {
+  await fixture(async ({ event, waitFor, statuses }) => {
     await waitFor("idle");
-    await delay(100);
-    assert.deepEqual(statuses(), ["idle"]);
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink"]);
   }, { sessions: [{ id: "root", outcome: "interrupted" }] });
 });
 
 test("hydration leaves an interrupted root idle despite an older succeeded child", async () => {
-  await fixture(async ({ waitFor, statuses }) => {
+  await fixture(async ({ event, waitFor, statuses }) => {
     await waitFor("idle");
-    await delay(100);
-    assert.deepEqual(statuses(), ["idle"]);
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink"]);
   }, {
     sessions: [{ id: "root", outcome: "interrupted", time: { idle: 20 } },
       { id: "child", parentID: "root", outcome: "succeeded", time: { idle: 10 } }],
@@ -272,8 +327,7 @@ test("cleanup unsubscribes and clears the status", async () => {
     assert.equal(handlers.size, 0);
     assert.equal(statuses().at(-1), "idle");
     event("session.execution.started", { sessionID: "root" });
-    await delay(300);
-    assert.equal(statuses().at(-1), "idle");
+    assert.deepEqual(statuses(), ["idle", "blocked", "idle"]);
   });
 });
 
@@ -282,12 +336,17 @@ test("a late snapshot from the previous selection cannot overwrite the new sessi
   await fixture(async ({ select, event, waitFor, statuses }) => {
     for (let attempt = 0; !release && attempt < 100; attempt++) await delay(10);
     assert.equal(typeof release, "function");
+    await waitFor("idle");
     select("other");
     event("session.execution.started", { sessionID: "other" });
     await waitFor("active --blink");
     release([{ id: "stale" }]);
-    await delay(50);
-    assert.equal(statuses().at(-1), "active --blink");
+    await nextTurn();
+    event("session.execution.succeeded", { sessionID: "other" });
+    await waitFor("completed --auto-reset");
+    event("session.execution.started", { sessionID: "other" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "idle", "active --blink", "completed --auto-reset", "active --blink"]);
   }, { configure: ({ context }) => {
     context.client.permission.list = ({ sessionID }) => sessionID === "root"
       ? new Promise(resolve => { release = resolve; }) : Promise.resolve([]);
@@ -315,7 +374,6 @@ test("two CLI clients observing the same events keep independent pane ownership"
 test("outside agterm setup is a no-op", async () => {
   await fixture(async ({ handlers, calls }) => {
     assert.equal(handlers.size, 0);
-    await delay(50);
     assert.deepEqual(calls(), []);
   }, { env: { AGTERM_SESSION_ID: "" } });
 });
@@ -323,7 +381,7 @@ test("outside agterm setup is a no-op", async () => {
 test("reporting failures do not reject into OpenCode", async () => {
   await fixture(async ({ event, dispose }) => {
     event("session.execution.started", { sessionID: "root" });
-    await delay(50);
+    await nextTurn();
     await assert.doesNotReject(dispose());
   }, { env: { AGTERM_STATUS_WRAPPER: "/nonexistent/agterm-test-wrapper" } });
 });
@@ -341,12 +399,44 @@ test("paginated descendants hydrate through the public client API", async () => 
   } });
 });
 
+test("children from different pages hydrate concurrently", async () => {
+  const children = Array.from({ length: 3 }, (_, index) => ({ id: `child-${index}`, parentID: "root" }));
+  await fixture(async ({ event, waitFor }) => {
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "child-2", requestID: "p1" });
+    await waitFor("active --blink");
+  }, {
+    sessions: [{ id: "root" }, ...children],
+    active: { root: {} },
+    configure: ({ context, permissions }) => {
+      permissions.set("child-2", [{ id: "p1" }]);
+      let started = 0;
+      let release;
+      const allStarted = new Promise(resolve => { release = resolve; });
+      const get = context.client.session.get;
+      context.client.session.get = async args => {
+        if (args.sessionID !== "root") {
+          if (++started === children.length) release();
+          await allStarted;
+        }
+        return get(args);
+      };
+      context.client.session.list = async ({ parentID, cursor }) => {
+        if (parentID !== "root") return { data: [], cursor: {} };
+        const index = Number(cursor ?? 0);
+        return { data: [children[index]], cursor: { next: index < children.length - 1 ? String(index + 1) : undefined } };
+      };
+    },
+  });
+});
+
 test("terminal errors unrelated to a running turn do not paint a blocked indicator", async () => {
   await fixture(async ({ event, waitFor, statuses }) => {
     await waitFor("idle");
     event("session.execution.failed", { sessionID: "root", error: { type: "unknown" } });
-    await delay(50);
-    assert.equal(statuses().at(-1), "idle");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink"]);
   });
 });
 
@@ -358,7 +448,9 @@ test("server shutdown or superseding a run is not reported as a completed turn",
       await waitFor("active --blink");
       event("session.execution.interrupted", { sessionID: "root", reason });
       await waitFor("idle");
-      assert.ok(!statuses().includes("completed --auto-reset"));
+      event("session.execution.started", { sessionID: "root" });
+      await waitFor("active --blink");
+      assert.deepEqual(statuses(), ["idle", "active --blink", "idle", "active --blink"]);
     });
   }
 });

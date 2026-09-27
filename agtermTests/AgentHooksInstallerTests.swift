@@ -50,17 +50,26 @@ final class AgentHooksInstallerTests: XCTestCase {
     }
 
     func testOpenCodeOutcomesNameTheVersionAndStayOnOneLine() {
-        let results: [AgentHooksInstaller.OpenCodeResult] = [.installed, .alreadyConfigured, .userOwned, .unreadable, .writeFailed, .noOpenCode]
         for version in AgentHooksInstall.OpenCode.Version.allCases {
+            let results: [AgentHooksInstaller.OpenCodeResult] = [
+                .installed(version), .alreadyConfigured(version), .userOwned(version), .unreadable(version), .writeFailed(version),
+            ]
             for result in results {
-                let text = AgentHooksInstaller.opencodeText(result, version: version)
+                let text = AgentHooksInstaller.opencodeText(result)
                 XCTAssertTrue(text.contains("OpenCode \(version.rawValue)"))
                 XCTAssertFalse(text.contains("\n"))
             }
-            let installed = AgentHooksInstaller.opencodeText(.installed, version: version)
+            let installed = AgentHooksInstaller.opencodeText(.installed(version))
             XCTAssertTrue(installed.contains(AgentHooksInstall.OpenCode.path(home: "~", version: version)))
             XCTAssertTrue(installed.contains("Restart OpenCode"))
         }
+    }
+
+    func testMissingOpenCodeDoesNotNameAVersion() {
+        let text = AgentHooksInstaller.opencodeText(.noOpenCode)
+        XCTAssertEqual(text, "No ~/.config/opencode found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
+                       + "Coarse shell detection for opencode is off by default.")
+        XCTAssertFalse(AgentHooksInstaller.OpenCodeResult.noOpenCode.isWarning)
     }
 
     func testUnknownOpenCodeVersionOffersSkipAndSupportedVersions() {
@@ -72,7 +81,7 @@ final class AgentHooksInstallerTests: XCTestCase {
 
     func testUndetectedOpenCodeVersionDoesNotClaimInstallation() {
         let result = AgentHooksInstaller.OpenCodeResult.unknownVersion
-        let text = AgentHooksInstaller.opencodeText(result, version: nil)
+        let text = AgentHooksInstaller.opencodeText(result)
         XCTAssertTrue(result.isWarning)
         XCTAssertTrue(text.contains("skipped"))
         XCTAssertFalse(text.contains("\n"))

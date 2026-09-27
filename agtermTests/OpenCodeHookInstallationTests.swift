@@ -44,8 +44,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
     func testSkippingUnknownVersionWritesNoPlugin() async throws {
         let outcome = try await install(choosing: "Skip OpenCode")
 
-        XCTAssertNil(outcome.version)
-        XCTAssertEqual(outcome.result, .unknownVersion)
+        XCTAssertEqual(outcome, .unknownVersion)
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins").path))
     }
 
@@ -56,8 +55,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         try existing.write(to: destination, atomically: true, encoding: .utf8)
         let outcome = try await install(choosing: "OpenCode v2")
 
-        XCTAssertEqual(outcome.version, .v2)
-        XCTAssertEqual(outcome.result, .userOwned)
+        XCTAssertEqual(outcome, .userOwned(.v2))
         XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), existing)
     }
 
@@ -66,8 +64,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
 
         let outcome = try await install(choosing: nil)
 
-        XCTAssertEqual(outcome.version, .v2)
-        XCTAssertEqual(outcome.result, .installed)
+        XCTAssertEqual(outcome, .installed(.v2))
         XCTAssertTrue(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins/agterm-v2/tui.js").path))
     }
 
@@ -80,8 +77,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
 
         let outcome = try await install(choosing: nil)
 
-        XCTAssertNil(outcome.version)
-        XCTAssertEqual(outcome.result, .noOpenCode)
+        XCTAssertEqual(outcome, .noOpenCode)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode").path))
     }
@@ -89,18 +85,16 @@ final class OpenCodeHookInstallationTests: XCTestCase {
     private func assertFallbackInstalls(_ expected: AgentHooksInstall.OpenCode.Version, button: String, plugin: String, other: String) async throws {
         let outcome = try await install(choosing: button)
 
-        XCTAssertEqual(outcome.version, expected)
-        XCTAssertEqual(outcome.result, .installed)
+        XCTAssertEqual(outcome, .installed(expected))
         let installed = home.appendingPathComponent(".config/opencode/plugins/" + plugin)
         let bundled = scripts.appendingPathComponent("opencode/" + plugin)
         XCTAssertEqual(try Data(contentsOf: installed), try Data(contentsOf: bundled))
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins/" + other).path))
         let repeated = try await install(choosing: button)
-        XCTAssertEqual(repeated.version, expected)
-        XCTAssertEqual(repeated.result, .alreadyConfigured)
+        XCTAssertEqual(repeated, .alreadyConfigured(expected))
     }
 
-    private func install(choosing button: String?) async throws -> (version: AgentHooksInstall.OpenCode.Version?, result: AgentHooksInstaller.OpenCodeResult) {
+    private func install(choosing button: String?) async throws -> AgentHooksInstaller.OpenCodeResult {
         clickedChoice = false
         let timer = Timer(timeInterval: 0.02, target: self, selector: #selector(clickChoice(_:)),
                           userInfo: ["button": button ?? "Skip OpenCode", "deadline": Date().addingTimeInterval(10)] as [String: Any], repeats: true)
