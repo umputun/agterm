@@ -1849,7 +1849,7 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect. Retries
   run after 1, 2, 4, 8, 16 then 30 seconds, slow to every 5 minutes after eight failures in a row, and
-  never stop.
+  never stop; a wake or the network coming back retries at once and starts that schedule over.
 - A notification raised while the stream is down is never shown here; status, context and HUD are restored.
 - A terminal notification (OSC 9/777) is not mirrored: it already arrives in the pane's bytes and is
   raised here once. A mirrored `notify` records a `notify` event on each app.

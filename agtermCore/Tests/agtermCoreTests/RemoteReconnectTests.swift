@@ -111,6 +111,28 @@ struct RemoteReconnectBookTests {
         #expect(book.due(now: later).isEmpty)
     }
 
+    @Test func retryAllNowMakesEveryWaitingPaneDueAndStartsItsBackoffOver() {
+        let book = RemoteReconnectBook()
+        let other = UUID()
+        book.wait(pane: pane, session: session, host: "mini", cover: false, now: t0)
+        book.wait(pane: other, session: session, host: "mini", cover: false, now: t0)
+        var now = t0
+        for step in 0..<9 {
+            now = t0.addingTimeInterval(Double(step) * 400)
+            _ = book.due(now: now)
+            _ = book.finished(pane: pane, ok: false, now: now)
+            _ = book.finished(pane: other, ok: false, now: now)
+        }
+        let later = now.addingTimeInterval(200)
+        #expect(book.due(now: later).isEmpty, "nine failures in a row: minutes until the next probe")
+
+        book.retryAllNow(now: later)
+
+        #expect(Set(book.due(now: later)) == [pane, other])
+        _ = book.finished(pane: pane, ok: false, now: later)
+        #expect(book.due(now: later.addingTimeInterval(1)) == [pane], "a retry that failed ramps from one second again")
+    }
+
     @Test func aCancelledPanesProbeResultIsDropped() {
         let book = waiting()
         _ = book.due(now: t0)

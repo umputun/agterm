@@ -41,6 +41,17 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    private final class CountingProbe: RemoteCommandRunner, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var runs: Int { lock.withLock { count } }
+
+        func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
+            lock.withLock { count += 1 }
+            return RemoteCommandResult(status: 255, stdout: "", stderr: "")
+        }
+    }
+
     private func server(probe status: Int32) -> ControlServer {
         server(runner: Probe(status: status))
     }
@@ -50,6 +61,30 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
                       settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: directory)),
                       identity: AppIdentity(version: "test", commit: "test"), remoteRunner: runner,
                       socketPath: directory.appendingPathComponent("control.sock").path)
+    }
+
+    func testRetryingRemoteLinksProbesAWaitingPaneBeforeItsBackoff() async throws {
+        let (session, view) = try replica()
+        let probe = CountingProbe()
+        let server = server(runner: probe)
+        let frozen = Date()
+        server.hudClock = { frozen }
+        let book = RemoteReconnectBook.shared
+
+        server.waitToReconnect(view, cover: false)
+        server.tickReconnects()
+        for _ in 0..<200 where book.entries[session.paneIdentity]?.probing != false {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(probe.runs, 1)
+        server.tickReconnects()
+        XCTAssertEqual(probe.runs, 1, "the next probe waits for its backoff")
+
+        server.retryRemoteLinksNow()
+        for _ in 0..<200 where probe.runs < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(probe.runs, 2)
     }
 
     private func replica() throws -> (Session, GhosttySurfaceView) {

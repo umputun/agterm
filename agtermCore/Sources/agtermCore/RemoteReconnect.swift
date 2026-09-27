@@ -114,9 +114,16 @@ public final class RemoteReconnectBook {
         return ControlReconnect(failures: entry.failures, reason: entry.reason)
     }
 
+    /// The pane is due now and its backoff starts over, so a retry fired before the network is back ramps
+    /// from one second again; a probe in flight is left alone.
     public func retryNow(pane: UUID, now: Date) {
         guard entries[pane]?.probing == false else { return }
+        entries[pane]?.failures = 0
         entries[pane]?.retryAt = now
+    }
+
+    public func retryAllNow(now: Date) {
+        for pane in entries.keys { retryNow(pane: pane, now: now) }
     }
 
     public func cancel(pane: UUID) {

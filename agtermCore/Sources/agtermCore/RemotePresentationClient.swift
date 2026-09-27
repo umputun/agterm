@@ -127,6 +127,13 @@ public final class RemotePresentationClient {
         dropLink()
     }
 
+    /// A pending retry is due now and its backoff starts over; with no retry pending nothing changes.
+    public func retryNow() {
+        guard retryAt != nil else { return }
+        failures = 0
+        retryAt = now()
+    }
+
     /// Sends what this Mac answered about work the origin handed over. Dropped with no link: the origin
     /// takes that work back when the stream goes.
     public func answer(_ body: PresentationFrame.Body) {

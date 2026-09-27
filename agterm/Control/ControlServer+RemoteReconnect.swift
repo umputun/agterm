@@ -38,6 +38,16 @@ extension ControlServer {
         }
     }
 
+    /// Wake or a network that came back: every waiting pane and dropped stream retries now, not on its backoff.
+    func retryRemoteLinksNow() {
+        RemoteReconnectBook.shared.retryAllNow(now: hudClock())
+        for client in remoteClients.values {
+            client.retryNow()
+            client.tick()
+        }
+        tickReconnects()
+    }
+
     /// The surface still holding `pane`, nil once the pane or its row is gone. A row closed within its undo
     /// window still holds it.
     private func waitingSurface(_ pane: UUID, in sessionID: UUID) -> GhosttySurfaceView? {
