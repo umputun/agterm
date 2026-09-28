@@ -15,7 +15,7 @@ fi
 
 sid="$AGTERM_SESSION_ID"
 # tree reports the frontmost window only; a session in a background window would read as missing
-# agtermctl never reads AGTERM_SOCKET, so without --socket a second instance would drive the live one
+# agtermctl never reads AGTERM_SOCKET, so a bare call can reach another instance's socket
 node_json() {
   "$AGTERMCTL" tree --json ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} ${AGTERM_WINDOW_ID:+--window "$AGTERM_WINDOW_ID"} | jq --arg id "$sid" '[.. | objects | select(.id? == $id)][0]'
 }
