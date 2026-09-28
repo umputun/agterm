@@ -14,8 +14,9 @@ if [[ "${AGTERM_ENABLED:-}" != "1" || -z "${AGTERM_SESSION_ID:-}" ]]; then
 fi
 
 sid="$AGTERM_SESSION_ID"
+# tree reports the frontmost window only; a session in a background window would read as missing
 node_json() {
-  "$AGTERMCTL" tree --json | jq --arg id "$sid" '[.. | objects | select(.id? == $id)][0]'
+  "$AGTERMCTL" tree --json ${AGTERM_WINDOW_ID:+--window "$AGTERM_WINDOW_ID"} | jq --arg id "$sid" '[.. | objects | select(.id? == $id)][0]'
 }
 
 # the reported path may differ from ours by a symlinked parent (/tmp -> /private/tmp)

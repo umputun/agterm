@@ -1,7 +1,7 @@
 ---
 name: agdoc
 description: Generate a context-aware HTML document and show it in an agterm overlay, end to end. With no arguments it works out the subject from the session - the issue, PR, branch, plan, diff or topic being discussed - and asks with the likely variants when that is unclear; with arguments it takes them as the brief, including subject and audience ("show me details about X from a business point of view"). It asks which design to use - editorial, a one-screen brief, classic, or one the user describes. This skill should be used when the user says "agdoc", "/agdoc", "show this as a doc", "make an html doc of this and show it", or asks to see an issue, PR, plan, change or topic explained as a page in agterm.
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/show.sh *), Bash(agtermctl *)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/show.sh *)
 ---
 
 # agdoc
