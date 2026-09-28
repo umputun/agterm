@@ -596,6 +596,21 @@ struct AppSettingsTests {
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
     }
 
+    @Test func newSessionPlacementAndCloseSelectionRoundTripAndDefault() throws {
+        let original = AppSettings(newSessionPlacement: "afterCurrent", closeSelection: "above")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.effectiveNewSessionPlacement == .afterCurrent)
+        #expect(decoded.effectiveCloseSelection == .above)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.effectiveNewSessionPlacement == .end)
+        #expect(legacy.effectiveCloseSelection == .recent)
+        let future = AppSettings(newSessionPlacement: "future", closeSelection: "future")
+        #expect(future.effectiveNewSessionPlacement == .end)
+        #expect(future.effectiveCloseSelection == .recent)
+        #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+    }
+
     @Test func autoFollowAttentionUnknownDecodesToOff() {
         #expect(AppSettings.AutoFollowAttention(rawValue: "s5") == .s5)
         #expect(AppSettings.AutoFollowAttention(rawValue: "future") == nil)
