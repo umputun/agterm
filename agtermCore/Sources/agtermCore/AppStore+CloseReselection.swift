@@ -1,8 +1,9 @@
 import Foundation
 
 extension AppStore {
-    /// Picks the next selection after CLOSING the active session at `location`: the most-recently-active
-    /// surviving session, else a positional walk.
+    /// Picks the next selection after CLOSING the active session at `location`: under `closeSelection == .above`
+    /// the nearest visible survivor above it in its own workspace (else below it), otherwise and when that
+    /// workspace has none, the most-recently-active surviving session, else a positional walk.
     /// The MRU scope narrows to the closing session's own workspace ∩ the VISIBLE set (`navigableSessions`,
     /// so both the flagged list and the focus filter apply) — an unscoped survivor could yank the user into
     /// another workspace, and a pick the sidebar isn't rendering would strand the selection. Exhausting a
@@ -18,6 +19,7 @@ extension AppStore {
         let everything = Set(workspaces.flatMap(\.sessions).map(\.id))
         let inWorkspace = Set(workspaces[location.workspaceIndex].sessions.map(\.id))
         let sameWorkspace = inWorkspace.intersection(visible)
+        if closeSelection == .above, let above = sessionAbove(location, scope: sameWorkspace) { return above }
         // the whole-tree level is what makes "widen when exhausted" mean widen: without it an emptied
         // visible scope falls to a positional jump into the first workspace.
         let scope = sameWorkspace.isEmpty ? (visible.isEmpty ? everything : visible) : sameWorkspace
@@ -28,6 +30,14 @@ extension AppStore {
             return inScope
         }
         return reselectionTarget(after: location)
+    }
+
+    /// The nearest `scope` member above the removed slot in its own workspace, else the nearest below it.
+    private func sessionAbove(_ location: (workspaceIndex: Int, sessionIndex: Int), scope: Set<UUID>) -> UUID? {
+        let sessions = workspaces[location.workspaceIndex].sessions
+        let slot = min(location.sessionIndex, sessions.count)
+        if let above = sessions[..<slot].last(where: { scope.contains($0.id) }) { return above.id }
+        return sessions[slot...].first { scope.contains($0.id) }?.id
     }
 
     /// `reselectionTarget`'s walk restricted to `scope`, over the tree FLATTENED in sidebar order: the
