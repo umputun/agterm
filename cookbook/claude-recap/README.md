@@ -69,6 +69,7 @@ Claude Code takes one `statusLine` command, so this is an either/or: extend the 
 
 All optional:
 
+- `AGTERMCTL`, the agterm CLI, default `agtermctl`
 - `CLAUDE_BIN`, the Claude Code binary, default `claude`
 - `RECAP_MODEL`, the summarizing model, default `claude-haiku-4-5-20251001`
 - `CLAUDE_DIRS`, space-separated Claude Code config dirs to search, default `$HOME/.claude`. Set it if you run more than one config dir.

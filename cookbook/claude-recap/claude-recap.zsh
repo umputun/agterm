@@ -11,6 +11,7 @@
 
 set -u
 
+AGTERMCTL="${AGTERMCTL:-agtermctl}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 # full id, not the "haiku" alias — that is not a recognized alias and silently falls back to the
 # session's default model, which is far slower and dearer for what is six one-line items
@@ -75,8 +76,8 @@ phase "resolving session"
 sid="${1:-}"
 pane="${2:-left}"
 cwd=""
-if [ -n "$sid" ] && command -v agtermctl >/dev/null 2>&1; then
-    cwd=$(agtermctl tree --json 2>/dev/null | \
+if [ -n "$sid" ] && command -v "$AGTERMCTL" >/dev/null 2>&1; then
+    cwd=$("$AGTERMCTL" tree --json 2>/dev/null | \
         jq -r --arg id "$sid" '.result.tree.workspaces[].sessions[] | select(.id==$id) | .cwd' 2>/dev/null | head -1)
 fi
 [ -n "$cwd" ] || cwd="$PWD"
