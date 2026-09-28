@@ -450,7 +450,7 @@ buys nothing. A caller with no tree uses `version`.
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
   Which session is selected after the active one closes follows the user's Settings choice: the most
-  recently used, or the row above in the same workspace (the row below when it was the top row, and the
+  recently used, or the next row in the same workspace (the row above when it was the last row, and the
   most recently used when nothing visible is left in that workspace).
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.

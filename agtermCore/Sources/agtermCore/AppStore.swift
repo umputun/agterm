@@ -520,7 +520,7 @@ public final class AppStore {
     }
 
     /// Removes a session, tears down its surface, and, if it was active, reselects per `closeSelection` through
-    /// `closeReselectionTarget(after:)`: the row above (else below) in its workspace, or the most-recently-active
+    /// `closeReselectionTarget(after:)`: the next row (else the one above) in its workspace, or the most-recently-active
     /// surviving session in scope, falling back to the positional neighbor.
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let location = location(ofSession: sessionID) else { return }

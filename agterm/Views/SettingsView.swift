@@ -140,7 +140,7 @@ private struct GeneralSettingsView: View {
                     .accessibilityIdentifier("settings-close-grace-undo")
                 Picker("After closing a session, select", selection: closeSelection) {
                     Text("The most recently used session").tag(AppSettings.CloseSelection.recent)
-                    Text("The session above it").tag(AppSettings.CloseSelection.above)
+                    Text("The next session in the list").tag(AppSettings.CloseSelection.next)
                 }
                 .accessibilityIdentifier("settings-close-selection")
                 Picker("Flagged view layout", selection: flaggedViewLayout) {

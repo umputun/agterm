@@ -125,11 +125,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case afterCurrent
     }
 
-    /// What closing the active session selects: the most recently used survivor, or the row above it in
-    /// the same workspace. `recent` is the default and the nil case.
+    /// What closing the active session selects: the most recently used survivor, or the next row in the
+    /// same workspace, as closing a browser or Finder tab does. `recent` is the default and the nil case.
     public enum CloseSelection: String, CaseIterable, Sendable {
         case recent
-        case above
+        case next
     }
 
     /// The terminal cursor shape, carrying ghostty's own `cursor-style` values as raw names. There is no

@@ -61,10 +61,10 @@ final class SettingsModelTests: XCTestCase {
     func testSetCloseSelectionPersistsAndReachesOpenStores() throws {
         let store = try XCTUnwrap(library.activeStore)
 
-        model.setCloseSelection(AppSettings.CloseSelection.above.rawValue)
+        model.setCloseSelection(AppSettings.CloseSelection.next.rawValue)
 
-        XCTAssertEqual(store.closeSelection, .above)
-        XCTAssertEqual(SettingsStore(directory: stateDir).load().closeSelection, "above")
+        XCTAssertEqual(store.closeSelection, .next)
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().closeSelection, "next")
 
         model.setCloseSelection(nil)
 

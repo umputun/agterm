@@ -597,11 +597,11 @@ struct AppSettingsTests {
     }
 
     @Test func newSessionPlacementAndCloseSelectionRoundTripAndDefault() throws {
-        let original = AppSettings(newSessionPlacement: "afterCurrent", closeSelection: "above")
+        let original = AppSettings(newSessionPlacement: "afterCurrent", closeSelection: "next")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
         #expect(decoded.effectiveNewSessionPlacement == .afterCurrent)
-        #expect(decoded.effectiveCloseSelection == .above)
+        #expect(decoded.effectiveCloseSelection == .next)
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.effectiveNewSessionPlacement == .end)
         #expect(legacy.effectiveCloseSelection == .recent)
