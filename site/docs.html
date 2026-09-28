@@ -1176,7 +1176,9 @@
               beyond the workspace only when the close leaves nothing there to return to, and beyond what is on screen only when
               that too is exhausted. If no recent session qualifies at all, it falls back to the adjacent row, kept inside the
               narrowed view while one is applied, and to the first session of another workspace when the closed session was the
-              last one in its own.
+              last one in its own. Settings ▸ General can switch this to the session directly above the closed one, or the
+              one below when it was the top row. That choice never leaves the workspace; when nothing visible is left there,
+              the recently-used rule above decides.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
               An action the menus currently disable — Rename Session with no session open, Focus Workspace with no workspace —
@@ -1450,7 +1452,9 @@
                 <strong style="color: #e6e1d7">Flagged view layout</strong> that picks a flat list or a workspace tree for the
                 flagged view in every window (the tree shares each workspace's collapse state with the ordinary tree, so
                 folding a group folds that workspace in both), where a new session opens (your home
-                directory by default, the current session's directory, or a fixed folder you pick), a restore mode for fresh shells,
+                directory by default, the current session's directory, or a fixed folder you pick), whether a new session goes
+                at the end of its workspace or right after the current one, whether closing a session returns to the one you
+                used most recently or the one above it, a restore mode for fresh shells,
                 re-run commands, or live sessions, an opt-in confirm before closing a session, and
                 whether to load your global Ghostty config.
               </div>
