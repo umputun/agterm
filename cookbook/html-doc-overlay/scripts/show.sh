@@ -15,8 +15,9 @@ fi
 
 sid="$AGTERM_SESSION_ID"
 # tree reports the frontmost window only; a session in a background window would read as missing
+# agtermctl never reads AGTERM_SOCKET, so without --socket a second instance would drive the live one
 node_json() {
-  "$AGTERMCTL" tree --json ${AGTERM_WINDOW_ID:+--window "$AGTERM_WINDOW_ID"} | jq --arg id "$sid" '[.. | objects | select(.id? == $id)][0]'
+  "$AGTERMCTL" tree --json ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} ${AGTERM_WINDOW_ID:+--window "$AGTERM_WINDOW_ID"} | jq --arg id "$sid" '[.. | objects | select(.id? == $id)][0]'
 }
 
 # the reported path may differ from ours by a symlinked parent (/tmp -> /private/tmp)
@@ -41,13 +42,13 @@ if [[ -n "$program" ]]; then
 fi
 
 if [[ -n "$shown" && "$(canon "$shown")" == "$file" ]]; then
-  "$AGTERMCTL" session overlay reload --target "$sid" >/dev/null || exit 1
+  "$AGTERMCTL" session overlay reload ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --target "$sid" >/dev/null || exit 1
   action="reloaded"
 else
   if [[ -n "$shown" || -n "$shown_url" ]]; then
-    "$AGTERMCTL" session overlay close --target "$sid" >/dev/null || exit 1
+    "$AGTERMCTL" session overlay close ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --target "$sid" >/dev/null || exit 1
   fi
-  "$AGTERMCTL" session overlay open --html "$file" --target "$sid" --size-percent 95 --follow >/dev/null || exit 1
+  "$AGTERMCTL" session overlay open ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --html "$file" --target "$sid" --size-percent 95 --follow >/dev/null || exit 1
   action="opened"
 fi
 
