@@ -641,7 +641,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(sharing.revealed, [pages.appendingPathComponent("a.html")])
     }
 
-    func testFinderFallsBackToTheOriginalFileBeforeLoading() throws {
+    func testFinderRevealsTheOriginalFileWhileTheFirstLoadIsPending() throws {
         let page = try open(grant: pages.path)
         _ = registry.page(for: page, store: store)
 
@@ -675,7 +675,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(browser.opened, [])
     }
 
-    func testCopyLinkFallsBackToTheOriginalURLBeforeLoading() throws {
+    func testCopyLinkCopiesTheOriginalURLWhileTheFirstLoadIsPending() throws {
         let address = "http://127.0.0.1:1/report?q=1#section"
         let page = try openURL(address)
         _ = registry.page(for: page, store: store)

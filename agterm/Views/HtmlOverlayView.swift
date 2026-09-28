@@ -56,7 +56,7 @@ struct HtmlOverlayView: View {
                 }
                 switch overlay.source {
                 case .file:
-                    button("finder", "Show in Finder", "htmlOverlay.finder", enabled: true) {
+                    button("arrow.up.forward.app", "Show in Finder", "htmlOverlay.finder", enabled: true) {
                         _ = registry.navigate(overlay.id, .finder)
                     }
                 case .url:
