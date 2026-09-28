@@ -8,18 +8,25 @@ These rules cover recipes. The project-wide rules for everything else are in [CO
 
 ## Layout
 
-One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the scripts, nothing else, with two exceptions. A recipe whose chord hands work to a coding agent may ship the agent skill it needs, as `SKILL.md` beside the scripts, and *Setup* says where to copy it. A recipe that drives more than one agent ships one `SKILL-<agent>.md` per agent it supports instead, and *Setup* says where each goes; every loader requires the installed file to be named exactly `SKILL.md`, so the suffix belongs to the recipe rather than to the agent. The skill is part of the recipe and is read the same way, so keep it to what this recipe needs rather than shipping your whole configuration. A recipe that is configuration rather than code may ship that config as a file the reader copies into place, named after the recipe, instead of a block he retypes out of the README, since a brace lost in transcription kills every hook silently. Nothing lints it, so say in the pull request what reads it, the same as a script in an extension CI does not know.
+One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and whatever the recipe needs to run, and nothing more. A recipe that is only instructions, a set of `agtermctl` commands or `keymap.conf` lines the reader types in, is a README alone. Anything else it needs is one of these:
+
+- **Scripts**, named by language as described below.
+- **A config file** the reader copies into place, named for its purpose, when the recipe is configuration rather than code. It spares the reader retyping a block out of the README, where a brace lost in transcription kills every hook silently. Nothing lints it, so say in the pull request what reads it, the same as a script in an extension CI does not know.
+- **An agent skill**, whether a chord hands work to it or the reader invokes it directly. Ship it as `SKILL.md`, or, for a recipe that drives more than one agent, one `SKILL-<agent>.md` per agent; every loader requires the installed file to be named exactly `SKILL.md`, so the suffix belongs to the recipe rather than to the agent. The skill is part of the recipe and is read the same way, so keep it to what this recipe needs rather than shipping your whole configuration.
+- **Data files** the scripts or the skill read at run time, such as page templates, in a subdirectory.
+
+*Setup* says where every one of these files goes. A skill that finds its scripts or data by path relative to itself keeps them in the subdirectories it names, such as `scripts/` and `assets/`, and *Setup* says they must be installed together.
 
 Name scripts by their language, because the extension decides what CI does with them:
 
 - `.sh` is POSIX or bash. CI runs `shellcheck` over every one, and it has to be clean.
 - `.zsh` is zsh. CI parses every one with `zsh -n`, so a syntax error is caught, but shellcheck cannot read zsh and nothing lints these. A parse is not a lint, so run `zsh -n` yourself and read the script over before sending.
 - `.fish` is fish. CI parses every one with `fish --no-execute`, the fish analogue of the `zsh -n` gate above. Nothing lints these either, so run it yourself and read the script over before sending.
-- `.py` is Python 3. CI runs `ruff check` over every one, and it has to be clean. A regression script named `test_*.py` is also executed directly by CI. Say which Python version the recipe needs in *Requirements*, the same as any other external tool, and depend on the standard library unless the recipe genuinely cannot.
+- `.py` is Python 3. CI runs `ruff check` over every one, and it has to be clean. A regression script named `test_*.py` is also run through `python3` by CI. Say which Python version the recipe needs in *Requirements*, the same as any other external tool, and depend on the standard library unless the recipe genuinely cannot.
 
 A recipe in another language is welcome, but say so in the pull request: nothing lints an extension CI does not know, and a recipe that arrives ungated is one the reader has to trust entirely on review.
 
-Every script carries a shebang. A script whose *Setup* tells the reader to execute it is committed with the executable bit set; a shell function the reader pastes into `~/.zshrc` is committed without it, and its *Setup* says to add it to the shell config, never to run it. A perfectly good script committed non-executable passes every check and then fails on the reader's machine with "permission denied".
+Every script carries a shebang. A script the reader invokes directly is committed with the executable bit set; a perfectly good script committed non-executable passes every check and then fails on the reader's machine with "permission denied". A file that is sourced rather than invoked, a shell function the reader adds to `~/.zshrc` or a helper library another script in the recipe sources, is committed without it, and *Setup* never tells the reader to run it. A `test_*.py` that CI runs through `python3` needs no executable bit either way.
 
 ## The README template
 
@@ -62,7 +69,7 @@ The index is split into four tables, grouped by what the reader is trying to do,
 
 - **Workspaces and projects** — arranging workspaces, windows, and where a session opens.
 - **Sessions across restarts** — a tab coming back to what it was running.
-- **Agent status and workflows** — reporting what an agent is doing, or driving one from a chord.
+- **Agent status and workflows** — reporting what an agent is doing, or an agent workflow driven from a chord or a skill.
 - **Panes, pickers and input** — splits, overlays, dashboards, and getting text into the shell.
 
 A recipe that genuinely fits two goes in the one its *What it does* line leads with. If none fits, say so in the pull request rather than forcing it: a fifth group is a fair outcome.

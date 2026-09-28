@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TITLE</title>
+<style>
+.doc {
+  --fg: var(--agterm-foreground, CanvasText);
+  --bg: var(--agterm-background, Canvas);
+  --ok: var(--agterm-color-2, #2e9e5b);
+  --bad: var(--agterm-color-1, #d0463c);
+  --warn: var(--agterm-color-3, #c8961e);
+  --accent: var(--agterm-color-4, #3b7dd8);
+  --alt: var(--agterm-color-5, #9a5cc6);
+  --info: var(--agterm-color-6, #2a9fb0);
+  --muted: color-mix(in srgb, var(--fg) 62%, transparent);
+  --panel: color-mix(in srgb, var(--fg) 5%, transparent);
+  --line: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+.doc { max-width: 1080px; margin: 0 auto; padding: 28px 32px 56px; }
+code, pre, .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 13px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.top { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; }
+.kind { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 6px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; }
+.sub { color: var(--muted); margin: 0 0 12px; font-size: 16px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 13px; }
+.meta b { color: var(--fg); font-weight: 600; }
+
+html { scroll-behavior: smooth; }
+nav.toc { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
+  margin: 16px -32px 0; padding: 8px 32px; font-size: 13px; border-bottom: 1px solid var(--line);
+  background: var(--agterm-background, Canvas); }
+nav.toc a { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg); }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+nav.toc a.top { margin-left: auto; color: var(--muted); }
+[id] { scroll-margin-top: 52px; }
+:target { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
+
+h2 { font-size: 18px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 8px 0; }
+ul, ol { margin: 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  border: 1px solid currentColor; background: color-mix(in srgb, currentColor 12%, transparent); }
+.pill.ok { color: var(--ok); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); }
+.pill.info { color: var(--info); } .pill.alt { color: var(--alt); } .pill.muted { color: var(--muted); }
+
+.tldr { border-left: 4px solid var(--accent); background: var(--panel); padding: 12px 16px; border-radius: 6px;
+  font-size: 16px; }
+.tldr > :first-child { margin-top: 0; } .tldr > :last-child { margin-bottom: 0; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card h3 { margin-top: 0; }
+.stat { font-size: 24px; font-weight: 700; line-height: 1.2; }
+.stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+
+.callout { border: 1px solid var(--line); border-left: 4px solid var(--c, var(--accent)); border-radius: 6px;
+  padding: 10px 14px; margin: 12px 0; background: color-mix(in srgb, var(--c, var(--accent)) 7%, transparent); }
+.callout.warn { --c: var(--warn); } .callout.risk { --c: var(--bad); } .callout.ok { --c: var(--ok); }
+.callout > b:first-child { display: block; margin-bottom: 2px; }
+
+table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+  overflow-x: auto; line-height: 1.45; }
+:not(pre) > code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.add { color: var(--ok); } .del { color: var(--bad); }
+
+.bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); min-width: 80px; }
+.bar > .a { background: var(--ok); } .bar > .d { background: var(--bad); }
+
+.timeline { list-style: none; padding-left: 0; border-left: 2px solid var(--line); margin-left: 6px; }
+.timeline li { position: relative; padding: 0 0 12px 18px; }
+.timeline li::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--bg); border: 2px solid var(--c, var(--accent)); }
+.timeline .when { color: var(--muted); font-size: 12px; }
+
+details { border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; margin: 8px 0; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 6px; }
+
+figure { margin: 14px 0; } figure svg { max-width: 100%; height: auto; }
+figcaption { color: var(--muted); font-size: 12px; margin-top: 4px; }
+svg text { fill: var(--agterm-foreground, CanvasText); font-family: -apple-system, sans-serif; font-size: 13px; }
+svg .box { fill: var(--panel); stroke: var(--line); }
+svg .edge { stroke: var(--muted); fill: none; }
+svg .hl { stroke: var(--accent); }
+
+.muted { color: var(--muted); }
+footer { margin-top: 36px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+</style>
+</head>
+<body>
+<main class="doc" id="top">
+<header class="top">
+  <div class="kind">KIND</div>
+  <h1>TITLE</h1>
+  <p class="sub">ONE-LINE SUBTITLE</p>
+  <div class="meta"><span><b>META</b> value</span></div>
+</header>
+
+<div class="tldr"><p>SUMMARY</p></div>
+
+<nav class="toc"><a href="#SECTION-ID">SECTION</a><a class="top" href="#top">top</a></nav>
+
+<!-- sections go here: <h2 id="SECTION-ID">SECTION</h2> -->
+
+<footer>SOURCES · generated DATE</footer>
+</main>
+</body>
+</html>

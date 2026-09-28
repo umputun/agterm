@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TITLE</title>
+<style>
+.doc {
+  --fg: var(--agterm-foreground, CanvasText);
+  --bg: var(--agterm-background, Canvas);
+  --c-red: var(--agterm-color-1, #d0463c);
+  --c-green: var(--agterm-color-2, #2e9e5b);
+  --c-yellow: var(--agterm-color-3, #c8961e);
+  --c-blue: var(--agterm-color-4, #3b7dd8);
+  --c-magenta: var(--agterm-color-5, #9a5cc6);
+  --c-cyan: var(--agterm-color-6, #2a9fb0);
+  /* palette slots are tuned for terminal text; pull them toward the foreground so they read in either scheme */
+  --accent: color-mix(in srgb, var(--c-blue) 55%, var(--fg));
+  --ok: color-mix(in srgb, var(--c-green) 80%, var(--fg));
+  --bad: color-mix(in srgb, var(--c-red) 80%, var(--fg));
+  --warn: color-mix(in srgb, var(--c-yellow) 85%, var(--fg));
+  --alt: color-mix(in srgb, var(--c-magenta) 75%, var(--fg));
+  --info: color-mix(in srgb, var(--c-cyan) 70%, var(--fg));
+  --muted: color-mix(in srgb, var(--fg) 58%, var(--bg));
+  --faint: color-mix(in srgb, var(--fg) 38%, var(--bg));
+  --panel: color-mix(in srgb, var(--fg) 4.5%, var(--bg));
+  --panel-2: color-mix(in srgb, var(--fg) 8%, var(--bg));
+  --line: color-mix(in srgb, var(--fg) 13%, var(--bg));
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText); }
+.doc { font: 14px/1.5 var(--sans); max-width: 1480px; margin: 0 auto; padding: 26px 34px 22px; }
+code { font: .88em var(--mono); padding: .05em .34em; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+b { font-weight: 650; }
+@keyframes in { from { opacity: 0; } }
+.doc > * { animation: in .45s ease-out both; }
+
+/* masthead: title and status on the left, key numbers on the right */
+.mast { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end;
+  padding-bottom: 16px; border-bottom: 2px solid var(--fg); }
+.eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 600 34px/1.1 var(--serif); letter-spacing: -.015em; margin: 8px 0 8px; }
+h1 em { font-style: italic; font-weight: 400; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.tag { display: inline-block; padding: 1px 9px; border-radius: 999px; font: 600 11px/1.6 var(--mono);
+  color: var(--c, var(--accent)); background: color-mix(in srgb, var(--c, var(--accent)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 40%, transparent); }
+.nums { display: flex; gap: 0; }
+.num { padding: 0 20px; border-left: 1px solid var(--line); text-align: right; }
+.num:first-child { border-left: none; }
+.num b { display: block; font: 600 30px/1 var(--serif); }
+.num span { font: 500 10.5px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.bottom { display: grid; grid-template-columns: 120px 1fr; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.bottom .lbl { font: 600 11px/1.9 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.bottom p { margin: 0; font: 400 17px/1.5 var(--serif); }
+
+/* fact blocks: a dense grid of labelled points; .wide spans two columns, .span-all the whole row.
+   the 1px gap over a line-colored grid draws the dividers, so every row must be filled */
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 4px; background: var(--line); border-bottom: 1px solid var(--line); }
+.fact { padding: 16px 20px 14px; background: var(--agterm-background, Canvas); }
+.fact.wide { grid-column: span 2; } .fact.span-all { grid-column: 1 / -1; }
+.fact h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 600 11px/1.4 var(--mono);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--c, var(--muted)); }
+.fact h2::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--accent)); }
+.fact ul { list-style: none; margin: 0; padding: 0; }
+.fact li { position: relative; padding-left: 14px; margin: 5px 0; }
+.fact li::before { content: "–"; position: absolute; left: 0; color: var(--faint); }
+.fact p { margin: 0 0 6px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 5px 10px 5px 0; vertical-align: top; }
+th { font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+tr + tr td { border-top: 1px solid var(--line); }
+td:first-child { white-space: nowrap; }
+.yes { color: var(--ok); font-weight: 600; } .no { color: var(--faint); } .never { color: var(--bad); font-weight: 600; }
+
+/* flow: a one-line process */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; }
+.flow span { padding: 3px 10px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); font: 12px var(--mono); }
+.flow span.g { border-color: color-mix(in srgb, var(--warn) 55%, var(--bg)); color: var(--warn); }
+.flow i { font-style: normal; color: var(--faint); }
+
+footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 14px; font: 11px/1.6 var(--mono); color: var(--faint); }
+
+@media (max-width: 1000px) {
+  .mast { grid-template-columns: minmax(0, 1fr); }
+  .num:first-child { padding-left: 0; } .num { text-align: left; }
+  .facts { grid-template-columns: minmax(0, 1fr); }
+  .fact { padding-left: 0; padding-right: 0; }
+  .fact.wide { grid-column: auto; }
+  .bottom { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+</style>
+</head>
+<body>
+<div class="doc">
+  <header class="mast">
+    <div>
+      <div class="eyebrow">KIND · LOCATION</div>
+      <h1>TITLE <em>tagline</em></h1>
+      <div class="meta"><span class="tag" style="--c: var(--ok)">STATUS</span><span>META</span></div>
+    </div>
+    <div class="nums"><div class="num"><b>N</b><span>label</span></div></div>
+  </header>
+
+  <div class="bottom"><div class="lbl">Bottom line</div><p>THE ANSWER IN ONE TO THREE SENTENCES.</p></div>
+
+  <div class="facts">
+    <div class="fact" style="--c: var(--accent)"><h2>LABEL</h2><ul><li>point</li></ul></div>
+    <!-- more .fact blocks; --c from --accent/--ok/--warn/--bad/--alt/--info; .wide or .span-all for a table or .flow -->
+  </div>
+
+  <footer><span>sources · …</span><span>generated DATE</span></footer>
+</div>
+</body>
+</html>
