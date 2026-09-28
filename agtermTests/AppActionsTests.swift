@@ -96,4 +96,19 @@ final class AppActionsTests: XCTestCase {
         _ = try remoteActiveSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
         XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/custom")
     }
+
+    func testNewSessionAfterCurrentLandsBehindTheSelectedSession() throws {
+        settings.setNewSessionPlacement(AppSettings.NewSessionPlacement.afterCurrent.rawValue)
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.activeSession)
+        _ = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: home))
+        store.selectSession(first.id)
+
+        actions.newSession()
+
+        let sessions = try XCTUnwrap(store.workspaces.first { $0.id == workspace }).sessions
+        XCTAssertEqual(sessions.count, 3)
+        XCTAssertEqual(sessions[1].id, store.selectedSessionID)
+    }
 }

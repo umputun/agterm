@@ -290,7 +290,8 @@ extension WorkspaceSidebar.Coordinator {
 
     /// Adds a session to `workspaceID` at `cwd` and selects it.
     private func addSession(toWorkspace workspaceID: UUID, cwd: String) {
-        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd) {
+        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
+                                          at: actions.resolvedNewSessionIndex(in: workspaceID, store: store)) {
             // creating + selecting from the sidebar context menu is a user-initiated selection on THIS
             // window's store: note activity so it buys the full idle grace before auto-follow pulls away.
             store.noteUserActivity()

@@ -225,9 +225,10 @@ struct agtermApp: App {
                         // wire the keymap + runner into the action hub for the command palette's custom
                         // commands; both are built after `actions`, so not in `init`.
                         actions.settingsModel = settingsModel
-                        // seed auto-follow into every open store now the model is wired: idempotent and
+                        // seed auto-follow and close selection into every open store now the model is wired: idempotent and
                         // order-independent of resolveStore/onAppear (later windows seed in resolveStore).
                         settingsModel.applyAutoFollowToAllWindows()
+                        settingsModel.applyCloseSelectionToAllWindows()
                         actions.customCommandRunner = customCommandRunner
                         // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
                         actions.palette = palette

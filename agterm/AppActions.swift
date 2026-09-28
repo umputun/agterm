@@ -116,7 +116,8 @@ final class AppActions {
     func newSession() {
         guard uiActionsEnabled else { return }
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd())
+              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(),
+                                             at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return }
         // note activity so the new session buys the full idle grace before auto-follow moves the selection.
         store.noteUserActivity()
@@ -133,6 +134,12 @@ final class AppActions {
         return settingsModel?.settings.resolveNewSessionCwd(currentSessionCwd: current, home: home) ?? home
     }
 
+    /// The `addSession(at:)` slot under the placement setting, in `store`'s own tree; nil appends.
+    func resolvedNewSessionIndex(in workspaceID: UUID, store: AppStore) -> Int? {
+        store.newSessionInsertionIndex(inWorkspace: workspaceID,
+                                       placement: settingsModel?.settings.effectiveNewSessionPlacement ?? .end)
+    }
+
     func openDirectory() {
         guard uiActionsEnabled else { return }
         guard let store, let workspaceID = store.currentWorkspaceID else { return }
@@ -144,7 +151,8 @@ final class AppActions {
         panel.prompt = "Open"
         panel.message = "Choose a directory for the new session"
         guard panel.runModal() == .OK, let url = panel.url,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: url.path)
+              let session = store.addSession(toWorkspace: workspaceID, cwd: url.path,
+                                             at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return }
         store.noteUserActivity()
         store.selectSession(session.id)
@@ -157,7 +165,8 @@ final class AppActions {
     /// zoom/dashboard. Returns whether one was created, so the delegate's drain retries until a store resolves.
     func openSession(atDirectory directory: String) -> Bool {
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: directory)
+              let session = store.addSession(toWorkspace: workspaceID, cwd: directory,
+                                             at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return false }
         store.noteUserActivity()
         store.selectSession(session.id)
