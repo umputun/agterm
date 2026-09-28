@@ -457,7 +457,7 @@ struct ControlDispatcherOverlayTests {
                                   .overlayReload(target: "session", window: nil, pane: nil, current: true)])
     }
 
-    @Test(arguments: [("back", HtmlNavigation.back), ("forward", .forward), ("browser", .browser)])
+    @Test(arguments: [("back", HtmlNavigation.back), ("forward", .forward), ("browser", .browser), ("finder", .finder)])
     func navigateRoutesTheStepAndPane(_ name: String, _ navigation: HtmlNavigation) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -468,7 +468,7 @@ struct ControlDispatcherOverlayTests {
         #expect(actions.calls == [.overlayNavigate(target: "session", window: nil, pane: .left, navigation)])
     }
 
-    @Test(arguments: [(String?.none, OverlayHtmlError.navigation), ("up", OverlayHtmlError.navigation)])
+    @Test(arguments: [(String?.none, OverlayHtmlError.navigation), ("up", OverlayHtmlError.navigation), ("copy", OverlayHtmlError.navigation)])
     func navigateRejectsAMissingOrUnknownStep(_ name: String?, _ error: String) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

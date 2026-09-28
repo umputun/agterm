@@ -136,6 +136,15 @@ private final class FakeBrowser: HtmlBrowser {
 }
 
 @MainActor
+private final class FakeSharing: HtmlSharing {
+    var revealed: [URL] = []
+    var copied: [String] = []
+
+    func reveal(_ url: URL) { revealed.append(url) }
+    func copy(_ text: String) { copied.append(text) }
+}
+
+@MainActor
 final class HtmlOverlayRegistryTests: XCTestCase {
     private final class StubSurface: PaneRoleMutableSurface {
         let paneToken: String
@@ -153,6 +162,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private var session: Session!
     private let registry = HtmlOverlayRegistry.shared
     private let browser = FakeBrowser()
+    private let sharing = FakeSharing()
 
     override func setUp() async throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-html-reg-\(UUID().uuidString)")
@@ -163,6 +173,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         registry.install()
         registry.browser = browser
+        registry.sharing = sharing
         try write("a.html", #"<title>A</title><script src="s.js"></script><a href="b.html">b</a>"#)
         try write("b.html", "<title>B</title>")
         try "document.title = 'script ran'".write(to: pages.appendingPathComponent("s.js"), atomically: true, encoding: .utf8)
@@ -171,6 +182,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     override func tearDown() async throws {
         servers.forEach { $0.stop() }
         registry.browser = SystemBrowser()
+        registry.sharing = SystemHtmlSharing()
         store.closeSession(session.id)
         try? FileManager.default.removeItem(at: directory)
     }
@@ -603,6 +615,74 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
         XCTAssertNil(registry.navigate(page.id, .browser))
         XCTAssertEqual(browser.opened, [try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/b?q=1"))])
+    }
+
+    func testFinderRevealsTheCurrentFileWithoutNavigationButtons() async throws {
+        let page = try open(grant: pages.path)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("a loaded") { self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = 'b.html'")
+        try await waitFor("b loaded") { self.current?.current?.title == "B" }
+
+        XCTAssertFalse(page.navigation)
+        XCTAssertNil(registry.navigate(page.id, .finder))
+        XCTAssertEqual(sharing.revealed, [pages.appendingPathComponent("b.html")])
+        XCTAssertEqual(sharing.copied, [])
+        XCTAssertEqual(browser.opened, [])
+    }
+
+    func testFinderRevealsTheOriginalTextLoadedFile() async throws {
+        let page = try open()
+        let live = registry.page(for: page, store: store)
+        try await waitFor("text loaded") { self.current?.loadState == .loaded }
+
+        XCTAssertEqual(live.webView.url?.scheme, "about")
+        XCTAssertNil(registry.navigate(page.id, .finder))
+        XCTAssertEqual(sharing.revealed, [pages.appendingPathComponent("a.html")])
+    }
+
+    func testFinderFallsBackToTheOriginalFileBeforeLoading() throws {
+        let page = try open(grant: pages.path)
+        _ = registry.page(for: page, store: store)
+
+        XCTAssertNil(registry.navigate(page.id, .finder))
+        XCTAssertEqual(sharing.revealed, [pages.appendingPathComponent("a.html")])
+    }
+
+    func testFinderRefusesAURLPageWithoutSideEffects() throws {
+        let page = try openURL("http://127.0.0.1:1/report")
+        _ = registry.page(for: page, store: store)
+
+        XCTAssertEqual(registry.navigate(page.id, .finder), OverlayHtmlError.finderRequiresFile)
+        XCTAssertEqual(sharing.revealed, [])
+        XCTAssertEqual(sharing.copied, [])
+        XCTAssertEqual(browser.opened, [])
+    }
+
+    func testCopyLinkCopiesTheCurrentURLWithQueryAndFragment() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/a": .init(body: "<title>a</title>"), "/b?q=1": .init(body: "<title>b</title>")])
+        let page = try openURL("http://127.0.0.1:\(port)/a")
+        let live = registry.page(for: page, store: store)
+        try await waitFor("a loaded") { self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = '/b?q=1#section'")
+        let address = "http://127.0.0.1:\(port)/b?q=1#section"
+        try await waitFor("b loaded") { self.current?.current?.page == address && self.current?.loadState == .loaded }
+
+        registry.copyLink(page.id)
+
+        XCTAssertEqual(sharing.copied, [address])
+        XCTAssertEqual(sharing.revealed, [])
+        XCTAssertEqual(browser.opened, [])
+    }
+
+    func testCopyLinkFallsBackToTheOriginalURLBeforeLoading() throws {
+        let address = "http://127.0.0.1:1/report?q=1#section"
+        let page = try openURL(address)
+        _ = registry.page(for: page, store: store)
+
+        registry.copyLink(page.id)
+
+        XCTAssertEqual(sharing.copied, [address])
     }
 
     func testAPageRefusesDraggedFilesAndTakesDraggedText() throws {

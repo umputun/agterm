@@ -782,7 +782,8 @@ error keeps those names for compatibility.
   instead of running a program. Same placement, sizing, `--follow`, ⌘W and `session overlay close` as a
   program overlay; a page never exits on its own, so close it when done. The panel always carries a strip
   naming the file shown or the page's origin, never its title, with a close button; `--navigation` adds
-  back, forward, reload and open in browser, worth it when the page links to others. Without `--cwd` the
+  back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL, worth it
+  when the page links to others. Without `--cwd` the
   page gets NO file access (it is loaded from the file's text), so keep it self-contained: inline CSS and
   SVG, data URIs, or remote images and stylesheets. With `--cwd DIR` the page may read files inside DIR, relative links and assets work, and FILE
   must be inside DIR; `/` and the home directory are refused (`cwd must not be / or the home directory`).
@@ -821,11 +822,14 @@ error keeps those names for compatibility.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
   overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
   page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.
-- `session overlay navigate back|forward|browser [--pane left|right] [--target] [--window W]` — step the
+- `session overlay navigate back|forward|browser|finder [--pane left|right] [--target] [--window W]` — step the
   page's history, or open it in the default browser with no prompt: a file page's original file, a URL
-  page's current address (within its origin). The browser applies its own JavaScript settings, not `--js`. Errors `no page to go back to` /
+  page's current address (within its origin). `finder` reveals the current file, including a sibling reached
+  through navigation; a text-loaded file uses its original path. These actions work without `--navigation`.
+  Copy Link is a toolbar button only; scripts read `tree`'s `htmlOverlays[].page` for the current address.
+  The browser applies its own JavaScript settings, not `--js`. Errors `no page to go back to` /
   `no page to go forward to`, `html overlay not realized` for a page never shown yet, `no default web
-  browser to open the page in`, and the two `reload` errors.
+  browser to open the page in`, `show in Finder requires a file page`, and the two `reload` errors.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
   `--pane` closes that split pane's overlay; omit it for the session-wide one. It also takes a HUD down,
   as a courtesy — the slot is the same one. For an overlay shown on another Mac (see Remote sessions) the

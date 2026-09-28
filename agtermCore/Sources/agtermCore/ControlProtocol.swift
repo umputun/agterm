@@ -235,7 +235,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for `workspace.go`
     /// (`next`|`prev`|`previous` — a workspace has no attention state and no ends to jump to), for the
     /// reorder form of `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for
-    /// `session.search` (`next`|`prev`|`close`), and `session.overlay.navigate` (`back`|`forward`|`browser`).
+    /// `session.search` (`next`|`prev`|`close`), and `session.overlay.navigate` (`back`|`forward`|`browser`|`finder`).
     public var to: String?
     /// Anchor session (id / unique prefix / `active`) to place a session right AFTER, for the placement form
     /// of `session.new`/`session.move`. The anchor carries its own workspace (resolved across the whole
@@ -666,7 +666,8 @@ public enum OverlayHtmlError {
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"
     public static let notHtml = "the overlay is not an html page"
-    public static let navigation = "session.overlay.navigate requires back, forward or browser"
+    public static let navigation = "session.overlay.navigate requires back, forward, browser or finder"
+    public static let finderRequiresFile = "show in Finder requires a file page"
     /// noHistory: the page has nowhere to go in that direction.
     public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
     /// notRealized: the page has not been shown yet, so there is no web view to drive.

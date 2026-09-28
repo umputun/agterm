@@ -83,7 +83,7 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "reload", "--pane", "middle"]))
     }
 
-    @Test(arguments: ["back", "forward", "browser"])
+    @Test(arguments: ["back", "forward", "browser", "finder"])
     func navigateSendsTheStep(_ step: String) throws {
         let req = try request(["session", "overlay", "navigate", step, "--pane", "right"])
         #expect(req.cmd == .sessionOverlayNavigate)
@@ -93,6 +93,15 @@ struct OverlayCommandsTests {
 
     @Test func navigateRejectsAnUnknownStep() {
         #expect(rejects(["session", "overlay", "navigate", "up"]))
+        #expect(rejects(["session", "overlay", "navigate", "copy"]))
         #expect(rejects(["session", "overlay", "navigate"]))
+    }
+
+    @Test func navigationHelpDescribesFinderAndTheSourceButtons() {
+        let navigate = Session.Overlay.Navigate.helpMessage(columns: 200)
+        #expect(navigate.contains("current file in Finder"))
+        #expect(navigate.contains("finder (file pages only)"))
+        let open = Session.Overlay.Open.helpMessage(columns: 200)
+        #expect(open.contains("Show in Finder or Copy Link"))
     }
 }

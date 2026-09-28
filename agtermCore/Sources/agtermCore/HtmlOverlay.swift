@@ -44,7 +44,7 @@ struct HtmlOrigin: Equatable {
 public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
     public let source: HtmlSource
-    /// navigation adds back, forward, reload and browser buttons to the panel's identity strip.
+    /// navigation adds history, reload, browser and source-sharing buttons to the identity strip.
     public let navigation: Bool
     /// javascript lets the page run its own scripts; agterm's theme script runs either way.
     public let javascript: Bool
@@ -129,7 +129,7 @@ public enum HtmlReloadTarget: Sendable {
 
 /// HtmlNavigation is a history step or hand-off `session.overlay.navigate` and the toolbar perform.
 public enum HtmlNavigation: String, CaseIterable, Sendable {
-    case back, forward, browser
+    case back, forward, browser, finder
 }
 
 /// HtmlOverlayTheme is the terminal theme as a page sees it. Every page gets it as custom properties

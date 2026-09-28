@@ -429,7 +429,7 @@ omitted when expanded).
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay reload [--current] [--pane left|right]` ·
-  `session overlay navigate back|forward|browser [--pane left|right]` ·
+  `session overlay navigate back|forward|browser|finder [--pane left|right]` ·
   `session overlay result [--pane left|right]` ·
   `session overlay copy [--pane left|right]` ·
   `session overlay text [--all] [--lines N] [--pane left|right]` — run a program (or show an HTML page, see
@@ -719,7 +719,9 @@ agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriti
   URIs. `--cwd DIR` grants read access to an asset directory that must contain FILE; relative URLs
   still resolve beside FILE. `/` and the home directory are refused as grants.
 - The panel always shows a strip naming the file or origin, with a close button. `--navigation` adds
-  back, forward, reload and open in browser; use it when the page links to other pages.
+  back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL; use it
+  when the page links to other pages.
+  `session overlay navigate finder` reveals the current file; scripts read a URL from `tree`'s `htmlOverlays[].page`.
 - `--size-percent N` makes it a floating panel, `--pane left|right` puts it over one split pane.
 - Build the page from the terminal theme, not a palette of your own, so it looks native in a dark or
   light theme (see below). A palette the user asks for wins.

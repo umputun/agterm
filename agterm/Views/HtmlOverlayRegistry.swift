@@ -10,6 +10,7 @@ final class HtmlOverlayRegistry {
     static let shared = HtmlOverlayRegistry()
     /// browser receives every URL a page hands off; pages created later use whatever is set here.
     var browser: any HtmlBrowser = SystemBrowser()
+    var sharing: any HtmlSharing = SystemHtmlSharing()
     private var pages: [UUID: HtmlOverlayPage] = [:]
     private var appearanceObserver: NSObjectProtocol?
 
@@ -28,7 +29,7 @@ final class HtmlOverlayRegistry {
     func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil) -> HtmlOverlayPage {
         if let page = pages[overlay.id] { return page }
         let page = HtmlOverlayPage(overlay: overlay, store: store, backgroundColor: backgroundColor,
-                                   theme: theme(backgroundColor: backgroundColor), browser: browser)
+                                   theme: theme(backgroundColor: backgroundColor), browser: browser, sharing: sharing)
         pages[overlay.id] = page
         return page
     }
@@ -72,11 +73,14 @@ final class HtmlOverlayRegistry {
         (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
     }
 
-    /// navigate performs a history step or the browser hand-off on page `id`, the one path the toolbar and
-    /// `session.overlay.navigate` share. Returns the refusal, nil on success.
+    /// navigate shares the toolbar's history and hand-off actions with the control API.
     func navigate(_ id: UUID, _ navigation: HtmlNavigation) -> String? {
         guard let page = pages[id] else { return OverlayHtmlError.notRealized }
         return page.navigate(navigation)
+    }
+
+    func copyLink(_ id: UUID) {
+        pages[id]?.copyLink()
     }
 
     /// reload is the other shared path: the toolbar reloads the current page, `session.overlay.reload` either.
@@ -108,6 +112,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private weak var store: AppStore?
     private var appliedRevision: Int
     private let browser: any HtmlBrowser
+    private let sharing: any HtmlSharing
     private var prompt: UUID?
     private var dismissPrompt: (() -> Void)?
     // a declined prompt silences the page until real input reaches its view: script can click links in a
@@ -123,9 +128,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
 
-    init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme, browser: any HtmlBrowser) {
+    init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme,
+         browser: any HtmlBrowser, sharing: any HtmlSharing) {
         id = overlay.id
         self.browser = browser
+        self.sharing = sharing
         self.overlay = overlay
         self.store = store
         self.backgroundColor = backgroundColor
@@ -224,8 +231,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.goForward()
         case .browser:
             guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
+        case .finder:
+            guard case .file = overlay.source else { return OverlayHtmlError.finderRequiresFile }
+            sharing.reveal(pageURL)
         }
         return nil
+    }
+
+    func copyLink() {
+        sharing.copy(browserURL.absoluteString)
     }
 
     /// setOnScreen takes whether the page is shown; a page out of sight asks nothing, and its pending prompt
@@ -413,6 +427,23 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_: WKWebView, decideMediaCapturePermissionsFor _: WKSecurityOrigin, initiatedBy _: WKFrameInfo,
                  type _: WKMediaCaptureType) async -> WKPermissionDecision { .deny }
+}
+
+@MainActor
+protocol HtmlSharing {
+    func reveal(_ url: URL)
+    func copy(_ text: String)
+}
+
+struct SystemHtmlSharing: HtmlSharing {
+    func reveal(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 }
 
 /// HtmlBrowser hands a page's URLs to the user's web browser. `confirm` puts a nonblocking prompt over `view`,

@@ -29,8 +29,8 @@ extension Session.Overlay {
 
     struct Navigate: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Step an HTML overlay's history back or forward, or open the page in the default browser.")
-        @Argument(help: "back, forward, or browser.") var step: String
+            abstract: "Step an HTML overlay's history, open it in the browser, or reveal its current file in Finder.")
+        @Argument(help: "back, forward, browser, or finder (file pages only).") var step: String
         @Option(name: .long, help: "Navigate that split pane's page (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
         var pane: String?
         @OptionGroup var target: TargetOptions
@@ -38,7 +38,7 @@ extension Session.Overlay {
 
         func validate() throws {
             guard HtmlNavigation(rawValue: step) != nil else {
-                throw ValidationError("step must be back, forward, or browser")
+                throw ValidationError("step must be back, forward, browser, or finder")
             }
             try Session.Overlay.validatePane(pane)
         }

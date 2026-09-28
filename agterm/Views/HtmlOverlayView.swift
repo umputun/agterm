@@ -2,8 +2,7 @@ import SwiftUI
 import agtermCore
 
 /// HtmlOverlayView is an HTML overlay's panel content: the page under an app-drawn strip naming its source,
-/// which the page cannot cover, with navigation buttons for `--navigation`. Every button goes through the
-/// same store and registry paths as `session.overlay.reload` and `session.overlay.navigate`.
+/// which the page cannot cover, with navigation buttons for `--navigation`.
 struct HtmlOverlayView: View {
     let store: AppStore
     let session: Session
@@ -54,6 +53,16 @@ struct HtmlOverlayView: View {
             if overlay.navigation {
                 button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
                     _ = registry.navigate(overlay.id, .browser)
+                }
+                switch overlay.source {
+                case .file:
+                    button("finder", "Show in Finder", "htmlOverlay.finder", enabled: true) {
+                        _ = registry.navigate(overlay.id, .finder)
+                    }
+                case .url:
+                    button("link", "Copy Link", "htmlOverlay.copy", enabled: true) {
+                        registry.copyLink(overlay.id)
+                    }
                 }
             }
             button("xmark", "Close", "htmlOverlay.close", enabled: true) {

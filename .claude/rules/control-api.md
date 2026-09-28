@@ -467,9 +467,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   that the page cannot cover or retitle, with the close button; `--navigation` adds the buttons. The page
   title reaches only `tree`, where agents must treat it as untrusted. Page views refuse drags and pastes
   carrying files; WKWebView's paste commands exist only at runtime, so they are overridden by selector.
-- Every toolbar button has a control twin through the same store/registry path: reload is
-  `overlay.reload --current` (bare `overlay.reload` loads the original source), back/forward/browser is
-  `overlay.navigate`. A page never takes the remote program-job path:
+- Reload is `overlay.reload --current` (bare `overlay.reload` loads the original source).
+  Back/forward/browser/finder share `overlay.navigate` with the toolbar, even without `--navigation`.
+  Finder reveals the current file via `pageURL`; browser opens the original file or current HTTP(S) URL.
+  Finder refuses URL sources without side effects.
+  Copy Link is a URL-page toolbar action only: it copies `browserURL` to the pasteboard.
+  Scripts read the current address from `tree`'s `htmlOverlays[].page`.
+  `HtmlSharing` isolates Finder and clipboard effects for hosted tests.
+  A page never takes the remote program-job path:
   `open --html` is refused while a presenter owns the session, and one already open stays local.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,
