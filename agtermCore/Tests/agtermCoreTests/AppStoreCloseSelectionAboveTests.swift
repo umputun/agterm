@@ -53,9 +53,10 @@ struct AppStoreCloseSelectionAboveTests {
         store.closeSelection = .above
         let work = store.addWorkspace(name: "work")
         let lone = store.addWorkspace(name: "lone")
-        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        let cameFrom = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        let cameFrom = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let lastRowAbove = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
         let only = try #require(store.addSession(toWorkspace: lone.id, cwd: "/x"))
+        store.selectSession(lastRowAbove.id)
         store.selectSession(cameFrom.id)
         store.selectSession(only.id)
 

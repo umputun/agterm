@@ -217,18 +217,19 @@ struct agtermApp: App {
                         // hand the delegate the action hub and drain folders `open -a agterm /path` queued
                         // before the window store resolved.
                         appDelegate.actions = actions
+                        // wire the settings model (keymap included) into the action hub before the drain: the
+                        // drained sessions read the placement setting through it. Built after `actions`, so not in `init`.
+                        actions.settingsModel = settingsModel
                         // hooks apply BEFORE the drain: a queued `open -a agterm /path` creates a session, and a
                         // session.created hook must already be scheduled to see it (idempotent).
                         hookController.start()
                         appDelegate.drainPendingOpenDirectories()
                         customCommandRunner.start()
-                        // wire the keymap + runner into the action hub for the command palette's custom
-                        // commands; both are built after `actions`, so not in `init`.
-                        actions.settingsModel = settingsModel
                         // seed auto-follow and close selection into every open store now the model is wired: idempotent and
                         // order-independent of resolveStore/onAppear (later windows seed in resolveStore).
                         settingsModel.applyAutoFollowToAllWindows()
                         settingsModel.applyCloseSelectionToAllWindows()
+                        // the runner backs the command palette's custom commands.
                         actions.customCommandRunner = customCommandRunner
                         // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
                         actions.palette = palette
