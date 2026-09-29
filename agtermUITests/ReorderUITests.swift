@@ -76,6 +76,27 @@ final class ReorderUITests: XCTestCase {
                       "outside right-click should flag only the clicked row")
     }
 
+    func testControlClickKeepsAndNarrowsSelectionLikeRightClick() throws {
+        try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
+        sessionRow(named: "aaa").click()
+        modifiedClick(sessionRow(named: "ccc"), modifiers: .shift)
+
+        modifiedClick(sessionRow(named: "bbb"), modifiers: .control)
+        XCTAssertTrue(presentedMenuItem("Close 3 Sessions").isHittable, "Control-click inside the selection should open the batch menu")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+        modifiedClick(sessionRow(named: "ccc"), modifiers: [.control, .shift])
+        XCTAssertTrue(presentedMenuItem("Close 3 Sessions").isHittable, "Control-Shift-click must not change the selection")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+        modifiedClick(sessionRow(named: "ddd"), modifiers: .control)
+        let flag = presentedMenuItem("Flag")
+        XCTAssertTrue(flag.isHittable, "Control-click outside the selection should narrow to one row")
+        flag.click()
+        XCTAssertTrue(pollFlagged(["aaa": false, "bbb": false, "ccc": false, "ddd": true], timeout: 8),
+                      "the narrowed menu should act on the Control-clicked row only")
+    }
+
     // the block inserts after ddd, so [aaa, bbb, ccc, ddd, eee] -> [aaa, ddd, bbb, ccc, eee].
     func testDragSelectedSessionsMovesBlock() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd", "eee"])

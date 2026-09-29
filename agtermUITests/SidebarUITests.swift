@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 /// Real UI tests: launch the actual app and drive the sidebar through the
@@ -351,6 +352,30 @@ final class SidebarUITests: XCTestCase {
         usleep(800_000)
         XCTAssertTrue(terminalReceivedTyping(named: "after-commit"),
                       "committing a rename should return focus to the session terminal")
+    }
+
+    private func controlClick(_ element: XCUIElement) {
+        XCTAssertTrue(element.waitForHittable(timeout: 10), "row should be hittable for Control-click")
+        XCUIElement.perform(withKeyModifiers: .control) {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        }
+    }
+
+    func testControlClickSessionRowOpensContextMenu() throws {
+        controlClick(sessionRow())
+        XCTAssertTrue(presentedMenuItem("Rename").isHittable, "Control-click should open the session row's context menu")
+    }
+
+    func testControlClickWorkspaceRowOpensContextMenuWithoutToggling() throws {
+        let session = sessionRow()
+        XCTAssertTrue(session.waitForExistence(timeout: 20), "seeded session row should be visible while expanded")
+        controlClick(app.staticTexts["workspace 1"])
+        let delete = presentedMenuItem("Delete Workspace")
+        XCTAssertTrue(delete.isHittable, "Control-click should open the workspace row's context menu")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        XCTAssertTrue(delete.waitForNonExistence(timeout: 5), "Esc should dismiss the context menu")
+        usleep(UInt32(NSEvent.doubleClickInterval * 1_000_000) + 300_000)
+        XCTAssertTrue(session.exists, "Control-click must not toggle the workspace's expansion")
     }
 
     func testCloseSession() throws {

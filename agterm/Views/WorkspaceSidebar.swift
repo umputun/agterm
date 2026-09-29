@@ -869,7 +869,13 @@ final class SidebarOutlineView: NSOutlineView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
+        // NSTableView treats Control-click as a plain click and ignores a left-button event handed to
+        // rightMouseDown, so the secondary-click convention has to open the menu here.
+        if event.modifierFlags.contains(.control) {
+            if let menu = menu(for: event) { NSMenu.popUpContextMenu(menu, with: event, for: self) }
+        } else {
+            super.mouseDown(with: event)
+        }
         // after the click is handled, hand keyboard focus back to the terminal; row selection persists
         // (model state), only first responder moves. Skipped mid-rename by the coordinator.
         (delegate as? WorkspaceSidebar.Coordinator)?.focusActiveTerminal()
