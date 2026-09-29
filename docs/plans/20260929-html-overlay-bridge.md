@@ -357,25 +357,25 @@
 - [x] run the scoped hosted tests - must pass before Task 7
 
 ### Task 7: Documentation and skill
-- [ ] update `.claude/rules/control-api.md`:
+- [x] update `.claude/rules/control-api.md`:
   - add `.overlay.submit` to the public catalog;
   - rewrite the HTML bullet that says `overlay.result` refuses pages;
   - add the bridge contract: surfaces, defaults, exclusions, reply-once, script set, outcomes
   - say that `sidebar` and `sidebar.mode` act on the frontmost window even from a page: they read no window
     argument, so the page's window cannot reach them
-- [ ] update `site/commands.html`:
+- [x] update `site/commands.html`:
   - `session overlay submit`;
   - `result --page`;
   - `open --html --block`;
   - the `pageID` and tree `id` read-back
-- [ ] update `site/docs.html`: the page bridge guide with the switcher, forms, page controls and selector
+- [x] update `site/docs.html`: the page bridge guide with the switcher, forms, page controls and selector
   examples
-- [ ] update `plugins/agterm/skills/agterm/`:
+- [x] update `plugins/agterm/skills/agterm/`:
   - a `SKILL.md` section plus a description trigger that keeps the description within 1024 characters;
   - the `reference.md` entries;
   - an `examples.md` switcher and selector
-- [ ] run `swift test --filter SkillInstallTests`
-- [ ] update `ARCHITECTURE.md` with the bridge module and outcome ownership, and `site/llms.txt` if its
+- [x] run `swift test --filter SkillInstallTests`
+- [x] update `ARCHITECTURE.md` with the bridge module and outcome ownership, and `site/llms.txt` if its
   capability list names HTML overlays
 
 ### Task 8: Verify acceptance criteria

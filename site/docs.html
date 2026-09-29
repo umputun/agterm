@@ -202,6 +202,7 @@
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
             <a href="#agtermctl" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">agtermctl reference</a>
+            <a href="#page-bridge" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Page bridge</a>
             <a href="/commands" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Command reference ↗</a>
             <a
               href="https://github.com/umputun/agterm/tree/master/cookbook"
@@ -1073,7 +1074,8 @@
                   ⌘W closes it like any overlay. ⌘+, ⌘− and ⌘0 zoom the page, and every later page opens at that zoom. A page runs no JavaScript of its
                   own unless opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span>. A link the page opens in your browser
                   asks you first. Pages can match the terminal
-                  through the theme's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-*</span> CSS variables. See the
+                  through the theme's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-*</span> CSS variables, and
+                  drive agterm themselves through the <a href="#page-bridge" style="color: #6d82f3">page bridge</a>. See the
                   <a href="#agtermctl" style="color: #6d82f3">agtermctl reference</a>.
                 </p>
               </div>
@@ -2013,6 +2015,121 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
           </section>
 
           <!-- AGTERMCTL -->
+          <section id="page-bridge" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Page bridge
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              A page shown with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay open --html</span> can run any agterm command: read the tree, switch
+              sessions, rename, set a status, or hand a value back to the script that opened it. These are pages you or your
+              agents write, trusted like a program in an overlay, which can already run every command; a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--url</span> page gets none of this. A page that pastes in outside text, an issue body say, escapes it.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 12px">
+              Tag a button or a form with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm</span> and the socket's command name. It works with the page's
+              JavaScript off, because agterm's own script handles the tags. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-target</span> is the target,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-args</span> a JSON object of fixed arguments, and a form's named inputs add to it by their field
+              name: a number input sends a number, a checkbox true or false, anything else a string. A name that would send
+              two values is refused. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-into</span> names an element that shows the reply as text, or the error.
+              A button outside a form must be <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">type=&quot;button&quot;</span>.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                margin-top: 12px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            ><span style="color: #6b727a">&lt;!-- switch sessions, rename this one, and the page's own controls --&gt;</span>
+&lt;button type="button" data-agterm="session.select" data-agterm-target="3F2A"&gt;api&lt;/button&gt;
+&lt;form data-agterm="session.rename"&gt;&lt;input name="name"&gt;&lt;button&gt;Rename&lt;/button&gt;&lt;/form&gt;
+&lt;button type="button" data-agterm="session.overlay.reload"&gt;Refresh&lt;/button&gt;
+&lt;button type="button" data-agterm="session.overlay.close"&gt;Done&lt;/button&gt;
+&lt;button type="button" data-agterm="window.list" data-agterm-into="#out"&gt;Windows&lt;/button&gt;&lt;pre id="out"&gt;&lt;/pre&gt;</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              What a page leaves out comes from where it sits: a command that addresses a session, left without a target,
+              acts on the page's own session, a command that addresses one window acts on the page's window, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.overlay.close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">navigate</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> on the page itself. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span> from a page re-reads the shown page. An
+              explicit target, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> or window is used as given. Global commands stay global, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">window.go</span>, like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>, steps from the frontmost window. Without JavaScript the rows above are what the
+              file says when it was written; a live list, built from <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> and redrawn on Refresh, needs
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span>, which also gives the page <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm.request(cmd, {target, args})</span>. It returns a promise
+              with the reply, or rejects with the error.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                margin-top: 12px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            ><span style="color: #6b727a">&lt;!-- switcher.html, opened with --js --&gt;</span>
+&lt;div id="list"&gt;&lt;/div&gt;
+&lt;script type="module"&gt;
+const list = document.getElementById('list');
+const {tree} = await agterm.request('tree');
+for (const ws of tree.workspaces) for (const s of ws.sessions) {
+  const row = list.appendChild(document.createElement('button'));
+  row.textContent = `${ws.name} / ${s.name}`;
+  row.onclick = () =&gt; agterm.request('session.select', {target: s.id});
+}
+&lt;/script&gt;</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              A page can also answer the script that opened it, like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl pick</span>. Open it with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span>: the command waits, prints the outcome as JSON, and exits 0 with the submitted value, or 2
+              when the page closes unanswered.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                margin-top: 12px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+                white-space: pre;
+              "
+            >choice=$(agtermctl session overlay open --html branches.html --block) || exit
+<span style="color: #6b727a">&lt;!-- branches.html --&gt;</span>
+&lt;button type="button" data-agterm="session.overlay.submit" data-agterm-args='{"value":"main"}'&gt;main&lt;/button&gt;
+&lt;form data-agterm="session.overlay.submit"&gt;&lt;input name="value" placeholder="other"&gt;&lt;/form&gt;</div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              Commands that stream or finish after their reply (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx present</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx reset</span> and the
+              overlay job helper) are refused from a page, and so are requests from a frame inside it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>
+              and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar mode</span> act on the frontmost window, as over the socket. See
+              <a href="commands.html#session" style="color: #6d82f3">the command reference</a> for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result --page</span>.
+            </p>
+          </section>
           <section id="agtermctl" style="scroll-margin-top: 88px; padding-top: 56px">
             <h2
               style="

@@ -156,7 +156,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
-  `.overlay.result`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
+  `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -479,6 +479,33 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `HtmlSharing` isolates Finder and clipboard effects for hosted tests.
   A page never takes the remote program-job path:
   `open --html` is refused while a presenter owns the session, and one already open stays local.
+- A FILE page drives the control API from its own content; `site/docs.html#page-bridge` owns the user
+  contract. Pages are self-authored and trusted like a program overlay, which already inherits
+  `AGTERM_SOCKET`, so there are no permission tiers; a URL page gets none of it. Two surfaces, one path:
+  `HtmlOverlayBridge.adapterScript` handles `data-agterm` tags in its own content world, so it runs with
+  page JS off, and `--js` adds the page-world `agterm.request`. Both reach `HtmlOverlayPage.handleBridgeRequest`,
+  which refuses frames, resolves the page where it sits NOW through `htmlOverlaySlot`, builds the request
+  with `HtmlBridge` and dispatches through `HtmlOverlayRegistry.dispatch`, the closure `ControlServer` sets
+  to its own `dispatch` so the window cache refreshes and unmigrated commands still reach the app switch.
+  Each admitted request calls its reply closure exactly once; a page its command closed never sees it.
+- `HtmlBridge` speaks the wire protocol only (`{cmd, target, args}`, dotted names, typed fields) and
+  fills only what a page left out: its session for session-targeted commands (the `session.` names bar
+  `new`, `go` and `overlay.job.run`, plus `notify`, the `font.*` trio and a non-GUI `ask.open`), its pane
+  for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
+  otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach` and
+  `dashboard` keep their ids and still land in the page's window. `sidebar` and `sidebar.mode` read no
+  window, so a page drives the frontmost one. `zmx.present`, `session.overlay.job.run` and `zmx.reset` are
+  refused: a stream hand-off and post-reply work do not fit one request and reply.
+- The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
+  separate install would lose the adapter at the next theme change. Release unregisters the handlers;
+  reload keeps them.
+- `HtmlPageOutcomes` keys every page's selector outcome by page id, outside the slot, so a caller blocked
+  on a page reads it after the page and its session are gone. A successful open registers `pending`;
+  `session.overlay.submit` records `submitted` before closing; `HtmlOverlayReleases.release` records
+  `dismissed` for a page still pending, before `onRelease`, which the registry keeps sole ownership of.
+  A soft close stays pending through the grace period. The open reply carries `pageID` and tree
+  `htmlOverlays` nodes carry `id`; `session.overlay.result --page` reads the outcome, and the CLI's
+  `--html --block` polls it with pick's exit codes.
 - One slot, asymmetric replacement: a second `hud.open` replaces the first, `overlay.open` closes a HUD and
   proceeds, and a HUD over a RUNNING program is refused `overlay already open`. `overlay.close`, Command-W,
   and session close tear a HUD down. `overlay.result` refuses with `OverlayHudError.noResult` because

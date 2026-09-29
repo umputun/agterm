@@ -333,6 +333,30 @@ agtermctl session overlay open "make test" --target "$AGTERM_SESSION_ID"   # thi
 agtermctl session overlay result --json   # errors "still running" until it exits, then result.exitCode
 ```
 
+## Ask for a choice with an HTML page, and switch sessions from one
+
+A page is a richer `pick`: write the rows, open it with `--block`, and read the answer. The page needs no
+JavaScript; agterm handles the `data-agterm` tags.
+
+```bash
+page=$(mktemp /tmp/branchesXXXXXX)
+{
+  echo '<title>Pick a branch</title>'
+  git for-each-ref --format='%(refname:short)' refs/heads | while read -r b; do
+    esc=$(printf '%s' "$b" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/"/\&quot;/g')
+    printf '<form data-agterm="session.overlay.submit"><input type="hidden" name="value" value="%s"><button>%s</button></form>\n' "$esc" "$esc"
+  done
+} > "$page"
+if out=$(agtermctl session overlay open --html "$page" --block --target "$AGTERM_SESSION_ID" --follow); then
+  branch=$(printf '%s' "$out" | jq -r .value)
+fi
+rm -f "$page"
+```
+
+Exit 2 means the user closed the page without choosing. For a switcher that stays current, open a page with
+`--js` that builds its rows from `agterm.request('tree')` and switches with
+`agterm.request('session.select', {target: id})`; rows written into a no-JS page are a snapshot.
+
 ## Read what the user highlighted inside an overlay
 
 `session copy` and `session text` address the pane the overlay COVERS, so a selection the user made in
