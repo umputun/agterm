@@ -16,6 +16,9 @@ paths:
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
   must run the four Swift jobs.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
+  It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
+  processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
+  A hang otherwise reaches only the job timeout, which records nothing.
   `coverage`, the only Swift-gated Linux job, downloads it for best-effort Coveralls.
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
 - `build` restores separate revision-keyed caches for libghostty and zmx, including each build stamp,
