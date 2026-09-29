@@ -599,4 +599,17 @@ struct AppStoreTreeProjectionTests {
         let json = String(decoding: try JSONEncoder().encode(node.htmlOverlays), as: UTF8.self)
         #expect(json.contains(#""javascript":false"#))
     }
+
+    @Test func htmlOverlaysReportTheAppZoom() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/wide.html", grantRoot: "/tmp/a"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        #expect(store.controlTree().workspaces[0].sessions[0].htmlOverlays?.first?.zoom == nil)
+        let node = try #require(store.controlTree(paneForeground: { _ in nil }, htmlZoom: 1.25).workspaces[0].sessions[0].htmlOverlays?.first)
+        #expect(node.zoom == 1.25)
+        let json = String(decoding: try JSONEncoder().encode(node), as: UTF8.self)
+        #expect(json.contains(#""zoom":1.25"#))
+    }
 }

@@ -399,10 +399,12 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let navigation: Bool?
     /// javascript says whether the page may run its own scripts.
     public let javascript: Bool
+    /// zoom is the page zoom factor, 1 at actual size. One app-wide value, so every page reports the same.
+    public let zoom: Double?
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
-                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false) {
+                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, zoom: Double? = nil) {
         self.pane = pane
         self.file = file
         self.cwd = cwd
@@ -415,6 +417,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.canGoForward = canGoForward
         self.navigation = navigation
         self.javascript = javascript
+        self.zoom = zoom
     }
 }
 

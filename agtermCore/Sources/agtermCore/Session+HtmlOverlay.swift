@@ -17,6 +17,16 @@ extension Session {
         return paneOverlayIsHtml(pane)
     }
 
+    /// htmlHidesTerminal says whether a page covers the terminal a `--pane` font command addresses: the
+    /// session-wide page covers both split panes, a pane page its own, and no page covers the scratch.
+    public func htmlHidesTerminal(_ pane: StatusPane?) -> Bool {
+        switch pane {
+        case .scratch: return false
+        case nil, .left: return htmlOverlayActive || paneOverlayIsHtml(.left)
+        case .right: return htmlOverlayActive || paneOverlayIsHtml(.right)
+        }
+    }
+
     /// topmostHtmlOverlay is the page that takes the keyboard when focus returns to this session, in the
     /// order `topmostSurface` resolves covers; nil when a terminal is on top.
     public var topmostHtmlOverlay: HtmlOverlay? {

@@ -21,12 +21,44 @@ final class SettingsModelTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             GhosttyApp.shared.setFlaggedViewLayout(.flat)
+            HtmlOverlayRegistry.shared.setZoom(1)
             model = nil
             library = nil
             try? FileManager.default.removeItem(at: stateDir)
             stateDir = nil
         }
         try await super.tearDown()
+    }
+
+    func testStepHtmlOverlayZoomPersistsAndMirrors() {
+        XCTAssertTrue(model.stepHtmlOverlayZoom("increase_font_size:1"))
+        XCTAssertTrue(model.stepHtmlOverlayZoom("increase_font_size:1"))
+
+        XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1.25)
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().htmlOverlayZoom, 1.25)
+        XCTAssertEqual(SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)).settings.htmlOverlayZoom, 1.25)
+    }
+
+    func testStepHtmlOverlayZoomBackToActualSizeClearsTheStoredField() {
+        model.stepHtmlOverlayZoom("decrease_font_size:1")
+
+        XCTAssertTrue(model.stepHtmlOverlayZoom("reset_font_size"))
+
+        XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1)
+        XCTAssertNil(SettingsStore(directory: stateDir).load().htmlOverlayZoom)
+    }
+
+    func testStepHtmlOverlayZoomRefusesANonFontAction() {
+        XCTAssertFalse(model.stepHtmlOverlayZoom("paste_from_clipboard"))
+        XCTAssertNil(model.settings.htmlOverlayZoom)
+    }
+
+    func testLaunchMirrorsTheSavedHtmlOverlayZoomToTheRegistry() throws {
+        try SettingsStore(directory: stateDir).save(AppSettings(htmlOverlayZoom: 1.5))
+
+        _ = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+
+        XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1.5)
     }
 
     func testSetFlaggedViewLayoutPersistsMirrorsAndBroadcasts() {

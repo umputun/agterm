@@ -471,6 +471,49 @@ struct HtmlOverlayTests {
         #expect(!pane.zoomSurface.isAvailable(in: session))
     }
 
+    @Test(arguments: [
+        (StatusPane?.none, true), (.left, true), (.right, true), (.scratch, false),
+    ])
+    func aSessionWidePageHidesBothSplitTerminals(_ pane: StatusPane?, _ hidden: Bool) {
+        split()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
+        #expect(session.htmlHidesTerminal(pane) == hidden)
+    }
+
+    @Test(arguments: [
+        (OverlayPane.left, StatusPane?.none, true), (.left, .left, true), (.left, .right, false),
+        (.right, nil, false), (.right, .right, true), (.right, .scratch, false),
+    ])
+    func aPanePageHidesOnlyItsOwnTerminal(_ slot: OverlayPane, _ pane: StatusPane?, _ hidden: Bool) {
+        split()
+        #expect(store.openHtmlOverlay(session.id, pane: slot, overlay: page(), sizePercent: nil) == nil)
+        #expect(session.htmlHidesTerminal(pane) == hidden)
+    }
+
+    @Test func noPageHidesNoTerminal() {
+        split()
+        #expect(StatusPane.allCases.allSatisfy { !session.htmlHidesTerminal($0) })
+        #expect(!session.htmlHidesTerminal(nil))
+    }
+
+    @Test(arguments: [
+        ("increase_font_size:1", 1.0, 1.15), ("increase_font_size:1", 2.5, 3.0), ("increase_font_size:1", 3.0, 3.0),
+        ("increase_font_size:1", 1.1, 1.15), ("decrease_font_size:1", 1.0, 0.85), ("decrease_font_size:1", 0.5, 0.5),
+        ("decrease_font_size:1", 1.1, 1.0), ("reset_font_size", 2.0, 1.0),
+    ])
+    func zoomWalksTheLadder(_ action: String, _ from: Double, _ to: Double) {
+        #expect(HtmlZoom.applying(fontAction: action, to: from) == to)
+    }
+
+    @Test func zoomIgnoresAnythingButAFontSizeAction() {
+        #expect(HtmlZoom.applying(fontAction: "paste_from_clipboard", to: 1) == nil)
+    }
+
+    @Test(arguments: [(Double?.none, 1.0), (1.5, 1.5), (0.1, 0.5), (9, 3.0), (.nan, 1.0), (.infinity, 1.0)])
+    func zoomResolvesAStoredFactorIntoRange(_ stored: Double?, _ resolved: Double) {
+        #expect(HtmlZoom.resolve(stored) == resolved)
+    }
+
     @Test func treeReportsAPageAsAnOverlay() throws {
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: 40) == nil)
         let node = try #require(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })

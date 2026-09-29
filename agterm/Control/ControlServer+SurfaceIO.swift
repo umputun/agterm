@@ -53,6 +53,7 @@ extension ControlServer {
     /// hidden, its surface kept alive. A resolved-but-unrealized pane returns `session not realized` rather
     /// than silently no-opping in the layout beat after the pane is shown.
     /// Only the surface currently in the main role persists its size; split-role and scratch changes stay live-only.
+    /// A pane under an HTML page steps the app-wide page zoom instead, as the keys do.
     func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
@@ -73,6 +74,12 @@ extension ControlServer {
                     return ControlResponse(ok: false, error: "session has no scratch terminal")
                 }
                 chosen = scratch
+            }
+            // after the pane checks, so a missing pane keeps its error, and before the realized one, since a
+            // page zooms without its terminal
+            if session.htmlHidesTerminal(pane) {
+                self.settingsModel.stepHtmlOverlayZoom(action)
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")

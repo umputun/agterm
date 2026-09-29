@@ -272,5 +272,9 @@ paths:
   overflowing tab still reports every control hittable; `testFlaggedViewLayoutPickerPersists` compares the
   tab's last line against the window frame instead.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
+- `htmlOverlayZoom` is the one page zoom every HTML overlay shows at, nil = 1, stepped only by the font
+  commands through `SettingsModel.stepHtmlOverlayZoom`, which saves and mirrors to `HtmlOverlayRegistry`
+  without `persistAndApply`: nothing else renders it, so a keypress must not broadcast an appearance change.
+  No Settings control.
 - These settings are GUI-only unless the control catalog explicitly says otherwise. Do not add settings
   commands merely to mirror chrome; user actions already have control coverage.

@@ -38,6 +38,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
 
     override func tearDown() async throws {
         await MainActor.run {
+            HtmlOverlayRegistry.shared.setZoom(1)
             server = nil
             actions = nil
             library = nil
@@ -362,6 +363,57 @@ final class ControlServerSessionActionsTests: XCTestCase {
             XCTAssertEqual(response.error, "session not realized", testCase.name)
             XCTAssertTrue(queued.granted, "\(testCase.name) must grant the pane before acting on it")
         }
+    }
+
+    func testFontUnderAPageStepsThePageZoomAndLeavesTheTerminal() throws {
+        let (store, target) = try addSession()
+        let queued = queuePane(in: target)
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/report.html", grantRoot: nil))
+        XCTAssertNil(store.openHtmlOverlay(target.id, pane: nil, overlay: page, sizePercent: nil))
+        let id = target.id.uuidString
+
+        let increased = server.font(id, window: nil, pane: nil, action: "increase_font_size:1")
+
+        XCTAssertTrue(increased.ok, increased.error ?? "")
+        XCTAssertFalse(queued.granted, "the terminal under the page must not be touched")
+        XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 1.15)
+        let node = server.controlTree(window: nil).result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == id }
+        XCTAssertEqual(node?.htmlOverlays?.first?.zoom, 1.15)
+
+        XCTAssertEqual(server.font(id, window: nil, pane: .right, action: "reset_font_size").error, "session has no split pane")
+        XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 1.15)
+        XCTAssertEqual(server.font(id, window: nil, pane: .scratch, action: "reset_font_size").error, "session has no scratch terminal")
+        XCTAssertTrue(server.font(id, window: nil, pane: nil, action: "reset_font_size").ok)
+        XCTAssertNil(server.settingsModel.settings.htmlOverlayZoom)
+        XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1)
+    }
+
+    func testFontOnTheRightPaneUnderASessionWidePageZoomsThePage() throws {
+        let (store, target) = try addSession()
+        store.setSplitVisibility(target.id, shown: true)
+        let queued = queuePane(in: target, split: true)
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/report.html", grantRoot: nil))
+        XCTAssertNil(store.openHtmlOverlay(target.id, pane: nil, overlay: page, sizePercent: nil))
+
+        let response = server.font(target.id.uuidString, window: nil, pane: .right, action: "decrease_font_size:1")
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertFalse(queued.granted)
+        XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 0.85)
+    }
+
+    func testFontOnTheUncoveredPaneBesideAPanePageActsOnTheTerminal() throws {
+        let (store, target) = try addSession()
+        store.setSplitVisibility(target.id, shown: true)
+        let queued = queuePane(in: target)
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/report.html", grantRoot: nil))
+        XCTAssertNil(store.openHtmlOverlay(target.id, pane: .right, overlay: page, sizePercent: nil))
+
+        let response = server.font(target.id.uuidString, window: nil, pane: .left, action: "increase_font_size:1")
+
+        XCTAssertEqual(response.error, "session not realized")
+        XCTAssertTrue(queued.granted)
+        XCTAssertNil(server.settingsModel.settings.htmlOverlayZoom)
     }
 
     func testReadsLeaveAQueuedPaneQueued() throws {

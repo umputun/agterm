@@ -183,6 +183,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         servers.forEach { $0.stop() }
         registry.browser = SystemBrowser()
         registry.sharing = SystemHtmlSharing()
+        registry.setZoom(1)
         store.closeSession(session.id)
         try? FileManager.default.removeItem(at: directory)
     }
@@ -787,6 +788,31 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         try await waitFor("two loaded") { self.current?.loadState == .loaded && self.current?.current?.title == "two" }
         let afterNavigation = try await page.webView.evaluateJavaScript("document.getElementById('i').textContent")
         XCTAssertEqual(afterNavigation as? String, "static")
+    }
+
+    func testAPageKeepsTheZoomThroughNavigationAndReloadAndANewPageOpensAtIt() async throws {
+        registry.setZoom(1.5)
+        let page = try open(grant: pages.path)
+        let live = registry.page(for: page, store: store)
+        XCTAssertEqual(live.webView.pageZoom, 1.5)
+        try await waitFor("a loaded") { self.current?.loadState == .loaded }
+
+        registry.setZoom(1.25)
+        _ = try await live.webView.evaluateJavaScript("location.href = 'b.html'")
+        try await waitFor("navigated to b") { self.current?.current?.page.hasSuffix("/b.html") == true && self.current?.loadState == .loaded }
+        XCTAssertEqual(live.webView.pageZoom, 1.25)
+        XCTAssertNil(registry.navigate(page.id, .back))
+        try await waitFor("back on a") { self.current?.current?.page.hasSuffix("/a.html") == true && self.current?.loadState == .loaded }
+        XCTAssertEqual(live.webView.pageZoom, 1.25)
+        XCTAssertNil(registry.navigate(page.id, .forward))
+        try await waitFor("forward on b") { self.current?.current?.page.hasSuffix("/b.html") == true && self.current?.loadState == .loaded }
+        XCTAssertEqual(live.webView.pageZoom, 1.25)
+        XCTAssertNil(registry.reload(page.id, target: .original, store: store))
+        try await waitFor("reloaded a") { self.current?.current?.page.hasSuffix("/a.html") == true && self.current?.loadState == .loaded }
+        XCTAssertEqual(live.webView.pageZoom, 1.25)
+
+        XCTAssertTrue(store.closeOverlay(session.id))
+        XCTAssertEqual(registry.page(for: try open(file: "b.html"), store: store).webView.pageZoom, 1.25)
     }
 
     func testNavigatingAPageThatWasNeverShownIsRefused() {

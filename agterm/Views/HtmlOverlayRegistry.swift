@@ -11,6 +11,8 @@ final class HtmlOverlayRegistry {
     /// browser receives every URL a page hands off; pages created later use whatever is set here.
     var browser: any HtmlBrowser = SystemBrowser()
     var sharing: any HtmlSharing = SystemHtmlSharing()
+    /// zoom is the page zoom every page shows at, pushed by `SettingsModel`.
+    private(set) var zoom = 1.0
     private var pages: [UUID: HtmlOverlayPage] = [:]
     private var appearanceObserver: NSObjectProtocol?
 
@@ -30,8 +32,14 @@ final class HtmlOverlayRegistry {
         if let page = pages[overlay.id] { return page }
         let page = HtmlOverlayPage(overlay: overlay, store: store, backgroundColor: backgroundColor,
                                    theme: theme(backgroundColor: backgroundColor), browser: browser, sharing: sharing)
+        page.webView.pageZoom = zoom
         pages[overlay.id] = page
         return page
+    }
+
+    func setZoom(_ zoom: Double) {
+        self.zoom = zoom
+        for page in pages.values { page.webView.pageZoom = zoom }
     }
 
     /// theme is the terminal theme's colors as a page's default style, the overlay's own background first.

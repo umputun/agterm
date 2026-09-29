@@ -283,7 +283,7 @@ public final class AppStore {
                             dashboardFontSize: () -> Double? = { nil },
                             dashboardFontMode: () -> String? = { nil }, app: AppIdentity? = nil,
                             liveReset: ControlLiveResetReadback? = nil,
-                            flaggedLayout: FlaggedViewLayout? = nil) -> ControlTree {
+                            flaggedLayout: FlaggedViewLayout? = nil, htmlZoom: Double? = nil) -> ControlTree {
         let activeID = selectedSessionID
         // `currentWorkspaceID`, not the selected session's owner: an EMPTY destination selects nothing, so
         // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
@@ -357,7 +357,7 @@ public final class AppStore {
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
                                           presentation: presentationNode(of: session), presenters: presentersNode(of: session),
                                           remoteOverlays: remoteOverlayNodes(of: session),
-                                          htmlOverlays: htmlOverlayNodes(session))
+                                          htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

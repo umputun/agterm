@@ -865,14 +865,30 @@ final class AppActions {
 
     // NOT zoom-gated: font commands act on the FOCUSED surface — while zoomed that is the zoomed terminal —
     // and never touch hidden deck state, so ⌘+/⌘−/⌘0 keep working.
-    func increaseFontSize() {
-        focusedSurface()?.performBindingAction("increase_font_size:1")
+    func increaseFontSize() { resizeFont("increase_font_size:1") }
+    func decreaseFontSize() { resizeFont("decrease_font_size:1") }
+    func resetFontSize() { resizeFont("reset_font_size") }
+
+    // a page owning the keys zooms the pages instead: `focusedSurface()` would fall back to the terminal the
+    // page hides. An open dashboard hides every page, so it keeps the terminal behavior.
+    private func resizeFont(_ action: String) {
+        let session = frontmostDashboard?.isOpen == true ? nil : store?.activeSession
+        if Self.htmlPageOwnsKeys(responder: NSApp.keyWindow?.firstResponder, session: session) {
+            settingsModel?.stepHtmlOverlayZoom(action)
+            return
+        }
+        focusedSurface()?.performBindingAction(action)
     }
-    func decreaseFontSize() {
-        focusedSurface()?.performBindingAction("decrease_font_size:1")
-    }
-    func resetFontSize() {
-        focusedSurface()?.performBindingAction("reset_font_size")
+
+    /// htmlPageOwnsKeys is true when a page has focus, or covers `session` while focus sits outside every
+    /// terminal, as on the sidebar.
+    static func htmlPageOwnsKeys(responder: NSResponder?, session: Session?) -> Bool {
+        let view = responder as? NSView
+        if let view, sequence(first: view, next: \.superview).contains(where: { $0 is HtmlOverlayWebView }) {
+            return true
+        }
+        if view is GhosttySurfaceView { return false }
+        return session?.topmostHtmlOverlay != nil
     }
 
     // MARK: - Search (on the surface that opened it)

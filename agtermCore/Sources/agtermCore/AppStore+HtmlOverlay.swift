@@ -120,7 +120,7 @@ extension AppStore {
         return slot.pane.map { closePaneOverlay(slot.session.id, pane: $0) } ?? closeOverlay(slot.session.id)
     }
 
-    func htmlOverlayNodes(_ session: Session) -> [ControlHtmlOverlayNode]? {
+    func htmlOverlayNodes(_ session: Session, zoom: Double?) -> [ControlHtmlOverlayNode]? {
         let slots: [(String?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
             + OverlayPane.allCases.map { ($0.rawValue, session.paneOverlay($0)?.html) }
         let nodes = slots.compactMap { pane, page in
@@ -133,7 +133,8 @@ extension AppStore {
                 return ControlHtmlOverlayNode(pane: pane, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
                                               error: page.loadError, page: page.current?.page, title: page.current?.title,
                                               canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
-                                              navigation: page.navigation ? true : nil, javascript: page.javascript)
+                                              navigation: page.navigation ? true : nil, javascript: page.javascript,
+                                              zoom: zoom)
             }
         }
         return nodes.isEmpty ? nil : nodes

@@ -506,6 +506,17 @@ struct AppSettingsTests {
         #expect(legacy.effectiveFlaggedViewLayout == .flat)
     }
 
+    @Test func htmlOverlayZoomDefaultsToActualSizeRoundTripsAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().effectiveHtmlOverlayZoom == 1)
+        #expect(AppSettings(htmlOverlayZoom: 1.5).ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(htmlOverlayZoom: 1.25)))
+        #expect(decoded.htmlOverlayZoom == 1.25)
+        #expect(decoded.effectiveHtmlOverlayZoom == 1.25)
+        #expect(AppSettings(htmlOverlayZoom: 40).effectiveHtmlOverlayZoom == 3)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.effectiveHtmlOverlayZoom == 1)
+    }
+
     @Test func rightClickPasteDefaultsOnAndIsAGhosttyKey() throws {
         // UNLIKE the app-level flags this IS a ghostty key — the toggle owns it, always emitted.
         #expect(AppSettings().rightClickPaste == nil)

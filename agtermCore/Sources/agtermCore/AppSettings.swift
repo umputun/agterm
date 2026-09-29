@@ -330,6 +330,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Raw `FlaggedViewLayout` for the sidebar's flagged view; nil = flat. Resolved by
     /// `effectiveFlaggedViewLayout`.
     public var flaggedViewLayout: String?
+    /// htmlOverlayZoom is the page zoom every HTML overlay shows at, nil for actual size; read it through
+    /// `effectiveHtmlOverlayZoom`.
+    public var htmlOverlayZoom: Double?
     /// Whether the first-launch pointer at the Help menu extras has been shown; nil/false = not yet.
     /// Written once, by the launch that shows it. See `FirstRunWelcome`.
     public var welcomeShown: Bool?
@@ -358,7 +361,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
-                welcomeShown: Bool? = nil) {
+                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -406,6 +409,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.shownInterfaceElements = shownInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.flaggedViewLayout = flaggedViewLayout
+        self.htmlOverlayZoom = htmlOverlayZoom
         self.welcomeShown = welcomeShown
     }
 
@@ -442,6 +446,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var effectiveFlaggedViewLayout: FlaggedViewLayout {
         flaggedViewLayout.flatMap(FlaggedViewLayout.init(rawValue:)) ?? .flat
     }
+
+    /// effectiveHtmlOverlayZoom is `htmlOverlayZoom` bounded to `HtmlZoom`'s range, the only read of the setting.
+    public var effectiveHtmlOverlayZoom: Double { HtmlZoom.resolve(htmlOverlayZoom) }
 
     /// The resolved status-reset mode: the explicit `statusReset` when a KNOWN raw value, else `firstKey`.
     public var effectiveStatusReset: StatusReset {

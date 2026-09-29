@@ -418,7 +418,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the remote overlay's local-hold check, and zoom's `uncovered`/`paneVisible`. Program-only sites:
   `TerminalView.viewOnly`, zoom's `.overlay` and pane-overlay arms, and `overlay.result`'s running check.
   Under a page `topmostSurface` and `focusTarget` return nil, never the hidden pane, and zoom's
-  `resolveTarget` returns nil. `dropUnrealizedPaneOverlays` never drops a page, which has no surface to
+  `resolveTarget` returns nil. The font commands follow the page too: ⌘+/⌘−/⌘0 route to it when
+  `AppActions.htmlPageOwnsKeys` says so, and `font.*` when `Session.htmlHidesTerminal` does; both step the one
+  app-wide `HtmlZoom` factor, read back as `htmlOverlays[].zoom`, never the terminal the page hides.
+  `dropUnrealizedPaneOverlays` never drops a page, which has no surface to
   realize. Every path that empties a slot holding a page fires `HtmlOverlayReleases` once: `closeOverlay`,
   `closePaneOverlay`, `teardownPaneOverlay`, and `Session.teardownOverlaySlot` at session, workspace,
   pending-close and window teardown. The app's `HtmlOverlayRegistry` keys web views by the page's id, which

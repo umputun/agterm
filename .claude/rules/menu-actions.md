@@ -85,7 +85,8 @@ paths:
 - The View menu carries no fullscreen item of agterm's own, and `toggle_fullscreen` rides the key monitor
   rather than a menu shortcut; see [[windows]]. It remains rebindable and control-drivable.
 - Font shortcuts call libghostty binding actions on the key window's first-responder surface, falling back
-  to the active session. Persistence still flows from cell-size callbacks.
+  to the active session, unless an HTML page owns the keys, which zooms the pages instead ([[control-api]]).
+  Persistence still flows from cell-size callbacks.
 - `shortcutGlyph` delegates to host-free `Keymap.glyphHint`. Use it for palette hints and the ten built-in
   toolbar/sidebar tooltips so rebinds update both. This visual text is keep-in-sync exempt.
 
