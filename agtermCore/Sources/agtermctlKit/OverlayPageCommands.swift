@@ -67,6 +67,14 @@ extension Session.Overlay {
     }
 }
 
+extension Session.Overlay.Open {
+    static let blockHelp: ArgumentHelp = """
+        Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the \
+        program's own output file). With --html, wait for the page to submit or close, print its outcome JSON, and \
+        exit 0 when submitted, 2 when dismissed, 1 on error.
+        """
+}
+
 // a page read prints its outcome and exits like pick; a program read keeps the plain request output
 extension Session.Overlay.Result {
     func validate() throws {

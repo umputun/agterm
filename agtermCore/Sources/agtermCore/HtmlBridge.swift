@@ -55,6 +55,8 @@ public enum HtmlBridge {
     private static let windowTargeted: Set<Command> = [.windowClose, .windowSelect, .windowRename, .windowDelete,
                                                        .windowResize, .windowMove, .windowZoom, .windowFullscreen,
                                                        .windowMinimize]
+    // app-global commands that refuse any window
+    private static let windowless: Set<Command> = [.hooksReload, .hooksList]
     // their ids name something else (a remote session, dashboard cells), and they still land in a local window
     private static let placedLocally: Set<Command> = [.zmxAttach, .dashboard]
 
@@ -76,7 +78,7 @@ public enum HtmlBridge {
         if request.cmd == .sessionOverlayReload, args.current == nil { args.current = true }
         if placedLocally.contains(request.cmd) {
             if args.window == nil { args.window = page.window }
-        } else if !addressed {
+        } else if !addressed, !windowless.contains(request.cmd) {
             if isSessionTargeted(request.cmd, args: args) {
                 request.target = page.session.uuidString
                 if ownOverlay.contains(request.cmd), args.pane == nil { args.pane = page.pane?.rawValue }

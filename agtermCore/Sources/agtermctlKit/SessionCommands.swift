@@ -570,7 +570,7 @@ struct Session: ParsableCommand {
                 """)
             var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
-            @Flag(name: .long, help: "Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the program's own output file).") var block = false
+            @Flag(name: .long, help: Open.blockHelp) var block = false
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
@@ -693,7 +693,7 @@ struct Session: ParsableCommand {
         }
 
         struct Result: RequestCommand {
-            static let configuration = CommandConfiguration(abstract: "Print the overlay program's exit status (errors if it is still running or never ran).")
+            static let configuration = CommandConfiguration(abstract: "Print the overlay program's exit status, or with --page an HTML page's outcome.")
             @Option(name: .long, help: "Read that split pane's overlay status (primary/left/top or split/right/bottom); omit for the session-wide overlay.")
             var pane: String?
             @Option(name: .long, help: "Read the outcome of the HTML page with this id, as a --block open prints it.") var page: String?

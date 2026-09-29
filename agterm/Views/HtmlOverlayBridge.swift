@@ -114,7 +114,7 @@ enum HtmlOverlayBridge {
 }
 
 /// HtmlOverlayBridgeHandler receives a page's requests. WebKit keeps it strongly for the page's lifetime, so it
-/// holds the page weakly and answers nothing once the page is gone.
+/// holds the page weakly and answers `page closed` once the page is gone.
 @MainActor
 final class HtmlOverlayBridgeHandler: NSObject, WKScriptMessageHandlerWithReply {
     weak var page: HtmlOverlayPage?

@@ -493,9 +493,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `new`, `go` and `overlay.job.run`, plus `notify`, the `font.*` trio and a non-GUI `ask.open`), its pane
   for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach` and
-  `dashboard` keep their ids and still land in the page's window. `sidebar` and `sidebar.mode` read no
-  window, so a page drives the frontmost one. `zmx.present`, `session.overlay.job.run` and `zmx.reset` are
-  refused: a stream hand-off and post-reply work do not fit one request and reply.
+  `dashboard` keep their ids and still land in the page's window, and `hooks.*`, which refuse any window,
+  get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
+  `zmx.present`, `session.overlay.job.run` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
   separate install would lose the adapter at the next theme change. Release unregisters the handlers;
   reload keeps them.

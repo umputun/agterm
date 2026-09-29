@@ -75,6 +75,13 @@ struct HtmlBridgeTests {
         #expect(workspace.args?.window == nil)
     }
 
+    @Test(arguments: ["hooks.reload", "hooks.list"])
+    func aCommandRefusingAnyWindowGetsNone(_ cmd: String) throws {
+        let built = try request(#"{"cmd":"\#(cmd)"}"#)
+        #expect(built.target == nil)
+        #expect(built.args?.window == nil)
+    }
+
     @Test(arguments: ["window.close", "window.select", "window.rename", "window.delete", "window.resize", "window.move",
                       "window.zoom", "window.fullscreen", "window.minimize"])
     func anUntargetedWindowCommandActsOnThePagesWindow(_ cmd: String) throws {
