@@ -40,11 +40,11 @@ struct HtmlOrigin: Equatable {
 
 /// HtmlZoom is the page-zoom ladder the font-size commands walk on an HTML page, one factor for every page.
 public enum HtmlZoom {
-    public static let steps: [Double] = [0.5, 0.75, 0.85, 1, 1.15, 1.25, 1.5, 1.75, 2, 2.5, 3]
+    static let steps: [Double] = [0.5, 0.75, 0.85, 1, 1.15, 1.25, 1.5, 1.75, 2, 2.5, 3]
     static let smallest = 0.5, largest = 3.0
 
     /// resolve bounds a stored factor to the ladder's range; nil and a non-finite value mean actual size.
-    public static func resolve(_ stored: Double?) -> Double {
+    static func resolve(_ stored: Double?) -> Double {
         guard let stored, stored.isFinite else { return 1 }
         return min(largest, max(smallest, stored))
     }

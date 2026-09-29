@@ -402,6 +402,19 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 0.85)
     }
 
+    func testFontOnAShownScratchUnderASessionWidePageZoomsThePage() throws {
+        let (store, target) = try addSession()
+        target.scratchSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        target.scratchActive = true
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/report.html", grantRoot: nil))
+        XCTAssertNil(store.openHtmlOverlay(target.id, pane: nil, overlay: page, sizePercent: nil))
+
+        let response = server.font(target.id.uuidString, window: nil, pane: .scratch, action: "increase_font_size:1")
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 1.15)
+    }
+
     func testFontOnTheUncoveredPaneBesideAPanePageActsOnTheTerminal() throws {
         let (store, target) = try addSession()
         store.setSplitVisibility(target.id, shown: true)

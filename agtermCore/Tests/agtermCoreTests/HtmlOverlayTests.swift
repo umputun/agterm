@@ -490,6 +490,13 @@ struct HtmlOverlayTests {
         #expect(session.htmlHidesTerminal(pane) == hidden)
     }
 
+    @Test(arguments: [Int?.none, 70], [true, false])
+    func aSessionWidePageHidesTheScratchOnlyWhileItIsShown(_ size: Int?, _ shown: Bool) {
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: size) == nil)
+        session.scratchActive = shown
+        #expect(session.htmlHidesTerminal(.scratch) == shown)
+    }
+
     @Test func noPageHidesNoTerminal() {
         split()
         #expect(StatusPane.allCases.allSatisfy { !session.htmlHidesTerminal($0) })

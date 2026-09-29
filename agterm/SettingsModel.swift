@@ -317,15 +317,13 @@ final class SettingsModel {
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
     /// Persist whether GUI closes use the short undo grace period. nil = on; false = close immediately.
     func setCloseGraceUndoEnabled(_ value: Bool?) { settings.closeGraceUndoEnabled = value; try? settingsStore.save(settings) }
-    /// stepHtmlOverlayZoom moves every HTML page's zoom by a font binding action and persists it, returning false
-    /// for an action that is not a font size change. Saves and mirrors only: no chrome or config depends on it.
-    @discardableResult
-    func stepHtmlOverlayZoom(_ action: String) -> Bool {
-        guard let zoom = HtmlZoom.applying(fontAction: action, to: settings.effectiveHtmlOverlayZoom) else { return false }
+    /// stepHtmlOverlayZoom moves every HTML page's zoom by a font binding action and persists it. Saves and
+    /// mirrors only: no chrome or config depends on it.
+    func stepHtmlOverlayZoom(_ action: String) {
+        guard let zoom = HtmlZoom.applying(fontAction: action, to: settings.effectiveHtmlOverlayZoom) else { return }
         settings.htmlOverlayZoom = zoom == 1 ? nil : zoom
         try? settingsStore.save(settings)
         applyHtmlOverlayZoom()
-        return true
     }
     /// Persist that the first-run welcome has been shown, so it never appears again on this state directory.
     func setWelcomeShown(_ value: Bool?) { settings.welcomeShown = value; try? settingsStore.save(settings) }

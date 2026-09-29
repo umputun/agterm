@@ -31,8 +31,8 @@ final class SettingsModelTests: XCTestCase {
     }
 
     func testStepHtmlOverlayZoomPersistsAndMirrors() {
-        XCTAssertTrue(model.stepHtmlOverlayZoom("increase_font_size:1"))
-        XCTAssertTrue(model.stepHtmlOverlayZoom("increase_font_size:1"))
+        model.stepHtmlOverlayZoom("increase_font_size:1")
+        model.stepHtmlOverlayZoom("increase_font_size:1")
 
         XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1.25)
         XCTAssertEqual(SettingsStore(directory: stateDir).load().htmlOverlayZoom, 1.25)
@@ -42,15 +42,10 @@ final class SettingsModelTests: XCTestCase {
     func testStepHtmlOverlayZoomBackToActualSizeClearsTheStoredField() {
         model.stepHtmlOverlayZoom("decrease_font_size:1")
 
-        XCTAssertTrue(model.stepHtmlOverlayZoom("reset_font_size"))
+        model.stepHtmlOverlayZoom("reset_font_size")
 
         XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1)
         XCTAssertNil(SettingsStore(directory: stateDir).load().htmlOverlayZoom)
-    }
-
-    func testStepHtmlOverlayZoomRefusesANonFontAction() {
-        XCTAssertFalse(model.stepHtmlOverlayZoom("paste_from_clipboard"))
-        XCTAssertNil(model.settings.htmlOverlayZoom)
     }
 
     func testLaunchMirrorsTheSavedHtmlOverlayZoomToTheRegistry() throws {

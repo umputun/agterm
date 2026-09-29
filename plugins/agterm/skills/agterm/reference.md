@@ -1355,7 +1355,7 @@ while hidden). The role and position aliases (`primary`/`top`, `split`/`bottom`)
 No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
 pane's font change is live-only, matching a GUI cmd +/- on those panes. Read the resulting size back from
 `tree` — `fontSize` (main), `splitFontSize`, `scratchFontSize`, each in points and omitted when that pane
-isn't realized. A pane under an HTML overlay (the session-wide one covers both split panes) zooms the page
+isn't realized. A pane under an HTML overlay (the session-wide one covers both split panes and a shown scratch) zooms the page
 instead of the terminal: one page zoom shared by every HTML overlay, kept across launches, read back as
 `htmlOverlays[].zoom` (1 = actual size).
 
