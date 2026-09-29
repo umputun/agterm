@@ -13,6 +13,8 @@ final class HtmlOverlayRegistry {
     var sharing: any HtmlSharing = SystemHtmlSharing()
     /// zoom is the page zoom every page shows at, pushed by `SettingsModel`.
     private(set) var zoom = 1.0
+    /// dispatch runs the requests pages send; `ControlServer` supplies it, and pages read it when a request arrives.
+    var dispatch: HtmlBridgeDispatch?
     private var pages: [UUID: HtmlOverlayPage] = [:]
     private var appearanceObserver: NSObjectProtocol?
 
@@ -158,7 +160,13 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // opaque canvas, since a web app styled against it would lose its background here.
         if case .file = overlay.source { webView.setValue(false, forKey: "drawsBackground") }
         super.init()
-        installTheme()
+        installScripts()
+        if themed {
+            let handler = HtmlOverlayBridgeHandler()
+            handler.page = self
+            webView.configuration.userContentController.addScriptMessageHandler(
+                handler, contentWorld: HtmlOverlayBridge.world, name: HtmlOverlayBridge.handlerName)
+        }
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.setAccessibilityIdentifier("htmlOverlay.page")
@@ -194,16 +202,31 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func applyTheme(_ theme: HtmlOverlayTheme) {
         guard theme != self.theme else { return }
         self.theme = theme
-        installTheme()
+        installScripts()
         if themed { reloadShown() }
     }
 
-    private func installTheme() {
+    // one set, because removing user scripts removes them all: the theme, and on a file page the bridge adapter
+    private func installScripts() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
         controller.addUserScript(WKUserScript(source: theme.script(themed: themed), injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: Self.themeWorld))
-        if themed { webView.underPageBackgroundColor = NSColor(agtermHex: theme.background) }
+        guard themed else { return }
+        controller.addUserScript(WKUserScript(source: HtmlOverlayBridge.adapterScript, injectionTime: .atDocumentEnd,
+                                              forMainFrameOnly: true, in: HtmlOverlayBridge.world))
+        webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
+    }
+
+    /// handleBridgeRequest runs one request the page sent and answers it through `reply` exactly once.
+    func handleBridgeRequest(_ body: Any, mainFrame: Bool, reply: @escaping @MainActor (Any?, String?) -> Void) {
+        guard mainFrame else { return reply(nil, "requests from frames are refused") }
+        guard let request = HtmlOverlayBridge.request(from: body) else { return reply(nil, "invalid request") }
+        guard let dispatch = HtmlOverlayRegistry.shared.dispatch else { return reply(nil, "control is unavailable") }
+        Task {
+            let (value, error) = HtmlOverlayBridge.reply(await dispatch(request))
+            reply(value, error)
+        }
     }
 
     private var themed: Bool {

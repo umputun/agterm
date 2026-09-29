@@ -255,6 +255,11 @@ final class ControlServer {
                                                queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
+        // through `dispatch`, not the dispatcher, so a page request refreshes the window cache and reaches the
+        // commands only the app's own switch handles
+        HtmlOverlayRegistry.shared.dispatch = { [weak self] request in
+            await self?.dispatch(request) ?? ControlResponse(ok: false, error: "control is unavailable")
+        }
     }
 
     /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` wins (tests need it —
