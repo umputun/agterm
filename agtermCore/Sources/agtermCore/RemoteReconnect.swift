@@ -2,14 +2,14 @@ import Foundation
 
 /// The retry schedule every remote link shares. A laptop asleep for the night should not be retried every
 /// thirty seconds, and should never be given up on either.
-public enum RemoteRetryBackoff {
+enum RemoteRetryBackoff {
     static let firstCap: TimeInterval = 30
     static let lateCap: TimeInterval = 300
     /// Failures in a row before the cap grows.
     static let failuresBeforeLateCap = 8
 
     /// The wait after the `failures`th failure in a row, counted from one.
-    public static func delay(afterFailures failures: Int) -> TimeInterval {
+    static func delay(afterFailures failures: Int) -> TimeInterval {
         let cap = failures > failuresBeforeLateCap ? lateCap : firstCap
         return min(pow(2, Double(min(failures - 1, 30))), cap)
     }
@@ -28,7 +28,7 @@ public struct RemoteLinkNotice: Equatable, Sendable {
         nonce = String(title.dropFirst(Self.prefix.count).dropLast(Self.suffix.count))
     }
 
-    public static func title(nonce: String) -> String { prefix + nonce + suffix }
+    static func title(nonce: String) -> String { prefix + nonce + suffix }
 }
 
 /// Panes whose ssh lost the connection and wait to be attached again, keyed by pane identity like

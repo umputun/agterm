@@ -1187,7 +1187,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   auth is a precondition and a host-key or password prompt is a failure rather than a question a
   dispatcher could answer. The host is refused rather than escaped; paths and the remote command are
   argv-quoted. The pane attach alone adds `LogLevel=ERROR`: ssh's disconnect chatter would land wherever the
-  remote program left the cursor, while a refused key or a changed host key still prints its reason.
+  remote program left the cursor, while a takeover or an unowned reattach runs with no probe first, so a
+  refused key or a changed host key must still print its reason.
 - Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
   host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
   character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed
@@ -1248,7 +1249,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `PaneLead.linkLost` believes only the current attachment's nonce and runs the same `remotePaneStopped`
   cleanup. `RemoteReconnectBook` probes (`RemoteSession.probeCommand`) on the remote tick with
   `RemoteRetryBackoff`, and a host that answers gets `reattachPane(claim: false)`, covered only when the
-  origin had reported a role, and `remotePaneResumed`. Re-running the attach in the shell was rejected: it
+  origin had reported a role or the attach it replaced dropped before its first report, and
+  `remotePaneResumed`. Re-running the attach in the shell was rejected: it
   would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
   chords pass.
   The held exit reaches the app at once through `onExitHeld`, which forgets the pane's lead and records the

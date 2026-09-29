@@ -94,9 +94,7 @@ public enum RemoteSession {
             endpoint.executable, "attach", daemon, "/bin/sh", "-c", guardScript,
         ])
         var argv = sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
-        // ssh's own disconnect chatter lands wherever the remote program left the cursor; the pane command
-        // prints the one line that matters. ERROR rather than QUIET: a takeover or an unowned reattach runs
-        // with no probe first, and a refused key or a changed host key must still say so.
+        // why ERROR: control-api.md, Remote sessions
         argv.insert(contentsOf: ["-o", "LogLevel=ERROR"], at: argv.count - 2)
         return argv
     }

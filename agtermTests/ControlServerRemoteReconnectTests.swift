@@ -4,10 +4,17 @@ import XCTest
 
 @MainActor
 final class ControlServerRemoteReconnectTests: XCTestCase {
-    private struct Probe: RemoteCommandRunner {
+    private final class Probe: RemoteCommandRunner, @unchecked Sendable {
+        private let lock = NSLock()
+        private var seen: [[String]] = []
         let status: Int32
+        var argvs: [[String]] { lock.withLock { seen } }
+
+        init(status: Int32) { self.status = status }
+
         func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
-            RemoteCommandResult(status: status, stdout: "", stderr: "")
+            lock.withLock { seen.append(argv) }
+            return RemoteCommandResult(status: status, stdout: "", stderr: "")
         }
     }
 
@@ -31,9 +38,13 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     }
 
     private func server(probe status: Int32) -> ControlServer {
+        server(runner: Probe(status: status))
+    }
+
+    private func server(runner: any RemoteCommandRunner) -> ControlServer {
         ControlServer(library: library, actions: AppActions(library: library),
                       settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: directory)),
-                      identity: AppIdentity(version: "test", commit: "test"), remoteRunner: Probe(status: status),
+                      identity: AppIdentity(version: "test", commit: "test"), remoteRunner: runner,
                       socketPath: directory.appendingPathComponent("control.sock").path)
     }
 
@@ -54,7 +65,8 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
 
     func testAHostThatAnswersGetsThePaneAttachedAgainUnheld() async throws {
         let (session, view) = try replica()
-        let server = server(probe: 0)
+        let probe = Probe(status: 0)
+        let server = server(runner: probe)
         let reconnected = expectation(description: "reconnected")
         PaneLead.reconnect = { old, cover in
             XCTAssertTrue(old === view)
@@ -71,6 +83,25 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
 
         XCTAssertFalse(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
+        XCTAssertEqual(probe.argvs, [try RemoteSession.probeCommand(host: "mini")])
+    }
+
+    func testAnUncoveredReconnectLeavesThePaneUncovered() throws {
+        let (session, view) = try replica()
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-t")
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+            session.paneIdentity: ZmxSupport.daemonName(for: UUID()),
+        ], presentationVersion: 1, origin: RemoteBinding.Origin(host: "mini", endpoint: endpoint, sessionName: "build")),
+                         forSession: session.id)
+        defer { ZmxLeadBook.shared.forget(pane: session.paneIdentity) }
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(view, claim: false, cover: false, services: services))
+
+        XCTAssertFalse(ZmxLeadBook.shared.covered(pane: session.paneIdentity),
+                       "an origin that never reports a role would leave it covered for good")
     }
 
     func testAnAttachThatDidNotStartKeepsThePaneWaitingAndHeld() async throws {
