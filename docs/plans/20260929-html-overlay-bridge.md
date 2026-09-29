@@ -255,10 +255,10 @@
 - Create: `agtermCore/Tests/agtermCoreTests/HtmlBridgeTests.swift`
 - Modify: `agterm/Control/ControlServer.swift` (move the `decodeDetail` formatting into agtermCore)
 
-- [ ] write failing tests for decoding a page message into `ControlRequest`:
+- [x] write failing tests for decoding a page message into `ControlRequest`:
   - dotted command name, `target`, `args` object;
   - an unknown command or a wrong field type produces the same `invalid request: …` text as the socket
-- [ ] write failing tests for the defaults:
+- [x] write failing tests for the defaults:
   - an untargeted rename and status from a page in a background window hit the page's own session;
   - explicit `active`, an explicit id in another window, explicit `args.window` and batch `args.targets`
     are kept as given;
@@ -267,10 +267,10 @@
   - the window is filled only when target, targets and window are all nil;
   - the pane is filled only for the page's own overlay commands, including `submit`;
   - `reload` gets `current: true` only when omitted
-- [ ] write failing tests for refusing `zmx.present`, `session.overlay.job.run` and `zmx.reset`
-- [ ] implement `HtmlBridge`, taking the page's current window, session and pane as input, and move the
+- [x] write failing tests for refusing `zmx.present`, `session.overlay.job.run` and `zmx.reset`
+- [x] implement `HtmlBridge`, taking the page's current window, session and pane as input, and move the
   decode-error formatting into agtermCore, used by both the socket and the bridge
-- [ ] run `swift test --filter HtmlBridgeTests` and the existing socket decode tests - must pass before
+- [x] run `swift test --filter HtmlBridgeTests` and the existing socket decode tests - must pass before
   Task 4
 
 ### Task 4: Wire the native bridge, page helper and full adapter behavior
