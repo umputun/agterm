@@ -53,7 +53,17 @@ jobs:
       - uses: actions/checkout@v7
       - name: swift test (with coverage)
         working-directory: agtermCore
-        run: swift test --enable-code-coverage
+        run: ../scripts/watchdog.sh swift test --enable-code-coverage
+        env:
+          WATCHDOG_SECONDS: "600"
+          DIAG_DIR: ${{ github.workspace }}/test-hang
+      - name: upload hang diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-hang
+          path: test-hang
+          if-no-files-found: ignore
       - name: export lcov
         working-directory: agtermCore
         # rewrite the absolute SF: paths llvm-cov emits to repo-relative so the
