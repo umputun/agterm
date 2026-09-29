@@ -68,6 +68,31 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(again.error, OverlayHtmlError.noOverlay)
     }
 
+    func testATaggedButtonSwitchesSessionsThroughTheRealDispatch() async throws {
+        let (store, pageSession) = try addSession()
+        let (_, other) = try addSession()
+        store.selectSession(pageSession.id)
+        let file = stateDir.appendingPathComponent("switch.html")
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try """
+            <title>S</title>
+            <button type="button" id="go" data-agterm="session.select" data-agterm-target="\(other.id.uuidString)">go</button>
+            """.write(to: file, atomically: true, encoding: .utf8)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, follow: false, pane: nil,
+                                                       page: .file(path: file.path, grantRoot: nil))
+        XCTAssertTrue(server.openSessionOverlay(pageSession.id.uuidString, window: nil, options: options).ok)
+        let overlay = try XCTUnwrap(pageSession.htmlOverlay)
+        let page = HtmlOverlayRegistry.shared.page(for: overlay, store: store)
+        defer { store.closeOverlay(pageSession.id) }
+        let deadline = Date().addingTimeInterval(10)
+        while page.webView.title != "S", Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+
+        _ = try await page.webView.evaluateJavaScript("document.getElementById('go').click()")
+        while store.selectedSessionID != other.id, Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(store.selectedSessionID, other.id)
+    }
+
     private func overlayOptions(follow: Bool, pane: OverlayPane? = nil) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
                                          backgroundColor: nil, follow: follow, pane: pane)

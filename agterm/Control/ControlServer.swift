@@ -245,6 +245,7 @@ final class ControlServer {
         HtmlOverlayRegistry.shared.dispatch = { [weak self] request in
             await self?.dispatch(request) ?? ControlResponse(ok: false, error: "control is unavailable")
         }
+        HtmlOverlayRegistry.shared.windowID = { [weak library] store in library?.windowID(for: store)?.uuidString }
     }
 
     /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` wins (tests need it —

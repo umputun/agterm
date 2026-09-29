@@ -280,27 +280,27 @@
 - Modify: `agterm/Views/HtmlOverlayRegistry.swift`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 
-- [ ] write failing hosted tests for the round trip:
+- [x] write failing hosted tests for the round trip:
   - a `tree` request returns the tree to a `--js` Promise, and to `data-agterm-into` text with JS off;
   - `session.select` switches the session;
   - a subframe request is refused;
   - a `--url` page has no adapter and no helper;
   - every Promise settles on an error
-- [ ] write failing hosted tests for form conversion in the injected script:
+- [x] write failing hosted tests for form conversion in the injected script:
   - empty and valid number fields;
   - an unchecked checkbox sends false;
   - disabled controls are skipped;
   - `data-agterm-args` is the base and a named control overrides it;
   - a selected radio group sends one value;
   - a repeated serialized value is refused
-- [ ] implement the reply handlers through one request-handling helper that takes the reply closure as a
+- [x] implement the reply handlers through one request-handling helper that takes the reply closure as a
   parameter: main-frame check, live-page admission, `HtmlBridge` build, dispatch through the closure, and
   exactly one call to the reply closure
-- [ ] add the page-world `agterm.request` helper on `--js` pages, and finish the adapter: form rules,
+- [x] add the page-world `agterm.request` helper on `--js` pages, and finish the adapter: form rules,
   args merge, `data-agterm-into`
-- [ ] unregister handlers on page release and keep them on reload; test that a released page sends nothing
+- [x] unregister handlers on page release and keep them on reload; test that a released page sends nothing
   further
-- [ ] run the scoped hosted tests - must pass before Task 5
+- [x] run the scoped hosted tests - must pass before Task 5
 
 ### Task 5: CLI for submit, page results and --block selectors
 
