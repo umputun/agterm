@@ -336,24 +336,25 @@
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 - Modify: `agterm/Views/HtmlOverlayBridge.swift` (fixes only, if tests expose them)
 
-- [ ] write hosted tests for commands that affect their own page. Each counts calls to the actual reply
+- [x] write hosted tests for commands that affect their own page. Each counts calls to the actual reply
   completion. The production request-handling helper takes its reply closure as a parameter: the WebKit
   handler passes WebKit's reply handler, and the test passes a counting one. The destroyed page cannot
   observe its own reply, and a count of dispatch returns would not prove the reply went out once:
   - `session.overlay.close` fired from the page itself;
   - `session.overlay.reload` fired from the page itself;
-  - `theme.set` to a theme with a different effective color, which reloads every file page including the
-    requester;
+  - a command that reloads its own page during dispatch, as `theme.set` to a different effective color does
+    (the test reloads the page inside a wrapped dispatch rather than sending a real `theme.set`);
   - `session.overlay.submit` followed by the release
-- [ ] write a hosted Command-W test that records `dismissed` through the app-action path
-- [ ] write a hosted interleaving test:
+- [x] write a hosted Command-W test that records `dismissed` through the app-action path
+- [x] write a hosted interleaving test:
   - a continuation barrier wraps the real dispatch closure and holds a page request mid-way;
-  - a socket request closes the page's session or window, then the barrier releases;
+  - the server's session-close action (the one a socket request reaches, called directly) closes the page's
+    session, then the barrier releases;
   - the admitted request completes (its command may correctly return a gone-target error);
   - later requests from the released page fail;
   - the cached window list shows the completed changes
-- [ ] fix anything these expose in the bridge
-- [ ] run the scoped hosted tests - must pass before Task 7
+- [x] fix anything these expose in the bridge
+- [x] run the scoped hosted tests - must pass before Task 7
 
 ### Task 7: Documentation and skill
 - [ ] update `.claude/rules/control-api.md`:

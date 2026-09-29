@@ -93,6 +93,146 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(store.selectedSessionID, other.id)
     }
 
+    @MainActor private final class Replies {
+        var values: [(Any?, String?)] = []
+    }
+
+    @MainActor private final class Gate {
+        private var continuation: CheckedContinuation<Void, Never>?
+        var held = false
+        var dispatched = 0
+
+        func wait() async {
+            held = true
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            continuation?.resume()
+            continuation = nil
+        }
+    }
+
+    private func openPage(in store: AppStore, _ session: Session) throws -> HtmlOverlayPage {
+        let file = stateDir.appendingPathComponent("page-\(UUID().uuidString).html")
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try "<title>P</title>".write(to: file, atomically: true, encoding: .utf8)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, follow: false, pane: nil,
+                                                       page: .file(path: file.path, grantRoot: nil))
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options).ok)
+        return HtmlOverlayRegistry.shared.page(for: try XCTUnwrap(session.htmlOverlay), store: store)
+    }
+
+    private func send(_ body: [String: Any], from page: HtmlOverlayPage) -> Replies {
+        let replies = Replies()
+        page.handleBridgeRequest(body, mainFrame: true) { replies.values.append(($0, $1)) }
+        return replies
+    }
+
+    private func settle(_ replies: Replies) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while replies.values.isEmpty, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(replies.values.count, 1, "a request is answered exactly once")
+    }
+
+    func testAPageClosingItselfIsAnsweredOnceAndRecordedDismissed() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        let replies = send(["cmd": "session.overlay.close"], from: page)
+        try await settle(replies)
+        XCTAssertNil(replies.values.first?.1)
+        XCTAssertFalse(session.overlayActive)
+        XCTAssertNil(HtmlOverlayRegistry.shared.existing(page.id))
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .dismissed)
+    }
+
+    func testAPageReloadingItselfIsAnsweredOnceAndKeepsItsPage() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        defer { store.closeOverlay(session.id) }
+        let revision = session.htmlOverlay?.reloadRevision ?? 0
+        let replies = send(["cmd": "session.overlay.reload"], from: page)
+        try await settle(replies)
+        XCTAssertNil(replies.values.first?.1)
+        XCTAssertEqual(session.htmlOverlay?.reloadRevision, revision + 1)
+        XCTAssertEqual(session.htmlOverlay?.reloadTarget, .current)
+        XCTAssertTrue(HtmlOverlayRegistry.shared.existing(page.id) === page)
+    }
+
+    func testAPageSubmittingItselfIsAnsweredOnceAndRecordedSubmitted() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        let replies = send(["cmd": "session.overlay.submit", "args": ["value": "v"]], from: page)
+        try await settle(replies)
+        XCTAssertNil(replies.values.first?.1)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.value, "v")
+        XCTAssertNil(HtmlOverlayRegistry.shared.existing(page.id))
+    }
+
+    func testACommandThatReloadsItsPageMidDispatchIsAnsweredOnce() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        defer { store.closeOverlay(session.id) }
+        let real = try XCTUnwrap(HtmlOverlayRegistry.shared.dispatch)
+        HtmlOverlayRegistry.shared.dispatch = { request in
+            page.applyTheme(HtmlOverlayTheme(background: "#123456", foreground: "#fedcba", dark: true))
+            return await real(request)
+        }
+        defer { HtmlOverlayRegistry.shared.dispatch = real }
+        let replies = send(["cmd": "version"], from: page)
+        try await settle(replies)
+        XCTAssertNil(replies.values.first?.1)
+    }
+
+    func testCommandWOverAPageRecordsItDismissed() throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        store.selectSession(session.id)
+        XCTAssertTrue(actions.closeActiveSession())
+        XCTAssertFalse(session.overlayActive)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .dismissed)
+    }
+
+    func testARequestHeldAcrossAnAppSessionCloseStillAnswersOnceAndThePageGoesSilent() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        let real = try XCTUnwrap(HtmlOverlayRegistry.shared.dispatch)
+        let gate = Gate()
+        HtmlOverlayRegistry.shared.dispatch = { request in
+            gate.dispatched += 1
+            await gate.wait()
+            return await real(request)
+        }
+        defer { HtmlOverlayRegistry.shared.dispatch = real }
+
+        let held = send(["cmd": "session.rename", "args": ["name": "late"]], from: page)
+        let deadline = Date().addingTimeInterval(5)
+        while !gate.held, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(server.closeSession(session.id.uuidString, window: nil).ok)
+        gate.open()
+        try await settle(held)
+        XCTAssertNotNil(held.values.first?.1, "the rename reaches a session that is gone")
+
+        let later = send(["cmd": "session.rename", "args": ["name": "again"]], from: page)
+        try await settle(later)
+        XCTAssertEqual(later.values.first?.1, "page closed")
+        XCTAssertEqual(gate.dispatched, 1)
+    }
+
+    func testAPageRequestRefreshesTheCachedWindowList() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        defer { store.closeOverlay(session.id) }
+        let replies = send(["cmd": "window.rename", "args": ["name": "from-page"]], from: page)
+        try await settle(replies)
+        XCTAssertNil(replies.values.first?.1)
+        let windowID = try XCTUnwrap(library.windowID(for: store)?.uuidString)
+        let cached = server.fastPathResponse(for: ControlRequest(cmd: .windowList))
+        XCTAssertEqual(cached?.result?.windows?.first { $0.id == windowID }?.name, "from-page")
+    }
+
     private func overlayOptions(follow: Bool, pane: OverlayPane? = nil) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
                                          backgroundColor: nil, follow: follow, pane: pane)
