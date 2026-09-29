@@ -224,6 +224,15 @@ struct SocketClient {
         }
     }
 
+    /// pageExitCode matches pick: 0 answered, 2 dismissed; a one-shot read of a pending page is a failure.
+    static func pageExitCode(for outcome: ControlHtmlPageOutcomeState) -> ExitCode {
+        switch outcome {
+        case .submitted: .success
+        case .pending: .failure
+        case .dismissed: ExitCode(rawValue: 2)
+        }
+    }
+
     /// Human choices may take minutes, so poll quickly only for the first second (ten 100 ms waits),
     /// then back off to 500 ms rather than hammering the server's serial accept loop indefinitely.
     static func pickPollDelay(afterPendingPoll poll: Int) -> TimeInterval {

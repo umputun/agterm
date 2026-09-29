@@ -311,12 +311,12 @@
 - Modify: `agtermCore/Sources/agtermctlKit/SocketClient.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/OverlayCommandsTests.swift`
 
-- [ ] write failing tests for parsing and validation:
+- [x] write failing tests for parsing and validation:
   - `session overlay submit [--value V] [--pane] [--target]` builds the request;
   - `session overlay result --page ID` reads the page outcome;
   - `--block` is accepted with `--html` and still refused with `--url`, and `--wait` stays refused for
     pages
-- [ ] write failing tests for the page `--block` flow, through an injectable open/poll runner like pick's:
+- [x] write failing tests for the page `--block` flow, through an injectable open/poll runner like pick's:
   - the poll uses the `pageID` from the open reply, and still finds it after a new page reopens the same
     slot;
   - an open reply missing `pageID` is an error;
@@ -324,11 +324,11 @@
   - the output is JSON with exit 0 on submitted, 2 on dismissed and 1 on error;
   - `--json` prints the raw socket reply;
   - program `--block` behavior is unchanged
-- [ ] implement `Submit` and the page poll/exit helpers in `OverlayPageCommands.swift`, and make the
+- [x] implement `Submit` and the page poll/exit helpers in `OverlayPageCommands.swift`, and make the
   declaration edits in `SessionCommands.swift` (registration, `--page`, `Open.run` routing, `validate()`).
   ⚠️ If `SessionCommands.swift` would pass 1000 lines, ask Eugene before moving existing code out of it.
-- [ ] add the page exit-code mapping next to `pickExitCode`
-- [ ] run `swift test --filter OverlayCommandsTests` - must pass before Task 6
+- [x] add the page exit-code mapping next to `pickExitCode`
+- [x] run `swift test --filter OverlayCommandsTests` - must pass before Task 6
 
 ### Task 6: Own-page and interleaving hosted tests
 
@@ -360,6 +360,8 @@
   - add `.overlay.submit` to the public catalog;
   - rewrite the HTML bullet that says `overlay.result` refuses pages;
   - add the bridge contract: surfaces, defaults, exclusions, reply-once, script set, outcomes
+  - say that `sidebar` and `sidebar.mode` act on the frontmost window even from a page: they read no window
+    argument, so the page's window cannot reach them
 - [ ] update `site/commands.html`:
   - `session overlay submit`;
   - `result --page`;
