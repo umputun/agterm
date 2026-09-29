@@ -69,6 +69,8 @@ paths:
 - Right-click inside a selection preserves it; outside narrows to the clicked row.
   Control-click takes the same `menu(for:)` path from `SidebarOutlineView.mouseDown` (issue #668), never
   `rightMouseDown`, which ignores a left-button event; `SidebarControlClickTests` pins it on CI.
+  The workspace row's `AddSessionButton` passes a Control-click up the responder chain to it, since NSButton
+  would otherwise fire the "+" action.
   `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag, and
   clear-status operate on all targets.
 - Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank

@@ -1,6 +1,15 @@
 import agtermCore
 import AppKit
 
+/// The workspace row's inline "+". NSButton fires its action on a Control-click, so that click goes up the
+/// responder chain to `SidebarOutlineView.mouseDown`, which opens the row menu as right-click does.
+final class AddSessionButton: NSButton {
+    override func mouseDown(with event: NSEvent) {
+        guard event.modifierFlags.contains(.control) else { return super.mouseDown(with: event) }
+        nextResponder?.mouseDown(with: event)
+    }
+}
+
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge. The icon is the inherited
 /// `cell.imageView` (2x2 grid for a workspace, outlined terminal for a session), so AppKit re-tints it white on
 /// a selected row; the name is `cell.textField`, which the rename and selection wiring drives.

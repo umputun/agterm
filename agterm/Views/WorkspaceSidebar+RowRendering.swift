@@ -217,7 +217,7 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     private func makeAddSessionButton() -> NSButton {
-        let btn = NSButton()
+        let btn = AddSessionButton()
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.isBordered = false
         let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)

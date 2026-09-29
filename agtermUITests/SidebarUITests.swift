@@ -479,6 +479,24 @@ final class SidebarUITests: XCTestCase {
                       "workspace 1 should have 2 sessions after clicking the inline '+' button")
     }
 
+    func testControlClickInlineAddSessionButtonOpensWorkspaceMenu() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 5), "seeded workspace should exist")
+        let addBtn = app.descendants(matching: .any).matching(identifier: "workspace-add-session").firstMatch
+        let deadline = Date().addingTimeInterval(8)
+        while !addBtn.isHittable, Date() < deadline {
+            ws.hover()
+            usleep(200_000)
+        }
+        controlClick(addBtn)
+        let delete = presentedMenuItem("Delete Workspace")
+        XCTAssertTrue(delete.isHittable, "Control-click on '+' should open the workspace row's context menu")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        usleep(1_000_000)
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 2), "Control-click on '+' must not create a session")
+    }
+
     // the picker is system UI, so only its presentation is checked here; the resulting addSession(cwd:)
     // is covered at the model level by AppStoreTests.
     func testOpenDirectoryShowsPicker() throws {

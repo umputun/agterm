@@ -65,6 +65,22 @@ final class SidebarControlClickTests: XCTestCase {
         XCTAssertTrue(outline.isItemExpanded(node), "Control-click must not schedule the row-click expansion toggle")
     }
 
+    func testControlClickOnWorkspaceAddButtonOpensMenuWithoutAddingSession() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let ws = try XCTUnwrap(store.workspaces.first)
+        buildSidebar(for: store)
+        let row = try XCTUnwrap(rowIndex { $0.kind == .workspace && $0.id == ws.id })
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
+        cell.setAddButtonVisible(true)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let button = try XCTUnwrap(cell.addButton)
+        let sessionCount = ws.sessions.count
+
+        let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+        XCTAssertEqual(try controlClick(button, at: point), 1, "Control-click on + should open the workspace row's menu")
+        XCTAssertEqual(store.workspaces.first?.sessions.count, sessionCount, "Control-click must not run the + action")
+    }
+
     private final class MenuTrackingRecorder: @unchecked Sendable {
         var count = 0
     }
@@ -72,6 +88,11 @@ final class SidebarControlClickTests: XCTestCase {
     /// Returns how many menus began tracking. The popped-up menu runs a modal loop, so it is dismissed from
     /// inside that loop; the posted mouse-up lets NSTableView's own click tracking return instead.
     private func controlClick(row: Int) throws -> Int {
+        let rect = outline.rect(ofRow: row)
+        return try controlClick(outline, at: outline.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil))
+    }
+
+    private func controlClick(_ view: NSView, at point: NSPoint) throws -> Int {
         let recorder = MenuTrackingRecorder()
         let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
                                                               object: nil, queue: .main) { note in
@@ -80,11 +101,9 @@ final class SidebarControlClickTests: XCTestCase {
                                               inModes: [.eventTracking, .default])
         }
         defer { NotificationCenter.default.removeObserver(observer) }
-        let rect = outline.rect(ofRow: row)
-        let point = outline.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
         let down = try mouseEvent(.leftMouseDown, at: point)
         NSApp.postEvent(try mouseEvent(.leftMouseUp, at: point), atStart: false)
-        outline.mouseDown(with: down)
+        view.mouseDown(with: down)
         _ = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true)
         return recorder.count
     }
