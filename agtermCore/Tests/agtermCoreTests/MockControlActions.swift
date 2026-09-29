@@ -85,6 +85,8 @@ final class MockControlActions: ControlActions {
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
         case overlayResult(target: String?, window: String?, pane: OverlayPane?)
+        case overlaySubmit(target: String?, window: String?, pane: OverlayPane?, value: String)
+        case pageResult(UUID)
         case overlayCopy(target: String?, window: String?, pane: OverlayPane?)
         case overlayText(target: String?, window: String?, ControlSessionOverlayTextOptions)
         case hudOpen(target: String?, window: String?, HudSpec, ControlHudPlacement)
@@ -598,6 +600,16 @@ final class MockControlActions: ControlActions {
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         calls.append(.overlayResult(target: target, window: window, pane: pane))
         return nextOverlayResultResponse
+    }
+
+    func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse {
+        calls.append(.overlaySubmit(target: target, window: window, pane: pane, value: value))
+        return ControlResponse(ok: true)
+    }
+
+    func htmlPageResult(_ pageID: UUID) -> ControlResponse {
+        calls.append(.pageResult(pageID))
+        return ControlResponse(ok: true)
     }
 
     func copySessionOverlaySelection(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {

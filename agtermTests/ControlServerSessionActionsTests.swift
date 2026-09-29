@@ -48,6 +48,26 @@ final class ControlServerSessionActionsTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testAPageOpensWithItsIdAndASubmitIsReadBackByThatId() throws {
+        let (_, session) = try addSession()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, follow: false, pane: nil,
+                                                       page: .file(path: "/tmp/pick.html", grantRoot: nil))
+        let opened = server.openSessionOverlay(session.id.uuidString, window: nil, options: options)
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        XCTAssertEqual(opened.result?.id, session.id.uuidString)
+        let pageID = try XCTUnwrap(opened.result?.pageID.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(server.htmlPageResult(pageID).result?.pageOutcome?.outcome, .pending)
+
+        let submitted = server.submitSessionOverlay(session.id.uuidString, window: nil, pane: nil, value: "feature-x")
+        XCTAssertTrue(submitted.ok, submitted.error ?? "")
+        XCTAssertFalse(session.overlayActive)
+        XCTAssertEqual(server.htmlPageResult(pageID).result?.pageOutcome,
+                       ControlHtmlPageOutcome(pageID: pageID.uuidString, outcome: .submitted, value: "feature-x"))
+        let again = server.submitSessionOverlay(session.id.uuidString, window: nil, pane: nil, value: "x")
+        XCTAssertEqual(again.error, OverlayHtmlError.noOverlay)
+    }
+
     private func overlayOptions(follow: Bool, pane: OverlayPane? = nil) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
                                          backgroundColor: nil, follow: follow, pane: pane)

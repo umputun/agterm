@@ -100,6 +100,10 @@ public protocol ControlActions {
     func navigateSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                                 navigation: HtmlNavigation) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
+    /// Answers the page in the addressed slot with `value` and closes it; `session.overlay.result --page` reads it.
+    func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse
+    /// The selector outcome of page `pageID`, readable after the page and its session are gone.
+    func htmlPageResult(_ pageID: UUID) -> ControlResponse
     /// The overlay's own current selection, the arm `session.copy` cannot reach: that one addresses the pane
     /// UNDER the overlay, and the selection the user made is on the surface covering it. `pane` nil reads
     /// the session-wide overlay.
@@ -205,8 +209,8 @@ public struct ControlDispatcher {
                 .sessionResize, .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
-                .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText, .sessionBackground,
-                .sessionText:
+                .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy, .sessionOverlayText,
+                .sessionBackground, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun:
             return dispatchSessionOverlayCommand(request)
@@ -628,7 +632,8 @@ public struct ControlDispatcher {
             return await actions.searchSession(request.target, window: request.args?.window,
                                                text: request.args?.text, to: request.args?.to)
         case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload,
-             .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlayCopy, .sessionOverlayText:
+             .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy,
+             .sessionOverlayText:
             return dispatchSessionOverlayCommand(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)

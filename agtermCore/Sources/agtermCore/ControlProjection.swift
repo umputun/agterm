@@ -401,10 +401,14 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let javascript: Bool
     /// zoom is the page zoom factor, 1 at actual size. One app-wide value, so every page reports the same.
     public let zoom: Double?
+    /// id is the page's identity, the one `session.overlay.result --page` reads; an older server omits it.
+    public let id: String?
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
-                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, zoom: Double? = nil) {
+                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, zoom: Double? = nil,
+                id: String? = nil) {
+        self.id = id
         self.pane = pane
         self.file = file
         self.cwd = cwd

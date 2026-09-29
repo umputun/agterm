@@ -170,6 +170,24 @@ struct ControlProtocolTests {
         #expect(try JSONDecoder().decode(ControlResult.self, from: Data(json.utf8)).cursor == nil)
     }
 
+    @Test func pageSubmitAndResultRoundTripAndOmitWhenNil() throws {
+        let submit = ControlRequest(cmd: .sessionOverlaySubmit, target: "s1", args: ControlArgs(pane: "right", value: ""))
+        #expect(try roundTrip(submit) == submit)
+        let read = ControlRequest(cmd: .sessionOverlayResult, args: ControlArgs(page: "D1B6A0F2-6E3B-4C11-9F1A-3E2B1C0D9A88"))
+        #expect(try roundTrip(read) == read)
+        let outcome = ControlHtmlPageOutcome(pageID: "p1", outcome: .submitted, value: "a\nb")
+        let carried = ControlResponse(ok: true, result: ControlResult(id: "s1", pageID: "p1", pageOutcome: outcome))
+        #expect(try roundTrip(carried) == carried)
+
+        let args = String(decoding: try JSONEncoder().encode(ControlArgs(pane: "right")), as: UTF8.self)
+        #expect(!args.contains("\"value\"") && !args.contains("\"page\""), "nil page fields must be omitted; got \(args)")
+        let result = String(decoding: try JSONEncoder().encode(ControlResult(id: "s1")), as: UTF8.self)
+        #expect(!result.contains("pageID") && !result.contains("pageOutcome"), "nil page results must be omitted; got \(result)")
+        let dismissed = String(decoding: try JSONEncoder().encode(ControlHtmlPageOutcome(pageID: "p1", outcome: .dismissed)),
+                               as: UTF8.self)
+        #expect(!dismissed.contains("\"value\""), "a dismissed page carries no value; got \(dismissed)")
+    }
+
     @Test func controlTreePickPendingOmitsWhenNil() throws {
         let tree = ControlTree(workspaces: [])
         let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)

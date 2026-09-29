@@ -257,6 +257,7 @@ public final class HtmlOverlayReleases {
 
     func release(_ overlay: HtmlOverlay?) {
         guard let overlay else { return }
+        HtmlPageOutcomes.shared.dismiss(overlay.id)
         onRelease?(overlay.id)
     }
 }

@@ -123,8 +123,9 @@
 - **Script set.** The theme script, the adapter and the page helper are installed together as one set,
   replacing `installTheme`'s theme-only install. Release unregisters the handlers; reload keeps them.
 - **Selectors.**
-  - Every successful `--html` open registers the page as `pending` at model open, not when the web view
-    is realized. A failed open registers nothing.
+  - Every successful page open, `--html` or `--url`, registers the page as `pending` at model open, not
+    when the web view is realized. A failed open registers nothing. Registering URL pages too keeps submit
+    uniform and costs nothing: their release records `dismissed` like any other page.
   - `session.overlay.submit {value}` records `submitted` before releasing the page.
   - `HtmlOverlayReleases.release()` in agtermCore records `dismissed` for a page still pending, before it
     calls `onRelease`. The registry keeps sole ownership of `onRelease`.
@@ -224,28 +225,28 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
 
-- [ ] write failing store tests:
+- [x] write failing store tests:
   - a successful open registers `pending`, and a failed open registers nothing;
   - submit records `submitted` with its value before release, including an empty value;
   - release records `dismissed` only while still pending, and each transition happens once;
   - retention evicts old terminal entries but never a pending one;
   - an outcome is still readable after its page and session are gone;
   - a read never consumes an outcome
-- [ ] write failing close tests:
-  - a page closed before its web view is realized;
+- [x] write failing close tests (a page closed before its web view exists is the same model release, so the
+  store tests cover it; Command-W moves to the Task 6 hosted tests):
   - a single-target session close records `dismissed` at once;
   - a soft-close batch keeps the page pending through the grace period; undo keeps it pending, and
     finalization records `dismissed`;
   - moves and swaps keep the outcome pending
-- [ ] implement `HtmlPageOutcomes`, shaped like `Pick.swift`. Register at model open, and record dismissal
+- [x] implement `HtmlPageOutcomes`, shaped like `Pick.swift`. Register at model open, and record dismissal
   inside `HtmlOverlayReleases.release()` before `onRelease` fires.
-- [ ] add `session.overlay.submit` (protocol case, routing, `ControlActions` method, default, mock,
+- [x] add `session.overlay.submit` (protocol case, routing, `ControlActions` method, default, mock,
   dispatcher arm, app action, server switch) and `args.page` on `session.overlay.result`. The
   program-overlay result contract stays unchanged.
-- [ ] add `pageID` to the open reply and `id` to `htmlOverlays` tree nodes
-- [ ] write round-trip and nil-omission tests in `ControlProtocolTests`, dispatcher tests, and a hosted
+- [x] add `pageID` to the open reply and `id` to `htmlOverlays` tree nodes
+- [x] write round-trip and nil-omission tests in `ControlProtocolTests`, dispatcher tests, and a hosted
   app-action test in `ControlServerSessionActionsTests`
-- [ ] run `swift test --filter` for the touched suites and the scoped hosted test - must pass before Task 3
+- [x] run `swift test --filter` for the touched suites and the scoped hosted test - must pass before Task 3
 
 ### Task 3: Build requests and page-relative defaults in agtermCore
 

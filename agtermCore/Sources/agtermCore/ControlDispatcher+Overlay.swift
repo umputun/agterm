@@ -81,10 +81,21 @@ extension ControlDispatcher {
             return actions.resizeSessionOverlay(request.target, window: request.args?.window,
                                                 sizePercent: wantsFull ? nil : percent)
         case .sessionOverlayResult:
+            if let page = request.args?.page {
+                guard let id = UUID(uuidString: page) else { return ControlResponse(ok: false, error: OverlayHtmlError.invalidPageID) }
+                return actions.htmlPageResult(id)
+            }
             switch parseOverlayPane(request.args?.pane) {
             case .rejected(let response): return response
             case .pane(let pane):
                 return actions.sessionOverlayResult(request.target, window: request.args?.window, pane: pane)
+            }
+        case .sessionOverlaySubmit:
+            guard let value = request.args?.value else { return ControlResponse(ok: false, error: OverlayHtmlError.submitValue) }
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.submitSessionOverlay(request.target, window: request.args?.window, pane: pane, value: value)
             }
         case .sessionOverlayCopy:
             switch parseOverlayPane(request.args?.pane) {

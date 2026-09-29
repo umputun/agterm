@@ -14,6 +14,15 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.navigate"))
     }
 
+    func submitSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?, value _: String) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.submit"))
+    }
+
+    // outcomes live in agtermCore, so every host answers the read the same way and owes no conformance
+    func htmlPageResult(_ pageID: UUID) -> ControlResponse {
+        HtmlPageOutcomes.shared.response(for: pageID)
+    }
+
     func openAsk(_: PendingAsk, target _: String?, window _: String?,
                  placement _: ControlAskPlacement, follow _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("ask.open"))

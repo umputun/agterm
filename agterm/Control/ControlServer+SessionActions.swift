@@ -63,14 +63,22 @@ extension ControlServer: ControlActions {
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
             return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
         }
-        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: HtmlOverlay(source: page,
-                                                                                    navigation: options.navigation,
-                                                                                    javascript: options.javascript),
+        let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript)
+        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: overlay,
                                                sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))
         }
         if options.follow { store.selectSession(id) }
-        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, pageID: overlay.id.uuidString))
+    }
+
+    func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            if let failure = store.submitHtmlOverlay(id, pane: pane, value: value) {
+                return ControlResponse(ok: false, error: failure.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
     }
 
     func reloadSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, current: Bool) -> ControlResponse {

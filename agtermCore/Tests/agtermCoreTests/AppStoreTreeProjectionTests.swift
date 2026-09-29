@@ -590,9 +590,9 @@ struct AppStoreTreeProjectionTests {
         #expect(node.htmlOverlays == [
             ControlHtmlOverlayNode(pane: nil, file: "/tmp/a/wide.html", cwd: "/tmp/a", state: "loading", error: nil,
                                    page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false,
-                                   navigation: true, javascript: true),
+                                   navigation: true, javascript: true, id: wide.id.uuidString),
             ControlHtmlOverlayNode(pane: "right", url: "http://localhost:5173/", state: "failed", error: "not found",
-                                   javascript: false),
+                                   javascript: false, id: right.id.uuidString),
         ])
         let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(store.controlTree()))
         #expect(decoded.workspaces[0].sessions[0] == node)

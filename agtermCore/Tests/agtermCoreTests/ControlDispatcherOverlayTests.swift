@@ -115,6 +115,45 @@ struct ControlDispatcherOverlayTests {
         ])
     }
 
+    @Test func sessionOverlaySubmitRoutesValuePaneAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let submit = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlaySubmit, target: "session", args: ControlArgs(window: "win", pane: "right", value: "")))
+
+        #expect(submit == ControlResponse(ok: true))
+        #expect(actions.calls == [.overlaySubmit(target: "session", window: "win", pane: .right, value: "")])
+    }
+
+    @Test func sessionOverlaySubmitRefusesAMissingValueOrABadPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlaySubmit, target: "session"))
+        let badPane = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlaySubmit, target: "session", args: ControlArgs(pane: "middle", value: "x")))
+
+        #expect(missing == ControlResponse(ok: false, error: OverlayHtmlError.submitValue))
+        #expect(badPane?.ok == false)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionOverlayResultWithAPageReadsThePageOutcome() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let id = UUID()
+
+        let page = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResult, target: "session", args: ControlArgs(page: id.uuidString)))
+        let invalid = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResult, args: ControlArgs(page: "not-a-uuid")))
+
+        #expect(page == ControlResponse(ok: true))
+        #expect(invalid == ControlResponse(ok: false, error: OverlayHtmlError.invalidPageID))
+        #expect(actions.calls == [.pageResult(id)])
+    }
+
     @Test func sessionOverlayResultKeepsExactActionErrorResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

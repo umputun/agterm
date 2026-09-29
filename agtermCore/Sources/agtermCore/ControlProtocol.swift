@@ -49,6 +49,7 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayReload = "session.overlay.reload"
     case sessionOverlayNavigate = "session.overlay.navigate"
     case sessionOverlayResult = "session.overlay.result"
+    case sessionOverlaySubmit = "session.overlay.submit"
     case sessionOverlayCopy = "session.overlay.copy"
     case sessionOverlayText = "session.overlay.text"
     case sessionHudOpen = "session.hud.open"
@@ -374,6 +375,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var url: String?
     /// javascript lets an `--html` or `--url` page run its own scripts (`--js`); off by default.
     public var javascript: Bool?
+    /// value is the answer `session.overlay.submit` hands back from a page; empty is a real answer.
+    public var value: String?
+    /// page is the page id `session.overlay.result` reads the outcome of, instead of a program's exit status.
+    public var page: String?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -401,7 +406,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
-                javascript: Bool? = nil) {
+                javascript: Bool? = nil, value: String? = nil, page: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -481,6 +486,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.navigation = navigation
         self.url = url
         self.javascript = javascript
+        self.value = value
+        self.page = page
     }
 }
 
@@ -571,6 +578,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var remote: ControlRemoteTree?
     /// What `zmx.reset` confirmed: the sessions and panes it will reset at the next launch.
     public var liveReset: ControlLiveResetStatus?
+    /// The page `session.overlay.open --html` opened, which `session.overlay.result --page` reads back.
+    public var pageID: String?
+    /// A page's selector outcome for `session.overlay.result --page`.
+    public var pageOutcome: ControlHtmlPageOutcome?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -583,13 +594,16 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 app: AppIdentity? = nil, restore: ControlRestoreStatus? = nil,
                 zmx: ControlZmxInventory? = nil, remote: ControlRemoteTree? = nil,
                 liveReset: ControlLiveResetStatus? = nil,
-                width: Int? = nil, height: Int? = nil) {
+                width: Int? = nil, height: Int? = nil,
+                pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil) {
         self.width = width
         self.height = height
         self.restore = restore
         self.zmx = zmx
         self.remote = remote
         self.liveReset = liveReset
+        self.pageID = pageID
+        self.pageOutcome = pageOutcome
         self.id = id
         self.tree = tree
         self.text = text
@@ -676,6 +690,10 @@ public enum OverlayHtmlError {
     /// noResult and noRead: a page runs no program, so there is no exit status and no terminal text.
     public static let noResult = "no overlay result: the slot holds an html page"
     public static let noRead = "no overlay to read: the slot holds an html page"
+    public static let submitValue = "session.overlay.submit requires a value"
+    public static let invalidPageID = "invalid page id"
+    /// unknownPage: no page with that id was opened, or its outcome aged out of the retained results.
+    public static let unknownPage = "no such page"
 }
 
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections
