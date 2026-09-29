@@ -244,9 +244,7 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuNewSession(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        // resolve the cwd via the same new-session-directory setting as AppActions.newSession(), so the
-        // workspace-row New Session honors it too (home / current session's cwd / a fixed custom dir).
-        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
+        addNewSession(toWorkspace: node.id)
     }
 
     /// Inline "+" button on a workspace row, the right-click "New Session" action. The button carries no
@@ -258,7 +256,7 @@ extension WorkspaceSidebar.Coordinator {
         guard let outline = outlineView else { return }
         let row = outline.row(for: sender)
         guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
-        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
+        addNewSession(toWorkspace: node.id)
     }
 
     @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {
@@ -288,10 +286,15 @@ extension WorkspaceSidebar.Coordinator {
         openDirectoryAndAddSession(toWorkspace: node.id)
     }
 
-    /// Adds a session to `workspaceID` at `cwd` and selects it.
-    private func addSession(toWorkspace workspaceID: UUID, cwd: String) {
-        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                          at: actions.resolvedNewSessionIndex(in: workspaceID, store: store)) {
+    /// The row's New Session and "+": the directory and placement settings apply, as for `AppActions.newSession()`.
+    private func addNewSession(toWorkspace workspaceID: UUID) {
+        addSession(toWorkspace: workspaceID, cwd: actions.resolvedNewSessionCwd(),
+                   at: actions.resolvedNewSessionIndex(in: workspaceID, store: store))
+    }
+
+    /// Adds a session to `workspaceID` at `cwd` and selects it; a nil `index` appends.
+    private func addSession(toWorkspace workspaceID: UUID, cwd: String, at index: Int? = nil) {
+        if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd, at: index) {
             // creating + selecting from the sidebar context menu is a user-initiated selection on THIS
             // window's store: note activity so it buys the full idle grace before auto-follow pulls away.
             store.noteUserActivity()

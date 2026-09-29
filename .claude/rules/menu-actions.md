@@ -179,8 +179,6 @@ paths:
   recent survivor in three widening scopes: same workspace intersected with `navigableSessions`, all
   navigable sessions, then the whole tree. Build scopes from the post-removal tree; soft close retains
   recency until grace finalization for undo.
-  `AppStore.closeSelection == .next` first takes the nearest visible same-workspace survivor at or below
-  the removed slot, else above it, never another workspace; with none, the scopes above run unchanged.
 - This preserves the current workspace when possible, remains inside flagged/focused views while they
   contain survivors, and lets `disableFocusIfSelectionOutsideSet` reveal a whole-tree fallback while
   preserving membership.

@@ -83,8 +83,7 @@ extension WorkspaceSidebar.Coordinator {
         }
         var created = false
         for url in drop.urls {
-            let index = actions.resolvedNewSessionIndex(in: drop.workspaceID, store: store)
-            created = store.addSession(toWorkspace: drop.workspaceID, cwd: url.path, at: index) != nil || created
+            created = store.addSession(toWorkspace: drop.workspaceID, cwd: url.path) != nil || created
         }
         guard created else { return false }
         store.noteUserActivity()

@@ -151,8 +151,7 @@ final class AppActions {
         panel.prompt = "Open"
         panel.message = "Choose a directory for the new session"
         guard panel.runModal() == .OK, let url = panel.url,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: url.path,
-                                             at: resolvedNewSessionIndex(in: workspaceID, store: store))
+              let session = store.addSession(toWorkspace: workspaceID, cwd: url.path)
         else { return }
         store.noteUserActivity()
         store.selectSession(session.id)
@@ -165,8 +164,7 @@ final class AppActions {
     /// zoom/dashboard. Returns whether one was created, so the delegate's drain retries until a store resolves.
     func openSession(atDirectory directory: String) -> Bool {
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: directory,
-                                             at: resolvedNewSessionIndex(in: workspaceID, store: store))
+              let session = store.addSession(toWorkspace: workspaceID, cwd: directory)
         else { return false }
         store.noteUserActivity()
         store.selectSession(session.id)

@@ -29,11 +29,11 @@ paths:
   Default-off nil fields include attention button, Dock bounce, global config inheritance, close
   confirmation, auto-follow, hidden inactive sidebars, and interface hiding. `restoreMode` defaults to
   `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
-- `newSessionPlacement` (nil = `end`) is read at creation through `AppActions.resolvedNewSessionIndex`, beside
-  `resolvedNewSessionCwd`, by every GUI create path; `session new` keeps appending. `closeSelection`
-  (nil = `recent`) reaches each window's store through `applyCloseSelection(to:)`, like auto-follow, and
-  [[menu-actions]] owns its rule. Deliberate control exemption: no command sets or reads either; `tree`
-  order and `active` show their effect.
+- `newSessionPlacement` (nil = `end`) applies only to New Session: `AppActions.newSession()` and the
+  workspace row's New Session and "+", through `AppActions.resolvedNewSessionIndex`. It inserts after the
+  selection only when that lives in the destination workspace. Open Directory, folder drops, and
+  `open -a agterm <dir>` keep appending; `session new` keeps its own `--after`/`--before` rules.
+  Deliberate control exemption, like `newSessionDirectory`: no command sets or reads it.
 - `sidebarFontSize` and `interfaceFontSize` are separate settings, both 9...20 default 13, read through
   `effectiveSidebarFontSize`/`effectiveInterfaceFontSize`. Neither falls back to the other: the sidebar
   is a density knob, the palette a readability one.

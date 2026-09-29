@@ -596,18 +596,14 @@ struct AppSettingsTests {
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
     }
 
-    @Test func newSessionPlacementAndCloseSelectionRoundTripAndDefault() throws {
-        let original = AppSettings(newSessionPlacement: "afterCurrent", closeSelection: "next")
+    @Test func newSessionPlacementRoundTripsAndDefaultsToEnd() throws {
+        let original = AppSettings(newSessionPlacement: "afterCurrent")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
         #expect(decoded.effectiveNewSessionPlacement == .afterCurrent)
-        #expect(decoded.effectiveCloseSelection == .next)
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.effectiveNewSessionPlacement == .end)
-        #expect(legacy.effectiveCloseSelection == .recent)
-        let future = AppSettings(newSessionPlacement: "future", closeSelection: "future")
-        #expect(future.effectiveNewSessionPlacement == .end)
-        #expect(future.effectiveCloseSelection == .recent)
+        #expect(AppSettings(newSessionPlacement: "future").effectiveNewSessionPlacement == .end)
         #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
     }
 

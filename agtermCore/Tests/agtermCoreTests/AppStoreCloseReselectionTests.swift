@@ -6,7 +6,6 @@ import Testing
 /// closing session's workspace ∩ the VISIBLE set — the flagged list in `.flagged` mode, the marked
 /// workspaces' sessions while the focus filter applies — widening through everything visible and then
 /// the whole tree, with a positional walk as the last fallback (GitHub Discussion #147).
-/// Under `closeSelection == .next`, the nearest survivor below in the same workspace, else above, comes first.
 @MainActor
 struct AppStoreCloseReselectionTests {
     @Test func closeActiveSessionInsertedAfterCurrentReturnsToTheSessionItCameFrom() throws {
@@ -395,101 +394,5 @@ struct AppStoreCloseReselectionTests {
         let last = try #require(store.selectedSessionID)
         store.closeSession(last)
         #expect(store.selectedSessionID == nil)
-    }
-
-    @Test func closingAMiddleRowSelectsTheNextRowOverTheRecentOne() throws {
-        let store = makeStore()
-        store.closeSelection = .next
-        let ws = store.addWorkspace(name: "work")
-        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
-        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
-        let third = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
-        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
-        store.selectSession(first.id)
-        store.selectSession(second.id)
-
-        store.closeSession(second.id)
-        #expect(store.selectedSessionID == third.id)
-    }
-
-    @Test func closingTheLastRowSelectsTheRowAboveNotTheNextWorkspace() throws {
-        let store = makeStore()
-        store.closeSelection = .next
-        let work = store.addWorkspace(name: "work")
-        let lower = store.addWorkspace(name: "lower")
-        let recent = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        let above = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
-        let last = try #require(store.addSession(toWorkspace: work.id, cwd: "/c"))
-        _ = try #require(store.addSession(toWorkspace: lower.id, cwd: "/l"))
-        store.selectSession(recent.id)
-        store.selectSession(last.id)
-
-        store.closeSession(last.id)
-        #expect(store.selectedSessionID == above.id)
-    }
-
-    @Test func softCloseHonorsNext() throws {
-        let store = makeStore()
-        store.closeSelection = .next
-        let ws = store.addWorkspace(name: "work")
-        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
-        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
-        let third = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
-        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
-        store.selectSession(first.id)
-        store.selectSession(second.id)
-
-        #expect(store.softCloseSession(second.id, grace: 60))
-        #expect(store.selectedSessionID == third.id)
-    }
-
-    @Test func emptyingTheWorkspaceFallsBackToTheRecentSurvivor() throws {
-        let store = makeStore()
-        store.closeSelection = .next
-        let work = store.addWorkspace(name: "work")
-        let lone = store.addWorkspace(name: "lone")
-        let cameFrom = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        let lastRowAbove = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
-        let only = try #require(store.addSession(toWorkspace: lone.id, cwd: "/x"))
-        store.selectSession(lastRowAbove.id)
-        store.selectSession(cameFrom.id)
-        store.selectSession(only.id)
-
-        store.closeSession(only.id)
-        #expect(store.selectedSessionID == cameFrom.id)
-    }
-
-    @Test func flatFlaggedViewSkipsHiddenRowsAndAFlaggedRowBelowFromAnotherWorkspace() throws {
-        let store = makeStore()
-        store.closeSelection = .next
-        let work = store.addWorkspace(name: "work")
-        let other = store.addWorkspace(name: "other")
-        let recentAbove = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        let nearestAbove = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
-        let closing = try #require(store.addSession(toWorkspace: work.id, cwd: "/c"))
-        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/unflagged"))
-        let elsewhere = try #require(store.addSession(toWorkspace: other.id, cwd: "/x"))
-        for session in [recentAbove, nearestAbove, closing, elsewhere] { store.setFlag(true, forSession: session.id) }
-        store.sidebarMode = .flagged
-        store.selectSession(recentAbove.id)
-        store.selectSession(elsewhere.id)
-        store.selectSession(closing.id)
-
-        store.closeSession(closing.id)
-        #expect(store.selectedSessionID == nearestAbove.id)
-    }
-
-    @Test func recentStaysTheDefault() throws {
-        let store = makeStore()
-        let ws = store.addWorkspace(name: "work")
-        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
-        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
-        let third = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
-        store.selectSession(third.id)
-        store.selectSession(second.id)
-
-        store.closeSession(second.id)
-        #expect(store.closeSelection == .recent)
-        #expect(store.selectedSessionID == third.id)
     }
 }

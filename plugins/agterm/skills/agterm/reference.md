@@ -421,7 +421,7 @@ buys nothing. A caller with no tree uses `version`.
   therefore mutually exclusive with each other and with `--workspace`/`--workspace-name` (the anchor
   already picks the workspace). `agtermctl session new --after active` is the headline case: create
   right after the current session in one round-trip. Without either flag it appends, whatever the user's
-  Settings placement for GUI-created sessions. `--no-select` creates the session in the BACKGROUND:
+  Settings placement for New Session. `--no-select` creates the session in the BACKGROUND:
   it is added to the sidebar but NOT selected or focused, so the current selection and focus are left
   untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
   select-and-focus behavior. Every other addressing/placement option composes with it, and a background
@@ -449,9 +449,6 @@ buys nothing. A caller with no tree uses `version`.
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
-  Which session is selected after the active one closes follows the user's Settings choice: the most
-  recently used, or the next row in the same workspace (the row above when it was the last row, and the
-  most recently used when nothing visible is left in that workspace).
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working

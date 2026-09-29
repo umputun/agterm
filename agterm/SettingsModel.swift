@@ -311,12 +311,6 @@ final class SettingsModel {
     func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
     /// Persist where a new session lands (nil = end). Read at creation time, so it only saves.
     func setNewSessionPlacement(_ value: String?) { settings.newSessionPlacement = value; try? settingsStore.save(settings) }
-    /// Persist the close-selection policy (nil = recent) and push it into every open window's store.
-    func setCloseSelection(_ value: String?) {
-        settings.closeSelection = value
-        try? settingsStore.save(settings)
-        applyCloseSelectionToAllWindows()
-    }
     /// Persist whether a GUI session close first asks for confirmation (nil = off). `AppActions` reads it on
     /// demand at close time, so it just saves.
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
@@ -788,17 +782,6 @@ final class SettingsModel {
     func applyAutoFollowToAllWindows() {
         for store in library.openIDs().compactMap({ library.store(for: $0) }) {
             applyAutoFollow(to: store)
-        }
-    }
-
-    /// Push the close-selection policy into one window's store; seeded from `ContentView.resolveStore`.
-    func applyCloseSelection(to store: AppStore) {
-        store.closeSelection = settings.effectiveCloseSelection
-    }
-
-    func applyCloseSelectionToAllWindows() {
-        for store in library.openIDs().compactMap({ library.store(for: $0) }) {
-            applyCloseSelection(to: store)
         }
     }
 

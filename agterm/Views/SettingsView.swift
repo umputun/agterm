@@ -138,11 +138,6 @@ private struct GeneralSettingsView: View {
                     .accessibilityIdentifier("settings-confirm-close-session")
                 Toggle("Allow undo after closing sessions and workspaces", isOn: closeGraceUndoEnabled)
                     .accessibilityIdentifier("settings-close-grace-undo")
-                Picker("After closing a session, select", selection: closeSelection) {
-                    Text("The most recently used session").tag(AppSettings.CloseSelection.recent)
-                    Text("The next session in the list").tag(AppSettings.CloseSelection.next)
-                }
-                .accessibilityIdentifier("settings-close-selection")
                 Picker("Flagged view layout", selection: flaggedViewLayout) {
                     Text("Flat list").tag(FlaggedViewLayout.flat)
                     Text("Workspace tree").tag(FlaggedViewLayout.tree)
@@ -219,11 +214,6 @@ private struct GeneralSettingsView: View {
     private var newSessionPlacement: Binding<AppSettings.NewSessionPlacement> {
         Binding(get: { model.settings.effectiveNewSessionPlacement },
                 set: { model.setNewSessionPlacement($0 == .end ? nil : $0.rawValue) })
-    }
-
-    private var closeSelection: Binding<AppSettings.CloseSelection> {
-        Binding(get: { model.settings.effectiveCloseSelection },
-                set: { model.setCloseSelection($0 == .recent ? nil : $0.rawValue) })
     }
 
     /// Pick the `custom` new-session mode's fixed directory with the standard open panel (dirs only), persist.

@@ -154,9 +154,6 @@ public final class AppStore {
     /// Whether auto-follow suppresses the jump while the current session is `active` (opt-in, default false).
     @ObservationIgnored var autoFollowStayOnActive = false
 
-    /// Which survivor an active-session close selects; pushed from Settings like auto-follow.
-    @ObservationIgnored public var closeSelection: AppSettings.CloseSelection = .recent
-
     /// The last user interaction with this window (a keystroke or a manual selection), nil until the first.
     /// Stamped unconditionally by `noteUserActivity`, so the idle metric is independent of the feature being
     /// on. Stamped at high frequency and read imperatively, so no view may react to it.
@@ -519,9 +516,8 @@ public final class AppStore {
         sessionRecency.remove(id)
     }
 
-    /// Removes a session, tears down its surface, and, if it was active, reselects per `closeSelection` through
-    /// `closeReselectionTarget(after:)`: the next row (else the one above) in its workspace, or the most-recently-active
-    /// surviving session in scope, falling back to the positional neighbor.
+    /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
+    /// surviving session in scope (`closeReselectionTarget(after:)`), falling back to the positional neighbor.
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
