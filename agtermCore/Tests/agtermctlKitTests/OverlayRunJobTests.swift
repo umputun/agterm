@@ -144,6 +144,7 @@ struct OverlayRunJobTests {
 
     @Test func aReportTheAppNeverGetsLeavesTheHelpersStatusAlone() throws {
         let origin = FakeOrigin()
+        defer { close(origin.helper) }
         origin.serve(reply: Self.okReply, context: context("sleep 0.3; exit 5"))
         let runner = OverlayJobRunner(socket: origin.helper)
         let claimed = try runner.claim("job")
