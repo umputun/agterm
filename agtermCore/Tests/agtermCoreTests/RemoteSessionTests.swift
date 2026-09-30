@@ -282,7 +282,7 @@ struct RemoteSessionTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(run.process.isRunning, "the pane holds until the app replaces it")
         try run.input.fileHandleForWriting.close()
-        run.process.waitUntilExit()
+        for await _ in run.exited {}
         let text = String(decoding: run.output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
 
         #expect(text == "\u{1B}[0m\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1006l\u{1B}[?1004l"
@@ -443,9 +443,18 @@ private struct FakeRemote {
         return (run.process.terminationStatus, String(decoding: data, as: UTF8.self))
     }
 
+    struct ShellRun {
+        let process: Process
+        let input: Pipe
+        let output: Pipe
+        /// Finishes when the shell ends: `waitUntilExit` from a thread other than the launching one can
+        /// miss the exit and hang.
+        let exited: AsyncStream<Void>
+    }
+
     /// Starts `remote` with stdin on a pipe, for a command that waits on its terminal.
     func startShell(_ remote: String, shell: String = "/bin/sh",
-                    exporting extra: [String: String] = [:]) throws -> (process: Process, input: Pipe, output: Pipe) {
+                    exporting extra: [String: String] = [:]) throws -> ShellRun {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
         process.arguments = ["-c", remote]
@@ -457,8 +466,10 @@ private struct FakeRemote {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = Pipe()
+        let (exited, exit) = AsyncStream<Void>.makeStream()
+        process.terminationHandler = { _ in exit.finish() }
         try process.run()
-        return (process, input, output)
+        return ShellRun(process: process, input: input, output: output, exited: exited)
     }
 
     func calls() throws -> [[String]] {
