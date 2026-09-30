@@ -379,21 +379,22 @@
   capability list names HTML overlays
 
 ### Task 8: Verify acceptance criteria
-- [ ] verify the Overview requirements:
+- [x] verify the Overview requirements:
   - tags run commands with JS off;
   - `agterm.request` returns replies on `--js` pages;
   - selectors return values through `--block`;
   - `--url` pages get nothing
-- [ ] verify the edge cases above are covered by tests (defaults, exclusions, own-page commands, soft
+- [x] verify the edge cases above are covered by tests (defaults, exclusions, own-page commands, soft
   close, form conversion)
-- [ ] build: `scripts/build.sh`
-- [ ] run full host-free suite: `cd agtermCore && swift test`
-- [ ] run hosted suite: `make test-app`
-- [ ] run lint: `make lint` (zero findings)
+- [x] build: `scripts/build.sh`
+- [x] run full host-free suite: `cd agtermCore && swift test`
+- [x] run hosted suite: `make test-app`
+- [x] run lint: `make lint` (zero findings)
 
 ### Task 9: [Final] Close out
-- [ ] update `README.md` only if its control-API synopsis should mention interactive pages
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `README.md` only if its control-API synopsis should mention interactive pages
+  (not needed: the synopsis names the control API, and the bridge is documented in the site and skill)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
