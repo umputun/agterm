@@ -42,7 +42,9 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
         XCTAssertTrue(app.webViews.staticTexts["hello artifact"].waitForExistence(timeout: 10))
         XCTAssertTrue(pollPage(id: id) { $0["title"] as? String == "agterm: enter your password" })
-        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "a.html", "the strip names the file, never the page title")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "a.html", "the page title never replaces the file name")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.title"].value as? String, "agterm: enter your password",
+                       "the page title shows as its own element beside the file name")
         XCTAssertFalse(app.buttons["htmlOverlay.back"].exists, "no navigation buttons without --navigation")
         app.buttons["htmlOverlay.close"].click()
         XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
@@ -250,6 +252,30 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["htmlOverlay.error"].waitForExistence(timeout: 10),
                       "a refused connection should show the error panel")
         XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "failed" })
+    }
+
+    func testAChromelessPageHasNoStripAndCommandWClosesItPastTheKeysItSwallows() throws {
+        let id = try activeSessionID()
+        let script = "<script>let n = 0; document.addEventListener('keydown', e => { e.preventDefault(); n += 1; "
+            + "document.title = 'keys ' + n }, true)</script>"
+        try writePage("bare.html", title: "keys 0", body: "<p>bare page</p>\(script)")
+        let file = pageDir.appendingPathComponent("bare.html").path
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(file)","javascript":true,"chromeless":true}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "chromeless open should succeed: \(open)")
+        let text = app.webViews.staticTexts["bare page"]
+        XCTAssertTrue(text.waitForExistence(timeout: 10), "the page should render")
+        XCTAssertTrue(pollPage(id: id) { $0["title"] as? String == "keys 0" && $0["chromeless"] as? Bool == true })
+        XCTAssertFalse(app.staticTexts["htmlOverlay.identity"].exists, "a chromeless page has no strip")
+        XCTAssertFalse(app.buttons["htmlOverlay.close"].exists, "a chromeless page has no strip close button")
+
+        text.click()
+        app.typeKey("k", modifierFlags: [])
+        XCTAssertTrue(pollPage(id: id) { ($0["title"] as? String)?.hasPrefix("keys ") == true && $0["title"] as? String != "keys 0" },
+                      "the page's keydown handler should see an ordinary key before ⌘W is tried")
+
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "⌘W should close a chromeless page that swallows every keydown")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the page")
     }
 
     private func bottomPixel(of element: XCUIElement) throws -> NSColor {

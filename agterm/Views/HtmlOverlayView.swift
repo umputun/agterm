@@ -2,7 +2,7 @@ import SwiftUI
 import agtermCore
 
 /// HtmlOverlayView is an HTML overlay's panel content: the page under an app-drawn strip naming its source,
-/// which the page cannot cover, with navigation buttons for `--navigation`.
+/// which the page cannot cover, with navigation buttons for `--navigation`; a chromeless page has no strip.
 struct HtmlOverlayView: View {
     let store: AppStore
     let session: Session
@@ -19,8 +19,10 @@ struct HtmlOverlayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            strip
-            Rectangle().fill(foreground.opacity(0.1)).frame(height: 1)
+            if !overlay.chromeless {
+                strip
+                Rectangle().fill(foreground.opacity(0.1)).frame(height: 1)
+            }
             HtmlWebViewHost(store: store, session: session, overlay: overlay, backgroundColor: backgroundColor,
                             isActive: isActive, visible: visible)
                 .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
@@ -44,12 +46,7 @@ struct HtmlOverlayView: View {
                     registry.reload(overlay.id, target: .current, store: store)
                 }
             }
-            Text(overlay.identity)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity)
-                .help(overlay.current?.page ?? sourceText)
-                .accessibilityIdentifier("htmlOverlay.identity")
+            label
             if overlay.navigation {
                 button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
                     _ = registry.navigate(overlay.id, .browser)
@@ -75,6 +72,30 @@ struct HtmlOverlayView: View {
         .frame(height: 28)
         .background(foreground.opacity(0.06))
         .background(background)
+    }
+
+    // the title is the page's own text, so it stays a separate dimmed view that gives up width before the
+    // source does and cannot pass for part of the app-drawn identity
+    private var label: some View {
+        HStack(spacing: 6) {
+            Text(overlay.identity)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(1)
+                .help(overlay.current?.page ?? sourceText)
+                .accessibilityIdentifier("htmlOverlay.identity")
+            if let title = overlay.current?.title {
+                Text("·")
+                    .foregroundStyle(foreground.opacity(0.4))
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(foreground.opacity(0.55))
+                    .help(title)
+                    .accessibilityIdentifier("htmlOverlay.title")
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // over the page so a failed load never reads as a blank one; reload replaces it with the loading state

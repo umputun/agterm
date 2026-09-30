@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -334,6 +335,50 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window),
                       "the chord is consumed either way; only the action is gated")
         XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore, "a pending picker must block the palette action")
+    }
+
+    /// An HTML page open in the active session, with first responder on a page view when `focused`.
+    private func openPage(_ fix: Fixture, focused: Bool) throws -> Session {
+        let session = try XCTUnwrap(fix.store.activeSession)
+        let page = HtmlOverlay(source: .file(path: "/tmp/agterm-runner-page.html", grantRoot: nil))
+        XCTAssertNil(fix.store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil))
+        if focused {
+            let webView = HtmlOverlayWebView(frame: NSRect(x: 0, y: 0, width: 200, height: 100),
+                                             configuration: WKWebViewConfiguration())
+            window.contentView?.addSubview(webView)
+            XCTAssertTrue(window.makeFirstResponder(webView))
+        }
+        return session
+    }
+
+    private var commandW: NSEvent { keyDown("w", keyCode: 13, mods: [.command]) }
+
+    // regression: a page that cancels keydown swallowed ⌘W, leaving a chromeless page with no way to close
+    func testCloseChordClosesAFocusedPage() throws {
+        let fix = try fixture()
+        let session = try openPage(fix, focused: true)
+
+        XCTAssertTrue(fix.runner.handleKeyDown(commandW, in: window))
+        XCTAssertNil(session.htmlOverlay, "⌘W should close the page")
+        XCTAssertTrue(fix.store.workspaces.flatMap(\.sessions).contains { $0 === session }, "the session stays")
+    }
+
+    func testReboundCloseChordFollowsTheKeymapWhileAPageHasFocus() throws {
+        let fix = try fixture(keymap: "map cmd+shift+k close_session\n")
+        let session = try openPage(fix, focused: true)
+
+        XCTAssertFalse(fix.runner.handleKeyDown(commandW, in: window), "⌘W no longer closes, so the page keeps it")
+        XCTAssertNotNil(session.htmlOverlay)
+        XCTAssertTrue(fix.runner.handleKeyDown(keyDown("k", keyCode: 40, mods: [.command, .shift]), in: window))
+        XCTAssertNil(session.htmlOverlay, "the rebound chord should close the page")
+    }
+
+    func testCloseChordStaysWithTheMenuWithoutPageFocus() throws {
+        let fix = try fixture()
+        let session = try openPage(fix, focused: false)
+
+        XCTAssertFalse(fix.runner.handleKeyDown(commandW, in: window), "the menu carries ⌘W")
+        XCTAssertNotNil(session.htmlOverlay)
     }
 
     // Navigate ▸ Dashboard keeps its key equivalent live over the open grid, so its alternative must close the

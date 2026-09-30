@@ -424,6 +424,9 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(sizePercent: 50, pane: "left", html: "/tmp/r.html"), PaneOverlayError.sizePercentConflict),
         (ControlArgs(command: "cat", navigation: true), OverlayHtmlError.navigationWithoutPage),
         (ControlArgs(command: "cat", javascript: true), OverlayHtmlError.javascriptWithoutPage),
+        (ControlArgs(command: "cat", chromeless: true), OverlayHtmlError.chromelessRequiresFile),
+        (ControlArgs(url: "http://localhost:5173/", chromeless: true), OverlayHtmlError.chromelessRequiresFile),
+        (ControlArgs(html: "/tmp/r.html", navigation: true, chromeless: true), OverlayHtmlError.chromelessWithNavigation),
         (ControlArgs(html: "/tmp/r.html", url: "http://localhost:5173/"), OverlayHtmlError.htmlAndURL),
         (ControlArgs(command: "cat", url: "http://localhost:5173/"), OverlayHtmlError.commandAndURL),
         (ControlArgs(wait: true, url: "http://localhost:5173/"), OverlayHtmlError.waitWithURL),
@@ -476,6 +479,24 @@ struct ControlDispatcherOverlayTests {
                                                           backgroundColor: nil,
                                                           page: .url(try #require(URL(string: "http://localhost:5173/app"))),
                                                           navigation: true, javascript: javascript == true))
+        ])
+    }
+
+    @Test(arguments: [Bool?.none, true])
+    func htmlOpenRoutesChromeless(_ chromeless: Bool?) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session",
+            args: ControlArgs(html: "/tmp/r.html", javascript: true, chromeless: chromeless)
+        ))
+
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                          backgroundColor: nil, page: .file(path: "/tmp/r.html", grantRoot: nil),
+                                                          javascript: true, chromeless: chromeless == true))
         ])
     }
 

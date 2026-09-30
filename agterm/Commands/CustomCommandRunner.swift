@@ -53,7 +53,8 @@ private struct StderrFile: @unchecked Sendable {
 /// chords, a `CustomCommandEngine` resolves them (simple chords and leader sequences like `ctrl+a > g`), and
 /// a fired command runs detached as `/bin/sh -c` with the session's context in `{AGT_X}` tokens and `$AGT_X`
 /// environment. The same matcher also carries the built-in binds an `NSMenuItem` key equivalent cannot hold —
-/// a `map` line's alternatives beyond its first single chord — dispatched through `AppActions.perform(_:in:)`.
+/// a `map` line's alternatives beyond its first single chord — dispatched through `AppActions.perform(_:in:)`,
+/// plus two menu chords it matches itself: `toggle_fullscreen`, and `close_session` while an HTML page has focus.
 ///
 /// Constructed once as `@State` in `agtermApp`. `start()`/`stop()` install/remove the monitor; `start()` is
 /// idempotent because the scene `.task` fires once per window, and the matcher rebuilds there and on
@@ -218,6 +219,13 @@ final class CustomCommandRunner {
             keyWindow.toggleFullScreen(nil)
             return true
         }
+        // a focused page receives key equivalents before the menu, and one cancelling the keydown makes WebKit
+        // report it handled, so close_session's menu chord never reaches Close Session. Taken here while a
+        // page holds focus; the chord's other owners keep the menu path.
+        if !commandEngine.isArmed, Self.pageHoldsFocus(responder), chord == settings.keymap.equivalent(for: .closeSession) {
+            actions.perform(.closeSession, in: keyWindow)
+            return true
+        }
         switch commandEngine.advance(chord) {
         case .fired(let command):
             cancelLeaderTimer()
@@ -244,6 +252,15 @@ final class CustomCommandRunner {
             cancelLeaderTimer()
             return false
         }
+    }
+
+    private static func pageHoldsFocus(_ responder: NSResponder?) -> Bool {
+        var view = responder as? NSView
+        while let current = view {
+            if current is HtmlOverlayWebView { return true }
+            view = current.superview
+        }
+        return false
     }
 
     /// Map an `NSEvent` key-down to an agtermCore `Chord`, or nil when it carries no usable base key. The base

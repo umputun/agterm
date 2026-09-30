@@ -578,19 +578,23 @@ struct AppStoreTreeProjectionTests {
 
         let wide = HtmlOverlay(source: .file(path: "/tmp/a/wide.html", grantRoot: "/tmp/a"), navigation: true, javascript: true)
         let right = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))))
+        let left = HtmlOverlay(source: .file(path: "/tmp/a/bare.html", grantRoot: nil), chromeless: true)
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: right, sizePercent: nil) == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: .left, overlay: left, sizePercent: nil) == nil)
         store.setHtmlLoadState(right.id, state: .failed, error: "not found")
         store.setHtmlPage(wide.id, HtmlPageInfo(page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false))
 
         let node = store.controlTree().workspaces[0].sessions[0]
         #expect(node.overlay)
         #expect(node.overlaySizePercent == 70)
-        #expect(node.paneOverlays == ["right"])
+        #expect(node.paneOverlays == ["left", "right"])
         #expect(node.htmlOverlays == [
             ControlHtmlOverlayNode(pane: nil, file: "/tmp/a/wide.html", cwd: "/tmp/a", state: "loading", error: nil,
                                    page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false,
                                    navigation: true, javascript: true, id: wide.id.uuidString),
+            ControlHtmlOverlayNode(pane: "left", file: "/tmp/a/bare.html", state: "loading", error: nil, chromeless: true,
+                                   id: left.id.uuidString),
             ControlHtmlOverlayNode(pane: "right", url: "http://localhost:5173/", state: "failed", error: "not found",
                                    javascript: false, id: right.id.uuidString),
         ])
@@ -598,6 +602,8 @@ struct AppStoreTreeProjectionTests {
         #expect(decoded.workspaces[0].sessions[0] == node)
         let json = String(decoding: try JSONEncoder().encode(node.htmlOverlays), as: UTF8.self)
         #expect(json.contains(#""javascript":false"#))
+        #expect(json.contains(#""chromeless":false"#))
+        #expect(json.contains(#""chromeless":true"#))
     }
 
     @Test func htmlOverlaysReportTheAppZoom() throws {

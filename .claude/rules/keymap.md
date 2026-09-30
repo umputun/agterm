@@ -182,6 +182,9 @@ paths:
   rather than a menu equivalent: `undo_close` through `UndoCloseShortcut`, so native text undo still
   works, and `toggle_fullscreen` through `CustomCommandRunner`, because agterm ships no full screen menu
   item for it to ride — see [[windows]]. Both are absent from `keymap list`'s `menu` by design.
+  `close_session` keeps its menu item, but `CustomCommandRunner` also matches its chord while an
+  `HtmlOverlayWebView` holds focus: WebKit hands key equivalents to the page first and reports a cancelled
+  keydown as handled, so the menu would never see it.
 - Write shifted symbols as `shift+<base>`: `shift+/` for `?`, `shift+=` for `+`, `shift+5` for `%`, and
   `shift+.` for `>`. `CustomCommandRunner` uses `characters(byApplyingModifiers: [])` to recover that
   base; keep `KeymapUITests.testCustomCommandShiftedSymbolFires`.

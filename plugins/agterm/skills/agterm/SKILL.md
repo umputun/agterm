@@ -425,7 +425,7 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation] [--js] [--block] | --url URL [--navigation] [--js]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation] [--js]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay reload [--current] [--pane left|right]` ·
@@ -720,9 +720,12 @@ agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriti
 - Without `--cwd` the page has NO file access, so keep it self-contained: inline CSS, inline SVG, data
   URIs. `--cwd DIR` grants read access to an asset directory that must contain FILE; relative URLs
   still resolve beside FILE. `/` and the home directory are refused as grants.
-- The panel always shows a strip naming the file or origin, with a close button. `--navigation` adds
-  back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL; use it
-  when the page links to other pages.
+- The panel shows a strip naming the file or origin, then the page title dimmed, with a close button.
+  `--navigation` adds back, forward, reload, open in browser, and Show in Finder for a file or Copy Link
+  for a URL; use it when the page links to other pages.
+- `--chromeless` (file pages only, not with `--navigation`) drops the strip, for a dashboard or monitor
+  meant to look native. The user then closes it with ⌘W, so give such a page its own
+  `data-agterm="session.overlay.close"` button when it is not self-evident.
   `session overlay navigate finder` reveals the current file; scripts read a URL from `tree`'s `htmlOverlays[].page`.
 - `--size-percent N` makes it a floating panel, `--pane left|right` puts it over one split pane.
 - Build the page from the terminal theme, not a palette of your own, so it looks native in a dark or

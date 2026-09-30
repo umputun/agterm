@@ -71,6 +71,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let navigation: Bool
     /// javascript lets the page run its own scripts; agterm's theme script runs either way.
     public let javascript: Bool
+    /// chromeless drops the identity strip, file pages only: the strip is what names a URL page's origin.
+    public let chromeless: Bool
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -81,11 +83,13 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
-    public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, id: UUID = UUID()) {
+    public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
+                id: UUID = UUID()) {
         self.id = id
         self.source = source
         self.navigation = navigation
         self.javascript = javascript
+        self.chromeless = chromeless
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file

@@ -466,9 +466,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   page until a native key or mouse event reaches its view, and closing, hiding or detaching the view ends
   the prompt without opening. Open in Browser (toolbar or `navigate browser`) is an explicit request and
   skips the prompt; it opens with the default browser app, never the file type's app, which could run it.
-- The panel always has an app-drawn identity strip (`HtmlOverlay.identity`: the file shown or the origin)
+- The panel has an app-drawn identity strip (`HtmlOverlay.identity`: the file shown or the origin)
   that the page cannot cover or retitle, with the close button; `--navigation` adds the buttons. The page
-  title reaches only `tree`, where agents must treat it as untrusted. Page views refuse drags and pastes
+  title follows it as a separate dimmed view that yields width first, never replacing the identity; agents
+  reading it from `tree` must treat it as untrusted. `--chromeless` (`HtmlOverlay.chromeless`) drops the strip,
+  file pages only: a URL page's strip is the only statement of whose content it is. It is refused with
+  `--navigation`, whose buttons live in the strip, and closes through the Command-W ladder, which
+  `ControlHtmlOverlayUITests` pins against a `--js` page that cancels every keydown.
+  Page views refuse drags and pastes
   carrying files; WKWebView's paste commands exist only at runtime, so they are overridden by selector.
 - Reload is `overlay.reload --current` (bare `overlay.reload` loads the original source).
   Back/forward/browser/finder share `overlay.navigate` with the toolbar, even without `--navigation`.

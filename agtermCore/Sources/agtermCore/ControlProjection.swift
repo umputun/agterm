@@ -399,6 +399,8 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let navigation: Bool?
     /// javascript says whether the page may run its own scripts.
     public let javascript: Bool
+    /// chromeless says whether the page shows without its identity strip.
+    public let chromeless: Bool
     /// zoom is the page zoom factor, 1 at actual size. One app-wide value, so every page reports the same.
     public let zoom: Double?
     /// id is the page's identity, the one `session.overlay.result --page` reads; an older server omits it.
@@ -406,8 +408,8 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
-                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, zoom: Double? = nil,
-                id: String? = nil) {
+                canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, chromeless: Bool = false,
+                zoom: Double? = nil, id: String? = nil) {
         self.id = id
         self.pane = pane
         self.file = file
@@ -421,6 +423,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.canGoForward = canGoForward
         self.navigation = navigation
         self.javascript = javascript
+        self.chromeless = chromeless
         self.zoom = zoom
     }
 }

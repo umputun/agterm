@@ -375,6 +375,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var url: String?
     /// javascript lets an `--html` or `--url` page run its own scripts (`--js`); off by default.
     public var javascript: Bool?
+    /// chromeless opens an `--html` page with no identity strip (`--chromeless`).
+    public var chromeless: Bool?
     /// value is the answer `session.overlay.submit` hands back from a page; empty is a real answer.
     public var value: String?
     /// page is the page id `session.overlay.result` reads the outcome of, instead of a program's exit status.
@@ -406,7 +408,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
-                javascript: Bool? = nil, value: String? = nil, page: String? = nil) {
+                javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -488,6 +490,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.javascript = javascript
         self.value = value
         self.page = page
+        self.chromeless = chromeless
     }
 }
 
@@ -676,6 +679,9 @@ public enum OverlayHtmlError {
     public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
     public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
     public static let javascriptWithoutPage = "session.overlay.open: --js requires --html or --url"
+    /// chromelessRequiresFile: the strip is what names a URL page's origin, so only a file page may drop it.
+    public static let chromelessRequiresFile = "session.overlay.open: --chromeless requires --html"
+    public static let chromelessWithNavigation = "session.overlay.open: --chromeless cannot be combined with --navigation"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

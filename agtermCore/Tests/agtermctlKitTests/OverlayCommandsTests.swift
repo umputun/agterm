@@ -28,6 +28,9 @@ struct OverlayCommandsTests {
         #expect(req.args?.color == "#102030")
         #expect(req.args?.navigation == nil)
         #expect(req.args?.javascript == nil)
+        #expect(req.args?.chromeless == nil)
+        let chromeless = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--chromeless", "--js"])
+        #expect(chromeless.args?.chromeless == true)
         let withToolbar = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--navigation", "--js"])
         #expect(withToolbar.args?.navigation == true)
         #expect(withToolbar.args?.javascript == true)
@@ -63,6 +66,9 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--block", "--wait"],
         ["session", "overlay", "open", "revdiff", "--navigation"],
         ["session", "overlay", "open", "revdiff", "--js"],
+        ["session", "overlay", "open", "revdiff", "--chromeless"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--chromeless"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--chromeless", "--navigation"],
         ["session", "overlay", "open", "revdiff", "--url", "http://localhost:5173/"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--url", "http://localhost:5173/"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--wait"],
