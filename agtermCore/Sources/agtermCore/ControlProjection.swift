@@ -399,7 +399,8 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let navigation: Bool?
     /// javascript says whether the page may run its own scripts.
     public let javascript: Bool
-    /// chromeless says whether the page shows without its identity strip.
+    /// chromeless says whether the page shows without its identity strip. Always present; an absent key
+    /// decodes as false, since an older running server omits it.
     public let chromeless: Bool
     /// zoom is the page zoom factor, 1 at actual size. One app-wide value, so every page reports the same.
     public let zoom: Double?
@@ -425,6 +426,30 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.javascript = javascript
         self.chromeless = chromeless
         self.zoom = zoom
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pane, file, cwd, url, state, error, page, title, canGoBack, canGoForward, navigation, javascript
+        case chromeless, zoom, id
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pane = try c.decodeIfPresent(String.self, forKey: .pane)
+        file = try c.decodeIfPresent(String.self, forKey: .file)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        url = try c.decodeIfPresent(String.self, forKey: .url)
+        state = try c.decode(String.self, forKey: .state)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        page = try c.decodeIfPresent(String.self, forKey: .page)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        canGoBack = try c.decodeIfPresent(Bool.self, forKey: .canGoBack)
+        canGoForward = try c.decodeIfPresent(Bool.self, forKey: .canGoForward)
+        navigation = try c.decodeIfPresent(Bool.self, forKey: .navigation)
+        javascript = try c.decode(Bool.self, forKey: .javascript)
+        chromeless = try c.decodeIfPresent(Bool.self, forKey: .chromeless) ?? false
+        zoom = try c.decodeIfPresent(Double.self, forKey: .zoom)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
     }
 }
 

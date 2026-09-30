@@ -723,10 +723,10 @@ agtermctl session overlay reload --target "$AGTERM_SESSION_ID"   # after rewriti
 - The panel shows a strip naming the file or origin, then the page title dimmed, with a close button.
   `--navigation` adds back, forward, reload, open in browser, and Show in Finder for a file or Copy Link
   for a URL; use it when the page links to other pages.
+  `session overlay navigate finder` reveals the current file; scripts read a URL from `tree`'s `htmlOverlays[].page`.
 - `--chromeless` (file pages only, not with `--navigation`) drops the strip, for a dashboard or monitor
   meant to look native. The user then closes it with ⌘W, so give such a page its own
   `data-agterm="session.overlay.close"` button when it is not self-evident.
-  `session overlay navigate finder` reveals the current file; scripts read a URL from `tree`'s `htmlOverlays[].page`.
 - `--size-percent N` makes it a floating panel, `--pane left|right` puts it over one split pane.
 - Build the page from the terminal theme, not a palette of your own, so it looks native in a dark or
   light theme (see below). A palette the user asks for wins.

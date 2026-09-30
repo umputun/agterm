@@ -1136,6 +1136,16 @@ struct ControlProtocolTests {
         #expect(hud.fontSize == nil)
     }
 
+    // an app deployed but not restarted still serves page nodes without the chromeless key to a newer CLI.
+    @Test func controlHtmlOverlayNodeFromAnOlderServerDecodesWithItsStrip() throws {
+        let raw = #"{"file":"/tmp/r.html","state":"loaded","javascript":false}"#
+
+        let node = try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: Data(raw.utf8))
+
+        #expect(node.chromeless == false)
+        #expect(node.file == "/tmp/r.html")
+    }
+
     @Test func treeSessionNodeToleratesMissingHud() throws {
         // a pre-`session.hud.open` server omits the key entirely, so it must decode as nil.
         let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +
