@@ -171,6 +171,27 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertNil(HtmlOverlayRegistry.shared.existing(page.id))
     }
 
+    func testAPageZoomingItselfThroughTheFontKeysKeepsItsIdAndOutcome() async throws {
+        let (store, session) = try addSession()
+        let page = try openPage(in: store, session)
+        defer { store.closeOverlay(session.id) }
+        let increased = send(["cmd": "font.inc"], from: page)
+        try await settle(increased)
+        XCTAssertNil(increased.values.first?.1)
+        XCTAssertEqual(server.settingsModel.settings.htmlOverlayZoom, 1.15)
+        let id = session.id.uuidString
+        let node = server.controlTree(window: nil).result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == id }
+        XCTAssertEqual(node?.htmlOverlays?.first?.zoom, 1.15)
+        XCTAssertEqual(node?.htmlOverlays?.first?.id, page.id.uuidString)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .pending)
+
+        let reset = send(["cmd": "font.reset"], from: page)
+        try await settle(reset)
+        XCTAssertNil(reset.values.first?.1)
+        XCTAssertNil(server.settingsModel.settings.htmlOverlayZoom)
+        XCTAssertTrue(HtmlOverlayRegistry.shared.existing(page.id) === page)
+    }
+
     func testACommandThatReloadsItsPageMidDispatchIsAnsweredOnce() async throws {
         let (store, session) = try addSession()
         let page = try openPage(in: store, session)
