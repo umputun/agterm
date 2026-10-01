@@ -308,7 +308,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ghostty_surface_text`, whose bracketed paste suppresses Return and can expose `\e[200~`/`\e[201~`
   markers under rapid use.
 - The final Return of a payload that ends in a line ending and has text before it is held back
-  `KeystrokeSegments.submitGap` (10 ms), on both routes: `inject` blocks the main thread for it, and
+  `KeystrokeSegments.submitGap` (10 ms), on both routes: `inject`, which `session.type` and
+  `quick.type` share, blocks the main thread for it, and
   `coveredType` sends the text and the Return as two acknowledged `zmx type` calls (#679).
   Claude Code reads a Return arriving in the same burst as a long text run as pasted content and does
   not submit.

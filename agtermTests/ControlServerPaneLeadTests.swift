@@ -152,7 +152,7 @@ final class ControlServerPaneLeadTests: XCTestCase {
                        ControlResponse(ok: false, error: "text typed, but its final Return could not be confirmed; do not retype the text"))
         XCTAssertEqual(invocations.map(\.input), [Data("nione\rtwo".utf8), Data([0x0D])])
         XCTAssertEqual(view.pendingComposition, "", "the composition went with the text the daemon took")
-        XCTAssertTrue(cleared.isEmpty)
+        XCTAssertTrue(cleared.isEmpty, "the call errored and the agent may still wait for its Return, so its status stays")
     }
 
     func testAPendingCompositionIsTypedFirstAndDroppedOnlyOnceTheDaemonTookIt() throws {

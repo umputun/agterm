@@ -4,7 +4,7 @@ public enum KeystrokeSegment: Equatable, Sendable {
     case returnKey
 }
 
-/// `PacedKeystrokes` is a `session.type` payload split around its final Return: `head` is sent at once,
+/// `PacedKeystrokes` is a typed payload split around its final Return: `head` is sent at once,
 /// and when `pacedReturn` is set one more Return follows after `KeystrokeSegments.submitGap`.
 public struct PacedKeystrokes: Equatable, Sendable {
     public let head: [KeystrokeSegment]
