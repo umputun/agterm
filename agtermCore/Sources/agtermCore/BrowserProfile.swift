@@ -24,21 +24,26 @@ public struct BrowserProfile: Sendable {
         file = directory.appendingPathComponent(Self.filename)
     }
 
-    /// exists is true once an identifier was written, whatever the file holds now.
-    public var exists: Bool { FileManager.default.fileExists(atPath: file.path) }
-
-    /// identifier reads the profile id, writing a new one only when the file is missing. A file that cannot
-    /// be read or holds anything else throws and is left alone: a regenerated id would orphan the store
-    /// holding every saved login.
-    public func identifier() throws -> UUID {
-        guard exists else { return try create() }
-        guard let data = try? Data(contentsOf: file) else { throw Failure.unreadable(file.path) }
+    /// existingIdentifier reads the profile id without creating one, nil only when the file does not exist.
+    /// A file that cannot be read or holds anything else throws and is left alone: a regenerated id would
+    /// orphan the store holding every saved login.
+    public func existingIdentifier() throws -> UUID? {
+        let data: Data
+        do {
+            data = try Data(contentsOf: file)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        } catch {
+            throw Failure.unreadable(file.path)
+        }
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = UUID(uuidString: text) else { throw Failure.malformed(file.path) }
         return id
     }
 
-    private func create() throws -> UUID {
+    /// identifier reads the profile id, writing a new one only when the file does not exist.
+    public func identifier() throws -> UUID {
+        if let id = try existingIdentifier() { return id }
         let id = UUID()
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("\(id.uuidString)\n".utf8).write(to: file, options: .atomic)
