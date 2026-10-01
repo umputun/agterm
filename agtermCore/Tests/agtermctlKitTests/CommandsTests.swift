@@ -1732,11 +1732,6 @@ struct CommandsTests {
         #expect(try request(["hooks", "list"]) == ControlRequest(cmd: .hooksList))
     }
 
-    @Test func browserClear() throws {
-        #expect(try request(["browser", "clear"]) == ControlRequest(cmd: .browserClear))
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["browser", "clear", "--window", "w1"]) }
-    }
-
     @Test func hooksCommandsRejectWindowSelector() {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["hooks", "reload", "--window", "w1"]) }
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["hooks", "list", "--window", "w1"]) }

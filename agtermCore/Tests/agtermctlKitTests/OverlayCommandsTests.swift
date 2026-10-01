@@ -53,6 +53,11 @@ struct OverlayCommandsTests {
         #expect(req.args?.persistent == nil)
     }
 
+    @Test func browserClearTakesNoWindow() throws {
+        #expect(try request(["browser", "clear"]) == ControlRequest(cmd: .browserClear))
+        #expect(rejects(["browser", "clear", "--window", "w1"]))
+    }
+
     @Test func urlOpenSendsPersistent() throws {
         let req = try request(["session", "overlay", "open", "--url", "http://localhost:5173/", "--persistent"])
         #expect(req.args?.persistent == true)

@@ -73,6 +73,20 @@ extension Session.Overlay.Open {
         program's own output file). With --html, wait for the page to submit or close, print its outcome JSON, and \
         exit 0 when submitted, 2 when dismissed, 1 on error.
         """
+
+    static let persistentHelp: ArgumentHelp = """
+        With --url, keep cookies and site data in the saved browser store shared by all persistent pages, so a login \
+        can outlive the overlay and an app restart; without it each page has its own in-memory store. \
+        `browser clear` empties it.
+        """
+
+    /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable
+    /// without a live socket: polling a pane overlay with no pane reads the session-wide slot and
+    /// blocks forever. No window scope — the returned id is globally unique and resolves cross-window,
+    /// so a frontmost-window change during the run cannot make the poll miss the session.
+    func resultRequest(id: String) -> ControlRequest {
+        ControlRequest(cmd: .sessionOverlayResult, target: id, args: pane.map { ControlArgs(pane: $0) })
+    }
 }
 
 // a page read prints its outcome and exits like pick; a program read keeps the plain request output
