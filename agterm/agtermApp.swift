@@ -150,7 +150,7 @@ struct agtermApp: App {
         // claim the next open id off `WindowLibrary`'s claim queue (dedup-by-id); one past the set dismisses itself.
         WindowGroup(id: Self.windowGroupID) {
             if Self.isHostedUnitTest {
-                Color.clear
+                HostedTestPlaceholder()
             } else {
                 ContentView(
                     library: library,

@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         if ContentView.isUITestLaunch {
             scheduleUITestWindowActivationRetries()
-        } else {
+        } else if !agtermApp.isHostedUnitTest {
             NSApp.activate()
         }
         // libghostty is already booted: `SettingsModel.init` touches `GhosttyApp.shared` during App.init,

@@ -26,8 +26,11 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   bindings. Suppress the substitution rather than renaming fixtures: `StockMenuChordTests` needs the
   real "Close" to test chord ownership, and the substitution matches invented titles just as readily.
 - Never stub `GhosttyApp`; its handler is the only crash record.
-- `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `Color.clear` and skips the scene task
-  that assigns `appDelegate.library`; it stays nil. SwiftUI's `@NSApplicationDelegateAdaptor` also makes
+- `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `HostedTestPlaceholder`, skips the
+  launch `NSApp.activate()`, and skips the scene task that assigns `appDelegate.library`; it stays nil.
+  The placeholder makes its window transparent and click-through and keeps it ordered in:
+  ordering out the launch window exited the host before XCTest connected.
+  SwiftUI's `@NSApplicationDelegateAdaptor` also makes
   `NSApp.delegate as? AppDelegate` nil, so obtain the delegate another way. The local placeholder window
   exists (`NSApp.windows.count == 1`, title "Agterm"), but another-process CI launch may hit FB11763863
   and create none.
