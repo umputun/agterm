@@ -540,10 +540,12 @@ final class HtmlOverlayWebView: WKWebView {
     var onUserInput: (() -> Void)?
     var onDetach: (() -> Void)?
     private var parkedDragTypes: [NSPasteboard.PasteboardType] = []
+    private var dropsEnabled = true
 
     /// setDropsEnabled keeps a page that is not on screen out of drag-destination lookup, which SwiftUI
     /// opacity does not do; a rejecting `draggingEntered` would still swallow the drop.
     func setDropsEnabled(_ enabled: Bool) {
+        dropsEnabled = enabled
         if enabled {
             guard !parkedDragTypes.isEmpty else { return }
             registerForDraggedTypes(parkedDragTypes)
@@ -552,6 +554,16 @@ final class HtmlOverlayWebView: WKWebView {
             parkedDragTypes = registeredDraggedTypes
             unregisterDraggedTypes()
         }
+    }
+
+    // a web view answers AppKit's drag-destination lookup for any point in its frame, whatever types it has
+    // registered, so parking them is not enough: an off-screen page declines here and AppKit moves on to the
+    // views stacked beneath it; the selector is absent from the headers, so forwarding uses the base IMP
+    @objc(_hitTest:dragTypes:) func dragDestination(at point: UnsafeMutablePointer<NSPoint>, types: NSSet) -> NSView? {
+        let selector = #selector(dragDestination(at:types:))
+        guard dropsEnabled, let method = class_getInstanceMethod(WKWebView.self, selector) else { return nil }
+        typealias Lookup = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSPoint>, NSSet) -> NSView?
+        return unsafeBitCast(method_getImplementation(method), to: Lookup.self)(self, selector, point, types)
     }
 
     /// deferFocusToAsk hands the keyboard to a pending ask or picker that owns this page's slot, as a pane

@@ -247,6 +247,35 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNotEqual(view.registeredDraggedTypes, parked)
     }
 
+    // regression: an off-screen page took every file drop aimed at the pane stacked beneath it (#677)
+    func testAnOffScreenPageLeavesTheDropToTheViewBeneathIt() throws {
+        let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        let window = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        let content = NSView(frame: frame)
+        window.contentView = content
+        let beneath = NSView(frame: content.bounds)
+        beneath.registerForDraggedTypes([.fileURL])
+        content.addSubview(beneath)
+        XCTAssertTrue(try dropTarget(in: content) === beneath)
+
+        let view = registry.page(for: try open(), store: store).webView
+        view.frame = content.bounds
+        content.addSubview(view)
+        XCTAssertTrue(try dropTarget(in: content) === view)
+
+        view.setDropsEnabled(false)
+        XCTAssertTrue(view.registeredDraggedTypes.isEmpty)
+        XCTAssertFalse(view.isHidden)
+        XCTAssertTrue(try dropTarget(in: content) === beneath)
+
+        view.setDropsEnabled(true)
+        XCTAssertTrue(try dropTarget(in: content) === view)
+        view.setDropsEnabled(false)
+        XCTAssertTrue(try dropTarget(in: content) === beneath)
+    }
+
     func testAnAuthoredBodyBackgroundFillsTheCanvasAndAnUnstyledPageStaysTransparent() async throws {
         try write("body.html", "<title>W</title><style>body { background: white; color: black }</style><p>short</p>")
         let styled = try await snapshotPixel(file: "body.html")
@@ -1168,6 +1197,16 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private func write(_ name: String, _ body: String) throws {
         try "<!doctype html><html><body>\(body)</body></html>"
             .write(to: pages.appendingPathComponent(name), atomically: true, encoding: .utf8)
+    }
+
+    // the drag-destination lookup AppKit runs, private and so reached through its implementation
+    private func dropTarget(in container: NSView) throws -> NSView? {
+        let selector = NSSelectorFromString("_hitTest:dragTypes:")
+        let method = try XCTUnwrap(class_getInstanceMethod(type(of: container), selector))
+        typealias Lookup = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSPoint>, NSSet) -> NSView?
+        var point = NSPoint(x: container.frame.midX, y: container.frame.midY)
+        let types: NSSet = [NSPasteboard.PasteboardType.fileURL.rawValue]
+        return unsafeBitCast(method_getImplementation(method), to: Lookup.self)(container, selector, &point, types)
     }
 
     private func open(pane: OverlayPane? = nil, file: String = "a.html", grant: String? = nil,

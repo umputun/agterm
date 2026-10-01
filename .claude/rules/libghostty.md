@@ -143,6 +143,12 @@ paths:
   drag destination lookup, and rejecting in `draggingEntered` does not fall through. Visible split panes
   both qualify; full overlay, scratch-covered, and self-overlaid panes do not. This closes the latent
   background-session target shipped with single-session file drop in #52.
+- An HTML page needs more than unregistering: `WKWebView` overrides the private `_hitTest:dragTypes:` and
+  answers for any point in its frame, registered types or not, so an off-screen page stacked above the
+  visible pane took its drops (#677). `HtmlOverlayWebView` overrides the same selector and returns nil
+  while `setDropsEnabled(false)` holds.
+  `HtmlOverlayRegistryTests.testAnOffScreenPageLeavesTheDropToTheViewBeneathIt` pins it through the
+  container's own lookup.
 - File drop uses `insertPasted`/`ghostty_surface_text`, preserving bracketed-paste behavior. It may still
   submit a trailing newline when the program disables mode 2004. Do not reuse `inject`, which intentionally
   translates newline/return into Return for `session.type`. `pasteboardText` remains shared with clipboard
