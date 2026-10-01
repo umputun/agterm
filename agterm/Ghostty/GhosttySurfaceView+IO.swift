@@ -11,7 +11,8 @@ extension GhosttySurfaceView {
     /// (`ghostty_surface_key` with `.text` set), NOT `ghostty_surface_text`, whose bracketed-paste wrapping
     /// suppresses command execution and leaks `\e[200~`/`\e[201~` markers when fired rapidly. Every line ending
     /// (`\n`, `\r`, `\r\n`) becomes a real Return keypress, so a trailing newline submits and a multi-line
-    /// payload runs line by line; `withCString` means no buffer outlives the call. Returns `false` when the
+    /// payload runs line by line; the final Return after text waits `KeystrokeSegments.submitGap`.
+    /// `withCString` means no buffer outlives the call. Returns `false` when the
     /// surface is not created yet, so a caller injecting into a pane with no realize path
     /// (`right`/`scratch`) reports `session not realized`, not a false ok; the main pane instead feeds this
     /// false return into a bounded poll, selecting only when `select` was passed.
@@ -22,7 +23,8 @@ extension GhosttySurfaceView {
         // keystrokes and re-commit on the user's next one, landing their half-typed word after the
         // injected text. No-op unless THIS pane is composing (see `commitOrDiscardComposition`).
         commitOrDiscardComposition()
-        for segment in KeystrokeSegments.split(text) {
+        let paced = KeystrokeSegments.paced(text)
+        for segment in paced.head {
             switch segment {
             case let .text(segment):
                 segment.withCString { ptr in
@@ -34,6 +36,11 @@ extension GhosttySurfaceView {
             case .returnKey:
                 sendReturn(to: surface)
             }
+        }
+        if paced.pacedReturn {
+            // blocking, not scheduled: a deferred Return could be overtaken by another injection or a keystroke
+            Thread.sleep(forTimeInterval: KeystrokeSegments.submitGap)
+            sendReturn(to: surface)
         }
         return true
     }

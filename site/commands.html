@@ -1113,7 +1113,8 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.type</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Inject text as real keystrokes — printable runs plus a Return for each newline, with no bracketed-paste markers. So a
-                trailing newline submits the command.
+                trailing newline submits the command. That final Return is sent a moment after the text, so a long line also submits
+                in an agent TUI that would read it as part of a paste; Returns inside a multi-line payload are not spaced.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--stdin</span> reads the text from stdin instead of the
                 argument. Any session is typable without
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span>, including one created moments ago: the main

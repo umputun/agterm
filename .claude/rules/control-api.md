@@ -307,6 +307,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `inject` emits Ghostty key events and Return keycode 36 for newline/CR/CRLF. Never replace it with
   `ghostty_surface_text`, whose bracketed paste suppresses Return and can expose `\e[200~`/`\e[201~`
   markers under rapid use.
+- The final Return of a payload that ends in a line ending and has text before it is held back
+  `KeystrokeSegments.submitGap` (10 ms), on both routes: `inject` blocks the main thread for it, and
+  `coveredType` sends the text and the Return as two acknowledged `zmx type` calls (#679).
+  Claude Code reads a Return arriving in the same burst as a long text run as pasted content and does
+  not submit.
+  The gap is blocking, never scheduled: a deferred Return can be overtaken by another injection or a keystroke.
+  It is one fixed gap per call, so do not scale it by length or add one per line.
+  Limits: Returns inside a multi-line payload stay back to back and still read as paste in such a program;
+  a writer on another Mac can land between the two daemon calls;
+  a failed second daemon call answers an error with the text already typed and is never retried,
+  since the daemon queues before it answers and a timeout does not prove the Return was dropped.
 - `session.copy` returns the addressed main selection without touching clipboard; empty is `no selection`,
   and an unrealized pane is `session not realized` — `readSelection` cannot tell the two apart, and copy is
   select-all's read-back, so both name that state the same way. It stays on the PANE while an overlay covers

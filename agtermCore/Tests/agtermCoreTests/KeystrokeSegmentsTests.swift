@@ -55,4 +55,19 @@ struct KeystrokeSegmentsTests {
     func ptyBytesSendOneCarriageReturnPerLineEnding(text: String, bytes: [UInt8]) {
         #expect(KeystrokeSegments.ptyBytes(text) == bytes)
     }
+
+    @Test(arguments: [
+        ("echo hi\n", [KeystrokeSegment.text("echo hi")], true),
+        ("echo hi\r\n", [.text("echo hi")], true),
+        ("one\ntwo\n", [.text("one"), .returnKey, .text("two")], true),
+        ("echo hi\n\n", [.text("echo hi"), .returnKey], true),
+        ("echo hi", [.text("echo hi")], false),
+        ("one\ntwo", [.text("one"), .returnKey, .text("two")], false),
+        ("\n", [.returnKey], false),
+        ("\n\n", [.returnKey, .returnKey], false),
+        ("", [], false),
+    ])
+    func onlyAFinalReturnAfterTextIsPaced(text: String, head: [KeystrokeSegment], pacedReturn: Bool) {
+        #expect(KeystrokeSegments.paced(text) == PacedKeystrokes(head: head, pacedReturn: pacedReturn))
+    }
 }

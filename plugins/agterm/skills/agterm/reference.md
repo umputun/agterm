@@ -479,6 +479,9 @@ error keeps those names for compatibility.
 
 - `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
+  A trailing newline's Return is sent a moment after the text, so a long line submits in an agent TUI;
+  Returns inside a multi-line payload are not spaced, so send an agent one line per call.
+  A shell's `$(...)` strips trailing newlines; pass the newline with `--stdin` or `$'...\n'`.
   `--stdin` reads the text from stdin instead of the argument. Any session is typable without `--select`,
   including a background one and one created moments ago: the main pane bounded-polls (12 × 30ms) for the
   surface, so `session new --no-select` followed straight away by `session type` does not race the mount.
