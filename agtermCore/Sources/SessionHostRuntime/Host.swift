@@ -12,6 +12,7 @@ enum HostChildState {
 protocol HostChild: AnyObject {
     var pid: Int32 { get }
     var hasExited: Bool { get }
+    var stopReason: String? { get }
     func poll() -> HostChildState
     func terminate(grace: TimeInterval) throws
 }
@@ -113,7 +114,10 @@ public final class Host {
 
     private func awaitLeader(name: String, child: any HostChild, deadline: TimeInterval) -> SessionHost.Response {
         while now() < deadline {
-            guard case .running = child.poll() else { return failure(.started, "attach client exited or failed before readiness") }
+            guard case .running = child.poll() else {
+                Self.log("attach client \(child.pid) for \(name) stopped before readiness: \(child.stopReason ?? "unknown")")
+                return failure(.started, "attach client exited or failed before readiness")
+            }
             do {
                 let matches = try backend.list(deadline: deadline).filter { $0.name == name }
                 if matches.count == 1, matches[0].clients != nil, let pid = matches[0].leaderPID, backend.isAlive(pid),

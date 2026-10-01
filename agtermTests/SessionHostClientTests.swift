@@ -280,6 +280,10 @@ final class SessionHostClientTests: XCTestCase {
                 XCTAssertNoThrow(try FileManager.default.copyItem(at: URL(fileURLWithPath: paths.log),
                                                                  to: evidenceDirectory.appendingPathComponent("host.log")))
             }
+            if let zmxDirectory = environment["ZMX_DIR"] {
+                try? FileManager.default.copyItem(at: URL(fileURLWithPath: zmxDirectory).appendingPathComponent("logs"),
+                                                  to: evidenceDirectory.appendingPathComponent("zmx-logs"))
+            }
             try? FileManager.default.removeItem(at: directory)
         }
 

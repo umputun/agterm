@@ -225,8 +225,30 @@ struct SessionHostServerTests {
         let child = NativeHostChild(.init(pid: process.pid, ptyFD: -1, execErrorFD: process.execErrorFD))
         defer { try? child.terminate(grace: 0.5) }
         #expect(child.poll() == .failed)
+        #expect(child.stopReason?.hasPrefix("descriptor preparation failed") == true)
         try child.terminate(grace: 0.5)
         #expect(child.hasExited)
+    }
+
+    @Test func exitedChildReportsItsWaitStatus() throws {
+        let process = try PTYProcess.spawn(argv: ["/bin/sh", "-c", "printf 'cannot connect'; exit 7"],
+                                           env: [:], cwd: "/tmp", rows: 24, cols: 80)
+        let child = NativeHostChild(process)
+        defer { try? child.terminate(grace: 0.5) }
+        #expect(child.stopReason == nil)
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while child.poll() == .running, ProcessInfo.processInfo.systemUptime < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        #expect(child.poll() == .exited)
+        #expect(child.stopReason == "exited with wait status \(7 << 8); output: cannot connect")
+    }
+
+    @Test func childThatCannotExecReportsThePreExecErrno() throws {
+        let process = try PTYProcess.spawn(argv: ["/nonexistent/agterm-probe"], env: [:], cwd: "/tmp", rows: 24, cols: 80)
+        let child = NativeHostChild(process)
+        defer { try? child.terminate(grace: 0.5) }
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while child.poll() == .running, ProcessInfo.processInfo.systemUptime < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        #expect(child.stopReason?.contains("pre-exec errno \(ENOENT)") == true)
     }
 
     @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
@@ -386,6 +408,7 @@ struct SessionHostServerTests {
         let pid: Int32 = 500
         var state: HostChildState = .running
         var hasExited = false
+        var stopReason: String?
         var terminations = 0
         var terminatedPIDs: [Int32] = []
         func poll() -> HostChildState { state }

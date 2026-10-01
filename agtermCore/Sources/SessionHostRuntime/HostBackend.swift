@@ -10,14 +10,30 @@ final class NativeHostChild: HostChild {
     private var errorBytes = Data()
     private var preparationFailed = false
     private(set) var hasExited = false
+    private var stopCauses: [String] = []
+    private var outputTail = Data()
     var pid: Int32 { process.pid }
+
+    /// Why the child is no longer running, with the end of its terminal output; nil while it runs.
+    var stopReason: String? {
+        var parts = stopCauses
+        if errorBytes.count == MemoryLayout<Int32>.size {
+            parts.append("pre-exec errno \(errorBytes.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) })")
+        }
+        guard !parts.isEmpty else { return nil }
+        if !outputTail.isEmpty { parts.append("output: \(String(decoding: outputTail, as: UTF8.self))") }
+        return parts.joined(separator: "; ")
+    }
 
     init(_ process: PTYProcess) {
         self.process = process
         do {
             try hostNonblocking(process.ptyFD)
             try hostNonblocking(process.execErrorFD)
-        } catch { preparationFailed = true }
+        } catch {
+            preparationFailed = true
+            stopCauses.append("descriptor preparation failed: \(error)")
+        }
     }
 
     deinit { closeDescriptors() }
@@ -32,7 +48,10 @@ final class NativeHostChild: HostChild {
             }
             if hasExited { return .exited }
             return errorBytes.isEmpty ? .running : .failed
-        } catch { return .failed }
+        } catch {
+            stopCauses.append("poll failed: \(error)")
+            return .failed
+        }
     }
 
     func terminate(grace: TimeInterval) throws {
@@ -48,8 +67,12 @@ final class NativeHostChild: HostChild {
         if hasExited { return true }
         var status: Int32 = 0
         let result = waitpid(pid, &status, WNOHANG)
-        if result == pid || (result < 0 && errno == ECHILD) {
+        if result == pid {
             hasExited = true
+            stopCauses.append("exited with wait status \(status)")
+        } else if result < 0 && errno == ECHILD {
+            hasExited = true
+            stopCauses.append("waitpid found no child")
         } else if result < 0 && errno != EINTR { throw HostFailure.system(errno) }
         return hasExited
     }
@@ -66,7 +89,10 @@ final class NativeHostChild: HostChild {
         var bytes = [UInt8](repeating: 0, count: 4096)
         for _ in 0..<16 {
             let count = read(process.ptyFD, &bytes, bytes.count)
-            if count > 0 { continue }
+            if count > 0 {
+                outputTail = (outputTail + bytes.prefix(count)).suffix(1024)
+                continue
+            }
             if count == 0 || errno == EIO || errno == EAGAIN { return }
             if errno != EINTR { throw HostFailure.system(errno) }
         }
