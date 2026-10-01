@@ -242,6 +242,10 @@ paths:
 - Each `DashboardMember` hosts its existing pane with stable primary/split slot identity. Claim each exact
   slot through `dashboardHostsSurface`, leaving a clear placeholder in the eager deck so other surfaces
   still realize. Enter selects, closes, then focuses that exact pane.
+- A cell hosts the pane's TERMINAL, never its overlay, so a pane the session shows under a page or program
+  gets `DashboardOverlayCover` from `Session.dashboardCover(for:)` (#688): a full session-wide cover first,
+  then the pane's own overlay. A HUD, a floating overlay and the scratch produce none.
+  The page or program remains hosted in the deck.
 - Place dashboard in `windowOverlayLayer`, never a body overlay.
 - View-only requires all five gates:
   1. terminal hit testing off with a transparent click/highlight/enter layer above;

@@ -157,6 +157,50 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertTrue(dashboardOverlay.exists, "the dashboard stays open across the promotion")
     }
 
+    // issue #688: the cell hosted the shell a page hides, with nothing naming the page.
+    func testCellUnderAPanePageShowsACoverNamingIt() throws {
+        let id = try prepareSessions(extra: 0)[0]
+        try splitAndFocusLeft(id)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-dash-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let page = dir.appendingPathComponent("cover.html")
+        try "<!doctype html><html><head><title>Cover Title</title></head><body>page</body></html>"
+            .write(to: page, atomically: true, encoding: .utf8)
+
+        try openDashboard(members: [id])
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "a split session opens as two pane cells")
+        let covers = app.descendants(matching: .any).matching(identifier: "dashboard-overlay-cover")
+        XCTAssertFalse(covers.firstMatch.exists, "an uncovered pane's cell has no cover")
+
+        let open = try sendCommand(
+            #"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(page.path)","pane":"right"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "the pane page should open under the grid: \(open)")
+        XCTAssertTrue(covers.firstMatch.waitForExistence(timeout: 10), "the covered pane's cell shows a cover")
+        XCTAssertEqual(covers.count, 1, "only the right pane's cell is covered")
+        XCTAssertEqual(covers.firstMatch.value as? String, "HTML overlay")
+        XCTAssertTrue(pollCoverText("dashboard-overlay-cover-source", "cover.html", timeout: 10),
+                      "the cover names the page's file")
+        XCTAssertTrue(pollCoverText("dashboard-overlay-cover-title", "Cover Title", timeout: 10),
+                      "the cover carries the page's title once it loads")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"right"}}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "the pane page should close: \(close)")
+        XCTAssertTrue(covers.firstMatch.waitForNonExistence(timeout: 10), "closing the page removes the cover")
+        XCTAssertTrue(dashboardOverlay.exists, "the dashboard stays open across the page closing")
+        XCTAssertTrue(pollCellCount(2, timeout: 5), "both cells stay on the grid")
+    }
+
+    private func pollCoverText(_ identifier: String, _ expected: String, timeout: TimeInterval) -> Bool {
+        let text = app.staticTexts.matching(identifier: identifier).firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if text.exists, text.value as? String == expected { return true }
+            usleep(200_000)
+        }
+        return text.exists && text.value as? String == expected
+    }
+
     /// Split `id` and leave the LEFT pane focused — `split on` focuses the right pane, which would make a
     /// later `splitFocused` assertion vacuous.
     private func splitAndFocusLeft(_ id: String) throws {

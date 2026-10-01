@@ -114,10 +114,15 @@ struct DashboardView: View {
 
     private func cell(for member: DashboardMember, session: Session) -> some View {
         let isHighlighted = controller.highlighted == member
+        let cover = session.dashboardCover(for: member.surface == .split ? .right : .left)
         return ZStack {
             captionBackground
-            memberTerminal(for: member, session: session)
+            memberTerminal(for: member, session: session, covered: cover != nil)
                 .allowsHitTesting(false)
+            if let cover {
+                DashboardOverlayCover(cover: cover, background: captionBackground, foreground: highlightColor)
+                    .allowsHitTesting(false)
+            }
             // transparent hit target above the terminal: a lone count:1 tap registers immediately, while a
             // count:2 + count:1 pair delayed every click by the double-click timeout. Carries the per-cell
             // a11y id — the Metal-backed surface is not in the tree.
@@ -156,21 +161,21 @@ struct DashboardView: View {
     /// representable, plus the resolved occupant token so a REPLACEMENT re-mounts the cell.
     /// `isActive`/`deckVisible`/`reportsFocusChange` off and `viewOnly` on: the cell auto-focuses nothing,
     /// is not a drop target, refuses first responder, and never mutates session focus state. It remains on
-    /// screen because the grid still paints it.
+    /// screen because the grid still paints it. `covered` hides the lead cover under a `DashboardOverlayCover`.
     @ViewBuilder
-    private func memberTerminal(for member: DashboardMember, session: Session) -> some View {
+    private func memberTerminal(for member: DashboardMember, session: Session, covered: Bool) -> some View {
         if member.surface == .split {
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
                          onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-split-\(PaneHostIdentity.token(for: member.surface, in: session))")
-                .overlay { PaneLeadCover(session: session, pane: .right).allowsHitTesting(false) }
+                .overlay { PaneLeadCover(session: session, pane: .right, hidden: covered).allowsHitTesting(false) }
         } else {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true,
                          onScreen: true)
                 .id("\(session.id.uuidString)-dashboard-primary-\(PaneHostIdentity.token(for: member.surface, in: session))")
-                .overlay { PaneLeadCover(session: session, pane: .left).allowsHitTesting(false) }
+                .overlay { PaneLeadCover(session: session, pane: .left, hidden: covered).allowsHitTesting(false) }
         }
     }
 
@@ -283,6 +288,62 @@ private struct DashboardCaptionPill: View {
                        value: pulsed)
             .onAppear { pulsed = shouldAnimatePulse }
             .onChange(of: shouldAnimatePulse) { _, now in pulsed = now }
+    }
+}
+
+/// Stands in for a member pane the session shows under a page or program: the cell hosts the pane's own
+/// terminal, which that overlay hides everywhere else. The source line is app-derived and the page's own
+/// title stays a separate dimmed line, the split `HtmlOverlayView` keeps, so a title cannot pass for it.
+private struct DashboardOverlayCover: View {
+    let cover: DashboardCover
+    let background: Color
+    let foreground: Color
+
+    var body: some View {
+        ZStack {
+            background
+            VStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 24, weight: .light))
+                Text(kind)
+                    .font(.system(size: 13, weight: .medium))
+                    .accessibilityIdentifier("dashboard-overlay-cover")
+                if let source {
+                    Text(source)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .accessibilityIdentifier("dashboard-overlay-cover-source")
+                }
+                if case .page(_, let title?) = cover {
+                    Text(title)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(foreground.opacity(0.55))
+                        .accessibilityIdentifier("dashboard-overlay-cover-title")
+                }
+            }
+            .foregroundStyle(foreground)
+            .padding()
+        }
+    }
+
+    private var symbol: String {
+        if case .page = cover { return "doc.richtext" }
+        return "terminal"
+    }
+
+    private var kind: String {
+        if case .page = cover { return "HTML overlay" }
+        return "Program overlay"
+    }
+
+    private var source: String? {
+        switch cover {
+        case .page(let identity, _): identity
+        case .program(let command): command
+        }
     }
 }
 

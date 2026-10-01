@@ -1112,7 +1112,9 @@
                   session+pane — a non-split session is one cell, a split session is two (its left and right panes), capped at nine
                   cells. Each cell's name chip also reflects the session's agent status, filling with the status color and pulsing
                   while it blinks, unless macOS Reduce Motion is enabled; the status color and text remain visible without the
-                  repeating animation. It is view-only — no cell's terminal
+                  repeating animation. A pane covered by a full overlay or its own pane overlay shows a label in its cell instead of
+                  the terminal underneath: the page's file or origin with its title when it has one, or the program's command when
+                  available. It is view-only — no cell's terminal
                   takes input; the arrow keys move a highlight, Enter (or a single mouse click on a cell) jumps into that
                   session and focuses that exact pane, and Esc closes. Opened over the control channel with
                   <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or

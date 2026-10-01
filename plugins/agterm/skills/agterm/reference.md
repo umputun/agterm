@@ -1151,6 +1151,11 @@ A cell placed by a `:right` ref FOLLOWS its pane through promotion: when a split
 exits, agterm promotes the survivor into the primary slot, and the grid rewrites that cell to `<id>:left`
 rather than dropping it, so a dashboard built to watch an agent in the split pane keeps watching it.
 
+A cell shows the pane's terminal, not an overlay over it. A pane covered by a full session overlay or its
+own pane overlay shows a label instead: `HTML overlay` with the page's file or origin and its title when
+it has one, or `Program overlay` with its command when available. The page or program is not rendered in
+the grid. HUDs and floating overlays do not produce covers.
+
 The most-recently-used grid also has a GUI opener: **⌘⇧G** (the `dashboard` built-in action, rebindable
 in `keymap.conf`), **Navigate ▸ Dashboard**, and the command palette's **Dashboard** entry all TOGGLE the
 frontmost window's dashboard: open it over the window's most-recently-used sessions auto-sized (identical to
