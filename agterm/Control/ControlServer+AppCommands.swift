@@ -112,6 +112,13 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(keymap: payload))
     }
 
+    func clearBrowser() async -> ControlResponse {
+        if let failure = await HtmlOverlayRegistry.shared.clearPersistentStore() {
+            return ControlResponse(ok: false, error: "browser.clear: \(failure)")
+        }
+        return ControlResponse(ok: true)
+    }
+
     func reloadHooks() -> ControlResponse {
         settingsModel.reloadHooks()
         return ControlResponse(ok: true, result: ControlResult(count: settingsModel.hooksDiagnostics.count))

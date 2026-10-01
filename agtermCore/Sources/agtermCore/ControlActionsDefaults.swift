@@ -48,6 +48,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.list"))
     }
 
+    func clearBrowser() async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("browser.clear"))
+    }
+
     func readRestoreMode() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("restore.mode"))
     }

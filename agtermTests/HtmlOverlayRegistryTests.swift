@@ -159,6 +159,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private var pages: URL!
     private var servers: [LoopbackServer] = []
     private var profiles: [BrowserProfile] = []
+    private var removal: (@MainActor (WKWebsiteDataStore) async -> Void)!
     private var store: AppStore!
     private var session: Session!
     private let registry = HtmlOverlayRegistry.shared
@@ -175,6 +176,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         registry.install()
         registry.browser = browser
         registry.sharing = sharing
+        removal = registry.removeWebsiteData
         useProfile("profile")
         try write("a.html", #"<title>A</title><script src="s.js"></script><a href="b.html">b</a>"#)
         try write("b.html", "<title>B</title>")
@@ -188,12 +190,8 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         registry.setZoom(1)
         registry.dispatch = nil
         store.closeSession(session.id)
-        // WebKit keeps an identified store outside the state directory and refuses to remove one still held
-        registry.profile = nil
-        for profile in profiles {
-            guard let id = try profile.existingIdentifier() else { continue }
-            try await removeStore(id)
-        }
+        registry.removeWebsiteData = removal
+        for profile in profiles { try await TestBrowserStore.remove(profile) }
         profiles = []
         try? FileManager.default.removeItem(at: directory)
     }
@@ -609,6 +607,116 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(current?.loadState, .failed)
         XCTAssertNil(page.webView.url)
         XCTAssertEqual(try Data(contentsOf: file), Data("not a uuid".utf8))
+    }
+
+    func testClearEmptiesTheSavedStoreAndKeepsItsProfile() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>store</title>")])
+        let address = "http://127.0.0.1:\(port)/"
+        let first = registry.page(for: try openURL(address, persistent: true), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        _ = try await first.webView.evaluateJavaScript("localStorage.setItem('k', 'v'); document.cookie = 'c=1; max-age=3600'")
+        _ = try await first.webView.callAsyncJavaScript(Self.putRecord, contentWorld: .page)
+        XCTAssertTrue(store.closeOverlay(session.id))
+        let profile = try XCTUnwrap(registry.profile)
+        let id = try profile.existingIdentifier()
+
+        let failure = await registry.clearPersistentStore()
+
+        XCTAssertNil(failure)
+        XCTAssertEqual(try profile.existingIdentifier(), id)
+        let next = registry.page(for: try openURL(address, persistent: true), store: store)
+        try await waitFor("next loaded") { self.current?.loadState == .loaded }
+        let left = try await next.webView.evaluateJavaScript("localStorage.getItem('k') + '|' + document.cookie")
+        XCTAssertEqual(left as? String, "null|")
+        let record = try await next.webView.callAsyncJavaScript(Self.getRecord, contentWorld: .page)
+        XCTAssertNil(record as? String)
+    }
+
+    func testClearIsRefusedWhileAPersistentPageIsOpenOrSoftClosed() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>store</title>")])
+        let address = "http://127.0.0.1:\(port)/"
+        let page = registry.page(for: try openURL(address, persistent: true), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        _ = try await page.webView.evaluateJavaScript("localStorage.setItem('k', 'v')")
+
+        let open = await registry.clearPersistentStore()
+        XCTAssertEqual(open, BrowserClearError.pagesOpen(1))
+
+        XCTAssertTrue(store.softCloseSession(session.id, grace: 60))
+        let softClosed = await registry.clearPersistentStore()
+        XCTAssertEqual(softClosed, BrowserClearError.pagesOpen(1))
+        let kept = try await page.webView.evaluateJavaScript("localStorage.getItem('k')")
+        XCTAssertEqual(kept as? String, "v")
+
+        store.finalizeAllPendingCloses()
+        let closed = await registry.clearPersistentStore()
+        XCTAssertNil(closed)
+    }
+
+    func testAnInMemoryPageDoesNotBlockAClear() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>store</title>")])
+        _ = registry.page(for: try openURL("http://127.0.0.1:\(port)/"), store: store)
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        XCTAssertNil(registry.persistentStoreFailure())
+
+        let failure = await registry.clearPersistentStore()
+
+        XCTAssertNil(failure)
+    }
+
+    func testClearWithNoProfileEverCreatedSucceedsAndCreatesNone() async throws {
+        let profile = try XCTUnwrap(registry.profile)
+        var removed = false
+        registry.removeWebsiteData = { _ in removed = true }
+
+        let failure = await registry.clearPersistentStore()
+
+        XCTAssertNil(failure)
+        XCTAssertFalse(removed)
+        XCTAssertNil(try profile.existingIdentifier())
+    }
+
+    func testClearOfAnUnreadableProfileFailsAndRemovesNothing() async throws {
+        let state = directory.appendingPathComponent("broken")
+        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        let file = state.appendingPathComponent(BrowserProfile.filename)
+        try Data("not a uuid".utf8).write(to: file)
+        registry.profile = BrowserProfile(directory: state)
+        var removed = false
+        registry.removeWebsiteData = { _ in removed = true }
+
+        let failure = await registry.clearPersistentStore()
+
+        XCTAssertEqual(failure, BrowserProfile.Failure.malformed(file.path).description)
+        XCTAssertFalse(removed)
+    }
+
+    func testAPersistentOpenIsRefusedUntilARunningClearCompletes() async throws {
+        XCTAssertNil(registry.persistentStoreFailure())
+        let started = expectation(description: "removal started")
+        var finish: CheckedContinuation<Void, Never>?
+        registry.removeWebsiteData = { _ in
+            await withCheckedContinuation { continuation in
+                finish = continuation
+                started.fulfill()
+            }
+        }
+        let clear = Task { await self.registry.clearPersistentStore() }
+        await fulfillment(of: [started], timeout: 5)
+
+        XCTAssertEqual(registry.persistentStoreFailure(), BrowserClearError.clearing)
+        let second = await registry.clearPersistentStore()
+        XCTAssertEqual(second, BrowserClearError.clearing)
+        let page = registry.page(for: try openURL("http://127.0.0.1:1/", persistent: true), store: store)
+        XCTAssertEqual(current?.loadState, .failed)
+        XCTAssertEqual(current?.loadError, BrowserClearError.clearing)
+        XCTAssertFalse(page.usesSavedStore)
+        XCTAssertNil(page.webView.url)
+
+        finish?.resume()
+        let failure = await clear.value
+        XCTAssertNil(failure)
+        XCTAssertNil(registry.persistentStoreFailure())
     }
 
     func testAnInMemoryPageNeedsNoProfile() async throws {
@@ -1344,19 +1452,6 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let profile = BrowserProfile(directory: directory.appendingPathComponent(name))
         profiles.append(profile)
         registry.profile = profile
-    }
-
-    // the web content process lets go of a store a moment after its last page closes
-    private func removeStore(_ id: UUID) async throws {
-        let deadline = Date().addingTimeInterval(10)
-        while true {
-            do {
-                return try await WKWebsiteDataStore.remove(forIdentifier: id)
-            } catch {
-                guard Date() < deadline else { throw error }
-                try await Task.sleep(for: .milliseconds(100))
-            }
-        }
     }
 
     private static let putRecord = """

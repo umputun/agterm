@@ -1136,6 +1136,22 @@ struct ControlProtocolTests {
         #expect(hud.fontSize == nil)
     }
 
+    @Test func browserClearAndPersistentRoundTripOnTheWire() throws {
+        let clear = try JSONEncoder().encode(ControlRequest(cmd: .browserClear))
+        #expect(String(decoding: clear, as: UTF8.self) == #"{"cmd":"browser.clear"}"#)
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: clear).cmd == .browserClear)
+
+        let open = ControlRequest(cmd: .sessionOverlayOpen, args: ControlArgs(url: "http://localhost:5173/", persistent: true))
+        let data = try JSONEncoder().encode(open)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""persistent":true"#))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == open)
+    }
+
+    @Test(arguments: [(1, "1 persistent page still open"), (3, "3 persistent pages still open")])
+    func browserClearNamesHowManyPagesBlockIt(_ count: Int, _ message: String) {
+        #expect(BrowserClearError.pagesOpen(count) == message)
+    }
+
     // an app deployed but not restarted still serves page nodes without the chromeless key to a newer CLI.
     @Test func controlHtmlOverlayNodeFromAnOlderServerDecodesWithItsStrip() throws {
         let raw = #"{"file":"/tmp/r.html","state":"loaded","javascript":false}"#

@@ -169,14 +169,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/{ControlDispatcherTests,ControlProtocolTests,HtmlBridgeTests}.swift`,
   `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`, `agtermTests/HtmlOverlayRegistryTests.swift`
 
-- [ ] protocol command, awaited dispatch to `ControlActions.clearBrowser`, unsupported default,
+- [x] protocol command, awaited dispatch to `ControlActions.clearBrowser`, unsupported default,
       `windowless` bridge entry, CLI `agtermctl browser clear`, with tests
-- [ ] registry clear: refuse while a persistent page is registered; otherwise enter the clearing state,
+- [x] registry clear: refuse while a persistent page is registered; otherwise enter the clearing state,
       remove all data types, leave it, reply; a persistent open during the clearing state is refused
-- [ ] hosted tests: clear then reopen is empty; refused with a persistent page open and with one
+- [x] hosted tests: clear then reopen is empty; refused with a persistent page open and with one
       soft-closed; ok with no profile ever created; an open during a held removal is refused
-- [ ] hosted socket test: persistent open and `browser.clear` over the socket, reply after completion
-- [ ] run the touched tests
+- [x] hosted socket test: persistent open and `browser.clear` over the socket, reply after completion
+- [x] run the touched tests
 
 ### Task 4: Update documentation
 - [ ] `.claude/rules/control-api.md`: replace the storage line with the two-mode contract, the profile id

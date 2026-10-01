@@ -889,6 +889,29 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.hooksReload, .hooksList])
     }
 
+    @Test func browserClearRoutesToActionsAndKeepsTheReply() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextBrowserClearResponse = ControlResponse(ok: false, error: BrowserClearError.pagesOpen(2))
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .browserClear))
+
+        #expect(response == ControlResponse(ok: false, error: "2 persistent pages still open"))
+        #expect(actions.calls == [.browserClear])
+    }
+
+    @Test func browserClearRefusesATargetOrWindowBeforeAnyAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let targeted = await dispatcher.dispatch(ControlRequest(cmd: .browserClear, target: "active"))
+        let windowed = await dispatcher.dispatch(ControlRequest(cmd: .browserClear, args: ControlArgs(window: "w1")))
+
+        #expect(targeted == ControlResponse(ok: false, error: "browser.clear takes no target or --window"))
+        #expect(windowed == ControlResponse(ok: false, error: "browser.clear takes no target or --window"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func hooksCommandsRefuseATargetOrWindowBeforeAnyAction() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

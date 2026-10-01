@@ -1,4 +1,5 @@
 import Darwin
+import os
 import XCTest
 @testable import agterm
 import agtermCore
@@ -193,6 +194,43 @@ final class ControlServerTests: XCTestCase {
         XCTAssertNotNil(response, "a malformed request should still get a response")
         XCTAssertTrue(response?.contains("restore.bogus") ?? false,
                       "the error should name the rejected cmd, got: \(response ?? "nil")")
+    }
+
+    func testBrowserClearRepliesOnlyAfterTheRemovalCompletes() async throws {
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        let removal = registry.removeWebsiteData
+        let profile = BrowserProfile(directory: stateDir)
+        registry.profile = profile
+        XCTAssertNil(registry.persistentStoreFailure())
+        let started = expectation(description: "removal started")
+        var finish: CheckedContinuation<Void, Never>?
+        registry.removeWebsiteData = { _ in
+            await withCheckedContinuation { continuation in
+                finish = continuation
+                started.fulfill()
+            }
+        }
+        let server = makeServer()
+        server.start()
+        let path = socketPath!
+        let replied = expectation(description: "reply written")
+        let reply = OSAllocatedUnfairLock<String?>(initialState: nil)
+        Thread {
+            let line = Self.roundTrip(#"{"cmd":"browser.clear"}"#, at: path)
+            reply.withLock { $0 = line }
+            replied.fulfill()
+        }.start()
+
+        await fulfillment(of: [started], timeout: 5)
+        XCTAssertNil(reply.withLock { $0 }, "the reply must wait for the removal")
+        finish?.resume()
+        await fulfillment(of: [replied], timeout: 5)
+
+        XCTAssertEqual(reply.withLock { $0 }?.trimmingCharacters(in: .newlines), #"{"ok":true}"#)
+        registry.removeWebsiteData = removal
+        try await TestBrowserStore.remove(profile)
+        registry.profile = before
     }
 
     private func makeServer(remoteRunner: RemoteCommandRunner? = nil) -> ControlServer {

@@ -65,6 +65,27 @@ struct Hooks: ParsableCommand {
     }
 }
 
+// MARK: - browser
+
+struct Browser: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Saved browser storage of --persistent URL overlays.",
+        subcommands: [Clear.self]
+    )
+
+    struct Clear: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Remove every cookie and all site data the saved browser store holds.",
+            discussion: "Refused while a --persistent page is open, a just-closed one that can still be reopened included: "
+                + "an open page writes its login back. Removing the local data does not sign you out on the server."
+        )
+        // one store serves every window, so no `--window`.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .browserClear) }
+    }
+}
+
 // MARK: - config
 
 struct Config: ParsableCommand {

@@ -84,6 +84,7 @@ public enum Command: String, Codable, Sendable {
     case keymapList = "keymap.list"
     case hooksReload = "hooks.reload"
     case hooksList = "hooks.list"
+    case browserClear = "browser.clear"
     case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
@@ -669,6 +670,15 @@ public enum OverlayHudError {
     public static let noRead = "no overlay to read: the slot holds a hud"
     /// The body file the helper reads could not be written, so the panel would paint nothing or stale text.
     public static let writeFailed = "could not write the hud message"
+}
+
+/// BrowserClearError holds the reasons the saved browser store cannot be cleared or opened right now.
+public enum BrowserClearError {
+    public static let clearing = "browser storage is being cleared"
+
+    public static func pagesOpen(_ count: Int) -> String {
+        "\(count) persistent \(count == 1 ? "page" : "pages") still open"
+    }
 }
 
 /// OverlayHtmlError holds the error strings for `session.overlay.*` against an HTML page.

@@ -21,6 +21,13 @@ final class HtmlOverlayRegistry {
     /// from the one before.
     var profile: BrowserProfile? { didSet { persistentStore = nil } }
     private var persistentStore: WKWebsiteDataStore?
+    /// removeWebsiteData empties a store and returns once WebKit is done.
+    var removeWebsiteData: @MainActor (WKWebsiteDataStore) async -> Void = {
+        await $0.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+    }
+    // the main actor is free while WebKit removes data, so a page opened then would write into the store
+    // being emptied
+    private var clearing = false
     private var pages: [UUID: HtmlOverlayPage] = [:]
     private var appearanceObserver: NSObjectProtocol?
 
@@ -49,6 +56,7 @@ final class HtmlOverlayRegistry {
     /// persistentStoreFailure builds the saved store on first use and says why it cannot be used, nil when
     /// it can. The open adapter asks before it accepts a persistent page, so the refusal reaches the caller.
     func persistentStoreFailure() -> String? {
+        if clearing { return BrowserClearError.clearing }
         guard persistentStore == nil else { return nil }
         guard let profile else { return OverlayHtmlError.persistentUnavailable }
         do {
@@ -59,6 +67,29 @@ final class HtmlOverlayRegistry {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// clearPersistentStore removes everything the saved store holds and says why it could not, nil when it
+    /// did. A profile never created has nothing to remove and is not created for it. A registered persistent
+    /// page blocks it, a soft-closed one included: its login lives in memory and would be written back.
+    func clearPersistentStore() async -> String? {
+        if clearing { return BrowserClearError.clearing }
+        let open = pages.values.filter(\.usesSavedStore).count
+        if open > 0 { return BrowserClearError.pagesOpen(open) }
+        guard let profile else { return OverlayHtmlError.persistentUnavailable }
+        do {
+            guard try profile.existingIdentifier() != nil else { return nil }
+        } catch let failure as BrowserProfile.Failure {
+            return failure.description
+        } catch {
+            return error.localizedDescription
+        }
+        if let failure = persistentStoreFailure() { return failure }
+        guard let persistentStore else { return OverlayHtmlError.persistentUnavailable }
+        clearing = true
+        defer { clearing = false }
+        await removeWebsiteData(persistentStore)
+        return nil
     }
 
     // a persistent page whose store cannot be used gets no store at all: an in-memory one would hold a
@@ -174,6 +205,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
     private let storageFailure: String?
+    /// usesSavedStore is true for a page built on the saved browser store.
+    let usesSavedStore: Bool
 
     init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme,
          browser: any HtmlBrowser, sharing: any HtmlSharing, storage: Storage) {
@@ -190,9 +223,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .ready(let dataStore):
             configuration.websiteDataStore = dataStore
             storageFailure = nil
+            usesSavedStore = dataStore.isPersistent
         case .unavailable(let failure):
             configuration.websiteDataStore = .nonPersistent()
             storageFailure = failure
+            usesSavedStore = false
         }
         // the page's own scripts only; the theme user script and app evaluation run either way
         configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript

@@ -254,6 +254,11 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(cached?.result?.windows?.first { $0.id == windowID }?.name, "from-page")
     }
 
+    private func persistentOptions() throws -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                         page: .url(try XCTUnwrap(URL(string: "http://127.0.0.1:1/"))), persistent: true)
+    }
+
     private func overlayOptions(follow: Bool, pane: OverlayPane? = nil) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "true", cwd: nil, wait: false, sizePercent: nil,
                                          backgroundColor: nil, follow: follow, pane: pane)
@@ -400,6 +405,41 @@ final class ControlServerSessionActionsTests: XCTestCase {
         let response = server.setSessionContext(UUID().uuidString, window: nil, context: "PR #517")
 
         XCTAssertFalse(response.ok)
+    }
+
+    func testAPersistentOpenIsRefusedWhenTheProfileCannotBeRead() throws {
+        let (_, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let file = stateDir.appendingPathComponent(BrowserProfile.filename)
+        try Data("not a uuid".utf8).write(to: file)
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        defer { registry.profile = before }
+        registry.profile = BrowserProfile(directory: stateDir)
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: try persistentOptions())
+
+        XCTAssertEqual(response, ControlResponse(
+            ok: false, error: "session.overlay.open: \(BrowserProfile.Failure.malformed(file.path).description)"))
+        XCTAssertNil(session.htmlOverlay)
+        XCTAssertEqual(try Data(contentsOf: file), Data("not a uuid".utf8))
+    }
+
+    func testAPersistentOpenPutsAPersistentPageInTheSlot() async throws {
+        let (store, session) = try addSession()
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        let profile = BrowserProfile(directory: stateDir)
+        registry.profile = profile
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: try persistentOptions())
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(session.htmlOverlay?.persistent, true)
+        XCTAssertNotNil(try profile.existingIdentifier())
+        store.closeOverlay(session.id)
+        try await TestBrowserStore.remove(profile)
+        registry.profile = before
     }
 
     func testFollowSelectsTheTargetWhenNothingIsSelected() throws {
