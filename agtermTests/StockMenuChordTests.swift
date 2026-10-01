@@ -3,15 +3,8 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Coverage for `AppDelegate.applyCloseSessionChord`, which decides whether ⌘W belongs to agterm's
-/// File ▸ Close Session or to the stock `performClose:` item.
-///
-/// SwiftUI hands the stock item a ⌘W key equivalent as soon as agterm's own item vacates the chord, and
-/// putting `close_session` back on ⌘W does not reclaim it — SwiftUI drops the shortcut from its OWN item
-/// instead, leaving Close Session unbound and ⌘W closing the whole window until relaunch. These tests
-/// drive the real `NSMenu` shapes the reconcile has to handle.
 @MainActor
-final class CloseSessionChordTests: XCTestCase {
+final class StockMenuChordTests: XCTestCase {
     private let commandW = Chord(mods: [.command], key: "w")
     private var priorUsesUserKeyEquivalents = true
 
@@ -50,6 +43,26 @@ final class CloseSessionChordTests: XCTestCase {
         return (main, ours, stock)
     }
 
+    private func item(_ title: String, _ selector: String, key: String, mask: NSEvent.ModifierFlags) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: NSSelectorFromString(selector), keyEquivalent: key)
+        item.keyEquivalentModifierMask = mask
+        return item
+    }
+
+    private func ownItem(_ title: String, key: String, mask: NSEvent.ModifierFlags) -> NSMenuItem {
+        item(title, "menuAction:", key: key, mask: mask)
+    }
+
+    private func menu(_ items: [NSMenuItem], title: String = "Edit") -> NSMenu {
+        let submenu = NSMenu(title: title)
+        items.forEach(submenu.addItem)
+        let top = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        top.submenu = submenu
+        let main = NSMenu()
+        main.addItem(top)
+        return main
+    }
+
     private func assertOwnsCommandW(_ item: NSMenuItem, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(item.keyEquivalent, "w", message, file: file, line: line)
         XCTAssertEqual(item.keyEquivalentModifierMask, .command, message, file: file, line: line)
@@ -64,7 +77,7 @@ final class CloseSessionChordTests: XCTestCase {
 
     func testDefaultKeymapGivesCommandWToCloseSessionAlone() {
         let menu = makeFileMenu(oursKey: "w")
-        AppDelegate.applyCloseSessionChord(keymap(), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap(), in: menu.menu)
 
         assertOwnsCommandW(menu.ours, "Close Session should own ⌘W at its shipped default")
         assertNoChord(menu.stock, "the stock Close must not compete for ⌘W")
@@ -72,7 +85,7 @@ final class CloseSessionChordTests: XCTestCase {
 
     func testRecoversFromSwiftUIUnbindingOurItem() {
         let menu = makeFileMenu(oursKey: "", stockKey: "w")
-        AppDelegate.applyCloseSessionChord(keymap(), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap(), in: menu.menu)
 
         assertOwnsCommandW(menu.ours, "Close Session should get ⌘W back")
         assertNoChord(menu.stock, "the stock Close should have released ⌘W")
@@ -80,7 +93,7 @@ final class CloseSessionChordTests: XCTestCase {
 
     func testRebindingCloseSessionAwayHandsCommandWToTheStockClose() {
         let menu = makeFileMenu(oursKey: "e")
-        AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
 
         assertOwnsCommandW(menu.stock, "nothing of agterm's wants ⌘W, so the stock Close keeps it")
     }
@@ -88,7 +101,7 @@ final class CloseSessionChordTests: XCTestCase {
     // the empty stock key is what a previous reconcile leaves behind while close_session held ⌘W.
     func testRebindingAwayRestoresAClearedStockChord() {
         let menu = makeFileMenu(oursKey: "e", stockKey: "")
-        AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
 
         assertOwnsCommandW(menu.stock, "a cleared stock chord must be restored once agterm stops wanting it")
     }
@@ -97,7 +110,7 @@ final class CloseSessionChordTests: XCTestCase {
     // close_session away our item still advertises ⌘W — leaving it would show ⌘W twice in the File menu.
     func testStaleOurChordIsClearedWhenTheStockCloseTakesCommandW() {
         let menu = makeFileMenu(oursKey: "w", stockKey: "")
-        AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
 
         assertNoChord(menu.ours, "our stale ⌘W must be released when the stock Close takes the chord")
         assertOwnsCommandW(menu.stock, "the stock Close should hold ⌘W")
@@ -111,7 +124,7 @@ final class CloseSessionChordTests: XCTestCase {
             .closeSession: Chord(mods: [.command], key: "e"),
             .newSession: commandW,
         ]
-        AppDelegate.applyCloseSessionChord(keymap(overrides), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap(overrides), in: menu.menu)
 
         assertNoChord(menu.stock, "new_session owns ⌘W, so the stock Close must not advertise it too")
         XCTAssertEqual(menu.ours.keyEquivalent, "e", "our item's own chord must be left alone")
@@ -120,7 +133,7 @@ final class CloseSessionChordTests: XCTestCase {
     // a File menu carrying neither chord yet, the shape a fresh SwiftUI build hands over.
     func testRebindingAwayFromABareMenuLeavesTheStockCloseItsChord() {
         let menu = makeFileMenu()
-        AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
 
         assertOwnsCommandW(menu.stock, "the stock Close keeps ⌘W when no built-in claims it")
         assertNoChord(menu.ours, "an item whose action does not own ⌘W must not be given the chord")
@@ -130,7 +143,7 @@ final class CloseSessionChordTests: XCTestCase {
     // chord at all — the one way `equivalent(for:)` answers nil for an action that ships one.
     func testCloseSessionUnboundByAMapLineHandsCommandWToTheStockClose() {
         let menu = makeFileMenu(oursKey: "w")
-        AppDelegate.applyCloseSessionChord(keymap(unbound: [.closeSession]), in: menu.menu)
+        AppDelegate.applyStockMenuChords(keymap(unbound: [.closeSession]), in: menu.menu)
 
         assertOwnsCommandW(menu.stock, "no built-in holds ⌘W, so the stock Close takes it back")
         assertNoChord(menu.ours, "our stale ⌘W must be released once the action carries no menu chord")
@@ -142,29 +155,113 @@ final class CloseSessionChordTests: XCTestCase {
         let menu = makeFileMenu(oursKey: "w")
         let away = keymap([.closeSession: Chord(mods: [.command], key: "e")])
         for _ in 0..<3 {
-            AppDelegate.applyCloseSessionChord(away, in: menu.menu)
+            AppDelegate.applyStockMenuChords(away, in: menu.menu)
             assertOwnsCommandW(menu.stock, "rebound away: the stock Close holds ⌘W")
             assertNoChord(menu.ours, "rebound away: our item must not still advertise ⌘W")
 
-            AppDelegate.applyCloseSessionChord(keymap(), in: menu.menu)
+            AppDelegate.applyStockMenuChords(keymap(), in: menu.menu)
             assertOwnsCommandW(menu.ours, "rebound back: Close Session holds ⌘W")
             assertNoChord(menu.stock, "rebound back: the stock Close must release ⌘W")
         }
     }
 
-    // the Edit/View menus go through the same walk, so a menu missing either half must be left alone.
     func testMenuWithoutBothItemsIsLeftAlone() {
         let lone = NSMenuItem(title: "Something Else", action: nil, keyEquivalent: "w")
         lone.keyEquivalentModifierMask = .command
-        let submenu = NSMenu(title: "View")
-        submenu.addItem(lone)
-        let top = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
-        top.submenu = submenu
-        let main = NSMenu()
-        main.addItem(top)
-
-        AppDelegate.applyCloseSessionChord(keymap(), in: main)
+        AppDelegate.applyStockMenuChords(keymap(), in: menu([lone], title: "View"))
 
         assertOwnsCommandW(lone, "an unrelated menu must not be rewritten")
+    }
+
+    func testClaimedStockChordIsClearedAndKeepsItsMask() {
+        let closeAll = item("Close All", "closeAll:", key: "w", mask: [.command, .option])
+        closeAll.isAlternate = true
+        let main = menu([closeAll], title: "File")
+        AppDelegate.applyStockMenuChords(keymap([.focusWorkspace: Chord(mods: [.command, .option], key: "w")]), in: main)
+
+        assertNoChord(closeAll, "focus_workspace owns ⌥⌘W, so Close All must not dispatch it")
+        XCTAssertEqual(closeAll.keyEquivalentModifierMask, [.command, .option], "the mask identifies the item on restore")
+    }
+
+    func testReleasedStockChordIsRestored() {
+        let closeAll = item("Close All", "closeAll:", key: "", mask: [.command, .option])
+        AppDelegate.applyStockMenuChords(keymap(), in: menu([closeAll], title: "File"))
+
+        XCTAssertEqual(closeAll.keyEquivalent, "w", "no built-in holds ⌥⌘W, so Close All takes it back")
+    }
+
+    // regression: a rebuild between claim and release left our item on the freed ⌘V, and paste stopped working.
+    func testStaleOwnCarrierIsClearedAndTheStockChordRestored() {
+        let paste = item("Paste", "paste:", key: "", mask: .command)
+        let split = ownItem("Toggle Vertical Split", key: "v", mask: .command)
+        AppDelegate.applyStockMenuChords(keymap(), in: menu([paste, split]))
+
+        assertNoChord(split, "our stale ⌘V must be released")
+        XCTAssertEqual(paste.keyEquivalent, "v", "Paste takes ⌘V back")
+    }
+
+    func testStaleOwnCarrierIsClearedWhileTheStockItemIsAbsent() {
+        let minimize = ownItem("Toggle Split", key: "m", mask: [.command, .option])
+        AppDelegate.applyStockMenuChords(keymap(), in: menu([minimize], title: "Window"))
+
+        assertNoChord(minimize, "Minimize All is inserted lazily, so our stale ⌥⌘M must go even without it")
+    }
+
+    func testUnmanagedItemKeepsAFreedStockChord() {
+        let paste = item("Paste", "paste:", key: "", mask: .command)
+        let service = item("Some Service", "someService:", key: "v", mask: .command)
+        AppDelegate.applyStockMenuChords(keymap(), in: menu([paste, service]))
+
+        XCTAssertEqual(service.keyEquivalent, "v", "only agterm's own items are ever cleared")
+    }
+
+    func testClaimingTheQuitAlternateLeavesThePrimaryQuit() {
+        let quit = item("Quit Agterm", "terminate:", key: "q", mask: .command)
+        let quitAll = item("Quit and Close All Windows", "terminate:", key: "q", mask: [.command, .option])
+        quitAll.isAlternate = true
+        AppDelegate.applyStockMenuChords(keymap([.focusWorkspace: Chord(mods: [.command, .option], key: "q")]),
+                                         in: menu([quit, quitAll], title: "Agterm"))
+
+        assertNoChord(quitAll, "focus_workspace owns ⌥⌘Q")
+        XCTAssertEqual(quit.keyEquivalent, "q", "the primary Quit shares the selector but not the chord")
+    }
+
+    func testClaimingControlCommandSpaceLeavesThePaletteTwins() {
+        let plain = item("Emoji & Symbols", "orderFrontCharacterPalette:", key: " ", mask: .command)
+        let control = item("Emoji & Symbols", "orderFrontCharacterPalette:", key: " ", mask: [.control, .command])
+        let globe = item("Emoji & Symbols", "orderFrontCharacterPalette:", key: "e", mask: .function)
+        let globeControl = item("Emoji & Symbols", "orderFrontCharacterPalette:", key: " ", mask: [.function, .control, .command])
+        AppDelegate.applyStockMenuChords(keymap([.focusWorkspace: Chord(mods: [.control, .command], key: "space")]),
+                                         in: menu([plain, control, globe, globeControl]))
+
+        assertNoChord(control, "focus_workspace owns ⌃⌘Space")
+        XCTAssertEqual(plain.keyEquivalent, " ", "⌘Space is a different chord on the same selector")
+        XCTAssertEqual(globe.keyEquivalent, "e", "fn+E has no keymap spelling and is never touched")
+        XCTAssertEqual(globeControl.keyEquivalent, " ", "an fn mask never matches the claimed ⌃⌘Space entry")
+    }
+
+    func testRepeatedClaimAndReleaseAcrossARebuild() {
+        let paste = item("Paste", "paste:", key: "v", mask: .command)
+        let split = ownItem("Toggle Vertical Split", key: "d", mask: .command)
+        let main = menu([paste, split])
+        let claimed = keymap([.toggleSplit: Chord(mods: [.command], key: "v")])
+        for _ in 0..<3 {
+            AppDelegate.applyStockMenuChords(claimed, in: main)
+            assertNoChord(paste, "claimed: Paste must not dispatch ⌘V")
+            split.keyEquivalent = "v"
+
+            AppDelegate.applyStockMenuChords(keymap(), in: main)
+            XCTAssertEqual(paste.keyEquivalent, "v", "released: Paste holds ⌘V")
+            assertNoChord(split, "released: our stale ⌘V is cleared")
+            split.keyEquivalent = "d"
+        }
+    }
+
+    func testNoShippedDefaultCollidesWithAStockChord() {
+        let stock = Set(AppDelegate.stockMenuChords.map(\.chord))
+        for action in BuiltinAction.allCases {
+            guard let chord = keymap().equivalent(for: action) else { continue }
+            XCTAssertFalse(stock.contains(chord), "\(action.rawValue) ships \(chord.displayString), a stock chord")
+        }
     }
 }

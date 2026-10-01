@@ -73,18 +73,23 @@ paths:
   `BuiltinAction` (48 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
-  `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts on the next activation, not immediately after
+  `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts lazily, on activation or key dispatch rather than on
   `keymap reload`, and resolves stock collisions by unbinding agterm's item.
-- `AppDelegate.applyCloseSessionChord` clears stock File > Close ⌘W while `close_session` owns it and
-  restores it otherwise. Run at launch, `.agtermKeymapChanged`, asynchronously after `didBecomeActive`,
-  and during menu tracking because every rebuild can reapply the collision. ⌘W is the only built-in with
-  a stock competitor.
+- `AppDelegate.applyStockMenuChords` asserts every contested stock chord from the AppKit side.
+  `applyCloseSessionChord` keeps the ⌘W pair with File > Close, matched by title.
+  `stockMenuChords` holds the other stock chords the grammar can spell, matched by selector plus modifier
+  mask because several stock items share a selector. A claimed chord clears only the stock key; the kept
+  mask finds the item again on release. A freed chord first leaves any `menuAction:` item still carrying it,
+  even with the stock item absent (AppKit adds some alternates lazily), then returns to the stock item.
+  Stale-chord cleanup touches only `menuAction:` items; user Services are left alone.
+  Run at launch, `.agtermKeymapChanged`, asynchronously after `didBecomeActive`, and during menu tracking,
+  because every rebuild can reapply the collision. No shipped default sits on a stock chord except ⌘W.
 - Diagnose live shortcut state with `agtermctl keymap list`, whose `actions` and `menu` expose parsed and
   dispatched chords through host-free `namedKey(forKeyEquivalent:)`; the actions column's contract is owned
   by [[control-api]], and only its first field can appear under `menu`. `overridden` compares the resolved
   menu chord against the shipped default, so an action left with alternatives only reports `overridden` with
   no `chord` when it ships a default, and stays unmarked when it is keyless. Test the reload path, not
-  only a seeded file: see `CloseSessionChordTests`,
+  only a seeded file: see `StockMenuChordTests`,
   `CustomCommandRunnerTests.testKeymapReloadRebindsTheBuiltinAlternatives`, and
   `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
 - `CustomCommandRunner` uses an app-wide local `.keyDown`/`.keyUp` monitor.

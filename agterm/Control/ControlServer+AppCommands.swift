@@ -145,7 +145,7 @@ extension ControlServer {
     /// reachable case, carrying whatever the user assigned in System Settings; top-level-only reporting would
     /// let a caller conclude nothing holds a chord when something does. `menu` stays the TOP-LEVEL title
     /// throughout, so a nested item is attributed to the menu-bar entry the reader can find it under. Internal
-    /// rather than private so `CloseSessionChordTests`' companion can drive it over a hand-built nested menu:
+    /// rather than private so `StockMenuChordTests`' companion can drive it over a hand-built nested menu:
     /// agterm's own submenus carry no key equivalents and Services entries depend on the user's system
     /// settings, so no real nested chord exists to assert against.
     @MainActor

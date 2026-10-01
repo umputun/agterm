@@ -18,7 +18,7 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
 - **A keybinding does not fire** — `agtermctl keymap list` shows the chord each action resolved to AND the
   key equivalents the menu bar is actually dispatching. If the action's `chord` looks right but no `menu`
   entry carries it (or a different item does), the keymap is fine and the menu is the problem: SwiftUI
-  rebuilds the menu only on the next app activation, so switch to another app and back, then relaunch if it
+  rebuilds the menu lazily (on activation or a key press), so switch to another app and back, then relaunch if it
   persists. Exceptions: `undo_close` (⌘Z) and `toggle_fullscreen` (⌃⌘F) are delivered by a key monitor
   rather than a menu item, so they never appear under `menu` and their absence there means nothing.
 - **Ghostty settings** - `agtermctl config reload` re-reads the ghostty config and prints the diagnostic

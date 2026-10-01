@@ -23,7 +23,7 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   menu, a detached one included, replacing the key equivalent and mask the test just set. Titles like
   "Paste and Match Style", "Zoom" and "Close" are real system commands, so a developer who rebound one
   fails on his machine alone while CI stays green. `defaults read -g NSUserKeyEquivalents` names the
-  bindings. Suppress the substitution rather than renaming fixtures: `CloseSessionChordTests` needs the
+  bindings. Suppress the substitution rather than renaming fixtures: `StockMenuChordTests` needs the
   real "Close" to test chord ownership, and the substitution matches invented titles just as readily.
 - Never stub `GhosttyApp`; its handler is the only crash record.
 - `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `Color.clear` and skips the scene task

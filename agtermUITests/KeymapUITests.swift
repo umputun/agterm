@@ -307,6 +307,49 @@ final class KeymapUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground, "the window must survive")
     }
 
+    func testSeededStockChordFiresTheBuiltin() throws {
+        seedKeymap("map cmd+opt+w new_session\n")
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+        XCTAssertTrue(poll { self.sessionRowCount() == 1 }, "should start with the one seeded session")
+
+        app.typeKey("w", modifierFlags: [.command, .option])
+        XCTAssertTrue(poll({ self.sessionRowCount() == 2 }, timeout: 10), "⌥⌘W should run new_session, not File ▸ Close All")
+        XCTAssertFalse(app.sheets.firstMatch.exists, "⌥⌘W must not raise the close-window confirmation")
+    }
+
+    func testSeededPasteChordFiresTheBuiltin() throws {
+        seedKeymap("map cmd+v new_session\n")
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+        XCTAssertTrue(poll { self.sessionRowCount() == 1 }, "should start with the one seeded session")
+
+        app.typeKey("v", modifierFlags: .command)
+        XCTAssertTrue(poll({ self.sessionRowCount() == 2 }, timeout: 10), "⌘V should run new_session, not Edit ▸ Paste")
+    }
+
+    func testMenuReloadClaimsAndReleasesAStockChord() throws {
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+        XCTAssertTrue(poll { self.sessionRowCount() == 1 }, "should start with the one seeded session")
+
+        seedKeymap("map cmd+opt+w new_session\n")
+        reloadKeymapFromMenu()
+        app.typeKey("w", modifierFlags: [.command, .option])
+        XCTAssertTrue(poll({ self.sessionRowCount() == 2 }, timeout: 10), "the claimed ⌥⌘W should run new_session")
+        XCTAssertFalse(app.sheets.firstMatch.exists, "the claimed ⌥⌘W must not raise the close-window confirmation")
+
+        seedKeymap("")
+        reloadKeymapFromMenu()
+        app.typeKey("w", modifierFlags: [.command, .option])
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the released ⌥⌘W should reach File ▸ Close All again")
+        XCTAssertTrue(sheet.buttons["Close"].exists && sheet.buttons["Cancel"].exists, "the sheet should be the close-window confirmation")
+        sheet.buttons["Cancel"].click()
+        XCTAssertTrue(poll({ !self.app.sheets.firstMatch.exists && self.sessionRowCount() == 2 }, timeout: 10),
+                      "cancelling must leave the window and both sessions in place")
+    }
+
     private func reloadKeymapFromMenu() {
         app.menuBars.menuBarItems["File"].click()
         let item = app.menuItems["Reload Keymap"]

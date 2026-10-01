@@ -1421,9 +1421,10 @@ parse diagnostics (0 = clean). App-global (no `--window`).
   same-chord sibling — so an entry marked `enabled: false` explains a dead binding by itself.
 
 **`actions` and `menu` can disagree, and that is what this command is for.** SwiftUI rebuilds the menu
-only on the next app activation, so right after `keymap reload` a chord can be correct in `actions` and
-stale in `menu`. It also resolves a chord collision by unbinding agterm's own item, so a stock item can
-end up holding a chord an action claims. If a keybinding "does not work" while `actions` looks right,
+lazily, on activation or key dispatch, so right after `keymap reload` a chord can be correct in `actions`
+and stale in `menu`. It also resolves a chord collision with a stock macOS item (Close All, Minimize, Hide,
+Quit, the Edit commands) by unbinding agterm's own item; agterm takes such a chord back from the stock
+item, so that mismatch is transient too. If a keybinding "does not work" while `actions` looks right,
 compare the two lists: find the action's `chord`, then look for that chord in `menu` and check which
 item carries it.
 

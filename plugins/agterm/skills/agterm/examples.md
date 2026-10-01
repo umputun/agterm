@@ -1216,7 +1216,7 @@ agtermctl keymap list --json \
 ```
 
 If those disagree, the keymap is fine and the menu is stale or the chord was taken: SwiftUI rebuilds the
-menu only on the next app activation, so switch away and back before concluding anything, and relaunch if
+menu lazily (on activation or a key press), so switch away and back before concluding anything, and relaunch if
 it persists.
 
 A menu entry with `"enabled": false` holds the chord but is inert — AppKit consumes the key and fires
