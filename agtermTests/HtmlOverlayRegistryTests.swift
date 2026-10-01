@@ -591,7 +591,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>store</title>")])
         let state = directory.appendingPathComponent("broken")
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        let file = state.appendingPathComponent(BrowserProfile.filename)
+        let file = state.appendingPathComponent("browser-profile")
         try Data("not a uuid".utf8).write(to: file)
         registry.profile = BrowserProfile(directory: state)
         let failure = BrowserProfile.Failure.malformed(file.path).description
@@ -679,7 +679,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     func testClearOfAnUnreadableProfileFailsAndRemovesNothing() async throws {
         let state = directory.appendingPathComponent("broken")
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        let file = state.appendingPathComponent(BrowserProfile.filename)
+        let file = state.appendingPathComponent("browser-profile")
         try Data("not a uuid".utf8).write(to: file)
         registry.profile = BrowserProfile(directory: state)
         var removed = false

@@ -410,7 +410,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
     func testAPersistentOpenIsRefusedWhenTheProfileCannotBeRead() throws {
         let (_, session) = try addSession()
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
-        let file = stateDir.appendingPathComponent(BrowserProfile.filename)
+        let file = stateDir.appendingPathComponent("browser-profile")
         try Data("not a uuid".utf8).write(to: file)
         let registry = HtmlOverlayRegistry.shared
         let before = registry.profile

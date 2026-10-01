@@ -76,7 +76,7 @@ struct Browser: ParsableCommand {
     struct Clear: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Remove every cookie and all site data the saved browser store holds.",
-            discussion: "Refused while a --persistent page is open, a just-closed one that can still be reopened included: "
+            discussion: "Refused while a --persistent page is open, one in a just-closed session that can still be restored included: "
                 + "an open page writes its login back. Removing the local data does not sign you out on the server."
         )
         // one store serves every window, so no `--window`.

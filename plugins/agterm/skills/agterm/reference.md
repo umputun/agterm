@@ -1589,8 +1589,8 @@ Both are app-global and refuse a target or `--window`.
 
 `agtermctl browser clear` - remove every cookie and all site data held by the saved store of
 `--persistent` URL overlays. The reply comes after the removal finished. Errors
-`browser.clear: N persistent page(s) still open` while such a page is open, including one just closed
-that can still be reopened, and `browser.clear: browser storage is being cleared` while another clear
+`browser.clear: N persistent page(s) still open` while such a page is open, including one in a
+just-closed session that can still be restored, and `browser.clear: browser storage is being cleared` while another clear
 runs. With nothing ever saved it answers ok. Clearing local data does not sign you out on the server.
 App-global; refuses a target or `--window`. There is no read-back beyond the reply.
 
