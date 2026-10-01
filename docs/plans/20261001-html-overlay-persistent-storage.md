@@ -131,14 +131,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/{HtmlOverlayTests,ControlDispatcherOverlayTests,AppStoreTreeProjectionTests,ControlProtocolTests}.swift`,
   `agtermCore/Tests/agtermctlKitTests/OverlayCommandsTests.swift`
 
-- [ ] write `BrowserProfile` tests: created when missing, reused, distinct per directory, unreadable and
+- [x] write `BrowserProfile` tests: created when missing, reused, distinct per directory, unreadable and
       malformed files throw and stay untouched
-- [ ] implement `BrowserProfile`
-- [ ] write protocol, dispatcher, projection and CLI tests for `persistent`: wire round trip, accepted
+- [x] implement `BrowserProfile`
+- [x] write protocol, dispatcher, projection and CLI tests for `persistent`: wire round trip, accepted
       with `--url`, refused with `--html` and with a command, reported on the node, a node without the
       key decodes as false, absent flag encodes nothing
-- [ ] carry `persistent` through `ControlArgs`, options, `HtmlOverlay`, the node and the CLI flag
-- [ ] run the touched `agtermCore` tests
+- [x] carry `persistent` through `ControlArgs`, options, `HtmlOverlay`, the node and the CLI flag
+- [x] run the touched `agtermCore` tests
 
 ### Task 2: The persistent store in the app
 

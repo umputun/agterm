@@ -427,6 +427,8 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(command: "cat", chromeless: true), OverlayHtmlError.chromelessRequiresFile),
         (ControlArgs(url: "http://localhost:5173/", chromeless: true), OverlayHtmlError.chromelessRequiresFile),
         (ControlArgs(html: "/tmp/r.html", navigation: true, chromeless: true), OverlayHtmlError.chromelessWithNavigation),
+        (ControlArgs(command: "cat", persistent: true), OverlayHtmlError.persistentRequiresURL),
+        (ControlArgs(html: "/tmp/r.html", persistent: true), OverlayHtmlError.persistentRequiresURL),
         (ControlArgs(html: "/tmp/r.html", url: "http://localhost:5173/"), OverlayHtmlError.htmlAndURL),
         (ControlArgs(command: "cat", url: "http://localhost:5173/"), OverlayHtmlError.commandAndURL),
         (ControlArgs(wait: true, url: "http://localhost:5173/"), OverlayHtmlError.waitWithURL),
@@ -460,6 +462,24 @@ struct ControlDispatcherOverlayTests {
                                                           backgroundColor: "#102030", follow: true, pane: .right,
                                                           page: .file(path: "/tmp/a/r.html", grantRoot: "/tmp"),
                                                           navigation: true, javascript: true))
+        ])
+    }
+
+    @Test(arguments: [Bool?.none, false, true])
+    func urlOpenRoutesItsStorageChoice(_ persistent: Bool?) async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(url: "http://localhost:5173/", persistent: persistent)
+        ))
+
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                          backgroundColor: nil,
+                                                          page: .url(try #require(URL(string: "http://localhost:5173/"))),
+                                                          persistent: persistent == true))
         ])
     }
 

@@ -577,7 +577,7 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().workspaces[0].sessions[0].htmlOverlays == nil)
 
         let wide = HtmlOverlay(source: .file(path: "/tmp/a/wide.html", grantRoot: "/tmp/a"), navigation: true, javascript: true)
-        let right = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))))
+        let right = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))), persistent: true)
         let left = HtmlOverlay(source: .file(path: "/tmp/a/bare.html", grantRoot: nil), chromeless: true)
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: right, sizePercent: nil) == nil)
@@ -596,7 +596,7 @@ struct AppStoreTreeProjectionTests {
             ControlHtmlOverlayNode(pane: "left", file: "/tmp/a/bare.html", state: "loading", error: nil, chromeless: true,
                                    id: left.id.uuidString),
             ControlHtmlOverlayNode(pane: "right", url: "http://localhost:5173/", state: "failed", error: "not found",
-                                   javascript: false, id: right.id.uuidString),
+                                   javascript: false, id: right.id.uuidString, persistent: true),
         ])
         let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(store.controlTree()))
         #expect(decoded.workspaces[0].sessions[0] == node)
@@ -604,6 +604,8 @@ struct AppStoreTreeProjectionTests {
         #expect(json.contains(#""javascript":false"#))
         #expect(json.contains(#""chromeless":false"#))
         #expect(json.contains(#""chromeless":true"#))
+        #expect(json.contains(#""persistent":false"#))
+        #expect(json.contains(#""persistent":true"#))
     }
 
     @Test func htmlOverlaysReportTheAppZoom() throws {

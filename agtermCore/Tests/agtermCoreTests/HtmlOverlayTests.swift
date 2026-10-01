@@ -165,6 +165,8 @@ struct HtmlOverlayTests {
         let source = HtmlSource.file(path: "/a/r.html", grantRoot: nil)
         #expect(!HtmlOverlay(source: source).javascript)
         #expect(HtmlOverlay(source: source, javascript: true).javascript)
+        #expect(!HtmlOverlay(source: source).persistent)
+        #expect(HtmlOverlay(source: source, persistent: true).persistent)
     }
 
     @Test func fileIdentityIsTheFileShownNeverTheTitle() {

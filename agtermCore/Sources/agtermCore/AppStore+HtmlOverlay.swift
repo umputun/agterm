@@ -149,7 +149,8 @@ extension AppStore {
                                               error: page.loadError, page: page.current?.page, title: page.current?.title,
                                               canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
                                               navigation: page.navigation ? true : nil, javascript: page.javascript,
-                                              chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString)
+                                              chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
+                                              persistent: page.persistent)
             }
         }
         return nodes.isEmpty ? nil : nodes

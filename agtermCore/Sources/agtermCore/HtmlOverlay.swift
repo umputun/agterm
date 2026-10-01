@@ -73,6 +73,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let javascript: Bool
     /// chromeless drops the identity strip, file pages only: the strip is what names a URL page's origin.
     public let chromeless: Bool
+    /// persistent puts a URL page on the saved browser store; every other page gets an in-memory one of its own.
+    public let persistent: Bool
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -84,12 +86,13 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadTarget = HtmlReloadTarget.original
 
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
-                id: UUID = UUID()) {
+                persistent: Bool = false, id: UUID = UUID()) {
         self.id = id
         self.source = source
         self.navigation = navigation
         self.javascript = javascript
         self.chromeless = chromeless
+        self.persistent = persistent
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
