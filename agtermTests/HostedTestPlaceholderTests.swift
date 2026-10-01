@@ -9,6 +9,7 @@ final class HostedTestPlaceholderTests: XCTestCase {
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
+        window.alphaValue = 1
 
         window.contentView = HostedTestPlaceholderView()
 

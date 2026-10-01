@@ -226,6 +226,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agtermTests
         GENERATE_INFOPLIST_FILE: YES
+        # XCTest instantiates it at bundle load; it makes every hosted window transparent.
+        INFOPLIST_KEY_NSPrincipalClass: HostedWindowHider
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/agterm.app/Contents/MacOS/agterm"
         BUNDLE_LOADER: "$(TEST_HOST)"
         CODE_SIGN_IDENTITY: "-"

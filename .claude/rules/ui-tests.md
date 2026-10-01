@@ -8,6 +8,11 @@ paths:
 
 These run inside the app, so a mistake can kill the host instead of failing an assertion.
 
+- The run draws nothing on screen. `HostedWindowHider`, the test bundle's principal class, makes every
+  window created after bundle load start at `alphaValue` 0; the launch window predates it and is covered
+  by `HostedTestPlaceholder`. Windows stay ordered in and key-eligible, so `isVisible` assertions hold.
+  A test that needs an opaque window sets `alphaValue` itself. View captures (`cacheDisplay`,
+  `ImageRenderer`, `WKWebView.takeSnapshot`) are unaffected; a screen-composite capture would be blank.
 - **Set `isReleasedWhenClosed = false` on every test-owned `NSWindow`.** The initializer defaults true;
   `close()` can over-release a window still held by `registeredWindows`/`WindowRegistry`, then crash at
   the main-queue autorelease-pool pop. xcodebuild reports `Restarting after unexpected exit, crash, or
