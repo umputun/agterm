@@ -469,8 +469,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
   page built on the store is registered, soft-closed ones included, since an open page holds its login in
-  memory and writes it back. While a removal runs, a persistent open is refused with
-  `browser storage is being cleared`. Deliberately no tree read-back, no event and no menu item: the store
+  memory and writes it back. While a removal runs, a persistent open that reaches the app is refused with
+  `browser storage is being cleared`, as is a second clear: a page's bridge request, a view building its
+  page, or a socket request when the clear came from a page. A socket request sent during a SOCKET-issued
+  clear is not refused. The accept loop serves one connection at a time, so it waits and runs once the
+  clear is done, on the emptied store. Deliberately no tree read-back, no event and no menu item: the store
   has no per-window state, and the reply is the result. Not solved here: an external login (OAuth, SSO, a
   popup) leaves the pinned origin, cookies ignore ports so `localhost` apps share them, a cookie with no
   expiry is not promised to outlive the app, and clearing does not sign anyone out on the server.

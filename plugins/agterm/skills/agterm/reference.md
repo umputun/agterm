@@ -852,7 +852,9 @@ error keeps those names for compatibility.
   uses one saved store shared by every `--persistent` page of this agterm state directory, so cookies,
   `localStorage` and IndexedDB survive the overlay and an app restart; `--html` and a program refuse the
   flag (`--persistent requires --url`). The open fails, with nothing opened, when the store's id file
-  cannot be read or while `browser clear` is running. A login that leaves the origin (OAuth, SSO, a popup)
+  cannot be read, or when it reaches the app before a clear's removal has finished
+  (`browser storage is being cleared`). A socket request queues behind a socket-issued clear and then
+  runs. A login that leaves the origin (OAuth, SSO, a popup)
   still fails, cookies are shared across ports of one host, and a cookie without an expiry is not promised
   to outlive the app. Reload loads the URL again; read back `url` and `persistent` in `htmlOverlays`.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
@@ -1590,8 +1592,9 @@ Both are app-global and refuse a target or `--window`.
 `agtermctl browser clear` - remove every cookie and all site data held by the saved store of
 `--persistent` URL overlays. The reply comes after the removal finished. Errors
 `browser.clear: N persistent page(s) still open` while such a page is open, including one in a
-just-closed session that can still be restored, and `browser.clear: browser storage is being cleared` while another clear
-runs. With nothing ever saved it answers ok. Clearing local data does not sign you out on the server.
+just-closed session that can still be restored, and `browser.clear: browser storage is being cleared` when it reaches the app
+before another clear's removal has finished. A socket request queues behind a socket-issued clear, since the
+socket serves one request at a time. With nothing ever saved it answers ok. Clearing local data does not sign you out on the server.
 App-global; refuses a target or `--window`. There is no read-back beyond the reply.
 
 ## config
