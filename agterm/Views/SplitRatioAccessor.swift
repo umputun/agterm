@@ -106,7 +106,9 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private var dividerPressed = false
 
         /// A divider drag is live right now: that press, with the button still down.
-        private var dividerDragging: Bool { dividerPressed && NSEvent.pressedMouseButtons & 1 != 0 }
+        private var dividerDragging: Bool { dividerPressed && primaryButtonDown() }
+        /// The physical primary button, system-wide; replaceable because a real click elsewhere answers it too.
+        var primaryButtonDown: () -> Bool = { NSEvent.pressedMouseButtons & 1 != 0 }
 
         init(session: Session) {
             self.session = session

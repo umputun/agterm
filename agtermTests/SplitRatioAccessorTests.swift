@@ -24,6 +24,7 @@ final class SplitRatioAccessorTests: XCTestCase {
             window.contentView?.addSubview(split)
             session = Session(initialCwd: NSTemporaryDirectory())
             probe = SplitRatioAccessor.SplitProbeView(session: session)
+            probe.primaryButtonDown = { false }
             split.arrangedSubviews[0].addSubview(probe)
         }
     }
@@ -136,6 +137,17 @@ final class SplitRatioAccessorTests: XCTestCase {
         NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
 
         XCTAssertEqual(session.splitRatio ?? -1, 0.5, accuracy: 0.001)
+    }
+
+    func testADragWithTheButtonHeldCapturesTheNewRatio() throws {
+        session.splitRatio = 0.5
+        probe.layout()
+        _ = try press(atX: try dividerX(), count: 1)
+        probe.primaryButtonDown = { true }
+        offsetDivider(to: 320)
+        NotificationCenter.default.post(name: NSSplitView.didResizeSubviewsNotification, object: split)
+
+        XCTAssertEqual(session.splitRatio ?? -1, 0.8, accuracy: 0.001)
     }
 
     func testAnUnchangedSafeAreaInsetLeavesTheDividerAlone() {
