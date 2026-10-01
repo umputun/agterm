@@ -59,3 +59,16 @@ failed before readiness` at 01:43:48, inside the failing test's window, which ma
 above (`started` failure, bare attach from the app's child). The correlation is by time only; the pid in
 that line is not the host pid the test recorded, and the retained `shc-FF830277-...` files from that minute
 are empty.
+
+Third sighting, 2026-10-01, in `agtermTests/ControlServerZmxTests.swift`
+`testRealClientPaneChangesFromSupervisorToOrphanedWhileBarePaneReadsApp`: the supervised pane read `app`
+instead of `supervisor`. It failed once in a full hosted run (1086 tests) and passed in the full run
+before it. The session-host log holds `client agterm-aaaa... host stage=started message=attach client
+exited or failed before readiness` at 11:48:27, inside the failing test, the second route again. The
+retained `shc-7B86B412-...` `host.log` is empty. Afterwards the test passed 83 times alone, its class 60
+times, and 7 further full hosted runs showed no early stop.
+
+Since that sighting the host records why the attach client stopped. On recurrence, read the retained
+`host.log` for `attach client PID for NAME stopped before readiness:`, which carries the wait status, a
+pre-exec errno, a poll error, and the tail of the client's terminal output. The fixture also keeps zmx's
+own logs in `zmx-logs` beside it.
