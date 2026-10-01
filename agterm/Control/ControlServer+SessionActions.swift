@@ -72,6 +72,11 @@ extension ControlServer: ControlActions {
                                                sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))
         }
+        // a page exists only once a view asks for it; built here, an accepted persistent page already
+        // counts as open to browser.clear, which would otherwise leave it failed for good
+        if options.persistent {
+            _ = HtmlOverlayRegistry.shared.page(for: overlay, store: store, backgroundColor: options.backgroundColor)
+        }
         if options.follow { store.selectSession(id) }
         return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, pageID: overlay.id.uuidString))
     }

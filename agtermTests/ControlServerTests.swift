@@ -214,16 +214,19 @@ final class ControlServerTests: XCTestCase {
         let server = makeServer()
         server.start()
         let path = socketPath!
+        let early = expectation(description: "reply written while the removal is held")
+        early.isInverted = true
         let replied = expectation(description: "reply written")
         let reply = OSAllocatedUnfairLock<String?>(initialState: nil)
         Thread {
             let line = Self.roundTrip(#"{"cmd":"browser.clear"}"#, at: path)
             reply.withLock { $0 = line }
+            early.fulfill()
             replied.fulfill()
         }.start()
 
         await fulfillment(of: [started], timeout: 5)
-        XCTAssertNil(reply.withLock { $0 }, "the reply must wait for the removal")
+        await fulfillment(of: [early], timeout: 1)
         finish?.resume()
         await fulfillment(of: [replied], timeout: 5)
 
@@ -233,8 +236,46 @@ final class ControlServerTests: XCTestCase {
         registry.profile = before
     }
 
-    private func makeServer(remoteRunner: RemoteCommandRunner? = nil) -> ControlServer {
+    func testAPersistentOpenOverTheSocketIsReadBackAndBlocksAClear() async throws {
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        let profile = BrowserProfile(directory: stateDir)
+        registry.profile = profile
         let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: "/tmp"))
+        let server = makeServer(library: library)
+        server.start()
+
+        let open = #"{"cmd":"session.overlay.open","target":"\#(session.id.uuidString)","args":{"url":"http://127.0.0.1:1/","persistent":true}}"#
+        let opened = await send(open)
+        XCTAssertTrue(opened?.contains(#""ok":true"#) ?? false, opened ?? "no reply")
+        let read = await send(#"{"cmd":"tree"}"#) ?? ""
+        let tree = try XCTUnwrap(JSONDecoder().decode(ControlResponse.self, from: Data(read.utf8)).result?.tree)
+        let pages = tree.workspaces.flatMap(\.sessions).compactMap(\.htmlOverlays).flatMap { $0 }
+        XCTAssertEqual(pages.map(\.persistent), [true])
+        XCTAssertEqual(pages.map(\.url), ["http://127.0.0.1:1/"])
+
+        let refused = await send(#"{"cmd":"browser.clear"}"#)
+        XCTAssertTrue(refused?.contains(BrowserClearError.pagesOpen(1)) ?? false, refused ?? "no reply")
+
+        store.closeOverlay(session.id)
+        let cleared = await send(#"{"cmd":"browser.clear"}"#)
+        XCTAssertEqual(cleared?.trimmingCharacters(in: .newlines), #"{"ok":true}"#)
+        try await TestBrowserStore.remove(profile)
+        registry.profile = before
+    }
+
+    // the main actor serves the request, so the blocking client runs off it
+    private func send(_ line: String) async -> String? {
+        let path = socketPath!
+        return await withCheckedContinuation { continuation in
+            Thread { continuation.resume(returning: Self.roundTrip(line, at: path, limit: 1 << 20)) }.start()
+        }
+    }
+
+    private func makeServer(library: WindowLibrary? = nil, remoteRunner: RemoteCommandRunner? = nil) -> ControlServer {
+        let library = library ?? WindowLibrary(directory: stateDir)
         let server = ControlServer(
             library: library,
             actions: AppActions(library: library),
@@ -316,15 +357,22 @@ final class ControlServerTests: XCTestCase {
     /// failure is answered from `acceptQueue` before `handleConnection` hops to the main actor at all.
     private func roundTrip(_ line: String) -> String? { Self.roundTrip(line, at: socketPath) }
 
-    nonisolated private static func roundTrip(_ line: String, at path: String) -> String? {
+    nonisolated private static func roundTrip(_ line: String, at path: String, limit: Int = 4096) -> String? {
         let fd = connectFD(to: path)
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         let payload = Array((line + "\n").utf8)
         let written = payload.withUnsafeBufferPointer { Darwin.write(fd, $0.baseAddress, $0.count) }
         guard written == payload.count else { return nil }
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        let count = buffer.withUnsafeMutableBufferPointer { Darwin.read(fd, $0.baseAddress, $0.count) }
+        var buffer = [UInt8](repeating: 0, count: limit)
+        var count = 0
+        // a reply is one line; a large one arrives in several reads
+        while count < limit {
+            let got = buffer.withUnsafeMutableBufferPointer { Darwin.read(fd, $0.baseAddress! + count, limit - count) }
+            guard got > 0 else { break }
+            count += got
+            if buffer[count - 1] == UInt8(ascii: "\n") { break }
+        }
         guard count > 0 else { return nil }
         return String(decoding: buffer[0..<count], as: UTF8.self)
     }

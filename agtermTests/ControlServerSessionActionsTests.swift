@@ -442,6 +442,30 @@ final class ControlServerSessionActionsTests: XCTestCase {
         registry.profile = before
     }
 
+    // an accepted page no view had shown yet did not block a clear, which then failed that page for good
+    func testAnAcceptedPersistentPageBlocksAClearBeforeAnyViewShowsIt() async throws {
+        let (store, session) = try addSession()
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        let profile = BrowserProfile(directory: stateDir)
+        registry.profile = profile
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil, options: try persistentOptions())
+        XCTAssertTrue(response.ok, response.error ?? "")
+        let overlay = try XCTUnwrap(session.htmlOverlay)
+
+        let refused = await server.clearBrowser()
+
+        XCTAssertEqual(refused, ControlResponse(ok: false, error: "browser.clear: \(BrowserClearError.pagesOpen(1))"))
+        XCTAssertEqual(registry.existing(overlay.id)?.usesSavedStore, true)
+        XCTAssertTrue(registry.page(for: overlay, store: store).usesSavedStore)
+        store.closeOverlay(session.id)
+        let cleared = await server.clearBrowser()
+        XCTAssertEqual(cleared, ControlResponse(ok: true))
+        try await TestBrowserStore.remove(profile)
+        registry.profile = before
+    }
+
     func testFollowSelectsTheTargetWhenNothingIsSelected() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
