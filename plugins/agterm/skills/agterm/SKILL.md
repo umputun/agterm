@@ -2,9 +2,9 @@
 name: agterm
 description: >
   Drive agterm, a native macOS terminal, through its agtermctl CLI. Use when
-  running inside an agterm session and asked to control the terminal: create, rename, close, select or
+  running inside an agterm session and asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run a program in an overlay
-  and read its exit status; create and show HTML pages, interactive ones too, URLs or dev servers in an overlay;
+  and read its exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD or a desktop notification; show a picker or question dialog; display an image inline; type
   into a session, copy its selection or search its scrollback; manage windows; change font size; set the
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; subscribe to status,
