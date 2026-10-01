@@ -247,7 +247,6 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNotEqual(view.registeredDraggedTypes, parked)
     }
 
-    // regression: an off-screen page took every file drop aimed at the pane stacked beneath it (#677)
     func testAnOffScreenPageLeavesTheDropToTheViewBeneathIt() throws {
         let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         let window = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
