@@ -188,13 +188,13 @@
       limits included
 
 ### Task 5: Verify acceptance criteria
-- [ ] every Overview item is implemented and the default path is unchanged
+- [x] every Overview item is implemented and the default path is unchanged
       (`testBrowserStorageLastsThroughAReloadButNotIntoTheNextOverlay` still passes untouched)
-- [ ] relaunch persistence in an isolated Debug instance against a local fixture server: set a cookie with
+- [x] relaunch persistence in an isolated Debug instance against a local fixture server: set a cookie with
       `Max-Age`, `localStorage` and IndexedDB, stop the instance, launch it again, read them back; then
       `browser clear` and read again; remove the instance's WebKit profile afterwards
-- [ ] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Not in this change:**
