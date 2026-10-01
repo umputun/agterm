@@ -166,7 +166,8 @@ renumbering. Do not reintroduce a count anywhere.
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
-- `keymap.reload`, `keymap.list`, `hooks.reload`, `hooks.list`, `config.reload`, `theme.set`, `theme.list`, `restore.capture`,
+- `keymap.reload`, `keymap.list`, `hooks.reload`, `hooks.list`, `browser.clear`, `config.reload`, `theme.set`, `theme.list`,
+  `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
 - `zmx.list`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
 
@@ -449,10 +450,30 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   frame reports `navigation blocked: URL` and the `WebKitErrorDomain` 102 that follows is ignored. An
   unreported 102, WebKit dropping a response it cannot show, restores `loaded` over a document the web
   content process still shows, and fails a load that never committed. A failed page shows its error in the panel.
-- Every page gets its own `WKWebsiteDataStore.nonPersistent()`, set before the web view exists, so browser
+- A page gets its own `WKWebsiteDataStore.nonPersistent()`, set before the web view exists, so browser
   storage lives exactly as long as the overlay and is shared with no other. `NSAllowsLocalNetworking` in
   Info.plist lets plain http reach local addresses (not only loopback, and for file pages too); public
   http stays subject to ATS.
+- A URL page opened with `--persistent` (`HtmlOverlay.persistent`, read back as `persistent`) uses ONE saved
+  store shared by every such page, `WKWebsiteDataStore(forIdentifier:)`. File pages and a program refuse the
+  flag. `BrowserProfile` keeps the store's UUID in `<stateDir>/browser-profile`, created on first use:
+  WebKit files the data under `~/Library/WebKit/<bundle id>/WebsiteDataStore/<UUID>`, outside the state
+  directory, so the id file is what keeps two state directories apart, and a fixed id would hand every
+  instance one jar. Only a MISSING file creates an id. An unreadable or malformed one is an error and is left
+  alone, because a new id would orphan the store holding every login; the open is then refused and never
+  falls back to an in-memory store.
+- `HtmlOverlayRegistry` owns the saved store. The open adapter asks `persistentStoreFailure()` before it
+  accepts a persistent page and builds the page before replying, so the page counts as open from the moment
+  the open answers ok; every other page is still built when a view first asks for it.
+- `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
+  `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
+  after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
+  page built on the store is registered, soft-closed ones included, since an open page holds its login in
+  memory and writes it back. While a removal runs, a persistent open is refused with
+  `browser storage is being cleared`. Deliberately no tree read-back, no event and no menu item: the store
+  has no per-window state, and the reply is the result. Not solved here: an external login (OAuth, SSO, a
+  popup) leaves the pinned origin, cookies ignore ports so `localhost` apps share them, a cookie with no
+  expiry is not promised to outlive the app, and clearing does not sign anyone out on the server.
 - `--cwd DIR` is WebKit's read grant. Without it the page is loaded from its TEXT with no base URL:
   WebKit reads a single-file `allowingReadAccessTo` as the file's whole folder, measured in
   `HtmlOverlayRegistryTests`, so the file-alone default needs no file URL at all, and a `--cwd` naming the
@@ -511,7 +532,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach` and
   `dashboard` keep their ids and still land in the page's window, and `hooks.*`, which refuse any window,
-  get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
+  and `browser.clear` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
   `zmx.present`, `session.overlay.job.run` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
   separate install would lose the adapter at the next theme change. Release unregisters the handlers;

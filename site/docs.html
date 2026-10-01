@@ -1073,7 +1073,9 @@
                   back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL;
                   ⌘W closes it like any overlay. A file page opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--chromeless</span>
                   has no strip, so a dashboard fills its session or split pane like a native view. ⌘+, ⌘− and ⌘0 zoom the page, and every later page opens at that zoom. A page runs no JavaScript of its
-                  own unless opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span>. A link the page opens in your browser
+                  own unless opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span>. A web page keeps cookies and logins only while it is open, unless opened with
+                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--persistent</span>, which saves them in one store shared by all such pages until
+                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl browser clear</span> empties it; a login that goes through another site still fails. A link the page opens in your browser
                   asks you first. Pages can match the terminal
                   through the theme's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-*</span> CSS variables, and
                   drive agterm themselves through the <a href="#page-bridge" style="color: #6d82f3">page bridge</a>. See the

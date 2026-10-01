@@ -179,12 +179,12 @@
 - [x] run the touched tests
 
 ### Task 4: Update documentation
-- [ ] `.claude/rules/control-api.md`: replace the storage line with the two-mode contract, the profile id
+- [x] `.claude/rules/control-api.md`: replace the storage line with the two-mode contract, the profile id
       file and its error rule, the on-disk location, the clear rule, and the no-read-back, no-event,
       no-menu exemptions of `browser.clear`
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` (a trigger in `description` and the URL section) and
+- [x] `plugins/agterm/skills/agterm/SKILL.md` (a trigger in `description` and the URL section) and
       `reference.md`
-- [ ] `site/commands.html` (`--persistent`, `persistent` read-back, `browser clear`) and `site/docs.html`,
+- [x] `site/commands.html` (`--persistent`, `persistent` read-back, `browser clear`) and `site/docs.html`,
       limits included
 
 ### Task 5: Verify acceptance criteria
