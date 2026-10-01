@@ -17,8 +17,11 @@ public struct BrowserProfile: Sendable {
     }
 
     static let filename = "browser-profile"
-    // WebKit raises an exception for the all-zero id instead of returning an error
-    private static let reserved = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    // the values 0 and 1 are WebKit's own: it raises an exception for either instead of returning an error
+    private static let reserved: Set<UUID> = [
+        UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+        UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+    ]
 
     private let file: URL
 
@@ -39,7 +42,7 @@ public struct BrowserProfile: Sendable {
             throw Failure.unreadable(file.path)
         }
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let id = UUID(uuidString: text), id != Self.reserved else { throw Failure.malformed(file.path) }
+        guard let id = UUID(uuidString: text), !Self.reserved.contains(id) else { throw Failure.malformed(file.path) }
         return id
     }
 

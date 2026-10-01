@@ -43,7 +43,8 @@ struct BrowserProfileTests {
         #expect(try BrowserProfile(directory: dir).existingIdentifier() == id)
     }
 
-    @Test(arguments: ["", "not-a-uuid", "123", "00000000-0000-0000-0000-000000000000"])
+    @Test(arguments: ["", "not-a-uuid", "123", "00000000-0000-0000-0000-000000000000",
+                      "00000000-0000-0000-0000-000000000001"])
     func aMalformedFileIsAnErrorAndStaysAsItWas(_ content: String) throws {
         let dir = try Self.directory()
         defer { try? FileManager.default.removeItem(at: dir) }
