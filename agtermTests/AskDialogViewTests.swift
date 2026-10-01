@@ -25,6 +25,7 @@ final class AskDialogViewTests: XCTestCase {
         XCTAssertTrue(fixture.window.makeFirstResponder(field))
         let editor = try XCTUnwrap(fixture.window.firstResponder as? NSText)
         try fixture.open()
+        host.layoutSubtreeIfNeeded()
         let deadline = Date(timeIntervalSinceNow: 1)
         while fixture.catcher == nil, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
         let catcher = try XCTUnwrap(fixture.catcher)
