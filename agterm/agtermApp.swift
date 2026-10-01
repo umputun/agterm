@@ -70,6 +70,7 @@ struct agtermApp: App {
         let stateDirectory = ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? PersistenceStore.defaultDirectory
         liveResetMarkerStore = LiveResetMarkerStore(directory: stateDirectory)
+        HtmlOverlayRegistry.shared.profile = BrowserProfile(directory: stateDirectory)
         // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
         // window and saves it, which a later read would see as evidence of an earlier launch.
         let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)

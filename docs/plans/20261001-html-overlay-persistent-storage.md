@@ -147,15 +147,15 @@
   `agterm/agtermApp.swift`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 
-- [ ] give the registry its `BrowserProfile` and a lazily built store, with a way to release the cached
+- [x] give the registry its `BrowserProfile` and a lazily built store, with a way to release the cached
       store; a persistent URL page uses it, every other page keeps `.nonPersistent()`
-- [ ] resolve the store in the open adapter before the overlay is accepted; a profile error refuses the
+- [x] resolve the store in the open adapter before the overlay is accepted; a profile error refuses the
       open and opens nothing
-- [ ] hosted tests: cookie, `localStorage` and IndexedDB survive close and reopen; non-persistent page
+- [x] hosted tests: cookie, `localStorage` and IndexedDB survive close and reopen; non-persistent page
       isolated; two live pages share; two profile ids do not share; unreadable profile refuses the open;
       each test removes its WebKit profile
-- [ ] measure where the installed framework writes the profile, for `control-api.md`
-- [ ] run the touched hosted tests
+- [x] measure where the installed framework writes the profile, for `control-api.md`
+- [x] run the touched hosted tests
 
 ### Task 3: `browser.clear`
 

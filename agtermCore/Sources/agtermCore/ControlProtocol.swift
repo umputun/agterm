@@ -687,6 +687,7 @@ public enum OverlayHtmlError {
     public static let chromelessRequiresFile = "session.overlay.open: --chromeless requires --html"
     public static let chromelessWithNavigation = "session.overlay.open: --chromeless cannot be combined with --navigation"
     public static let persistentRequiresURL = "session.overlay.open: --persistent requires --url"
+    public static let persistentUnavailable = "persistent browser storage is not available"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"
