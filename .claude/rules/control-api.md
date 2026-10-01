@@ -1238,8 +1238,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   remote program left the cursor, while a takeover or an unowned reattach runs with no probe first, so a
   refused key or a changed host key must still print its reason.
   The pane wrapper also adds `ServerAliveInterval=5`/`ServerAliveCountMax=2` before the host when `ssh -G`
-  reports `serveraliveinterval 0`, so a dead link ends in about 10 s unless the user's config sets a nonzero one.
-  An explicit `ServerAliveInterval 0` reads the same as unset and gets the default.
+  reports `serveraliveinterval 0`, so a dead link ends within about 15 s, on the third missed check, unless
+  the user's config sets a nonzero one. The check runs with the attach's own arguments, so a `Match command`
+  or `Match sessiontype` block answers it the way it answers the attach, and a `Match exec` command runs
+  twice per attach. An explicit `ServerAliveInterval 0` reads the same as unset and gets the default; a
+  large value is the opt-out. When the pane's ssh joins an existing `ControlMaster` connection the options
+  do nothing; that master's own settings decide.
 - Neither the host nor the session target is echoed into an error unless it PASSED validation. `invalid
   host` is a constant, and `zmx.attach` refuses a session carrying EMBEDDED whitespace or a control
   character through the same `RemoteSession.isPlain` the argv builders use — outer whitespace is trimmed

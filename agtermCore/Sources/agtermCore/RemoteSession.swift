@@ -114,8 +114,8 @@ public enum RemoteSession {
                                          connectTimeout: Int = 5) throws -> String {
         let argv = try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
                                      connectTimeout: connectTimeout)
-        // a nonzero keepalive in the user's config wins; ssh -G cannot tell an explicit 0 from unset
-        let keepAlive = "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G", host])
+        // $ka is unquoted on purpose: four words or none. When and why the check: control-api.md, Remote sessions
+        let keepAlive = "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G"] + argv.dropFirst())
             + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
             + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
         let attach = CommandRestore.shellQuotedLine(Array(argv.dropLast(2))) + " $ka "

@@ -1769,6 +1769,9 @@ is created, so a session that has gone since the listing fails and creates nothi
 here is a failure found before that point — a connection that starts and later drops is an ordinary pane
 exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself; any other exit prints
 one line naming the host, the session, the pane and the exit status and holds on Ghostty's press-any-key prompt.
+agterm adds ssh keepalive (`ServerAliveInterval 5`, `ServerAliveCountMax 2`) to the pane's ssh unless the
+user's config sets a nonzero interval, so a dead link is noticed within about fifteen seconds. When the
+pane's ssh joins an existing `ControlMaster` connection, that master's settings decide instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
