@@ -152,6 +152,24 @@ struct CodexStatusHookTests {
         #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
     }
 
+    // a quoted footer hint, “? for shortcuts”, reported blocked: the opening quote passed as the word the ? ends
+    @Test(arguments: [
+        #"The literal “? for shortcuts” matches none."#, #"The literal ‘? for shortcuts’ matches none."#,
+        #"The literal \"? for shortcuts\" matches none."#, "The literal '? for shortcuts' matches none.",
+        "The key (? for shortcuts) is shown.", "The key [? for shortcuts] is shown.", "“? for shortcuts” is the footer.",
+        "The key *? for shortcuts* is shown.", "The key _? for shortcuts_ is shown.",
+    ])
+    func stopReportsCompletedWhenQuestionMarkOpensQuotedText(message: String) throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":""# + message + #""}"#
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
+    }
+
+    @Test(arguments: [#"Did he say \"yes\"? I need to know."#, "The footer shows “? for shortcuts”. Should I keep it?"])
+    func stopReportsBlockedWhenRealQuestionSitsNearQuotedText(message: String) throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":""# + message + #""}"#
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
     @Test func stopReportsCompletedWhenQuestionMarkEndsFencedCodeLine() throws {
         let input = """
         {"hook_event_name":"Stop","last_assistant_message":"The prompt is\\n```text\\nProceed?\\n```\\nand it renders."}

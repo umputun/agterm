@@ -3450,7 +3450,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               On Stop, a final assistant message that ends a sentence with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span> reports blocked.
               The check is a heuristic: it ignores single-backtick spans and triple-backtick blocks, and a mark
-              that stands alone or sits inside a word, as in a URL query string, does not count.
+              that stands alone, opens quoted text, or sits inside a word, as in a URL query string, does not count.
               Every other final message reports completed and auto-resets.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
