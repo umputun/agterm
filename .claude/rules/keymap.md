@@ -101,7 +101,10 @@ paths:
   so a window timed from the fire would close first. Autorepeat of that live tail fires too, every other
   consumed autorepeat stays swallowed. A new leader pressed while the tail is held keeps its 1.5 s timeout;
   app deactivation, a text-field or auxiliary-window key, and Esc close the window (Esc still reaching the
-  terminal). Any other chord closes it and is matched afresh; it is deliberately not `isArmed`, which would
+  terminal). So do menu tracking starting and a window resigning key while agterm is inactive: a local
+  monitor never sees a keyUp consumed by menu tracking, and the quick terminal is key without agterm being
+  active, so neither release would ever start the timeout. A resign inside the active app is left alone,
+  or `--repeat next_window` would stop after one step. Any other chord closes it and is matched afresh; it is deliberately not `isArmed`, which would
   swallow those keys. The chord goes to the matcher before the `toggle_fullscreen` and page `close_session`
   checks, which run only on an unmatched, unarmed chord, so a tail equal to either chord repeats instead.
   `NSMenu.willSendActionNotification` also records current F-key presses dispatched by AppKit menus,

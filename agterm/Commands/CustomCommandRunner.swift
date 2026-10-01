@@ -77,6 +77,8 @@ final class CustomCommandRunner {
     private var keymapObserver: NSObjectProtocol?
     private var menuActionObserver: NSObjectProtocol?
     private var resignActiveObserver: NSObjectProtocol?
+    private var menuTrackingObserver: NSObjectProtocol?
+    private var resignKeyObserver: NSObjectProtocol?
     private var consumedKeyCodes: Set<UInt16> = []
     /// The fired `--repeat` tail still held down. Its window does not time out until release: macOS sends the
     /// first autorepeat only after "Delay until repeat" (0.5 s by default, often longer).
@@ -127,14 +129,31 @@ final class CustomCommandRunner {
         resignActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applicationDidResignActive() }
+            MainActor.assumeIsolated { self?.closeRepeatWindow() }
+        }
+        // a local monitor never sees a keyUp consumed by menu tracking.
+        menuTrackingObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closeRepeatWindow() }
+        }
+        resignKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.windowDidResignKey(appIsActive: NSApp.isActive) }
         }
     }
 
     /// Close an open repeat window and forget the held tail; a half-typed leader keeps its own timeout.
-    func applicationDidResignActive() {
+    func closeRepeatWindow() {
         heldRepeatKeyCode = nil
         if commandEngine.isRepeating { resetMatcher() }
+    }
+
+    /// The quick terminal is key while agterm is inactive, so its focus loss posts no deactivation. A resign
+    /// inside the active app must not close the window, or `--repeat next_window` stops after one step.
+    func windowDidResignKey(appIsActive: Bool) {
+        if !appIsActive { closeRepeatWindow() }
     }
 
     /// Remove the key monitor, observers, and pending leader timer.
@@ -147,6 +166,10 @@ final class CustomCommandRunner {
         menuActionObserver = nil
         if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
         resignActiveObserver = nil
+        if let menuTrackingObserver { NotificationCenter.default.removeObserver(menuTrackingObserver) }
+        menuTrackingObserver = nil
+        if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
+        resignKeyObserver = nil
         resetMatcher()
         consumedKeyCodes.removeAll()
     }

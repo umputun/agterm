@@ -381,8 +381,63 @@ final class CustomCommandRunnerTests: XCTestCase {
 
         XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
         XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
-        fix.runner.applicationDidResignActive()
+        fix.runner.closeRepeatWindow()
         XCTAssertFalse(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+    }
+
+    // a tail released while a menu tracks never reaches the monitor, which left the window open with no timer.
+    func testMenuTrackingClosesTheWindowOfAHeldTail() throws {
+        let fix = try fixture(keymap: "map ctrl+a>s --repeat toggle_sidebar\n")
+
+        XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: NSMenu())
+        XCTAssertFalse(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+    }
+
+    // the quick terminal is key while agterm is inactive, so its focus loss posts no deactivation.
+    func testAWindowLosingKeyWhileTheAppIsInactiveClosesTheWindowOfAHeldTail() throws {
+        let fix = try fixture(keymap: "map ctrl+a>s --repeat toggle_sidebar\n")
+
+        XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        fix.runner.windowDidResignKey(appIsActive: false)
+        XCTAssertFalse(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+    }
+
+    func testAWindowLosingKeyInsideTheActiveAppKeepsTheRepeatWindow() throws {
+        let fix = try fixture(keymap: "map ctrl+a>s --repeat toggle_sidebar\n")
+
+        XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        fix.runner.windowDidResignKey(appIsActive: true)
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
+    }
+
+    func testMenuTrackingAndFocusLossLeaveAHalfTypedLeaderArmed() throws {
+        let fix = try fixture(keymap: "map ctrl+a>s --repeat toggle_sidebar\n")
+
+        XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
+        NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: NSMenu())
+        fix.runner.windowDidResignKey(appIsActive: false)
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
+    }
+
+    func testAKeyInAnAuxiliaryWindowClosesTheRepeatWindow() throws {
+        let fix = try fixture(keymap: "map ctrl+a>s --repeat toggle_sidebar\n")
+        let aux = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+                           styleMask: [.titled], backing: .buffered, defer: false)
+        aux.isReleasedWhenClosed = false
+
+        XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
+        XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window))
+        XCTAssertFalse(fix.runner.handleKeyDown(sidebarTail, in: aux))
+        XCTAssertFalse(fix.runner.handleKeyDown(sidebarTail, in: window), "the tail reaches the terminal")
         XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
     }
 
