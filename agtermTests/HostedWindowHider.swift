@@ -2,8 +2,9 @@ import AppKit
 import ObjectiveC
 
 /// The test bundle's principal class: XCTest builds one at bundle load, before any test runs.
-/// Every window created in the hosted process from then on starts fully transparent, so the suite draws
-/// nothing on screen while windows stay ordered in, key-eligible and visible to AppKit.
+/// Every window created in the hosted process from then on starts fully transparent, while it stays
+/// ordered in, key-eligible and visible to AppKit. A menu is not one of the app's windows, so a test
+/// that would pop one up records the request instead (`SidebarControlClickTests`).
 @objc(HostedWindowHider)
 final class HostedWindowHider: NSObject {
     private typealias Initializer = @convention(c) (UnsafeRawPointer, Selector, NSRect, UInt, UInt, Bool) -> UnsafeRawPointer?

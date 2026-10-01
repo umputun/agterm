@@ -4,7 +4,8 @@ import XCTest
 import agtermCore
 
 /// Hosted coverage for Control-click as the secondary click on sidebar rows (issue #668). CI does not run
-/// the UI tests that drive a real Control-click, so this sends the event straight to `mouseDown`.
+/// the UI tests that drive a real Control-click, so this sends the event straight to `mouseDown` and
+/// checks which menu was requested; `SidebarUITests` owns the menu actually opening.
 @MainActor
 final class SidebarControlClickTests: XCTestCase {
     private var stateDir: URL!
@@ -48,7 +49,9 @@ final class SidebarControlClickTests: XCTestCase {
         let row = try XCTUnwrap(rowIndex { $0.kind == .session && $0.id == second.id })
         XCTAssertFalse(outline.selectedRowIndexes.contains(row))
 
-        XCTAssertEqual(try controlClick(row: row), 1, "Control-click should open the row's context menu")
+        let menus = try controlClick(row: row)
+        XCTAssertEqual(menus.count, 1, "Control-click should open the row's context menu")
+        XCTAssertTrue(menus.first?.contains("Close Session") == true, "it should be the session row's menu: \(menus)")
         XCTAssertEqual(outline.selectedRowIndexes, IndexSet(integer: row), "Control-click should narrow like a right-click")
     }
 
@@ -60,7 +63,9 @@ final class SidebarControlClickTests: XCTestCase {
         let node = try XCTUnwrap(outline.item(atRow: row))
         XCTAssertTrue(outline.isItemExpanded(node))
 
-        XCTAssertEqual(try controlClick(row: row), 1, "Control-click should open the workspace row's context menu")
+        let menus = try controlClick(row: row)
+        XCTAssertEqual(menus.count, 1, "Control-click should open the workspace row's context menu")
+        XCTAssertTrue(menus.first?.contains("Delete Workspace") == true, "it should be the workspace row's menu: \(menus)")
         RunLoop.main.run(until: Date().addingTimeInterval(NSEvent.doubleClickInterval + 0.2))
         XCTAssertTrue(outline.isItemExpanded(node), "Control-click must not schedule the row-click expansion toggle")
     }
@@ -77,35 +82,38 @@ final class SidebarControlClickTests: XCTestCase {
         let sessionCount = ws.sessions.count
 
         let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
-        XCTAssertEqual(try controlClick(button, at: point), 1, "Control-click on + should open the workspace row's menu")
+        let menus = try controlClick(button, at: point)
+        XCTAssertEqual(menus.count, 1, "Control-click on + should open the workspace row's menu")
+        XCTAssertTrue(menus.first?.contains("Delete Workspace") == true, "it should be the workspace row's menu: \(menus)")
         XCTAssertEqual(store.workspaces.first?.sessions.count, sessionCount, "Control-click must not run the + action")
     }
 
-    private final class MenuTrackingRecorder: @unchecked Sendable {
-        var count = 0
+    private final class MenuRequestRecorder: @unchecked Sendable {
+        var menus: [NSMenu] = []
     }
 
-    /// Returns how many menus began tracking. The popped-up menu runs a modal loop, so it is dismissed from
-    /// inside that loop; the posted mouse-up lets NSTableView's own click tracking return instead.
-    private func controlClick(row: Int) throws -> Int {
+    private typealias PopUp = @convention(block) (AnyObject, NSMenu, NSEvent, NSView) -> Void
+
+    /// Returns the item titles of each context menu the click asked for. A real popup is a window-server
+    /// surface no test window owns, so it would draw on screen; the request is recorded in its place.
+    private func controlClick(row: Int) throws -> [[String]] {
         let rect = outline.rect(ofRow: row)
         return try controlClick(outline, at: outline.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil))
     }
 
-    private func controlClick(_ view: NSView, at point: NSPoint) throws -> Int {
-        let recorder = MenuTrackingRecorder()
-        let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
-                                                              object: nil, queue: .main) { note in
-            recorder.count += 1
-            (note.object as? NSMenu)?.perform(#selector(NSMenu.cancelTracking), with: nil, afterDelay: 0,
-                                              inModes: [.eventTracking, .default])
+    private func controlClick(_ view: NSView, at point: NSPoint) throws -> [[String]] {
+        let recorder = MenuRequestRecorder()
+        let selector = #selector(NSMenu.popUpContextMenu(_:with:for:))
+        let method = try XCTUnwrap(class_getClassMethod(NSMenu.self, selector))
+        let record: PopUp = { _, menu, _, _ in recorder.menus.append(menu) }
+        let replacement = imp_implementationWithBlock(record)
+        let original = method_setImplementation(method, replacement)
+        defer {
+            method_setImplementation(method, original)
+            imp_removeBlock(replacement)
         }
-        defer { NotificationCenter.default.removeObserver(observer) }
-        let down = try mouseEvent(.leftMouseDown, at: point)
-        NSApp.postEvent(try mouseEvent(.leftMouseUp, at: point), atStart: false)
-        view.mouseDown(with: down)
-        _ = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true)
-        return recorder.count
+        view.mouseDown(with: try mouseEvent(.leftMouseDown, at: point))
+        return recorder.menus.map { $0.items.map(\.title) }
     }
 
     private func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {

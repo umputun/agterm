@@ -13,6 +13,9 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   by `HostedTestPlaceholder`. Windows stay ordered in and key-eligible, so `isVisible` assertions hold.
   A test that needs an opaque window sets `alphaValue` itself. View captures (`cacheDisplay`,
   `ImageRenderer`, `WKWebView.takeSnapshot`) are unaffected; a screen-composite capture would be blank.
+  A popped-up `NSMenu` is a window-server surface outside `NSApp.windows`, so the hook cannot reach it.
+  A hosted test records the popup request instead, as `SidebarControlClickTests` does, and leaves the
+  menu actually opening to `agtermUITests`.
 - **Set `isReleasedWhenClosed = false` on every test-owned `NSWindow`.** The initializer defaults true;
   `close()` can over-release a window still held by `registeredWindows`/`WindowRegistry`, then crash at
   the main-queue autorelease-pool pop. xcodebuild reports `Restarting after unexpected exit, crash, or
