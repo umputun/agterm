@@ -200,6 +200,81 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(split.arrangedSubviews[0].frame.width, 200, accuracy: 1)
     }
 
+    /// Resize the split and leave its primary pane at zero width, as SwiftUI's `HSplitView` does after one
+    /// large shrink. `setPosition` posts the resize notification, so this is the first one at the new width.
+    private func resizeCollapsingThePrimaryPane(toWidth width: CGFloat) {
+        split.setFrameSize(NSSize(width: width, height: 200))
+        split.setPosition(0, ofDividerAt: 0)
+    }
+
+    // pins #691 with a simulated collapse: a bare NSSplitView stays proportional by itself
+    func testAnAxisLengthChangeReappliesAnEvenRatio() async { await assertResizeCyclesReapply(ratio: 0.5) }
+
+    func testAnAxisLengthChangeReappliesAnOffCenterRatio() async { await assertResizeCyclesReapply(ratio: 0.3) }
+
+    private func assertResizeCyclesReapply(ratio: Double) async {
+        // the split's first layout pass resets the divider, so it runs before the probe attaches
+        probe.removeFromSuperview()
+        session.splitRatio = ratio
+        split.layoutSubtreeIfNeeded()
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.layout()
+        XCTAssertEqual(leftWidth(), 400 * ratio, accuracy: 1)
+
+        for width: CGFloat in [200, 400, 200] {
+            resizeCollapsingThePrimaryPane(toWidth: width)
+            await runloopTurn()
+            XCTAssertEqual(leftWidth(), width * ratio, accuracy: 1, "at width \(width)")
+            XCTAssertEqual(session.splitRatio ?? -1, ratio, accuracy: 0.001)
+        }
+    }
+
+    func testAnAxisLengthChangeReappliesTheStoredRatioOnLayout() {
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        session.splitRatio = 0.3
+        split.setFrameSize(NSSize(width: 200, height: 200))
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(leftWidth(), 60, accuracy: 1)
+    }
+
+    func testASuspendedProbeLeavesAResizedSplitAloneUntilResumed() async {
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        probe.suspended = true
+        resizeCollapsingThePrimaryPane(toWidth: 200)
+        await runloopTurn()
+        XCTAssertEqual(leftWidth(), 0, accuracy: 1)
+
+        probe.suspended = false
+        probe.layout()
+        XCTAssertEqual(leftWidth(), 100, accuracy: 1)
+    }
+
+    func testADragAfterAWindowResizeIsStillCaptured() async throws {
+        session.splitRatio = 0.5
+        probe.layout()
+        split.setFrameSize(NSSize(width: 300, height: 200))
+        split.layoutSubtreeIfNeeded()
+        probe.layout()
+        await runloopTurn()
+        XCTAssertEqual(leftWidth(), 150, accuracy: 1)
+
+        _ = try press(atX: try dividerX(), count: 1)
+        probe.primaryButtonDown = { true }
+        split.setPosition(240, ofDividerAt: 0)
+        await runloopTurn()
+
+        XCTAssertEqual(session.splitRatio ?? -1, 0.8, accuracy: 0.004)
+        XCTAssertEqual(leftWidth(), 240, accuracy: 1)
+    }
+
     private func move(toX x: CGFloat) throws {
         split.setPosition(200, ofDividerAt: 0)
         split.layoutSubtreeIfNeeded()

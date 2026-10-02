@@ -93,8 +93,10 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private var dividerClipMask: CALayer?
         private var dividerTracking: NSTrackingArea?
         private var restored = false
-        /// The split's top safe-area inset when the ratio was last applied; a change re-arms `restored`.
+        /// The split's top safe-area inset and axis length when the ratio was last applied; a change in
+        /// either re-arms `restored`.
         private var restoredSafeAreaTop: CGFloat = 0
+        private var restoredAxisLength: CGFloat = 0
         /// Primary-pane extent at the previous in-band press, nil when that press missed the band.
         private var lastPressPrimaryExtent: CGFloat?
         /// A press was swallowed and its release is still to come.
@@ -137,40 +139,46 @@ struct SplitRatioAccessor: NSViewRepresentable {
             restoreDivider()
         }
 
-        /// Apply the stored ratio once the split has a real extent, and again whenever the safe-area inset
-        /// changed under it. A background split first lays out at a stale 1pt inset; when the real one arrives
-        /// the divider has to be re-applied, or the top pane keeps the stale position and overruns the
-        /// titlebar, and the next window resize falls back to SwiftUI's own even split of the content space
-        /// (#539).
+        /// Apply the stored ratio once the split has a real extent, and again whenever the safe-area inset or
+        /// the axis length changed under it. A background split first lays out at a stale 1pt inset; when the
+        /// real one arrives the divider has to be re-applied, or the top pane keeps the stale position and
+        /// overruns the titlebar, and the next window resize falls back to SwiftUI's own even split of the
+        /// content space (#539). SwiftUI also redistributes a resize by its own rule: one shrink below the
+        /// second pane's extent leaves the primary pane at zero (#691).
         private func restoreDivider() {
             guard !suspended, let split = splitView else { return }
-            let safeAreaTop = split.safeAreaInsets.top
-            if restored, safeAreaTop != restoredSafeAreaTop { restored = false }
+            if restored, geometryChanged(in: split) { restored = false }
             guard !restored else { return }
             guard axisLength(of: split) > 1 else { return } // wait for a real extent
             // a never-set ratio is seeded rather than left to the mount, which is uneven in content space
             let ratio = session.splitRatio ?? AppStore.splitRatioDefault
             // marked applied BEFORE the move: `setPosition` posts `didResizeSubviews` synchronously, and
-            // `rearmOnInsetChange` would otherwise re-arm off the very inset this pass is applying.
+            // `rearmOnGeometryChange` would otherwise re-arm off the very geometry this pass is applying.
             restored = true
-            restoredSafeAreaTop = safeAreaTop
+            restoredSafeAreaTop = split.safeAreaInsets.top
+            restoredAxisLength = axisLength(of: split)
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
             session.splitRatio = ratio
         }
 
-        /// Catch the inset change from the split's own resize notification, because macOS 27 never re-enters
-        /// `layout()` on the reveal path where a restored background split becomes the visible one (#539).
+        private func geometryChanged(in split: NSSplitView) -> Bool {
+            split.safeAreaInsets.top != restoredSafeAreaTop || axisLength(of: split) != restoredAxisLength
+        }
+
+        /// Catch the geometry change from the split's own resize notification, because macOS 27 never
+        /// re-enters `layout()` on the reveal path where a restored background split becomes the visible one
+        /// (#539).
         ///
         /// The re-apply is deferred a runloop turn rather than done here: that reveal delivers two
         /// notifications, and the second puts the divider back where the first found it, so moving it
-        /// synchronously at the first is reverted with `restoredSafeAreaTop` already up to date and nothing
+        /// synchronously at the first is reverted with the recorded geometry already up to date and nothing
         /// left to re-arm.
-        private func rearmOnInsetChange() {
+        private func rearmOnGeometryChange() {
             guard !suspended, restored, let split = splitView else { return }
-            guard split.safeAreaInsets.top != restoredSafeAreaTop else { return }
-            // an inset change mid-drag would drop the drag at `capture()`'s `restored` gate and snap the
-            // divider to the stored ratio a turn later, under the user's grip. Skipping leaves
-            // `restoredSafeAreaTop` stale, which costs nothing: it still differs, so a later pass re-arms.
+            guard geometryChanged(in: split) else { return }
+            // a change mid-drag would drop the drag at `capture()`'s `restored` gate and snap the divider to
+            // the stored ratio a turn later, under the user's grip. Skipping leaves the recorded geometry
+            // stale, which costs nothing: it still differs, so a later pass re-arms.
             guard !dividerDragging else { return }
             restored = false
             DispatchQueue.main.async { [weak self] in self?.restoreDivider() }
@@ -189,7 +197,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
                 MainActor.assumeIsolated {
                     // before `capture()`, whose `restored` gate then skips the pass whose divider this
                     // re-arm is about to re-apply, rather than reading the frame it is about to replace.
-                    self?.rearmOnInsetChange()
+                    self?.rearmOnGeometryChange()
                     self?.capture()
                 }
             }

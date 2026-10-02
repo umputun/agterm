@@ -140,6 +140,37 @@ final class SplitRatioUITests: ControlAPITestCase {
         XCTAssertEqual(restored.topRows, after.topRows, "the restored top pane should keep its dragged rows: \(restored)")
     }
 
+    // pins #691: one shrink past the split pane's width left the primary pane at zero width
+    func testHalvingAWideLeftRightSplitInOneStepKeepsBothPanes() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":1600,"height":600}}"#)["ok"] as? Bool,
+                       true, "widening the window should succeed")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let wide = app.windows.firstMatch.frame.size
+        // the window cannot go below 640 wide, so a narrower screen has no half to shrink to
+        try XCTSkipUnless(wide.width >= 1280, "needs a screen at least 1280 points wide, got \(wide.width)")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "left/right split should open")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the split should show")
+        let before = (left: try paneColumns(id: id, pane: "left", tag: "wide"),
+                      right: try paneColumns(id: id, pane: "right", tag: "wide"))
+        attachScreenshot("left/right split before halving the window")
+
+        try resizeWindow(width: Int(wide.width / 2), height: Int(wide.height))
+        let after = (left: try paneColumns(id: id, pane: "left", tag: "halved"),
+                     right: try paneColumns(id: id, pane: "right", tag: "halved"))
+        attachScreenshot("left/right split after halving the window in one step")
+
+        XCTAssertGreaterThan(after.left, 0, "the left pane should report a width: \(after)")
+        XCTAssertGreaterThan(after.right, 0, "the right pane should report a width: \(after)")
+        XCTAssertLessThanOrEqual(abs(after.left - after.right), 1, "an even split should stay even: \(after)")
+        // a pane left at zero width is never resized, so its pty keeps the wide column count
+        XCTAssertLessThan(after.left, before.left, "the left pane should shrink with the window: \(before) -> \(after)")
+        XCTAssertLessThan(after.right, before.right, "the right pane should shrink with the window: \(before) -> \(after)")
+        XCTAssertEqual(try sessionNode(id: id)["splitRatio"] as? Double ?? -1, 0.5, accuracy: 0.004,
+                       "the stored ratio should survive the resize")
+    }
+
     private func openTopBottomSplit(_ id: String) throws {
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on","axis":"horizontal"}}"#)["ok"] as? Bool,
                        true, "top/bottom split should open")
