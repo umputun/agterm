@@ -3,17 +3,17 @@ import XCTest
 
 @MainActor
 final class RemoteLinkObserverTests: XCTestCase {
-    func testOnlyAPathThatComesBackRetries() {
+    func testEveryPathChangeThatLeavesThePathUsableRetriesButNotTheFirstReport() {
         var retries = 0
         let observer = RemoteLinkObserver { retries += 1 }
 
         observer.pathChanged(satisfied: true)
-        observer.pathChanged(satisfied: true)
         XCTAssertEqual(retries, 0, "the first report is the state at start")
+        observer.pathChanged(satisfied: true)
+        XCTAssertEqual(retries, 1, "a hand-off that stayed usable still cut the old connections")
 
         observer.pathChanged(satisfied: false)
-        observer.pathChanged(satisfied: true)
-        observer.pathChanged(satisfied: false)
+        XCTAssertEqual(retries, 1)
         observer.pathChanged(satisfied: true)
         XCTAssertEqual(retries, 2)
     }

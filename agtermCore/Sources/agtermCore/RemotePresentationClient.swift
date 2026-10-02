@@ -127,10 +127,11 @@ public final class RemotePresentationClient {
         dropLink()
     }
 
-    /// A pending retry is due now and its backoff starts over; with no retry pending nothing changes.
+    /// The backoff starts over, and a pending retry is due now. A launch still connecting is not started
+    /// twice, but its failure ramps from one second too.
     public func retryNow() {
-        guard retryAt != nil else { return }
         failures = 0
+        guard retryAt != nil else { return }
         retryAt = now()
     }
 

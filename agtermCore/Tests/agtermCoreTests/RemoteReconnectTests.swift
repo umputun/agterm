@@ -133,6 +133,25 @@ struct RemoteReconnectBookTests {
         #expect(book.due(now: later.addingTimeInterval(1)) == [pane], "a retry that failed ramps from one second again")
     }
 
+    @Test func aRetryDuringAProbeStillStartsTheBackoffOverWhenThatProbeFails() {
+        let book = RemoteReconnectBook()
+        book.wait(pane: pane, session: session, host: "mini", cover: false, now: t0)
+        var now = t0
+        for step in 0..<5 {
+            now = t0.addingTimeInterval(Double(step) * 100)
+            _ = book.due(now: now)
+            _ = book.finished(pane: pane, ok: false, now: now)
+        }
+        let probing = now.addingTimeInterval(100)
+        #expect(book.due(now: probing) == [pane])
+
+        book.retryAllNow(now: probing)
+
+        #expect(book.due(now: probing).isEmpty, "the running probe is not started twice")
+        _ = book.finished(pane: pane, ok: false, now: probing)
+        #expect(book.due(now: probing.addingTimeInterval(1)) == [pane], "its failure ramps from one second again")
+    }
+
     @Test func aCancelledPanesProbeResultIsDropped() {
         let book = waiting()
         _ = book.due(now: t0)

@@ -114,11 +114,13 @@ public final class RemoteReconnectBook {
         return ControlReconnect(failures: entry.failures, reason: entry.reason)
     }
 
-    /// The pane is due now and its backoff starts over, so a retry fired before the network is back ramps
-    /// from one second again; a probe in flight is left alone.
+    /// The pane's backoff starts over, so a retry fired before the network is back ramps from one second
+    /// again, and the pane is due now unless a probe is already running: that one is not started twice, but
+    /// its failure ramps from one second too.
     public func retryNow(pane: UUID, now: Date) {
-        guard entries[pane]?.probing == false else { return }
+        guard entries[pane] != nil else { return }
         entries[pane]?.failures = 0
+        guard entries[pane]?.probing == false else { return }
         entries[pane]?.retryAt = now
     }
 

@@ -2,14 +2,14 @@ import Foundation
 import Network
 
 /// Retries remote links the moment they can work again: when the displays wake, which a Mac a user wakes
-/// posts, and when the network path turns usable after being unusable. The backoff alone can leave a Mac
-/// that slept all night waiting five minutes.
+/// posts, and when the network path changes and is usable. The backoff alone can leave a Mac that slept
+/// all night waiting five minutes.
 @MainActor
 final class RemoteLinkObserver {
     private let onRetry: @MainActor () -> Void
     private let monitor = NWPathMonitor()
     private var wakeObserver: NSObjectProtocol?
-    private var usable: Bool?
+    private var reported = false
 
     init(onRetry: @escaping @MainActor () -> Void) {
         self.onRetry = onRetry
@@ -30,10 +30,11 @@ final class RemoteLinkObserver {
         monitor.start(queue: DispatchQueue(label: "com.umputun.agterm.remote-link-path"))
     }
 
-    /// The first report is the state at start, never a change.
+    /// The first report is the state at start, never a change. Every later one is a change, and a usable
+    /// path after one is worth a retry: a hand-off that stayed usable still cut the old connections.
     func pathChanged(satisfied: Bool) {
-        defer { usable = satisfied }
-        if usable == false, satisfied { onRetry() }
+        defer { reported = true }
+        if reported, satisfied { onRetry() }
     }
 
     isolated deinit {

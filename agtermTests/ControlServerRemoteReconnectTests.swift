@@ -78,7 +78,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         }
         XCTAssertEqual(probe.runs, 1)
         server.tickReconnects()
-        XCTAssertEqual(probe.runs, 1, "the next probe waits for its backoff")
+        XCTAssertEqual(book.entries[session.paneIdentity]?.probing, false, "the next probe waits for its backoff")
 
         server.retryRemoteLinksNow()
         for _ in 0..<200 where probe.runs < 2 {

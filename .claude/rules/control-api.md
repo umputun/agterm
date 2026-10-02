@@ -1349,10 +1349,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `remotePaneResumed`. Re-running the attach in the shell was rejected: it
   would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
   chords pass. `RemoteLinkObserver` calls `ControlServer.retryRemoteLinksNow` on the display wake
-  `SystemWakeObserver` bridges, which a dark wake or a headless Mac never posts, and when an `NWPathMonitor`
-  path turns usable again, which a VPN drop under a live Wi-Fi never does; the first path report is the
-  state at start. That makes every waiting pane and dropped stream due now and starts their backoff over,
-  so a probe fired before the network is back ramps from 1 s again instead of waiting out the 300 s cap.
+  `SystemWakeObserver` bridges, which a dark wake or a headless Mac never posts, and on every
+  `NWPathMonitor` path change that leaves the path usable, a hand-off that stayed usable included; a VPN
+  drop under a live Wi-Fi changes no path, and the first path report is the state at start. That makes
+  every waiting pane and dropped stream due now and starts their backoff over, so a probe fired before the
+  network is back ramps from 1 s again instead of waiting out the 300 s cap. A key on a waiting pane goes
+  through the same `retryNow` and starts the backoff over too.
   The held exit reaches the app at once through `onExitHeld`, which forgets the pane's lead and records the
   hold for remote layout, but it carries no ssh status: `/usr/bin/login` discards it. Each pane holding and
   closing on its own is also right when one half of a split dies.
