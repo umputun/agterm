@@ -206,9 +206,13 @@ export default {
 
     function refresh(selectionChanged = false) {
       hydration?.controller.abort();
-      states = new Map();
+      if (!selectionChanged && hydration) {
+        // Older events update only the fallback; a new snapshot supersedes them.
+        for (const event of hydration.events) applyEvent(states, event);
+      }
       retryAt = 0;
       if (selectionChanged) {
+        states = new Map();
         generation++;
         last = undefined;
         publish(IDLE);
@@ -246,6 +250,8 @@ export default {
           states = snapshot;
         } catch {
           if (disposed || hydration !== pending) return;
+          for (const event of pending.events) applyEvent(states, event);
+          pending.controller.abort();
           retryAt = Date.now() + 5_000;
         } finally {
           clearTimeout(timer);

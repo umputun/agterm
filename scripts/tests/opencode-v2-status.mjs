@@ -71,9 +71,13 @@ test("selected session and descendants report to the client's pane", async () =>
     event("session.execution.started", { sessionID: "child" });
     event("session.execution.succeeded", { sessionID: "child" });
     event("session.execution.failed", { sessionID: "other", error: { type: "unknown" } });
+    event("permission.asked", { sessionID: "root", id: "p1" });
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "root", requestID: "p1" });
+    await waitFor("active --blink");
     event("session.execution.succeeded", { sessionID: "root" });
     await waitFor("completed --auto-reset");
-    assert.deepEqual(statuses(), ["idle", "active --blink", "completed --auto-reset"]);
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink", "completed --auto-reset"]);
     assert.ok(calls().every(line => line.startsWith("pane-a|right|stable-a|") && line.includes("isolated.sock|")));
   });
 });
@@ -249,6 +253,138 @@ test("reconnect preserves a queued report for the same selection", async () => {
     event("session.execution.started", { sessionID: "root" });
     await waitFor("active --blink");
     assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink"]);
+  });
+});
+
+test("failed reconnect keeps pending permissions blocked and continues tracking live events", async () => {
+  await fixture(async ({ context, event, waitFor, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    event("permission.asked", { sessionID: "root", id: "p1" });
+    await waitFor("blocked");
+    context.client.session.active = async () => { throw new Error("temporary RPC failure"); };
+    event("server.connected");
+    await nextTurn();
+    event("permission.asked", { sessionID: "root", id: "p2" });
+    event("permission.replied", { sessionID: "root", requestID: "p1" });
+    event("permission.replied", { sessionID: "root", requestID: "p2" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink"]);
+  });
+});
+
+test("failed reconnect replays buffered events and aborts remaining hydration RPCs", async () => {
+  await fixture(async ({ context, event, waitFor, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    const get = context.client.session.get;
+    let fail;
+    let waiting = false;
+    let aborted = false;
+    context.client.session.get = (args, { signal }) => {
+      if (args.sessionID === "child") return new Promise((_, reject) => { fail = reject; });
+      if (args.sessionID === "sibling") return new Promise((_, reject) => {
+        signal.addEventListener("abort", () => { aborted = true; reject(signal.reason); }, { once: true });
+        waiting = true;
+      });
+      return get(args);
+    };
+    event("server.connected");
+    for (let attempt = 0; !waiting && attempt < 100; attempt++) await delay(10);
+    assert.equal(waiting, true);
+    event("permission.asked", { sessionID: "root", id: "p1" });
+    fail(new Error("child RPC failed"));
+    await waitFor("blocked");
+    assert.equal(aborted, true);
+    event("permission.replied", { sessionID: "root", requestID: "p1" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink"]);
+  }, { sessions: [{ id: "root" }, { id: "child", parentID: "root" }, { id: "sibling", parentID: "root" }] });
+});
+
+test("overlapping reconnects preserve buffered permission requests", async () => {
+  await fixture(async ({ context, event, waitFor, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    context.client.session.active = ({ signal }) => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+    event("server.connected");
+    event("permission.asked", { sessionID: "root", id: "pending" });
+    context.client.session.active = async () => { throw new Error("reconnect RPC failed"); };
+    event("server.connected");
+    await nextTurn();
+    event("permission.asked", { sessionID: "root", id: "barrier" });
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "root", requestID: "barrier" });
+    event("session.deleted", { sessionID: "root" });
+    await waitFor("idle");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "idle"]);
+  });
+});
+
+test("overlapping reconnects preserve buffered permission replies", async () => {
+  await fixture(async ({ context, event, waitFor, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    event("permission.asked", { sessionID: "root", id: "pending" });
+    await waitFor("blocked");
+    context.client.session.active = ({ signal }) => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+    event("server.connected");
+    event("permission.replied", { sessionID: "root", requestID: "pending" });
+    context.client.session.active = async () => { throw new Error("reconnect RPC failed"); };
+    event("server.connected");
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "blocked", "active --blink"]);
+  });
+});
+
+for (const buffered of ["permission.asked", "session.execution.started"]) {
+  test(`a successful reconnect snapshot supersedes an earlier buffered ${buffered}`, async () => {
+    await fixture(async ({ context, records, event, waitFor, statuses }) => {
+      await waitFor("idle");
+      if (buffered === "permission.asked") {
+        event("session.execution.started", { sessionID: "root" });
+        await waitFor("active --blink");
+      }
+      context.client.session.active = ({ signal }) => new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+      event("server.connected");
+      event(buffered, { sessionID: "root", id: "answered-during-disconnect" });
+      records.set("root", { id: "root", outcome: "succeeded", time: { idle: 30 } });
+      context.client.session.active = async () => ({});
+      event("server.connected");
+      await waitFor("completed --auto-reset");
+      assert.deepEqual(statuses(), buffered === "permission.asked"
+        ? ["idle", "active --blink", "completed --auto-reset"] : ["idle", "completed --auto-reset"]);
+    });
+  });
+}
+
+test("a selection change discards the previous family's buffered events", async () => {
+  await fixture(async ({ context, event, select, waitFor, statuses }) => {
+    await waitFor("idle");
+    event("session.execution.started", { sessionID: "root" });
+    await waitFor("active --blink");
+    context.client.session.active = ({ signal }) => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+    event("server.connected");
+    event("permission.asked", { sessionID: "child", id: "stale" });
+    select("child");
+    context.client.session.active = async () => ({ child: {} });
+    event("server.connected");
+    await nextTurn();
+    event("permission.asked", { sessionID: "child", id: "barrier" });
+    await waitFor("blocked");
+    event("permission.replied", { sessionID: "child", requestID: "barrier" });
+    await waitFor("active --blink");
+    assert.deepEqual(statuses(), ["idle", "active --blink", "idle", "active --blink", "blocked", "active --blink"]);
   });
 });
 
