@@ -94,8 +94,13 @@ C-boundary concurrency before changing the bridge.
   the same window. The correlation is measured; the causal link to the timeout is not. Diagnose with
   `log show --predicate 'subsystem == "com.apple.TCC"' --last 6m --style compact` plus
   `ps -p <pid> -o lstart` against the binary's mtime. If the retry also fails, diagnose the attribution
-  issue before considering a restart; restarting agterm is Eugene's decision, never the agent's. Hosted
-  `agtermTests` are unaffected; only the XCUITest runner needs the automation grant.
+  issue before considering a restart; restarting agterm is Eugene's decision, never the agent's.
+  Hosted `agtermTests` can be blocked over the same period (2026-10-02): the host waits in
+  `_prepareTestConfigurationAndIDESession` with zero test cases started, and `xcodebuild` logs
+  `Connection peer refused channel request for "dtxproxy:XCTestManager_IDEInterface:..."` two minutes after
+  connecting. Both runners recovered once Eugene allowed the pending authorization, with the same stale
+  session host and the same `testmanagerd` still running, so neither needs a restart. SIP refuses
+  `launchctl kickstart -k` on `testmanagerd`. [Unverified] which authorization that was.
 - For maintainer work, ask before splitting a touched long file and do not raise limits reflexively.
   Contributors need not refactor preexisting length; mention it without blocking or suggesting a limit bump.
 
