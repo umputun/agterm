@@ -41,10 +41,11 @@ final class OpenCodeHookInstallationTests: XCTestCase {
                                          plugin: "agterm-v2/tui.js", other: "agterm-status.js")
     }
 
-    func testSkippingUnknownVersionWritesNoPlugin() async throws {
+    func testSkippingUnknownVersionWritesNoPluginAndDoesNotWarn() async throws {
         let outcome = try await install(choosing: "Skip OpenCode")
 
-        XCTAssertEqual(outcome, .unknownVersion)
+        XCTAssertEqual(outcome, .skipped)
+        XCTAssertFalse(outcome.isWarning)
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins").path))
     }
 

@@ -71,12 +71,12 @@ enum AgentHooksInstaller {
         case userOwned(AgentHooksInstall.OpenCode.Version)
         case unreadable(AgentHooksInstall.OpenCode.Version)
         case writeFailed(AgentHooksInstall.OpenCode.Version)
-        case noOpenCode, unknownVersion
+        case noOpenCode, skipped
 
         var isWarning: Bool {
             switch self {
-            case .userOwned, .unreadable, .writeFailed, .unknownVersion: return true
-            case .installed, .alreadyConfigured, .noOpenCode: return false
+            case .userOwned, .unreadable, .writeFailed: return true
+            case .installed, .alreadyConfigured, .noOpenCode, .skipped: return false
             }
         }
     }
@@ -285,7 +285,7 @@ enum AgentHooksInstaller {
         guard fm.fileExists(atPath: AgentHooksInstall.OpenCode.configurationDirectory(home: home.path)) else { return .noOpenCode }
         var detected = await OpenCodeVersionProbe.detect(environment: environment)
         if detected == nil { detected = chooseOpenCodeVersion() }
-        guard let version = detected else { return .unknownVersion }
+        guard let version = detected else { return .skipped }
 
         let source = scriptDirectory.appendingPathComponent(AgentHooksInstall.OpenCode.relativePath(version: version))
         guard fm.fileExists(atPath: source.path) else {
@@ -429,8 +429,8 @@ enum AgentHooksInstaller {
         case .noOpenCode:
             return "No \(directory) found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
                 + "Coarse shell detection for opencode is off by default."
-        case .unknownVersion:
-            return "OpenCode version could not be determined, so its status plugin was skipped. Run this again and choose the installed version."
+        case .skipped:
+            return "OpenCode status plugin installation was skipped."
         }
     }
 

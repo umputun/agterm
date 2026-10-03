@@ -79,11 +79,11 @@ final class AgentHooksInstallerTests: XCTestCase {
         XCTAssertTrue(alert.informativeText.contains("opencode --version"))
     }
 
-    func testUndetectedOpenCodeVersionDoesNotClaimInstallation() {
-        let result = AgentHooksInstaller.OpenCodeResult.unknownVersion
+    func testSkippedOpenCodeHasNeutralConfirmation() {
+        let result = AgentHooksInstaller.OpenCodeResult.skipped
         let text = AgentHooksInstaller.opencodeText(result)
-        XCTAssertTrue(result.isWarning)
-        XCTAssertTrue(text.contains("skipped"))
+        XCTAssertFalse(result.isWarning)
+        XCTAssertEqual(text, "OpenCode status plugin installation was skipped.")
         XCTAssertFalse(text.contains("\n"))
     }
 }
