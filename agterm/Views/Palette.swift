@@ -257,11 +257,11 @@ struct CommandPalette: View {
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
                     // taken from the field editor: ctrl+k is its kill-to-end-of-line.
-                    .onKeyPress(keys: ["j", "k"], phases: [.down, .repeat]) { press in
+                    .onKeyPress(keys: ["j", "k", "J", "K"], phases: [.down, .repeat]) { press in
                         guard press.modifiers.intersection([.control, .command, .option, .shift]) == .control else {
                             return .ignored
                         }
-                        move(press.key == "j" ? 1 : -1)
+                        move(press.key == "j" || press.key == "J" ? 1 : -1)
                         return .handled
                     }
                     .onKeyPress(.escape) { dismiss(); return .handled }

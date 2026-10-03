@@ -208,6 +208,9 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
 
         app.typeText("jk")
+        // caret at the start, where an unhandled ctrl+k would kill the whole query.
+        app.typeKey(.leftArrow, modifierFlags: [])
+        app.typeKey(.leftArrow, modifierFlags: [])
         app.typeKey("j", modifierFlags: [.control])
         app.typeKey("k", modifierFlags: [.control])
         XCTAssertEqual(field.value as? String, "jk", "bare j and k type, and the control chords leave the query alone")
