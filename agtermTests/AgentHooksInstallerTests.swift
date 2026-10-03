@@ -51,25 +51,29 @@ final class AgentHooksInstallerTests: XCTestCase {
 
     func testOpenCodeOutcomesNameTheVersionAndStayOnOneLine() {
         for version in AgentHooksInstall.OpenCode.Version.allCases {
+            let path = "/custom/opencode/plugins/\(version.rawValue).js"
             let results: [AgentHooksInstaller.OpenCodeResult] = [
-                .installed(version), .alreadyConfigured(version), .userOwned(version), .unreadable(version), .writeFailed(version),
+                .installed(version, path: path), .alreadyConfigured(version, path: path),
+                .userOwned(version, path: path), .unreadable(version, path: path), .writeFailed(version, path: path),
             ]
             for result in results {
                 let text = AgentHooksInstaller.opencodeText(result)
                 XCTAssertTrue(text.contains("OpenCode \(version.rawValue)"))
+                XCTAssertTrue(text.contains(path))
                 XCTAssertFalse(text.contains("\n"))
             }
-            let installed = AgentHooksInstaller.opencodeText(.installed(version))
-            XCTAssertTrue(installed.contains(AgentHooksInstall.OpenCode.path(home: "~", version: version)))
+            let installed = AgentHooksInstaller.opencodeText(.installed(version, path: path))
+            XCTAssertTrue(installed.contains(path))
             XCTAssertTrue(installed.contains("Restart OpenCode"))
         }
     }
 
     func testMissingOpenCodeDoesNotNameAVersion() {
-        let text = AgentHooksInstaller.opencodeText(.noOpenCode)
-        XCTAssertEqual(text, "No ~/.config/opencode found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
+        let result = AgentHooksInstaller.OpenCodeResult.noOpenCode(directory: "/custom/opencode")
+        let text = AgentHooksInstaller.opencodeText(result)
+        XCTAssertEqual(text, "No /custom/opencode found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
                        + "Coarse shell detection for opencode is off by default.")
-        XCTAssertFalse(AgentHooksInstaller.OpenCodeResult.noOpenCode.isWarning)
+        XCTAssertFalse(result.isWarning)
     }
 
     func testUnknownOpenCodeVersionOffersSkipAndSupportedVersions() {
@@ -85,5 +89,22 @@ final class AgentHooksInstallerTests: XCTestCase {
         XCTAssertFalse(result.isWarning)
         XCTAssertEqual(text, "OpenCode status plugin installation was skipped.")
         XCTAssertFalse(text.contains("\n"))
+    }
+
+    func testV1CleanupWarningsReportTheReasonAndTheInstalledV2Plugin() {
+        let path = "/custom/opencode/plugins/agterm-status.js"
+        let cases: [(AgentHooksInstaller.OpenCodeResult, String)] = [
+            (.v1CleanupUserOwned(path: path), "is user-owned and was left untouched"),
+            (.v1CleanupUnreadable(path: path), "could not be read and was left untouched"),
+            (.v1CleanupFailed(path: path), "could not be safely removed"),
+        ]
+        for (result, reason) in cases {
+            let text = AgentHooksInstaller.opencodeText(result)
+            XCTAssertTrue(result.isWarning)
+            XCTAssertTrue(text.contains("OpenCode v2 status plugin is installed"))
+            XCTAssertTrue(text.contains(path))
+            XCTAssertTrue(text.contains(reason))
+            XCTAssertFalse(text.contains("\n"))
+        }
     }
 }

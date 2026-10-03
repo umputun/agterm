@@ -66,16 +66,18 @@ enum AgentHooksInstaller {
 
     // OpenCode plugin-install outcome; only version-specific results carry a version.
     enum OpenCodeResult: Equatable {
-        case installed(AgentHooksInstall.OpenCode.Version)
-        case alreadyConfigured(AgentHooksInstall.OpenCode.Version)
-        case userOwned(AgentHooksInstall.OpenCode.Version)
-        case unreadable(AgentHooksInstall.OpenCode.Version)
-        case writeFailed(AgentHooksInstall.OpenCode.Version)
-        case noOpenCode, skipped
+        case installed(AgentHooksInstall.OpenCode.Version, path: String)
+        case alreadyConfigured(AgentHooksInstall.OpenCode.Version, path: String)
+        case userOwned(AgentHooksInstall.OpenCode.Version, path: String)
+        case unreadable(AgentHooksInstall.OpenCode.Version, path: String)
+        case writeFailed(AgentHooksInstall.OpenCode.Version, path: String)
+        case noOpenCode(directory: String)
+        case skipped, v2ConfigUnavailable
+        case v1CleanupUserOwned(path: String), v1CleanupUnreadable(path: String), v1CleanupFailed(path: String)
 
         var isWarning: Bool {
             switch self {
-            case .userOwned, .unreadable, .writeFailed: return true
+            case .userOwned, .unreadable, .writeFailed, .v2ConfigUnavailable, .v1CleanupUserOwned, .v1CleanupUnreadable, .v1CleanupFailed: return true
             case .installed, .alreadyConfigured, .noOpenCode, .skipped: return false
             }
         }
@@ -282,10 +284,24 @@ enum AgentHooksInstaller {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) async throws -> OpenCodeResult {
         let fm = FileManager.default
-        guard fm.fileExists(atPath: AgentHooksInstall.OpenCode.configurationDirectory(home: home.path)) else { return .noOpenCode }
-        var detected = await OpenCodeVersionProbe.detect(environment: environment)
+        let legacyDirectory = URL(fileURLWithPath: AgentHooksInstall.opencodePluginPath(home: home.path))
+            .deletingLastPathComponent().deletingLastPathComponent().path
+        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
+        var detected = probe?.version
+        if detected == nil, !fm.fileExists(atPath: legacyDirectory),
+           let v2Directory = probe?.v2ConfigurationDirectory, !fm.fileExists(atPath: v2Directory) {
+            return .noOpenCode(directory: v2Directory)
+        }
         if detected == nil { detected = chooseOpenCodeVersion() }
         guard let version = detected else { return .skipped }
+        let configurationDirectory: String
+        switch version {
+        case .v1: configurationDirectory = legacyDirectory
+        case .v2:
+            guard let resolved = probe?.v2ConfigurationDirectory else { return .v2ConfigUnavailable }
+            configurationDirectory = resolved
+        }
+        guard fm.fileExists(atPath: configurationDirectory) else { return .noOpenCode(directory: configurationDirectory) }
 
         let source = scriptDirectory.appendingPathComponent(AgentHooksInstall.OpenCode.relativePath(version: version))
         guard fm.fileExists(atPath: source.path) else {
@@ -296,27 +312,51 @@ enum AgentHooksInstaller {
             throw InstallError(message: "The bundled OpenCode \(version.rawValue) status plugin is missing its ownership marker.")
         }
 
-        let destination = URL(fileURLWithPath: AgentHooksInstall.OpenCode.path(home: home.path, version: version))
+        let destination = URL(fileURLWithPath: AgentHooksInstall.OpenCode.pluginPath(configurationDirectory: configurationDirectory, version: version))
         let existing: String?
         do {
             existing = try readExistingConfig(at: destination)
         } catch {
-            return .unreadable(version)
+            return .unreadable(version, path: destination.path)
         }
         guard AgentHooksInstall.OpenCode.mayOverwrite(fileExists: existing != nil, existingContents: existing, version: version) else {
-            return .userOwned(version)
+            return .userOwned(version, path: destination.path)
         }
-        guard existing != sourceContents else { return .alreadyConfigured(version) }
+        let alreadyConfigured = existing == sourceContents
+        if !alreadyConfigured {
+            do {
+                try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                let target = symlinkTarget(of: destination) ?? destination
+                let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+                try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
+            } catch {
+                return .writeFailed(version, path: destination.path)
+            }
+        }
+        if version == .v2, let warning = removeManagedOpenCodeV1Plugin(configurationDirectory: configurationDirectory) {
+            return warning
+        }
+        return alreadyConfigured ? .alreadyConfigured(version, path: destination.path) : .installed(version, path: destination.path)
+    }
 
-        do {
-            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let target = symlinkTarget(of: destination) ?? destination
-            let mode = AgentHooksInstall.posixMode(ofFile: target.path)
-            try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
-        } catch {
-            return .writeFailed(version)
+    private static func removeManagedOpenCodeV1Plugin(configurationDirectory: String) -> OpenCodeResult? {
+        let destination = URL(fileURLWithPath: AgentHooksInstall.OpenCode.pluginPath(configurationDirectory: configurationDirectory, version: .v1))
+        var entry = stat()
+        guard lstat(destination.path, &entry) == 0 else {
+            return errno == ENOENT ? nil : .v1CleanupUnreadable(path: destination.path)
         }
-        return .installed(version)
+        let existing: String
+        do {
+            existing = try String(contentsOf: destination, encoding: .utf8)
+        } catch {
+            return .v1CleanupUnreadable(path: destination.path)
+        }
+        guard AgentHooksInstall.OpenCode.mayOverwrite(fileExists: true, existingContents: existing, version: .v1) else {
+            return .v1CleanupUserOwned(path: destination.path)
+        }
+        // Unlink only the plugin entry, never a symlink target or a directory tree.
+        guard unlink(destination.path) == 0 else { return .v1CleanupFailed(path: destination.path) }
+        return nil
     }
 
     // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when anything changes.
@@ -414,23 +454,34 @@ enum AgentHooksInstaller {
 
     // OpenCode's plugin-install outcome. plugins load on the next OpenCode start.
     static func opencodeText(_ opencode: OpenCodeResult) -> String {
-        let directory = AgentHooksInstall.OpenCode.configurationDirectory(home: "~")
         switch opencode {
-        case .installed(let version):
-            return "OpenCode \(version.rawValue) status plugin installed to \(AgentHooksInstall.OpenCode.path(home: "~", version: version)). Restart OpenCode."
-        case .alreadyConfigured(let version):
-            return "OpenCode \(version.rawValue) status plugin is already current at \(AgentHooksInstall.OpenCode.path(home: "~", version: version))."
-        case .userOwned(let version):
-            return "\(AgentHooksInstall.OpenCode.path(home: "~", version: version)) is user-owned, so the OpenCode \(version.rawValue) plugin was left untouched."
-        case .unreadable(let version):
-            return "\(AgentHooksInstall.OpenCode.path(home: "~", version: version)) could not be read, so the OpenCode \(version.rawValue) plugin was left untouched."
-        case .writeFailed(let version):
-            return "OpenCode \(version.rawValue) plugin couldn't be written to \(AgentHooksInstall.OpenCode.path(home: "~", version: version)) (check permissions), so it was skipped."
-        case .noOpenCode:
+        case .installed(let version, let path):
+            return "OpenCode \(version.rawValue) status plugin installed to \(path). Restart OpenCode."
+        case .alreadyConfigured(let version, let path):
+            return "OpenCode \(version.rawValue) status plugin is already current at \(path)."
+        case .userOwned(let version, let path):
+            return "\(path) is user-owned, so the OpenCode \(version.rawValue) plugin was left untouched."
+        case .unreadable(let version, let path):
+            return "\(path) could not be read, so the OpenCode \(version.rawValue) plugin was left untouched."
+        case .writeFailed(let version, let path):
+            return "OpenCode \(version.rawValue) plugin couldn't be written to \(path) (check permissions), so it was skipped."
+        case .noOpenCode(let directory):
             return "No \(directory) found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
                 + "Coarse shell detection for opencode is off by default."
         case .skipped:
             return "OpenCode status plugin installation was skipped."
+        case .v2ConfigUnavailable:
+            return "OpenCode v2 installation was skipped because its configuration directory could not be determined from your login shell. "
+                + "Check shell startup and OPENCODE_CONFIG_DIR, then run this again."
+        case .v1CleanupUserOwned(let path):
+            return "OpenCode v2 status plugin is installed, but "
+                + "\(path) is user-owned and was left untouched."
+        case .v1CleanupUnreadable(let path):
+            return "OpenCode v2 status plugin is installed, but "
+                + "\(path) could not be read and was left untouched."
+        case .v1CleanupFailed(let path):
+            return "OpenCode v2 status plugin is installed, but the v1 plugin at "
+                + "\(path) could not be safely removed. Check permissions and run this again."
         }
     }
 

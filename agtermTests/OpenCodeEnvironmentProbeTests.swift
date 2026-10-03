@@ -4,7 +4,7 @@ import agtermCore
 @testable import agterm
 
 @MainActor
-final class OpenCodeVersionProbeTests: XCTestCase {
+final class OpenCodeEnvironmentProbeTests: XCTestCase {
     func testProbeUsesVersionArgumentAndPathFromInteractiveLoginShell() async throws {
         let version = try await probe(script: """
         [ "$#" -eq 1 ] && [ "$1" = --version ] || exit 2
@@ -70,7 +70,7 @@ final class OpenCodeVersionProbeTests: XCTestCase {
     }
 
     func testMissingExecutableNeedsManualSelection() async {
-        let version = await OpenCodeVersionProbe.detect(environment: [:], executableURL: URL(fileURLWithPath: "/no/such/agterm-probe"))
+        let version = await OpenCodeEnvironmentProbe.detect(environment: [:], executableURL: URL(fileURLWithPath: "/no/such/agterm-probe"))
         XCTAssertNil(version)
     }
 
@@ -97,9 +97,9 @@ final class OpenCodeVersionProbeTests: XCTestCase {
         try fm.createDirectory(at: fishConfig, withIntermediateDirectories: true)
         try ("set -gx PATH \(CommandRestore.shellQuotedLine([directory.path]))\n" + startup + "\n")
             .write(to: fishConfig.appendingPathComponent("config.fish"), atomically: true, encoding: .utf8)
-        return await OpenCodeVersionProbe.detect(environment: [
+        return await OpenCodeEnvironmentProbe.detect(environment: [
             "PATH": inheritedBin.path, "HOME": directory.path, "ZDOTDIR": directory.path,
             "XDG_CONFIG_HOME": directory.path, "SHELL": shell, "AGTERM_SESSION_ID": "not-a-live-session",
-        ], timeout: timeout)
+        ], timeout: timeout)?.version
     }
 }

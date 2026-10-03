@@ -64,14 +64,25 @@ public enum AgentHooksInstall {
             version == .v1 ? "// agterm-opencode-status-plugin" : "// agterm-opencode-v2-status-plugin"
         }
 
-        /// OpenCode's global configuration directory beneath the supplied home.
-        public static func configurationDirectory(home: String) -> String {
-            home + "/.config/opencode"
+        /// Plugin destination in an explicitly resolved configuration directory.
+        public static func pluginPath(configurationDirectory: String, version: Version) -> String {
+            configurationDirectory + "/plugins/" + pluginName(for: version)
         }
 
-        /// Installed plugin path beneath the supplied home for the selected version.
-        public static func path(home: String, version: Version) -> String {
-            configurationDirectory(home: home) + "/plugins/" + pluginName(for: version)
+        /// Uses override/XDG precedence; normalizes against `workingDirectory` only when supplied.
+        public static func configurationDirectory(home: String, opencodeConfigDirectory: String? = nil,
+                                                  xdgConfigHome: String? = nil, workingDirectory: String? = nil) -> String? {
+            let path: String
+            if let opencodeConfigDirectory {
+                guard !opencodeConfigDirectory.isEmpty else { return nil }
+                path = opencodeConfigDirectory
+            } else {
+                let base = xdgConfigHome.flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.config"
+                path = base + "/opencode"
+            }
+            guard let workingDirectory else { return path }
+            let absolute = path.hasPrefix("/") ? path : workingDirectory + "/" + path
+            return URL(fileURLWithPath: absolute).standardizedFileURL.path
         }
 
         /// Allows absent destinations or those marked for the selected version, protecting unreadable files.
@@ -141,7 +152,7 @@ public enum AgentHooksInstall {
 
     /// Installed OpenCode plugin path beneath the supplied home; `version` defaults to `.v1`.
     public static func opencodePluginPath(home: String, version: OpenCode.Version = .v1) -> String {
-        OpenCode.path(home: home, version: version)
+        OpenCode.pluginPath(configurationDirectory: home + "/.config/opencode", version: version)
     }
 
     /// Allows absent or marked plugins, protecting unreadable files; `version` defaults to `.v1`.
