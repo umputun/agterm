@@ -182,6 +182,43 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(result["index"] as? Int, 2, "the reported index stays the caller's array position")
     }
 
+    func testControlJAndKMoveThePickSelection() throws {
+        let pickID = try resultID(openPick([
+            ["id": "alpha", "label": "Alpha"],
+            ["id": "beta", "label": "Beta"],
+            ["id": "gamma", "label": "Gamma"],
+        ]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        XCTAssertTrue(app.paletteRow("gamma").waitForExistence(timeout: 5), "the items should be listed")
+
+        app.typeKey("j", modifierFlags: [.control])
+        app.typeKey("j", modifierFlags: [.control])
+        app.typeKey("k", modifierFlags: [.control])
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "beta", "⌃J⌃J⌃K should land on the second row")
+    }
+
+    func testPlainJAndKStillTypeIntoThePickQuery() throws {
+        let pickID = try resultID(openPick([], allowCustom: true))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+
+        app.typeText("jk")
+        app.typeKey("j", modifierFlags: [.control])
+        app.typeKey("k", modifierFlags: [.control])
+        XCTAssertEqual(field.value as? String, "jk", "bare j and k type, and the control chords leave the query alone")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "custom")
+        XCTAssertEqual(result["query"] as? String, "jk")
+    }
+
     func testEmptyItemsWithAllowCustomActAsAPrefilledPrompt() throws {
         let pickID = try resultID(openPick([], query: "old name", allowCustom: true))
         XCTAssertTrue(pickPalette.waitForExistence(timeout: 10),

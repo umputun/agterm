@@ -91,7 +91,7 @@ final class PaletteController {
 }
 
 /// The palette overlay: a dimmed scrim (click to dismiss) over a top-centered search field and a
-/// fuzzy-filtered result list. Type to filter, ↑/↓ to move, Enter to run, Esc to close. Mounted by
+/// fuzzy-filtered result list. Type to filter, ↑/↓ or ⌃J/⌃K to move, Enter to run, Esc to close. Mounted by
 /// `ContentView` only while a palette is open.
 struct CommandPalette: View {
     let controller: PaletteController
@@ -256,6 +256,14 @@ struct CommandPalette: View {
                     .onChange(of: query) { selection = 0; updateFiltered(); previewSelected() }
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
+                    // taken from the field editor: ctrl+k is its kill-to-end-of-line.
+                    .onKeyPress(keys: ["j", "k"], phases: [.down, .repeat]) { press in
+                        guard press.modifiers.intersection([.control, .command, .option, .shift]) == .control else {
+                            return .ignored
+                        }
+                        move(press.key == "j" ? 1 : -1)
+                        return .handled
+                    }
                     .onKeyPress(.escape) { dismiss(); return .handled }
             }
             .padding(metrics.scaled(12))

@@ -45,6 +45,30 @@ final class PaletteUITests: XCTestCase {
         XCTAssertEqual(sessionCount(), beforeSessions, "New Session should not have run")
     }
 
+    func testActionPaletteControlJMovesDownLikeTheArrow() throws {
+        let beforeWs = workspaceCount(), beforeSessions = sessionCount()
+        openPalette("Command Palette")
+        typeIntoPalette("new")
+        app.typeKey("j", modifierFlags: [.control])
+        app.typeKey("j", modifierFlags: [.control])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.workspaceCount() == beforeWs + 1 }, "⌃J⌃J then Enter should run the third match (New Workspace)")
+        XCTAssertEqual(sessionCount(), beforeSessions, "New Session should not have run")
+    }
+
+    func testActionPaletteControlKMovesUpLikeTheArrow() throws {
+        let beforeWs = workspaceCount(), beforeSessions = sessionCount()
+        openPalette("Command Palette")
+        typeIntoPalette("new")
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey("k", modifierFlags: [.control])
+        app.typeKey("k", modifierFlags: [.control])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.sessionCount() == beforeSessions + 1 }, "↓↓⌃K⌃K then Enter should run the first match (New Session)")
+        XCTAssertEqual(workspaceCount(), beforeWs, "New Workspace should not have run")
+    }
+
     func testRenameSessionFromMenuStartsInlineEdit() throws {
         renameActiveSession(to: "renamed-via-menu")
         XCTAssertTrue(poll { self.firstSessionName() == "renamed-via-menu" }, "menu rename should persist the new name")
