@@ -61,6 +61,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
+| [open-selected-path](open-selected-path/) | open a selected file path in a viewer in an overlay, at its line | 0.30.1, python3 |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 | [remote-image-paste](remote-image-paste/) | copy a screenshot to a remote session's Mac so ctrl+v there pastes it | 0.31.0 |
 | [remote-session-picker](remote-session-picker/) | pick a session running on another Mac and attach it here | 0.26.0, jq |
