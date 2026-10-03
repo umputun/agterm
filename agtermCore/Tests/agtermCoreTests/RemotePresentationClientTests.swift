@@ -388,6 +388,63 @@ struct RemotePresentationClientTests {
         #expect(recorder.connections.last == .failed("bad frame"))
     }
 
+    @Test func retryNowSkipsTheBackoffOfADroppedLink() {
+        let client = makeClient()
+        client.start()
+        transport.close("exit 255")
+        let launched = transport.launches.count
+        client.tick()
+        #expect(transport.launches.count == launched)
+
+        client.retryNow()
+        client.tick()
+
+        #expect(transport.launches.count == launched + 1)
+    }
+
+    @Test func retryNowStartsTheBackoffOver() {
+        let client = makeClient()
+        client.start()
+        for _ in 0..<3 {
+            transport.close("exit 255")
+            clock.now += 100
+            client.tick()
+        }
+        transport.close("exit 255")
+        client.retryNow()
+        client.tick()
+
+        transport.close("exit 255")
+        let launched = transport.launches.count
+        clock.now += 1
+        client.tick()
+
+        #expect(transport.launches.count == launched + 1, "a retry that failed ramps from one second again")
+    }
+
+    @Test func retryNowWhileALaunchIsConnectingStillStartsTheBackoffOver() {
+        let client = makeClient()
+        client.start()
+        for _ in 0..<3 {
+            transport.close("exit 255")
+            clock.now += 100
+            client.tick()
+        }
+        transport.close("exit 255")
+        clock.now += 100
+        client.tick()
+        let launched = transport.launches.count
+
+        client.retryNow()
+        client.tick()
+        #expect(transport.launches.count == launched, "the connecting launch is not started twice")
+
+        transport.close("exit 255")
+        clock.now += 1
+        client.tick()
+        #expect(transport.launches.count == launched + 1, "its failure ramps from one second again")
+    }
+
     @Test func aLinkThatEndsIsRetriedAfterABackoffThatDoublesToThirtySeconds() {
         let client = makeClient()
         client.start()

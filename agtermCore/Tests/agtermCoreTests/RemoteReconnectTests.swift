@@ -111,6 +111,47 @@ struct RemoteReconnectBookTests {
         #expect(book.due(now: later).isEmpty)
     }
 
+    @Test func retryAllNowMakesEveryWaitingPaneDueAndStartsItsBackoffOver() {
+        let book = RemoteReconnectBook()
+        let other = UUID()
+        book.wait(pane: pane, session: session, host: "mini", cover: false, now: t0)
+        book.wait(pane: other, session: session, host: "mini", cover: false, now: t0)
+        var now = t0
+        for step in 0..<9 {
+            now = t0.addingTimeInterval(Double(step) * 400)
+            _ = book.due(now: now)
+            _ = book.finished(pane: pane, ok: false, now: now)
+            _ = book.finished(pane: other, ok: false, now: now)
+        }
+        let later = now.addingTimeInterval(200)
+        #expect(book.due(now: later).isEmpty, "nine failures in a row: minutes until the next probe")
+
+        book.retryAllNow(now: later)
+
+        #expect(Set(book.due(now: later)) == [pane, other])
+        _ = book.finished(pane: pane, ok: false, now: later)
+        #expect(book.due(now: later.addingTimeInterval(1)) == [pane], "a retry that failed ramps from one second again")
+    }
+
+    @Test func aRetryDuringAProbeStillStartsTheBackoffOverWhenThatProbeFails() {
+        let book = RemoteReconnectBook()
+        book.wait(pane: pane, session: session, host: "mini", cover: false, now: t0)
+        var now = t0
+        for step in 0..<5 {
+            now = t0.addingTimeInterval(Double(step) * 100)
+            _ = book.due(now: now)
+            _ = book.finished(pane: pane, ok: false, now: now)
+        }
+        let probing = now.addingTimeInterval(100)
+        #expect(book.due(now: probing) == [pane])
+
+        book.retryAllNow(now: probing)
+
+        #expect(book.due(now: probing).isEmpty, "the running probe is not started twice")
+        _ = book.finished(pane: pane, ok: false, now: probing)
+        #expect(book.due(now: probing.addingTimeInterval(1)) == [pane], "its failure ramps from one second again")
+    }
+
     @Test func aCancelledPanesProbeResultIsDropped() {
         let book = waiting()
         _ = book.due(now: t0)

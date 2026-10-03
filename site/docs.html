@@ -2909,7 +2909,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               While the stream is down the row says so and names the host. A question goes back to the other side, a finished
               overlay held open with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> closes, and a running overlay keeps running until its program
-              ends. Retrying is automatic; close and reattach the session to retry at once.
+              ends. Retrying is automatic, and at once when the Mac wakes or the network changes; close and reattach the session to retry by hand.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               Each pane has one Mac that leads it, and the program inside sees that Mac's window size. Attaching takes the
@@ -2922,7 +2922,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               the attach still arrives at the other Mac's size until you type. When a connection drops, the pane keeps its last screen. If ssh
               itself failed (exit 255, which is also what a refused login gives), a bar under it names the host and says it is reconnecting,
               under whatever ssh printed, and agterm attaches the pane again once the host answers, retried on the
-              schedule the stream uses; any key retries at once and ⌘W still closes the session. While the host keeps refusing, a line along the pane's bottom edge shows what ssh said on the last try, such as a changed host key or a rejected login. The last screen is replaced when the host answers, before the new connection is up, so if the link drops again right away the pane waits on an empty terminal with only the bar. The pane comes back without taking the lead, so
+              schedule the stream uses; any key, waking the Mac or a network change retries at once and starts that schedule over, and ⌘W still closes the session. While the host keeps refusing, a line along the pane's bottom edge shows what ssh said on the last try, such as a changed host key or a rejected login. The last screen is replaced when the host answers, before the new connection is up, so if the link drops again right away the pane waits on an empty terminal with only the bar. The pane comes back without taking the lead, so
               if the other Mac leads it by then, it arrives covered, and also while the other Mac still counts this Mac's dropped connection
               as the leader, which clears by itself once that connection times out. Any other exit prints one line naming the host, the
               session, the pane and the exit status, and holds on Ghostty's press-any-key prompt. When your ssh config sets no

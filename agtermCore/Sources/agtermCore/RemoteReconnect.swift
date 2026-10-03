@@ -114,9 +114,16 @@ public final class RemoteReconnectBook {
         return ControlReconnect(failures: entry.failures, reason: entry.reason)
     }
 
+    /// Due now with the backoff over; a probe already running is not started twice.
     public func retryNow(pane: UUID, now: Date) {
+        guard entries[pane] != nil else { return }
+        entries[pane]?.failures = 0
         guard entries[pane]?.probing == false else { return }
         entries[pane]?.retryAt = now
+    }
+
+    public func retryAllNow(now: Date) {
+        for pane in entries.keys { retryNow(pane: pane, now: now) }
     }
 
     public func cancel(pane: UUID) {

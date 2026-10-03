@@ -52,6 +52,30 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
                       socketPath: directory.appendingPathComponent("control.sock").path)
     }
 
+    func testRetryingRemoteLinksProbesAWaitingPaneBeforeItsBackoff() async throws {
+        let (session, view) = try replica()
+        let probe = Probe(status: 255)
+        let server = server(runner: probe)
+        let frozen = Date()
+        server.hudClock = { frozen }
+        let book = RemoteReconnectBook.shared
+
+        server.waitToReconnect(view, cover: false)
+        server.tickReconnects()
+        for _ in 0..<200 where book.entries[session.paneIdentity]?.probing != false {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(probe.argvs.count, 1)
+        server.tickReconnects()
+        XCTAssertEqual(book.entries[session.paneIdentity]?.probing, false, "the next probe waits for its backoff")
+
+        server.retryRemoteLinksNow()
+        for _ in 0..<200 where probe.argvs.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(probe.argvs.count, 2)
+    }
+
     private func replica() throws -> (Session, GhosttySurfaceView) {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", command: "ssh mini",

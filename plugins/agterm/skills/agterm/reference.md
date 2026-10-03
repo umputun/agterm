@@ -1849,7 +1849,7 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect. Retries
   run after 1, 2, 4, 8, 16 then 30 seconds, slow to every 5 minutes after eight failures in a row, and
-  never stop.
+  never stop; a wake or a network change retries at once and starts that schedule over.
 - A notification raised while the stream is down is never shown here; status, context and HUD are restored.
 - A terminal notification (OSC 9/777) is not mirrored: it already arrives in the pane's bytes and is
   raised here once. A mirrored `notify` records a `notify` event on each app.
@@ -1876,8 +1876,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   presenting Mac's own `session overlay result` for it reports its local ssh status; ask the origin.
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
   and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
-- While the stream is not up the row's indicator says so and names the host. It retries on its own;
-  close and reattach the session to retry at once.
+- While the stream is not up the row's indicator says so and names the host. It retries on its own, at
+  once when the Mac wakes or the network changes; close and reattach the session to retry by hand.
 
 `agtermctl zmx present SESSION` is the plumbing behind it: it opens the stream on the local socket and
 bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the origin; it is not meant to
