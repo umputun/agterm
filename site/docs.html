@@ -3478,9 +3478,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               after installing it. Re-running upgrades agterm-managed integrations and is otherwise idempotent.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              When OpenCode has already created
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode</span>,
-              the installer also adds a lifecycle plugin at
+              When OpenCode's selected configuration directory already exists,
+              the installer runs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opencode --version</span>
+              and installs the matching plugin. OpenCode v1 uses
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-status.js</span>:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">busy</span>/<span
@@ -3504,6 +3504,24 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>.
               Restart OpenCode after installing it. The plugin serves OpenCode 1.x; OpenCode 2 does not load 1.x plugins,
               so it shows no status there.
+            </p>
+
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              For OpenCode v2, the default plugin path is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-v2/tui.js</span>.
+              This CLI plugin reports the selected OpenCode session and its descendants into the current agterm pane,
+              even when several clients share a server. Background tabs, ancestors, and sibling sessions are excluded.
+              Running work, retries, and recovering compaction stay active; pending permissions and questions are blocked
+              until all are answered or cancelled. Success or user interruption completes only when the family is no longer busy;
+              a terminal failure becomes blocked once the family stops working and stays blocked until the next run.
+              Switching sessions, reconnecting, and unloading the plugin refresh or clear the indicator.
+              Detection uses your interactive login shell's PATH ($SHELL, or /bin/zsh if unset).
+              V2 resolves its directory from that shell's OPENCODE_CONFIG_DIR, then $XDG_CONFIG_HOME/opencode,
+              then ~/.config/opencode. An empty OPENCODE_CONFIG_DIR or unavailable shell configuration skips v2 with a warning.
+              If the version cannot be determined, choose v1 or v2 in the installer, or skip OpenCode.
+              No npm dependencies or configuration edits are needed. Re-run the installer after switching major versions:
+              a v2 install removes the marked v1 plugin in its selected directory, while a v1 install leaves the v2 plugin directory alone.
+              User-owned or unreadable v1 files are preserved and reported in the install result. Then restart OpenCode.
             </p>
 
             <h3

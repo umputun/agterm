@@ -7,7 +7,7 @@ import os
 final class ZmxClient {
     // A 55-daemon cold refresh measured at 10-30 ms; timeout plus kill grace stays below the exit budget.
     nonisolated static let captureInvocationTimeout: TimeInterval = 0.1
-    nonisolated static let terminationGrace: TimeInterval = 0.25
+    nonisolated static let terminationGrace = ProcessOutputCapture.terminationGrace
     nonisolated static let captureWallClockLimit = captureInvocationTimeout + terminationGrace
 
     struct Invocation {

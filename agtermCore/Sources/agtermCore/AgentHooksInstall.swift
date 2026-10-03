@@ -27,13 +27,74 @@ public enum AgentHooksInstall {
     /// extension, preserving a user-authored integration.
     public static let piExtensionMarker = "// agterm-pi-status-extension"
 
-    /// The bundled OpenCode plugin's path relative to the agent-status package, and its destination filename.
-    public static let opencodePluginRelativePath = "opencode/agterm-status.js"
-    static let opencodePluginName = "agterm-status.js"
+    /// The bundled v1 plugin's path relative to the agent-status package.
+    public static let opencodePluginRelativePath = OpenCode.relativePath(version: .v1)
+    /// Ownership sentinel identifying an agterm-managed OpenCode v1 plugin.
+    public static let opencodePluginMarker = OpenCode.marker(version: .v1)
 
-    /// Ownership sentinel in the bundled OpenCode plugin, same policy as `piExtensionMarker`. Named `*Plugin*`
-    /// (not `*Extension*`) because OpenCode's host term is plugin — a deliberate divergence from `piExtension*`.
-    public static let opencodePluginMarker = "// agterm-opencode-status-plugin"
+    /// Versioned paths and ownership policy for OpenCode's auto-discovered status plugins.
+    public enum OpenCode {
+        /// Supported OpenCode major versions, each with its own plugin entrypoint.
+        public enum Version: String, CaseIterable, Sendable {
+            case v1, v2
+
+            /// Parses a supported semantic version, optionally prefixed with `opencode ` or `v`.
+            public init?(versionOutput: String) {
+                var output = versionOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                let prefix = "opencode "
+                if output.hasPrefix(prefix) { output.removeFirst(prefix.count) }
+                let pattern = #"^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"#
+                guard output.range(of: pattern, options: .regularExpression) != nil else { return nil }
+                let version = output.hasPrefix("v") ? String(output.dropFirst()) : output
+                switch version.split(separator: ".").first {
+                case "1": self = .v1
+                case "2": self = .v2
+                default: return nil
+                }
+            }
+        }
+
+        /// Plugin path relative to the bundled agent-status package for the selected version.
+        public static func relativePath(version: Version) -> String {
+            "opencode/" + pluginName(for: version)
+        }
+
+        /// Ownership sentinel for the selected plugin version.
+        public static func marker(version: Version) -> String {
+            version == .v1 ? "// agterm-opencode-status-plugin" : "// agterm-opencode-v2-status-plugin"
+        }
+
+        /// Plugin destination in an explicitly resolved configuration directory.
+        public static func pluginPath(configurationDirectory: String, version: Version) -> String {
+            configurationDirectory + "/plugins/" + pluginName(for: version)
+        }
+
+        /// Uses override/XDG precedence; normalizes against `workingDirectory` only when supplied.
+        public static func configurationDirectory(home: String, opencodeConfigDirectory: String? = nil,
+                                                  xdgConfigHome: String? = nil, workingDirectory: String? = nil) -> String? {
+            let path: String
+            if let opencodeConfigDirectory {
+                guard !opencodeConfigDirectory.isEmpty else { return nil }
+                path = opencodeConfigDirectory
+            } else {
+                let base = xdgConfigHome.flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.config"
+                path = base + "/opencode"
+            }
+            guard let workingDirectory else { return path }
+            let absolute = path.hasPrefix("/") ? path : workingDirectory + "/" + path
+            return URL(fileURLWithPath: absolute).standardizedFileURL.path
+        }
+
+        /// Allows absent destinations or those marked for the selected version, protecting unreadable files.
+        public static func mayOverwrite(fileExists: Bool, existingContents: String?, version: Version) -> Bool {
+            guard fileExists else { return true }
+            return existingContents?.contains(marker(version: version)) == true
+        }
+
+        private static func pluginName(for version: Version) -> String {
+            version == .v1 ? "agterm-status.js" : "agterm-v2/tui.js"
+        }
+    }
 
     /// The shell integration scripts sourced from the user's rc files / config.fish, relative to the script
     /// directory.
@@ -89,20 +150,14 @@ public enum AgentHooksInstall {
         return existingContents.contains(piExtensionMarker)
     }
 
-    /// The destination directory for OpenCode's auto-discovered global plugins.
-    static func opencodePluginDirectory(home: String) -> String {
-        home + "/.config/opencode/plugins"
+    /// Installed OpenCode plugin path beneath the supplied home; `version` defaults to `.v1`.
+    public static func opencodePluginPath(home: String, version: OpenCode.Version = .v1) -> String {
+        OpenCode.pluginPath(configurationDirectory: home + "/.config/opencode", version: version)
     }
 
-    public static func opencodePluginPath(home: String) -> String {
-        opencodePluginDirectory(home: home) + "/" + opencodePluginName
-    }
-
-    /// Whether the OpenCode plugin destination is safe to replace; same ownership policy as Pi.
-    public static func mayOverwriteOpenCodePlugin(fileExists: Bool, existingContents: String?) -> Bool {
-        guard fileExists else { return true }
-        guard let existingContents else { return false }
-        return existingContents.contains(opencodePluginMarker)
+    /// Allows absent or marked plugins, protecting unreadable files; `version` defaults to `.v1`.
+    public static func mayOverwriteOpenCodePlugin(fileExists: Bool, existingContents: String?, version: OpenCode.Version = .v1) -> Bool {
+        OpenCode.mayOverwrite(fileExists: fileExists, existingContents: existingContents, version: version)
     }
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid JSON
