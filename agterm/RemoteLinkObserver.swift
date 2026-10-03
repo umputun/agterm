@@ -1,18 +1,17 @@
 import Foundation
 import Network
 
-/// Retries remote links the moment they can work again: when the displays wake, which a Mac a user wakes
-/// posts, and when the network path changes and is usable. The backoff alone can leave a Mac that slept
-/// all night waiting five minutes.
+/// Retries remote links when the displays wake or the network path changes; `control-api.md` says when and why.
 @MainActor
 final class RemoteLinkObserver {
     private let onRetry: @MainActor () -> Void
-    private let monitor = NWPathMonitor()
+    private let monitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
     private var reported = false
 
-    init(onRetry: @escaping @MainActor () -> Void) {
+    init(watchPath: Bool = true, onRetry: @escaping @MainActor () -> Void) {
         self.onRetry = onRetry
+        monitor = watchPath ? NWPathMonitor() : nil
     }
 
     /// Idempotent: the scene `.task` runs once per window. The wake is `SystemWakeObserver`'s bridge.
@@ -23,22 +22,21 @@ final class RemoteLinkObserver {
         ) { [weak self] _ in
             DispatchQueue.main.async { self?.onRetry() }
         }
-        monitor.pathUpdateHandler = { [weak self] path in
+        monitor?.pathUpdateHandler = { [weak self] path in
             let satisfied = path.status == .satisfied
             DispatchQueue.main.async { self?.pathChanged(satisfied: satisfied) }
         }
-        monitor.start(queue: DispatchQueue(label: "com.umputun.agterm.remote-link-path"))
+        monitor?.start(queue: DispatchQueue(label: "com.umputun.agterm.remote-link-path"))
     }
 
-    /// The first report is the state at start, never a change. Every later one is a change, and a usable
-    /// path after one is worth a retry: a hand-off that stayed usable still cut the old connections.
+    /// The first report is the state at start, never a change.
     func pathChanged(satisfied: Bool) {
         defer { reported = true }
         if reported, satisfied { onRetry() }
     }
 
     isolated deinit {
-        monitor.cancel()
+        monitor?.cancel()
         if let wakeObserver { NotificationCenter.default.removeObserver(wakeObserver) }
     }
 }

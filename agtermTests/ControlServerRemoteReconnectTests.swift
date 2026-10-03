@@ -41,17 +41,6 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private final class CountingProbe: RemoteCommandRunner, @unchecked Sendable {
-        private let lock = NSLock()
-        private var count = 0
-        var runs: Int { lock.withLock { count } }
-
-        func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
-            lock.withLock { count += 1 }
-            return RemoteCommandResult(status: 255, stdout: "", stderr: "")
-        }
-    }
-
     private func server(probe status: Int32) -> ControlServer {
         server(runner: Probe(status: status))
     }
@@ -65,7 +54,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
 
     func testRetryingRemoteLinksProbesAWaitingPaneBeforeItsBackoff() async throws {
         let (session, view) = try replica()
-        let probe = CountingProbe()
+        let probe = Probe(status: 255)
         let server = server(runner: probe)
         let frozen = Date()
         server.hudClock = { frozen }
@@ -76,15 +65,15 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         for _ in 0..<200 where book.entries[session.paneIdentity]?.probing != false {
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertEqual(probe.runs, 1)
+        XCTAssertEqual(probe.argvs.count, 1)
         server.tickReconnects()
         XCTAssertEqual(book.entries[session.paneIdentity]?.probing, false, "the next probe waits for its backoff")
 
         server.retryRemoteLinksNow()
-        for _ in 0..<200 where probe.runs < 2 {
+        for _ in 0..<200 where probe.argvs.count < 2 {
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertEqual(probe.runs, 2)
+        XCTAssertEqual(probe.argvs.count, 2)
     }
 
     private func replica() throws -> (Session, GhosttySurfaceView) {
