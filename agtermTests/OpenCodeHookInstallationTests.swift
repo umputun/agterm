@@ -22,7 +22,9 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         let command = bin.appendingPathComponent("opencode")
         try "#!/bin/sh\nprintf 'unknown-version\\n'\n".write(to: command, atomically: true, encoding: .utf8)
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: command.path)
-        environment = ["PATH": bin.path, "HOME": home.path]
+        try "export PATH=\(CommandRestore.shellQuotedLine([bin.path]))\n"
+            .write(to: home.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+        environment = ["PATH": bin.path, "HOME": home.path, "ZDOTDIR": home.path, "SHELL": "/bin/zsh"]
         scripts = try XCTUnwrap(Bundle.main.resourceURL).appendingPathComponent("agent-status")
     }
 

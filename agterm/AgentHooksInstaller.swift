@@ -455,7 +455,7 @@ enum AgentHooksInstaller {
     static func makeOpenCodeVersionAlert() -> NSAlert {
         let alert = NSAlert()
         alert.messageText = "Choose OpenCode Version"
-        alert.informativeText = "opencode --version did not identify a supported version. Choose the version you use, or skip OpenCode and install the other hooks."
+        alert.informativeText = "Could not determine the OpenCode version in your login shell (opencode --version). Choose the version you use, or skip OpenCode and install the other hooks."
         alert.addButton(withTitle: "Skip OpenCode")
         for version in AgentHooksInstall.OpenCode.Version.allCases {
             alert.addButton(withTitle: "OpenCode \(version.rawValue)")
