@@ -123,6 +123,13 @@ C-boundary concurrency before changing the bridge.
   changing the main checkout's branch. Squash/rebase makes removal report unmerged commits; after
   verification, discard the worktree safely. Native removal may leave a renamed branch, which must be
   deleted separately after checking the remote.
+- Before removing a worktree, and after any hosted or UI test run, run
+  `lsappinfo list | grep -A4 agterm.debug`.
+  An entry marked `exited-with-subordinates` that lists `relatedCoalitionPIDs` is held by those pids:
+  identify them with `ps -p`, stop the ones that are leaked test processes, and report anything else to
+  Eugene.
+  An entry without `relatedCoalitionPIDs` right after a run can be transient; check again after a minute
+  before acting, and report it to Eugene if it persists.
 - Debug Swift code lives in `agterm.debug.dylib`; inspect it or object files, not the stub executable.
 - For throwaway launch-time probes, append to a temp file. `NSLog` from `open -n` is unreliable; production
   logging uses `os.Logger`.
