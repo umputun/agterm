@@ -248,7 +248,8 @@ or `unowned`: whether this Mac's window size is the one the pane's program sees.
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
 again: `failures` is the retry streak, the probes of its host that failed in a row plus one for a link
-that dropped again soon after attaching, and `reason` is what ssh said on the last failed probe, omitted
+that dropped again soon after attaching, started over by a key on the pane, a wake or a network change,
+and `reason` is what ssh said on the last failed probe, omitted
 when it said nothing. Its message can help distinguish an offline host from a refused login. It goes
 when the pane is attached again or closed.
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included

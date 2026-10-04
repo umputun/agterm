@@ -40,7 +40,7 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
 
 /// ControlReconnect is a remote pane's wait to be attached again. `failures` is the backoff streak: probes
 /// of its host that failed in a row, plus one for a link that dropped again soon after attaching.
-/// `reason` is what ssh said on the last failed probe, omitted when it said nothing.
+/// A key on the pane, a wake or a network change starts it over. `reason` is what ssh said on the last failed probe, omitted when it said nothing.
 public struct ControlReconnect: Codable, Sendable, Equatable {
     public let failures: Int
     public let reason: String?

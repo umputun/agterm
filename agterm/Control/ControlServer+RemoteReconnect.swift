@@ -38,7 +38,7 @@ extension ControlServer {
         }
     }
 
-    /// Wake or a network that came back: every waiting pane and dropped stream retries now, not on its backoff.
+    /// Every waiting pane and dropped stream retries now, not on its backoff.
     func retryRemoteLinksNow() {
         RemoteReconnectBook.shared.retryAllNow(now: hudClock())
         for client in remoteClients.values {

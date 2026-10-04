@@ -1353,8 +1353,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
   chords pass. `RemoteLinkObserver` calls `ControlServer.retryRemoteLinksNow` on the display wake
   `SystemWakeObserver` bridges, which a dark wake or a headless Mac never posts, and on every
-  `NWPathMonitor` path change that leaves the path usable, a hand-off that stayed usable included; a VPN
-  drop under a live Wi-Fi changes no path, and the first path report is the state at start. That makes
+  `NWPathMonitor` path change that leaves the path usable, a hand-off that stayed usable included;
+  the first path report is the state at start. That makes
   every waiting pane and dropped stream due now and starts their backoff over, so a probe fired before the
   network is back ramps from 1 s again instead of waiting out the 300 s cap. A key on a waiting pane goes
   through the same `retryNow` and starts the backoff over too.

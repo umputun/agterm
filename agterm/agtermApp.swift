@@ -292,6 +292,7 @@ struct agtermApp: App {
                         accessibilityObserver.start()
                         wakeObserver.start()
                         linkObserver.start()
+                        linkObserver.watchPath()
                         // last: a modal here blocks the rest of the task, and the window behind it should be
                         // fully wired before it opens. `presentOnce` latches, so the per-window .task is safe.
                         if welcomeDue { WelcomeAlert.presentOnce(settingsModel: settingsModel) }

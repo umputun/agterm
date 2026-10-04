@@ -20,7 +20,7 @@ final class RemoteLinkObserverTests: XCTestCase {
 
     func testAWakeRetriesOnceHoweverManyWindowsStarted() {
         var retries = 0
-        let observer = RemoteLinkObserver(watchPath: false) { retries += 1 }
+        let observer = RemoteLinkObserver { retries += 1 }
         observer.start()
         observer.start()
 
