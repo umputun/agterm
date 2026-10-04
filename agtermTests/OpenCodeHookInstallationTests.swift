@@ -266,6 +266,18 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: v2Path))
     }
 
+    // regression: with no opencode config and no probe result the version chooser opened, though no answer could install
+    func testMissingConfigAndUnprobeableShellSkipsWithoutSelection() async throws {
+        environment["SHELL"] = "/no/such/agterm-test-shell"
+        try FileManager.default.removeItem(at: home.appendingPathComponent(".config/opencode"))
+
+        let outcome = try await install(choosing: nil)
+
+        XCTAssertEqual(outcome, .noOpenCode(directory: home.appendingPathComponent(".config/opencode").path))
+        XCTAssertFalse(outcome.isWarning)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode").path))
+    }
+
     private func writeV1Plugin(_ contents: String = "// agterm-opencode-status-plugin\nexport const AgtermStatusPlugin = async () => ({});\n") throws -> URL {
         let legacy = home.appendingPathComponent(".config/opencode/plugins/agterm-status.js")
         try FileManager.default.createDirectory(at: legacy.deletingLastPathComponent(), withIntermediateDirectories: true)

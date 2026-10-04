@@ -3517,7 +3517,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Switching sessions, reconnecting, and unloading the plugin refresh or clear the indicator.
               Detection uses your interactive login shell's PATH ($SHELL, or /bin/zsh if unset).
               V2 resolves its directory from that shell's OPENCODE_CONFIG_DIR, then $XDG_CONFIG_HOME/opencode,
-              then ~/.config/opencode. An empty OPENCODE_CONFIG_DIR or unavailable shell configuration skips v2 with a warning.
+              then ~/.config/opencode. An empty OPENCODE_CONFIG_DIR skips v2 with a warning. So does an unavailable shell
+              configuration when ~/.config/opencode exists; without that directory OpenCode is skipped as not installed.
               If the version cannot be determined, choose v1 or v2 in the installer, or skip OpenCode.
               No npm dependencies or configuration edits are needed. Re-run the installer after switching major versions:
               a v2 install removes the marked v1 plugin in its selected directory, while a v1 install leaves the v2 plugin directory alone.

@@ -288,6 +288,8 @@ enum AgentHooksInstaller {
             .deletingLastPathComponent().deletingLastPathComponent().path
         let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
         var detected = probe?.version
+        // no probe result and no default config: neither chooser answer could install anything
+        if probe == nil, !fm.fileExists(atPath: legacyDirectory) { return .noOpenCode(directory: legacyDirectory) }
         if detected == nil, !fm.fileExists(atPath: legacyDirectory),
            let v2Directory = probe?.v2ConfigurationDirectory, !fm.fileExists(atPath: v2Directory) {
             return .noOpenCode(directory: v2Directory)

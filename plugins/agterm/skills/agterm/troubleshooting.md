@@ -262,7 +262,7 @@ For OpenCode, restart it to load `~/.config/opencode/plugins/agterm-status.js` (
 `~/.config/opencode/plugins/agterm-v2/tui.js` (v2).
 The installer detects the major via `opencode --version` in your interactive login shell; failed detection offers a manual choice.
 V1 uses `~/.config/opencode`. V2 uses the shell's `OPENCODE_CONFIG_DIR`, then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
-The selected directory must already exist. An empty `OPENCODE_CONFIG_DIR` or unavailable shell configuration skips v2 with a warning.
+The selected directory must already exist. An empty `OPENCODE_CONFIG_DIR` skips v2 with a warning. So does an unavailable shell configuration when `~/.config/opencode` exists; without that directory OpenCode is skipped as not installed.
 Re-run it after switching major versions: v2 removes the marked v1 plugin in its selected directory; v1 leaves the v2 directory alone.
 User-owned or unreadable v1 files are preserved and reported in the install result.
 The v2 CLI plugin follows the selected session and its descendants, excluding background tabs and headless runs.
