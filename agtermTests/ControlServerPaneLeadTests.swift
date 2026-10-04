@@ -51,6 +51,40 @@ final class ControlServerPaneLeadTests: XCTestCase {
         return (view, identity)
     }
 
+    // pins a swap during the realize wait sending an id's keystrokes to the terminal that took its slot
+    func testTypeByPaneIDReachesItsTerminalAfterASwapDuringTheRealizeWait() async throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let (target, identity) = try pane(role: nil)
+        let (other, _) = try pane(role: nil)
+        session.surface = target
+        session.splitSurface = other
+        session.hasSplit = true
+        let registry = SpawnRegistry(pacer: SpawnPacer())
+        let key = UUID()
+        registry.pacer.arm(order: [UUID(), key], burst: [])
+        registry.enqueue(target, key: key, provider: LaunchSeedProvider(shouldPace: true) { _ in
+            LaunchSeed(command: nil, initialInput: nil, waitAfterCommand: false)
+        })
+        XCTAssertFalse(target.requestSpawnPermit())
+        let grant = registry.pacer.onGrant
+        registry.pacer.onGrant = { granted in
+            grant?(granted)
+            XCTAssertNil(store.swapPanes(session.id))
+            _ = ZmxLeadNotice(title: "zmx-role;n:leader:1").map { ZmxLeadBook.shared.apply($0, pane: identity) }
+        }
+
+        let typed = await server.typeSession(session.id.uuidString, window: nil,
+                                             options: ControlSessionTypeOptions(text: "x", select: false, pane: nil,
+                                                                                paneID: identity.uuidString))
+
+        XCTAssertTrue(typed.ok, typed.error ?? "")
+        XCTAssertEqual(typed.result?.pane, "right")
+        XCTAssertEqual(invocations.map(\.arguments), [["type", ZmxSupport.daemonName(for: identity)]])
+    }
+
     func testAPaneWhoseZmxNeverReportedKeepsItsOwnSurfaceForEverything() throws {
         let server = makeServer()
         let (view, _) = try pane(role: nil)

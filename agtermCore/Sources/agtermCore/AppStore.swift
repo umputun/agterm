@@ -314,11 +314,13 @@ public final class AppStore {
                     guard surface.isAvailable(in: session) else { return nil }
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
                     let pane = session.paneIdentity(for: surface)
+                    let token = surface.surface(in: session)?.paneToken
                     return ControlSurfaceNode(id: id, kind: surface.rawValue, active: surface.isActive(in: session),
                                               visible: surface.isVisible(in: session),
                                               backedByZmx: session.zmxBacking(for: surface),
                                               lead: ZmxLeadBook.shared.role(pane: pane),
-                                              reconnect: RemoteReconnectBook.shared.readback(pane: pane))
+                                              reconnect: RemoteReconnectBook.shared.readback(pane: pane),
+                                              paneID: token?.isEmpty == false ? token : nil)
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: session.effectiveCwd, title: session.oscTitle,

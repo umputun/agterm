@@ -195,6 +195,8 @@ struct Session: ParsableCommand {
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane, and unknown without --pane is an error.") var paneID: String?
+
         func validate() throws { try validatePaneArgument(pane) }
 
         func makeRequest() throws -> ControlRequest {
@@ -209,7 +211,7 @@ struct Session: ParsableCommand {
 
         private func makeRequest(payload: String) -> ControlRequest {
             return ControlRequest(cmd: .sessionType, target: target.target,
-                                  args: options.withWindow(ControlArgs(text: payload, select: select, pane: pane)))
+                                  args: options.withWindow(ControlArgs(text: payload, select: select, pane: pane, paneID: paneID)))
         }
     }
 
@@ -358,7 +360,7 @@ struct Session: ParsableCommand {
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
         @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
         @Option(name: .long, help: "Which pane to read: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to the on-screen pane.") var pane: String?
-        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves.")
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID); overrides --pane when it resolves, and an unknown token without --pane is an error.")
         var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions

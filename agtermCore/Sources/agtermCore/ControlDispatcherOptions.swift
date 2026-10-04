@@ -4,11 +4,13 @@ public struct ControlSessionTypeOptions: Equatable, Sendable {
     /// The parsed pane, nil for the main one. The dispatcher owns the spelling, so the role and position
     /// aliases the CLI accepts resolve here rather than being matched again in the host.
     public let pane: StatusPane?
+    public let paneID: String?
 
-    public init(text: String, select: Bool, pane: StatusPane?) {
+    public init(text: String, select: Bool, pane: StatusPane?, paneID: String? = nil) {
         self.text = text
         self.select = select
         self.pane = pane
+        self.paneID = paneID
     }
 }
 

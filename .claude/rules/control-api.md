@@ -127,7 +127,7 @@ paths:
   server did, rather than leaving the two outcomes indistinguishable. A read-back is any observable read, not
   necessarily a response field: `session.paste --pane` is covered by `session.text --pane`, its documented
   read-back command, as `session.type` and `font.*` are, and `result.pane` is carried by `session.restore`,
-  for the token reason below, and by `ask.open` for its resolved pane anchor. Since `agtermctl` ships inside the
+  `session.text` and `session.type` for the token reason below, and by `ask.open` for its resolved pane anchor. Since `agtermctl` ships inside the
   bundle, the CLI that sends a field and the app that reads it are the same build, so the exposure is a
   stale RUNNING process across an upgrade, not a mismatched install. Only an app predating `result.pane`
   omits it from a successful `session.restore`; treat absence as UNKNOWN, never as the default pane.
@@ -357,9 +357,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   never happened. `failed to read surface buffer` is left to a real read failure on a realized surface.
   `quick.text` keeps its own vocabulary and still reports that string for an unrealized quick surface.
   Output is plain text because pinned Ghostty exposes no styled-cell read.
-  `--pane-id` accepts a stable surface token and resolves it against live slots before `--pane`; an absent
-  or unknown token falls back to the role, then to the on-screen default. This is the read path for a
-  long-running watcher whose baked `AGTERM_PANE` spawn role may be stale after promotion or swap.
+  `--pane-id` accepts a stable surface token and resolves it against live slots before `--pane`.
+  This is the read path for a long-running watcher whose baked `AGTERM_PANE` spawn role may be stale
+  after promotion or swap.
   `onScreenSurface` is pane-vs-scratch only, so every `--pane` and the default alike read the surface
   UNDER an overlay; the covering program is `session.overlay.text`.
 - `session.search` selects and realizes the target, then searches its focused surface. Text opens/updates;
@@ -875,12 +875,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   their own pane), and same-pane writes are unrestricted, so a
   single-pane session behaves exactly as before. `session.type` into the owning pane clears the block like a
   keystroke, an empty payload excepted. Two simultaneous blocks still collapse to one; see [[notifications]].
-- `--pane-id` (#199) is a stable per-surface token that overrides stale baked role after promote/re-split,
-  then falls back to role when absent/unknown. Inject `AGTERM_PANE_ID`, resolve against live surface tokens,
-  and report only resolved `statusPane`. For `session.status` this addressing adds no read-back field. For
-  `session.restore` it does: every success carries `result.pane`, the `StatusPane` raw value written, since a
-  token names a surface rather than a role and the caller would otherwise have to diff `restoreCommand`
-  against `splitRestoreCommand` on the tree to find out where its pin landed.
+- `Session.paneAddress` owns `--pane-id` resolution for `session.text`, `session.type` and
+  `session.restore`: a live token wins over `--pane`, an empty one counts as absent, and an unknown one
+  without an explicit `--pane` answers `unknown pane id: <id>` rather than reaching a pane the caller
+  never named. `session.status` alone keeps the plain role fallback. `session.text` and `session.type`
+  report the pane they acted on as `result.pane`, the default-pane paths included.
+- `session.type --pane-id` carries the token into the main pane's realize wait and re-resolves it before
+  every probe. A pane that moved is typed into where it is, and one that is gone answers the unknown-id
+  error, so a swap or a close during the wait cannot hand the keystrokes to another terminal.
+- `surface.cursor --pane-id` takes a SESSION target (`active` or an id) and the token picks the pane.
+  A surface id or `quick` beside it is refused, an unknown token always errors since there is no role to
+  fall back on, and `result.id` is the resolved `surface:<session>:<position>`. `ControlActions` keeps
+  the two-argument requirement and defaults the overload to refuse a token by name.
+- Each tree surface node carries `paneID`, the live surface's token, omitted for a slot whose surface
+  carries none (an overlay, or a pane whose surface is not created yet).
+- `session.status --pane-id` (#199) falls back to the role for an absent or unknown token and adds no
+  read-back field: it reports only the resolved `statusPane`.
 - Auto-reset clears both session entered and session left. Status renders on selected sessions too.
 - `session.flag on|off|toggle|clear` is idempotent; clear ignores target and clears the store.
   Read `flagged`.

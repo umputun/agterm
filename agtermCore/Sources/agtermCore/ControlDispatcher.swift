@@ -64,6 +64,8 @@ public protocol ControlActions {
     /// The addressed surface's cursor column. Takes `surface.zoom`'s target vocabulary, `quick` included,
     /// because it addresses the same set of surfaces; unlike zoom it is a pure read and changes nothing.
     func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse
+    /// readSurfaceCursor with a non-empty `paneID` takes a session target; the token picks the pane.
+    func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse
     func setDashboard(targets: [String], window: String?, close: Bool,
                       fontMode: DashboardFontMode, mru: Bool) -> ControlResponse
     func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse
@@ -611,7 +613,8 @@ public struct ControlDispatcher {
             }
             return actions.setSurfaceZoom(request.target, window: request.args?.window, mode: mode)
         case .surfaceCursor:
-            return actions.readSurfaceCursor(request.target, window: request.args?.window)
+            return actions.readSurfaceCursor(request.target, window: request.args?.window,
+                                             paneID: request.args?.paneID)
         case .sessionType:
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")
@@ -626,7 +629,8 @@ public struct ControlDispatcher {
                                              options: ControlSessionTypeOptions(
                                                 text: text,
                                                 select: request.args?.select ?? false,
-                                                pane: pane
+                                                pane: pane,
+                                                paneID: request.args?.paneID
                                              ))
         case .sessionCopy:
             return actions.copySessionSelection(request.target, window: request.args?.window)

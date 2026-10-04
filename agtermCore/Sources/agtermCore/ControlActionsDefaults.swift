@@ -103,6 +103,13 @@ public extension ControlActions {
         return await attachRemoteSession(host: host, session: session)
     }
 
+    func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {
+        guard paneID?.isEmpty != false else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("surface.cursor --pane-id"))
+        }
+        return readSurfaceCursor(target, window: window)
+    }
+
     func attachRemoteSession(host _: String, session _: String) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach"))
     }

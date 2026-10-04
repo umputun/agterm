@@ -43,7 +43,7 @@ final class MockControlActions: ControlActions {
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
-        case surfaceCursor(target: String?, window: String?)
+        case surfaceCursor(target: String?, window: String?, paneID: String? = nil)
         case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool)
         case font(target: String?, window: String?, pane: StatusPane?, String)
         case keymapReload
@@ -391,7 +391,11 @@ final class MockControlActions: ControlActions {
     }
 
     func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse {
-        calls.append(.surfaceCursor(target: target, window: window))
+        readSurfaceCursor(target, window: window, paneID: nil)
+    }
+
+    func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {
+        calls.append(.surfaceCursor(target: target, window: window, paneID: paneID))
         return nextSurfaceCursorResponse
     }
 

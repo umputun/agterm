@@ -241,9 +241,11 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
-Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `lead` is `leader`, `follower`
+Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `paneID` is the surface's
+stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
+overlay or a pane whose surface is not created yet. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
@@ -490,7 +492,7 @@ Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
 The signatures and read-back below use canonical `left`/`right`/`scratch`; the stable invalid-value
 error keeps those names for compatibility.
 
-- `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
+- `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
   A trailing newline's Return is sent a moment after the text, so a long line submits in an agent TUI;
   Returns inside a multi-line payload are not spaced, so send an agent one line per call.
@@ -509,7 +511,10 @@ error keeps those names for compatibility.
   (errors with `session has no split pane` when the session has no split), `--pane scratch` into the
   session's scratch terminal even while it is hidden (`session has no scratch terminal` when none opened);
   the role and position aliases (`primary`/`top`, `split`/`bottom`) resolve to the same panes; like
-  `session text`, no `other` value. `--select` realizes the MAIN pane only — a split pane must
+  `session text`, no `other` value. `--pane-id` takes a stable pane token (`$AGTERM_PANE_ID`, or
+  `surfaces[].paneID` from `tree --json`) and types into that terminal wherever it sits now, overriding
+  `--pane`. An unknown token without `--pane` fails with `unknown pane id: <id>`; with `--pane` it uses
+  that pane. `result.pane` names the pane typed into. `--select` realizes the MAIN pane only — a split pane must
   already exist. Also like `session text`, there is no overlay value: every `--pane` types into the surface
   UNDER a covering overlay, so the keystrokes reach the hidden shell and run there unseen until the overlay
   closes — the call still answers `ok`. That is deliberate: the panes stay drivable whatever is drawn over
@@ -547,8 +552,9 @@ error keeps those names for compatibility.
   terminal` when none opened); the role and position aliases (`primary`/`top`, `split`/`bottom`) resolve to
   the same panes; omit `--pane` for the visible pane (the scratch terminal when it covers the
   session, else the focused pane). `--pane-id` accepts the shell's stable `$AGTERM_PANE_ID`, resolves its
-  current live slot and overrides `--pane` when found. An absent or unknown token falls back to `--pane`,
-  then to the visible pane. Use it for a long-running watcher because `$AGTERM_PANE` is a spawn role and can
+  current live slot and overrides `--pane` when found. An unknown token falls back to an explicit `--pane`
+  and otherwise fails with `unknown pane id: <id>`, never reading another pane. `result.pane` names the
+  pane read. Use it for a long-running watcher because `$AGTERM_PANE` is a spawn role and can
   become stale after promotion or `session swap`. NOTE: unlike
   `session focus`, `--pane` here has NO `other` value — only `left`/`right`/`scratch`, and no overlay value:
   every one of them reads the surface UNDER a covering overlay, whose buffer is `session overlay text`'s.
@@ -1125,12 +1131,14 @@ opens on the zoomed session still spawn their shells behind the zoom layer. A no
 click exits zoom before revealing its session. Use `surface zoom` when the user/agent needs a pane
 fullscreen inside agterm; use `window zoom` only to maximize the whole window on screen.
 
-`agtermctl surface cursor [--target SURFACE_ID|active|quick] [--window W]` — the surface's zero-based
+`agtermctl surface cursor [--target SURFACE_ID|active|quick] [--pane-id TOKEN] [--window W]` — the surface's zero-based
 cursor column, counted from the left edge of the grid. Plain output is the bare number, so
 `col=$(agtermctl surface cursor)` works; under `--json` it is `.result.cursor.column`. The target
 vocabulary and its refusals are `surface zoom`'s, so an explicit `SURFACE_ID` reads a hidden pane or a
 background session as readily as the visible one. It is a pure read: it neither selects nor realizes the
-target, and it reports no field in `tree`, so poll it when you need it.
+target, and it reports no field in `tree`, so poll it when you need it. With `--pane-id` the target is a
+SESSION (`active` or a session id) and the token picks the pane; a surface id or `quick` beside it is
+refused, an unknown token fails with `unknown pane id: <id>`, and `result.id` is the resolved surface id.
 
 There is no row. The pinned libghostty exposes no cursor accessor and the vertical metrics it does export
 cannot recover a row that survives a custom `adjust-font-baseline`; a `row` would join the same `cursor`

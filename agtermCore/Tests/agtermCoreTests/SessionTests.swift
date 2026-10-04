@@ -603,6 +603,25 @@ struct SessionTests {
         #expect(session.paneRole(forToken: "no-such-tok") == nil)
     }
 
+    @Test(arguments: [
+        ("split-tok", StatusPane.left, Session.PaneAddress.pane(.right)),
+        ("split-tok", nil, .pane(.right)),
+        ("gone", .scratch, .pane(.scratch)),
+        ("gone", nil, .unknownToken("gone")),
+        ("", .right, .pane(.right)),
+        ("", nil, .pane(nil)),
+        (nil, .left, .pane(.left)),
+        (nil, nil, .pane(nil)),
+    ] as [(String?, StatusPane?, Session.PaneAddress)])
+    func paneAddressPrefersALiveTokenAndRefusesAnUnknownOneGivenAlone(token: String?, pane: StatusPane?,
+                                                                      expected: Session.PaneAddress) {
+        let session = Session(initialCwd: "/repo")
+        session.surface = FakeSurface(paneToken: "main-tok")
+        session.splitSurface = FakeSurface(paneToken: "split-tok")
+
+        #expect(session.paneAddress(token: token, pane: pane) == expected)
+    }
+
     @Test func paneTokenForPaneReadsTheSlotAndEmptiesWithIt() {
         let session = Session(initialCwd: "/repo")
         #expect(session.paneToken(for: .left) == "")

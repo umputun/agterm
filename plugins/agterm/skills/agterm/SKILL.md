@@ -6,13 +6,13 @@ description: >
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD or desktop notification; show a picker or question dialog; display an image inline; type
-  into a session, copy its selection or search its scrollback; manage windows; set font size and
+  into a session or one pane by stable id, copy its selection or search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
   pane-visibility and tree-change events.
-  Covers window/workspace/session addressing, spawned shells' AGTERM_* variables,
+  Covers window/workspace/session addressing, AGTERM_* variables,
   attaching a session from another Mac, cookbook recipes, running version, diagnosing
-  problems and filing an agterm bug or feature request.
+  problems and filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
@@ -43,8 +43,9 @@ the control channel is available:
 - `AGTERM_SOCKET` — the absolute path to the control socket this app bound.
 - `AGTERM_PANE` / `AGTERM_PANE_ID`: the surface's spawn role (`left`|`right`|`scratch`) and stable
   per-surface token. The role is not rewritten after promotion or swap; the token resolves the LIVE slot.
-  Prefer `--pane-id "$AGTERM_PANE_ID"` where supported, including `session status`, `session restore` and
-  `session text`. The agent-status hook forwards both values for compatibility.
+  Prefer `--pane-id "$AGTERM_PANE_ID"` where supported: `session status`, `session restore`,
+  `session text`, `session type`, `surface cursor` and `session hud`. `tree --json` lists each surface's
+  token as `surfaces[].paneID`. The agent-status hook forwards both values for compatibility.
 - `TERM_PROGRAM=agterm` / `TERM_PROGRAM_VERSION` (agterm's version): the terminal identity, replacing
   the `ghostty` pair embedded libghostty would set. A tool that decides a capability from a list of
   terminal names (Claude Code's OSC 8 hyperlinks) needs its own override; see troubleshooting.md.
@@ -343,9 +344,11 @@ omitted when expanded).
 - Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
   `split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.
   Syntax and read-back use canonical `left`/`right`/`scratch`; the invalid-value error keeps those names.
-- `session type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
+- `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--pane-id TOKEN]` — inject keystrokes (real typing, Enter
   included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
-  with `--pane scratch`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's
+  with `--pane scratch`. `--pane-id` names one terminal wherever a swap or promotion moved it; an unknown
+  token without `--pane` fails with `unknown pane id: <id>`, and `--json` reports the pane typed into as
+  `result.pane`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's
   active one (see Addressing). Like `session text`, every `--pane` addresses the surface UNDER a covering
   overlay — by design, so a pane stays drivable whatever is drawn over it — meaning text typed while one is
   open runs in the hidden shell and is invisible until it closes. There is no write twin of
@@ -363,7 +366,8 @@ omitted when expanded).
 - `session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN]`: print the session buffer
   as plain text. Default is the visible screen of the focused pane; `--pane scratch` reads the scratch
   terminal even while hidden; `--pane-id "$AGTERM_PANE_ID"` follows the same terminal after a role change
-  and overrides `--pane` when it resolves; `--all` adds available scrollback (alternate-screen buffers
+  and overrides `--pane` when it resolves, while an unknown token without `--pane` fails with
+  `unknown pane id: <id>`; `--json` reports the pane read as `result.pane`; `--all` adds available scrollback (alternate-screen buffers
   have none); `--lines N` keeps the last N lines.
 - `session search [needle] [--next|--prev|--close]` — search the terminal scrollback; prints the "N of M" counter.
 - `session split [on|off|toggle] [--axis vertical|horizontal]` · `session split close` - second shell, left/right by

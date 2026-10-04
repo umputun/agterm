@@ -843,6 +843,21 @@ public final class Session: Identifiable {
         return nil
     }
 
+    /// PaneAddress is the outcome of resolving a command's `--pane-id` and `--pane` pair.
+    public enum PaneAddress: Equatable, Sendable {
+        /// pane is nil when neither selector was given and the command's own default applies.
+        case pane(StatusPane?)
+        case unknownToken(String)
+    }
+
+    /// paneAddress resolves `token` against the live slots, then falls back to `pane`. An empty token
+    /// counts as absent; an unknown one with no `pane` beside it is refused.
+    public func paneAddress(token: String?, pane: StatusPane?) -> PaneAddress {
+        guard let token, !token.isEmpty else { return .pane(pane) }
+        guard let resolved = paneRole(forToken: token) ?? pane else { return .unknownToken(token) }
+        return .pane(resolved)
+    }
+
     /// Takes the pane's PENDING restore-command override, clearing it so a second surface for the same pane
     /// this launch gets a plain shell: `makeSplitSurface` runs again on a fresh ⌘D after a split shell exits,
     /// and a leftover payload would fire twice mid-session. The PERSISTED `restoreCommand`/`splitRestoreCommand`

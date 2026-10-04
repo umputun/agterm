@@ -41,6 +41,37 @@ final class ControlSurfaceCursorUITests: ControlAPITestCase {
         XCTAssertEqual(empty["error"] as? String, "surface not available: surface:\(sessionID):scratch")
     }
 
+    func testAPaneIDReachesItsTerminalForTypeTextAndCursorAfterASwap() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        try waitForPrompt(sessionID, marker: "pane-id-left")
+        try waitForPrompt(sessionID, marker: "pane-id-right", pane: "right")
+        try type("P=two\n", into: sessionID, pane: "right")
+        let surfaces = try XCTUnwrap(try sessionNode(id: sessionID)["surfaces"] as? [[String: Any]])
+        let paneID = try XCTUnwrap(surfaces.first { $0["kind"] as? String == "right" }?["paneID"] as? String,
+                                   "the tree should list the right pane's id: \(surfaces)")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.swap","target":"\#(sessionID)"}"#)["ok"] as? Bool, true)
+
+        let file = markerDir.appendingPathComponent("pane-id-typed")
+        let typed = try sendCommand(#"""
+        {"cmd":"session.type","target":"\#(sessionID)","args":{"text":"printf $P > '\#(file.path)'\n","paneID":"\#(paneID)"}}
+        """#)
+        XCTAssertEqual((typed["result"] as? [String: Any])?["pane"] as? String, "left", "the id's terminal moved left: \(typed)")
+        XCTAssertEqual(pollMarker(file, timeout: 10), "two", "the keystrokes should run in the terminal the id names")
+
+        let text = try sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"paneID":"\#(paneID)"}}"#)
+        XCTAssertEqual((text["result"] as? [String: Any])?["pane"] as? String, "left", "\(text)")
+        let cursor = try sendCommand(#"{"cmd":"surface.cursor","target":"\#(sessionID)","args":{"paneID":"\#(paneID)"}}"#)
+        XCTAssertEqual((cursor["result"] as? [String: Any])?["id"] as? String, "surface:\(sessionID):left", "\(cursor)")
+
+        for command in ["session.text", "surface.cursor"] {
+            let unknown = try sendCommand(#"{"cmd":"\#(command)","target":"\#(sessionID)","args":{"paneID":"gone"}}"#)
+            XCTAssertEqual(unknown["error"] as? String, "unknown pane id: gone", command)
+        }
+        let unknownType = try sendCommand(#"{"cmd":"session.type","target":"\#(sessionID)","args":{"text":"x","paneID":"gone"}}"#)
+        XCTAssertEqual(unknownType["error"] as? String, "unknown pane id: gone")
+    }
+
     // a hidden pane's view has no window, and a read that divided by the window's scale refused it
     func testSurfaceCursorReadsAHiddenSplitPaneInBothDirections() throws {
         let sessionID = try activeSessionID()

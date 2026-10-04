@@ -343,11 +343,14 @@ struct Surface: ParsableCommand {
             line is not empty; AT the prompt it establishes nothing, since the caret may have been moved \
             back over text that is still there.
             """)
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID). With it --target names the session ('active' or a session id), not a surface.")
+        var paneID: String?
         @OptionGroup var target: SurfaceTargetOptions
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .surfaceCursor, target: target.target, args: options.withWindow(ControlArgs()))
+            ControlRequest(cmd: .surfaceCursor, target: target.target,
+                           args: options.withWindow(ControlArgs(paneID: paneID)))
         }
     }
 

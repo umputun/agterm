@@ -15,4 +15,12 @@ struct MiscCommandsTests {
         #expect(targeted.args?.window == "w1")
         #expect(throws: (any Error).self) { try Keymap.Run.parse([]) }
     }
+
+    @Test func surfaceCursorAndSessionTypeTakeAPaneID() throws {
+        let cursor = try Surface.Cursor.parse(["--target", "s1", "--pane-id", "tok"]).makeRequest()
+        #expect(cursor == ControlRequest(cmd: .surfaceCursor, target: "s1", args: ControlArgs(paneID: "tok")))
+        let typed = try agtermctlKit.Session.TypeText.parse(["hi", "--target", "s1", "--pane-id", "tok"]).makeRequest()
+        #expect(typed == ControlRequest(cmd: .sessionType, target: "s1",
+                                        args: ControlArgs(text: "hi", select: false, paneID: "tok")))
+    }
 }

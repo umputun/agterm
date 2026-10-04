@@ -1522,6 +1522,21 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.surfaceCursor(target: nil, window: nil)])
     }
 
+    @Test func surfaceCursorAndSessionTypeForwardThePaneID() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .surfaceCursor, target: "s1", args: ControlArgs(paneID: "tok")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionType, target: "s1",
+                                                     args: ControlArgs(text: "x", pane: "right", paneID: "tok")))
+
+        #expect(actions.calls == [
+            .surfaceCursor(target: "s1", window: nil, paneID: "tok"),
+            .sessionType(target: "s1", window: nil,
+                         ControlSessionTypeOptions(text: "x", select: false, pane: .right, paneID: "tok")),
+        ])
+    }
+
     @Test func dashboardOpenRoutesTargetsWindowAndFixedFontMode() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

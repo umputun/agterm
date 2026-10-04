@@ -461,7 +461,9 @@
                 displays wake, then recovers on its own — poll this after an unattended create),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">backedByZmx</span> (true only when every existing
                 primary/split pane is currently zmx-backed; each primary/split object in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value, and its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value, its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span> (the stable token <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes, which follows the terminal through a swap
+                and is omitted for an overlay or a pane whose surface is not created yet), and its
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span>: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">leader</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">follower</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unowned</span>, which says whether this Mac's
                 window size is the one the pane's program sees. A pane that does not lead is covered. A remote pane waiting to be attached again after its ssh dropped also carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reconnect</span>, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failures</span> (the retry streak) and, when ssh said anything on the last failed try, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reason</span>.
@@ -1115,7 +1117,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session type &lt;text&gt; [--stdin] [--select] [--pane left|right|scratch] [--target T] [--window W]
+                agtermctl session type &lt;text&gt; [--stdin] [--select] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.type</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1135,6 +1137,13 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span> glyph exactly as a keystroke does — another
                 pane's glyph and an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> one are left alone, and empty
                 text clears nothing.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes a stable pane token (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].paneID</span> from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree --json</span>) and types into that terminal wherever a swap or
+                promotion moved it, overriding <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>. An unknown token falls back to an explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> and otherwise fails with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane id: &lt;id&gt;</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.pane</span> names the pane typed into.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> is the main pane (the default),
@@ -1231,8 +1240,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> accepts the shell's stable
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>. It resolves the surface's
                 current slot and overrides <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> when found,
-                so a long-running watcher keeps reading the same terminal after a pane swap or promotion. An absent or unknown
-                token falls back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, then to the visible pane.
+                so a long-running watcher keeps reading the same terminal after a pane swap or promotion. An unknown
+                token falls back to an explicit <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> and otherwise fails with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane id: &lt;id&gt;</span>, never reading another pane.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.pane</span> names the pane read.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A genuinely blank screen is <em>not</em> an error — it returns
@@ -2373,7 +2384,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl surface cursor [--target surface:&lt;id&gt;:right | active | quick] [--window W]
+                agtermctl surface cursor [--target surface:&lt;id&gt;:right | active | quick] [--pane-id TOKEN] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">surface.cursor</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -2385,6 +2396,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;kind&gt;</span>
                 id reads a hidden pane or a background session just as well as the visible one. This is a pure read: it neither
                 selects nor realizes the target, so an unrealized surface is reported rather than waited for.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> the target is a session (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> or a session id) and the
+                token picks the pane. A surface id or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> beside it is refused, an unknown token fails with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane id: &lt;id&gt;</span>, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> is the resolved surface id.
               </p>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 There is no row. The pinned libghostty exposes no cursor accessor, and the vertical metrics it does export
