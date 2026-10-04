@@ -266,7 +266,6 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: v2Path))
     }
 
-    // regression: with no opencode config and no probe result the version chooser opened, though no answer could install
     func testMissingConfigAndUnprobeableShellSkipsWithoutSelection() async throws {
         environment["SHELL"] = "/no/such/agterm-test-shell"
         try FileManager.default.removeItem(at: home.appendingPathComponent(".config/opencode"))

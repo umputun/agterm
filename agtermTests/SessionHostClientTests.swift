@@ -127,6 +127,29 @@ final class SessionHostClientTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), expected)
     }
 
+    func testCleanupStopsADaemonZmxCannotKill() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        let fixture = try Fixture()
+        let pair: (daemon: Int32, leader: Int32)
+        do {
+            try fixture.startClient(name: fixture.names[0], terminal: true)
+            _ = try fixture.waitForLeaders(count: 1)
+            pair = try XCTUnwrap(fixture.daemonsAndLeaders().first)
+            try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: fixture.zmx.path)
+        } catch {
+            fixture.cleanup()
+            throw error
+        }
+
+        fixture.cleanup()
+
+        let deadline = Date().addingTimeInterval(3)
+        while (kill(pair.daemon, 0) == 0 || kill(pair.leader, 0) == 0) && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        XCTAssertEqual(kill(pair.daemon, 0), -1)
+        XCTAssertEqual(kill(pair.leader, 0), -1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.directory.path))
+    }
+
     final class Fixture {
         let directory = URL(fileURLWithPath: "/tmp/shc-\(UUID().uuidString)")
         let names = ["agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "agterm-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
@@ -284,7 +307,37 @@ final class SessionHostClientTests: XCTestCase {
                 try? FileManager.default.copyItem(at: URL(fileURLWithPath: zmxDirectory).appendingPathComponent("logs"),
                                                   to: evidenceDirectory.appendingPathComponent("zmx-logs"))
             }
+            let survivors = killOwnedProcesses()
+            XCTAssertEqual(survivors, [], "fixture processes outlived cleanup; \(directory.path) is kept")
+            guard survivors.isEmpty else { return }
             try? FileManager.default.removeItem(at: directory)
+        }
+
+        /// Leader pid of every daemon `zmx list` reports, paired with the daemon that is its parent.
+        func daemonsAndLeaders() throws -> [(daemon: Int32, leader: Int32)] {
+            try ZmxListParser.parse(runZmx(["list"])).compactMap { $0.leaderPID }.map { leader in
+                var info = proc_bsdinfo()
+                let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+                guard proc_pidinfo(leader, PROC_PIDTBSDINFO, 0, &info, size) == size else { throw POSIXError(.ESRCH) }
+                return (Int32(info.pbi_ppid), leader)
+            }
+        }
+
+        // `zmx kill` needs a daemon that answers, so a daemon it could not reach is found by its executable
+        // instead: only this fixture's own copies live under `directory`.
+        private func killOwnedProcesses() -> [Int32] {
+            guard let physical = realpath(directory.path, nil) else { return [] }
+            defer { free(physical) }
+            let root = String(cString: physical) + "/"
+            func owned() -> [Int32] {
+                var pids = [Int32](repeating: 0, count: Int(proc_listallpids(nil, 0)) + 64)
+                let count = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<Int32>.size))
+                return pids.prefix(Int(max(count, 0))).filter { pid in pid > 0 && (try? executablePath(pid))?.hasPrefix(root) == true }
+            }
+            for pid in owned() { kill(pid, SIGKILL) }
+            let deadline = Date().addingTimeInterval(3)
+            while !owned().isEmpty && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+            return owned().sorted()
         }
 
         private func executablePath(_ pid: Int32) throws -> String {
