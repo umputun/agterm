@@ -130,13 +130,14 @@ extension HtmlSource {
 extension HtmlOverlay {
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
     /// page writes and could dress as a prompt: the file shown, the origin a URL page is confined to, or
-    /// for a browsing page the origin of the document it shows now.
+    /// for a browsing page the origin of the document it shows now. A browsing page on a document with no
+    /// web origin, `about:blank`, is named by that address: no site is shown, so none is claimed.
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .url(let url):
-            let shown = browse ? current.flatMap { URL(string: $0.page) }.flatMap(HtmlOrigin.init) : nil
-            return (shown ?? HtmlOrigin(url))?.display ?? url.absoluteString
+            let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
+            return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
         }
     }
 }

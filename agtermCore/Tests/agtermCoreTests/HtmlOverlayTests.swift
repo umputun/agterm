@@ -178,7 +178,7 @@ struct HtmlOverlayTests {
     @Test(arguments: [
         ("https://login.example/sso?next=1", "https://login.example"),
         ("http://localhost:5173/other", "http://localhost:5173"),
-        ("about:blank", "http://localhost:5173"),
+        ("about:blank", "about:blank"),
     ])
     func browsingIdentityIsTheOriginOfTheShownDocument(_ shown: String, _ identity: String) throws {
         var overlay = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/app"))), browse: true)

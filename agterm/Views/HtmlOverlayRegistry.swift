@@ -204,6 +204,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var loadPending = false
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
+    // the address of the document a browsing page shows; nil until its first commit
+    private var shownURL: URL?
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
     private var closeRequested = false
@@ -273,7 +275,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         observations = [
             webView.observe(\.title) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
-            webView.observe(\.url) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
+            webView.observe(\.url) { [weak self] _, _ in Task { @MainActor in self?.urlChanged() } },
             webView.observe(\.canGoBack) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
             webView.observe(\.canGoForward) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
         ]
@@ -464,7 +466,17 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         dismiss?()
     }
 
+    // `webView.url` names a pending load before its document replaces the one shown, so a browsing page
+    // takes its address at commit; a change that stays on the shown origin is the document's own
+    private func urlChanged() {
+        if let url = webView.url, let shownURL, HtmlSource.origin(of: url) == HtmlSource.origin(of: shownURL) {
+            self.shownURL = url
+        }
+        reportPage()
+    }
+
     private var pageURL: URL {
+        if overlay.browse, let shownURL { return shownURL }
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
@@ -501,6 +513,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_: WKWebView, didCommit _: WKNavigation!) {
         committed = true
+        shownURL = webView.url
+        reportPage()
     }
 
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
@@ -519,6 +533,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webViewWebContentProcessDidTerminate(_: WKWebView) {
         committed = false
+        shownURL = nil
         fail("web content process terminated")
     }
 

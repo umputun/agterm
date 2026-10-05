@@ -10,11 +10,13 @@ private final class LoopbackServer: @unchecked Sendable {
         var status = 200
         var headers: [String: String] = [:]
         var body = ""
+        var hold = false
     }
 
     private let listener: NWListener
     private let queue = DispatchQueue(label: "agterm.test.loopback")
     private var routes: [String: Response]
+    private var held: [NWConnection] = []
 
     init(_ host: NWEndpoint.Host, routes: [String: Response]) throws {
         let parameters = NWParameters.tcp
@@ -50,6 +52,7 @@ private final class LoopbackServer: @unchecked Sendable {
             }
             let path = line.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
             let response = routes[path] ?? Response(status: 404, body: "not found")
+            if response.hold { return held.append(connection) }
             let headers = (["Content-Type": "text/html", "Content-Length": "\(response.body.utf8.count)",
                             "Connection": "close"].merging(response.headers) { $1 })
                 .map { "\($0): \($1)\r\n" }.joined()
@@ -508,6 +511,47 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNil(registry.navigate(page.id, .back))
         try await waitFor("back on first") { self.current?.current?.title == "first" }
         XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+    }
+
+    func testABrowsingPageKeepsNamingTheShownSiteWhileAnotherSiteLoads() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let slow = try await serve(.ipv4(.loopback), ["/": .init(hold: true)])
+        let live = registry.page(for: try openURL("http://127.0.0.1:\(first)/", browse: true), store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+
+        _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(slow)/'")
+        try await waitFor("second site loading") { self.current?.loadState == .loading }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+        XCTAssertEqual(current?.current?.page, "http://127.0.0.1:\(first)/")
+    }
+
+    func testABrowsingPageSentBackToItsSourceNamesTheShownSiteUntilTheSourceCommits() async throws {
+        let server = try LoopbackServer(.ipv4(.loopback), routes: ["/": .init(body: "<title>first</title>")])
+        servers.append(server)
+        let first = try await server.start()
+        let second = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>second</title>")])
+        let page = try openURL("http://127.0.0.1:\(first)/", browse: true)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(second)/'")
+        try await waitFor("second loaded") { self.current?.current?.title == "second" && self.current?.loadState == .loaded }
+
+        server.set("/", .init(hold: true))
+        XCTAssertNil(registry.reload(page.id, target: .original, store: store))
+        try await waitFor("source loading") { self.current?.loadState == .loading }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(second)")
+    }
+
+    func testABrowsingPageNamesABlankDocumentAsBlank() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let live = registry.page(for: try openURL("http://127.0.0.1:\(first)/", browse: true), store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+
+        _ = try await live.webView.evaluateJavaScript("location.href = 'about:blank'")
+        try await waitFor("blank shown") { self.current?.current?.page == "about:blank" }
+        XCTAssertEqual(current?.identity, "about:blank")
     }
 
     func testABrowsingPageKeepsNamingTheShownSiteWhenALoadElsewhereFails() async throws {
