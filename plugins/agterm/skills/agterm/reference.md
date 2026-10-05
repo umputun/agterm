@@ -578,6 +578,15 @@ error keeps those names for compatibility.
   runs dies with it, and `hasSplit`/`splitRatio`/`splitFocused` drop out of `tree`. Reaches a HIDDEN pane
   too, which is what `session type --pane right $'exit\n'` cannot do once the pane is past a prompt
   (nested shell, ssh, an agent). Answers ok on a session with no split.
+- `session restart --command LINE (--pane-id ID | --pane left|right) [--target] [--window W]`: replace one
+  pane's shell. Ends the shell and its foreground program, then starts a new login shell in the same pane
+  that runs LINE and stays interactive. The pane keeps its place, stable id and `AGTERM_*` environment and
+  starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
+  shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;
+  read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode and a local pane only,
+  no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
+  4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
+  background or disowned job of the old shell is not ended.
 - `session swap [--target] [--window W]`: exchange both terminals' physical positions and primary/split
   roles without restarting either process. Focus follows its terminal; split axis and ratio stay fixed.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a

@@ -27,6 +27,7 @@ public enum Command: String, Codable, Sendable {
     case sessionContext = "session.context"
     case sessionSeen = "session.seen"
     case sessionRestore = "session.restore"
+    case sessionRestart = "session.restart"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionSplitClose = "session.split.close"
@@ -589,6 +590,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var pageID: String?
     /// A page's selector outcome for `session.overlay.result --page`.
     public var pageOutcome: ControlHtmlPageOutcome?
+    /// restart is what `session.restart` replaced: the pane's stable id and its shell before and after.
+    public var restart: ControlRestartReceipt?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -602,7 +605,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 zmx: ControlZmxInventory? = nil, remote: ControlRemoteTree? = nil,
                 liveReset: ControlLiveResetStatus? = nil,
                 width: Int? = nil, height: Int? = nil,
-                pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil) {
+                pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil,
+                restart: ControlRestartReceipt? = nil) {
+        self.restart = restart
         self.width = width
         self.height = height
         self.restore = restore

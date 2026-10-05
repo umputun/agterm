@@ -43,6 +43,73 @@ final class ZmxLiveUITests: ControlAPITestCase {
                        "the create-only payload must run exactly once")
     }
 
+    func testRestartReplacesTheShellEndsItsProgramAndKeepsThePane() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20))
+        let paneID = try XCTUnwrap(paneID(sessionID, kind: "left"))
+        let programPid = stateDir.appendingPathComponent("program.pid")
+        let verdict = stateDir.appendingPathComponent("program.gone")
+
+        let first = try restart(sessionID, paneID: paneID, command: "sh -c 'echo $$ > \(programPid.path); exec sleep 600'")
+        XCTAssertTrue(poll(until: FileManager.default.fileExists(atPath: programPid.path), timeout: 20),
+                      "the restarted shell should run the line")
+        let pid = try String(contentsOf: programPid, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let second = try restart(sessionID, paneID: paneID,
+                                 command: "kill -0 \(pid) 2>/dev/null; echo $? > \(verdict.path); echo $AGTERM_PANE_ID >> \(verdict.path)")
+        XCTAssertTrue(poll(until: (try? String(contentsOf: verdict, encoding: .utf8))?.contains(paneID) == true, timeout: 20))
+        XCTAssertEqual(try String(contentsOf: verdict, encoding: .utf8), "1\n\(paneID)\n",
+                       "the program the first shell ran must be gone, and the new shell keeps the pane id")
+        XCTAssertEqual(first.newPid, second.oldPid)
+        XCTAssertNotEqual(second.oldPid, second.newPid)
+        XCTAssertEqual(self.paneID(sessionID, kind: "left"), paneID)
+        XCTAssertTrue(isBacked(sessionID, expectedPanes: ["left"]))
+    }
+
+    func testRestartRunsInAHiddenSplitAndRefusesAnUnknownPaneID() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionID)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left", "right"]), timeout: 20))
+        let paneID = try XCTUnwrap(paneID(sessionID, kind: "right"))
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionID)","args":{"mode":"off"}}"#)["ok"] as? Bool, true)
+        let marker = stateDir.appendingPathComponent("hidden.txt")
+
+        _ = try restart(sessionID, paneID: paneID, command: "printf x > \(marker.path)")
+        XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8)) == "x", timeout: 20),
+                      "a pane the deck does not lay out should still start its new shell")
+        XCTAssertEqual(self.paneID(sessionID, kind: "right"), paneID)
+
+        let unknown = UUID().uuidString
+        let request = try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.restart", "target": sessionID,
+            "args": ["command": "true", "paneID": unknown, "pane": "right"],
+        ])
+        let refused = try sendCommand(String(decoding: request, as: UTF8.self))
+        XCTAssertEqual(refused["error"] as? String, "unknown pane id: \(unknown)")
+    }
+
+    private func restart(_ sessionID: String, paneID: String, command: String) throws -> (oldPid: Int, newPid: Int) {
+        let request = try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.restart", "target": sessionID, "args": ["command": command, "paneID": paneID],
+        ])
+        let response = try sendCommand(String(decoding: request, as: UTF8.self))
+        XCTAssertEqual(response["ok"] as? Bool, true, "\(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any])
+        let receipt = try XCTUnwrap(result["restart"] as? [String: Any])
+        XCTAssertEqual(receipt["paneID"] as? String, paneID)
+        return (try XCTUnwrap(receipt["oldPid"] as? Int), try XCTUnwrap(receipt["newPid"] as? Int))
+    }
+
+    private func paneID(_ sessionID: String, kind: String) -> String? {
+        guard let response = try? sendCommand(#"{"cmd":"tree"}"#),
+              let tree = (response["result"] as? [String: Any])?["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]],
+              let session = workspaces.flatMap({ $0["sessions"] as? [[String: Any]] ?? [] })
+                  .first(where: { ($0["id"] as? String)?.caseInsensitiveCompare(sessionID) == .orderedSame }),
+              let surfaces = session["surfaces"] as? [[String: Any]] else { return nil }
+        return surfaces.first { $0["kind"] as? String == kind }?["paneID"] as? String
+    }
+
     private func isBacked(_ sessionID: String, expectedPanes: Set<String>) -> Bool {
         guard let response = try? sendCommand(#"{"cmd":"tree"}"#),
               let tree = (response["result"] as? [String: Any])?["tree"] as? [String: Any],

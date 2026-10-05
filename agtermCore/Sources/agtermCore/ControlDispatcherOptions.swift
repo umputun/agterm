@@ -89,3 +89,35 @@ public struct ControlSessionOverlayTextOptions: Equatable, Sendable {
         self.lines = lines
     }
 }
+
+/// ControlSessionRestartOptions is the parsed `session.restart` payload. At least one of `pane` and
+/// `paneID` is set; the host resolves them against the live slots.
+public struct ControlSessionRestartOptions: Equatable, Sendable {
+    /// maxCommandBytes bounds the shell line in UTF-8 bytes. It travels in the new shell's argv, inside
+    /// the session host's 64 KiB creation frame beside the pane's environment.
+    public static let maxCommandBytes = 4096
+
+    public let command: String
+    public let pane: StatusPane?
+    public let paneID: String?
+
+    public init(command: String, pane: StatusPane?, paneID: String? = nil) {
+        self.command = command
+        self.pane = pane
+        self.paneID = paneID
+    }
+}
+
+/// ControlRestartReceipt is what a successful `session.restart` proves: the pane's shell was replaced.
+/// The pids are the daemon leaders, the pane's root shells, not the program the caller's line starts.
+public struct ControlRestartReceipt: Codable, Equatable, Sendable {
+    public let paneID: String
+    public let oldPid: Int32
+    public let newPid: Int32
+
+    public init(paneID: String, oldPid: Int32, newPid: Int32) {
+        self.paneID = paneID
+        self.oldPid = oldPid
+        self.newPid = newPid
+    }
+}

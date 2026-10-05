@@ -432,4 +432,62 @@ struct ControlDispatcherSessionMetadataTests {
             .sessionRestore(target: "session", window: nil, ControlSessionRestoreUpdate(pin: .pin(exact)))
         ])
     }
+
+    @Test func sessionRestartRoutesLinePaneAndTokenToTheHost() async {
+        let actions = MockControlActions()
+        let receipt = ControlRestartReceipt(paneID: "token", oldPid: 11, newPid: 22)
+        actions.nextSessionRestartResponse = ControlResponse(
+            ok: true, result: ControlResult(id: "session", pane: "right", restart: receipt))
+        let line = #"cld "brief: $HOME/x.md" && echo done | tee log"#
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionRestart, target: "session",
+            args: ControlArgs(command: line, window: "win", pane: "split", paneID: "token")
+        ))
+
+        #expect(response?.result?.restart == receipt)
+        #expect(actions.calls == [
+            .sessionRestart(target: "session", window: "win",
+                            ControlSessionRestartOptions(command: line, pane: .right, paneID: "token"))
+        ])
+    }
+
+    @Test func sessionRestartAcceptsEitherSelectorAlone() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionRestart, target: "session",
+                                                     args: ControlArgs(command: "cld", paneID: "token")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionRestart, target: "session",
+                                                     args: ControlArgs(command: "cld", pane: "left")))
+
+        #expect(actions.calls == [
+            .sessionRestart(target: "session", window: nil,
+                            ControlSessionRestartOptions(command: "cld", pane: nil, paneID: "token")),
+            .sessionRestart(target: "session", window: nil,
+                            ControlSessionRestartOptions(command: "cld", pane: .left, paneID: nil))
+        ])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(paneID: "token"), "session.restart requires a command"),
+        (ControlArgs(command: "   ", paneID: "token"), "session.restart requires a command"),
+        (ControlArgs(command: "a\nb", paneID: "token"), "command must not contain control characters"),
+        (ControlArgs(command: "cld", pane: "middle"), "--pane must be left, right, or scratch"),
+        (ControlArgs(command: "cld", pane: "scratch"), "session.restart does not address the scratch pane"),
+        (ControlArgs(command: "cld"), "session.restart requires --pane-id or --pane"),
+        (ControlArgs(command: "cld", paneID: ""), "session.restart requires --pane-id or --pane"),
+        (ControlArgs(command: String(repeating: "a", count: ControlSessionRestartOptions.maxCommandBytes + 1),
+                     paneID: "token"),
+         "command too long (max \(ControlSessionRestartOptions.maxCommandBytes) bytes)")
+    ])
+    func sessionRestartRejectsBeforeTheHost(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionRestart, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
 }

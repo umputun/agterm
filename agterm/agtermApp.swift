@@ -250,6 +250,10 @@ struct agtermApp: App {
                         NotificationManager.shared.start()
                         let paneServices = surfaceServices
                         PaneLead.reattach = { old, claim in Self.reattachPane(old, claim: claim, services: paneServices) }
+                        PaneLead.replace = { old, launch, lead in
+                            Self.replacePane(old, launch: launch, lead: lead, cover: false, spawnFirst: true,
+                                             services: paneServices)
+                        }
                         PaneLead.roleChanged = { [library] view in
                             view.session.flatMap { library.store(forSession: $0.id) }?.leadRoleChanged()
                         }
@@ -346,7 +350,8 @@ struct agtermApp: App {
         let executable = ZmxLaunch.executablePath(bundleURL: Bundle.main.bundleURL, environment: environment,
                                                   allowDebugOverride: ZmxLaunch.allowDebugOverride)
         let client = ZmxClient(executablePath: executable,
-                              socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: stateDirectory.path))
+                              socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: stateDirectory.path),
+                              sweeper: ProcessSweeper())
         let foregroundResolver = ZmxForegroundResolver(leaderProvider: { client.sessionLeaderPIDs(timeout: $0) })
         let context = LaunchSpawnContext()
         let library = WindowLibrary(
@@ -513,10 +518,22 @@ struct agtermApp: App {
     @MainActor @discardableResult
     static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, services: SurfaceServices) -> Bool {
         let lead = ZmxLeadAttachment(claim: claim)
-        guard let session = old.session, let store = services.library.store(forSession: session.id),
+        guard let session = old.session,
               let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
               let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
         else { return false }
+        return replacePane(old, launch: launch, lead: lead, cover: cover, services: services) != nil
+    }
+
+    /// replacePane puts a surface built from `launch` in `old`'s slot and destroys `old`, running none of
+    /// the pane's close paths. `spawnFirst` creates the new surface at the old size BEFORE the free: libghostty
+    /// routes a queued child-exit by surface address, and a surface created after it can take the old exit.
+    @MainActor
+    static func replacePane(_ old: GhosttySurfaceView, launch: PaneReattach, lead: ZmxLeadAttachment, cover: Bool,
+                            spawnFirst: Bool = false, services: SurfaceServices) -> GhosttySurfaceView? {
+        guard let session = old.session, let store = services.library.store(forSession: session.id),
+              let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity
+        else { return nil }
         // a dashboard cell's transient font is not the pane's: seeding from it would persist the small size
         let fontSize = old.dashboardFontOverride == nil ? old.currentFontSize() ?? session.fontSize : session.fontSize
         let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
@@ -538,10 +555,14 @@ struct agtermApp: App {
             session.searchSurface = nil
         }
         if old.isSplitPane { session.splitSurface = view } else { session.surface = view }
+        if spawnFirst {
+            view.frame = old.frame.isEmpty ? NSRect(x: 0, y: 0, width: 800, height: 600) : old.frame
+            view.createSurface()
+        }
         old.destroySurface()
         if old.backedByZmx { services.zmxForegroundResolver?.noteLifecycleChange() }
         if hadFocus { view.focusAfterReparent() }
-        return true
+        return view
     }
 
     /// Shell-exit handler for BOTH pane factories, dispatched on the surface's CURRENT role, not the factory that

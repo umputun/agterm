@@ -1341,6 +1341,37 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session restart --command LINE (--pane-id ID | --pane left|right) [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.restart</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Replace the shell of one pane. The pane's shell and its foreground program are ended, then a new
+                login shell starts in the same pane, runs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span>
+                and stays as an interactive shell afterwards. The pane keeps its place, its stable id and its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_*</span> environment, and starts with an
+                empty screen. Nothing is typed into the pane. A hidden split and a pane in a background window restart like any
+                other.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The reply comes once the new shell exists and carries
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.oldPid</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.newPid</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.paneID</span>, plus
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>. The pids are the pane's shells, not the
+                program <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span> starts; read that from
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>. Requires Live sessions
+                mode and a local pane; the scratch terminal is refused. A pane id that does not resolve is an error even beside
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span> is one shell line of at most 4096
+                bytes. The pane's status and any ask, HUD or pane overlay anchored to it are cleared; its restore pin is kept.
+                A background or disowned job of the old shell is not ended.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session lead [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.lead</div>

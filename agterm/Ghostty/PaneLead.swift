@@ -10,6 +10,8 @@ import AppKit
 enum PaneLead {
     /// Replaces a pane's surface with a fresh attach. Installed once by the app, which owns the factories.
     static var reattach: ((_ old: GhosttySurfaceView, _ claim: Bool) -> Void)?
+    /// replace swaps a pane's surface for one built from `launch`, uncovered. Installed once by the app.
+    static var replace: ((_ old: GhosttySurfaceView, _ launch: PaneReattach, _ lead: ZmxLeadAttachment) -> GhosttySurfaceView?)?
     /// Tells the pane's store that read-back changed.
     static var roleChanged: ((_ view: GhosttySurfaceView) -> Void)?
     /// Parks a pane whose ssh lost the connection until the host answers again. Installed by the app.

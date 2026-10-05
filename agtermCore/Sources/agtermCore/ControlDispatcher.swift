@@ -43,6 +43,10 @@ public protocol ControlActions {
     /// unresolvable `paneID` given without an explicit `pane`).
     func setSessionRestore(_ target: String?, window: String?,
                            update: ControlSessionRestoreUpdate) -> ControlResponse
+    /// restartSessionPane replaces one live pane's shell with a new one running `options.command`, keeping
+    /// the pane and its stable id. The default below keeps existing hosts source-compatible.
+    func restartSessionPane(_ target: String?, window: String?,
+                            options: ControlSessionRestartOptions) async -> ControlResponse
     /// Source-compatible axis-agnostic entry point retained for existing conformers and callers.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
     /// Axis-aware entry point. Its default delegates to the original method so an existing conformer does
@@ -215,6 +219,8 @@ public struct ControlDispatcher {
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionSeen, .sessionStatus,
                 .sessionRestore:
             return await dispatchSessionCommand(request)
+        case .sessionRestart:
+            return await dispatchSessionRestart(request)
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom, .surfaceCursor, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
@@ -469,6 +475,36 @@ public struct ControlDispatcher {
         }
         let update = ControlSessionRestoreUpdate(pin: pin, pane: pane, paneID: args?.paneID)
         return actions.setSessionRestore(request.target, window: args?.window, update: update)
+    }
+
+    /// `session.restart`: the line is a shell line and is never rewritten. A pane must be named, by token
+    /// or by role, because a default would restart a shell the caller never addressed.
+    private func dispatchSessionRestart(_ request: ControlRequest) async -> ControlResponse {
+        let args = request.args
+        guard let command = args?.command, !command.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return ControlResponse(ok: false, error: "session.restart requires a command")
+        }
+        guard !CommandRestore.hasControlCharacter(command) else {
+            return ControlResponse(ok: false, error: "command must not contain control characters")
+        }
+        guard command.utf8.count <= ControlSessionRestartOptions.maxCommandBytes else {
+            return ControlResponse(ok: false, error: "command too long (max "
+                + "\(ControlSessionRestartOptions.maxCommandBytes) bytes)")
+        }
+        let pane: StatusPane?
+        switch parsePane(args?.pane) {
+        case .pane(let parsed): pane = parsed
+        case .rejected(let rejection): return rejection
+        }
+        guard pane != .scratch else {
+            return ControlResponse(ok: false, error: "session.restart does not address the scratch pane")
+        }
+        let paneID = args?.paneID.flatMap { $0.isEmpty ? nil : $0 }
+        guard pane != nil || paneID != nil else {
+            return ControlResponse(ok: false, error: "session.restart requires --pane-id or --pane")
+        }
+        return await actions.restartSessionPane(request.target, window: args?.window, options: .init(
+            command: command, pane: pane, paneID: paneID))
     }
 
     /// `session.context`: `set` takes `text`, `clear` takes none. An invalid value is REJECTED, never

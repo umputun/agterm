@@ -357,4 +357,67 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(elapsed, 0.09)
         XCTAssertLessThan(elapsed, ZmxClient.captureWallClockLimit + 0.1)
     }
+
+    private static let sweptDaemon = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    private func sweepingClient(reply: String = "killed session \(ZmxClientTests.sweptDaemon)",
+                                signals: @escaping (Int32, pid_t) -> Void) -> ZmxClient {
+        var sweeper = ProcessSweeper()
+        sweeper.table = {
+            [ProcessRecord(pid: 100, parent: 50, started: 1, group: 100, foreground: 300),
+             ProcessRecord(pid: 300, parent: 100, started: 2, group: 300, foreground: 300),
+             ProcessRecord(pid: 301, parent: 300, started: 3, group: 300, foreground: 300),
+             ProcessRecord(pid: 400, parent: 100, started: 4, group: 400, foreground: 300),
+             ProcessRecord(pid: 200, parent: 1, started: 5, group: 200)]
+        }
+        sweeper.signal = signals
+        return ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
+            invocation.arguments.first == "list" ? "name=\(Self.sweptDaemon)\tpid=100\tclients=1\tcreated=1" : reply
+        }
+    }
+
+    func testAConfirmedKillHangsUpOnlyTheShellsForegroundJob() {
+        var sent: [String] = []
+        let client = sweepingClient { sent.append("\($0):\($1)") }
+
+        XCTAssertEqual(client.killConfirmed(name: Self.sweptDaemon), .killed)
+
+        XCTAssertEqual(sent.sorted(), ["\(SIGHUP):300", "\(SIGHUP):301"],
+                       "the background job and the unrelated process must never be signalled")
+    }
+
+    func testAKillZmxDidNotConfirmSignalsNothing() throws {
+        var sent: [String] = []
+        let client = sweepingClient(reply: "cleaned up stale session \(Self.sweptDaemon)") { sent.append("\($0):\($1)") }
+        let pane = try XCTUnwrap(ZmxSupport.paneIdentity(fromDaemonName: Self.sweptDaemon))
+
+        XCTAssertEqual(client.killConfirmed(name: Self.sweptDaemon), .staleSocket)
+        _ = client.killObservedOrphan(names: [Self.sweptDaemon])
+        client.kill(paneIdentities: [pane])
+
+        XCTAssertEqual(sent, [])
+    }
+
+    func testEveryKillPathHangsUpTheForegroundJob() throws {
+        var sent: [String] = []
+        let client = sweepingClient { sent.append("\($0):\($1)") }
+        let pane = try XCTUnwrap(ZmxSupport.paneIdentity(fromDaemonName: Self.sweptDaemon))
+
+        _ = client.killObservedOrphan(names: [Self.sweptDaemon])
+        _ = client.killBatch(names: [Self.sweptDaemon], shells: [Self.sweptDaemon: 100], timeout: 1)
+        client.kill(paneIdentities: [pane])
+
+        XCTAssertEqual(sent.sorted(), Array(repeating: ["\(SIGHUP):300", "\(SIGHUP):301"], count: 3).flatMap { $0 }.sorted())
+    }
+
+    func testForceEndKillsWhatIsLeftOfACapturedJob() {
+        var sent: [String] = []
+        let client = sweepingClient { sent.append("\($0):\($1)") }
+        let job = client.foregroundJobs(of: [Self.sweptDaemon])[Self.sweptDaemon] ?? []
+
+        XCTAssertTrue(client.isRunning(job))
+        client.forceEnd(job)
+
+        XCTAssertEqual(sent.sorted(), ["\(SIGKILL):300", "\(SIGKILL):301"])
+    }
 }

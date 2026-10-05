@@ -55,7 +55,8 @@ enum LiveResetConsumer {
                 logger.error("live sessions reset: the budget expired before the kill; leaving every selected pane suppressed")
                 survivors = Set(kill.map(\.leaderPID))
             } else {
-                if !client.killBatch(names: kill.map(\.daemon), timeout: timeout) {
+                let shells = Dictionary(kill.map { ($0.daemon, $0.leaderPID) }) { first, _ in first }
+                if !client.killBatch(names: kill.map(\.daemon), shells: shells, timeout: timeout) {
                     logger.error("live sessions reset: the batched kill did not complete; polling every leader anyway")
                 }
                 survivors = ZmxClient.leadersExited(Set(kill.map(\.leaderPID)), deadline: deadline, poll: deps.poll, isAlive: deps.isAlive)

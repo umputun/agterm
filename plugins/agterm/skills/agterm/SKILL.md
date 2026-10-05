@@ -6,7 +6,7 @@ description: >
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD or desktop notification; show a picker or question dialog; display an image inline; type
-  into a session or one pane by stable id, copy its selection or search its scrollback; manage windows; set font size and
+  into or restart a pane by its stable id, copy its selection or search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
   pane-visibility and tree-change events.
@@ -378,6 +378,10 @@ omitted when expanded).
 - `session lead [--pane left|right]`: for a session shared with another Mac, take the lead of a pane here
   (what a key press on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
   `unowned`. On the Mac the session runs on, a covered pane still takes `session type`/`text`.
+- `session restart --pane-id ID --command LINE`: end one pane's shell and its foreground program, and start a
+  new login shell there running LINE. Same pane, same stable id, blank screen, nothing typed. Use it to start
+  a program over in its pane instead of typing into it; the reply carries the old and new shell pids. Live
+  sessions mode only.
 - `session swap`: exchange the two terminals' physical positions and primary/split roles without restarting
   them. Focus follows the terminal; axis and divider ratio stay fixed. Works on shown or hidden splits and
   under zoom/dashboard; errors when there is no split or either surface is not ready. Read the new primary

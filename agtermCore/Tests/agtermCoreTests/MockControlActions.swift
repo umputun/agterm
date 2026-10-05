@@ -35,6 +35,7 @@ final class MockControlActions: ControlActions {
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
+        case sessionRestart(target: String?, window: String?, ControlSessionRestartOptions)
         case sessionSplit(target: String?, window: String?, String?, SplitAxis?)
         case sessionSplitClose(target: String?, window: String?)
         case sessionSwap(target: String?, window: String?)
@@ -203,6 +204,7 @@ final class MockControlActions: ControlActions {
     var nextRestoreCaptureResponse = ControlResponse(ok: true)
     var nextSessionRestoreResponse = ControlResponse(ok: true)
     var nextSessionSwapResponse = ControlResponse(ok: true)
+    var nextSessionRestartResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
@@ -343,6 +345,12 @@ final class MockControlActions: ControlActions {
                            update: ControlSessionRestoreUpdate) -> ControlResponse {
         calls.append(.sessionRestore(target: target, window: window, update))
         return nextSessionRestoreResponse
+    }
+
+    func restartSessionPane(_ target: String?, window: String?,
+                            options: ControlSessionRestartOptions) async -> ControlResponse {
+        calls.append(.sessionRestart(target: target, window: window, options))
+        return nextSessionRestartResponse
     }
 
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
