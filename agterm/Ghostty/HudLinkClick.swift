@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import SwiftUI
 
 /// Gives a HUD panel the terminal's link gesture: ⌘ over a link shows the pointing hand, ⌘-click opens it.
 /// The panel refuses every hit (`viewOnly`, under SwiftUI's `.allowsHitTesting(false)`) and tracks no
@@ -80,10 +81,39 @@ enum HudLinkClick {
         }
     }
 
+    /// Chrome drawn above a panel whose clicks are its own, the search bar today. Weak, so a view that
+    /// unmounts stops covering.
+    private static let covers = NSHashTable<NSView>.weakObjects()
+
+    static func trackCover(_ view: NSView, _ tracked: Bool) {
+        if tracked { covers.add(view) } else { covers.remove(view) }
+    }
+
+    private static func chromeCovers(_ point: NSPoint, in window: NSWindow) -> Bool {
+        covers.allObjects.contains { $0.window === window && $0.bounds.contains($0.convert(point, from: nil)) }
+    }
+
     private static func panel(in window: NSWindow?, at point: NSPoint) -> GhosttySurfaceView? {
-        guard let window, window.attachedSheet == nil, !askCovers(point, in: window) else { return nil }
+        guard let window, window.attachedSheet == nil, !askCovers(point, in: window),
+              !chromeCovers(point, in: window) else { return nil }
         return panels.allObjects.first { panel in
             panel.deckOnScreen && panel.window === window && panel.bounds.contains(panel.convert(point, from: nil))
         }
     }
+}
+
+/// Marks the bounds of chrome a HUD panel may lie under, so `HudLinkClick` leaves a command-click there to
+/// that chrome. A background of the view it marks; it takes no hits itself.
+struct HudClickCover: NSViewRepresentable {
+    final class MarkerView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            HudLinkClick.trackCover(self, window != nil)
+        }
+    }
+
+    func makeNSView(context: Context) -> MarkerView { MarkerView() }
+    func updateNSView(_ view: MarkerView, context: Context) {}
 }

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import agterm
 @testable import agtermCore
@@ -187,6 +188,39 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags, timestamp: 0,
                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0,
                                          clickCount: 1, pressure: 1))
+    }
+
+    // regression: a command-click on the search bar over a HUD went to the panel underneath
+    func testTheSearchBarKeepsACommandClickOverAHudPanel() throws {
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 320, height: 200)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+        let bar = NSHostingView(rootView: TerminalSearchBar(
+            needle: .constant(""), displayText: "", onNext: {}, onPrevious: {}, onClose: {},
+            chromeText: .white, terminalColor: .black))
+        bar.frame = NSRect(origin: NSPoint(x: 20, y: 120), size: bar.fittingSize)
+        content.addSubview(bar)
+        bar.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        let onBar = NSPoint(x: bar.frame.midX, y: bar.frame.midY)
+        let beside = NSPoint(x: bar.frame.midX, y: 40)
+
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command, at: onBar)),
+                       "the search bar is drawn above the panel, so the click is the bar's")
+        HudLinkClick.hover(try mouse(.mouseMoved, .command, at: onBar))
+        XCTAssertNil(HudLinkClick.hovered, "and the panel is not told the pointer is over it")
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseDown, .command, at: beside)),
+                      "the same panel still takes a command-click beside the bar")
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseUp, [], at: beside)))
+
+        bar.removeFromSuperview()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseDown, .command, at: onBar)),
+                      "a bar that is gone covers nothing")
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseUp, [], at: onBar)))
     }
 
     func testOnlyAPlainCommandLeftPressIsALinkClick() throws {
