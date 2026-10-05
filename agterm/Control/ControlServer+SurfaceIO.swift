@@ -566,8 +566,8 @@ extension ControlServer {
     /// for the same reason. A call that succeeds on the first probe pays no wait at all; the sleeps below are
     /// only reached once that probe has already failed.
     ///
-    /// `token` is the pane id the main pane was resolved from. The wait re-resolves it before each probe, so
-    /// a swap or a close during the wait cannot hand the keystrokes to whatever terminal took the slot.
+    /// `token` is the pane id the main pane was resolved from. The wait follows it into whichever slot holds
+    /// that terminal at each probe, so a swap or a close cannot hand the keystrokes to another terminal.
     func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool,
                     pane: StatusPane?, token: String? = nil) async -> ControlResponse {
         // a pane that does not lead its daemon takes scripted input through the daemon, never through
@@ -618,23 +618,24 @@ extension ControlServer {
         (store.session(withID: id)?.surface as? GhosttySurfaceView)?.expediteSpawn()
         for _ in 0..<12 {
             try? await Task.sleep(nanoseconds: 30_000_000)
+            let live = store.session(withID: id)
+            var role = StatusPane.left
             if let token {
-                guard let moved = store.session(withID: id)?.paneRole(forToken: token) else {
-                    return Self.unknownPaneID(token)
-                }
-                if moved != .left {
-                    var response = await injectText(text, into: id, store: store, select: false, pane: moved)
-                    if response.ok { response.result?.pane = moved.rawValue }
-                    return response
-                }
+                guard let current = live?.paneRole(forToken: token) else { return Self.unknownPaneID(token) }
+                role = current
             }
+            let slot = role == .right ? live?.splitSurface : (role == .scratch ? live?.scratchSurface : live?.surface)
             // poll for the surface AND its realization (a false inject keeps polling), so a just-created or
             // just-selected session isn't reported ok before its libghostty surface is up.
-            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView {
+            if let surface = slot as? GhosttySurfaceView {
                 // a pane that realized during the wait may have come up managed, or following
-                if let covered = coveredType(text, into: surface, session: id) { return covered }
-                if surface.injectAsUserInput(text: text) {
-                    return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+                var response = coveredType(text, into: surface, session: id)
+                if response == nil, surface.injectAsUserInput(text: text) {
+                    response = ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+                }
+                if var response {
+                    if response.ok, token != nil { response.result?.pane = role.rawValue }
+                    return response
                 }
             }
         }
