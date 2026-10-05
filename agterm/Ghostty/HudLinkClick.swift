@@ -36,7 +36,8 @@ enum HudLinkClick {
     static func hover(_ event: NSEvent) {
         let held = event.modifierFlags.intersection([.command, .shift, .control, .option]) == .command
         let point = event.type == .mouseMoved ? event.locationInWindow : event.window?.mouseLocationOutsideOfEventStream
-        let panel = held ? point.flatMap { panel(in: event.window, at: $0) } : nil
+        var panel: GhosttySurfaceView?
+        if held, let point { panel = Self.panel(in: event.window, at: point) }
         let owned = ownsCursor
         if let previous = hovered, previous !== panel { previous.passivePointer(at: nil, with: event) }
         hovered = panel
