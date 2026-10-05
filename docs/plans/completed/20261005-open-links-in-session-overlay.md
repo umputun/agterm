@@ -247,7 +247,7 @@
 - [x] `.claude/rules/settings.md`: the setting as a control-backed one, like `flaggedViewLayout`
 - [x] `.claude/rules/libghostty.md`: no change, it does not cover link clicks; the routing seam is recorded in `control-api.md`
 - [x] `ARCHITECTURE.md`: no change, it does not describe link routing
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
