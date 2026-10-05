@@ -239,13 +239,13 @@
 - [ ] run `lsappinfo list | grep -A4 agterm.debug` and clear leaked test processes
 
 ### Task 6: [Final] Update documentation
-- [ ] `site/docs.html`: the setting, what it covers, the fallbacks, HUD links, that logins are agterm's own
-- [ ] `site/commands.html`: `browser links`, `--browse`, `tree.linkOpenMode`, `htmlOverlays[].browse`
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: the command, the flag, both read-backs
-- [ ] `.claude/rules/control-api.md`: `browser.links` in the public catalog and in the bridge sentence beside `browser.clear`; record that the setting has no event and pages no restore
-- [ ] `.claude/rules/settings.md`: the setting as a control-backed one, like `flaggedViewLayout`
-- [ ] `.claude/rules/libghostty.md`: the link routing seam and the injected opener
-- [ ] `ARCHITECTURE.md` if the link routing seam is described there
+- [x] `site/docs.html`: the setting, what it covers, the fallbacks, HUD links, that logins are agterm's own
+- [x] `site/commands.html`: `browser links`, `--browse`, `tree.linkOpenMode`, `htmlOverlays[].browse`
+- [x] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: the command, the flag, both read-backs
+- [x] `.claude/rules/control-api.md`: `browser.links` in the public catalog and in the bridge sentence beside `browser.clear`; record that the setting has no event and pages no restore
+- [x] `.claude/rules/settings.md`: the setting as a control-backed one, like `flaggedViewLayout`
+- [x] `.claude/rules/libghostty.md`: no change, it does not cover link clicks; the routing seam is recorded in `control-api.md`
+- [x] `ARCHITECTURE.md`: no change, it does not describe link routing
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

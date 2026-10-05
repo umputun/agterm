@@ -1454,7 +1454,9 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste, whether clicking a workspace
+                ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste,
+                <strong style="color: #e6e1d7">Open links in</strong> (Browser, or Session overlay to show a ⌘-clicked web
+                link over its session; see <a href="#links" style="color: #6d82f3">links</a>), whether clicking a workspace
                 row expands or collapses it (on by default; the disclosure triangle always does), a
                 <strong style="color: #e6e1d7">Flagged view layout</strong> that picks a flat list or a workspace tree for the
                 flagged view in every window (the tree shares each workspace's collapse state with the ordinary tree, so
@@ -3106,6 +3108,16 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">clipboard-write = ask</span> or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">deny</span>. Each prompt offers
               <em>Don't ask again this session</em>.
+            </p>
+            <p id="links" style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A ⌘-click on a web link opens it in your browser. With
+              <strong style="color: #e6e1d7">Settings ▸ General ▸ Open links in</strong> set to Session overlay, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl browser links overlay</span>, an http or https link
+              opens in a web overlay over its session instead: JavaScript on, navigation buttons, and the saved browser
+              store, so a login made there lasts. That store is agterm's own; nothing is taken from your browser. The page
+              may go on to other sites, and its strip always names the site shown. The link still opens in the browser
+              when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
+              already has an overlay, or in the quick terminal.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A ⌘-click on a

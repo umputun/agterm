@@ -491,7 +491,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the pages in the overlay slots as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, zoom?, id}</span>, one of file and url set,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id}</span>, one of file and url set,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
                 slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?}</span>, where
@@ -586,6 +586,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">autoFollowMs</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">browser links</span>; app-wide),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarFlaggedLayout</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">flat</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar flagged-layout</span>; app-wide, so every window reports the
@@ -1837,11 +1840,13 @@
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay open --url URL [--navigation] [--js] [--persistent] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+                agtermctl session overlay open --url URL [--navigation] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Show a web page by URL in the overlay slot, typically a dev server you are running or a docs page. Everything about <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> applies, except that URL must be an absolute http or https URL, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span> are refused, and the page gets no bridge to agterm.
+                Show a web page by URL in the overlay slot, typically a dev server you are running or a docs page. Everything about <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> applies, except that URL must be an absolute http or https URL, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span> are refused, and the page gets no bridge to agterm. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--browse</span> the page may leave
+                the site it opened: links, redirects, forms and scripts can take it to any http or https address, so a redirect
+                login works, and the strip names the site of the document shown. Read it back as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">browse</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The server must be reachable from the Mac running agterm, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">localhost</span> points. Plain http works for local addresses (localhost, .local, IP literals); use https for public hosts. Pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span> for web apps that require client-side JavaScript. It keeps browser styling: an opaque canvas and no theme text color or scheme, only the theme variables, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> changes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-background</span> and never the browser canvas. The page is pinned to its origin: same-origin navigations and redirects load in place; a clicked link elsewhere, or a clicked link's redirect elsewhere, goes through the same confirmation and leaves the page loaded; a redirect to another origin during a load nobody clicked fails it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">navigation blocked</span>. Each overlay has its own in-memory browser storage, gone when it closes. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--persistent</span> the page instead uses one saved store shared by every such page, so cookies and site data survive the overlay and an app restart; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">persistent</span> reads it back and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser clear</span> empties it. The open fails, with nothing opened, when the store cannot be read or when it reaches the app before a clear's removal has finished. A socket request queues behind a socket-issued clear and then runs. A login that leaves the origin (OAuth, SSO, a popup) still fails, apps on one host with different ports share cookies, and a cookie without an expiry is not promised to outlive the app. Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">url</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span>.
@@ -3300,6 +3305,27 @@
                 after the removal finished, and with nothing ever saved it answers ok. Refused while a persistent page is open, one in a
                 just-closed session that can still be restored included, since an open page writes its login back. Clearing local data does not sign
                 you out on the server. App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl browser links [browser|overlay]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">browser.links</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Set where a clicked http or https link in a terminal opens, or with no mode print the current one.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span>, the default, hands it to the system browser.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span> opens it in a full session web overlay with JavaScript, navigation
+                buttons and the saved browser store, as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--url URL --browse --js --navigation --persistent</span>
+                would, without selecting the session. App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+                Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> at the top of <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree --json</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The link still opens in the browser when it was clicked in a HUD, a program overlay or the quick terminal,
+                when a HUD is up on the session, when the window has a zoomed terminal, when the session-wide overlay slot
+                is taken, when another Mac presents the session, or when the saved store cannot be used. mailto, ftp and
+                file links are unaffected. Same setting as Settings ▸ General ▸ Open links in.
               </p>
             </div>
           </section>

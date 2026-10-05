@@ -5,6 +5,7 @@ description: >
   asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
+  choose whether clicked links open in the browser or a session overlay;
   post a HUD or desktop notification; show a picker or question dialog; display an image inline; type
   into or restart a pane by its stable id, copy its selection or search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
@@ -108,7 +109,8 @@ control address for `surface zoom` and `surface cursor` (`left`, `right`, `scrat
 read-only top-level fields — `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
-(`tree` or `flagged` — the read side of `sidebar mode`), `sidebarFlaggedLayout` (`flat` or `tree`, app-wide —
+(`tree` or `flagged` — the read side of `sidebar mode`), `linkOpenMode` (`browser` or `overlay`, app-wide —
+the read side of `browser links`), `sidebarFlaggedLayout` (`flat` or `tree`, app-wide —
 the read side of `sidebar flagged-layout`), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
@@ -625,7 +627,7 @@ with `--error-position POS` and `--error-pane left|right`; see
 
 **hooks** — `hooks reload` — re-read `hooks.conf` (prints the parse-diagnostic count); `hooks list` — every `on <kind> <shell...>` line with its running pid and elapsed seconds, pending and dropped counts, last failure, and a retired marker for a removed line whose script still runs. A hook gets the event JSON on stdin plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_EVENT_HOST`, `AGT_SESSION_ID`, `AGT_WORKSPACE_ID`, `AGT_WINDOW_ID` and `AGT_SOCKET`; one process per line at a time with a 256-deep queue behind it. Both commands are app-global and refuse a target or `--window`.
 
-**browser** - `browser clear` - remove every cookie and all site data that `--persistent` URL overlays saved; refused while one is open. App-global, no target or `--window`.
+**browser** - `browser clear` - remove every cookie and all site data that `--persistent` URL overlays saved; refused while one is open. `browser links [browser|overlay]` - set or print where a clicked web link in a terminal opens: the system browser (default) or a full session web overlay with saved logins; read back from `linkOpenMode` in `tree`. Both app-global, no target or `--window`.
 
 **config** - `config reload` - re-read the agterm-scoped `ghostty.conf` (prints the diagnostic count).
 
@@ -777,6 +779,9 @@ agtermctl session overlay open --url http://localhost:5173/ --js --target "$AGTE
   page. `agtermctl browser clear` empties the store, and is refused while a `--persistent` page is open.
   A login that sends the page to another site (OAuth, SSO, a popup) still fails: the page stays on its
   origin. Apps on `localhost` with different ports share cookies in the store.
+- Pass `--browse` to let the page leave its first site: links, redirects and scripts can then take it to
+  any `http` or `https` address, a redirect login included, and the strip names the site shown. A popup
+  login still fails. `tree` reports `browse` for each page.
 
 Every page gets the terminal theme as CSS variables: `--agterm-background`, `--agterm-foreground` and
 `--agterm-color-0` to `--agterm-color-15`, the theme's ANSI palette by slot (1 red, 2 green, 3 yellow, 4 blue,

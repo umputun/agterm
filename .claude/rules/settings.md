@@ -273,6 +273,10 @@ paths:
   overflowing tab still reports every control hittable; `testFlaggedViewLayoutPickerPersists` compares the
   tab's last line against the window frame instead.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
+- `linkOpenMode` is raw `LinkOpenMode`, nil = `browser`, read through `effectiveLinkOpenMode` at each link
+  click; nothing renders from it. Its picker sits in the General tab's Mouse section, and
+  `testLinkOpenModePickerPersists` holds the same fit check. The control catalog carries it as
+  `browser.links` ([[control-api]]).
 - `htmlOverlayZoom` is the one page zoom every HTML overlay shows at, nil = 1, stepped only by the font
   commands through `SettingsModel.stepHtmlOverlayZoom`, which saves and mirrors to `HtmlOverlayRegistry`
   without `persistAndApply`: nothing else renders it, so a keypress must not broadcast an appearance change.

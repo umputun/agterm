@@ -169,7 +169,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
   `.fullscreen`, `.minimize`
-- `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `config.reload`, `theme.set`, `theme.list`,
+- `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
@@ -523,6 +523,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `HtmlOverlayRegistry` owns the saved store. The open adapter asks `persistentStoreFailure()` before it
   accepts a persistent page and builds the page before replying, so the page counts as open from the moment
   the open answers ok; every other page is still built when a view first asks for it.
+- `browser.links` sets or reads `AppSettings.linkOpenMode` (`browser` | `overlay`), app-global like
+  `browser.clear`; no mode reads, and the reply's `text` is the effective mode either way. It writes through
+  `SettingsModel.setLinkOpenMode`, the Settings picker's setter. Read back as top-level `tree.linkOpenMode`.
+  Poll-only: no event reports a change, and nothing is restored but the setting itself.
+- A URL page opened with `--browse` (`HtmlOverlay.browse`, read back as `browse`) may take its main frame to
+  any HTTP(S) origin; without it the origin-pinned policy stands. Its identity and reported `page` come from
+  the document COMMITTED, never from `webView.url`, which names a pending load while the old document is
+  still shown; a later URL change is taken only when it stays on the shown origin. A blank document is named
+  `about:blank`. New-window requests stay confirmed-external and a URL page still gets no bridge.
+- A clicked terminal link follows `LinkPolicy.route` through `LinkOpener.shared`, which the app points at
+  the setting and at `ControlServer.openLinkOverlay`. That opens `--url --browse --js --navigation
+  --persistent` full-size on the click's owning session, without selecting it, and returns false, sending
+  the link to the browser, when a HUD is up on the session, when its window has a zoomed terminal, or when
+  `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those
+  opens: one closes the HUD for good, the other shows nothing. A HUD, a program overlay and the quick
+  terminal never route to the overlay.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
@@ -601,7 +617,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach` and
   `dashboard` keep their ids and still land in the page's window, and `hooks.*`, which refuse any window,
-  and `browser.clear` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
+  and `browser.clear` and `browser.links` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
   `zmx.present`, `session.overlay.job.run` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
   separate install would lose the adapter at the next theme change. Release unregisters the handlers;
