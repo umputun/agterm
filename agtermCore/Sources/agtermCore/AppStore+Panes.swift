@@ -384,7 +384,7 @@ extension AppStore {
     /// Resizes an already-open overlay in place: `sizePercent` (clamped to 1...100) switches it to floating,
     /// nil to the translucent full-pane overlay, as in `openOverlay`. The surface stays mounted (the detail
     /// pane hosts both variants), so only the layout re-flows and the program never re-spawns. False with no
-    /// open overlay. A HUD in the slot takes the narrower `HudLayout.clampSizePercent` bound instead, so no
+    /// open overlay. A HUD in the slot takes the `HudLayout.clampSizePercent(_:for:)` bound instead, so no
     /// resize path can grow a message until it covers the session it is about, and the percent reaches its
     /// WIDTH alone. That width is recorded as forced, so it holds through later remeasures until the next
     /// open or update; the caller owes the panel a `remeasureHud` for the height the new width needs.
@@ -456,7 +456,7 @@ extension AppStore {
 
     /// Opens a HUD in the session's overlay slot: a passive message panel rendered by the app's bundled
     /// helper, which `command` runs and which re-reads `file` every tick. Always FLOATING and always within
-    /// `HudLayout.clampSizePercent` — the app's measurement or the caller's `spec.sizePercent`, whichever
+    /// `HudLayout.clampSizePercent(_:for:)` — the app's measurement or the caller's `spec.sizePercent`, whichever
     /// applies, bounded — because a HUD must never cover the session it is a message about.
     ///
     /// A live HUD is REPLACED (torn down and re-opened, so the helper picks up the new file), a live

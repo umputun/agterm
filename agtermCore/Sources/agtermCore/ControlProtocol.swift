@@ -676,7 +676,7 @@ public enum OverlayHudError {
     /// `overlayActive` alone would otherwise answer the misleading "overlay still running".
     public static let noResult = "no overlay result: the slot holds a hud"
     /// A HUD is always floating (`AppStore.openHud`): it must never cover the session it is a message about.
-    /// A percent is accepted but bounded by `HudLayout.clampSizePercent`, which states the same invariant.
+    /// A percent is accepted but bounded by `HudLayout.clampSizePercent(_:for:)`.
     public static let fullResize = "a hud is always floating: pass --size-percent, not --full"
     /// `session.hud.update`/`.close` against a slot that holds no HUD — empty, or running a caller's program.
     public static let noHud = "no hud"

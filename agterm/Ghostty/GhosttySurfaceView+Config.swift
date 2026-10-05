@@ -123,7 +123,7 @@ extension GhosttySurfaceView {
         """
 
     /// restoreHudFontSize puts a HUD back at its creation size after a config rebuild, through the keybind
-    /// action: an included config's `font-size` can outrank the size a rebuilt config restates.
+    /// action: libghostty keeps a size across a config update only when it was set that way.
     private func restoreHudFontSize() {
         guard hudBodyFile != nil, let size = initialFontSize else { return }
         _ = performBindingAction("set_font_size:\(size)")

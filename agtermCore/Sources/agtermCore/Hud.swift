@@ -211,9 +211,9 @@ public enum HudPosition: String, Codable, CaseIterable, Sendable {
     public static let defaultPosition = HudPosition.center
 
     /// Percent of the pane held clear at an edge the panel is anchored to, on EITHER axis; a `center` term
-    /// ignores it on that axis. The margin is held only while the panel is small enough to leave room —
-    /// `OverlayPanelStyle` centers instead of overhanging the pane, so a panel at or above
-    /// `HudLayout.maxSizePercent` ignores the anchor on that axis entirely.
+    /// ignores it on that axis, and a `sticky` spec holds none. The margin is held only while the panel is
+    /// small enough to leave room — `OverlayPanelStyle` centers instead of overhanging the pane, so a panel
+    /// that holds the margin and is at or above `HudLayout.maxSizePercent` ignores the anchor on that axis.
     public static let edgeMarginPercent = 10
 
     /// parse resolves a caller's spelling, aliases included. The ONE entry point for turning text into a
@@ -377,24 +377,24 @@ public enum HudLayout {
     /// Cells the spinner glyph and its trailing space claim, so turning the spinner on cannot rewrap text.
     static let spinnerWidth = 2
 
-    /// clampSizePercent bounds a CALLER'S `--size-percent` into the same range the measured WIDTH produces.
-    /// The maximum is the invariant `OverlayHudError.fullResize` states for `--full`, one layer down: a HUD
-    /// is a message ABOUT a session and must never cover it, and 100 would do exactly that. The read-back
-    /// reports the clamped value, so a caller sees what the panel actually took. Height takes no caller
-    /// override at all — `heightPercent` owns why.
+    /// clampSizePercent bounds a width into the range a panel holding its edge margin may take. The maximum
+    /// is the invariant `OverlayHudError.fullResize` states for `--full`, one layer down: a HUD is a message
+    /// ABOUT a session and must never cover it. Every path sizing a live HUD takes `clampSizePercent(_:for:)`
+    /// instead, since a sticky spec may take more. Height takes no caller override at all — `heightPercent`
+    /// owns why.
     public static func clampSizePercent(_ requested: Int) -> Int {
         min(max(requested, minSizePercent), maxSizePercent)
     }
 
     /// The widest `spec`'s panel may be. A sticky panel off center owes no edge margin, so nothing is left
     /// for the two margins `maxSizePercent` reserves and it may span the pane.
-    public static func maxWidthPercent(for spec: HudSpec) -> Int {
+    static func maxWidthPercent(for spec: HudSpec) -> Int {
         spec.sticky && spec.position != .center ? 100 : maxSizePercent
     }
 
     /// clampSizePercent bounds a width for `spec`'s own panel, which is what every path sizing a live HUD
-    /// takes.
-    public static func clampSizePercent(_ requested: Int, for spec: HudSpec) -> Int {
+    /// takes. The read-back reports the clamped value, so a caller sees what the panel actually took.
+    static func clampSizePercent(_ requested: Int, for spec: HudSpec) -> Int {
         min(max(requested, minSizePercent), maxWidthPercent(for: spec))
     }
 
@@ -444,8 +444,8 @@ public enum HudLayout {
     }
 
     /// widthPercent returns the share of the pane's WIDTH the panel takes: the box's columns plus the
-    /// terminal's own padding, clamped into `minSizePercent...maxSizePercent`. A pane with no measured width
-    /// resolves to `maxSizePercent`: nothing is known to fit, so the panel takes the most room allowed.
+    /// terminal's own padding, clamped into `minSizePercent...maxPercent`. A pane with no measured width
+    /// resolves to `maxPercent`: nothing is known to fit, so the panel takes the most room allowed.
     public static func widthPercent(box: (columns: Int, rows: Int), pane: PaneMetrics,
                                     maxPercent: Int = maxSizePercent) -> Int {
         let needed = Double(max(box.columns, 0)) * pane.cellWidth + pane.paddingWidth * 2
@@ -476,14 +476,14 @@ public enum HudLayout {
         return min(needed, pane.paneHeight * Double(maxSizePercent) / 100)
     }
 
-    /// panelGrid returns the cell grid the PANEL ITSELF gets: each percentage's share of its own pane
-    /// dimension, less the terminal's padding, over one cell. The two percentages are measured separately,
-    /// so the panel tracks the box on both axes and the helper centers in a frame the size of its content.
-    /// It still centers on THIS grid rather than the box, which the rounding to whole cells can differ from.
+    /// panelGrid returns the cell grid the PANEL ITSELF gets: its width percent of the pane and its height
+    /// in points, each less the terminal's padding, over one cell. The percent stands in for the height only
+    /// when no points were measured. The helper centers on THIS grid rather than the box, which the rounding
+    /// to whole cells can differ from.
     ///
     /// Nil when the pane is not measured (an unrealized session, a zero cell): there is no panel grid to
-    /// compute, and `paintGrid` falls back to the box. The result is an ESTIMATE — a user
-    /// `window-padding-*` override is not tracked — so it can miss by a column.
+    /// compute, and `paintGrid` falls back to the box. The columns are an estimate from a whole percent of
+    /// the pane, so they can miss by one.
     public static func panelGrid(size: HudPanelSize, pane: PaneMetrics) -> (columns: Int, rows: Int)? {
         guard pane.cellWidth > 0, pane.cellHeight > 0, pane.paneWidth > 0, pane.paneHeight > 0 else { return nil }
         let columns = Int((pane.paneWidth * Double(size.widthPercent) / 100

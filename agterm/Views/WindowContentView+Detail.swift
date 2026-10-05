@@ -559,8 +559,8 @@ struct OverlayPanelStyle: Equatable {
     }
 
     /// The panel's offset from the pane's center, positive downward. A `top`/`bottom` anchor holds
-    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge. It is the HEIGHT that decides how far
-    /// the panel can travel, and every height a HUD can reach fits that margin — `HudLayout.heightPercent`
+    /// `edgeMargin` of the pane clear at that edge, none for a sticky panel. It is the HEIGHT that decides
+    /// how far the panel can travel, and every height a HUD can reach fits that margin — `HudLayout.heightPoints`
     /// caps it at `maxSizePercent`, where two margins exactly fill the rest — so `max(0,` is defensive only,
     /// for a panel no supported path can produce. A message-sized panel leaves most of the pane free, so the
     /// edge anchors reach the edge instead of barely clearing center.
@@ -571,9 +571,10 @@ struct OverlayPanelStyle: Equatable {
 
     func panelHeight(paneHeight: CGFloat) -> CGFloat { heightPoints ?? paneHeight * heightFraction }
 
-    /// The same math across the pane's WIDTH, positive rightward, off the anchor's column. The invariant that
-    /// makes the margin always fit holds identically here: `HudLayout.clampSizePercent` bounds every width,
-    /// the caller's `--size-percent` included, at the same `maxSizePercent` two margins fill the rest of.
+    /// The same math across the pane's WIDTH, positive rightward, off the anchor's column. The margin always
+    /// fits here too: `HudLayout.clampSizePercent(_:for:)` bounds every width, the caller's `--size-percent`
+    /// included, at the `maxSizePercent` two margins fill the rest of, and past it only for a sticky panel,
+    /// which holds no margin.
     func horizontalOffset(paneWidth: CGFloat) -> CGFloat {
         offset(along: paneWidth, fraction: widthFraction, band: position.horizontalBand)
     }
