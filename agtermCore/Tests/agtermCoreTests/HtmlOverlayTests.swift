@@ -127,6 +127,28 @@ struct HtmlOverlayTests {
     }
 
     @Test(arguments: [
+        ("http://localhost:5173/about", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
+        ("https://example.com/", .mainFrame, true, .allow),
+        ("https://example.com/", .mainFrame, false, .allow),
+        ("http://localhost:5174/", .mainFrame, false, .allow),
+        ("https://example.com/embed", .subframe, false, .allow),
+        ("https://example.com/", .newWindow, true, .openExternal),
+        ("https://example.com/", .newWindow, false, .cancel),
+        ("about:blank", .mainFrame, false, .allow),
+        ("file:///tmp/a/report.html", .mainFrame, true, .cancel),
+        ("file:///tmp/a/report.html", .subframe, false, .cancel),
+        ("mailto:a@example.com", .mainFrame, true, .cancel),
+        ("x-custom://open", .mainFrame, true, .cancel),
+        ("data:text/html,hi", .mainFrame, false, .cancel),
+    ])
+    func browsingPagePolicy(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
+                            _ decision: HtmlNavigationDecision) throws {
+        let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
+        let overlay = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))), browse: true)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == decision)
+    }
+
+    @Test(arguments: [
         ("http://example.com/", "http://EXAMPLE.com:80/a", true),
         ("https://example.com/", "https://example.com:443/b", true),
         ("HTTPS://example.com/", "https://example.com/", true),
@@ -151,6 +173,24 @@ struct HtmlOverlayTests {
         var overlay = HtmlOverlay(source: .url(try #require(URL(string: address))))
         overlay.current = HtmlPageInfo(page: address, title: "agterm: enter your password", canGoBack: false, canGoForward: false)
         #expect(overlay.identity == identity)
+    }
+
+    @Test(arguments: [
+        ("https://login.example/sso?next=1", "https://login.example"),
+        ("http://localhost:5173/other", "http://localhost:5173"),
+        ("about:blank", "http://localhost:5173"),
+    ])
+    func browsingIdentityIsTheOriginOfTheShownDocument(_ shown: String, _ identity: String) throws {
+        var overlay = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/app"))), browse: true)
+        #expect(overlay.identity == "http://localhost:5173")
+        overlay.current = HtmlPageInfo(page: shown, title: "https://bank.example", canGoBack: true, canGoForward: false)
+        #expect(overlay.identity == identity)
+    }
+
+    @Test func anOrdinaryUrlPageKeepsNamingItsSourceOrigin() throws {
+        var overlay = try web("http://localhost:5173/app")
+        overlay.current = HtmlPageInfo(page: "https://login.example/sso", title: nil, canGoBack: true, canGoForward: false)
+        #expect(overlay.identity == "http://localhost:5173")
     }
 
     @Test(arguments: [

@@ -421,7 +421,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     // a file page opens its own file, never one it navigated to; a URL page opens what it shows, which its
-    // policy keeps within the original origin
+    // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
         case .file(let path, _):

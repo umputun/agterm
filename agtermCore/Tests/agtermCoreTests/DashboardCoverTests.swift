@@ -41,6 +41,14 @@ struct DashboardCoverTests {
         #expect(session.dashboardCover(for: .right) == .page(identity: "http://localhost:5173", title: nil))
     }
 
+    @Test func aBrowsingPageCoverNamesTheSiteShown() throws {
+        let overlay = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/app"))), browse: true)
+        #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: overlay, sizePercent: nil) == nil)
+        session.rightOverlay?.html?.current = HtmlPageInfo(page: "https://login.example/sso", title: nil,
+                                                           canGoBack: true, canGoForward: false)
+        #expect(session.dashboardCover(for: .right) == .page(identity: "https://login.example", title: nil))
+    }
+
     @Test func aPaneProgramCoversItsPaneWithItsCommand() {
         #expect(store.openPaneOverlay(session.id, pane: .left, command: "htop -d 5") == nil)
         #expect(session.dashboardCover(for: .left) == .program(command: "htop -d 5"))

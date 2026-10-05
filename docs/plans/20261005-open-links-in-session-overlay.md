@@ -163,18 +163,18 @@
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/HtmlOverlay.swift`
 - Modify: `agterm/Views/HtmlOverlayRegistry.swift`
-- Modify: `agterm/Views/HtmlOverlayView.swift`
+- `agterm/Views/HtmlOverlayView.swift` needs no change: it already draws `overlay.identity` and redraws on every page report
 - Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/DashboardCoverTests.swift`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 
-- [ ] write policy tests: a browsing page allows cross-origin main-frame `http`/`https` navigation with and without user activation; denies `file`, custom schemes and `about` stays allowed; new-window stays external only when user-activated; a non-browsing page decides exactly as before
-- [ ] write identity tests: a browsing page shows the reported page's origin, the source origin before the first report, and never the title; a non-browsing URL page and a file page are unchanged; the dashboard cover (`DashboardCover.swift:17,21`) reads the same identity and follows it
-- [ ] add `HtmlOverlay.browse` and the policy branch
-- [ ] make `identity` follow the shown document for a browsing page; confirm the view redraws when the page report changes
-- [ ] update the doc comments this falsifies: `HtmlOverlay.identity`, `HtmlNavigationPolicy`, and `browserURL` in `HtmlOverlayRegistry.swift:424`
-- [ ] write hosted tests on the in-process listener: a redirect to a second origin loads in a browsing page and is blocked in an ordinary one; first committed site → second site → back, with the header label following each; a failed or cancelled cross-origin load leaves the label naming the document still shown
-- [ ] run the targeted core and hosted tests - must pass before task 3
+- [x] write policy tests: a browsing page allows cross-origin main-frame `http`/`https` navigation with and without user activation; denies `file`, custom schemes and `about` stays allowed; new-window stays external only when user-activated; a non-browsing page decides exactly as before
+- [x] write identity tests: a browsing page shows the reported page's origin, the source origin before the first report, and never the title; a non-browsing URL page and a file page are unchanged; the dashboard cover (`DashboardCover.swift:17,21`) reads the same identity and follows it
+- [x] add `HtmlOverlay.browse` and the policy branch
+- [x] make `identity` follow the shown document for a browsing page; confirm the view redraws when the page report changes
+- [x] update the doc comments this falsifies: `HtmlOverlay.identity`, `HtmlNavigationPolicy`, and `browserURL` in `HtmlOverlayRegistry.swift:424`
+- [x] write hosted tests on the in-process listener: a redirect to a second origin loads in a browsing page and is blocked in an ordinary one; first committed site → second site → back, with the header label following each; a failed or cancelled cross-origin load leaves the label naming the document still shown
+- [x] run the targeted core and hosted tests - must pass before task 3
 
 ### Task 3: Control API and CLI
 

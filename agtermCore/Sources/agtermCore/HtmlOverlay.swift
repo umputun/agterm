@@ -75,6 +75,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let chromeless: Bool
     /// persistent puts a URL page on the saved browser store; every other page gets an in-memory one of its own.
     public let persistent: Bool
+    /// browse lets a URL page's main frame leave its original origin for any HTTP(S) site.
+    public let browse: Bool
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -86,13 +88,14 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadTarget = HtmlReloadTarget.original
 
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
-                persistent: Bool = false, id: UUID = UUID()) {
+                persistent: Bool = false, browse: Bool = false, id: UUID = UUID()) {
         self.id = id
         self.source = source
         self.navigation = navigation
         self.javascript = javascript
         self.chromeless = chromeless
         self.persistent = persistent
+        self.browse = browse
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
@@ -126,11 +129,14 @@ extension HtmlSource {
 
 extension HtmlOverlay {
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
-    /// page writes and could dress as a prompt: the file shown, or the origin a URL page is confined to.
+    /// page writes and could dress as a prompt: the file shown, the origin a URL page is confined to, or
+    /// for a browsing page the origin of the document it shows now.
     public var identity: String {
         switch source {
-        case .file(let path, _): URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .url(let url): HtmlOrigin(url)?.display ?? url.absoluteString
+        case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .url(let url):
+            let shown = browse ? current.flatMap { URL(string: $0.page) }.flatMap(HtmlOrigin.init) : nil
+            return (shown ?? HtmlOrigin(url))?.display ?? url.absoluteString
         }
     }
 }
@@ -233,7 +239,8 @@ public enum HtmlNavigationDecision: Sendable {
     case allow, openExternal, cancel
 }
 
-/// HtmlNavigationPolicy bounds file navigation by its grant and URL main-frame navigation by its origin.
+/// HtmlNavigationPolicy bounds file navigation by its grant and URL main-frame navigation by its origin; a
+/// browsing page's main frame may go to any HTTP(S) origin.
 /// openExternal requires app confirmation because WebKit reports synthetic clicks as link activations.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
@@ -248,7 +255,7 @@ public enum HtmlNavigationPolicy {
             return HtmlOverlay.contains(grantRoot, action.url.path) ? .allow : .cancel
         case .url(let original):
             guard web else { return .cancel }
-            if action.target == .subframe || HtmlOrigin(action.url) == HtmlOrigin(original) { return .allow }
+            if overlay.browse || action.target == .subframe || HtmlOrigin(action.url) == HtmlOrigin(original) { return .allow }
             return action.userActivated ? .openExternal : .cancel
         }
     }

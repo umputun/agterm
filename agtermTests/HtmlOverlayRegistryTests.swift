@@ -478,6 +478,51 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertNotNil(current?.loadError)
     }
 
+    func testABrowsingPageFollowsARedirectToAnotherOriginAndNamesIt() async throws {
+        let second = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>second</title>")])
+        let first = try await serve(.ipv4(.loopback), [
+            "/away": .init(status: 302, headers: ["Location": "http://127.0.0.1:\(second)/"]),
+        ])
+        _ = registry.page(for: try openURL("http://127.0.0.1:\(first)/away", browse: true), store: store)
+        try await waitFor("redirect followed") { self.current?.current?.title == "second" && self.current?.loadState == .loaded }
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(second)")
+        XCTAssertTrue(store.closeOverlay(session.id))
+
+        _ = registry.page(for: try openURL("http://127.0.0.1:\(first)/away"), store: store)
+        try await waitFor("ordinary page blocked") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, "navigation blocked: http://127.0.0.1:\(second)/")
+    }
+
+    func testABrowsingPageNamesTheSiteShownThroughNavigationAndBack() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let second = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>second</title>")])
+        let page = try openURL("http://127.0.0.1:\(first)/", browse: true)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+
+        _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(second)/'")
+        try await waitFor("second loaded") { self.current?.current?.title == "second" && self.current?.loadState == .loaded }
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(second)")
+
+        XCTAssertNil(registry.navigate(page.id, .back))
+        try await waitFor("back on first") { self.current?.current?.title == "first" }
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+    }
+
+    func testABrowsingPageKeepsNamingTheShownSiteWhenALoadElsewhereFails() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let closed = try LoopbackServer(.ipv4(.loopback), routes: [:])
+        let dead = try await closed.start()
+        closed.stop()
+        let live = registry.page(for: try openURL("http://127.0.0.1:\(first)/", browse: true), store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+
+        _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(dead)/'")
+        try await waitFor("load elsewhere failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+    }
+
     func testCurrentReloadStaysOnTheNavigatedPageAndOriginalReturnsToTheUrl() async throws {
         let port = try await serve(.ipv4(.loopback), ["/a": .init(body: "<title>a</title>"), "/b": .init(body: "<title>b</title>")])
         let page = try openURL("http://127.0.0.1:\(port)/a")
@@ -1499,9 +1544,10 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         return overlay
     }
 
-    private func openURL(_ address: String, javascript: Bool = false, persistent: Bool = false) throws -> HtmlOverlay {
+    private func openURL(_ address: String, javascript: Bool = false, persistent: Bool = false,
+                         browse: Bool = false) throws -> HtmlOverlay {
         let overlay = HtmlOverlay(source: .url(try XCTUnwrap(URL(string: address))), javascript: javascript,
-                                  persistent: persistent)
+                                  persistent: persistent, browse: browse)
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
         return overlay
     }
