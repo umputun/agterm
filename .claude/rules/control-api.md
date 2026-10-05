@@ -472,7 +472,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   it and `passiveClick` forwards it to libghostty, whose own resolution reaches `openLink`. It grabs no
   focus. A HUD has no tracking area, so the monitor also reports the pointer to the panel while ⌘ is held
   over it and takes it away when ⌘ is released or the pointer leaves, which is what raises and drops the
-  pointing hand. It claims nothing under a terminal ask drawn over the panel.
+  pointing hand. It claims nothing under a terminal ask drawn over the panel, nor under chrome that marks
+  itself with `HudClickCover`, which the search bar does.
   Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
   close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
@@ -675,14 +676,30 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The pane hosts publish those bounds in the session detail coordinate space. Never derive them from
   `splitRatio` or the terminal surface frame: the ratio is observation-ignored and the surface moves on zoom.
 - `--size-percent` reaches the WIDTH alone, on open and on `overlay.resize`, and the height takes no caller
-  override at all. A plain message wraps at `HudLayout.maxColumns`, so a resize changes no rows. A markdown
-  message wraps at the panel (`HudLayout.wrapColumns` when measured, `textColumns` when painted), and its
-  height is measured only at open and update: narrowed afterwards it can outgrow that height. Every HUD WIDTH passes `HudLayout.clampSizePercent` (10...80), the caller's included, so
-  `--full`'s refusal and the never-cover invariant cannot disagree. The height is capped at the same 80 but
-  takes NO minimum floor: the box already carries `verticalPadding`, and flooring it is the square again.
-  The 80 cap is also what makes an edge anchor always fit its margin on EITHER axis, each axis' own extent
-  being what decides how far the panel travels there; the centering fallback in `OverlayPanelStyle`'s two
-  offsets is defensive only.
+  override. Every HUD width passes `HudLayout.clampSizePercent(_:for:)`: 10...80, or up to 100 for a `sticky`
+  spec off center, which owes no edge margin. The height is capped at 80 and has NO minimum floor. A plain
+  message wraps at `HudLayout.maxColumns`; markdown wraps there while the app measures the width and at the
+  full text width once a caller set one, by `--size-percent` or `overlay.resize`.
+- The height is held in POINTS, capped once in `HudLayout.panelSize`; that one value drives the frame, the
+  paint grid's rows and the derived `heightPercent`. Nil only over an unmeasured pane, where the percent
+  path still answers.
+- `ControlServer.refreshHud` is the one remeasure path, for the deck's geometry trigger, `overlay.resize`
+  and the panel surface's `onGridChange` (a size push or `CELL_SIZE`). It is not an update: spec, pane
+  scope, slot generation and the auto-hide deadline stay, and a failed write puts the size back. The deck
+  trigger observes the bounds the panel is laid out in, never the panel's own size.
+- Measure and paint from `Session.effectiveHudSpec`, never the stored spec: it carries the width
+  `overlay.resize` forced (`hudResizedWidthPercent`, cleared by the store's open and update), without
+  which a geometry change undoes the resize.
+- A session-wide HUD is measured from `hudPaneFrames.detail`, never the terminal views: zoom and the
+  dashboard move those to another host. A live panel is measured with its own surface's cell
+  (`HudPanelSurface`), matched by its pinned creation size, never `currentFontSize`, which is nil under
+  `window-inherit-font-size = false`.
+- The panel's surface gets `ControlServer.windowPadding` plus `window-padding-balance` in its per-surface
+  config; libghostty keeps creation-time padding without the balance key, and `ghostty_config_get` cannot
+  read the user's. That overlay loads AFTER `ghostty_config_load_recursive_files`, or a `config-file`
+  include outranks it.
+- `sticky` zeroes `OverlayPanelStyle.edgeMargin`; `center` ignores it. `frame` false zeroes the radius,
+  the border and the box's blank rows while `framed` stays true, since that flag is also the opaque backing.
 - `HudPosition` is the nine anchors of a 3x3 grid, spelled exactly as `BackgroundWatermark.Position` so
   `--position` means one thing across `session.background` and `session.hud`. The bare `top`/`bottom` it
   shipped with stay ACCEPTED as aliases for the middle column, and `HudPosition.parse` is the one entry
@@ -710,7 +727,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `HudLayout.foregroundSGR` owns the encoding, host-free, and resolves a malformed hex to the
   `noTextColor` sentinel rather than a partial run; the helper converts nothing and wraps only digits and
   semicolons, so a malformed header cannot emit an arbitrary escape into the pane.
-- Read back `ControlSessionNode.hud` with BOTH shares, `sizePercent` and `heightPercent`, `overlay` false
+- Read back `ControlSessionNode.hud` with BOTH shares, `sizePercent` and `heightPercent`, `sticky` and
+  `frame` (always present, absent keys decoding to false and true), `overlay` false
   and `overlaySizePercent` omitted beside it, plus `textColor` (omitted when the panel keeps the terminal
   foreground, and tracking the LATEST update unlike `backgroundColor`);
   `position` and `spinner` always report the effective value, defaults included — `spinner` names the STYLE
@@ -730,15 +748,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ⌘W, session/workspace/window teardown — so a HUD closed before its surface realized cannot strand the
   message text in `/tmp`. An update carries the OPEN's background color forward, the factory reading it once
   at creation, so `hud.backgroundColor` never names a color the panel will not paint.
-- The header's grid is `HudLayout.paintGrid` — the PANEL's own cells (`panelGrid`: the effective percent of
-  the pane, less `window-padding-*`, over the measured cell), NOT `HudLayout.box`, which only decides the
-  size. Both now measure the same message, so the two usually agree, but the panel is whole CELLS of a
-  rounded percent and the box is not — centering on the box can still strand the message by a column or a
-  row, and a `--size-percent` width detaches them outright. `box` remains the fallback when nothing is
-  measured. Every path that changes the panel's size — open, update, `overlay.resize` — must rewrite the
-  header through `ControlServer.writeHudBody`, which reads the size the STORE resolved. The deck's own size
-  change is the fourth: it calls `Session.onHudGeometryChange`, which `ControlServer.watchHudGeometry`
-  installs at open and coalesces into one rewrite per main-actor turn.
+- The header's grid is `HudLayout.paintGrid`, the panel's laid-out cells, NOT `HudLayout.box`, which only
+  decides the size; `box` is the fallback when nothing is measured. Every path that changes the panel's size
+  rewrites the header through `ControlServer.writeHudBody`, which reads the size the STORE resolved.
 - `--markdown` (`HudSpec.markdown`) renders standard markdown through Foundation's `.full` parser in
   `HudMarkdown`, with no dialect of its own: a single LF inside a paragraph is a soft break, lists always
   render tight because the parser does not say which a list was, and trailing all-empty table rows and an
@@ -750,7 +762,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A link renders as its label. A target `LinkPolicy` accepts is underlined and wrapped in OSC 8, which
   is why `Run` carries `link` through wrapping and clipping: every row reopens its own hyperlink.
   A table renders framed in box-drawing borders with a header rule only when the header has cells, and a
-  thematic break spans the widest other row. Text wraps at the panel's text width, `maxColumns` at most, table rows stay intact, and all rows are clipped to the grid on
+  thematic break spans the widest other row. Text wraps as the width bullet above says, table rows stay intact, and all rows are clipped to the grid on
   both axes in `renderedBody`, so the painter never measures them: the header's seventh field, `blockwidth`, is 0 for plain mode and the
   painted width of the finished rows otherwise, and the helper prints those rows verbatim at one shared
   offset. The painter draws the spinner glyph on the first row; the renderer indents the others by the gutter.

@@ -180,9 +180,9 @@ independently of the session-wide `overlay` flag, which a pane overlay never set
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
 `{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter,
-markdown, fontSize?}` object: `markdown` is always present, and `fontSize` is the `--font-size` the panel was
+markdown, fontSize?, sticky, frame}` object: `markdown`, `sticky` and `frame` are always present, and `fontSize` is the `--font-size` the panel was
 opened with, omitted when it uses the session's; `detail`, `backgroundColor` and `textColor` are omitted when the caller set none, `sizePercent` is the EFFECTIVE
-10–80 share of the pane's WIDTH the panel takes (the app's measurement of the message, or the caller's
+10–80 share of the pane's WIDTH the panel takes, up to 100 for a `sticky` panel off center (the app's measurement of the message, or the caller's
 `--size-percent` override, either way bounded so a message never covers the session; always present for a
 live HUD), `heightPercent` is the effective share of its HEIGHT, always measured from the message's rows
 and never set by a caller, and `position` and `spinner`
@@ -821,8 +821,8 @@ error keeps those names for compatibility.
   `the viewer showing this overlay is gone` for an overlay shown on another Mac whose stream has dropped. Returns the
   session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
   HUD a percent is accepted and re-flows its WIDTH (the panel re-flows and its `hud.sizePercent` reports the
-  new value; `hud.heightPercent` does not move, so a markdown message rewrapped narrower can end in
-  `… N more` until the next update) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
+  new value; the height is measured again for that width, and the width holds through later window
+  resizes until the next `session hud` or `session hud update`) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
   would cover the session the message is about. The resize rewrites the body header itself, so the panel
   re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
 - `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
@@ -963,7 +963,7 @@ error keeps those names for compatibility.
   file. Errors `no overlay`, `overlay not realized` and `no overlay to read: the slot holds a hud` as
   `session overlay copy` does, plus `failed to read surface buffer` on a real read failure. It has no
   `no selection`: a blank realized screen is `ok` with an empty string.
-- `session hud [open] <message>|--file FILE [--markdown] [--font-size PT] [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
+- `session hud [open] <message>|--file FILE [--markdown] [--font-size PT] [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
   — post a PASSIVE message panel over the session and return its id. It occupies the same session-wide slot
   as `session overlay open`, but carries a message rather than a program: it takes no input, the session
   keeps first responder and stays typable, and the terminal behind it is neither dimmed nor click-blocked.
@@ -998,9 +998,22 @@ error keeps those names for compatibility.
   axes separately — width from the longest wrapped line, height from the number of them — so a title and a
   subtitle give a wide, short panel rather than a square one. `--size-percent N` (1–100) overrides the WIDTH
   only; the height always follows the message, since a caller-set height could only strand it in an empty
-  box. The effective width is bounded to 10–80% of the pane, the same invariant that makes
-  `session overlay resize --full` a refusal, so a requested 100 reads back as 80. Both effective shares read
-  back, as `hud.sizePercent` and `hud.heightPercent`. `--background-color #rrggbb` gives the panel its own solid
+  box. The effective width is bounded to 10–80% of the pane, or up to 100% with `--sticky` off center, the
+  same invariant that makes `session overlay resize --full` a refusal, so without it a requested 100 reads
+  back as 80. Both effective shares read back, as `hud.sizePercent` and `hud.heightPercent`. The height
+  follows the rendered rows, capped at 80% of the pane, so a pane narrowed until a line wraps gains that row.
+  Markdown wraps at the panel's text width once a width is set, by `--size-percent` or by
+  `session overlay resize`, and at 60 columns at most while the app measures the width.
+  `--sticky` drops the edge margin, so the panel sits flush against the edge or corner `--position` names
+  (`center` has no edge and ignores it); it does not force full width. `--no-frame` draws no border, no
+  rounded corners and no blank row above and below the text, keeping the opaque backing. Together they make
+  a caption, a strip across the top as tall as its text:
+  `session hud --markdown --sticky --no-frame --position top --size-percent 100 "**deploy api** [PR](https://…) · [docs](https://…)"`.
+  It is still the one transient slot: `session overlay open` closes it, a restart drops it, and zoom and the
+  dashboard do not show it, so a script re-posts it. A frameless panel is its rendered rows plus 12 points
+  of padding tall; with the default font and pane padding that covers one row more than its text, and the
+  caller leaves that room and keeps its lines from wrapping. Both read back, as `hud.sticky` and
+  `hud.frame`, and an update that omits either returns the panel to its margin or its frame. `--background-color #rrggbb` gives the panel its own solid
   background, read once when the panel is created; `--text-color #rrggbb` colors the TEXT and, unlike the
   background, rides the panel's body file, so an update can change it. Both read back, as
   `hud.backgroundColor` and `hud.textColor`. Message and detail are capped at 256 characters and
@@ -1013,8 +1026,8 @@ error keeps those names for compatibility.
   anything else is its plain label. That ⌘-click is the one click the panel takes, and it moves no focus. It raises the message cap to 4096 characters and allows newlines and tabs
   in it; every other control character is still refused and the detail keeps the plain rules. Markdown
   semantics apply: a single newline inside a paragraph is a space, so end a line with two spaces or a
-  backslash, or use list items, to keep rows apart; lists always render tight. Text wraps at the panel's width, 60
-  columns at most, while table rows stay intact, and the rows sit left-aligned as one block. What does not
+  backslash, or use list items, to keep rows apart; lists always render tight. Text wraps as the sizing
+  paragraph above says, while table rows stay intact, and the rows sit left-aligned as one block. What does not
   fit the panel is clipped: a table row too wide ends in `…`, and rows past the panel's height give way to a
   dim `… N more`, itself clipped in a narrow panel. A table is framed in box-drawing borders with a rule under its header; trailing
   all-empty table rows and an all-empty header row are not shown, the latter leaving no header rule.
@@ -1039,7 +1052,7 @@ error keeps those names for compatibility.
   and `session.hud.open: --size-percent must be 1...100`.
   A second `hud` replaces the first; a `session overlay open` replaces a HUD, while a HUD over a RUNNING
   program is refused with `overlay already open` — a message is replaceable, a program is not.
-- `session hud update <message>|--file FILE [--markdown] [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
+- `session hud update <message>|--file FILE [--markdown] [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target] [--window W]`
   — repaint the live panel in place: no re-spawn, no blink, the panel does not flicker. It REPLACES the
   whole spec rather than patching it, so `--detail`, the spinner, `--position`, `--text-color`, and pane selectors must be
   repeated to survive and an omitted one drops. `--spinner-style` may name a DIFFERENT style than the panel

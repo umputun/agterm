@@ -5,7 +5,7 @@ description: >
   asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD or desktop notification; show a picker or question dialog; display an image inline; type
+  post a HUD/caption or notification; show a picker or question dialog; display an image inline; type
   into or restart a pane by its stable id, copy its selection or search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
@@ -226,7 +226,7 @@ overlay resize` for a record-then-restore zoom), `paneOverlays` (the panes cover
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `session overlay
 open --pane`, independent of the session-wide `overlay` flag),
 `hud` (the message panel occupying the session-wide slot — `{message, detail?, spinner, backgroundColor?,
-textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?}`, the two percents being the panel's width and height
+textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?, sticky, frame}`, the two percents being the panel's width and height
 shares and `hideAfter` the configured auto-hide in seconds, 0 for a panel that stays — omitted when none is
 up; the read side of `session hud`. `position` and `spinner`
 always report the EFFECTIVE value, `center` and a static panel's `none` included, so a caller who omitted
@@ -478,8 +478,8 @@ omitted when expanded).
   `--background-color` gives the overlay pane its own solid color, independent of the session's. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
-- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
-  `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
+- `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
+  `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud close` — post a small **passive** panel over the session saying what you are doing
   ("gathering options…"). Unlike an overlay it takes no input and steals nothing: the session keeps first
   responder, the user keeps typing, and the terminal behind it is neither dimmed nor click-blocked. With
@@ -503,10 +503,12 @@ omitted when expanded).
   the HUD. The panel is sized from the message on both axes:
   width from the longest line, height from the number of them — so a title and a subtitle give a wide, short
   panel, not a square one. `--size-percent N` (1-100) overrides the WIDTH only, bounded to 10-80% of the
-  pane, since a message must never cover the session it is about, so a requested 100 reads back as 80. The
-  height always follows the message. `--text-color` colors the panel's TEXT and `--background-color` its
+  pane, or up to 100% with `--sticky` off center, since a message must never cover the session it is about.
+  The height always follows the message. `--sticky` (no margin at the edge or corner `--position` names)
+  and `--no-frame` (no border, rounding or blank rows) pin a caption to an edge; reference.md has the
+  example. `--text-color` colors the panel's TEXT and `--background-color` its
   backing, independently. `session hud update` repaints in place with no re-spawn and no blink,
-  and REPLACES the whole spec. Repeat `--detail`/`--spinner`/`--text-color`/`--pane`/`--pane-id` to keep them, since an omitted
+  and REPLACES the whole spec. Repeat `--detail`/`--spinner`/`--text-color`/`--sticky`/`--no-frame`/`--pane`/`--pane-id` to keep them, since an omitted
   one drops. It takes no `--background-color`: the surface reads that once at creation, so only a fresh
   `session hud` changes it and `tree` keeps reporting the creation color across updates, while the text color rides
   the panel's body file and an update recolors it in place. Message and detail are capped at 256 characters and reject control characters, newline included.

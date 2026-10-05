@@ -1045,7 +1045,8 @@ agtermctl session hud "gathering options…" --spinner --position bottom-right \
 ```
 
 The stable pane ID wins when it resolves. `--pane` is the fallback for older or unknown IDs. The selected
-pane supplies the size, 80% cap, anchor, and 10% edge margin. A hidden pane keeps its HUD and shows it again
+pane supplies the size, 80% cap, anchor, and 10% edge margin; `--sticky` drops the margin and, off center,
+lifts the WIDTH cap to 100. A hidden pane keeps its HUD and shows it again
 when restored; closing the pane closes its HUD.
 
 `session hud update` repaints in place, no re-spawn and no blink, and it replaces the whole spec: `--detail`,
