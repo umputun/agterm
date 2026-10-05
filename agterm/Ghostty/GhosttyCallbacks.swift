@@ -58,7 +58,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
             // the cell pixel size changed (cmd +/- font size, or DPI): a trigger only — the view reads the
             // live font size and the app persists it.
             guard let view = surfaceView(from: target) else { return true }
-            DispatchQueue.main.async { view.reportFontSize() }
+            DispatchQueue.main.async {
+                view.reportFontSize()
+                view.onGridChange?()
+            }
             return true
         case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
             // an OSC 9 / 777 desktop notification. the manager resolves the session/pane and suppresses.

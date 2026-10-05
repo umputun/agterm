@@ -334,6 +334,10 @@ public final class Session: Identifiable {
     /// Cleared with the rest of the HUD state, never persisted.
     public var hudHeightPercent: Int?
 
+    /// The height a HUD panel is laid out at, in points and already capped; nil over an unmeasured pane,
+    /// which falls back to `hudHeightPercent`. Cleared with the rest of the HUD state, never persisted.
+    public var hudHeightPoints: Double?
+
     /// hudFontSize is the point size the live HUD's surface was created at: the caller's `HudSpec.fontSize`
     /// or the session's size at open. Measuring reads it, so a session zoom after open cannot change the
     /// cell a HUD is sized with. Cleared with the rest of the HUD state, never persisted.
@@ -483,6 +487,7 @@ public final class Session: Identifiable {
         hudPaneIdentity = nil
         hudFile = nil
         hudHeightPercent = nil
+        hudHeightPoints = nil
         hudFontSize = nil
         hudExpiresAt = nil
         hudResizedWidthPercent = nil
@@ -501,9 +506,9 @@ public final class Session: Identifiable {
     /// When the app hides the published panel, nil for a persistent one.
     @ObservationIgnored var hudExpiresAt: Date?
 
-    /// The width an `overlay.resize` forced on the published panel, until the next open or update resolves
-    /// the size from its own spec. A viewer sizes from its own pane, so only a forced width travels.
-    @ObservationIgnored var hudResizedWidthPercent: Int?
+    /// The width an `overlay.resize` forced on the panel, until the next open or update resolves the size
+    /// from its own spec. A viewer sizes from its own pane, so only a forced width travels.
+    @ObservationIgnored public internal(set) var hudResizedWidthPercent: Int?
 
     /// Counts publications of the panel. Frame order is what keeps a stale close off a later panel; a
     /// viewer does not read this.

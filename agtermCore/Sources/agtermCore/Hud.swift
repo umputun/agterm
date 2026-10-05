@@ -320,10 +320,14 @@ public struct HudPaneFrame: Equatable, Sendable {
 public struct HudPaneFrames: Equatable, Sendable {
     public var left: HudPaneFrame?
     public var right: HudPaneFrame?
+    /// The session detail area, which a session-wide HUD is laid out in. Cached from the deck rather than
+    /// read off the terminal views: zoom and the dashboard move those to another host.
+    public var detail: HudPaneFrame?
 
-    public init(left: HudPaneFrame? = nil, right: HudPaneFrame? = nil) {
+    public init(left: HudPaneFrame? = nil, right: HudPaneFrame? = nil, detail: HudPaneFrame? = nil) {
         self.left = left
         self.right = right
+        self.detail = detail
     }
 
     public subscript(_ pane: OverlayPane) -> HudPaneFrame? { pane == .left ? left : right }
@@ -331,6 +335,7 @@ public struct HudPaneFrames: Equatable, Sendable {
     public mutating func merge(_ other: HudPaneFrames) {
         if let left = other.left { self.left = left }
         if let right = other.right { self.right = right }
+        if let detail = other.detail { self.detail = detail }
     }
 }
 

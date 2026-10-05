@@ -52,6 +52,13 @@ Three defects found while designing this, all reachable today and all in the way
   grows a row where it used to clip with `… N more`.
 - `agtermCore` is a library the `agterm-linux` fork consumes. Public signatures are extended, never
   narrowed: new parameters take defaults and existing initializers keep compiling.
+- Lint file-length limits (1000 source, 2000 tests) are already at the edge in five files this work
+  touches: `Session.swift` 995, `SessionCommands.swift` 994, `ControlProtocolTests.swift` 2000,
+  `CommandsTests.swift` 1996, `ControlServerSessionActionsTests.swift` 1983. No limit is raised.
+  Source: the two computed HUD properties live in a new `Session+Hud.swift` extension, and the `Hud`
+  command moves unchanged into `SessionHudCommands.swift`, as `SessionMetadataCommands.swift` already
+  does for its group. Tests: new cases go into the smaller HUD test files named per task, never into
+  the three full ones, which are only edited in place.
 - Update this plan when scope changes.
 
 ## Testing Strategy
@@ -101,6 +108,20 @@ Three defects found while designing this, all reachable today and all in the way
   alone does not widen it.
 - **The search bar wins its own region.** `HudLinkClick` skips a point the search bar covers, the same
   way it already skips a terminal ask.
+
+Found while building, all in Task 2:
+
+- **The panel's surface gets its own padding.** It inherited the user's `window-padding-*` while the
+  sizing assumed the default, so a custom padding clipped a frameless caption, and already clipped
+  today's framed HUD. libghostty will not report the padding (`ghostty_config_get` returns false for
+  it), so the HUD surface is given the padding the sizing assumes, with `window-padding-balance`, which
+  is what makes libghostty derive padding again after creation. The per-surface overlay now loads after
+  the `config-file` includes so one of those cannot outrank it.
+- **A live panel is measured with its own cell.** A pane's cell scaled to `--font-size` came out a pixel
+  short and cost a frameless panel its last row. The surface reports size pushes and cell-size changes,
+  and the remeasure reads the cell libghostty draws.
+- **A session-wide panel is measured from the detail area** the deck lays it out in, not from terminal
+  views that zoom and the dashboard move to another host.
 
 Rejected: a `--lines` row cap (a clip would hide the links the caption exists for); one bundled
 `--style banner` flag (placement and appearance are separate choices); a second, persistent HUD slot.
@@ -177,6 +198,7 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Presentation.swift`
+- Create: `agtermCore/Sources/agtermCore/Session+Hud.swift`
 - Modify: `agterm/Control/ControlServer+Hud.swift`
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agterm/Views/WindowContentView+Detail.swift`
@@ -185,27 +207,27 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
 - Modify: `agtermTests/ControlServerHudAutoHideTests.swift`
 
-- [ ] failing test first: the same HUD laid out at one width in two pane heights has the same frame
+- [x] failing test first: the same HUD laid out at one width in two pane heights has the same frame
       height in points; confirm it fails against the saved percent, then lay out from points and make
       the container-geometry watcher remeasure
-- [ ] `testAPaneShrinkReclipsAMarkdownHudOnceForABurst` and
+- [x] `testAPaneShrinkReclipsAMarkdownHudOnceForABurst` and
       `testTheHudIsMeasuredWithItsOwnFontThroughOpenZoomUpdateAndResize` in
       `ControlServerSessionActionsTests` state the old saved-percent behavior; rewrite their expected
       values to the new one (rewrap and grow by the known added row, once per burst) rather than
       leaving them to fail at the gate
-- [ ] one remeasure path serves the watcher and `overlay resize`: width, capped height and grid move
+- [x] one remeasure path serves the watcher and `overlay resize`: width, capped height and grid move
       together, a failed write rolls all three back, and the deadline, pane scope, spec, slot
       generation and surface identity are untouched
-- [ ] a width forced by `overlay resize` survives a later geometry change and is dropped by the next
+- [x] a width forced by `overlay resize` survives a later geometry change and is dropped by the next
       open or update; it is honored up to the live spec's cap and is the wrap width
-- [ ] `OverlayPanelStyle` lays the panel out from points, holds no margin for a sticky panel, and draws
+- [x] `OverlayPanelStyle` lays the panel out from points, holds no margin for a sticky panel, and draws
       no border or rounding for a frameless one while keeping the backing
-- [ ] tests: panel frames for sticky top, bottom, a corner, a side and center; a default HUD's anchor,
+- [x] tests: panel frames for sticky top, bottom, a corner, a side and center; a default HUD's anchor,
       margin and chrome unchanged; frameless chrome values; a height-only pane change updates
       `hud.heightPercent` and leaves the frame height; a narrowed pane adds the known row with a
       matching body grid; `overlay resize` then a geometry change keeps the resized width; the
       auto-hide deadline survives a remeasure
-- [ ] targeted `swift test` and `scripts/test-app.sh -only-testing:` runs pass
+- [x] targeted `swift test` and `scripts/test-app.sh -only-testing:` runs pass
 
 ### Task 3: Control surface
 
@@ -215,24 +237,28 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 - Modify: `agtermCore/Sources/agtermCore/ControlProjection.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
+- Create: `agtermCore/Sources/agtermctlKit/SessionHudCommands.swift` (the `Hud` command, moved)
 - Modify: `agterm/Control/ControlServer+RemotePresentation.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherHudTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreHudTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/HudCommandHelpTests.swift`
 - Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 - Modify: `agtermUITests/ControlHudUITests.swift`
 
-- [ ] `session.hud.open` and `.update` accept `sticky` and `frame` and pass them into the spec; an
+- [x] `session.hud.open` and `.update` accept `sticky` and `frame` and pass them into the spec; an
       update that omits them returns the panel to the defaults, like every other replaced option
-- [ ] `agtermctl session hud [open|update]` takes `--sticky` and `--no-frame`, with help text in the
-      caller's words
-- [ ] `tree` reports `hud.sticky` and `hud.frame`, and `hud.sizePercent` reads back 100 for a sticky
+- [x] `agtermctl session hud [open|update]` takes `--sticky` and `--no-frame`, with help text in the
+      caller's words; the `--size-percent` help on both stops saying "bounded to 10-80" without
+      qualification
+- [x] `tree` reports `hud.sticky` and `hud.frame`, and `hud.sizePercent` reads back 100 for a sticky
       panel that asked for it
-- [ ] the remote mirror carries both fields to an attached Mac
-- [ ] tests: dispatcher accept and default cases, CLI argument and help, request and tree coding with
-      the new keys present and absent (a `ControlHudNode` from an older server decodes to not sticky,
-      framed), mirror reconstruction, one UI test reading the new fields back over the socket
-- [ ] targeted runs pass
+- [x] the remote mirror carries both fields to an attached Mac
+- [x] tests: dispatcher accept and default cases; request coding with the keys present and omitted
+      when nil; `ControlHudNode` round trip and an older server's node decoding to not sticky, framed;
+      `controlTreeReportsHudWithEveryField` covers the two fields; CLI argument and help; mirror
+      reconstruction; one UI test reading the new fields back over the socket. The protocol and CLI
+      cases go in `ControlDispatcherHudTests`, `AppStoreHudTests` and `HudCommandHelpTests`
+- [x] targeted runs pass
 
 ### Task 4: Search bar keeps its clicks
 
@@ -241,15 +267,15 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 - Modify: `agterm/Views/TerminalSearchBar.swift`
 - Modify: `agtermTests/GhosttySurfaceViewTrackingTests.swift`
 
-- [ ] failing test first: with the real `TerminalSearchBar` hosted over a HUD panel, a ⌘-click at a
+- [x] failing test first: with the real `TerminalSearchBar` hosted over a HUD panel, a ⌘-click at a
       point the bar covers is not claimed by the panel; confirm it fails, then exclude the bar's own
       bounds through a passive marker view registered weakly, as `askCovers` reads its catchers
-- [ ] ⌘-hover over that region leaves the cursor to the search bar
-- [ ] the exclusion covers the bar's bounds only, not its alignment padding, and goes away when the
+- [x] ⌘-hover over that region leaves the cursor to the search bar
+- [x] the exclusion covers the bar's bounds only, not its alignment padding, and goes away when the
       bar unmounts
-- [ ] tests: click and hover inside the bar; a ⌘-click on the same panel outside it is still claimed
+- [x] tests: click and hover inside the bar; a ⌘-click on the same panel outside it is still claimed
       as a press and release pair; removing the bar restores routing at that point
-- [ ] targeted hosted run passes
+- [x] targeted hosted run passes
 
 ### Task 5: Verify acceptance criteria
 
@@ -258,14 +284,16 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
       capturing each: a sticky frameless two-line markdown caption at the top, full width, session-wide
       and on one pane of a split; the same at the bottom and in a corner; it keeps its height through a
       window resize and gains a row when narrowed until a line wraps; links open on ⌘-click; the search
-      bar stays on top and usable over it; a default HUD looks as before
+      bar stays on top and usable over it; a default HUD looks as before; a frameless caption with
+      `--font-size` and one under a non-default terminal font show every line of their text
 - [ ] stop the instance by pid and check `lsappinfo list | grep -A4 agterm.debug`
 
 ### Task 6: [Final] Update documentation
 
 - [ ] `plugins/agterm/skills/agterm/reference.md` and `SKILL.md`: the two options, the read-back
       fields, the caption recipe, the rows-covered example, and the corrected statements about the 80%
-      width bound and the height following a resize
+      width bound and the height following a resize; a trigger for the pinned caption in SKILL.md's
+      `description`; `examples.md` where it states the 80% cap and the 10% margin
 - [ ] `site/commands.html` and `site/docs.html` mirror the same; bump `style.css?v=` only if the CSS
       changes
 - [ ] `.claude/rules/control-api.md`: the sizing paragraph (points, remeasure on geometry, per-spec

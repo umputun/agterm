@@ -343,6 +343,92 @@ struct AppStoreHudTests {
         let sink: HudSink
     }
 
+    private func measuredHud(_ spec: HudSpec, pane: PaneMetrics) throws -> (AppStore, Session) {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/hud",
+                      size: HudLayout.panelSize(for: spec, pane: pane))
+        return (store, session)
+    }
+
+    private static let widePane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1600, paneHeight: 1000,
+                                              paddingWidth: 8, paddingHeight: 6)
+
+    @Test func openStoresTheHeightInPointsAndCloseClearsIt() throws {
+        let (store, session) = try measuredHud(HudSpec(message: "working"), pane: Self.widePane)
+
+        #expect(session.hudHeightPoints == 66)
+        #expect(session.hudPanelSize?.heightPoints == 66)
+
+        store.closeHud(session.id)
+
+        #expect(session.hudHeightPoints == nil)
+        #expect(session.hudPanelSize == nil)
+    }
+
+    @Test func aStickyHudMayTakeTheFullWidthAndALooseOneIsStillCapped() throws {
+        let sticky = HudSpec(message: "caption", sizePercent: 100, position: .topCenter, sticky: true)
+        let (store, session) = try measuredHud(sticky, pane: Self.widePane)
+
+        #expect(session.overlaySizePercent == 100)
+        #expect(store.controlTree().workspaces[0].sessions[0].hud?.sizePercent == 100)
+
+        let loose = HudSpec(message: "caption", sizePercent: 100, position: .topCenter)
+        store.updateHud(session.id, spec: loose, size: HudLayout.panelSize(for: loose, pane: Self.widePane))
+
+        #expect(session.overlaySizePercent == HudLayout.maxSizePercent)
+    }
+
+    @Test func aResizeForcesTheWidthUntilTheNextUpdate() throws {
+        let (store, session) = try measuredHud(HudSpec(message: "working"), pane: Self.widePane)
+
+        #expect(session.hudResizedWidthPercent == nil)
+        #expect(store.resizeOverlay(session.id, sizePercent: 100))
+
+        #expect(session.overlaySizePercent == HudLayout.maxSizePercent)
+        #expect(session.hudResizedWidthPercent == HudLayout.maxSizePercent)
+        #expect(session.effectiveHudSpec?.sizePercent == HudLayout.maxSizePercent)
+        #expect(session.hudSpec?.sizePercent == nil)
+
+        let next = HudSpec(message: "done")
+        store.updateHud(session.id, spec: next, size: HudLayout.panelSize(for: next, pane: Self.widePane))
+
+        #expect(session.hudResizedWidthPercent == nil)
+    }
+
+    @Test func aRemeasureKeepsAForcedWidthAndFollowsThePane() throws {
+        let line = Array(repeating: "word", count: 20).joined(separator: " ")
+        let (store, session) = try measuredHud(HudSpec(message: line, markdown: true), pane: Self.widePane)
+        let wrapped = try #require(session.hudHeightPoints)
+        store.resizeOverlay(session.id, sizePercent: 80)
+
+        #expect(store.remeasureHud(session.id, pane: Self.widePane))
+
+        #expect(session.overlaySizePercent == 80)
+        #expect(session.hudResizedWidthPercent == 80)
+        #expect(session.hudHeightPoints == wrapped - 18)
+
+        let short = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1600, paneHeight: 500,
+                                paddingWidth: 8, paddingHeight: 6)
+        store.remeasureHud(session.id, pane: short)
+
+        #expect(session.hudHeightPoints == wrapped - 18)
+        #expect(session.hudHeightPercent == 14)
+    }
+
+    @Test func settingTheSizeBackRestoresAMeasuredWidthAsMeasured() throws {
+        let (store, session) = try measuredHud(HudSpec(message: "working"), pane: Self.widePane)
+        let measured = try #require(session.hudPanelSize)
+        store.resizeOverlay(session.id, sizePercent: 60)
+
+        #expect(store.setHudSize(session.id, size: measured, forcedWidthPercent: nil))
+
+        #expect(session.hudPanelSize == measured)
+        #expect(session.hudResizedWidthPercent == nil)
+        #expect(!store.setHudSize(UUID(), size: measured, forcedWidthPercent: nil))
+    }
+
     private func mirroredStore() throws -> Mirrored {
         let store = makeStore()
         let hub = PresentationHub(staleTimeout: 30)

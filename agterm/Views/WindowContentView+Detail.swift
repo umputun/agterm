@@ -355,7 +355,14 @@ extension WindowContentView {
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear { cachePaneFrames(paneFrames, for: session) }
             .onChange(of: paneFrames) { _, value in cachePaneFrames(value, for: session) }
-            .onChange(of: session.hudActive ? panelFrame.size : .zero, initial: true) { _, _ in
+            // declared before the HUD's own trigger below, so a remeasure it starts reads these bounds
+            .onChange(of: geo.size, initial: true) { _, size in
+                cachePaneFrames(HudPaneFrames(detail: HudPaneFrame(x: 0, y: 0, width: size.width,
+                                                                   height: size.height)), for: session)
+            }
+            // the bounds the panel is laid out in, not the panel: its height is fixed in points, so a pane
+            // that only grows taller leaves the panel's size alone and would never fire.
+            .onChange(of: session.hudActive ? layoutFrame.size : .zero, initial: true) { _, _ in
                 session.onHudGeometryChange?()
             }
         }
@@ -489,6 +496,11 @@ struct OverlayPanelStyle: Equatable {
     /// it is a terminal, and a square-ish region is what it wants — while a HUD measures this one from its
     /// message alone, so a two-line panel is two lines tall however wide it had to be.
     let heightFraction: CGFloat
+    /// a HUD's height in points, which wins over `heightFraction` when set: a fraction of the pane grows
+    /// the panel with the window while its text stays the same size.
+    var heightPoints: CGFloat?
+    /// pane fraction held clear at an edge the panel is anchored to; 0 for a sticky HUD.
+    var edgeMargin = CGFloat(HudPosition.edgeMarginPercent) / 100
     /// opaque backing: both framed variants, never the chromeless full overlay.
     let framed: Bool
     let cornerRadius: CGFloat
@@ -529,10 +541,16 @@ struct OverlayPanelStyle: Equatable {
         // put the square back for exactly the frame that would be seen first.
         let height = session.hudHeightPercent.map { CGFloat($0) / 100 }
             ?? CGFloat(HudLayout.minSizePercent) / 100
-        return OverlayPanelStyle(widthFraction: fraction, heightFraction: height, framed: true,
-                                 cornerRadius: hudCornerRadius, borderOpacity: hudBorderOpacity,
-                                 shadowRadius: 0, backdrop: false, interactive: false,
-                                 position: session.hudSpec?.position ?? .center)
+        // a frameless HUD keeps `framed` for the opaque backing and only loses the border and the rounding
+        let frame = session.hudSpec?.frame ?? true
+        var style = OverlayPanelStyle(widthFraction: fraction, heightFraction: height, framed: true,
+                                      cornerRadius: frame ? hudCornerRadius : 0,
+                                      borderOpacity: frame ? hudBorderOpacity : 0,
+                                      shadowRadius: 0, backdrop: false, interactive: false,
+                                      position: session.hudSpec?.position ?? .center)
+        style.heightPoints = session.hudHeightPoints.map { CGFloat($0) }
+        if session.hudSpec?.sticky == true { style.edgeMargin = 0 }
+        return style
     }
 
     /// A session-wide HUD needs no pane frame; a scoped HUD mounts only while its target pane is laid out.
@@ -547,19 +565,22 @@ struct OverlayPanelStyle: Equatable {
     /// for a panel no supported path can produce. A message-sized panel leaves most of the pane free, so the
     /// edge anchors reach the edge instead of barely clearing center.
     func verticalOffset(paneHeight: CGFloat) -> CGFloat {
-        Self.offset(along: paneHeight, fraction: heightFraction, band: position.verticalBand)
+        offset(along: paneHeight, fraction: panelHeight(paneHeight: paneHeight) / max(paneHeight, 1),
+               band: position.verticalBand)
     }
+
+    func panelHeight(paneHeight: CGFloat) -> CGFloat { heightPoints ?? paneHeight * heightFraction }
 
     /// The same math across the pane's WIDTH, positive rightward, off the anchor's column. The invariant that
     /// makes the margin always fit holds identically here: `HudLayout.clampSizePercent` bounds every width,
     /// the caller's `--size-percent` included, at the same `maxSizePercent` two margins fill the rest of.
     func horizontalOffset(paneWidth: CGFloat) -> CGFloat {
-        Self.offset(along: paneWidth, fraction: widthFraction, band: position.horizontalBand)
+        offset(along: paneWidth, fraction: widthFraction, band: position.horizontalBand)
     }
 
     /// Applies the panel's size and anchor inside one session or pane bounds rect.
     func panelFrame(in pane: CGRect) -> CGRect {
-        let size = CGSize(width: pane.width * widthFraction, height: pane.height * heightFraction)
+        let size = CGSize(width: pane.width * widthFraction, height: panelHeight(paneHeight: pane.height))
         let center = CGPoint(x: pane.midX + horizontalOffset(paneWidth: pane.width),
                              y: pane.midY + verticalOffset(paneHeight: pane.height))
         return CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
@@ -567,10 +588,8 @@ struct OverlayPanelStyle: Equatable {
     }
 
     /// One axis' travel: half the free room left after the panel and its edge margin, signed by the band.
-    private static func offset(along extent: CGFloat, fraction: CGFloat,
-                               band: HudPosition.Band) -> CGFloat {
-        let margin = CGFloat(HudPosition.edgeMarginPercent) / 100
-        let free = max(0, extent * ((1 - fraction) / 2 - margin))
+    private func offset(along extent: CGFloat, fraction: CGFloat, band: HudPosition.Band) -> CGFloat {
+        let free = max(0, extent * ((1 - fraction) / 2 - edgeMargin))
         switch band {
         case .middle: return 0
         case .leading: return -free

@@ -161,12 +161,9 @@ extension ControlServer: ControlActions {
     }
 
     /// A HUD resizes through the same slot and field as any floating panel, but never to FULL, which would
-    /// make the message cover the session it is about. The percent reaches its WIDTH only — its height stays
-    /// as measured when the message was posted, which a markdown message rewrapped at a narrower width can
-    /// outgrow (`HudLayout.wrapColumns`). A resized HUD also gets its body rewritten: the helper
-    /// centers on the grid in that file's header, so a new panel with the old header would paint the message
-    /// off-center until the next `session.hud.update`. A refused rewrite puts the size back rather than
-    /// leave the two disagreeing.
+    /// make the message cover the session it is about. The percent sets its WIDTH; `refreshHud` then
+    /// measures the height that width needs and rewrites the body, since the helper centers on the grid in
+    /// that file's header. A refused rewrite puts the size back rather than leave the two disagreeing.
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             if let resized = store.resizeRemoteOverlay(id, sizePercent: sizePercent) {
@@ -178,14 +175,15 @@ extension ControlServer: ControlActions {
             if sizePercent == nil, hud {
                 return ControlResponse(ok: false, error: OverlayHudError.fullResize)
             }
-            let previousSize = session?.overlaySizePercent
+            let previousSize = session?.hudPanelSize
+            let previousForcedWidth = session?.hudResizedWidthPercent
             guard store.resizeOverlay(id, sizePercent: sizePercent) else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
-            if hud, let session,
-               !self.writeHudBody(session, pane: self.paneMetrics(for: session, pane: session.hudTargetPane,
-                                                                  fontSize: self.liveHudFontSize(session))) {
-                store.resizeOverlay(id, sizePercent: previousSize)
+            if hud, let session, !self.refreshHud(session) {
+                if let previousSize {
+                    store.setHudSize(id, size: previousSize, forcedWidthPercent: previousForcedWidth)
+                }
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             if hud { store.publishHudResize(forSession: id, now: self.hudClock()) }

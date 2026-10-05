@@ -386,13 +386,42 @@ extension AppStore {
     /// pane hosts both variants), so only the layout re-flows and the program never re-spawns. False with no
     /// open overlay. A HUD in the slot takes the narrower `HudLayout.clampSizePercent` bound instead, so no
     /// resize path can grow a message until it covers the session it is about, and the percent reaches its
-    /// WIDTH alone: its height stays as measured when the message was posted. A markdown message rewraps at
-    /// the new width, so one made narrower can need more rows than that height and end in `… N more`.
+    /// WIDTH alone. That width is recorded as forced, so it holds through later remeasures until the next
+    /// open or update; the caller owes the panel a `remeasureHud` for the height the new width needs.
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
-        let hud = session.hudActive
-        session.overlaySizePercent = sizePercent.map { hud ? HudLayout.clampSizePercent($0) : min(100, max(1, $0)) }
+        guard let spec = session.hudSpec, session.hudActive else {
+            session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+            return true
+        }
+        session.overlaySizePercent = sizePercent.map { HudLayout.clampSizePercent($0, for: spec) }
+        session.hudResizedWidthPercent = session.overlaySizePercent
         return true
+    }
+
+    /// Sets a live HUD's size as one step, the width bounded for its own spec. `forcedWidthPercent` is what
+    /// `overlay.resize` left in force, nil when the width is the spec's own; a rollback passes back what it
+    /// captured, so a failed write cannot turn a measured width into a forced one.
+    @discardableResult public func setHudSize(_ sessionID: UUID, size: HudPanelSize,
+                                              forcedWidthPercent: Int?) -> Bool {
+        guard let session = session(withID: sessionID), let spec = session.hudSpec, session.hudActive else {
+            return false
+        }
+        session.overlaySizePercent = HudLayout.clampSizePercent(size.widthPercent, for: spec)
+        session.hudHeightPercent = size.heightPercent
+        session.hudHeightPoints = size.heightPoints
+        session.hudResizedWidthPercent = forcedWidthPercent
+        return true
+    }
+
+    /// Measures the live HUD again for `pane` and stores the result: wrap, rows, width and height together,
+    /// at the forced width when one is in force. Everything else about the panel is left alone — spec, pane
+    /// scope, slot generation, auto-hide — which is what separates this from an update.
+    @discardableResult public func remeasureHud(_ sessionID: UUID, pane: PaneMetrics) -> Bool {
+        guard let session = session(withID: sessionID), let spec = session.effectiveHudSpec,
+              session.hudActive else { return false }
+        return setHudSize(sessionID, size: HudLayout.panelSize(for: spec, pane: pane),
+                          forcedWidthPercent: session.hudResizedWidthPercent)
     }
 
     /// Records the overlay program's exit status (parsed app-side from the wrapper's temp file at surface
@@ -438,13 +467,15 @@ extension AppStore {
                                            size: HudPanelSize, paneIdentity: UUID? = nil,
                                            fontSize: Double? = nil) -> Bool {
         guard openOverlay(sessionID, command: command,
-                          sizePercent: HudLayout.clampSizePercent(size.widthPercent),
+                          sizePercent: HudLayout.clampSizePercent(size.widthPercent, for: spec),
                           backgroundColor: spec.backgroundColor),
               let session = session(withID: sessionID) else { return false }
         session.hudSpec = spec
         session.hudPaneIdentity = paneIdentity
         session.hudFile = file
         session.hudHeightPercent = size.heightPercent
+        session.hudHeightPoints = size.heightPoints
+        session.hudResizedWidthPercent = nil
         session.hudFontSize = fontSize
         return true
     }
@@ -463,9 +494,7 @@ extension AppStore {
               session.hudActive else { return false }
         session.hudSpec = spec.holdingCreationFields(of: live)
         session.hudPaneIdentity = paneIdentity
-        session.hudHeightPercent = size.heightPercent
-        resizeOverlay(sessionID, sizePercent: size.widthPercent)
-        return true
+        return setHudSize(sessionID, size: size, forcedWidthPercent: nil)
     }
 
     /// Closes a HUD through the ordinary overlay teardown. Refused when the slot holds a caller's PROGRAM,
