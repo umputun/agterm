@@ -586,7 +586,10 @@ error keeps those names for compatibility.
   read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode and a local pane only,
   no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
   4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
-  background or disowned job of the old shell is not ended.
+  background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
+  daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the
+  pane closes and the error says so. A startup timeout reports only that no new shell was observed.
+  Refused with nothing changed while the display is asleep, since no terminal can be created then.
 - `session swap [--target] [--window W]`: exchange both terminals' physical positions and primary/split
   roles without restarting either process. Focus follows its terminal; split axis and ratio stay fixed.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a

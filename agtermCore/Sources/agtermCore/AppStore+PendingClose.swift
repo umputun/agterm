@@ -293,6 +293,49 @@ extension AppStore {
         }
     }
 
+    /// finalizePendingClose makes ONE soft-closed session's close final and leaves the rest of its record,
+    /// and every other record, inside their undo window. False when the session is not pending.
+    @discardableResult
+    public func finalizePendingClose(ofSession sessionID: UUID) -> Bool {
+        for (id, record) in pendingCloseRecords {
+            switch record {
+            case .sessions(let close):
+                guard let member = close.sessions.first(where: { $0.session.id == sessionID }) else { continue }
+                // a survivor after the dropped member in the same workspace was saved one slot too far down
+                let rest = close.sessions.filter { $0.session.id != sessionID }.map { other in
+                    guard other.workspaceID == member.workspaceID, other.sessionIndex > member.sessionIndex else { return other }
+                    return PendingSessionClose(
+                        session: other.session, workspaceID: other.workspaceID, workspaceName: other.workspaceName,
+                        workspaceIndex: other.workspaceIndex, sessionIndex: other.sessionIndex - 1, recentID: other.recentID)
+                }
+                guard !rest.isEmpty else {
+                    finalizePendingClose(id)
+                    return true
+                }
+                let selected = close.selectedSessionID == sessionID ? nil : close.selectedSessionID
+                pendingCloseRecords[id] = .sessions(PendingSessionsClose(sessions: rest, selectedSessionID: selected))
+                hardFinalizePendingSessions([member.session])
+            case .workspace(let close):
+                guard let session = close.workspace.sessions.first(where: { $0.id == sessionID }) else { continue }
+                guard close.workspace.sessions.count > 1 else {
+                    finalizePendingClose(id)
+                    return true
+                }
+                var workspace = close.workspace
+                workspace.sessions.removeAll { $0.id == sessionID }
+                let selected = close.selectedSessionID == sessionID ? nil : close.selectedSessionID
+                pendingCloseRecords[id] = .workspace(PendingWorkspaceClose(
+                    workspace: workspace, workspaceIndex: close.workspaceIndex, selectedSessionID: selected,
+                    focusMember: close.focusMember))
+                hardFinalizePendingSessions([session])
+            }
+            if pendingCloseSummary?.id == id { showPendingCloseSummary(id: id) }
+            save()
+            return true
+        }
+        return false
+    }
+
     private func showPendingCloseSummary(id: UUID) {
         guard let record = pendingCloseRecords[id] else { return }
         pendingCloseSummary = summary(for: id, record: record)

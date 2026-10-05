@@ -1,4 +1,5 @@
 import agtermCore
+import CoreGraphics
 import Foundation
 
 /// `session.restart`: ends a live pane's daemon and builds the pane a new surface whose daemon runs the
@@ -32,10 +33,22 @@ extension ControlServer {
         guard let oldPid = await shell(daemon: resolved.daemon, otherThan: nil, client: client, within: .seconds(5)) else {
             return Self.restartFailure("the pane's shell is not running")
         }
-        guard (resolved.view.isSplitPane ? session.splitSurface : session.surface) === old else {
+        // a session waiting out its undo window is not in an open store: killing its shell would leave undo
+        // a dead pane to restore
+        guard (resolved.view.isSplitPane ? session.splitSurface : session.surface) === old,
+              library.store(forSession: session.id) != nil else {
             return Self.restartFailure("the pane changed before the restart; nothing was started")
         }
-        let program = client.foregroundJobs(of: [resolved.daemon], shells: [resolved.daemon: oldPid])[resolved.daemon] ?? []
+        // libghostty creates no surface while the display sleeps, so the kill would leave the pane without
+        // a shell until wake, with the line still armed to run then
+        guard !Self.restartDisplayAsleep() else {
+            return Self.restartFailure("the display is asleep, so a new terminal cannot be created; nothing was changed")
+        }
+        // read before the kill: without it the restart could not tell when the old program is gone
+        guard let program = client.foregroundJob(ofShell: oldPid) else {
+            return Self.restartFailure("the process table cannot be read, so the old program could not be tracked; "
+                + "nothing was changed")
+        }
         switch client.killConfirmed(name: resolved.daemon) {
         case .killed: break
         case .staleSocket: return Self.restartFailure("\(resolved.daemon) did not confirm the kill; nothing was started")
@@ -47,10 +60,15 @@ extension ControlServer {
         // the dying client reports `unowned`, which would reattach to a daemon that is gone and close the pane
         ZmxLeadBook.shared.forget(pane: resolved.identity)
         // the new shell starts only once the old program is gone, so it cannot meet a held port or lock
-        await programEnded(program, client: client)
+        guard await programEnded(program, client: client) else {
+            closeEndedPane(old, session: session, identity: resolved.identity)
+            return Self.restartFailure("the old shell ended (pid \(oldPid)) but its program is still running; "
+                + "nothing was started and the pane was closed")
+        }
         guard let pane = session.paneRole(forIdentity: resolved.identity).map({ $0 == .right ? StatusPane.right : .left }),
               (pane == .right ? session.splitSurface : session.surface) === old,
               let store = library.store(forSession: session.id) else {
+            closeEndedPane(old, session: session, identity: resolved.identity)
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and the pane changed during the restart; "
                 + "nothing was started")
         }
@@ -60,8 +78,18 @@ extension ControlServer {
             command: ZmxSupport.attachCommand(zmx, replaying: nil, creationCommand: options.command, denylist: []),
             wait: false, environment: zmx.environment,
             workingDirectory: FileManager.default.fileExists(atPath: cwd) ? cwd : old.workingDirectory)
-        guard PaneLead.replace?(old, launch, lead) != nil else {
-            return Self.restartFailure("the old shell ended (pid \(oldPid)) and the pane could not be rebuilt")
+        guard let fresh = PaneLead.replace?(old, launch, lead) else {
+            closeEndedPane(old, session: session, identity: resolved.identity)
+            return Self.restartFailure("the old shell ended (pid \(oldPid)) and the pane could not be rebuilt; "
+                + "it was closed")
+        }
+        guard fresh.isRealized else {
+            // destroyed first: a surface that failed to create re-arms itself for the next layout or wake,
+            // which would run the line after this error
+            fresh.destroySurface()
+            closeEndedPane(fresh, session: session, identity: resolved.identity)
+            return Self.restartFailure("the old shell ended (pid \(oldPid)) and the new terminal could not be "
+                + "created; the pane was closed")
         }
 
         guard let newPid = await shell(daemon: resolved.daemon, otherThan: oldPid, client: client,
@@ -112,17 +140,36 @@ extension ControlServer {
         return .success(RestartTarget(session: session, view: view, identity: identity, daemon: daemon, client: client))
     }
 
+    /// closeEndedPane runs the exit transition the restart claimed, for a restart that stops after its
+    /// kill: the pane has no shell, and with its exit claimed nothing else would ever close it.
+    ///
+    /// A session soft-closed meanwhile sits in a pending close, where undo would restore that dead pane, so
+    /// the close is made final instead.
+    private func closeEndedPane(_ view: GhosttySurfaceView, session: Session, identity: UUID) {
+        if let store = library.store(forSession: session.id) {
+            agtermApp.handlePaneExit(view, store: store, sessionID: session.id, library: library,
+                                     alreadyFinalized: identity)
+        } else {
+            library.store(holdingSession: session.id)?.finalizePendingClose(ofSession: session.id)
+        }
+    }
+
+    /// restartDisplayAsleep is whether the main display sleeps; a test replaces it.
+    static var restartDisplayAsleep: () -> Bool = { CGDisplayIsAsleep(CGMainDisplayID()) != 0 }
+
     /// programEnded gives the old foreground program a second to act on the hangup the kill sent it, then
-    /// kills it: a restart replaces the program, so one that ignores a hangup cannot stay.
-    private func programEnded(_ job: [ProcessRecord], client: ZmxClient) async {
-        for grace in [Duration.seconds(1), .milliseconds(500)] {
+    /// kills it: a restart replaces the program, so one that ignores a hangup cannot stay. False when it
+    /// outlives the kill too, as a program this user cannot signal does.
+    private func programEnded(_ job: [ProcessRecord], client: ZmxClient) async -> Bool {
+        for (grace, kills) in [(Duration.seconds(1), true), (.milliseconds(500), false)] {
             let deadline = ContinuousClock.now + grace
             while ContinuousClock.now < deadline {
-                guard client.isRunning(job) else { return }
+                guard client.isRunning(job) else { return true }
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            client.forceEnd(job)
+            if kills { client.forceEnd(job) }
         }
+        return !client.isRunning(job)
     }
 
     /// shell returns the leader pid `zmx list` reports for `daemon` once it differs from `otherThan`, nil

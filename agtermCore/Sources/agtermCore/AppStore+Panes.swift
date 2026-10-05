@@ -186,7 +186,10 @@ extension AppStore {
         let identity = pane == .left ? session.paneIdentity : session.splitPaneIdentity
         if let identity, session.hudPaneIdentity == identity { closeHud(sessionID) }
         if let identity, session.askPaneIdentity == identity { session.cancelPendingAsk() }
-        closePaneOverlay(sessionID, pane: pane == .left ? .left : .right)
+        let slot: OverlayPane = pane == .left ? .left : .right
+        closePaneOverlay(sessionID, pane: slot)
+        // one handed to another Mac lives in the remote slot only, and the pane's kill does not end its job
+        closeRemoteOverlay(sessionID, pane: slot)
         clearIndicatorOwnedByPane(pane, of: session)
     }
 

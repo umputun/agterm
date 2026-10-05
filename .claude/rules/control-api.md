@@ -238,7 +238,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The kill hangs up the old foreground program (next bullet); a restart then waits a second and SIGKILLs
   what is left of that job through `ZmxClient.forceEnd`, since it replaces the program. The new shell
   starts only after that, so it cannot meet a port or lock the old program still holds. Background and
-  disowned jobs of the old shell are not ended.
+  disowned jobs of the old shell are not ended. A restart that stops AFTER its kill, because the old
+  program outlived SIGKILL or the surface could not be rebuilt, runs `handlePaneExit` on the old view and
+  says the pane was closed: its exit is claimed by then, so nothing else would ever close a pane left
+  without a shell. A session soft-closed during the restart has ITS pending close made final for the
+  same reason, since undo would restore that dead pane; `finalizePendingClose(ofSession:)` leaves batch
+  mates and every other record undoable. Three refusals come BEFORE the kill: a session no longer in an
+  open store, a process table that cannot be read (the old program could not be tracked), and a sleeping
+  display (`restartDisplayAsleep`), where libghostty creates no surface and the line would otherwise run
+  at wake, after the error. A new view that still fails to
+  create its surface is destroyed and the pane closed, so nothing stays armed. An unreadable process
+  table counts as "still running" for the wait, never as the program's end.
   `replacePane(spawnFirst:)` gives the new view the old one's frame and creates its surface BEFORE the old
   surface is freed. libghostty routes a queued child-exit by surface address, so a surface created after
   the free can land on that address and take the old child's exit, which closed the pane (measured: the

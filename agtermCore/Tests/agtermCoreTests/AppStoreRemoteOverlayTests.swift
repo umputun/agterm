@@ -131,6 +131,18 @@ struct AppStoreRemoteOverlayTests {
         #expect(jobs.job(job)?.state == .finished(.canceled))
     }
 
+    @Test func clearingAPanesOwnedStateClosesItsRemoteOverlayOnly() throws {
+        let (session, _) = try origin(split: true)
+        let right = try job(of: open(session, pane: .right))
+        let left = try job(of: open(session, pane: .left))
+
+        store.clearPaneOwnedState(session.id, pane: .right)
+
+        #expect(presenter.bodies.last == .overlayClose(PresentationOverlayChange(job: right)))
+        #expect(jobs.job(right)?.state == .finished(.canceled))
+        #expect(jobs.job(left)?.state != .finished(.canceled))
+    }
+
     @Test func losingAPresenterLeavesALocalOverlayAlone() throws {
         let (session, id) = try origin()
         setLead(.leader, pane: session.paneIdentity)

@@ -2,16 +2,14 @@
 /// is not mistaken for the process that held it.
 public struct ProcessRecord: Equatable, Hashable, Sendable {
     public let pid: Int32
-    public let parent: Int32
     /// started is the start time in microseconds since the epoch.
     public let started: Int64
     public let group: Int32
     /// foreground is the foreground process group of the process's terminal, 0 without one.
     public let foreground: Int32
 
-    public init(pid: Int32, parent: Int32, started: Int64, group: Int32 = 0, foreground: Int32 = 0) {
+    public init(pid: Int32, started: Int64, group: Int32 = 0, foreground: Int32 = 0) {
         self.pid = pid
-        self.parent = parent
         self.started = started
         self.group = group
         self.foreground = foreground

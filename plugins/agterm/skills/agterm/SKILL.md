@@ -44,7 +44,7 @@ the control channel is available:
 - `AGTERM_PANE` / `AGTERM_PANE_ID`: the surface's spawn role (`left`|`right`|`scratch`) and stable
   per-surface token. The role is not rewritten after promotion or swap; the token resolves the LIVE slot.
   Prefer `--pane-id "$AGTERM_PANE_ID"` where supported: `session status`, `session restore`,
-  `session text`, `session type`, `surface cursor` and `session hud`. `tree --json` lists each surface's
+  `session text`, `session type`, `session restart`, `surface cursor` and `session hud`. `tree --json` lists each surface's
   token as `surfaces[].paneID`. The agent-status hook forwards both values for compatibility.
 - `TERM_PROGRAM=agterm` / `TERM_PROGRAM_VERSION` (agterm's version): the terminal identity, replacing
   the `ghostty` pair embedded libghostty would set. A tool that decides a capability from a list of

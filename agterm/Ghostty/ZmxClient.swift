@@ -58,9 +58,16 @@ final class ZmxClient {
         return sweeper.capture(shells: known.filter { names.contains($0.key) })
     }
 
+    /// foregroundJob reads one shell's foreground job for a caller that waits on it. Nil when the process
+    /// table cannot be read; empty with no sweeper, where nothing is ever signalled or waited on.
+    func foregroundJob(ofShell pid: pid_t) -> [ProcessRecord]? {
+        guard let sweeper else { return [] }
+        return sweeper.foregroundJob(of: pid)
+    }
+
     /// isRunning is whether any process of `job` still runs.
     func isRunning(_ job: [ProcessRecord]) -> Bool {
-        sweeper.map { !$0.survivors(of: job).isEmpty } ?? false
+        sweeper?.isRunning(job) ?? false
     }
 
     /// forceEnd kills what is left of `job`, for a restart whose old program ignored the hangup.

@@ -364,11 +364,11 @@ final class ZmxClientTests: XCTestCase {
                                 signals: @escaping (Int32, pid_t) -> Void) -> ZmxClient {
         var sweeper = ProcessSweeper()
         sweeper.table = {
-            [ProcessRecord(pid: 100, parent: 50, started: 1, group: 100, foreground: 300),
-             ProcessRecord(pid: 300, parent: 100, started: 2, group: 300, foreground: 300),
-             ProcessRecord(pid: 301, parent: 300, started: 3, group: 300, foreground: 300),
-             ProcessRecord(pid: 400, parent: 100, started: 4, group: 400, foreground: 300),
-             ProcessRecord(pid: 200, parent: 1, started: 5, group: 200)]
+            [ProcessRecord(pid: 100, started: 1, group: 100, foreground: 300),
+             ProcessRecord(pid: 300, started: 2, group: 300, foreground: 300),
+             ProcessRecord(pid: 301, started: 3, group: 300, foreground: 300),
+             ProcessRecord(pid: 400, started: 4, group: 400, foreground: 300),
+             ProcessRecord(pid: 200, started: 5, group: 200)]
         }
         sweeper.signal = signals
         return ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
@@ -419,5 +419,19 @@ final class ZmxClientTests: XCTestCase {
         client.forceEnd(job)
 
         XCTAssertEqual(sent.sorted(), ["\(SIGKILL):300", "\(SIGKILL):301"])
+    }
+
+    func testAnUnreadableProcessTableCountsAsStillRunning() {
+        var sweeper = ProcessSweeper()
+        sweeper.table = { nil }
+        var sent = 0
+        sweeper.signal = { _, _ in sent += 1 }
+        let job = [ProcessRecord(pid: 300, started: 2, group: 300, foreground: 300)]
+
+        XCTAssertTrue(sweeper.isRunning(job))
+        XCTAssertFalse(sweeper.isRunning([]))
+        sweeper.send(SIGKILL, to: job)
+        XCTAssertEqual(sent, 0)
+        XCTAssertEqual(sweeper.capture(shells: ["agterm-a": 100]), [:])
     }
 }
