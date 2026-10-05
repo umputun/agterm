@@ -553,8 +553,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// from. Without the echo a caller cannot tell an out-of-range request from an honored one, both
     /// answering ok.
     public var sidebarWidth: Double?
-    /// pane is the role written by session.restore or the pane anchor resolved by ask.open.
-    /// session.restore reports it on every success, including the default-to-main path.
+    /// pane is the pane session.restore wrote, session.text read or session.type typed into, or the anchor
+    /// ask.open resolved. The first three report it on every success, the default-pane paths included.
     public var pane: String?
     /// The light/dark syncing state for `theme.set`/`theme.list`, from the stored theme: `sync` = whether it
     /// is ghostty's dual `light:,dark:` form (the terminal tracks the macOS appearance), `light`/`dark` its
