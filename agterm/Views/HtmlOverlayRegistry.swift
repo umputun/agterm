@@ -204,6 +204,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var loadPending = false
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
+    // stays set while the session sits in an undoable close, where no slot is found to close, so a
+    // restored page closes at its next mount
+    private var closeRequested = false
     private let storageFailure: String?
     /// usesSavedStore is true for a page built on the saved browser store.
     let usesSavedStore: Bool
@@ -331,9 +334,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         return false
     }
 
-    /// apply takes the model's latest value and reloads when its revision moved.
+    /// apply takes the model's latest value and reloads when its revision moved. It also finishes a close
+    /// the page asked for while its session was hidden.
     func apply(_ overlay: HtmlOverlay) {
         self.overlay = overlay
+        closeIfRequested()
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
         if overlay.reloadTarget == .current { reloadShown() } else { loadOriginal() }
@@ -543,6 +548,22 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_: WKWebView, createWebViewWith _: WKWebViewConfiguration, for _: WKNavigationAction,
                  windowFeatures _: WKWindowFeatures) -> WKWebView? { nil }
+
+    /// webViewDidClose closes the overlay of a page whose `window.close()` WebKit accepted, as the panel's
+    /// close button does.
+    func webViewDidClose(_: WKWebView) {
+        closeRequested = true
+        closeIfRequested()
+    }
+
+    // deferred because the close releases this page, clearing the delegate WebKit is calling through
+    private func closeIfRequested() {
+        guard closeRequested else { return }
+        Task { [weak self] in
+            guard let self, closeRequested else { return }
+            store?.closeHtmlOverlay(id)
+        }
+    }
 
     func webView(_: WKWebView, runJavaScriptAlertPanelWithMessage _: String, initiatedByFrame _: WKFrameInfo) async {}
 

@@ -1044,6 +1044,64 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(afterNavigation as? String, "static")
     }
 
+    func testAPageClosingItsWindowClosesItsOverlayAsDismissed() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>done</title><script>window.close()</script>")])
+        let page = try openURL("http://127.0.0.1:\(port)/", javascript: true)
+        let live = registry.page(for: page, store: store)
+
+        try await waitFor("the page closed its overlay") { !self.session.overlayActive }
+        XCTAssertNil(session.htmlOverlay)
+        XCTAssertNil(registry.existing(page.id))
+        XCTAssertNil(live.webView.uiDelegate)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .dismissed)
+    }
+
+    func testAPageWithScriptOffCannotCloseItsOverlay() async throws {
+        let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>static</title><script>window.close()</script>")])
+        let page = try openURL("http://127.0.0.1:\(port)/")
+        _ = registry.page(for: page, store: store)
+
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(session.htmlOverlay?.id, page.id)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .pending)
+    }
+
+    func testAPanePageClosingItsWindowAfterASwapClosesOnlyItsOwnSlot() async throws {
+        store.toggleSplit(session.id)
+        session.surface = StubSurface("left")
+        session.splitSurface = StubSurface("right")
+        let closing = try open(pane: .left, file: "a.html", javascript: true)
+        let staying = try open(pane: .right, file: "b.html")
+        let live = registry.page(for: closing, store: store)
+        _ = registry.page(for: staying, store: store)
+        try await waitFor("both loaded") {
+            self.session.paneOverlay(.left)?.html?.loadState == .loaded && self.session.paneOverlay(.right)?.html?.loadState == .loaded
+        }
+
+        XCTAssertNil(store.swapPanes(session.id))
+        _ = try await live.webView.evaluateJavaScript("window.close()")
+
+        try await waitFor("the swapped page closed") { self.session.paneOverlay(.right) == nil }
+        XCTAssertEqual(session.paneOverlay(.left)?.html?.id, staying.id)
+        XCTAssertNil(registry.existing(closing.id))
+    }
+
+    func testAPageThatClosedDuringAnUndoableCloseStaysClosedAfterUndo() async throws {
+        let page = try open()
+        let live = registry.page(for: page, store: store)
+        XCTAssertTrue(store.softCloseSession(session.id, grace: 60))
+
+        live.webViewDidClose(live.webView)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNotNil(registry.existing(page.id))
+
+        XCTAssertTrue(store.undoPendingClose())
+        live.apply(try XCTUnwrap(session.htmlOverlay))
+        try await waitFor("the restored page closed") { !self.session.overlayActive }
+        XCTAssertNil(registry.existing(page.id))
+    }
+
     func testAPageKeepsTheZoomThroughNavigationAndReloadAndANewPageOpensAtIt() async throws {
         registry.setZoom(1.5)
         let page = try open(grant: pages.path)

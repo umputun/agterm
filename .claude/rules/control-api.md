@@ -549,6 +549,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `javascript`): `allowsContentJavaScript` is set on the configuration before the web view exists, and
   nothing enables it later. User scripts and native `evaluateJavaScript` still run, so the theme survives,
   and a test cannot use evaluation to show page script ran; tests that need page script open with it on.
+- A page's `window.close()` closes its overlay: `HtmlOverlayPage.webViewDidClose` calls `closeHtmlOverlay`,
+  so the outcome is `dismissed`. A URL page can thereby dismiss its overlay without a prompt, and `--js`
+  is the only gate. The callback names no frame, so a same-origin subframe's `top.close()` closes the
+  overlay too, unlike a bridge request. WebKit may refuse the call, as it does after `history.pushState`.
+  The close is deferred one task because releasing the page clears the delegate WebKit is calling through.
+  A session in an undoable close has no slot to find, so the page keeps the request and `apply` finishes
+  it at the next mount.
 - A synthetic `a.click()` reaches the policy exactly like a real click (`.linkActivated`, button 0, no
   flags), so every hand-off the page starts goes through `HtmlBrowser.confirm`, a nonblocking sheet with
   Cancel as default; nothing in control dispatch waits on it. One pending prompt per page, a decline silences the

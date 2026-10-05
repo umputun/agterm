@@ -825,7 +825,7 @@ error keeps those names for compatibility.
 - `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a local HTML file (an artifact you generated: a report, chart or prototype) in the overlay slot
   instead of running a program. Same placement, sizing, `--follow`, ⌘W and `session overlay close` as a
-  program overlay; a page stays up until the user, a caller or its own bridge closes it. The panel carries a strip
+  program overlay; a page stays up until it is closed. The panel carries a strip
   naming the file shown or the page's origin, then the page title dimmed, with a close button; `--navigation` adds
   back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL, worth it
   when the page links to others. `--chromeless` drops the strip so the page fills its panel (the session or
@@ -843,7 +843,9 @@ error keeps those names for compatibility.
   generated pages from them, with a fallback at each use, and never declare them in the page. The page's
   own JavaScript is off unless `--js` is passed; agterm's theme script runs either way, and images and
   stylesheets load. Prefer static HTML, CSS and SVG, and pass `--js` only when the requested interaction or
-  web app requires JavaScript; `--js` with a COMMAND is refused (`--js requires --html or --url`). A clicked http(s) link, or a link opening a new window, opens in the
+  web app requires JavaScript; `--js` with a COMMAND is refused (`--js requires --html or --url`). A `--js` page, a URL page
+  included, closes its own overlay with `window.close()` when the web view accepts the call; it may refuse,
+  for example after `history.pushState`, and the page then needs `session overlay close`. A clicked http(s) link, or a link opening a new window, opens in the
   default browser only after the user confirms a prompt naming its origin and URL; one prompt at a time,
   and after Cancel the page asks nothing more until the user clicks or types in it. Popups, JS dialogs,
   file-chooser requests, dropped or pasted files and camera/microphone requests are refused. Mutually exclusive with a COMMAND and `--wait`.
@@ -855,7 +857,7 @@ error keeps those names for compatibility.
   carries `result.pageID`, the same `id`. With `--block` the command waits for the page to answer and
   prints its outcome as JSON: `{"pageID":"…","outcome":"submitted","value":"main"}` with exit 0,
   `{"pageID":"…","outcome":"dismissed"}` with exit 2 when the page closes unanswered (panel button, ⌘W, `session overlay close`, its
-  session closing), exit 1 on error; `--json` prints the raw reply. It polls by that page id, so a page
+  own `window.close()`, its session closing), exit 1 on error; `--json` prints the raw reply. It polls by that page id, so a page
   opened later in the same slot cannot answer for it.
 
   **Page bridge.** The page can run any command itself; it is trusted like a program overlay, and a URL
