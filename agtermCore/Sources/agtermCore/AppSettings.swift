@@ -19,6 +19,13 @@ public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case tree
 }
 
+/// Where a clicked web link from terminal output opens: the system `browser`, or a session web `overlay`.
+/// App-wide. Raw-stored, resolved by `effectiveLinkOpenMode`.
+public enum LinkOpenMode: String, Codable, Sendable, CaseIterable {
+    case browser
+    case overlay
+}
+
 /// How a delivered notification bounces the Dock icon (`requestUserAttention`): `off`, `once` (one
 /// `.informationalRequest`), or `untilFocused` (a `.criticalRequest` bouncing until agterm activates).
 /// Raw-stored, resolved by `effectiveDockBounce`. Named `off`, not `none`, to dodge the `Optional.none`
@@ -330,6 +337,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Raw `FlaggedViewLayout` for the sidebar's flagged view; nil = flat. Resolved by
     /// `effectiveFlaggedViewLayout`.
     public var flaggedViewLayout: String?
+    /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
+    public var linkOpenMode: String?
     /// htmlOverlayZoom is the page zoom every HTML overlay shows at, nil for actual size; read it through
     /// `effectiveHtmlOverlayZoom`.
     public var htmlOverlayZoom: Double?
@@ -361,6 +370,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
+                linkOpenMode: String? = nil,
                 htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
@@ -409,6 +419,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.shownInterfaceElements = shownInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.flaggedViewLayout = flaggedViewLayout
+        self.linkOpenMode = linkOpenMode
         self.htmlOverlayZoom = htmlOverlayZoom
         self.welcomeShown = welcomeShown
     }
@@ -445,6 +456,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The resolved flagged-view layout: the explicit `flaggedViewLayout` when a KNOWN raw value, else `flat`.
     public var effectiveFlaggedViewLayout: FlaggedViewLayout {
         flaggedViewLayout.flatMap(FlaggedViewLayout.init(rawValue:)) ?? .flat
+    }
+
+    /// The resolved link-open mode: the explicit `linkOpenMode` when a KNOWN raw value, else `browser`.
+    public var effectiveLinkOpenMode: LinkOpenMode {
+        linkOpenMode.flatMap(LinkOpenMode.init(rawValue:)) ?? .browser
     }
 
     /// effectiveHtmlOverlayZoom is `htmlOverlayZoom` bounded to `HtmlZoom`'s range, the only read of the setting.

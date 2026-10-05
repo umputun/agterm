@@ -122,8 +122,8 @@
 
 ## Technical Details
 - `AppSettings.linkOpenMode: String?`, `effectiveLinkOpenMode: LinkOpenMode` (unknown or nil → `.browser`).
-- `LinkClickOrigin`: `.pane(UUID)`, `.scratch(UUID)`, `.hud`, `.programOverlay`, `.quick`.
-- `LinkRoute`: `.browser(URL)`, `.overlay(URL, session: UUID)`, `.reveal(URL)`, `.ignore`;
+- `LinkPolicy.ClickOrigin`: `.pane(UUID)`, `.scratch(UUID)`, `.hud`, `.programOverlay`, `.quick`.
+- `LinkPolicy.Route`: `.browser(URL)`, `.overlay(URL, session: UUID)`, `.reveal(URL)`, `.ignore`;
   `LinkPolicy.route(for:mode:origin:)` wraps `disposition`.
 - `HtmlOverlay.browse: Bool`, default false. Valid only with a URL source: `--browse` without `--url` is
   rejected by the dispatcher; the existing `--chromeless requires --html` rule covers the header.
@@ -151,12 +151,12 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
 
-- [ ] write tests for `effectiveLinkOpenMode`: nil, `browser`, `overlay`, unknown value, round trip through encode/decode
-- [ ] write tests for `LinkPolicy.route`: every origin × both modes for `https`; `mailto`/`ftp` always browser; `file://` always reveal; ignored schemes stay ignored
-- [ ] add `LinkOpenMode`, the stored setting and its effective accessor
-- [ ] add `LinkClickOrigin`, `LinkRoute` and `LinkPolicy.route`
-- [ ] update the `LinkPolicy` doc comment, which says the app side only calls two `NSWorkspace` methods
-- [ ] run `swift test` for these suites - must pass before task 2
+- [x] write tests for `effectiveLinkOpenMode`: nil, `browser`, `overlay`, unknown value, round trip through encode/decode
+- [x] write tests for `LinkPolicy.route`: every origin × both modes for `https`; `mailto`/`ftp` always browser; `file://` always reveal; ignored schemes stay ignored
+- [x] add `LinkOpenMode`, the stored setting and its effective accessor
+- [x] add `LinkPolicy.ClickOrigin`, `LinkPolicy.Route` (nested, like `LinkDisposition`) and `LinkPolicy.route`
+- [x] update the `LinkPolicy` doc comment, which says the app side only calls two `NSWorkspace` methods
+- [x] run `swift test` for these suites - must pass before task 2
 
 ### Task 2: Browsing pages: navigation scope and current-origin header
 

@@ -7,8 +7,10 @@ import Foundation
 /// opened: opening goes through LaunchServices (the Finder double-click path), so a click on
 /// `file:///…/X.app` or `.command` would LAUNCH it, while reveal only selects it. A `file://` whose host is
 /// NOT this machine is ignored, since `activateFileViewerSelecting` on a remote host can trigger a Finder
-/// network/SMB mount. Host-free (Foundation-only) so it is unit-tested — the local host names are injected;
-/// the app-side glue only calls the two `NSWorkspace` methods (same split as `ShellEscape`).
+/// network/SMB mount. `route(for:mode:origin:)` adds the link-open setting on top: a web link clicked in a
+/// pane or the scratch terminal may go to a session overlay instead of the browser. Host-free
+/// (Foundation-only) so it is unit-tested — the local host names are injected; the app side only carries
+/// out the route (same split as `ShellEscape`).
 public enum LinkPolicy {
     /// The schemes safe to hand to the system opener — web + mail only, none that hands off to a local
     /// executable/handler.
@@ -17,6 +19,28 @@ public enum LinkPolicy {
     /// What a link click should do. Carries the target URL for `.open`/`.reveal`.
     public enum LinkDisposition: Equatable {
         case open(URL)
+        case reveal(URL)
+        case ignore
+    }
+
+    /// The schemes a session web overlay can show; `mailto` and `ftp` always go to the system handler.
+    static let overlaySchemes: Set<String> = ["http", "https"]
+
+    /// Where a clicked link came from. Only a pane and the scratch terminal have an owning session a page
+    /// could open on; a HUD link stays in the browser so the click never replaces the HUD it sits in.
+    public enum ClickOrigin: Equatable, Sendable {
+        case pane(UUID)
+        case scratch(UUID)
+        case hud
+        case programOverlay
+        case quick
+    }
+
+    /// What a link click should do once the link-open setting is applied. `browser` is the system opener,
+    /// whatever handler the scheme maps to.
+    public enum Route: Equatable, Sendable {
+        case browser(URL)
+        case overlay(URL, session: UUID)
         case reveal(URL)
         case ignore
     }
@@ -113,5 +137,22 @@ public enum LinkPolicy {
         let normalizedPath = Self.lexicallyNormalizedAbsolutePath(rawPath)
         guard !isAutomountPath(normalizedPath) else { return .ignore }
         return .reveal(URL(fileURLWithPath: normalizedPath, isDirectory: false))
+    }
+
+    /// Maps a raw link to its route: `disposition` decides open, reveal or ignore, then an `http`/`https`
+    /// link clicked in a pane or the scratch terminal goes to that session's overlay when `mode` is
+    /// `overlay`. Whether the overlay can be shown right now is the caller's check.
+    public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
+                             localHosts: Set<String> = localHostNames) -> Route {
+        switch disposition(for: raw, localHosts: localHosts) {
+        case .ignore: return .ignore
+        case .reveal(let url): return .reveal(url)
+        case .open(let url):
+            guard mode == .overlay, overlaySchemes.contains(url.scheme?.lowercased() ?? "") else { return .browser(url) }
+            switch origin {
+            case .pane(let session), .scratch(let session): return .overlay(url, session: session)
+            case .hud, .programOverlay, .quick: return .browser(url)
+            }
+        }
     }
 }

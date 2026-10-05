@@ -168,4 +168,44 @@ struct LinkPolicyTests {
         }
         #expect(url.absoluteString == "file:///tmp/x.md")
     }
+
+    // MARK: route (browser / overlay / reveal / ignore)
+
+    static let session = UUID()
+    static let origins: [LinkPolicy.ClickOrigin] = [.pane(session), .scratch(session), .hud, .programOverlay, .quick]
+
+    @Test(arguments: ["http://example.com/a", "https://example.com/a?q=1"], origins)
+    func browserModeSendsWebLinksToTheBrowser(_ raw: String, _ origin: LinkPolicy.ClickOrigin) throws {
+        let url = try #require(URL(string: raw))
+        #expect(LinkPolicy.route(for: raw, mode: .browser, origin: origin, localHosts: Self.localHosts) == .browser(url))
+    }
+
+    @Test(arguments: ["http://example.com/a", "HTTPS://example.com/a"],
+          [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func overlayModeOpensPaneAndScratchWebLinksOnTheOwningSession(_ raw: String, _ origin: LinkPolicy.ClickOrigin) throws {
+        let url = try #require(URL(string: raw))
+        #expect(LinkPolicy.route(for: raw, mode: .overlay, origin: origin, localHosts: Self.localHosts)
+            == .overlay(url, session: Self.session))
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
+    func overlayModeKeepsSessionlessOriginsInTheBrowser(_ origin: LinkPolicy.ClickOrigin) throws {
+        let url = try #require(URL(string: "https://example.com"))
+        #expect(LinkPolicy.route(for: "https://example.com", mode: .overlay, origin: origin, localHosts: Self.localHosts)
+            == .browser(url))
+    }
+
+    @Test(arguments: ["mailto:someone@example.com", "ftp://host/file.txt"], LinkOpenMode.allCases)
+    func nonWebSchemesAlwaysGoToTheSystemHandler(_ raw: String, _ mode: LinkOpenMode) throws {
+        let url = try #require(URL(string: raw))
+        #expect(LinkPolicy.route(for: raw, mode: mode, origin: .pane(Self.session), localHosts: Self.localHosts) == .browser(url))
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, origins)
+    func fileLinksRevealAndOtherSchemesStayIgnoredInEveryMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.route(for: "file:///tmp/x.md", mode: mode, origin: origin, localHosts: Self.localHosts)
+            == .reveal(URL(fileURLWithPath: "/tmp/x.md", isDirectory: false)))
+        #expect(LinkPolicy.route(for: "x-custom://run", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
+        #expect(LinkPolicy.route(for: "file://elsewhere/tmp/x.md", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
+    }
 }
