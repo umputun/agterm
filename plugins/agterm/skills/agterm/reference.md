@@ -589,7 +589,7 @@ error keeps those names for compatibility.
   background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
   daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the
   pane closes and the error says so. A startup timeout reports only that no new shell was observed.
-  Refused with nothing changed while the display is asleep, since no terminal can be created then.
+  Does not need the display awake.
 - `session swap [--target] [--window W]`: exchange both terminals' physical positions and primary/split
   roles without restarting either process. Focus follows its terminal; split axis and ratio stay fixed.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a

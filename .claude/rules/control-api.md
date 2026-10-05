@@ -243,11 +243,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   says the pane was closed: its exit is claimed by then, so nothing else would ever close a pane left
   without a shell. A session soft-closed during the restart has ITS pending close made final for the
   same reason, since undo would restore that dead pane; `finalizePendingClose(ofSession:)` leaves batch
-  mates and every other record undoable. Three refusals come BEFORE the kill: a session no longer in an
-  open store, a process table that cannot be read (the old program could not be tracked), and a sleeping
-  display (`restartDisplayAsleep`), where libghostty creates no surface and the line would otherwise run
-  at wake, after the error. A new view that still fails to
-  create its surface is destroyed and the pane closed, so nothing stays armed. An unreadable process
+  mates and every other record undoable. Two refusals come BEFORE the kill: a session no longer in an
+  open store and a process table that cannot be read (the old program could not be tracked). A sleeping
+  display is not one: `spawnFirst` creates the surface for a view outside any window, which libghostty
+  did with the display asleep for 60 seconds (measured), unlike the deck's creation in #416. A new view
+  that still fails to create its surface is destroyed and the pane closed, so nothing stays armed to run
+  the line at a later wake. An unreadable process
   table counts as "still running" for the wait, never as the program's end.
   `replacePane(spawnFirst:)` gives the new view the old one's frame and creates its surface BEFORE the old
   surface is freed. libghostty routes a queued child-exit by surface address, so a surface created after

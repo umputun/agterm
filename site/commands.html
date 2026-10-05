@@ -1368,8 +1368,8 @@
                 bytes. The pane's status and any ask, HUD or pane overlay anchored to it are cleared; its restore pin is kept.
                 A background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
                 daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the pane
-                closes and the error says so. A startup timeout reports only that no new shell was observed. While the
-                display is asleep the command is refused and nothing is changed, because no terminal can be created then.
+                closes and the error says so. A startup timeout reports only that no new shell was observed. The command
+                does not need the display awake.
               </p>
             </div>
 

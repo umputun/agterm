@@ -1,5 +1,4 @@
 import agtermCore
-import CoreGraphics
 import Foundation
 
 /// `session.restart`: ends a live pane's daemon and builds the pane a new surface whose daemon runs the
@@ -38,11 +37,6 @@ extension ControlServer {
         guard (resolved.view.isSplitPane ? session.splitSurface : session.surface) === old,
               library.store(forSession: session.id) != nil else {
             return Self.restartFailure("the pane changed before the restart; nothing was started")
-        }
-        // libghostty creates no surface while the display sleeps, so the kill would leave the pane without
-        // a shell until wake, with the line still armed to run then
-        guard !Self.restartDisplayAsleep() else {
-            return Self.restartFailure("the display is asleep, so a new terminal cannot be created; nothing was changed")
         }
         // read before the kill: without it the restart could not tell when the old program is gone
         guard let program = client.foregroundJob(ofShell: oldPid) else {
@@ -153,9 +147,6 @@ extension ControlServer {
             library.store(holdingSession: session.id)?.finalizePendingClose(ofSession: session.id)
         }
     }
-
-    /// restartDisplayAsleep is whether the main display sleeps; a test replaces it.
-    static var restartDisplayAsleep: () -> Bool = { CGDisplayIsAsleep(CGMainDisplayID()) != 0 }
 
     /// programEnded gives the old foreground program a second to act on the hangup the kill sent it, then
     /// kills it: a restart replaces the program, so one that ignores a hangup cannot stay. False when it

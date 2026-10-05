@@ -7,7 +7,6 @@ final class ControlServerRestartTests: XCTestCase {
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settingsModel: SettingsModel!
-    private var displayAsleep: () -> Bool = { false }
 
     override func setUp() async throws {
         try await super.setUp()
@@ -15,12 +14,9 @@ final class ControlServerRestartTests: XCTestCase {
             .appendingPathComponent("agterm-restart-tests-\(UUID().uuidString)", isDirectory: true)
         library = WindowLibrary(directory: stateDir)
         settingsModel = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
-        displayAsleep = ControlServer.restartDisplayAsleep
-        ControlServer.restartDisplayAsleep = { false }
     }
 
     override func tearDown() async throws {
-        ControlServer.restartDisplayAsleep = displayAsleep
         settingsModel = nil
         library = nil
         try? FileManager.default.removeItem(at: stateDir)
@@ -62,21 +58,6 @@ final class ControlServerRestartTests: XCTestCase {
             + "nothing was started and the pane was closed")
         XCTAssertEqual(signals, [SIGHUP, SIGKILL])
         XCTAssertNil(library.store(forSession: session.id))
-    }
-
-    func testASleepingDisplayRefusesTheRestartBeforeAnythingIsKilled() async throws {
-        let (session, view) = try livePane()
-        var killed: [String] = []
-        let server = makeServer(daemon: ZmxSupport.daemonName(for: session.paneIdentity)) { killed.append($0) }
-        ControlServer.restartDisplayAsleep = { true }
-
-        let response = await server.restartSessionPane(
-            session.id.uuidString, window: nil,
-            options: ControlSessionRestartOptions(command: "cld", pane: nil, paneID: view.paneToken))
-
-        XCTAssertEqual(response.error, "the display is asleep, so a new terminal cannot be created; nothing was changed")
-        XCTAssertEqual(killed, [])
-        XCTAssertNotNil(library.store(forSession: session.id))
     }
 
     func testASessionSoftClosedDuringTheRestartIsNotLeftForUndoToRestore() async throws {
