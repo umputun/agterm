@@ -306,6 +306,13 @@ struct HudTests {
         #expect(body == "20 5 0 4242 0.5 - 8\n\u{1B}[1mhi\u{1B}[22m there\n")
     }
 
+    @Test func aMarkdownLinkAddsNoWidthBeyondItsVisibleText() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "[ab](http://x)", markdown: true), grid: (columns: 40, rows: 5))
+
+        #expect(body.blockWidth == 2)
+        #expect(body.lines == ["\u{1B}]8;;http://x\u{1B}\\\u{1B}[4mab\u{1B}[24m\u{1B}]8;;\u{1B}\\"])
+    }
+
     @Test func aSpinningMarkdownBodyIndentsEveryRowAfterTheFirstByTheGutter() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "- a\n- bb", spinner: .bar, markdown: true),
                                           grid: (columns: 20, rows: 6))
@@ -314,13 +321,34 @@ struct HudTests {
         #expect(body.blockWidth == 4 + HudLayout.spinnerWidth)
     }
 
-    @Test func aMarkdownBodyIsClippedToTheGridLessItsPadding() {
+    @Test func aMarkdownBodyWrapsAtTheGridLessItsPaddingAndCountsWhatDoesNotFit() {
         let message = (1...10).map { "- item \($0)" }.joined(separator: "\n")
 
         let body = HudLayout.markdownBody(for: HudSpec(message: message, markdown: true), grid: (columns: 9, rows: 5))
 
-        #expect(body.lines == ["• it…", "• it…", "\u{1B}[2m… 8 \u{1B}[22m…"])
+        #expect(body.lines == ["• ite", "  m 1", "\u{1B}[2m… 19\u{1B}[22m…"])
         #expect(body.blockWidth == 5)
+    }
+
+    @Test func aMarkdownTableWiderThanThePanelIsStillClipped() {
+        let body = HudLayout.markdownBody(for: HudSpec(message: "| abcdef |\n|---|\n| x |", markdown: true),
+                                          grid: (columns: 10, rows: 9))
+
+        #expect(body.lines.first == "┌────…")
+    }
+
+    @Test func aMarkdownMessageIsMeasuredAndWrappedAtTheWidthThePaneAllows() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 400, paneHeight: 800)
+        let spec = HudSpec(message: "aaaa bbbb cccc dddd eeee ffff gggg [the link](http://x) hhhh iiii jjjj", markdown: true)
+
+        let size = HudLayout.panelSize(for: spec, pane: pane)
+        let grid = HudLayout.paintGrid(for: spec, size: size, pane: pane)
+        let body = HudLayout.markdownBody(for: spec, grid: grid)
+
+        #expect(grid.columns == 38)
+        #expect(body.lines == ["aaaa bbbb cccc dddd eeee ffff gggg",
+                               "\u{1B}]8;;http://x\u{1B}\\\u{1B}[4mthe link\u{1B}]8;;\u{1B}\\\u{1B}[24m hhhh iiii jjjj"])
+        #expect(grid.rows == body.lines.count + HudLayout.verticalPadding * 2)
     }
 
     @Test func aOneRowSpinningMarkdownBodyShowsOnlyTheMarker() {

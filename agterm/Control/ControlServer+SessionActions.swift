@@ -149,8 +149,8 @@ extension ControlServer: ControlActions {
 
     /// A HUD resizes through the same slot and field as any floating panel, but never to FULL, which would
     /// make the message cover the session it is about. The percent reaches its WIDTH only — its height stays
-    /// measured from the message, and the text wraps at `HudLayout.maxColumns` rather than at the panel, so
-    /// a resize cannot change how many rows it needs. A resized HUD also gets its body rewritten: the helper
+    /// as measured when the message was posted, which a markdown message rewrapped at a narrower width can
+    /// outgrow (`HudLayout.wrapColumns`). A resized HUD also gets its body rewritten: the helper
     /// centers on the grid in that file's header, so a new panel with the old header would paint the message
     /// off-center until the next `session.hud.update`. A refused rewrite puts the size back rather than
     /// leave the two disagreeing.

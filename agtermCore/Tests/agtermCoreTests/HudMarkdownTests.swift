@@ -156,8 +156,55 @@ struct HudMarkdownTests {
             HudMarkdown.Run(text: "i", style: .italic), HudMarkdown.Run(text: " ", style: []),
             HudMarkdown.Run(text: "s", style: .strikethrough), HudMarkdown.Run(text: " ", style: []),
             HudMarkdown.Run(text: "c", style: []), HudMarkdown.Run(text: " ", style: []),
-            HudMarkdown.Run(text: "label", style: [])
+            HudMarkdown.Run(text: "label", style: .underline, link: "http://x")
         ]])
+    }
+
+    @Test func aLinkShowsItsUnderlinedLabelAlone() {
+        #expect(plain("see [the PR](https://example.com/pr/7) now") == ["see the PR now"])
+        #expect(styled("**[a b](https://example.com)**")[0] == [
+            HudMarkdown.Run(text: "a b", style: [.bold, .underline], link: "https://example.com")
+        ])
+        #expect(plain("| h |\n|---|\n| [a](http://x) |").contains("│ a │"))
+        #expect(plain("<https://example.com/a>") == ["https://example.com/a"])
+    }
+
+    @Test(arguments: ["javascript:alert(1)", "x-custom://do", "relative/path.md", "file://other.host/tmp/x"])
+    func aLinkThePolicyIgnoresIsItsPlainLabel(url: String) {
+        #expect(styled("[label](\(url))")[0] == [HudMarkdown.Run(text: "label", style: [])])
+    }
+
+    @Test func aLocalFileLinkIsClickable() {
+        #expect(styled("[log](file:///tmp/build.log)")[0].first == HudMarkdown.Run(text: "log", style: .underline,
+                                                                                    link: "file:///tmp/build.log"))
+    }
+
+    @Test func aLinkTargetIsAlwaysPrintableAscii() throws {
+        let url = try #require(URL(string: "https://example.com/a%1Bb"))
+
+        #expect(HudMarkdown.linkTarget(url) == "https://example.com/a%1Bb")
+        #expect(styled("[x](https://example.com/%D1%84)")[0].first?.link == "https://example.com/%D1%84")
+    }
+
+    @Test func aLinkInAHeadingKeepsTheHeadingStyle() {
+        #expect(styled("# [t](http://x) u")[0] == [
+            HudMarkdown.Run(text: "t", style: [.bold, .underline], link: "http://x"),
+            HudMarkdown.Run(text: " u", style: .bold)
+        ])
+    }
+
+    @Test func aWrappedLinkKeepsItsTargetOnEveryRow() {
+        let rows = HudMarkdown.rows(HudMarkdown.lines("[ab cd ef](http://x/yz)"), width: 6)
+
+        #expect(rows == [[HudMarkdown.Run(text: "ab cd", style: .underline, link: "http://x/yz")],
+                         [HudMarkdown.Run(text: "ef", style: .underline, link: "http://x/yz")]])
+    }
+
+    @Test func aClippedLinkLeavesTheEllipsisOutsideIt() {
+        let row = HudMarkdown.clipped([HudMarkdown.Run(text: "abcdef", style: .underline, link: "http://x")], columns: 4)
+
+        #expect(row == [HudMarkdown.Run(text: "abc", style: .underline, link: "http://x"),
+                        HudMarkdown.Run(text: "…", style: [])])
     }
 
     @Test func strongInsideEmphasisCarriesBoth() {
@@ -179,6 +226,8 @@ struct HudMarkdownTests {
     }
 
     private let esc = "\u{1B}["
+    private let osc = "\u{1B}]"
+    private let st = "\u{1B}\\"
 
     @Test func wrappingBreaksAtSpacesAcrossStyleRuns() {
         let rows = HudMarkdown.rows(HudMarkdown.lines("aa **bb** cc"), width: 5)
@@ -242,6 +291,18 @@ struct HudMarkdownTests {
 
         #expect(HudMarkdown.sgr([bold, italic, both]) == "\(esc)1ma\(esc)22;3mb\(esc)9mc\(esc)23;29m")
         #expect(HudMarkdown.sgr([HudMarkdown.Run(text: "plain", style: [])]) == "plain")
+    }
+
+    @Test func sgrWrapsALinkedRunInAHyperlinkClosedByTheRowEnd() {
+        let open = "\(osc)8;;http://x\(st)"
+        let close = "\(osc)8;;\(st)"
+        let label = HudMarkdown.Run(text: "a", style: .underline, link: "http://x")
+        let other = HudMarkdown.Run(text: "c", style: .underline, link: "http://y")
+
+        #expect(HudMarkdown.sgr([label, HudMarkdown.Run(text: " b", style: [])])
+                == "\(open)\(esc)4ma\(close)\(esc)24m b")
+        #expect(HudMarkdown.sgr([label]) == "\(open)\(esc)4ma\(esc)24m\(close)")
+        #expect(HudMarkdown.sgr([label, other]) == "\(open)\(esc)4ma\(osc)8;;http://y\(st)c\(esc)24m\(close)")
     }
 
     @Test func droppingBoldReopensDimBecause22ClosesBoth() {

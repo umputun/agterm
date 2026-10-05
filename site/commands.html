@@ -2081,11 +2081,13 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--markdown</span> renders the message as standard markdown (CommonMark plus GFM tables): headings, bold,
-                italic, strikethrough, nested lists, code blocks, block quotes, rules and tables, with a link showing its label and
-                raw HTML staying literal. It raises the message cap to 4096 characters and allows newlines and tabs in it; the
+                italic, strikethrough, nested lists, code blocks, block quotes, rules and tables, with
+                raw HTML staying literal. A link shows its label, underlined when a ⌘-click opens it:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">http</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">https</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mailto</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ftp</span> open, a local <span style="font-family: &quot;JetBrains Mono&quot;, monospace">file://</span> link is revealed in Finder, and a link to anything
+                else is its plain label. That ⌘-click is the one click the panel takes, and it moves no focus. It raises the message cap to 4096 characters and allows newlines and tabs in it; the
                 detail keeps the plain rules. A message that renders nothing visible is refused like an empty one. A single newline inside a paragraph is a space, so end a line with two spaces or a
-                backslash, or use list items; lists always render tight. Text wraps at 60 columns while table rows stay intact,
-                all left-aligned as one block. What does not fit is clipped: a row too wide ends in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">…</span>, and rows past the
+                backslash, or use list items; lists always render tight. Text wraps at the panel's width, 60 columns at most, while table rows stay intact,
+                all left-aligned as one block. What does not fit is clipped: a table row too wide ends in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">…</span>, and rows past the
                 panel's height give way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace">… N more</span>, itself clipped in a narrow panel. Trailing all-empty table
                 rows and an all-empty header row are not shown; a table is framed in box-drawing borders with a rule under its header.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--file FILE</span> reads the message from a UTF-8 file instead of the argument (exactly one of the two), once

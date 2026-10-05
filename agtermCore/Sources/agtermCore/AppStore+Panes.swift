@@ -386,8 +386,8 @@ extension AppStore {
     /// pane hosts both variants), so only the layout re-flows and the program never re-spawns. False with no
     /// open overlay. A HUD in the slot takes the narrower `HudLayout.clampSizePercent` bound instead, so no
     /// resize path can grow a message until it covers the session it is about, and the percent reaches its
-    /// WIDTH alone: its height stays measured from the message, which a resize does not change (the text
-    /// wraps at `HudLayout.maxColumns`, not at the panel).
+    /// WIDTH alone: its height stays as measured when the message was posted. A markdown message rewraps at
+    /// the new width, so one made narrower can need more rows than that height and end in `… N more`.
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
         let hud = session.hudActive

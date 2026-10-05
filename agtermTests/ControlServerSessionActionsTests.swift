@@ -1353,6 +1353,17 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(ControlServer.cellSize(family: "Menlo", size: 26).width, menlo.width * 2, accuracy: 0.01)
     }
 
+    func testAHudIsSizedFromTheEstimateWhileItsSessionHasNoLiveSurface() throws {
+        let server = try XCTUnwrap(self.server)
+        let (_, session) = try makeHudSession()
+
+        XCTAssertNil(server.liveCellSize(of: session, fontSize: 13))
+        let estimate = ControlServer.cellSize(family: server.settingsModel.settings.fontFamily, size: 13)
+        let metrics = server.paneMetrics(for: session, fontSize: 13)
+        XCTAssertEqual(metrics.cellWidth, estimate.width, accuracy: 0.001)
+        XCTAssertEqual(metrics.cellHeight, estimate.height, accuracy: 0.001)
+    }
+
     // an unwritable body means the panel would paint nothing or stale text, so neither open nor update may
     // leave the store claiming a message the helper cannot read.
     func testAFailedBodyWriteRollsTheStoreBack() throws {

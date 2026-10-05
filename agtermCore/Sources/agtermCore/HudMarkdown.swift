@@ -10,11 +10,14 @@ enum HudMarkdown {
         static let italic = Style(rawValue: 2)
         static let strikethrough = Style(rawValue: 4)
         static let dim = Style(rawValue: 8)
+        static let underline = Style(rawValue: 16)
     }
 
     struct Run: Equatable, Sendable {
         var text: String
         var style: Style
+        /// link is the target a click on this run opens, set only for a URL `linkTarget` accepts.
+        var link: String?
     }
 
     /// Line is one logical row. `lead` prefixes its first wrapped row (indent, quote bars, list marker) and `hang`
@@ -59,7 +62,7 @@ enum HudMarkdown {
         var walker = Walker()
         for run in parsed.runs {
             walker.add(Segment(text: String(parsed[run.range].characters),
-                               inline: run.inlinePresentationIntent ?? []),
+                               inline: run.inlinePresentationIntent ?? [], link: run.link),
                        block: run.presentationIntent?.components ?? [])
         }
         return walker.finish()
@@ -87,6 +90,15 @@ enum HudMarkdown {
         return String(out)
     }
 
+    /// linkTarget is the URL a click may act on, or nil when `LinkPolicy` would ignore it. Only printable
+    /// ASCII passes, so the target can ride inside an OSC 8 sequence without ending it early.
+    static func linkTarget(_ url: URL) -> String? {
+        let raw = url.absoluteString
+        guard LinkPolicy.disposition(for: raw) != .ignore,
+              raw.unicodeScalars.allSatisfy({ (0x21...0x7e).contains($0.value) }) else { return nil }
+        return raw
+    }
+
     /// expandTabs replaces tabs with spaces up to the next `tabWidth` stop, counted from the line start.
     static func expandTabs(_ line: String) -> String {
         var out = ""
@@ -107,6 +119,7 @@ enum HudMarkdown {
     fileprivate struct Segment {
         let text: String
         let inline: InlinePresentationIntent
+        let link: URL?
     }
 
     /// Block is one parsed block: consecutive runs sharing the innermost block identity.
@@ -281,6 +294,7 @@ enum HudMarkdown {
         }
 
         /// inlineRows maps inline intents onto styles and splits at hard breaks; a soft break is a space.
+        /// A link is its label, underlined when a click can open it.
         private func inlineRows(_ segments: [Segment], base: Style) -> [[Run]] {
             var rows: [[Run]] = [[]]
             for segment in segments {
@@ -292,8 +306,10 @@ enum HudMarkdown {
                 if segment.inline.contains(.stronglyEmphasized) { style.insert(.bold) }
                 if segment.inline.contains(.emphasized) { style.insert(.italic) }
                 if segment.inline.contains(.strikethrough) { style.insert(.strikethrough) }
+                let target = segment.link.flatMap(HudMarkdown.linkTarget)
+                if target != nil { style.insert(.underline) }
                 let text = segment.inline.contains(.softBreak) ? " " : sanitized(segment.text)
-                rows[rows.count - 1].append(Run(text: text, style: style))
+                rows[rows.count - 1].append(Run(text: text, style: style, link: target))
             }
             return rows
         }
@@ -328,7 +344,7 @@ enum HudMarkdown {
 }
 
 extension HudMarkdown {
-    private typealias Cell = (scalar: Unicode.Scalar, style: Style)
+    private typealias Cell = (scalar: Unicode.Scalar, style: Style, link: String?)
 
     static let ellipsis = "…"
     static let ruleGlyph = "─"
@@ -365,15 +381,24 @@ extension HudMarkdown {
     }
 
     /// sgr encodes `row` for the painter. A style change emits only the codes it needs, and every style
-    /// opened is closed with its own reset (22, 23, 29), never SGR 0, so the header's text color holds.
+    /// opened is closed with its own reset (22, 23, 24, 29), never SGR 0, so the header's text color holds.
+    /// A linked run is wrapped in an OSC 8 hyperlink, closed by the end of the row.
     static func sgr(_ row: [Run]) -> String {
         var out = ""
         var current: Style = []
+        var link: String?
         for run in row where !run.text.isEmpty {
+            if run.link != link { out += hyperlink(run.link) }
             out += transition(from: current, to: run.style) + run.text
             current = run.style
+            link = run.link
         }
-        return out + transition(from: current, to: [])
+        return out + transition(from: current, to: []) + (link == nil ? "" : hyperlink(nil))
+    }
+
+    /// hyperlink opens an OSC 8 link to `target`, or closes the open one when it is nil.
+    private static func hyperlink(_ target: String?) -> String {
+        "\u{1B}]8;;" + (target ?? "") + "\u{1B}\\"
     }
 
     private static func transition(from current: Style, to next: Style) -> String {
@@ -388,11 +413,15 @@ extension HudMarkdown {
             codes.append("23")
             open.remove(.italic)
         }
+        if open.contains(.underline) && !next.contains(.underline) {
+            codes.append("24")
+            open.remove(.underline)
+        }
         if open.contains(.strikethrough) && !next.contains(.strikethrough) {
             codes.append("29")
             open.remove(.strikethrough)
         }
-        let on: [(Style, String)] = [(.bold, "1"), (.dim, "2"), (.italic, "3"), (.strikethrough, "9")]
+        let on: [(Style, String)] = [(.bold, "1"), (.dim, "2"), (.italic, "3"), (.underline, "4"), (.strikethrough, "9")]
         for (flag, code) in on where next.contains(flag) && !open.contains(flag) { codes.append(code) }
         return codes.isEmpty ? "" : "\u{1B}[" + codes.joined(separator: ";") + "m"
     }
@@ -473,16 +502,16 @@ extension HudMarkdown {
     }
 
     private static func cells(_ runs: [Run]) -> [Cell] {
-        runs.flatMap { run in run.text.unicodeScalars.map { (scalar: $0, style: run.style) } }
+        runs.flatMap { run in run.text.unicodeScalars.map { (scalar: $0, style: run.style, link: run.link) } }
     }
 
     private static func merged(_ cells: [Cell]) -> [Run] {
         var runs: [Run] = []
         for cell in cells {
-            if runs.last?.style == cell.style {
+            if let last = runs.last, last.style == cell.style, last.link == cell.link {
                 runs[runs.count - 1].text.unicodeScalars.append(cell.scalar)
             } else {
-                runs.append(Run(text: String(cell.scalar), style: cell.style))
+                runs.append(Run(text: String(cell.scalar), style: cell.style, link: cell.link))
             }
         }
         return runs

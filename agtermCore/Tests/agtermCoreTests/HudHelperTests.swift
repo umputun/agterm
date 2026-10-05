@@ -216,6 +216,13 @@ struct HudHelperTests {
         #expect(!run.painted.contains("\(Self.esc)[2m"))
     }
 
+    @Test func aMarkdownHyperlinkReachesTheTerminalWithItsTerminatorIntact() throws {
+        let link = "\(Self.esc)]8;;http://x\(Self.esc)\\go\(Self.esc)]8;;\(Self.esc)\\"
+        let run = try Run(link + "\n", cols: 40, rows: 7, blockWidth: 2)
+        defer { run.stop() }
+        #expect(run.paints("\(Self.esc)[19C" + link))
+    }
+
     @Test func aMalformedBlockWidthPaintsInPlainMode() throws {
         let run = try Run("hi\n", cols: 40, rows: 7)
         defer { run.stop() }

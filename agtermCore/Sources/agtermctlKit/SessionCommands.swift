@@ -836,8 +836,8 @@ struct Session: ParsableCommand {
             @Argument(help: "Message shown in the panel (omit with --file).") var message: String?
             @Option(name: .long, help: "Read the message from FILE instead of the argument.") var file: String?
             @Flag(name: .long, help: """
-                Render the message as markdown, up to \(HudSpec.maxMarkdownLength) characters. A single newline \
-                inside a paragraph is a soft break; end a line with two spaces or a backslash to break it.
+                Render the message as markdown, up to \(HudSpec.maxMarkdownLength) characters. A single newline inside a paragraph is a \
+                soft break; end a line with two spaces or a backslash to break it. A link is underlined and opens on a command-click.
                 """)
             var markdown = false
             @Option(name: .customLong("font-size"), help: """

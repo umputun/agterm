@@ -2681,7 +2681,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               tables render, and the message may run to 4096 characters. Standard markdown rules apply, so a single newline
               inside a paragraph is a space; use list items, or end a line with two spaces, to keep rows apart. A board taller
               than the panel is clipped, its excess rows giving way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">… N more</span>. The file is read once per
-              command, so push each change with an update.
+              command, so push each change with an update. A link shows its label underlined, and a ⌘-click opens it as it
+              would in the terminal, so a board can carry the pull request or the ticket it is about. That is the one click
+              the panel takes; any other still reaches the terminal behind it.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--file status.md</span> reads the message from a file, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--font-size PT</span> gives the panel its own
               font size, set when it opens. A controller agent can keep one in a corner of its session with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud --file status.md --markdown --font-size 11 --position top-right</span> and refresh it with

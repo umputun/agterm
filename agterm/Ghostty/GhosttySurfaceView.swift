@@ -97,7 +97,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// every teardown path like `overlayCodeFile`, which both removes the temp file and is how the helper
     /// learns to stop. `session.hud.open` writes it AFTER the store call, so a replacement's teardown
     /// cannot delete the body the incoming HUD just wrote at the same per-session path.
-    var hudBodyFile: String?
+    var hudBodyFile: String? {
+        didSet { HudLinkClick.track(self, hudBodyFile != nil) }
+    }
 
     /// For an OVERLAY surface: its own solid `#rrggbb` background (`session.overlay.open --background-color`),
     /// nil for the theme background. Applied in `createSurface`, which the session-watermark path skips

@@ -468,6 +468,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   NSView layer, where `mouseDown` makes a surface first responder; the panel's ancestor
   `.allowsHitTesting(false)` currently blocks the click before that, so the two are belt and braces and
   neither is the place to economise.
+  A ⌘-click on a HUD opens a link without passing either gate: `HudLinkClick`'s app-wide monitor claims
+  it and `passiveClick` forwards it to libghostty, whose own resolution reaches `openLink`. It grabs no
+  focus and clears the pointer after the release, because a HUD has no tracking area to do it.
   Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
   close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
@@ -642,9 +645,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   takes both dimensions, its anchor offsets, and the edge margin from the deck pane host's live bounds.
   The pane hosts publish those bounds in the session detail coordinate space. Never derive them from
   `splitRatio` or the terminal surface frame: the ratio is observation-ignored and the surface moves on zoom.
-- `--size-percent` reaches the WIDTH alone, on open and on `overlay.resize` — the text wraps at
-  `HudLayout.maxColumns`, not at the panel, so a resize changes no rows — and the height takes no caller
-  override at all. Every HUD WIDTH passes `HudLayout.clampSizePercent` (10...80), the caller's included, so
+- `--size-percent` reaches the WIDTH alone, on open and on `overlay.resize`, and the height takes no caller
+  override at all. A plain message wraps at `HudLayout.maxColumns`, so a resize changes no rows. A markdown
+  message wraps at the panel (`HudLayout.wrapColumns` when measured, `textColumns` when painted), and its
+  height is measured only at open and update: narrowed afterwards it can outgrow that height. Every HUD WIDTH passes `HudLayout.clampSizePercent` (10...80), the caller's included, so
   `--full`'s refusal and the never-cover invariant cannot disagree. The height is capped at the same 80 but
   takes NO minimum floor: the box already carries `verticalPadding`, and flooring it is the square again.
   The 80 cap is also what makes an edge anchor always fit its margin on EITHER axis, each axis' own extent
@@ -714,8 +718,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and caps it at `HudSpec.maxMarkdownLength`; the renderer replaces control characters the parser decoded
   from entities. The dispatcher also refuses a markdown message that renders nothing visible
   (`HudMarkdown.rendersVisibleText`).
+  A link renders as its label. A target `LinkPolicy` accepts is underlined and wrapped in OSC 8, which
+  is why `Run` carries `link` through wrapping and clipping: every row reopens its own hyperlink.
   A table renders framed in box-drawing borders with a header rule only when the header has cells, and a
-  thematic break spans the widest other row. Text wraps at `maxColumns`, table rows stay intact, and all rows are clipped to the grid on
+  thematic break spans the widest other row. Text wraps at the panel's text width, `maxColumns` at most, table rows stay intact, and all rows are clipped to the grid on
   both axes in `renderedBody`, so the painter never measures them: the header's seventh field, `blockwidth`, is 0 for plain mode and the
   painted width of the finished rows otherwise, and the helper prints those rows verbatim at one shared
   offset. The painter draws the spinner glyph on the first row; the renderer indents the others by the gutter.

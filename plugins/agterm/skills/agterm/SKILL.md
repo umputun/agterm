@@ -481,7 +481,9 @@ omitted when expanded).
   `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud close` — post a small **passive** panel over the session saying what you are doing
   ("gathering options…"). Unlike an overlay it takes no input and steals nothing: the session keeps first
-  responder, the user keeps typing, and the terminal behind it is neither dimmed nor click-blocked. Use it
+  responder, the user keeps typing, and the terminal behind it is neither dimmed nor click-blocked. With
+  `--markdown` a `[label](url)` link is underlined and opens on ⌘-click, so the panel can link the PR or
+  ticket it is about. Use it
   for the seconds an agent needs before it can show something (computing picker items, waiting on a slow
   command), then take it down. `open` is the default subcommand, so `session hud "…"` posts; a message that is
   literally `update` or `close` needs the explicit `session hud open` verb. `--detail` adds a dim second line,

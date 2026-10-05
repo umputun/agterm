@@ -169,6 +169,29 @@ extension GhosttySurfaceView {
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, mods(event))
     }
 
+    /// Forwards the ⌘-click `HudLinkClick` claims for a HUD panel, so libghostty opens the link under it. It
+    /// moves no focus.
+    func passiveClick(_ state: ghostty_input_mouse_state_e, with event: NSEvent) {
+        guard let surface else { return }
+        reportMousePos(from: event)
+        _ = ghostty_surface_mouse_button(surface, state, GHOSTTY_MOUSE_LEFT, mods(event))
+    }
+
+    /// Tells a HUD panel where the pointer is while `HudLinkClick` sees ⌘ held over it, or with nil that it
+    /// is gone, so libghostty resolves the link under it and asks for the pointing hand.
+    func passivePointer(at windowPoint: NSPoint?, with event: NSEvent) {
+        guard let surface else { return }
+        guard let windowPoint else {
+            ghostty_surface_mouse_pos(surface, -1, -1, GHOSTTY_MODS_NONE)
+            lastReportedMousePoint = NSPoint(x: -1, y: -1)
+            return
+        }
+        let local = convert(windowPoint, from: nil)
+        let point = NSPoint(x: local.x, y: bounds.height - local.y)
+        ghostty_surface_mouse_pos(surface, point.x, point.y, mods(event))
+        lastReportedMousePoint = point
+    }
+
     // forward right-/middle-button press/release so libghostty's mouse bindings fire (right-click-action),
     // in the left handlers' `mouse_pos`-then-`mouse_button` order minus the focus grab — these buttons
     // don't move first responder. no terminal context menu, so the return value is discarded.
@@ -503,6 +526,8 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     func applyMouseShape(_ shape: ghostty_action_mouse_shape_e) {
         guard shape != mouseShape else { return }
         mouseShape = shape
+        // a HUD panel is never `deckVisible`; it paints the shape only while `HudLinkClick` hovers it
+        if HudLinkClick.hovered === self { Self.nsCursor(for: shape).set() }
         if deckVisible, pointerInside, ownsPointer() { Self.nsCursor(for: shape).set() }
     }
 

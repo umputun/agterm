@@ -19,7 +19,7 @@
 #   detail lines                 rendered dimmed
 #
 # a markdown body (blockwidth > 0) is instead rows HudLayout.markdownBody already wrapped, styled with their
-# own SGR and clipped to the grid. they are printed verbatim at one shared offset: measuring them here would
+# own SGR and OSC 8 links and clipped to the grid. they are printed verbatim at one shared offset: measuring them here would
 # count their escape bytes, and an empty row is spacing, not the detail separator.
 #
 # Everything an update may change lives in that file, re-read every tick, so `session.hud.update` repaints

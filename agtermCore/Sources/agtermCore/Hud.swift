@@ -368,8 +368,9 @@ public enum HudLayout {
     /// box returns the cell box the panel needs for `spec`: the wrapped content plus the frame padding. It
     /// decides how BIG the panel is (through `widthPercent` and `heightPercent`); `panelGrid` decides where
     /// the text sits inside the panel that decision produced. Measured in `cellCount`'s unit.
-    public static func box(for spec: HudSpec) -> (columns: Int, rows: Int) {
-        let widths = spec.markdown ? markdownRows(for: spec).map(HudMarkdown.width) : bodyLines(for: spec).map(cellCount)
+    public static func box(for spec: HudSpec, wrapColumns: Int = maxColumns) -> (columns: Int, rows: Int) {
+        let widths = spec.markdown ? markdownRows(for: spec, columns: wrapColumns).map(HudMarkdown.width)
+            : bodyLines(for: spec).map(cellCount)
         let content = max((widths.max() ?? 0) + (spec.spinner != nil ? spinnerWidth : 0), 1)
         return (columns: content + horizontalPadding * 2, rows: max(widths.count, 1) + verticalPadding * 2)
     }
@@ -379,9 +380,24 @@ public enum HudLayout {
     /// same message. Every caller takes this rather than the two halves, which exist for the tests that pin
     /// each axis' own rules.
     public static func panelSize(for spec: HudSpec, pane: PaneMetrics) -> HudPanelSize {
-        let box = box(for: spec)
+        let box = box(for: spec, wrapColumns: wrapColumns(for: spec, pane: pane))
         return HudPanelSize(widthPercent: spec.sizePercent ?? widthPercent(box: box, pane: pane),
                             heightPercent: heightPercent(box: box, pane: pane))
+    }
+
+    /// wrapColumns is the width a markdown message wraps at before its panel exists: the text columns of
+    /// the widest panel this pane allows, so a row that cannot fit wraps rather than being clipped.
+    /// `maxColumns` for a plain message and for a pane with no measured width.
+    static func wrapColumns(for spec: HudSpec, pane: PaneMetrics) -> Int {
+        let widest = HudPanelSize(widthPercent: spec.sizePercent ?? maxSizePercent, heightPercent: maxSizePercent)
+        guard spec.markdown, let grid = panelGrid(size: widest, pane: pane) else { return maxColumns }
+        return textColumns(in: grid.columns, for: spec)
+    }
+
+    /// textColumns is what a panel `columns` wide leaves for text once its padding and the spinner's gutter
+    /// are taken, never more than `maxColumns`.
+    static func textColumns(in columns: Int, for spec: HudSpec) -> Int {
+        min(max(columns - horizontalPadding * 2 - (spec.spinner != nil ? spinnerWidth : 0), 1), maxColumns)
     }
 
     /// widthPercent returns the share of the pane's WIDTH the panel takes: the box's columns plus the
@@ -414,8 +430,8 @@ public enum HudLayout {
     /// It still centers on THIS grid rather than the box, which the rounding to whole cells can differ from.
     ///
     /// Nil when the pane is not measured (an unrealized session, a zero cell): there is no panel grid to
-    /// compute, and `paintGrid` falls back to the box. The result is an ESTIMATE — libghostty reports no
-    /// cell metrics, and a user `window-padding-*` override is not tracked — so it can miss by a column.
+    /// compute, and `paintGrid` falls back to the box. The result is an ESTIMATE — a user
+    /// `window-padding-*` override is not tracked — so it can miss by a column.
     public static func panelGrid(size: HudPanelSize, pane: PaneMetrics) -> (columns: Int, rows: Int)? {
         guard pane.cellWidth > 0, pane.cellHeight > 0, pane.paneWidth > 0, pane.paneHeight > 0 else { return nil }
         let columns = Int((pane.paneWidth * Double(size.widthPercent) / 100
@@ -485,11 +501,11 @@ public enum HudLayout {
         return header + lines.map { $0 + "\n" }.joined()
     }
 
-    /// markdownRows lays a markdown spec out unclipped: the message's rows at `maxColumns`, then, when a
+    /// markdownRows lays a markdown spec out unclipped: the message's rows at `columns`, then, when a
     /// detail is set, a blank row and the detail's rows dimmed.
-    static func markdownRows(for spec: HudSpec) -> [[HudMarkdown.Run]] {
-        var rows = HudMarkdown.rows(HudMarkdown.lines(spec.message), width: maxColumns)
-        let detail = wrap(spec.detail ?? "", columns: maxColumns)
+    static func markdownRows(for spec: HudSpec, columns: Int = maxColumns) -> [[HudMarkdown.Run]] {
+        var rows = HudMarkdown.rows(HudMarkdown.lines(spec.message), width: columns)
+        let detail = wrap(spec.detail ?? "", columns: columns)
         guard !detail.isEmpty else { return rows }
         rows.append([])
         rows += detail.map { [HudMarkdown.Run(text: $0, style: .dim)] }
@@ -501,7 +517,8 @@ public enum HudLayout {
     /// the widest painted row, gutter included, and never 0, which the header reserves for plain mode.
     static func markdownBody(for spec: HudSpec, grid: (columns: Int, rows: Int)) -> (lines: [String], blockWidth: Int) {
         let gutter = spec.spinner != nil ? spinnerWidth : 0
-        let rows = HudMarkdown.fitted(markdownRows(for: spec), columns: grid.columns - horizontalPadding * 2 - gutter,
+        let rows = HudMarkdown.fitted(markdownRows(for: spec, columns: textColumns(in: grid.columns, for: spec)),
+                                      columns: grid.columns - horizontalPadding * 2 - gutter,
                                       rows: grid.rows - verticalPadding * 2)
         let blockWidth = max((rows.map(HudMarkdown.width).max() ?? 0) + gutter, 1)
         let indent = String(repeating: " ", count: gutter)

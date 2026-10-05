@@ -818,8 +818,8 @@ error keeps those names for compatibility.
   `the viewer showing this overlay is gone` for an overlay shown on another Mac whose stream has dropped. Returns the
   session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
   HUD a percent is accepted and re-flows its WIDTH (the panel re-flows and its `hud.sizePercent` reports the
-  new value; `hud.heightPercent` does not move, the text wrapping at a fixed 60 columns rather than at the
-  panel) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
+  new value; `hud.heightPercent` does not move, so a markdown message rewrapped narrower can end in
+  `… N more` until the next update) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
   would cover the session the message is about. The resize rewrites the body header itself, so the panel
   re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
 - `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
@@ -996,14 +996,16 @@ error keeps those names for compatibility.
   reject control characters — newline included, since the panel prints straight into a live terminal and
   `--detail` is the second line on offer.
   `--markdown` renders the message as standard markdown (CommonMark plus GFM tables): headings, bold, italic,
-  strikethrough, nested lists, code blocks, block quotes, rules and tables; a link shows its label, an image its
-  alt text, and raw HTML stays literal. It raises the message cap to 4096 characters and allows newlines and tabs
+  strikethrough, nested lists, code blocks, block quotes, rules and tables; an image shows its
+  alt text and raw HTML stays literal. A link shows its label, underlined when a ⌘-click opens it:
+  `http`, `https`, `mailto` and `ftp` open, a local `file://` link is revealed in Finder, and a link to
+  anything else is its plain label. That ⌘-click is the one click the panel takes, and it moves no focus. It raises the message cap to 4096 characters and allows newlines and tabs
   in it; every other control character is still refused and the detail keeps the plain rules. Markdown
   semantics apply: a single newline inside a paragraph is a space, so end a line with two spaces or a
-  backslash, or use list items, to keep rows apart; lists always render tight. Text wraps at 60 columns while
-  table rows stay intact, and the rows sit left-aligned as one block. What does not fit the panel is clipped:
-  a row too wide ends in `…`, and rows past the panel's height give way to a dim `… N more`, itself clipped
-  in a narrow panel. A table is framed in box-drawing borders with a rule under its header; trailing
+  backslash, or use list items, to keep rows apart; lists always render tight. Text wraps at the panel's width, 60
+  columns at most, while table rows stay intact, and the rows sit left-aligned as one block. What does not
+  fit the panel is clipped: a table row too wide ends in `…`, and rows past the panel's height give way to a
+  dim `… N more`, itself clipped in a narrow panel. A table is framed in box-drawing borders with a rule under its header; trailing
   all-empty table rows and an all-empty header row are not shown, the latter leaving no header rule.
   A markdown message that renders nothing visible is refused like an empty one.
   `--file FILE` reads the message from a UTF-8 file instead of the argument, exactly one of the two, once per

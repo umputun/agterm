@@ -172,6 +172,64 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertNil(view.hitTest(inside), "a view-only surface must let the click through instead of taking it")
     }
 
+    func testAHudPanelStaysClosedToEveryHit() {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        view.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        view.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        view.viewOnly = true
+
+        XCTAssertNil(view.hitTest(NSPoint(x: 40, y: 30)))
+        XCTAssertFalse(view.acceptsFirstResponder)
+    }
+
+    private func mouse(_ type: NSEvent.EventType, _ flags: NSEvent.ModifierFlags,
+                       at point: NSPoint = NSPoint(x: 40, y: 30)) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags, timestamp: 0,
+                                         windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+                                         clickCount: 1, pressure: 1))
+    }
+
+    func testOnlyAPlainCommandLeftPressIsALinkClick() throws {
+        XCTAssertTrue(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, .command)))
+        XCTAssertTrue(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .capsLock])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .shift])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .option])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.rightMouseDown, .command)))
+    }
+
+    func testACommandClickOverAHudPanelIsClaimedAsAPair() throws {
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, [])), "a plain click passes on to the session")
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseUp, [])), "and so does its release")
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command, at: NSPoint(x: 200, y: 150))),
+                       "a command-click beside the panel is not the panel's")
+
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseDown, .command)))
+        XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseUp, [])), "the release follows its press")
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseUp, [])))
+
+        HudLinkClick.hover(try mouse(.mouseMoved, .command))
+        XCTAssertTrue(HudLinkClick.hovered === panel, "the pointer is the panel's while command is held over it")
+        XCTAssertFalse(HudLinkClick.ownsCursor, "with no link under it the pane beneath keeps the cursor")
+        HudLinkClick.hover(try mouse(.mouseMoved, []))
+        XCTAssertNil(HudLinkClick.hovered, "without command the panel hears nothing")
+        HudLinkClick.hover(try mouse(.mouseMoved, .command, at: NSPoint(x: 200, y: 150)))
+        XCTAssertNil(HudLinkClick.hovered)
+
+        panel.deckOnScreen = false
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command)), "a panel not on screen claims nothing")
+        panel.deckOnScreen = true
+        panel.hudBodyFile = nil
+        XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command)), "a closed panel claims nothing")
+    }
+
     func testRendererVisibilityRequiresAnOnScreenHost() {
         surface.wantsLayer = true
         surface.layer?.contents = NSColor.red.cgColor

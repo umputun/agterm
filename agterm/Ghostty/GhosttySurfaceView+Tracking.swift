@@ -54,6 +54,7 @@ extension GhosttySurfaceView {
     /// first and by the split itself: every session's split is mounted at the full frame, and asking the
     /// window which one is on top reaches whichever the deck stacked last, not this pane's.
     func ownsPointer(at point: NSPoint) -> Bool {
+        if HudLinkClick.ownsCursor, HudLinkClick.hovered !== self { return false }
         if overOwnSplitDivider(at: point) { return false }
         guard let hit = window?.contentView?.hitTest(point) else { return true }
         if hit === self || hit.isDescendant(of: self) { return true }

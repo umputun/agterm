@@ -168,6 +168,19 @@ extension GhosttySurfaceView {
         return column
     }
 
+    /// This surface's real cell in points, nil when the surface is not created or reports no grid. The
+    /// height is what `ghostty_surface_ime_point` returns over the content scale, and the width follows from
+    /// the pixel ratio, as `readCursorColumn` derives it.
+    func cellSize() -> (width: Double, height: Double)? {
+        guard let surface else { return nil }
+        let size = ghostty_surface_size(surface)
+        guard size.cell_width_px > 0, size.cell_height_px > 0 else { return nil }
+        var x = 0.0, y = 0.0, w = 0.0, h = 0.0
+        ghostty_surface_ime_point(surface, &x, &y, &w, &h)
+        guard h > 0, h.isFinite else { return nil }
+        return (width: h * Double(size.cell_width_px) / Double(size.cell_height_px), height: h)
+    }
+
     /// This surface's foreground process pid (`ghostty_surface_foreground_pid`), nil when the surface is not
     /// created or the call returns 0. Read at quit by the restore-running-command capture; not focus-dependent.
     func foregroundPid() -> pid_t? {
