@@ -219,6 +219,7 @@
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agterm/Views/SettingsView.swift`
 - Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`, `agtermTests/SettingsModelTests.swift`
+- Create: `agtermTests/ControlServerLinkOverlayTests.swift`
 - Modify: `agtermUITests/SettingsUITests.swift`
 
 - [x] derive `LinkClickOrigin` from the surface's ownership fields, HUD first; no new identity field
@@ -226,7 +227,7 @@
 - [x] route `openLink` through `LinkPolicy.route`; for `.overlay`, run `openSessionOverlay` for the owner session id with a browsing page (JavaScript, navigation bar, saved store, full size), without selecting another session
 - [x] fall back to the browser on every refusal (occupied slot, remotely reserved slot, presenter, saved store unavailable, unknown session) when the owner session's HUD is active, and when the owning window's terminal zoom is active
 - [x] add the "Open links in" picker to the General tab, bound to the same setting
-- [x] write hosted tests on surfaces built by the production factories, split and scratch included: pane link in overlay mode opens a browsing page on that session; scratch link opens on its owning session; HUD link opens the browser and the HUD is still active; quick terminal and program-overlay links open the browser; each refusal opens the browser; a pane click on a session with an active HUD opens the browser and the HUD is still active; a click in a zoomed window opens the browser, creates no page and leaves zoom set; `mailto` and `file://` are unchanged; browser mode never opens a page; a browsing page whose load fails stays up and the open effect is not called
+- [x] write hosted tests, split across `GhosttySurfaceViewInputTests` (surfaces given each ownership shape: origin per kind, overlay then browser fallback) and `ControlServerLinkOverlayTests` (the open and its refusals on real sessions): pane link in overlay mode opens a browsing page on that session; scratch link opens on its owning session; HUD link opens the browser and the HUD is still active; quick terminal and program-overlay links open the browser; each refusal opens the browser; a pane click on a session with an active HUD opens the browser and the HUD is still active; a click in a zoomed window opens the browser, creates no page and leaves zoom set; `mailto` and `file://` are unchanged; browser mode never opens a page; a browsing page whose load fails stays up and the open effect is not called
 - [x] write a hosted test that the `SettingsModel` value behind the picker and `browser.links` are one value; add `testLinkOpenModePickerPersists` to `SettingsUITests.swift` with the fit assertion and run it alone
 - [x] run the targeted hosted tests - must pass before task 5
 

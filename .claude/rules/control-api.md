@@ -528,10 +528,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `SettingsModel.setLinkOpenMode`, the Settings picker's setter. Read back as top-level `tree.linkOpenMode`.
   Poll-only: no event reports a change, and nothing is restored but the setting itself.
 - A URL page opened with `--browse` (`HtmlOverlay.browse`, read back as `browse`) may take its main frame to
-  any HTTP(S) origin; without it the origin-pinned policy stands. Its identity and reported `page` come from
-  the document COMMITTED, never from `webView.url`, which names a pending load while the old document is
-  still shown; a later URL change is taken only when it stays on the shown origin. A blank document is named
-  `about:blank`. New-window requests stay confirmed-external and a URL page still gets no bridge.
+  any HTTP(S) origin; without it the origin-pinned policy stands. Its identity never names a site whose
+  document has not COMMITTED: `webView.url` names a pending load while the old document is still shown, so
+  the page takes its address at commit and accepts a later URL change only when it stays on the shown
+  origin. That protects the ORIGIN only: a pending load on the same origin still shows in the reported
+  `page`, as it does for every other page. A blank document is named `about:blank`. New-window requests stay confirmed-external and a URL page still gets no bridge.
 - A clicked terminal link follows `LinkPolicy.route` through `LinkOpener.shared`, which the app points at
   the setting and at `ControlServer.openLinkOverlay`. That opens `--url --browse --js --navigation
   --persistent` full-size on the click's owning session, without selecting it, and returns false, sending

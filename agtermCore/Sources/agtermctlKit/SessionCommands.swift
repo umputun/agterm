@@ -382,16 +382,6 @@ struct Session: ParsableCommand {
         }
     }
 
-    struct Seen: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Clear a session's unseen-notification badge without changing the selection or focus (idempotent).")
-        @OptionGroup var target: TargetOptions
-        @OptionGroup var options: ClientOptions
-
-        func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionSeen, target: target.target, args: options.withWindow())
-        }
-    }
-
     struct Search: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Search a session's terminal output (open the bar, set a needle, or step matches).")
         @Argument(help: "Needle to search for (omit to just open the bar).") var needle: String?
@@ -983,6 +973,16 @@ struct Session: ParsableCommand {
 }
 
 extension Session {
+    struct Seen: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Clear a session's unseen-notification badge without changing the selection or focus (idempotent).")
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionSeen, target: target.target, args: options.withWindow())
+        }
+    }
+
     /// The overlay and HUD arms share one accepted range for `--size-percent`, so the gate belongs to
     /// neither. `1...100` is the input domain both document; the narrower bound for rendering a HUD is a
     /// presentation limit applied app-side, not a rejection.

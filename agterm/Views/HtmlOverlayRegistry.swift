@@ -467,7 +467,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     // `webView.url` names a pending load before its document replaces the one shown, so a browsing page
-    // takes its address at commit; a change that stays on the shown origin is the document's own
+    // takes its address at commit. A change on the shown origin is taken at once: it cannot change the
+    // site named, and a fragment or pushState change has no commit to wait for
     private func urlChanged() {
         if let url = webView.url, let shownURL, HtmlSource.origin(of: url) == HtmlSource.origin(of: shownURL) {
             self.shownURL = url

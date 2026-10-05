@@ -5,7 +5,6 @@ description: >
   asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  choose whether clicked links open in the browser or a session overlay;
   post a HUD or desktop notification; show a picker or question dialog; display an image inline; type
   into or restart a pane by its stable id, copy its selection or search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
