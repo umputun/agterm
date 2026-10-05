@@ -549,8 +549,9 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let first = try await serve(.ipv4(.loopback), [
             "/away": .init(status: 302, headers: ["Location": "http://127.0.0.1:\(slow)/"]),
         ])
-        _ = registry.page(for: try openURL("http://127.0.0.1:\(first)/away", browse: true), store: store)
-        try await Task.sleep(for: .milliseconds(600))
+        let live = registry.page(for: try openURL("http://127.0.0.1:\(first)/away", browse: true), store: store)
+        try await waitFor("redirect pending on the slow site") { live.webView.url?.port == Int(slow) }
+        try await Task.sleep(for: .milliseconds(300))
         XCTAssertEqual(current?.loadState, .loading)
         XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
     }
@@ -562,7 +563,7 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         let live = registry.page(for: page, store: store)
         try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
         _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(slow)/'")
-        try await waitFor("second site loading") { self.current?.loadState == .loading }
+        try await waitFor("second site pending") { live.webView.url?.port == Int(slow) }
         try await Task.sleep(for: .milliseconds(300))
 
         XCTAssertNil(registry.navigate(page.id, .browser))
