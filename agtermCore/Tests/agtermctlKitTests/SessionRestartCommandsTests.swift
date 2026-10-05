@@ -19,12 +19,22 @@ struct SessionRestartCommandsTests {
                              "--command", "cld 'brief one'", "--window", "w1"]) == expected)
     }
 
+    @Test func omitsTheLineToAskForAReplay() throws {
+        let expected = ControlRequest(cmd: .sessionRestart, target: "s1", args: ControlArgs(paneID: "tok"))
+        #expect(try request(["session", "restart", "--target", "s1", "--pane-id", "tok"]) == expected)
+    }
+
+    @Test func sendsAnEmptyLineForTheServerToRefuse() throws {
+        let expected = ControlRequest(cmd: .sessionRestart, target: "active", args: ControlArgs(command: "", paneID: "tok"))
+        #expect(try request(["session", "restart", "--pane-id", "tok", "--command", ""]) == expected)
+    }
+
     @Test(arguments: [
         ["session", "restart", "--command", "cld"],
-        ["session", "restart", "--pane-id", "tok"],
+        ["session", "restart"],
         ["session", "restart", "--command", "cld", "--pane", "middle"],
     ])
-    func requiresAPaneSelectorAndACommand(argv: [String]) {
+    func requiresAValidPaneSelector(argv: [String]) {
         #expect(throws: (any Error).self) { try request(argv) }
     }
 }

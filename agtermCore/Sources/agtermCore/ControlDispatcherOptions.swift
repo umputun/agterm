@@ -97,11 +97,12 @@ public struct ControlSessionRestartOptions: Equatable, Sendable {
     /// the session host's 64 KiB creation frame beside the pane's environment.
     public static let maxCommandBytes = 4096
 
-    public let command: String
+    /// command is the shell line to run; nil replays the pane's foreground program instead.
+    public let command: String?
     public let pane: StatusPane?
     public let paneID: String?
 
-    public init(command: String, pane: StatusPane?, paneID: String? = nil) {
+    public init(command: String?, pane: StatusPane?, paneID: String? = nil) {
         self.command = command
         self.pane = pane
         self.paneID = paneID
@@ -114,10 +115,14 @@ public struct ControlRestartReceipt: Codable, Equatable, Sendable {
     public let paneID: String
     public let oldPid: Int32
     public let newPid: Int32
+    /// replayedArgv is the foreground program a restart without a command asked the new shell to run;
+    /// nil when the caller supplied the line. It is what was requested, not proof the program started.
+    public let replayedArgv: [String]?
 
-    public init(paneID: String, oldPid: Int32, newPid: Int32) {
+    public init(paneID: String, oldPid: Int32, newPid: Int32, replayedArgv: [String]? = nil) {
         self.paneID = paneID
         self.oldPid = oldPid
         self.newPid = newPid
+        self.replayedArgv = replayedArgv
     }
 }

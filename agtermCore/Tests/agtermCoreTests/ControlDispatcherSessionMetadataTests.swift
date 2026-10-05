@@ -469,9 +469,21 @@ struct ControlDispatcherSessionMetadataTests {
         ])
     }
 
+    @Test func sessionRestartWithoutACommandAsksTheHostToReplay() async {
+        let actions = MockControlActions()
+
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionRestart, target: "session", args: ControlArgs(paneID: "token")))
+
+        #expect(actions.calls == [
+            .sessionRestart(target: "session", window: nil,
+                            ControlSessionRestartOptions(command: nil, pane: nil, paneID: "token"))
+        ])
+    }
+
     @Test(arguments: [
-        (ControlArgs(paneID: "token"), "session.restart requires a command"),
-        (ControlArgs(command: "   ", paneID: "token"), "session.restart requires a command"),
+        (ControlArgs(command: "", paneID: "token"), "session.restart takes a non-empty command, or none to replay"),
+        (ControlArgs(command: "   ", paneID: "token"), "session.restart takes a non-empty command, or none to replay"),
         (ControlArgs(command: "a\nb", paneID: "token"), "command must not contain control characters"),
         (ControlArgs(command: "cld", pane: "middle"), "--pane must be left, right, or scratch"),
         (ControlArgs(command: "cld", pane: "scratch"), "session.restart does not address the scratch pane"),

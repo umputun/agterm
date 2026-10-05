@@ -378,10 +378,12 @@ omitted when expanded).
 - `session lead [--pane left|right]`: for a session shared with another Mac, take the lead of a pane here
   (what a key press on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
   `unowned`. On the Mac the session runs on, a covered pane still takes `session type`/`text`.
-- `session restart --pane-id ID --command LINE`: end one pane's shell and its foreground program, and start a
-  new login shell there running LINE. Same pane, same stable id, blank screen, nothing typed. Use it to start
-  a program over in its pane instead of typing into it; the reply carries the old and new shell pids. Live
-  sessions mode only.
+- `session restart --pane-id ID [--command LINE]`: end one pane's shell and its foreground program, and start a
+  new login shell there running LINE. Same pane, same stable id, blank screen, nothing typed. Without
+  `--command` it runs the program the pane is running now again, with the same arguments, and refuses when
+  a shell holds the pane or the program cannot be read. Use it to start a program over in its pane instead
+  of typing into it; the reply carries the old and new shell pids, and `restart.replayedArgv` on a replay.
+  Live sessions mode only.
 - `session swap`: exchange the two terminals' physical positions and primary/split roles without restarting
   them. Focus follows the terminal; axis and divider ratio stay fixed. Works on shown or hidden splits and
   under zoom/dashboard; errors when there is no split or either surface is not ready. Read the new primary

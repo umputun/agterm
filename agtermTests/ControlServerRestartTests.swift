@@ -136,6 +136,79 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertEqual(response.error, "session.restart needs Live sessions mode; this pane has no live shell to replace")
     }
 
+    func testAReplayOfAReadableProgramGoesOnToEndTheOldShell() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let program = try spawn("/bin/sleep", ["300"])
+        defer { program.terminate() }
+        var killed: [String] = []
+        let server = makeServer(daemon: daemon, foreground: program.processIdentifier) { killed.append($0) }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: nil, pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(response.error, "the old shell ended (pid 4242) and the pane could not be rebuilt; it was closed")
+        XCTAssertEqual(killed, [daemon])
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenAShellHoldsThePane() async throws {
+        let shell = try spawn("/bin/sh", ["-s"])
+        defer { shell.terminate() }
+
+        try await assertReplayRefused(foreground: shell.processIdentifier, RestartReplay.Refusal.shell("sh"))
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheForegroundCannotBeRead() async throws {
+        try await assertReplayRefused(foreground: nil, RestartReplay.Refusal.unreadable)
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheProgramIsDenylisted() async throws {
+        let program = try spawn("/bin/sleep", ["300"])
+        defer { program.terminate() }
+        let denylist = GhosttyApp.shared.restoreDenylist
+        GhosttyApp.shared.setRestoreDenylist(["sleep"])
+        defer { GhosttyApp.shared.setRestoreDenylist(denylist) }
+
+        try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.denylisted("sleep"))
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheLineIsTooLong() async throws {
+        let long = String(repeating: "a", count: ControlSessionRestartOptions.maxCommandBytes)
+        let program = try spawn("/bin/sh", ["-c", "read line", long])
+        defer { program.terminate() }
+
+        try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.tooLong)
+    }
+
+    private func assertReplayRefused(foreground: pid_t?, _ refusal: RestartReplay.Refusal,
+                                     file: StaticString = #filePath, line: UInt = #line) async throws {
+        let (session, view) = try livePane()
+        var killed: [String] = []
+        let server = makeServer(daemon: ZmxSupport.daemonName(for: session.paneIdentity), foreground: foreground) {
+            killed.append($0)
+        }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: nil, pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(response.error, refusal.message, file: file, line: line)
+        XCTAssertEqual(killed, [], file: file, line: line)
+        XCTAssertTrue(session.surface === view, file: file, line: line)
+        XCTAssertNotNil(library.store(forSession: session.id), file: file, line: line)
+    }
+
+    private func spawn(_ path: String, _ arguments: [String]) throws -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        process.standardInput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        return process
+    }
+
     private func livePane() throws -> (Session, GhosttySurfaceView) {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.workspaces.first?.sessions.first)
@@ -146,8 +219,11 @@ final class ControlServerRestartTests: XCTestCase {
         return (session, view)
     }
 
-    private func makeServer(daemon: String, sweeper: ProcessSweeper? = nil,
+    private func makeServer(daemon: String, sweeper: ProcessSweeper? = nil, foreground: pid_t? = nil,
                             onKill: @escaping (String) -> Void) -> ControlServer {
+        let resolver = ZmxForegroundResolver(
+            leaderProvider: { _ in [daemon: 4242] },
+            leaderProbe: { _ in foreground.map { .foreground($0) } ?? .noForeground })
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
             guard invocation.arguments.first == "list" else {
                 onKill(invocation.arguments[1])
@@ -157,7 +233,7 @@ final class ControlServerRestartTests: XCTestCase {
         }
         return ControlServer(
             library: library, actions: AppActions(library: library), settingsModel: settingsModel,
-            identity: AppIdentity(version: "9.9.9", commit: "testsha"), zmxClient: client,
+            identity: AppIdentity(version: "9.9.9", commit: "testsha"), zmxForegroundResolver: resolver, zmxClient: client,
             socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
     }
 }

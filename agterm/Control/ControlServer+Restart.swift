@@ -2,7 +2,7 @@ import agtermCore
 import Foundation
 
 /// `session.restart`: ends a live pane's daemon and builds the pane a new surface whose daemon runs the
-/// caller's line, the way a `session.new --command` pane is created. `.claude/rules/control-api.md` owns
+/// caller's line, the way a `session.new --command` pane is created, or the pane's foreground program again. `.claude/rules/control-api.md` owns
 /// the contract.
 extension ControlServer {
     private static let restartWait: Duration = .seconds(10)
@@ -38,6 +38,13 @@ extension ControlServer {
               library.store(forSession: session.id) != nil else {
             return Self.restartFailure("the pane changed before the restart; nothing was started")
         }
+        var replay: [String]?
+        if options.command == nil {
+            switch replayArgv(of: old, client: client) {
+            case .failure(let refusal): return Self.restartFailure(refusal.message)
+            case .success(let argv): replay = argv
+            }
+        }
         // read before the kill: without it the restart could not tell when the old program is gone
         guard let program = client.foregroundJob(ofShell: oldPid) else {
             return Self.restartFailure("the process table cannot be read, so the old program could not be tracked; "
@@ -69,7 +76,8 @@ extension ControlServer {
         store.clearPaneOwnedState(session.id, pane: pane)
         let cwd = session.cwd(for: pane == .right ? .right : .left)
         let launch = PaneReattach(
-            command: ZmxSupport.attachCommand(zmx, replaying: nil, creationCommand: options.command, denylist: []),
+            // the denylist was applied before the kill: a rejection here would start a plain shell instead
+            command: ZmxSupport.attachCommand(zmx, replaying: replay, creationCommand: options.command, denylist: []),
             wait: false, environment: zmx.environment,
             workingDirectory: FileManager.default.fileExists(atPath: cwd) ? cwd : old.workingDirectory)
         guard let fresh = PaneLead.replace?(old, launch, lead) else {
@@ -90,10 +98,20 @@ extension ControlServer {
                                        within: Self.restartWait) else {
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
         }
-        let receipt = ControlRestartReceipt(paneID: resolved.identity.uuidString, oldPid: oldPid, newPid: newPid)
+        let receipt = ControlRestartReceipt(paneID: resolved.identity.uuidString, oldPid: oldPid, newPid: newPid,
+                                            replayedArgv: replay)
+        let replayed = replay.map { "; replay requested: \(CommandRestore.shellQuotedLine($0))" } ?? ""
         return ControlResponse(ok: true, result: ControlResult(
-            id: session.id.uuidString, text: "restarted \(pane.rawValue) pane: shell \(oldPid) -> \(newPid)",
+            id: session.id.uuidString, text: "restarted \(pane.rawValue) pane: shell \(oldPid) -> \(newPid)\(replayed)",
             pane: pane.rawValue, restart: receipt))
+    }
+
+    private func replayArgv(of view: GhosttySurfaceView, client: ZmxClient) -> Result<[String], RestartReplay.Refusal> {
+        // a failed listing drops the cached leaders, so a daemon that is gone cannot answer for the pane
+        zmxForegroundResolver?.acceptLeaderSnapshot(client.sessionLeaderPIDs())
+        let shell = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
+        let foreground = ForegroundProcess.running(for: view, shellBasename: shell, zmxResolver: zmxForegroundResolver)
+        return RestartReplay.resolve(foreground: foreground, denylist: GhosttyApp.shared.restoreDenylist)
     }
 
     private func resolveRestartTarget(_ target: String?, window: String?, options: ControlSessionRestartOptions)

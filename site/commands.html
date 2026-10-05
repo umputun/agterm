@@ -1341,7 +1341,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session restart --command LINE (--pane-id ID | --pane left|right) [--target T] [--window W]
+                agtermctl session restart [--command LINE] (--pane-id ID | --pane left|right) [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.restart</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1352,12 +1352,22 @@
                 empty screen. Nothing is typed into the pane. A hidden split and a pane in a background window restart like any
                 other.
               </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> the new shell runs the pane's current foreground program again: the
+                arguments <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>, in the pane's current
+                directory. That is the program as it runs now, not the line that started it, so environment assignments,
+                redirections and the other parts of a pipeline are not reconstructed. A replay is refused, with nothing
+                changed, when a shell holds the pane, when the program cannot be read (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">sudo</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>) or when
+                it is listed in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restore-denylist.conf</span>. An empty <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> is an error, never a replay.
+              </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The reply comes once the new shell exists and carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.oldPid</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.newPid</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.paneID</span>, plus
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>. The pids are the pane's shells, not the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>. A replay adds
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restart.replayedArgv</span>, the program it asked
+                the new shell to run. The pids are the pane's shells, not the
                 program <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span> starts; read that from
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or

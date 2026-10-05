@@ -20,6 +20,18 @@ struct SessionRestartTests {
         #expect(!bare.contains("restart"))
     }
 
+    @Test func aReplayReceiptCarriesTheArgvAndAnExplicitOneOmitsIt() throws {
+        let replayed = ControlRestartReceipt(paneID: "token", oldPid: 11, newPid: 22, replayedArgv: ["sh", "-c", "a b", ""])
+        let encoded = try JSONEncoder().encode(replayed)
+        #expect(try JSONDecoder().decode(ControlRestartReceipt.self, from: encoded) == replayed)
+
+        let explicit = try JSONEncoder().encode(ControlRestartReceipt(paneID: "token", oldPid: 11, newPid: 22))
+        #expect(!String(decoding: explicit, as: UTF8.self).contains("replayedArgv"))
+
+        let old = Data(#"{"paneID":"token","oldPid":11,"newPid":22}"#.utf8)
+        #expect(try JSONDecoder().decode(ControlRestartReceipt.self, from: old).replayedArgv == nil)
+    }
+
     @Test(arguments: [StatusPane.left, .right])
     func clearPaneOwnedStateDropsOnlyThatPanesStatusAskAndOverlay(pane: StatusPane) throws {
         let (store, session) = try splitSession()

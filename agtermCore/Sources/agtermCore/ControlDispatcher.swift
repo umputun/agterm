@@ -477,19 +477,23 @@ public struct ControlDispatcher {
         return actions.setSessionRestore(request.target, window: args?.window, update: update)
     }
 
-    /// `session.restart`: the line is a shell line and is never rewritten. A pane must be named, by token
-    /// or by role, because a default would restart a shell the caller never addressed.
+    /// `session.restart`: the line is a shell line and is never rewritten; an absent one asks the host to
+    /// replay the pane's foreground program. A pane must be named, by token or by role, because a default
+    /// would restart a shell the caller never addressed.
     private func dispatchSessionRestart(_ request: ControlRequest) async -> ControlResponse {
         let args = request.args
-        guard let command = args?.command, !command.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return ControlResponse(ok: false, error: "session.restart requires a command")
-        }
-        guard !CommandRestore.hasControlCharacter(command) else {
-            return ControlResponse(ok: false, error: "command must not contain control characters")
-        }
-        guard command.utf8.count <= ControlSessionRestartOptions.maxCommandBytes else {
-            return ControlResponse(ok: false, error: "command too long (max "
-                + "\(ControlSessionRestartOptions.maxCommandBytes) bytes)")
+        let command = args?.command
+        if let command {
+            guard !command.trimmingCharacters(in: .whitespaces).isEmpty else {
+                return ControlResponse(ok: false, error: "session.restart takes a non-empty command, or none to replay")
+            }
+            guard !CommandRestore.hasControlCharacter(command) else {
+                return ControlResponse(ok: false, error: "command must not contain control characters")
+            }
+            guard command.utf8.count <= ControlSessionRestartOptions.maxCommandBytes else {
+                return ControlResponse(ok: false, error: "command too long (max "
+                    + "\(ControlSessionRestartOptions.maxCommandBytes) bytes)")
+            }
         }
         let pane: StatusPane?
         switch parsePane(args?.pane) {

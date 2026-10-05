@@ -135,6 +135,10 @@ C-boundary concurrency before changing the bridge.
   logging uses `os.Logger`.
 - `scripts/run.sh` activates an existing instance instead of loading a rebuild. Use a distinct isolated
   launch for current code.
+- Stop an isolated Live-mode Debug instance and its daemons before rebuilding the same DerivedData.
+  Rewriting the bundle's `zmx` or `agterm-session-host` under running daemons can trigger
+  `SIGKILL (Code Signature Invalid)`; the reports go to `~/Library/Logs/DiagnosticReports/`.
+  Foreground programs can survive without a tty; stop any survivors by pid.
 - `make deploy` copies Release to `~/Applications`, whose app, PATH CLI, and installed hooks shadow Debug.
   Test fresh CLI/hooks with the Debug binary or redeploy and reinstall them. Debug uses
   `com.umputun.agterm.debug`, distinct from Release.
