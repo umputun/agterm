@@ -290,15 +290,15 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 
 ### Task 6: [Final] Update documentation
 
-- [ ] `plugins/agterm/skills/agterm/reference.md` and `SKILL.md`: the two options, the read-back
+- [x] `plugins/agterm/skills/agterm/reference.md` and `SKILL.md`: the two options, the read-back
       fields, the caption recipe, the rows-covered example, and the corrected statements about the 80%
       width bound and the height following a resize; a trigger for the pinned caption in SKILL.md's
       `description`; `examples.md` where it states the 80% cap and the 10% margin
-- [ ] `site/commands.html` and `site/docs.html` mirror the same; bump `style.css?v=` only if the CSS
+- [x] `site/commands.html` and `site/docs.html` mirror the same; bump `style.css?v=` only if the CSS
       changes
-- [ ] `.claude/rules/control-api.md`: the sizing paragraph (points, remeasure on geometry, per-spec
+- [x] `.claude/rules/control-api.md`: the sizing paragraph (points, remeasure on geometry, per-spec
       cap, wrap rule) and the search bar exclusion beside the `HudLinkClick` note
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
