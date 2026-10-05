@@ -23,8 +23,26 @@ public enum LinkPolicy {
         case ignore
     }
 
-    /// The schemes a session web overlay can show; `mailto` and `ftp` always go to the system handler.
-    static let overlaySchemes: Set<String> = ["http", "https"]
+    /// Whether a web view of this app can load plain http from `host`. The app allows local networking
+    /// only, and App Transport Security reads "local" off the host's SYNTAX, never off where it resolves:
+    /// an unqualified name, a `.local` name, or an IP literal, a public one included.
+    static func loadsPlainHTTP(host: String) -> Bool {
+        let host = normalizedHost(host)
+        guard !host.isEmpty else { return false }
+        if host.hasSuffix(".local") || !host.contains(where: { $0 == "." || $0 == ":" }) { return true }
+        var v4 = in_addr(), v6 = in6_addr()
+        return inet_pton(AF_INET, host, &v4) == 1 || inet_pton(AF_INET6, host, &v6) == 1
+    }
+
+    /// Whether a session web overlay can show `url`: https, or plain http from a host `loadsPlainHTTP`
+    /// accepts. `mailto`, `ftp` and other plain http go to the system handler.
+    static func overlayCanShow(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+        case "https": return true
+        case "http": return loadsPlainHTTP(host: url.host(percentEncoded: false) ?? "")
+        default: return false
+        }
+    }
 
     /// Where a clicked link came from. Only a pane and the scratch terminal have an owning session a page
     /// could open on; a HUD link stays in the browser so the click never replaces the HUD it sits in.
@@ -139,16 +157,16 @@ public enum LinkPolicy {
         return .reveal(URL(fileURLWithPath: normalizedPath, isDirectory: false))
     }
 
-    /// Maps a raw link to its route: `disposition` decides open, reveal or ignore, then an `http`/`https`
-    /// link clicked in a pane or the scratch terminal goes to that session's overlay when `mode` is
-    /// `overlay`. Whether the overlay can be shown right now is the caller's check.
+    /// Maps a raw link to its route: `disposition` decides open, reveal or ignore, then a web link the
+    /// overlay can show (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's
+    /// overlay when `mode` is `overlay`. Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
                              localHosts: Set<String> = localHostNames) -> Route {
         switch disposition(for: raw, localHosts: localHosts) {
         case .ignore: return .ignore
         case .reveal(let url): return .reveal(url)
         case .open(let url):
-            guard mode == .overlay, overlaySchemes.contains(url.scheme?.lowercased() ?? "") else { return .browser(url) }
+            guard mode == .overlay, overlayCanShow(url) else { return .browser(url) }
             switch origin {
             case .pane(let session), .scratch(let session): return .overlay(url, session: session)
             case .hud, .programOverlay, .quick: return .browser(url)

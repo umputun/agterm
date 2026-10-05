@@ -528,13 +528,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `SettingsModel.setLinkOpenMode`, the Settings picker's setter. Read back as top-level `tree.linkOpenMode`.
   Poll-only: no event reports a change, and nothing is restored but the setting itself.
 - A URL page opened with `--browse` (`HtmlOverlay.browse`, read back as `browse`) may take its main frame to
-  any HTTP(S) origin; without it the origin-pinned policy stands. Its identity never names a site whose
-  document has not COMMITTED: `webView.url` names a pending load while the old document is still shown, so
-  the page takes its address at commit and accepts a later URL change only when it stays on the shown
-  origin. That protects the ORIGIN only: a pending load on the same origin still shows in the reported
+  any HTTP(S) origin; without it the origin-pinned policy stands. Its identity, reported `page`, Open in
+  Browser and Copy Link never follow `webView.url`, which names a pending load while the old document is
+  still shown: the page takes its address at commit, reports its SOURCE until the first commit, and accepts
+  a later URL change only when it stays on the shown origin. That protects the ORIGIN only: a pending load on the same origin still shows in the reported
   `page`, as it does for every other page. A blank document is named `about:blank`. New-window requests stay confirmed-external and a URL page still gets no bridge.
 - A clicked terminal link follows `LinkPolicy.route` through `LinkOpener.shared`, which the app points at
-  the setting and at `ControlServer.openLinkOverlay`. That opens `--url --browse --js --navigation
+  the setting and at `ControlServer.openLinkOverlay`. `route` sends plain http to the overlay only for a
+  host ATS exempts by syntax (unqualified, `.local`, an IP literal): the store would accept any other and
+  the load would then fail, with no refusal for the browser fallback to act on. Explicit `--url` is not
+  narrowed. That opens `--url --browse --js --navigation
   --persistent` full-size on the click's owning session, without selecting it, and returns false, sending
   the link to the browser, when a HUD is up on the session, when its window has a zoomed terminal, or when
   `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those

@@ -544,6 +544,47 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(current?.identity, "http://127.0.0.1:\(second)")
     }
 
+    func testABrowsingPageNamesItsSourceWhileItsFirstLoadRedirectsToASiteStillLoading() async throws {
+        let slow = try await serve(.ipv4(.loopback), ["/": .init(hold: true)])
+        let first = try await serve(.ipv4(.loopback), [
+            "/away": .init(status: 302, headers: ["Location": "http://127.0.0.1:\(slow)/"]),
+        ])
+        _ = registry.page(for: try openURL("http://127.0.0.1:\(first)/away", browse: true), store: store)
+        try await Task.sleep(for: .milliseconds(600))
+        XCTAssertEqual(current?.loadState, .loading)
+        XCTAssertEqual(current?.identity, "http://127.0.0.1:\(first)")
+    }
+
+    func testABrowsingPageOpensAndCopiesTheSiteShownWhileAnotherLoads() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let slow = try await serve(.ipv4(.loopback), ["/": .init(hold: true)])
+        let page = try openURL("http://127.0.0.1:\(first)/", browse: true)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = 'http://127.0.0.1:\(slow)/'")
+        try await waitFor("second site loading") { self.current?.loadState == .loading }
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertNil(registry.navigate(page.id, .browser))
+        registry.copyLink(page.id)
+
+        XCTAssertEqual(browser.opened, [try XCTUnwrap(URL(string: "http://127.0.0.1:\(first)/"))])
+        XCTAssertEqual(sharing.copied, ["http://127.0.0.1:\(first)/"])
+    }
+
+    func testABrowsingPageOnABlankDocumentOpensItsSourceInTheBrowser() async throws {
+        let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
+        let page = try openURL("http://127.0.0.1:\(first)/", browse: true)
+        let live = registry.page(for: page, store: store)
+        try await waitFor("first loaded") { self.current?.current?.title == "first" && self.current?.loadState == .loaded }
+        _ = try await live.webView.evaluateJavaScript("location.href = 'about:blank'")
+        try await waitFor("blank shown") { self.current?.current?.page == "about:blank" }
+
+        XCTAssertNil(registry.navigate(page.id, .browser))
+
+        XCTAssertEqual(browser.opened, [try XCTUnwrap(URL(string: "http://127.0.0.1:\(first)/"))])
+    }
+
     func testABrowsingPageNamesABlankDocumentAsBlank() async throws {
         let first = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>first</title>")])
         let live = registry.page(for: try openURL("http://127.0.0.1:\(first)/", browse: true), store: store)

@@ -3117,7 +3117,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               store, so a login made there lasts. That store is agterm's own; nothing is taken from your browser. The page
               may go on to other sites, and its strip always names the site shown. The link still opens in the browser
               when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
-              already has an overlay, or in the quick terminal.
+              already has an overlay, or in the quick terminal. So does a plain http link to anything but a local
+              address (localhost, a .local name, an IP address), which the overlay could not load.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A ⌘-click on a

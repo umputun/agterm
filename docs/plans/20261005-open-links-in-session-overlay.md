@@ -232,12 +232,12 @@
 - [x] run the targeted hosted tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify each Overview bullet against the built app's tests
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint`
-- [ ] run `scripts/build.sh` (Release)
-- [ ] run `lsappinfo list | grep -A4 agterm.debug` and clear leaked test processes
+- [x] verify each Overview bullet against the built app's tests
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint`
+- [x] run `scripts/build.sh` (Release)
+- [x] run `lsappinfo list | grep -A4 agterm.debug` and clear leaked test processes
 
 ### Task 6: [Final] Update documentation
 - [x] `site/docs.html`: the setting, what it covers, the fallbacks, HUD links, that logins are agterm's own

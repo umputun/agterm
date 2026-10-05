@@ -905,7 +905,7 @@ error keeps those names for compatibility.
   to outlive the app. Reload loads the URL again; read back `url` and `persistent` in `htmlOverlays`.
   With `--browse` the page may leave the site it opened: links, redirects, forms and scripts can take its
   main frame to any `http` or `https` address, so a redirect login works, and the strip names the site of
-  the document shown, `about:blank` for a blank one. A link that asks for a new window still asks the user
+  the document shown, `about:blank` for a blank one, and the source site until the first document loads. A link that asks for a new window still asks the user
   and opens in the browser. `--html` and a program refuse the flag (`--browse requires --url`). It changes
   navigation only: add `--js`, `--navigation` and `--persistent` for the page a clicked link opens (see
   `browser links`). Read back `browse` in `htmlOverlays`.
@@ -1672,7 +1672,9 @@ opens, or with no mode print the current one. `browser` (default) hands the link
 --navigation --persistent` would, without selecting the session. The link still goes to the browser when
 it was clicked in a HUD, a program overlay or the quick terminal, when a HUD is up on the session, when the
 session's window has a zoomed terminal, when the session-wide overlay slot is taken, when another Mac
-presents the session, or when the saved browser store cannot be used. `mailto`, `ftp` and `file` links are
+presents the session, or when the saved browser store cannot be used. A plain `http` link uses the overlay
+only for a host the page could load: an unqualified name such as `localhost`, a `.local` name, or an IP
+address; `http` to any other host name opens in the browser. `mailto`, `ftp` and `file` links are
 unaffected. The setting is the one in Settings > General > Open links in. App-global; refuses a target or
 `--window`. Read back `linkOpenMode` at the top of `tree --json`. No event reports a change.
 

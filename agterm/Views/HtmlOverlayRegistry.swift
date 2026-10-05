@@ -204,7 +204,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var loadPending = false
     // a document this web content process still shows, which an interrupted load leaves in place
     private var committed = false
-    // the address of the document a browsing page shows; nil until its first commit
+    // the address of the document a browsing page shows; nil until its first commit, when the page
+    // reports its source instead
     private var shownURL: URL?
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
@@ -429,7 +430,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .file(let path, _):
             return URL(fileURLWithPath: path)
         case .url(let original):
-            guard let url = webView.url, url.scheme == "http" || url.scheme == "https" else { return original }
+            let shown = overlay.browse ? shownURL : webView.url
+            guard let url = shown, url.scheme == "http" || url.scheme == "https" else { return original }
             return url
         }
     }
@@ -477,7 +479,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     private var pageURL: URL {
-        if overlay.browse, let shownURL { return shownURL }
+        if overlay.browse, case .url(let source) = overlay.source { return shownURL ?? source }
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
