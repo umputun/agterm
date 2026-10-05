@@ -298,6 +298,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// markdown renders the HUD message as markdown for `session.hud.open`/`.update`; nil/omitted is plain.
     /// An update omitting it returns the panel to plain text, the whole spec being replaced.
     public var markdown: Bool?
+    /// sticky puts a HUD flush against the edge or corner its `position` names, for `session.hud.open`/
+    /// `.update`; nil/omitted keeps the edge margin.
+    public var sticky: Bool?
+    /// frame false drops a HUD's border, rounding and blank rows, for `session.hud.open`/`.update`;
+    /// nil/omitted is framed.
+    public var frame: Bool?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
@@ -396,7 +402,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 text: String? = nil, select: Bool? = nil, mode: String? = nil, axis: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: String? = nil,
-                hideAfter: Double? = nil, markdown: Bool? = nil,
+                hideAfter: Double? = nil, markdown: Bool? = nil, sticky: Bool? = nil, frame: Bool? = nil,
                 items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, selection: String? = nil,
                 buttons: [ControlAskButton]? = nil, defaultButton: String? = nil,
@@ -441,6 +447,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.spinner = spinner
         self.hideAfter = hideAfter
         self.markdown = markdown
+        self.sticky = sticky
+        self.frame = frame
         self.items = items
         self.prompt = prompt
         self.query = query

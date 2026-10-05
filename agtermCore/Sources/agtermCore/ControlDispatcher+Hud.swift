@@ -113,7 +113,8 @@ extension ControlDispatcher {
         return .spec(HudSpec(message: message, detail: args?.detail, spinner: spinner,
                              backgroundColor: args?.color, textColor: args?.textColor,
                              sizePercent: args?.sizePercent, position: position,
-                             hideAfter: args?.hideAfter, markdown: markdown, fontSize: args?.fontSize))
+                             hideAfter: args?.hideAfter, markdown: markdown, fontSize: args?.fontSize,
+                             sticky: args?.sticky ?? false, frame: args?.frame ?? true))
     }
 
     /// containsMarkdownControlCharacters is `containsControlCharacters` less LF and TAB, which markdown

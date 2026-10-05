@@ -574,4 +574,46 @@ struct ControlDispatcherHudTests {
         #expect(response == expected)
         #expect(actions.calls == [.hudClose(target: "session-id", window: "window-id")])
     }
+
+    @Test(arguments: [Command.sessionHudOpen, .sessionHudUpdate])
+    func stickyAndNoFrameReachTheHost(cmd: Command) async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: cmd, args: ControlArgs(message: "caption", sticky: true, frame: false)))
+
+        let spec = try #require(Self.hudSpec(actions.calls.first))
+        #expect(spec.sticky)
+        #expect(!spec.frame)
+    }
+
+    @Test(arguments: [Command.sessionHudOpen, .sessionHudUpdate])
+    func omittedStickyAndFrameReachTheHostAsAFramedPanelWithItsMargin(cmd: Command) async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: cmd, args: ControlArgs(message: "caption")))
+
+        let spec = try #require(Self.hudSpec(actions.calls.first))
+        #expect(!spec.sticky)
+        #expect(spec.frame)
+    }
+
+    @Test func stickyAndFrameAreOmittedFromTheWireWhenUnsetAndRoundTripWhenSet() throws {
+        let unset = try JSONEncoder().encode(ControlRequest(cmd: .sessionHudOpen, args: ControlArgs(message: "x")))
+        let set = ControlRequest(cmd: .sessionHudOpen, args: ControlArgs(message: "x", sticky: true, frame: false))
+
+        let text = try #require(String(data: unset, encoding: .utf8))
+        #expect(!text.contains("sticky"))
+        #expect(!text.contains("frame"))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: JSONEncoder().encode(set)) == set)
+    }
+
+    private static func hudSpec(_ call: MockControlActions.Call?) -> HudSpec? {
+        switch call {
+        case .hudOpen(_, _, let spec, _), .hudUpdate(_, _, let spec, _): return spec
+        default: return nil
+        }
+    }
 }

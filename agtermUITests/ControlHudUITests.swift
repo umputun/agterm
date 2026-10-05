@@ -31,6 +31,23 @@ final class ControlHudUITests: ControlAPITestCase {
         XCTAssertNil(node["overlaySizePercent"], "the hud's size belongs in hud, not on the slot")
     }
 
+    func testAStickyFramelessHudReadsBackItsFlagsAndTheFullWidth() throws {
+        let session = try activeSessionID()
+        try assertOK(sendCommand(request(command: "session.hud.open", args: [
+            "message": "caption", "position": "top", "sticky": true, "frame": false, "sizePercent": 100
+        ])))
+
+        let hud = try XCTUnwrap(pollHud(session, message: "caption"), "tree should expose the hud")
+        XCTAssertEqual(hud["sticky"] as? Bool, true)
+        XCTAssertEqual(hud["frame"] as? Bool, false)
+        XCTAssertEqual(hud["sizePercent"] as? Int, 100, "a sticky panel off center may span the pane")
+
+        try assertOK(sendCommand(request(command: "session.hud.update", args: ["message": "plain"])))
+        let plain = try XCTUnwrap(pollHud(session, message: "plain"))
+        XCTAssertEqual(plain["sticky"] as? Bool, false, "an update that omits the flags returns the panel to its defaults")
+        XCTAssertEqual(plain["frame"] as? Bool, true)
+    }
+
     func testPositionReadsBackAsCenterWhenOmittedAndAsRequestedWhenSet() throws {
         let session = try activeSessionID()
         try assertOK(openHud(message: "no position given"))

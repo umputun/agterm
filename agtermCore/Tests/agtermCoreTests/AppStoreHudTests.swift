@@ -429,6 +429,30 @@ struct AppStoreHudTests {
         #expect(!store.setHudSize(UUID(), size: measured, forcedWidthPercent: nil))
     }
 
+    @Test func theTreeReportsStickyAndFrameAndAnOlderServersNodeDecodesToTheDefaults() throws {
+        let caption = HudSpec(message: "caption", position: .topCenter, sticky: true, frame: false)
+        let (store, _) = try measuredHud(caption, pane: Self.widePane)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions[0].hud)
+        let older = try JSONDecoder().decode(ControlHudNode.self, from: Data(
+            #"{"message":"m","spinner":"none","position":"center","hideAfter":0}"#.utf8))
+
+        #expect(node.sticky)
+        #expect(!node.frame)
+        #expect(try JSONDecoder().decode(ControlHudNode.self, from: JSONEncoder().encode(node)) == node)
+        #expect(!older.sticky)
+        #expect(older.frame)
+    }
+
+    @Test func aPlainHudReadsBackNotStickyAndFramed() throws {
+        let (store, _) = try measuredHud(HudSpec(message: "working"), pane: Self.widePane)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions[0].hud)
+
+        #expect(!node.sticky)
+        #expect(node.frame)
+    }
+
     private func mirroredStore() throws -> Mirrored {
         let store = makeStore()
         let hub = PresentationHub(staleTimeout: 30)
