@@ -518,4 +518,118 @@ struct HudTests {
 
         #expect(header == "30 9 1 4242 0.12 38;2;126;192;126 0 ◐ ◓ ◑ ◒")
     }
+
+    // regression: markdown wrapped at 60 columns however wide the caller made the panel
+    @Test func aMarkdownMessageWithACallerWidthWrapsAtThatWidth() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1600, paneHeight: 800)
+        let line = Array(repeating: "word", count: 20).joined(separator: " ")
+        let sized = HudSpec(message: line, sizePercent: 80, markdown: true)
+        let unsized = HudSpec(message: line, markdown: true)
+
+        let size = HudLayout.panelSize(for: sized, pane: pane)
+        let body = HudLayout.markdownBody(for: sized, grid: HudLayout.paintGrid(for: sized, size: size, pane: pane))
+
+        #expect(body.lines == [line])
+        #expect(HudLayout.box(for: unsized, wrapColumns: HudLayout.wrapColumns(for: unsized, pane: pane)).rows
+            == 2 + HudLayout.verticalPadding * 2)
+    }
+
+    @Test func omittedStickyAndFrameDecodeToAFramedPanelWithItsMargin() throws {
+        let spec = try JSONDecoder().decode(HudSpec.self, from: Data(#"{"message":"working"}"#.utf8))
+
+        #expect(!spec.sticky)
+        #expect(spec.frame)
+    }
+
+    @Test func stickyAndFrameSurviveARoundTripAndEveryCopy() throws {
+        let spec = HudSpec(message: "caption", sticky: true, frame: false)
+
+        let decoded = try JSONDecoder().decode(HudSpec.self, from: JSONEncoder().encode(spec))
+        let held = spec.holdingCreationFields(of: HudSpec(message: "live"))
+        let resized = spec.withSizePercent(40)
+
+        #expect(decoded == spec)
+        #expect(held.sticky && !held.frame)
+        #expect(resized.sticky && !resized.frame)
+    }
+
+    @Test(arguments: HudPosition.allCases) func aStickyPanelMaySpanThePaneUnlessItIsCentered(position: HudPosition) {
+        let sticky = HudSpec(message: "caption", position: position, sticky: true)
+        let loose = HudSpec(message: "caption", position: position)
+        let widest = position == .center ? HudLayout.maxSizePercent : 100
+
+        #expect(HudLayout.clampSizePercent(100, for: sticky) == widest)
+        #expect(HudLayout.clampSizePercent(100, for: loose) == HudLayout.maxSizePercent)
+        #expect(HudLayout.clampSizePercent(1, for: sticky) == HudLayout.minSizePercent)
+    }
+
+    @Test func aMeasuredStickyPanelTakesTheWidthItsTextNeedsUpToThePane() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 400, paneHeight: 800)
+        let message = String(repeating: "x", count: 58)
+
+        #expect(HudLayout.panelSize(for: HudSpec(message: message, position: .topCenter, sticky: true), pane: pane)
+            .widthPercent == 100)
+        #expect(HudLayout.panelSize(for: HudSpec(message: message, position: .topCenter), pane: pane)
+            .widthPercent == HudLayout.maxSizePercent)
+    }
+
+    @Test func aFramelessPanelIsAsTallAsItsText() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1200, paneHeight: 800,
+                               paddingWidth: 8, paddingHeight: 6)
+        let spec = HudSpec(message: "- a\n- b", markdown: true, frame: false)
+
+        let size = HudLayout.panelSize(for: spec, pane: pane)
+        let grid = HudLayout.paintGrid(for: spec, size: size, pane: pane)
+
+        #expect(HudLayout.box(for: spec).rows == 2)
+        #expect(HudLayout.box(for: HudSpec(message: "one line", frame: false)).rows == 1)
+        #expect(size.heightPoints == 48.0)
+        #expect(grid.rows == 2)
+        #expect(HudLayout.markdownBody(for: spec, grid: grid).lines == ["• a", "• b"])
+    }
+
+    @Test(arguments: [(400.0, 66.0), (800.0, 66.0), (1600.0, 66.0)])
+    func theHeightInPointsDoesNotFollowThePane(paneHeight: Double, expected: Double) {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1200, paneHeight: paneHeight,
+                               paddingWidth: 8, paddingHeight: 6)
+        let spec = HudSpec(message: "gathering options")
+
+        let size = HudLayout.panelSize(for: spec, pane: pane)
+
+        #expect(size.heightPoints == expected)
+        #expect(HudLayout.paintGrid(for: spec, size: size, pane: pane).rows == 3)
+    }
+
+    @Test(arguments: [15.4, 17.3, 19.7])
+    func aFractionalCellStillYieldsTheWholeRowsThePointsWereBuiltFrom(cellHeight: Double) {
+        let pane = PaneMetrics(cellWidth: 7.8, cellHeight: cellHeight, paneWidth: 1200, paneHeight: 900,
+                               paddingWidth: 8, paddingHeight: 6)
+        let spec = HudSpec(message: "- a\n- b\n- c", markdown: true, frame: false)
+
+        let size = HudLayout.panelSize(for: spec, pane: pane)
+
+        #expect(HudLayout.paintGrid(for: spec, size: size, pane: pane).rows == 3)
+    }
+
+    @Test func contentPastTheHeightCapAgreesOnPointsGridBodyAndPercent() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 1200, paneHeight: 800,
+                               paddingWidth: 8, paddingHeight: 6)
+        let spec = HudSpec(message: (1...80).map { "- item \($0)" }.joined(separator: "\n"), markdown: true)
+
+        let size = HudLayout.panelSize(for: spec, pane: pane)
+        let grid = HudLayout.paintGrid(for: spec, size: size, pane: pane)
+        let body = HudLayout.markdownBody(for: spec, grid: grid)
+
+        #expect(size.heightPoints == 640)
+        #expect(size.heightPercent == HudLayout.maxSizePercent)
+        #expect(grid.rows == Int((640.0 - 12) / 18))
+        #expect(body.lines.count == grid.rows - HudLayout.verticalPadding * 2)
+        #expect(body.lines.last?.contains("more") == true)
+    }
+
+    @Test func anUnmeasuredPaneHasNoHeightInPoints() {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 0, paneHeight: 0)
+
+        #expect(HudLayout.panelSize(for: HudSpec(message: "working"), pane: pane).heightPoints == nil)
+    }
 }
