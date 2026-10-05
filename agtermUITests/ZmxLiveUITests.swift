@@ -93,9 +93,12 @@ final class ZmxLiveUITests: ControlAPITestCase {
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20))
         let paneID = try XCTUnwrap(paneID(sessionID, kind: "left"))
         let marker = stateDir.appendingPathComponent("replay runs.txt")
-        let script = "printf x >> '\(marker.path)'; sleep 600; :"
-        _ = try restart(sessionID, paneID: paneID, command: "sh -c \"\(script)\"")
-        XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8)) == "x", timeout: 20))
+        let work = stateDir.appendingPathComponent("work dir", isDirectory: true)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        let script = "pwd -P >> '\(marker.path)'; sleep 600; :"
+        _ = try restart(sessionID, paneID: paneID, command: "cd '\(work.path)' && sh -c \"\(script)\"")
+        XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8))?.hasSuffix("/work dir\n") == true, timeout: 20))
+        let ran = try String(contentsOf: marker, encoding: .utf8)
 
         let request = try JSONSerialization.data(withJSONObject: [
             "cmd": "session.restart", "target": sessionID, "args": ["paneID": paneID],
@@ -105,8 +108,8 @@ final class ZmxLiveUITests: ControlAPITestCase {
         XCTAssertEqual(response["ok"] as? Bool, true, "\(response)")
         let receipt = try XCTUnwrap((response["result"] as? [String: Any])?["restart"] as? [String: Any])
         XCTAssertEqual(receipt["replayedArgv"] as? [String], ["sh", "-c", script])
-        XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8)) == "xx", timeout: 20),
-                      "the replay should run the restarted program, quoting intact")
+        XCTAssertTrue(poll(until: (try? String(contentsOf: marker, encoding: .utf8)) == ran + ran, timeout: 20),
+                      "the replay should run the restarted program where it was running, quoting intact")
         XCTAssertEqual(self.paneID(sessionID, kind: "left"), paneID)
     }
 

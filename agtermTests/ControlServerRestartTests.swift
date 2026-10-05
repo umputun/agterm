@@ -136,20 +136,62 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertEqual(response.error, "session.restart needs Live sessions mode; this pane has no live shell to replace")
     }
 
-    func testAReplayOfAReadableProgramGoesOnToEndTheOldShell() async throws {
+    func testAReplayLaunchesTheProgramsArgvInTheDirectoryItRunsIn() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
-        let program = try spawn("/bin/sleep", ["300"])
+        let directory = try programDirectory()
+        let program = try spawn("/bin/sleep", ["300"], in: directory)
         defer { program.terminate() }
         var killed: [String] = []
         let server = makeServer(daemon: daemon, foreground: program.processIdentifier) { killed.append($0) }
+        var launched: PaneReattach?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, launch, _ in
+            launched = launch
+            return nil
+        }
+        defer { PaneLead.replace = replace }
 
-        let response = await server.restartSessionPane(
+        _ = await server.restartSessionPane(
             session.id.uuidString, window: nil,
             options: ControlSessionRestartOptions(command: nil, pane: nil, paneID: view.paneToken))
 
-        XCTAssertEqual(response.error, "the old shell ended (pid 4242) and the pane could not be rebuilt; it was closed")
         XCTAssertEqual(killed, [daemon])
+        XCTAssertEqual(launched?.workingDirectory, directory.path)
+        XCTAssertNotEqual(directory.path, session.cwd(for: .left))
+        XCTAssertEqual(launched?.command.contains(#"'\''/bin/sleep'\'' '\''300'\''"#), true, launched?.command ?? "no launch")
+    }
+
+    func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let shell = try spawn("/bin/sh", ["-c", "read line"])
+        defer { shell.terminate() }
+        var killed: [String] = []
+        let server = makeServer(daemon: daemon, foreground: shell.processIdentifier) { killed.append($0) }
+
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: nil, pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(killed, [daemon])
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenThePanesRootShellRunsItsOwnLine() async throws {
+        let shell = try spawn("/bin/sh", ["-c", "read line"])
+        defer { shell.terminate() }
+
+        try await assertReplayRefused(foreground: shell.processIdentifier, leader: shell.processIdentifier,
+                                      RestartReplay.Refusal.shell("sh"))
+    }
+
+    func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheProgramsDirectoryIsGone() async throws {
+        let directory = try programDirectory()
+        let program = try spawn("/bin/sleep", ["300"], in: directory)
+        defer { program.terminate() }
+        try FileManager.default.removeItem(at: directory)
+
+        try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.noDirectory)
     }
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenAShellHoldsThePane() async throws {
@@ -181,13 +223,12 @@ final class ControlServerRestartTests: XCTestCase {
         try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.tooLong)
     }
 
-    private func assertReplayRefused(foreground: pid_t?, _ refusal: RestartReplay.Refusal,
+    private func assertReplayRefused(foreground: pid_t?, leader: pid_t = 4242, _ refusal: RestartReplay.Refusal,
                                      file: StaticString = #filePath, line: UInt = #line) async throws {
         let (session, view) = try livePane()
         var killed: [String] = []
-        let server = makeServer(daemon: ZmxSupport.daemonName(for: session.paneIdentity), foreground: foreground) {
-            killed.append($0)
-        }
+        let server = makeServer(daemon: ZmxSupport.daemonName(for: session.paneIdentity), foreground: foreground,
+                                leader: leader) { killed.append($0) }
 
         let response = await server.restartSessionPane(
             session.id.uuidString, window: nil,
@@ -199,10 +240,17 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertNotNil(library.store(forSession: session.id), file: file, line: line)
     }
 
-    private func spawn(_ path: String, _ arguments: [String]) throws -> Process {
+    private func programDirectory() throws -> URL {
+        let directory = stateDir.appendingPathComponent("program-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return URL(fileURLWithPath: try XCTUnwrap(directory.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath))
+    }
+
+    private func spawn(_ path: String, _ arguments: [String], in directory: URL? = nil) throws -> Process {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
+        process.currentDirectoryURL = directory
         process.standardInput = Pipe()
         process.standardOutput = FileHandle.nullDevice
         try process.run()
@@ -220,16 +268,16 @@ final class ControlServerRestartTests: XCTestCase {
     }
 
     private func makeServer(daemon: String, sweeper: ProcessSweeper? = nil, foreground: pid_t? = nil,
-                            onKill: @escaping (String) -> Void) -> ControlServer {
+                            leader: pid_t = 4242, onKill: @escaping (String) -> Void) -> ControlServer {
         let resolver = ZmxForegroundResolver(
-            leaderProvider: { _ in [daemon: 4242] },
+            leaderProvider: { _ in [daemon: leader] },
             leaderProbe: { _ in foreground.map { .foreground($0) } ?? .noForeground })
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
             guard invocation.arguments.first == "list" else {
                 onKill(invocation.arguments[1])
                 return "killed session \(invocation.arguments[1])\n"
             }
-            return "name=\(daemon)\tpid=4242\tclients=1\tcreated=1"
+            return "name=\(daemon)\tpid=\(leader)\tclients=1\tcreated=1"
         }
         return ControlServer(
             library: library, actions: AppActions(library: library), settingsModel: settingsModel,

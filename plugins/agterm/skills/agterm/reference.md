@@ -581,11 +581,12 @@ error keeps those names for compatibility.
 - `session restart [--command LINE] (--pane-id ID | --pane left|right) [--target] [--window W]`: replace one
   pane's shell. Ends the shell and its foreground program, then starts a new login shell in the same pane
   that runs LINE and stays interactive. Without `--command` it runs the pane's current foreground program
-  again: the argv `tree` reports as `foreground`/`splitForeground`, in the pane's current directory, and
+  again: the argv `tree` reports as `foreground`/`splitForeground`, in the directory that program is running in, and
   the reply carries the requested argv as `restart.replayedArgv`. That is the program as it runs now, not the line that
   started it, so environment assignments, redirections and the rest of a pipeline are not reconstructed.
-  A replay is refused with nothing changed when a shell holds the pane, when the program cannot be read
-  (`sudo`, `top`) or when it is in `restore-denylist.conf`; pass `--command` then. An empty `--command`
+  A replay is refused with nothing changed when a shell holds the pane (the pane's own shell running a
+  builtin or a loop included), when the program cannot be read (`sudo`, `top`), when its directory is
+  unavailable or when it is in `restore-denylist.conf`; pass `--command` then. An empty `--command`
   is an error, never a replay. The pane keeps its place, stable id and `AGTERM_*` environment and
   starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
   shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;

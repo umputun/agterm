@@ -257,8 +257,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   libghostty creates a surface for a view outside any window. The reply waits for a new leader pid in
   `zmx list` and carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
   reads back as `foreground`. With no `command` the host replays the pane's foreground program: the
-  argv `tree` reports, read through `ForegroundProcess.running` from a fresh leader listing, filtered by
-  host-free `RestartReplay.resolve` and launched through `attachCommand(replaying:)`. Everything is decided
+  argv `tree` reports, read through `ForegroundProcess.observed` from a fresh leader listing, filtered by
+  host-free `RestartReplay.resolve` and launched through `attachCommand(replaying:)`. It starts in that
+  process's own working directory, never `session.cwd`: the shell-reported cwd can be stale before the
+  first prompt. A process that IS the daemon leader and a shell is refused, to prevent replaying the
+  hosting wrapper. Everything is decided
   BEFORE the kill, because `attachCommand` answers a rejected argv with a plain shell. The source is never
   `initialCommand` or a restore pin: after `restart --command B` the creation line still says A. The
   receipt's `replayedArgv` is the read-back, present only on a replay; a blank `command` is an error so an

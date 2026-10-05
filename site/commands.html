@@ -1354,10 +1354,11 @@
               </p>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> the new shell runs the pane's current foreground program again: the
-                arguments <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>, in the pane's current
-                directory. That is the program as it runs now, not the line that started it, so environment assignments,
+                arguments <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>, in the directory
+                that program is running in. That is the program as it runs now, not the line that started it, so environment assignments,
                 redirections and the other parts of a pipeline are not reconstructed. A replay is refused, with nothing
-                changed, when a shell holds the pane, when the program cannot be read (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">sudo</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>) or when
+                changed, when a shell holds the pane (the pane's own shell running a builtin or a loop included), when the
+                program cannot be read (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">sudo</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>), when its directory is unavailable, or when
                 it is listed in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restore-denylist.conf</span>. An empty <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> is an error, never a replay.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">

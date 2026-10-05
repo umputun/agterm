@@ -15,11 +15,12 @@ extension Session {
             typed into the pane.
 
             Without --command the new shell runs the pane's current foreground program again, with the \
-            arguments `tree` reports as foreground or splitForeground, in the pane's current directory. \
-            That is the program as it runs now, not the line that started it: environment assignments, \
-            redirections and the other parts of a pipeline are not reconstructed. It is refused, with \
-            nothing changed, when a shell holds the pane, when the program cannot be read (sudo, top), or \
-            when it is listed in restore-denylist.conf. The reply carries the argv the new shell was \
+            arguments `tree` reports as foreground or splitForeground, in the directory that program is \
+            running in. That is the program as it runs now, not the line that started it: environment \
+            assignments, redirections and the other parts of a pipeline are not reconstructed. It is \
+            refused, with nothing changed, when a shell holds the pane (the pane's own shell running a \
+            builtin or a loop included), when the program cannot be read (sudo, top), when its directory \
+            is unavailable, or when it is listed in restore-denylist.conf. The reply carries the argv the new shell was \
             asked to run as restart.replayedArgv.
 
             The reply comes once a new shell exists in the pane, and carries the ended shell's pid and \

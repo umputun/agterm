@@ -38,11 +38,11 @@ extension ControlServer {
               library.store(forSession: session.id) != nil else {
             return Self.restartFailure("the pane changed before the restart; nothing was started")
         }
-        var replay: [String]?
+        var replay: RestartReplay.Launch?
         if options.command == nil {
-            switch replayArgv(of: old, client: client) {
+            switch replayLaunch(of: old, leader: oldPid, client: client) {
             case .failure(let refusal): return Self.restartFailure(refusal.message)
-            case .success(let argv): replay = argv
+            case .success(let launch): replay = launch
             }
         }
         // read before the kill: without it the restart could not tell when the old program is gone
@@ -77,9 +77,10 @@ extension ControlServer {
         let cwd = session.cwd(for: pane == .right ? .right : .left)
         let launch = PaneReattach(
             // the denylist was applied before the kill: a rejection here would start a plain shell instead
-            command: ZmxSupport.attachCommand(zmx, replaying: replay, creationCommand: options.command, denylist: []),
+            command: ZmxSupport.attachCommand(zmx, replaying: replay?.argv, creationCommand: options.command, denylist: []),
             wait: false, environment: zmx.environment,
-            workingDirectory: FileManager.default.fileExists(atPath: cwd) ? cwd : old.workingDirectory)
+            workingDirectory: replay?.workingDirectory
+                ?? (FileManager.default.fileExists(atPath: cwd) ? cwd : old.workingDirectory))
         guard let fresh = PaneLead.replace?(old, launch, lead) else {
             closeEndedPane(old, session: session, identity: resolved.identity)
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and the pane could not be rebuilt; "
@@ -99,19 +100,25 @@ extension ControlServer {
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
         }
         let receipt = ControlRestartReceipt(paneID: resolved.identity.uuidString, oldPid: oldPid, newPid: newPid,
-                                            replayedArgv: replay)
-        let replayed = replay.map { "; replay requested: \(CommandRestore.shellQuotedLine($0))" } ?? ""
+                                            replayedArgv: replay?.argv)
+        let replayed = replay.map { "; replay requested: \(CommandRestore.shellQuotedLine($0.argv))" } ?? ""
         return ControlResponse(ok: true, result: ControlResult(
             id: session.id.uuidString, text: "restarted \(pane.rawValue) pane: shell \(oldPid) -> \(newPid)\(replayed)",
             pane: pane.rawValue, restart: receipt))
     }
 
-    private func replayArgv(of view: GhosttySurfaceView, client: ZmxClient) -> Result<[String], RestartReplay.Refusal> {
+    private func replayLaunch(of view: GhosttySurfaceView, leader: pid_t,
+                              client: ZmxClient) -> Result<RestartReplay.Launch, RestartReplay.Refusal> {
         // a failed listing drops the cached leaders, so a daemon that is gone cannot answer for the pane
         zmxForegroundResolver?.acceptLeaderSnapshot(client.sessionLeaderPIDs())
         let shell = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
-        let foreground = ForegroundProcess.running(for: view, shellBasename: shell, zmxResolver: zmxForegroundResolver)
-        return RestartReplay.resolve(foreground: foreground, denylist: GhosttyApp.shared.restoreDenylist)
+        let observed = ForegroundProcess.observed(for: view, shellBasename: shell, zmxResolver: zmxForegroundResolver)
+        var isDirectory: ObjCBool = false
+        let directory = observed.flatMap { ForegroundProcess.workingDirectory(of: $0.pid) }
+            .flatMap { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue ? $0 : nil }
+        return RestartReplay.resolve(
+            .init(foreground: observed?.foreground, isDaemonLeader: observed?.pid == leader, workingDirectory: directory),
+            shell: shell, denylist: GhosttyApp.shared.restoreDenylist)
     }
 
     private func resolveRestartTarget(_ target: String?, window: String?, options: ControlSessionRestartOptions)

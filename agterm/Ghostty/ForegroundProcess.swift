@@ -49,6 +49,13 @@ enum ForegroundProcess {
     @MainActor
     static func running(for view: GhosttySurfaceView, shellBasename: String?,
                         zmxResolver: ZmxForegroundResolver? = nil) -> CommandRestore.PaneForeground? {
+        observed(for: view, shellBasename: shellBasename, zmxResolver: zmxResolver)?.foreground
+    }
+
+    /// `running`, with the pid whose argv it read: the group leader, or the child the descent settled on.
+    @MainActor
+    static func observed(for view: GhosttySurfaceView, shellBasename: String?,
+                         zmxResolver: ZmxForegroundResolver? = nil) -> (pid: pid_t, foreground: CommandRestore.PaneForeground)? {
         let pgid: pid_t?
         if view.backedByZmx, let sessionName = view.zmxSessionName {
             pgid = zmxResolver?.foregroundPID(sessionName: sessionName)
@@ -57,15 +64,27 @@ enum ForegroundProcess {
         }
         guard let pgid else { return nil }
         if let argv = procArgs(pid: pgid) {
-            return CommandRestore.paneForeground(argv: argv, extra: shellBasename)
+            return CommandRestore.paneForeground(argv: argv, extra: shellBasename).map { (pgid, $0) }
         }
         let members = CommandRestore.groupDescentCandidates(pgid: pgid, members: processGroup(pgid: pgid))
         for pid in members {
             if let argv = procArgs(pid: pid) {
-                return CommandRestore.paneForeground(argv: argv, extra: shellBasename)
+                return CommandRestore.paneForeground(argv: argv, extra: shellBasename).map { (pid, $0) }
             }
         }
         return nil
+    }
+
+    /// workingDirectory returns nil when `proc_pidinfo` cannot read the process's cwd, as for one owned
+    /// by another user.
+    static func workingDirectory(of pid: pid_t) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        let path = withUnsafePointer(to: &info.pvi_cdir.vip_path) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
+        }
+        return path.isEmpty ? nil : path
     }
 
     /// Fetch and parse a process's argv via `sysctl(KERN_PROCARGS2)`; nil on any syscall failure, which is
