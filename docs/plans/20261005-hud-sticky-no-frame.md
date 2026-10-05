@@ -279,14 +279,14 @@ Rejected: a `--lines` row cap (a clip would hide the links the caption exists fo
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] run each gate once: `cd agtermCore && swift test`, `make test-app`, `make lint`, Debug build
-- [ ] launch an isolated Debug instance (short `/tmp` state dir, `windows` marker) and check by eye,
+- [x] run each gate once: `cd agtermCore && swift test`, `make test-app`, `make lint`, Debug build
+- [x] launch an isolated Debug instance (short `/tmp` state dir, `windows` marker) and check by eye,
       capturing each: a sticky frameless two-line markdown caption at the top, full width, session-wide
       and on one pane of a split; the same at the bottom and in a corner; it keeps its height through a
       window resize and gains a row when narrowed until a line wraps; links open on ⌘-click; the search
       bar stays on top and usable over it; a default HUD looks as before; a frameless caption with
       `--font-size` and one under a non-default terminal font show every line of their text
-- [ ] stop the instance by pid and check `lsappinfo list | grep -A4 agterm.debug`
+- [x] stop the instance by pid and check `lsappinfo list | grep -A4 agterm.debug`
 
 ### Task 6: [Final] Update documentation
 
