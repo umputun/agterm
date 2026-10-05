@@ -425,6 +425,9 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     /// persistent says whether the page uses the saved browser store. Always present; an absent key decodes
     /// as false, since an older running server omits it.
     public let persistent: Bool
+    /// browse says whether the page's main frame may leave its first origin. Always present; an absent key
+    /// decodes as false, since an older running server omits it.
+    public let browse: Bool
     /// zoom is the page zoom factor, 1 at actual size. One app-wide value, so every page reports the same.
     public let zoom: Double?
     /// id is the page's identity, the one `session.overlay.result --page` reads; an older server omits it.
@@ -433,7 +436,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
                 canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, chromeless: Bool = false,
-                zoom: Double? = nil, id: String? = nil, persistent: Bool = false) {
+                zoom: Double? = nil, id: String? = nil, persistent: Bool = false, browse: Bool = false) {
         self.id = id
         self.pane = pane
         self.file = file
@@ -449,12 +452,13 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.javascript = javascript
         self.chromeless = chromeless
         self.persistent = persistent
+        self.browse = browse
         self.zoom = zoom
     }
 
     enum CodingKeys: String, CodingKey {
         case pane, file, cwd, url, state, error, page, title, canGoBack, canGoForward, navigation, javascript
-        case chromeless, persistent, zoom, id
+        case chromeless, persistent, browse, zoom, id
     }
 
     public init(from decoder: Decoder) throws {
@@ -473,6 +477,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         javascript = try c.decode(Bool.self, forKey: .javascript)
         chromeless = try c.decodeIfPresent(Bool.self, forKey: .chromeless) ?? false
         persistent = try c.decodeIfPresent(Bool.self, forKey: .persistent) ?? false
+        browse = try c.decodeIfPresent(Bool.self, forKey: .browse) ?? false
         zoom = try c.decodeIfPresent(Double.self, forKey: .zoom)
         id = try c.decodeIfPresent(String.self, forKey: .id)
     }
@@ -584,6 +589,10 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// is dormant. The read side of `sidebar.flagged-layout` and a term of the workspace-row visibility
     /// predicate on `ControlWorkspaceNode.focused`.
     public let sidebarFlaggedLayout: String?
+    /// Where a clicked web link from terminal output opens: `LinkOpenMode.rawValue` (`browser` | `overlay`),
+    /// the effective value, so the default reads `browser`. APP-WIDE, the read side of `browser.links`; nil
+    /// in a host-produced tree and from an older server.
+    public let linkOpenMode: String?
     /// The projected window's sidebar divider position in points - the read side of `sidebar.width`, and the
     /// only place it is reported. LIVE and `tree`-only, like every field below and like `sidebarMode`: the
     /// tree is the live per-window read surface, and nothing needs width discovery ACROSS windows, which is
@@ -644,8 +653,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil, pickPending: String? = nil, askPending: String? = nil,
                 app: AppIdentity? = nil, liveReset: ControlLiveResetReadback? = nil,
-                indexUnsaved: Bool? = nil) {
+                indexUnsaved: Bool? = nil, linkOpenMode: String? = nil) {
         self.workspaces = workspaces
+        self.linkOpenMode = linkOpenMode
         self.liveReset = liveReset
         self.indexUnsaved = indexUnsaved
         self.idleMs = idleMs

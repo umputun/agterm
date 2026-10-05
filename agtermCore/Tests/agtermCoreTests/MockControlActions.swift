@@ -53,6 +53,7 @@ final class MockControlActions: ControlActions {
         case hooksReload
         case hooksList
         case browserClear
+        case browserLinks(LinkOpenMode?)
         case version
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
@@ -147,6 +148,7 @@ final class MockControlActions: ControlActions {
     var nextKeymapListResponse = ControlResponse(ok: true)
     var nextHooksReloadResponse = ControlResponse(ok: true)
     var nextBrowserClearResponse = ControlResponse(ok: true)
+    var nextBrowserLinksResponse = ControlResponse(ok: true)
     var nextHooksListResponse = ControlResponse(ok: true)
     var nextVersionResponse = ControlResponse(ok: true)
     var nextKeymapResponse = ControlResponse(ok: true)
@@ -446,6 +448,11 @@ final class MockControlActions: ControlActions {
     func clearBrowser() async -> ControlResponse {
         calls.append(.browserClear)
         return nextBrowserClearResponse
+    }
+
+    func linkOpenMode(_ mode: LinkOpenMode?) -> ControlResponse {
+        calls.append(.browserLinks(mode))
+        return nextBrowserLinksResponse
     }
 
     func appIdentity() -> ControlResponse {

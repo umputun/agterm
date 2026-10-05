@@ -266,6 +266,14 @@ final class SettingsModel {
         persistAndApply()
     }
 
+    /// Persist where a clicked web link opens; `browser` is the nil case, keeping `settings.json` minimal. Not a
+    /// ghostty key and nothing renders from it: each click reads the setting.
+    func setLinkOpenMode(_ mode: LinkOpenMode) {
+        guard mode != settings.effectiveLinkOpenMode else { return }
+        settings.linkOpenMode = mode == .browser ? nil : mode.rawValue
+        persistAndApply()
+    }
+
     /// Show or hide one title-bar / sidebar-footer chrome element (an empty result maps back to nil so
     /// `settings.json` stays minimal). Not a ghostty key — it rides `.agtermAppearanceChanged`, so every
     /// window re-gates live. Mutates the RAW string set: `resolvedHiddenInterfaceElements` drops unknown

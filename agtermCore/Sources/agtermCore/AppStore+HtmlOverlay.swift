@@ -150,7 +150,7 @@ extension AppStore {
                                               canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
                                               navigation: page.navigation ? true : nil, javascript: page.javascript,
                                               chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
-                                              persistent: page.persistent)
+                                              persistent: page.persistent, browse: page.browse)
             }
         }
         return nodes.isEmpty ? nil : nodes

@@ -83,6 +83,9 @@ public protocol ControlActions {
     func listHooks() -> ControlResponse
     /// `browser.clear` empties the saved browser store; the reply waits for the removal to finish.
     func clearBrowser() async -> ControlResponse
+    /// `browser.links` sets where a clicked web link opens, or with nil only reads it; the reply's text is
+    /// the effective mode either way.
+    func linkOpenMode(_ mode: LinkOpenMode?) -> ControlResponse
     func appIdentity() -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
@@ -241,7 +244,7 @@ public struct ControlDispatcher {
             return await dispatchZmxCommand(request)
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
-        case .browserClear:
+        case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)

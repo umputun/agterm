@@ -267,6 +267,43 @@ final class ControlServerTests: XCTestCase {
     }
 
     // the main actor serves the request, so the blocking client runs off it
+    func testTheLinkModeAndABrowsingPageAreSetAndReadBackOverTheSocket() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: "/tmp"))
+        let server = makeServer(library: library)
+        server.start()
+
+        func tree() async throws -> ControlTree {
+            let read = await send(#"{"cmd":"tree"}"#) ?? ""
+            return try XCTUnwrap(JSONDecoder().decode(ControlResponse.self, from: Data(read.utf8)).result?.tree)
+        }
+        func text(_ line: String) async throws -> String? {
+            let reply = await send(line) ?? ""
+            return try JSONDecoder().decode(ControlResponse.self, from: Data(reply.utf8)).result?.text
+        }
+
+        let untouched = try await tree()
+        XCTAssertEqual(untouched.linkOpenMode, "browser")
+        let read = try await text(#"{"cmd":"browser.links"}"#)
+        XCTAssertEqual(read, "browser")
+        let set = try await text(#"{"cmd":"browser.links","args":{"mode":"overlay"}}"#)
+        XCTAssertEqual(set, "overlay")
+        let changed = try await tree()
+        XCTAssertEqual(changed.linkOpenMode, "overlay")
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().linkOpenMode, "overlay")
+        let back = try await text(#"{"cmd":"browser.links","args":{"mode":"browser"}}"#)
+        XCTAssertEqual(back, "browser")
+        XCTAssertNil(SettingsStore(directory: stateDir).load().linkOpenMode)
+
+        let open = #"{"cmd":"session.overlay.open","target":"\#(session.id.uuidString)","args":{"url":"http://127.0.0.1:1/","browse":true}}"#
+        let opened = await send(open)
+        XCTAssertTrue(opened?.contains(#""ok":true"#) ?? false, opened ?? "no reply")
+        let pages = try await tree().workspaces.flatMap(\.sessions).compactMap(\.htmlOverlays).flatMap { $0 }
+        XCTAssertEqual(pages.map(\.browse), [true])
+        store.closeOverlay(session.id)
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in

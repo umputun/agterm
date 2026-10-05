@@ -87,6 +87,7 @@ public enum Command: String, Codable, Sendable {
     case hooksReload = "hooks.reload"
     case hooksList = "hooks.list"
     case browserClear = "browser.clear"
+    case browserLinks = "browser.links"
     case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
@@ -380,6 +381,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var chromeless: Bool?
     /// persistent opens a `--url` page on the saved browser store (`--persistent`) instead of an in-memory one.
     public var persistent: Bool?
+    /// browse lets a `--url` page's main frame leave its first origin for any HTTP(S) site (`--browse`).
+    public var browse: Bool?
     /// value is the answer `session.overlay.submit` hands back from a page; empty is a real answer.
     public var value: String?
     /// page is the page id `session.overlay.result` reads the outcome of, instead of a program's exit status.
@@ -412,7 +415,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
-                persistent: Bool? = nil) {
+                persistent: Bool? = nil, browse: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -496,6 +499,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.page = page
         self.chromeless = chromeless
         self.persistent = persistent
+        self.browse = browse
     }
 }
 
@@ -702,6 +706,7 @@ public enum OverlayHtmlError {
     public static let chromelessWithNavigation = "session.overlay.open: --chromeless cannot be combined with --navigation"
     public static let persistentRequiresURL = "session.overlay.open: --persistent requires --url"
     public static let persistentUnavailable = "persistent browser storage is not available"
+    public static let browseRequiresURL = "session.overlay.open: --browse requires --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

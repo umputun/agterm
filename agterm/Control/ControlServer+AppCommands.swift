@@ -138,6 +138,12 @@ extension ControlServer {
         return ControlResponse(ok: true)
     }
 
+    /// Writes through the `SettingsModel` setter the Settings picker uses; the text is the effective mode.
+    func linkOpenMode(_ mode: LinkOpenMode?) -> ControlResponse {
+        if let mode { settingsModel.setLinkOpenMode(mode) }
+        return ControlResponse(ok: true, result: ControlResult(text: settingsModel.settings.effectiveLinkOpenMode.rawValue))
+    }
+
     func reloadHooks() -> ControlResponse {
         settingsModel.reloadHooks()
         return ControlResponse(ok: true, result: ControlResult(count: settingsModel.hooksDiagnostics.count))

@@ -199,15 +199,15 @@
 - Modify: `agtermCore/Tests/agtermctlKitTests/MiscCommandsTests.swift` (`browser links`), `OverlayCommandsTests.swift` (`--browse`)
 - Modify: `agtermTests/ControlServerTests.swift`
 
-- [ ] write dispatcher tests for `browser.links`: set each mode, bare read, invalid mode, target and `--window` refused
-- [ ] write dispatcher tests for `--browse`: accepted with `--url`; rejected with `--html` and without a page; `--url --browse --chromeless` still fails on the existing chromeless rule
-- [ ] write projection tests: `tree.linkOpenMode` reports the effective value including the default; `htmlOverlays[].browse` round-trips and decodes as false when absent
-- [ ] write CLI tests for `agtermctl browser links` and `session overlay open --browse`
-- [ ] add the protocol command, argument, action, dispatch and CLI; add `browser.links` to `HtmlBridge.windowless` with its test, and to the app's command switch
-- [ ] implement the app adapter: read and write the setting through the same `SettingsModel` path the picker uses; pass `browse` into `HtmlOverlay`
-- [ ] fill `linkOpenMode` in `buildTree`/`controlTree` and `browse` in `htmlOverlayNodes`
-- [ ] write a socket round-trip test: set the mode, read it back from `tree`; open a browsing page and read `browse` from `htmlOverlays`
-- [ ] run the targeted tests - must pass before task 4
+- [x] write dispatcher tests for `browser.links`: set each mode, bare read, invalid mode, target and `--window` refused
+- [x] write dispatcher tests for `--browse`: accepted with `--url`; rejected with `--html` and without a page; `--url --browse --chromeless` still fails on the existing chromeless rule
+- [x] write projection tests: `tree.linkOpenMode` reports the effective value including the default; `htmlOverlays[].browse` round-trips and decodes as false when absent
+- [x] write CLI tests for `agtermctl browser links` and `session overlay open --browse`
+- [x] add the protocol command, argument, action, dispatch and CLI; add `browser.links` to `HtmlBridge.windowless` with its test, and to the app's command switch
+- [x] implement the app adapter: read and write the setting through the same `SettingsModel` path the picker uses; pass `browse` into `HtmlOverlay`
+- [x] fill `linkOpenMode` in `buildTree`/`controlTree` and `browse` in `htmlOverlayNodes`
+- [x] write a socket round-trip test: set the mode, read it back from `tree`; open a browsing page and read `browse` from `htmlOverlays`
+- [x] run the targeted tests - must pass before task 4
 
 ### Task 4: Click path, fallbacks and the Settings picker
 

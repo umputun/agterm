@@ -80,6 +80,11 @@ extension Session.Overlay.Open {
         `browser clear` empties it.
         """
 
+    static let browseHelp: ArgumentHelp = """
+        With --url, let the page leave its first site: links, redirects and scripts may take it to any http or https \
+        address, and the strip names the site shown. Without it the page stays on the site it opened.
+        """
+
     /// The `--block` poll request. Extracted from `run()` so the `--pane` forwarding is assertable
     /// without a live socket: polling a pane overlay with no pane reads the session-wide slot and
     /// blocks forever. No window scope — the returned id is globally unique and resolves cross-window,

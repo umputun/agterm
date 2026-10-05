@@ -52,6 +52,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("browser.clear"))
     }
 
+    func linkOpenMode(_: LinkOpenMode?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("browser.links"))
+    }
+
     func runCustomCommand(name _: String, target _: String?, window _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("keymap.run"))
     }

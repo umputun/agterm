@@ -91,9 +91,30 @@ struct Hooks: ParsableCommand {
 
 struct Browser: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Saved browser storage of --persistent URL overlays.",
-        subcommands: [Clear.self]
+        abstract: "Saved browser storage of --persistent URL overlays, and where clicked links open.",
+        subcommands: [Clear.self, Links.self]
     )
+
+    /// `agtermctl browser links [browser|overlay]`: no mode reads the setting. App-wide, so no `--window`.
+    struct Links: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Set or read where a clicked web link in a terminal opens (browser|overlay).",
+            discussion: "overlay opens http and https links in a full session web overlay with JavaScript, navigation "
+                + "buttons and the saved browser store; with no MODE the current one is printed. A link in a HUD, a link "
+                + "clicked while a HUD is up or the terminal is zoomed, and a link the overlay cannot show open in the browser."
+        )
+        @Argument(help: "Mode: browser or overlay. Omit to read the current mode.") var mode: String?
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            guard let mode else { return }
+            guard LinkOpenMode(rawValue: mode) != nil else { throw ValidationError("mode must be browser or overlay") }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .browserLinks, args: mode.map { ControlArgs(mode: $0) })
+        }
+    }
 
     struct Clear: RequestCommand {
         static let configuration = CommandConfiguration(

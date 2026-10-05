@@ -76,7 +76,7 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
         }
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                  chromeless: options.chromeless, persistent: options.persistent)
+                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
         if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: overlay,
                                                sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))
