@@ -313,6 +313,21 @@ struct HudTests {
         #expect(body.lines == ["\u{1B}]8;;http://x\u{1B}\\\u{1B}[4mab\u{1B}[24m\u{1B}]8;;\u{1B}\\"])
     }
 
+    // regression: the height was measured at the caller's raw percent while the panel took the clamped one
+    @Test(arguments: [100, 5]) func aMarkdownMessageIsMeasuredAtTheClampedWidthItIsPaintedAt(percent: Int) {
+        let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 576, paneHeight: 2000)
+        let spec = HudSpec(message: Array(repeating: "word", count: 24).joined(separator: " "),
+                           sizePercent: percent, markdown: true)
+
+        let measured = HudLayout.panelSize(for: spec, pane: pane)
+        let taken = HudPanelSize(widthPercent: HudLayout.clampSizePercent(percent), heightPercent: measured.heightPercent)
+        let grid = HudLayout.paintGrid(for: spec, size: taken, pane: pane)
+        let body = HudLayout.markdownBody(for: spec, grid: grid)
+
+        #expect(!body.lines.joined().contains("more"))
+        #expect(grid.rows - body.lines.count - HudLayout.verticalPadding * 2 <= 1)
+    }
+
     @Test func aSpinningMarkdownBodyIndentsEveryRowAfterTheFirstByTheGutter() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "- a\n- bb", spinner: .bar, markdown: true),
                                           grid: (columns: 20, rows: 6))

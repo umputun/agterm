@@ -240,13 +240,16 @@ extension ControlServer {
     /// liveCellSize is the cell libghostty really draws for this session, scaled to `fontSize` when the HUD
     /// has its own. The estimate below measures the Settings font, which is not the drawn one when none is
     /// set there or a user `ghostty.conf` names another, and a short cell budgets rows the panel cannot hold.
+    ///
+    /// The scale divides by the size THAT surface is drawn at, read from it: `session.fontSize` carries
+    /// neither the dashboard's override nor a split pane's zoom.
     func liveCellSize(of session: Session, fontSize: Double) -> (width: Double, height: Double)? {
-        let sessionFontSize = session.fontSize ?? GhosttyApp.shared.baseFontSize
-        guard sessionFontSize > 0,
-              let cell = [session.surface, session.splitSurface].lazy
-                  .compactMap({ ($0 as? GhosttySurfaceView)?.cellSize() }).first else { return nil }
-        let scale = fontSize / sessionFontSize
-        return (width: cell.width * scale, height: cell.height * scale)
+        for case let view as GhosttySurfaceView in [session.surface, session.splitSurface] {
+            guard let cell = view.cellSize(), let drawn = view.currentFontSize() else { continue }
+            let scale = fontSize / drawn
+            return (width: cell.width * scale, height: cell.height * scale)
+        }
+        return nil
     }
 
     /// One cell of `family` at `size`: the horizontal advance of a digit (every glyph advances the same in

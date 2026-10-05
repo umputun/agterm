@@ -588,6 +588,40 @@ final class ControlServerAskTests: XCTestCase {
                        ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
     }
 
+    func testACommandClickOnAnAskDrawnOverAHudPanelIsLeftToTheAsk() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let frame = NSRect(x: 0, y: 0, width: 200, height: 120)
+        let window = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        panel.frame = frame
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        window.contentView?.addSubview(panel)
+        defer { panel.hudBodyFile = nil }
+        func click(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: 50, y: 50), modifierFlags: .command,
+                                             timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                             eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+        XCTAssertTrue(HudLinkClick.consumes(try click(.leftMouseDown)), "with no ask the panel claims the click")
+        XCTAssertTrue(HudLinkClick.consumes(try click(.leftMouseUp)))
+
+        let ask = makeTerminalAsk()
+        XCTAssertTrue(open(ask).ok)
+        let catcher = AskKeyCatcher.KeyCatcherView(frame: frame)
+        catcher.sessionInput = SessionAskInput(session: session, store: store, actions: actions, windowID: windowID,
+                                               askID: ask.id, frame: frame)
+        window.contentView?.addSubview(catcher)
+        defer { catcher.removeFromSuperview() }
+        XCTAssertEqual(catcher.sessionInput?.visible, true)
+
+        XCTAssertFalse(HudLinkClick.consumes(try click(.leftMouseDown)))
+    }
+
     func testLosingThePresenterDrawsATerminalAskHere() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)

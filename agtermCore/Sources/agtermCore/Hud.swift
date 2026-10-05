@@ -387,9 +387,11 @@ public enum HudLayout {
 
     /// wrapColumns is the width a markdown message wraps at before its panel exists: the text columns of
     /// the widest panel this pane allows, so a row that cannot fit wraps rather than being clipped.
-    /// `maxColumns` for a plain message and for a pane with no measured width.
+    /// `maxColumns` for a plain message and for a pane with no measured width. The caller's percent is
+    /// clamped as the store clamps it, or the height is budgeted for a width the panel never has.
     static func wrapColumns(for spec: HudSpec, pane: PaneMetrics) -> Int {
-        let widest = HudPanelSize(widthPercent: spec.sizePercent ?? maxSizePercent, heightPercent: maxSizePercent)
+        let widest = HudPanelSize(widthPercent: spec.sizePercent.map(clampSizePercent) ?? maxSizePercent,
+                                  heightPercent: maxSizePercent)
         guard spec.markdown, let grid = panelGrid(size: widest, pane: pane) else { return maxColumns }
         return textColumns(in: grid.columns, for: spec)
     }
@@ -503,7 +505,7 @@ public enum HudLayout {
 
     /// markdownRows lays a markdown spec out unclipped: the message's rows at `columns`, then, when a
     /// detail is set, a blank row and the detail's rows dimmed.
-    static func markdownRows(for spec: HudSpec, columns: Int = maxColumns) -> [[HudMarkdown.Run]] {
+    static func markdownRows(for spec: HudSpec, columns: Int) -> [[HudMarkdown.Run]] {
         var rows = HudMarkdown.rows(HudMarkdown.lines(spec.message), width: columns)
         let detail = wrap(spec.detail ?? "", columns: columns)
         guard !detail.isEmpty else { return rows }
@@ -512,7 +514,8 @@ public enum HudLayout {
         return rows
     }
 
-    /// markdownBody clips the markdown rows to `grid` less its padding and the spinner's gutter, then indents
+    /// markdownBody wraps the markdown rows at `grid` less its padding and the spinner's gutter, clips what
+    /// still does not fit (a table row, rows past the height), then indents
     /// every row after the first by that gutter (the helper draws the glyph on the first). `blockWidth` is
     /// the widest painted row, gutter included, and never 0, which the header reserves for plain mode.
     static func markdownBody(for spec: HudSpec, grid: (columns: Int, rows: Int)) -> (lines: [String], blockWidth: Int) {

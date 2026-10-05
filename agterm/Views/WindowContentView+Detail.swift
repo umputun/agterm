@@ -318,8 +318,8 @@ extension WindowContentView {
                     // `mouseDown` makes the surface first responder, which would swallow every keystroke the
                     // user meant for the session, and the dashboard learned that `.allowsHitTesting(false)`
                     // alone is not what stops AppKit routing a click there. `deckVisible: live` is deliberate
-                    // too — a passive panel registers no drag types and writes no mouse cursor, so a file drop
-                    // keeps reaching the pane behind it.
+                    // too — a passive panel registers no drag types and tracks no pointer, so a file drop
+                    // keeps reaching the pane behind it. Its one cursor write is `HudLinkClick`'s, over a link.
                     Group {
                         if let page = session.htmlOverlay, session.htmlOverlayActive {
                             HtmlOverlayView(store: store, session: session, overlay: page,

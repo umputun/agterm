@@ -470,7 +470,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   neither is the place to economise.
   A ⌘-click on a HUD opens a link without passing either gate: `HudLinkClick`'s app-wide monitor claims
   it and `passiveClick` forwards it to libghostty, whose own resolution reaches `openLink`. It grabs no
-  focus and clears the pointer after the release, because a HUD has no tracking area to do it.
+  focus. A HUD has no tracking area, so the monitor also reports the pointer to the panel while ⌘ is held
+  over it and takes it away when ⌘ is released or the pointer leaves, which is what raises and drops the
+  pointing hand. It claims nothing under a terminal ask drawn over the panel.
   Keying the refocus on the raw slot instead yanks focus out of a search field or a rename on every
   close. Never spell it inline; two spellings will disagree. `OverlayPanelStyle` resolves
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s

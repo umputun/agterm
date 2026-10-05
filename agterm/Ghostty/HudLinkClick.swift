@@ -69,8 +69,18 @@ enum HudLinkClick {
         return event.modifierFlags.intersection([.command, .shift, .control, .option]) == .command
     }
 
+    /// A terminal ask has its own slot and is drawn above the HUD, so a click on it is the ask's.
+    private static func askCovers(_ point: NSPoint, in window: NSWindow) -> Bool {
+        let catchers = AskKeyCatcher.KeyCatcherView.sessionCatchers.objectEnumerator()?.allObjects ?? []
+        return catchers.contains { entry in
+            guard let catcher = entry as? AskKeyCatcher.KeyCatcherView, catcher.window === window,
+                  catcher.sessionInput?.visible == true else { return false }
+            return catcher.bounds.contains(catcher.convert(point, from: nil))
+        }
+    }
+
     private static func panel(in window: NSWindow?, at point: NSPoint) -> GhosttySurfaceView? {
-        guard let window, window.attachedSheet == nil else { return nil }
+        guard let window, window.attachedSheet == nil, !askCovers(point, in: window) else { return nil }
         return panels.allObjects.first { panel in
             panel.deckOnScreen && panel.window === window && panel.bounds.contains(panel.convert(point, from: nil))
         }
