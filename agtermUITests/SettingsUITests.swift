@@ -104,6 +104,28 @@ final class SettingsUITests: XCTestCase {
                       "the default 'Flat list' should remove flaggedViewLayout from settings.json")
     }
 
+    func testLinkOpenModePickerPersists() throws {
+        let picker = settingsControl(tab: "General", control: "settings-link-open-mode")
+        let window = app.windows.containing(.any, identifier: "settings-link-open-mode").firstMatch
+        let lastLine = app.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Also loads")).firstMatch
+        XCTAssertTrue(lastLine.waitForExistence(timeout: 5), "the General tab's closing hint should exist")
+        XCTAssertLessThanOrEqual(lastLine.frame.maxY, window.frame.maxY, "the General tab should fit without scrolling")
+
+        picker.click()
+        let overlay = app.menuItems["Session overlay"]
+        XCTAssertTrue(overlay.waitForExistence(timeout: 5), "the link picker should offer 'Session overlay'")
+        overlay.click()
+        XCTAssertTrue(poll { self.settingsValue("linkOpenMode") == "overlay" },
+                      "selecting 'Session overlay' should persist linkOpenMode=overlay to settings.json")
+
+        picker.click()
+        let browser = app.menuItems["Browser"]
+        XCTAssertTrue(browser.waitForExistence(timeout: 5), "the link picker should offer 'Browser'")
+        browser.click()
+        XCTAssertTrue(poll { self.settingsValue("linkOpenMode") == nil },
+                      "the default 'Browser' should remove linkOpenMode from settings.json")
+    }
+
     func testDockBouncePickerPersists() throws {
         let picker = settingsControl(tab: "Notifications", control: "settings-dock-bounce")
 

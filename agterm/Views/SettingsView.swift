@@ -92,6 +92,11 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Right-click pastes", isOn: rightClickPaste)
                     .accessibilityIdentifier("settings-right-click-paste")
+                Picker("Open links in", selection: linkOpenMode) {
+                    Text("Browser").tag(LinkOpenMode.browser)
+                    Text("Session overlay").tag(LinkOpenMode.overlay)
+                }
+                .accessibilityIdentifier("settings-link-open-mode")
                 Toggle("Click a workspace row to expand or collapse", isOn: workspaceRowClickExpands)
                     .accessibilityIdentifier("settings-workspace-row-click-expands")
             }
@@ -179,6 +184,11 @@ private struct GeneralSettingsView: View {
     private var rightClickPaste: Binding<Bool> {
         Binding(get: { model.settings.rightClickPaste ?? true },
                 set: { model.setRightClickPaste($0 ? nil : false) })
+    }
+
+    private var linkOpenMode: Binding<LinkOpenMode> {
+        Binding(get: { model.settings.effectiveLinkOpenMode },
+                set: { model.setLinkOpenMode($0) })
     }
 
     private var flaggedViewLayout: Binding<FlaggedViewLayout> {

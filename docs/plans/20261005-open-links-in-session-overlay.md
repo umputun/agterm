@@ -214,20 +214,21 @@
 **Files:**
 - Modify: `agterm/Ghostty/GhosttySurfaceView+Input.swift`
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift`
-- Modify: `agterm/agtermApp.swift` (where session surfaces are built and the opener is set; a quick terminal keeps the default, which opens the browser)
+- Create: `agterm/Ghostty/LinkOpener.swift`
+- Modify: `agterm/agtermApp.swift` (one shared opener, set where the app is composed; a surface before that keeps the default, which opens the browser)
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agterm/Views/SettingsView.swift`
 - Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`, `agtermTests/SettingsModelTests.swift`
 - Modify: `agtermUITests/SettingsUITests.swift`
 
-- [ ] derive `LinkClickOrigin` from the surface's ownership fields, HUD first; no new identity field
-- [ ] add the injected link opener and set it where session surfaces are built; its open and reveal effects are replaceable on their own, so a test swaps them on a factory-built surface and keeps the factory's overlay wiring
-- [ ] route `openLink` through `LinkPolicy.route`; for `.overlay`, run `openSessionOverlay` for the owner session id with a browsing page (JavaScript, navigation bar, saved store, full size), without selecting another session
-- [ ] fall back to the browser on every refusal (occupied slot, remotely reserved slot, presenter, saved store unavailable, unknown session) when the owner session's HUD is active, and when the owning window's terminal zoom is active
-- [ ] add the "Open links in" picker to the General tab, bound to the same setting
-- [ ] write hosted tests on surfaces built by the production factories, split and scratch included: pane link in overlay mode opens a browsing page on that session; scratch link opens on its owning session; HUD link opens the browser and the HUD is still active; quick terminal and program-overlay links open the browser; each refusal opens the browser; a pane click on a session with an active HUD opens the browser and the HUD is still active; a click in a zoomed window opens the browser, creates no page and leaves zoom set; `mailto` and `file://` are unchanged; browser mode never opens a page; a browsing page whose load fails stays up and the open effect is not called
-- [ ] write a hosted test that the `SettingsModel` value behind the picker and `browser.links` are one value; add `testLinkOpenModePickerPersists` to `SettingsUITests.swift` with the fit assertion and run it alone
-- [ ] run the targeted hosted tests - must pass before task 5
+- [x] derive `LinkClickOrigin` from the surface's ownership fields, HUD first; no new identity field
+- [x] add the shared `LinkOpener` and set it once in `agtermApp.init`; its open and reveal effects are replaceable on their own, so a test swaps them on a factory-built surface and keeps the factory's overlay wiring
+- [x] route `openLink` through `LinkPolicy.route`; for `.overlay`, run `openSessionOverlay` for the owner session id with a browsing page (JavaScript, navigation bar, saved store, full size), without selecting another session
+- [x] fall back to the browser on every refusal (occupied slot, remotely reserved slot, presenter, saved store unavailable, unknown session) when the owner session's HUD is active, and when the owning window's terminal zoom is active
+- [x] add the "Open links in" picker to the General tab, bound to the same setting
+- [x] write hosted tests on surfaces built by the production factories, split and scratch included: pane link in overlay mode opens a browsing page on that session; scratch link opens on its owning session; HUD link opens the browser and the HUD is still active; quick terminal and program-overlay links open the browser; each refusal opens the browser; a pane click on a session with an active HUD opens the browser and the HUD is still active; a click in a zoomed window opens the browser, creates no page and leaves zoom set; `mailto` and `file://` are unchanged; browser mode never opens a page; a browsing page whose load fails stays up and the open effect is not called
+- [x] write a hosted test that the `SettingsModel` value behind the picker and `browser.links` are one value; add `testLinkOpenModePickerPersists` to `SettingsUITests.swift` with the fit assertion and run it alone
+- [x] run the targeted hosted tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify each Overview bullet against the built app's tests

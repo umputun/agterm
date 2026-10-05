@@ -4,6 +4,96 @@ import agtermCore
 
 @MainActor
 final class GhosttySurfaceViewInputTests: XCTestCase {
+    private var savedOpener = LinkOpener()
+
+    private final class Followed {
+        var opened: [URL] = []
+        var revealed: [URL] = []
+        var overlaid: [(URL, UUID)] = []
+    }
+
+    private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
+        let followed = Followed()
+        LinkOpener.shared.mode = { mode }
+        LinkOpener.shared.open = { followed.opened.append($0) }
+        LinkOpener.shared.reveal = { followed.revealed.append($0) }
+        LinkOpener.shared.overlay = { url, session in
+            followed.overlaid.append((url, session))
+            return overlayOpens
+        }
+        return followed
+    }
+
+    private func bareSurface() -> GhosttySurfaceView {
+        GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+    }
+
+    func testEachSurfaceKindNamesItsLinkClickOrigin() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        pane.focusSession = session
+        let scratch = bareSurface()
+        scratch.watermarkSession = session
+        scratch.focusSession = session
+        let program = bareSurface()
+        program.focusSession = session
+        let hud = bareSurface()
+        hud.focusSession = session
+        hud.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
+        let quick = bareSurface()
+
+        XCTAssertEqual(pane.linkClickOrigin, .pane(session.id))
+        XCTAssertEqual(scratch.linkClickOrigin, .scratch(session.id))
+        XCTAssertEqual(program.linkClickOrigin, .programOverlay)
+        XCTAssertEqual(hud.linkClickOrigin, .hud)
+        XCTAssertEqual(quick.linkClickOrigin, .quick)
+        hud.hudBodyFile = nil
+    }
+
+    func testAPaneLinkGoesToTheOverlayInOverlayModeAndToTheBrowserWhenItCannotOpen() throws {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let url = try XCTUnwrap(URL(string: "https://example.com/pr/1"))
+
+        let shown = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink(url.absoluteString)
+        XCTAssertEqual(shown.overlaid.map(\.0), [url])
+        XCTAssertEqual(shown.overlaid.map(\.1), [session.id])
+        XCTAssertTrue(shown.opened.isEmpty)
+
+        let refused = recordLinks(mode: .overlay, overlayOpens: false)
+        pane.openLink(url.absoluteString)
+        XCTAssertEqual(refused.overlaid.count, 1)
+        XCTAssertEqual(refused.opened, [url])
+    }
+
+    func testBrowserModeAHudAndNonWebLinksNeverReachTheOverlay() throws {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let hud = bareSurface()
+        hud.focusSession = session
+        hud.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
+        defer { hud.hudBodyFile = nil }
+        let web = try XCTUnwrap(URL(string: "https://example.com/"))
+        let mail = try XCTUnwrap(URL(string: "mailto:a@example.com"))
+
+        let browser = recordLinks(mode: .browser, overlayOpens: true)
+        pane.openLink(web.absoluteString)
+        XCTAssertEqual(browser.opened, [web])
+
+        let overlay = recordLinks(mode: .overlay, overlayOpens: true)
+        hud.openLink(web.absoluteString)
+        pane.openLink(mail.absoluteString)
+        pane.openLink("file:///tmp/x.md")
+        pane.openLink("x-custom://run")
+        XCTAssertEqual(overlay.opened, [web, mail])
+        XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.md", isDirectory: false)])
+        XCTAssertTrue(browser.overlaid.isEmpty && overlay.overlaid.isEmpty)
+    }
+
     func testAnsweringFocusedAskReturnsKeysToItsTerminal() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
@@ -90,11 +180,17 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
-        await MainActor.run { surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory()) }
+        await MainActor.run {
+            surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+            savedOpener = LinkOpener.shared
+        }
     }
 
     override func tearDown() async throws {
-        await MainActor.run { surface = nil }
+        await MainActor.run {
+            surface = nil
+            LinkOpener.shared = savedOpener
+        }
         try await super.tearDown()
     }
 

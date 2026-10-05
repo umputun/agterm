@@ -581,11 +581,16 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// Acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); the scheme/host decision lives in the
     /// host-free `LinkPolicy`. A `file://` link is REVEALED in Finder, never opened — reveal executes nothing.
     func openLink(_ raw: String) {
-        switch LinkPolicy.disposition(for: raw) {
-        case let .open(url): NSWorkspace.shared.open(url)
-        case let .reveal(url): NSWorkspace.shared.activateFileViewerSelecting([url])
-        case .ignore: return
-        }
+        LinkOpener.shared.follow(raw, from: linkClickOrigin)
+    }
+
+    /// Which kind of surface a clicked link came from, read off the ownership each factory already sets.
+    /// HUD first: its surface sits in the session's overlay slot like a program's.
+    var linkClickOrigin: LinkPolicy.ClickOrigin {
+        if hudBodyFile != nil { return .hud }
+        if let session { return .pane(session.id) }
+        if let owner = watermarkSession { return .scratch(owner.id) }
+        return focusSession == nil ? .quick : .programOverlay
     }
 }
 

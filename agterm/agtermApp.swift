@@ -108,6 +108,10 @@ struct agtermApp: App {
                                           zmxClient: restored.zmxClient,
                                           zmxOutdatedBefore: restored.zmxOutdatedBefore)
         _controlServer = State(initialValue: controlServer)
+        LinkOpener.shared.mode = { settingsModel.settings.effectiveLinkOpenMode }
+        LinkOpener.shared.overlay = { [weak controlServer] url, session in
+            controlServer?.openLinkOverlay(url, session: session) ?? false
+        }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })
         controlServer.liveReset = liveReset

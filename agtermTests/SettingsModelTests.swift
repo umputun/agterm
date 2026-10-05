@@ -56,6 +56,14 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1.5)
     }
 
+    func testSetLinkOpenModePersistsAndTheDefaultRemovesTheKey() {
+        model.setLinkOpenMode(.overlay)
+        XCTAssertEqual(model.settings.effectiveLinkOpenMode, .overlay)
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().linkOpenMode, "overlay")
+        model.setLinkOpenMode(.browser)
+        XCTAssertNil(SettingsStore(directory: stateDir).load().linkOpenMode)
+    }
+
     func testSetFlaggedViewLayoutPersistsMirrorsAndBroadcasts() {
         let posted = expectation(forNotification: .agtermAppearanceChanged, object: nil)
 
