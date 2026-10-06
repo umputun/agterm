@@ -34,6 +34,18 @@ struct RemotePresentationStateTests {
         return (store, session)
     }
 
+    // a row attached while its stream was connecting kept the disconnected icon after it connected
+    @Test func aConnectionChangeIsAnnouncedToObservers() throws {
+        let (store, session) = try attached()
+        let announced = Flag()
+        withObservationTracking { _ = session.remoteConnection } onChange: { announced.set() }
+
+        store.setRemoteConnection(.connected, forSession: session.id)
+
+        #expect(session.remoteConnection == .connected)
+        #expect(announced.isSet)
+    }
+
     private final class Flag: @unchecked Sendable {
         private(set) var isSet = false
         func set() { isSet = true }

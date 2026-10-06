@@ -493,6 +493,8 @@ public final class Session: Identifiable {
 
     /// What this Mac keeps about a session attached from another one; nil for a local session.
     @ObservationIgnored public internal(set) var remotePresentation: RemotePresentationState?
+    /// Bumped with every connection change, so an observer of `remoteConnection` is told.
+    var remoteConnectionRevision = 0
 
     /// Tells attached viewers the panel is gone. Set when the HUD is published, so a panel whose body was
     /// never written, and so never published, withdraws nothing.

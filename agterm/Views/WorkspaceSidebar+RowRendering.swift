@@ -93,7 +93,7 @@ extension WorkspaceSidebar.Coordinator {
     /// The notice a remote row shows while its presentation stream is not up, nil otherwise.
     func presentationNotice(for session: Session) -> String? {
         guard let host = session.remoteHost else { return nil }
-        return session.remotePresentation?.connection.rowNotice(host: host)
+        return session.remoteConnection?.rowNotice(host: host)
     }
 
     /// Shows the unseen-notification `count` capsule on the row (hidden, zero-width when 0, so the

@@ -52,6 +52,7 @@ extension AppStore {
     public func setRemoteConnection(_ connection: RemotePresentationConnection, forSession id: UUID) {
         guard let session = session(withID: id), let state = session.remotePresentation else { return }
         session.remotePresentation?.connection = connection
+        if state.connection != connection { session.remoteConnectionRevision += 1 }
         guard state.connection == .connected, connection != .connected else { return }
         applyRemoteContext(nil, forSession: id)
         if state.statusBridged { setAgentIndicator(AgentIndicator(), forSession: id) }
@@ -208,5 +209,14 @@ extension AppStore {
         guard let pane else { return (nil, true) }
         guard let role = localPane(pane, in: session) else { return (nil, false) }
         return (role == .right ? .right : .left, true)
+    }
+}
+
+extension Session {
+    /// remoteConnection is the presentation stream's state, read through here by anything that must
+    /// redraw when it changes: `remotePresentation` announces nothing.
+    public var remoteConnection: RemotePresentationConnection? {
+        _ = remoteConnectionRevision
+        return remotePresentation?.connection
     }
 }

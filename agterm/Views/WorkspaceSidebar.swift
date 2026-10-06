@@ -101,7 +101,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.workspaces.map {
             ($0.id, $0.name, $0.unseenCount, $0.sessions.map {
                 ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
-                 $0.remotePresentation?.connection)
+                 $0.remoteConnection)
             })
         }
         _ = store.selectedSessionID
