@@ -50,7 +50,7 @@ paths:
 - File ▸ Attach Remote… picks among `remotes.conf` entries (`destination [label]`, parsed by
   `parseRemotesConf`) in the window picker, skipping the question for a single entry, and is disabled when
   the file lists none (`PaletteContext.hasRemotes`). It is `BuiltinAction.attachRemote`, default
-  Command-Shift-A, with a palette row. `RemotesWatcher` re-reads on file and directory events,
+  Command-Shift-R, with a palette row. `RemotesWatcher` re-reads on file and directory events,
   because SwiftUI rebuilds `Commands` on its own schedule and a read in the menu body would go stale.
   `AppActions.attachRemote()` composes the existing `remoteTree`, window picker and `attachRemoteSession`
   through `RemoteAttaching`, so it adds no control command: `zmx tree` + `pick` + `zmx attach` already

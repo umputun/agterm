@@ -260,9 +260,12 @@ paths:
   it to parse clean, and counts the chords that survive.
   Both verbs rot: `validateBindings` clears a custom shortcut a built-in has claimed just as
   `resolveBuiltinOverrides` drops the colliding `map`.
+- A new shipped default must also avoid the shortcuts macOS Services claim in every app while text is
+  selected. Terminal.app's `NSServices` take ⇧⌘A and ⇧⌘M, both enabled on a stock Mac;
+  `plutil -convert json -o - <App>/Contents/Info.plist | jq '.NSServices'` lists an app's.
 - New shipped defaults must not break a valid existing keymap. `parseKeymap` vacates the new horizontal
   split default when an old file explicitly uses `cmd+shift+d`, and vacates Dashboard's new default when
-  an old file explicitly uses `cmd+shift+g`, and `attach_remote`'s when one uses `cmd+shift+a`.
+  an old file explicitly uses `cmd+shift+g`, and `attach_remote`'s when one uses `cmd+shift+r`.
   An explicit map for the new action opts into its new chord.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject

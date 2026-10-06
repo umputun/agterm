@@ -57,7 +57,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .customCommandPalette: return Chord(mods: [.control, .shift], key: "o")
         case .showAttention: return Chord(mods: [.control, .shift], key: "i")
         case .dashboard: return Chord(mods: [.command, .shift], key: "g")
-        case .attachRemote: return Chord(mods: [.command, .shift], key: "a")
+        case .attachRemote: return Chord(mods: [.command, .shift], key: "r")
         case .focusLeftPane: return Chord(mods: [.command, .option], key: "left")
         case .focusRightPane: return Chord(mods: [.command, .option], key: "right")
         case .previousSession: return Chord(mods: [.command, .option], key: "up")

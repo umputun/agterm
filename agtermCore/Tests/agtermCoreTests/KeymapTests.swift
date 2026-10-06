@@ -1332,36 +1332,36 @@ struct KeymapTests {
         #expect(keymap.equivalent(for: .dashboard) == nil)
     }
 
-    @Test func attachRemoteShipsOnCmdShiftAAndCanBeRemapped() {
-        let attachChord = Chord(mods: [.command, .shift], key: "a")
+    @Test func attachRemoteShipsOnCmdShiftRAndCanBeRemapped() {
+        let attachChord = Chord(mods: [.command, .shift], key: "r")
         #expect(parseKeymap("").keymap.equivalent(for: .attachRemote) == attachChord)
 
-        let (keymap, diagnostics) = parseKeymap("map ctrl+shift+r attach_remote")
+        let (keymap, diagnostics) = parseKeymap("map ctrl+shift+y attach_remote")
         #expect(diagnostics.isEmpty)
-        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.control, .shift], key: "r"))
+        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.control, .shift], key: "y"))
     }
 
-    @Test func existingCmdShiftABuiltinBindingIsNotBrokenByAttachRemoteDefault() {
-        let (keymap, diagnostics) = parseKeymap("map cmd+shift+a toggle_workspace_filter")
+    @Test func existingCmdShiftRBuiltinBindingIsNotBrokenByAttachRemoteDefault() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+r toggle_workspace_filter")
         #expect(diagnostics.isEmpty)
-        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == Chord(mods: [.command, .shift], key: "a"))
+        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == Chord(mods: [.command, .shift], key: "r"))
         #expect(keymap.equivalent(for: .attachRemote) == nil)
         #expect(keymap.builtinUnbound.contains(.attachRemote))
     }
 
-    @Test func existingCmdShiftACustomCommandIsNotBrokenByAttachRemoteDefault() {
-        let (keymap, diagnostics) = parseKeymap("command \"Old binding\" cmd+shift+a echo ok")
+    @Test func existingCmdShiftRCustomCommandIsNotBrokenByAttachRemoteDefault() {
+        let (keymap, diagnostics) = parseKeymap("command \"Old binding\" cmd+shift+r echo ok")
         #expect(diagnostics.isEmpty)
-        #expect(keymap.commands.first?.shortcut == "cmd+shift+a")
+        #expect(keymap.commands.first?.shortcut == "cmd+shift+r")
         #expect(keymap.equivalent(for: .attachRemote) == nil)
     }
 
     @Test func anExplicitAttachRemoteMapKeepsTheChordOverAnOldCommandOnIt() {
         let (keymap, _) = parseKeymap("""
-        map cmd+shift+a attach_remote
-        command "Old binding" cmd+shift+a echo ok
+        map cmd+shift+r attach_remote
+        command "Old binding" cmd+shift+r echo ok
         """)
-        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.command, .shift], key: "a"))
+        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.command, .shift], key: "r"))
         #expect(keymap.commands.first?.shortcut == "")
     }
 

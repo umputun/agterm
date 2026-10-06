@@ -1883,7 +1883,7 @@ pane's ssh joins an existing `ControlMaster` connection, that master's settings 
 File ▸ Attach Remote… is the same flow in the GUI and has no command of its own: it offers the machines in
 `<config dir>/remotes.conf` (one `destination [label]` per line, `#` comments), asks which in the picker
 when there are several, then lists that machine's sessions and attaches the picked one. It is the
-`attach_remote` keymap action, on Cmd-Shift-A unless `keymap.conf` maps another chord. A script composes
+`attach_remote` keymap action, on Cmd-Shift-R unless `keymap.conf` maps another chord. A script composes
 `zmx tree`, `pick` and `zmx attach` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks

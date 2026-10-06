@@ -128,7 +128,7 @@ struct BuiltinActionTests {
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
             .dashboard: Chord(mods: [.command, .shift], key: "g"),
-            .attachRemote: Chord(mods: [.command, .shift], key: "a"),
+            .attachRemote: Chord(mods: [.command, .shift], key: "r"),
         ]
         #expect(expected.count == BuiltinAction.allCases.count)
         for action in BuiltinAction.allCases {
