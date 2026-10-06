@@ -52,7 +52,6 @@ public func parseRemotesConf(_ text: String) -> (remotes: Remotes, diagnostics: 
             continue
         }
         let rest = line.dropFirst(destination.count).trimmingCharacters(in: .whitespaces)
-        // a label reaches a terminal through `agtermctl zmx remotes`
         guard !rest.unicodeScalars.contains(where: { ($0.value < 0x20 && $0 != "\t") || $0.value == 0x7f }) else {
             diagnostics.append(KeymapDiagnostic(
                 line: lineNumber, message: "label for '\(destination)' has control characters; remote skipped"))

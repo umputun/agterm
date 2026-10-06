@@ -467,7 +467,9 @@ final class SettingsModel {
     var remotesURL: URL { ConfigPaths.remotesPath(configDirectory: configDirectoryURL()) }
 
     /// remotes follows `remotes.conf` on disk; File ▸ Attach Remote lists its entries.
-    @ObservationIgnored private(set) lazy var remotes = RemotesWatcher(url: remotesURL)
+    @ObservationIgnored private(set) lazy var remotes = RemotesWatcher(url: remotesURL) {
+        NotificationManager.shared.notifyRemotesDiagnostics(count: $0)
+    }
 
     /// The resolved `hooks.conf` path: `<config dir>/hooks.conf`, beside `keymap.conf`.
     var hooksPath: String { ConfigPaths.hooksPath(configDirectory: configDirectoryURL()).path }

@@ -137,6 +137,18 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
+    /// notifyRemotesDiagnostics posts a banner for a `remotes.conf` that has bad lines or cannot be read.
+    func notifyRemotesDiagnostics(count: Int) {
+        guard bannersEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Remotes"
+        content.body = "\(count) issue\(count == 1 ? "" : "s") in remotes.conf"
+        let request = UNNotificationRequest(identifier: "remotes-diagnostics", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("remotes-diagnostics banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     /// Post a banner for `hooks.conf` parse diagnostics, mirroring the keymap one.
     func notifyHooksDiagnostics(count: Int) {
         guard bannersEnabled else { return }

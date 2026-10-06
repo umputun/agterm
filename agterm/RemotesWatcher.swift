@@ -7,12 +7,17 @@ import agtermCore
 @Observable
 final class RemotesWatcher {
     private(set) var entries: [RemoteEntry] = []
+    /// issueCount is how many problems the file has: its parse diagnostics, or one when it cannot be read.
+    private(set) var issueCount = 0
     @ObservationIgnored private var url: URL
     @ObservationIgnored private var sources: [DispatchSourceFileSystemObject] = []
+    @ObservationIgnored private let onIssues: (Int) -> Void
 
-    init(url: URL) {
+    /// `onIssues` runs when an edit turns a clean file into one with problems, once per such episode.
+    init(url: URL, onIssues: @escaping (Int) -> Void = { _ in }) {
         self.url = url
-        refresh()
+        self.onIssues = onIssues
+        refresh(reporting: false)
     }
 
     isolated deinit {
@@ -22,16 +27,32 @@ final class RemotesWatcher {
     /// watch switches to another file, as a config directory change does.
     func watch(_ url: URL) {
         self.url = url
-        refresh()
+        refresh(reporting: false)
     }
 
     /// refresh re-arms on every event: an editor that saves by replacing the file leaves the old descriptor
     /// on a file nothing names any more, and a directory created later is only visible from its parent.
-    private func refresh() {
-        let loaded = (try? RemotesFile.load(at: url).remotes.entries) ?? []
-        if loaded != entries { entries = loaded }
+    private func refresh(reporting: Bool) {
+        let loaded = try? RemotesFile.load(at: url)
+        let entries = loaded?.remotes.entries ?? []
+        if entries != self.entries { self.entries = entries }
+        let issues = loaded?.diagnostics.count ?? 1
+        let turnedBad = issueCount == 0 && issues > 0
+        if issues != issueCount { issueCount = issues }
+        if reporting, turnedBad { onIssues(issues) }
         sources.forEach { $0.cancel() }
-        sources = [url.path, Self.nearestExistingDirectory(of: url)].compactMap(source)
+        sources = watchedPaths().compactMap(source)
+    }
+
+    /// watchedPaths includes a symlink target's directory, so a target recreated later is observed.
+    private func watchedPaths() -> [String] {
+        var paths = [url.path, Self.nearestExistingDirectory(of: url)]
+        if let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path) {
+            let target = URL(fileURLWithPath: destination, relativeTo: url.deletingLastPathComponent())
+            let directory = Self.nearestExistingDirectory(of: target.standardizedFileURL)
+            if !paths.contains(directory) { paths.append(directory) }
+        }
+        return paths
     }
 
     private func source(for path: String) -> DispatchSourceFileSystemObject? {
@@ -40,7 +61,7 @@ final class RemotesWatcher {
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: [.write, .extend, .delete, .rename], queue: .main)
         source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated { self?.refresh(reporting: true) }
         }
         source.setCancelHandler { close(descriptor) }
         source.resume()
