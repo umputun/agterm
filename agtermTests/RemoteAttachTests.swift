@@ -100,6 +100,86 @@ final class RemoteAttachTests: XCTestCase {
         await waitForRemotes(["mini"], "the file of the directory switched to")
     }
 
+    private func writeRemotes(_ text: String, expecting destinations: [String]) async throws {
+        try text.write(to: remotesFile, atomically: true, encoding: .utf8)
+        await waitForRemotes(destinations, "the watcher picks the file up")
+    }
+
+    func testSeveralRemotesAskWhichMacInThePickerThenListIt() async throws {
+        try await writeRemotes("studio Mac Studio\nmini\n", expecting: ["studio", "mini"])
+
+        actions.attachRemote()
+        await waitUntil("the machine picker opens") { controller.pending != nil }
+
+        let pick = try XCTUnwrap(controller.pending)
+        XCTAssertEqual(pick.prompt, "Attach from which Mac?")
+        XCTAssertEqual(pick.items, [ControlPickItem(id: "studio", label: "Mac Studio", subtitle: "studio"),
+                                    ControlPickItem(id: "mini", label: "mini")])
+        XCTAssertTrue(attacher.treeHosts.isEmpty, "nothing is contacted before a machine is chosen")
+        controller.resolve(ControlPickResult(result: .picked, id: "mini", label: "mini", index: 1))
+        await waitUntil("the chosen machine is listed") { attacher.treeHosts == ["mini"] }
+        await finishListing()
+    }
+
+    func testAWindowSwitchWhileChoosingTheMacKeepsTheAttachInTheStartingWindow() async throws {
+        try await writeRemotes("studio\nmini\n", expecting: ["studio", "mini"])
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let other = library.newWindow(name: "other").id
+        _ = library.loadStore(for: other)
+        library.frontmostWindowID = windowID
+
+        actions.attachRemote()
+        await waitUntil("the machine picker opens") { controller.pending != nil }
+        library.frontmostWindowID = other
+        controller.resolve(ControlPickResult(result: .picked, id: "studio", label: "studio", index: 0))
+        await waitUntil("the listing starts") { attacher.treeHosts == ["studio"] }
+
+        guard case let .opened(hudSession, hudWindow, _) = attacher.huds.first else { return XCTFail("expected a progress panel") }
+        XCTAssertEqual(hudSession, session)
+        XCTAssertEqual(hudWindow, windowID.uuidString)
+        attacher.answerTree(listing([build]))
+        await waitUntil("the session picker opens in the starting window") { controller.pending?.items.first?.id == "s1" }
+        controller.resolve(ControlPickResult(result: .picked, id: "s1", label: "build", index: 0))
+        await waitUntil("the attach is requested") { attacher.attaches.count == 1 }
+        XCTAssertEqual(attacher.attaches.first?.window, windowID.uuidString)
+    }
+
+    private func finishListing() async {
+        attacher.answerTree(listing([]))
+        await waitUntil("the flow ends") { attacher.huds.count >= 2 }
+    }
+
+    func testDismissingTheMachinePickerContactsNothing() async throws {
+        try await writeRemotes("studio\nmini\n", expecting: ["studio", "mini"])
+
+        actions.attachRemote()
+        await waitUntil("the machine picker opens") { controller.pending != nil }
+        controller.cancel()
+        for _ in 0..<200 { await Task.yield() }
+
+        XCTAssertFalse(controller.modalPending)
+        XCTAssertTrue(attacher.treeHosts.isEmpty)
+        XCTAssertTrue(attacher.huds.isEmpty)
+    }
+
+    func testASingleRemoteIsListedWithoutAsking() async throws {
+        try await writeRemotes("studio Mac Studio\n", expecting: ["studio"])
+
+        actions.attachRemote()
+
+        await waitUntil("the listing starts") { attacher.treeHosts == ["studio"] }
+        XCTAssertNil(controller.pending)
+        await finishListing()
+    }
+
+    func testNoRemotesDoesNothing() async {
+        actions.attachRemote()
+        for _ in 0..<200 { await Task.yield() }
+
+        XCTAssertFalse(controller.modalPending)
+        XCTAssertTrue(attacher.treeHosts.isEmpty)
+    }
+
     func testAttachListsTheMachineAndAttachesThePickedSessionInTheStartingWindow() async throws {
         let other = library.newWindow(name: "other").id
         _ = library.loadStore(for: other)
@@ -107,7 +187,7 @@ final class RemoteAttachTests: XCTestCase {
 
         let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
 
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts == ["studio"] }
         XCTAssertEqual(attacher.huds, [.opened(session: session, window: windowID.uuidString,
                                                spec: HudSpec(message: "Attach Remote: listing sessions on studio…",
@@ -141,7 +221,7 @@ final class RemoteAttachTests: XCTestCase {
                         "Attach Remote: studio: ssh: connection refused"),
                        (listing([]), "Attach Remote: nothing to attach on studio")]
         for (index, answer) in answers.enumerated() {
-            actions.attachRemote("studio")
+            actions.attachRemote("studio", in: windowID)
             await waitUntil("listing \(index) starts") { attacher.treeHosts.count == index + 1 }
             attacher.answerTree(answer.0, call: index)
             await waitUntil("the error panel shows") { attacher.huds.count == 2 * (index + 1) }
@@ -156,7 +236,7 @@ final class RemoteAttachTests: XCTestCase {
     func testARefusedAttachShowsATimedErrorPanel() async throws {
         attacher.attachResponse = ControlResponse(ok: false, error: "no attachable session s1 on studio")
 
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         attacher.answerTree(listing([build]))
         await waitUntil("the session picker opens") { controller.pending != nil }
@@ -170,7 +250,7 @@ final class RemoteAttachTests: XCTestCase {
     func testAnAttachLeavesAHudAnotherCallerPostedDuringItsWaitAlone() async throws {
         let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
 
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         let foreign = HudSpec(message: "an agent's own panel")
         _ = attacher.openHud(session, window: nil, spec: foreign)
@@ -183,7 +263,7 @@ final class RemoteAttachTests: XCTestCase {
     }
 
     func testAnOverlongErrorIsCutToWhatAHudAccepts() async throws {
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         attacher.answerTree(ControlResponse(ok: false, error: String(repeating: "q\u{301}", count: 400)))
         await waitUntil("the error panel shows") { attacher.huds.count == 2 }
@@ -193,7 +273,7 @@ final class RemoteAttachTests: XCTestCase {
     }
 
     func testDismissingThePickerAttachesNothing() async {
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         attacher.answerTree(listing([build]))
         await waitUntil("the session picker opens") { controller.pending != nil }
@@ -205,7 +285,7 @@ final class RemoteAttachTests: XCTestCase {
     }
 
     func testAWindowClosedDuringTheListingGetsNoPicker() async {
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         PickRegistry.shared.unregister(windowID)
         attacher.answerTree(listing([build]))
@@ -218,7 +298,7 @@ final class RemoteAttachTests: XCTestCase {
     func testAttachDoesNothingWhileAModalHoldsTheWindow() async {
         XCTAssertTrue(controller.open(PendingPick(id: "busy", items: [ControlPickItem(id: "a", label: "A")])))
 
-        actions.attachRemote("studio")
+        actions.attachRemote("studio", in: windowID)
         for _ in 0..<200 { await Task.yield() }
 
         XCTAssertTrue(attacher.treeHosts.isEmpty)

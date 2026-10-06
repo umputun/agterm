@@ -42,6 +42,7 @@ struct PaletteCatalogTests {
             "Decrease Font Size",
             "Actual Font Size",
             "Select Theme…",
+            "Attach Remote…",
             "Edit Keymap",
             "Reload Keymap",
             "Edit Hooks",
@@ -63,7 +64,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 55)
+        #expect(PaletteCommand.allCases.count == 56)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -207,7 +208,7 @@ struct PaletteCatalogTests {
                                              canStepWindows: true,
                                              activeSessionHasSplit: true, hasPendingClose: true,
                                              hasRecentClosed: true, hasActiveSession: true,
-                                             hasCurrentWorkspace: true)
+                                             hasCurrentWorkspace: true, hasRemotes: true)
 
     /// The commands whose menu item carries no `modalActive` term at all.
     private static let coverProof: Set<PaletteCommand> = [
@@ -246,10 +247,20 @@ struct PaletteCatalogTests {
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: false,
-                                     hasCurrentWorkspace: true)
+                                     hasCurrentWorkspace: true, hasRemotes: true)
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !Self.needSession.contains(command), "\(command)")
         }
+    }
+
+    @Test func attachRemoteNeedsAConfiguredRemote() {
+        let none = PaletteContext(hasCurrentWorkspace: true)
+        #expect(PaletteCommand.attachRemote.isVisible(in: none), "stays listed, inert")
+        #expect(!PaletteCommand.attachRemote.isEnabled(in: none))
+        #expect(PaletteCommand.attachRemote.isEnabled(in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true)))
+        #expect(!PaletteCommand.attachRemote.isEnabled(
+            in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true, pickerActive: true)))
+        #expect(PaletteCommand.attachRemote.builtinAction == .attachRemote)
     }
 
     @Test func workspacePresenceGatesTheWorkspaceEntries() {
@@ -259,9 +270,10 @@ struct PaletteCatalogTests {
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true,
-                                     hasCurrentWorkspace: false)
+                                     hasCurrentWorkspace: false, hasRemotes: true)
         let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus,
-                                                  .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse]
+                                                  .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
+                                                  .attachRemote]
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !needWorkspace.contains(command), "\(command)")
         }

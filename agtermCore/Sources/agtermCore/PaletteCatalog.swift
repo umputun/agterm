@@ -37,6 +37,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasActiveSession: Bool
     /// Whether it has a current workspace — nil only with no store, since a window always keeps one.
     public let hasCurrentWorkspace: Bool
+    /// hasRemotes is whether `remotes.conf` lists a machine to attach from.
+    public let hasRemotes: Bool
     public let terminalZoomActive: Bool
     public let dashboardOpen: Bool
     /// pickerActive covers either a control picker or an ask dialog in the window.
@@ -62,6 +64,7 @@ public struct PaletteContext: Sendable, Equatable {
                 hasRecentClosed: Bool = false,
                 hasActiveSession: Bool = false,
                 hasCurrentWorkspace: Bool = false,
+                hasRemotes: Bool = false,
                 terminalZoomActive: Bool = false,
                 dashboardOpen: Bool = false,
                 pickerActive: Bool = false) {
@@ -82,6 +85,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasRecentClosed = hasRecentClosed
         self.hasActiveSession = hasActiveSession
         self.hasCurrentWorkspace = hasCurrentWorkspace
+        self.hasRemotes = hasRemotes
         self.terminalZoomActive = terminalZoomActive
         self.dashboardOpen = dashboardOpen
         self.pickerActive = pickerActive
@@ -100,6 +104,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
+    case attachRemote
     case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
     case addWorkspaceToFocus, toggleWorkspaceFilter
@@ -127,6 +132,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousWindow, .nextWindow:
             // same rule one level up: a single open window has nowhere to step to
             return context.canStepWindows
+        case .attachRemote:
+            return context.hasRemotes && context.hasCurrentWorkspace
         default:
             return true
         }
@@ -235,6 +242,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .decreaseFontSize: return "Decrease Font Size"
         case .resetFontSize: return "Actual Font Size"
         case .selectTheme: return "Select Theme…"
+        case .attachRemote: return "Attach Remote…"
         case .editKeymap: return "Edit Keymap"
         case .reloadKeymap: return "Reload Keymap"
         case .editHooks: return "Edit Hooks"
@@ -299,6 +307,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleWorkspaceFilter: return .toggleWorkspaceFilter
         case .focusLeftPane: return .focusLeftPane
         case .focusRightPane: return .focusRightPane
+        case .attachRemote: return .attachRemote
         case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,
              .clearFlagged, .clearFocus, .addWorkspaceToFocus, .expandWorkspaces, .collapseWorkspaces,
              .closeSplit, .swapPanes:

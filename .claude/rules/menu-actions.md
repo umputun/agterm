@@ -47,10 +47,12 @@ paths:
   button is replaced by dashboard chrome, which hides an open quick terminal before showing the grid.
 - Every new action must satisfy the control contract in [[control-api]]: protocol, dispatch, CLI, and
   protocol/end-to-end tests. Do not restate per-action audits here.
-- File ▸ Attach Remote is a submenu of `remotes.conf` entries (`destination [label]`, parsed by
-  `parseRemotesConf`) and disabled when empty. `RemotesWatcher` re-reads on file and directory events,
+- File ▸ Attach Remote… picks among `remotes.conf` entries (`destination [label]`, parsed by
+  `parseRemotesConf`) in the window picker, skipping the question for a single entry, and is disabled when
+  the file lists none (`PaletteContext.hasRemotes`). It is `BuiltinAction.attachRemote`, default
+  Command-Shift-A, with a palette row. `RemotesWatcher` re-reads on file and directory events,
   because SwiftUI rebuilds `Commands` on its own schedule and a read in the menu body would go stale.
-  `AppActions.attachRemote(_:)` composes the existing `remoteTree`, window picker and `attachRemoteSession`
+  `AppActions.attachRemote()` composes the existing `remoteTree`, window picker and `attachRemoteSession`
   through `RemoteAttaching`, so it adds no control command: `zmx tree` + `pick` + `zmx attach` already
   script it. A HUD over the starting session shows the two ssh waits and a failure, the latter hiding
   itself after `remoteAttachErrorSeconds`; a window with no session falls back to `notifyCommandFailure`.

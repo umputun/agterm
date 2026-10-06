@@ -1332,6 +1332,39 @@ struct KeymapTests {
         #expect(keymap.equivalent(for: .dashboard) == nil)
     }
 
+    @Test func attachRemoteShipsOnCmdShiftAAndCanBeRemapped() {
+        let attachChord = Chord(mods: [.command, .shift], key: "a")
+        #expect(parseKeymap("").keymap.equivalent(for: .attachRemote) == attachChord)
+
+        let (keymap, diagnostics) = parseKeymap("map ctrl+shift+r attach_remote")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.control, .shift], key: "r"))
+    }
+
+    @Test func existingCmdShiftABuiltinBindingIsNotBrokenByAttachRemoteDefault() {
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+a toggle_workspace_filter")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == Chord(mods: [.command, .shift], key: "a"))
+        #expect(keymap.equivalent(for: .attachRemote) == nil)
+        #expect(keymap.builtinUnbound.contains(.attachRemote))
+    }
+
+    @Test func existingCmdShiftACustomCommandIsNotBrokenByAttachRemoteDefault() {
+        let (keymap, diagnostics) = parseKeymap("command \"Old binding\" cmd+shift+a echo ok")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.first?.shortcut == "cmd+shift+a")
+        #expect(keymap.equivalent(for: .attachRemote) == nil)
+    }
+
+    @Test func anExplicitAttachRemoteMapKeepsTheChordOverAnOldCommandOnIt() {
+        let (keymap, _) = parseKeymap("""
+        map cmd+shift+a attach_remote
+        command "Old binding" cmd+shift+a echo ok
+        """)
+        #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.command, .shift], key: "a"))
+        #expect(keymap.commands.first?.shortcut == "")
+    }
+
     @Test func keymapStoreLoadsFileAndRecoversWhenMissing() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

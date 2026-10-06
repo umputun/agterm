@@ -27,11 +27,29 @@ extension AppActions {
     /// configuredRemotes is what `remotes.conf` lists; an unreadable file reads as none.
     var configuredRemotes: [RemoteEntry] { settingsModel?.remotes.entries ?? [] }
 
-    /// attachRemote lets the user pick one of `destination`'s sessions and attaches it in the window the
-    /// action started in, whichever window is frontmost by then.
-    func attachRemote(_ destination: String) {
-        guard uiActionsEnabled, let windowID = library.activeWindowID, let remoteAttacher else { return }
-        let hud = RemoteAttachHud(attacher: remoteAttacher, session: store?.selectedSessionID?.uuidString,
+    /// attachRemote asks which configured machine to attach from, in the window's picker; a single entry
+    /// needs no question.
+    func attachRemote() {
+        let remotes = configuredRemotes
+        guard let windowID = library.activeWindowID, uiActionsEnabled(for: windowID), let first = remotes.first,
+              let controller = PickRegistry.shared.controller(for: windowID) else { return }
+        guard remotes.count > 1 else { return attachRemote(first.destination, in: windowID) }
+        let items = remotes.map {
+            ControlPickItem(id: $0.destination, label: $0.label, subtitle: $0.label == $0.destination ? nil : $0.destination)
+        }
+        Task {
+            let pick = PendingPick(id: UUID().uuidString, items: items, prompt: "Attach from which Mac?")
+            guard let picked = await controller.pick(pick), picked.result == .picked, let destination = picked.id else { return }
+            attachRemote(destination, in: windowID)
+        }
+    }
+
+    /// attachRemote lets the user pick one of `destination`'s sessions and attaches it in `windowID`,
+    /// whichever window is frontmost by then.
+    func attachRemote(_ destination: String, in windowID: WindowInfo.ID) {
+        guard uiActionsEnabled(for: windowID), let remoteAttacher else { return }
+        let hud = RemoteAttachHud(attacher: remoteAttacher,
+                                  session: library.store(for: windowID)?.selectedSessionID?.uuidString,
                                   window: windowID.uuidString)
         Task {
             hud.progress("listing sessions on \(destination)…")

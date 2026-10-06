@@ -1745,7 +1745,7 @@
                 color: #cbc6bc;
               "
             >
-              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;reopen_recent&nbsp;&nbsp;&nbsp;undo_close&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_horizontal_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />toggle_workspace_collapse<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_workspace&nbsp;&nbsp;&nbsp;next_workspace<br />previous_window&nbsp;&nbsp;&nbsp;next_window<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard
+              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;reopen_recent&nbsp;&nbsp;&nbsp;undo_close&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_horizontal_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />toggle_workspace_collapse<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_workspace&nbsp;&nbsp;&nbsp;next_workspace<br />previous_window&nbsp;&nbsp;&nbsp;next_window<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard&nbsp;&nbsp;&nbsp;attach_remote
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> is the one
@@ -2874,13 +2874,15 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               The Ctrl-Tab switcher and the title-bar recent and attention lists mark the row with the same cloud and name the host.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              File ▸ Attach Remote does the same from the menu. It lists the Macs named in
+              File ▸ Attach Remote… does the same from the menu. It offers the Macs named in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remotes.conf</span> in the config directory, one per line as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">destination [label]</span>: the destination is what ssh takes, and the rest of
-              the line is an optional name for the menu. Lines starting with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> are comments.
-              Picking a Mac shows its sessions in the picker and attaches the one you choose in the current window. A panel
-              over the session reports the connection while it is being made, and a failure stays up for five seconds. The
-              submenu is greyed out while the file is missing or lists nothing.
+              the line is an optional name for the picker. Lines starting with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> are comments.
+              It is the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">attach_remote</span>
+              action, on ⌘⇧A unless you map another chord.
+              With more than one Mac listed it asks which in the picker, then shows that Mac's sessions and attaches the one
+              you choose in the current window. A panel over the session reports the connection while it is being made, and a
+              failure stays up for five seconds. The item is greyed out while the file is missing or lists nothing.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every attach also opens a

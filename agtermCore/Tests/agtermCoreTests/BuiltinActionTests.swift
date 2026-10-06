@@ -35,7 +35,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleWorkspaceCollapse.rawValue == "toggle_workspace_collapse")
         #expect(BuiltinAction.previousWindow.rawValue == "previous_window")
         #expect(BuiltinAction.nextWindow.rawValue == "next_window")
-        #expect(BuiltinAction.allCases.count == 48)
+        #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
+        #expect(BuiltinAction.allCases.count == 49)
     }
 
     @Test func rejectsUnknownName() {
@@ -127,6 +128,7 @@ struct BuiltinActionTests {
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
             .dashboard: Chord(mods: [.command, .shift], key: "g"),
+            .attachRemote: Chord(mods: [.command, .shift], key: "a"),
         ]
         #expect(expected.count == BuiltinAction.allCases.count)
         for action in BuiltinAction.allCases {

@@ -1880,6 +1880,12 @@ agterm adds ssh keepalive (`ServerAliveInterval 5`, `ServerAliveCountMax 2`) to 
 user's config sets a nonzero interval, so a dead link is noticed within about fifteen seconds. When the
 pane's ssh joins an existing `ControlMaster` connection, that master's settings decide instead.
 
+File ▸ Attach Remote… is the same flow in the GUI and has no command of its own: it offers the machines in
+`<config dir>/remotes.conf` (one `destination [label]` per line, `#` comments), asks which in the picker
+when there are several, then lists that machine's sessions and attaches the picked one. It is the
+`attach_remote` keymap action, on Cmd-Shift-A unless `keymap.conf` maps another chord. A script composes
+`zmx tree`, `pick` and `zmx attach` instead.
+
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
 Mac mirrors the origin session's status, its `session context`, its `notify` notifications, its HUD and
