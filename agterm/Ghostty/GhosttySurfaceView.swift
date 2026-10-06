@@ -140,6 +140,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// idle timer. Fires unconditionally, unlike `onUserInputClearsStatus`: ordinary typing in an idle
     /// session must count as activity or the user is yanked to a blocked session mid-type.
     var onUserInput: (() -> Void)?
+    /// Called after a size push and after a cell-size change; a HUD panel is measured from this surface.
+    var onGridChange: (() -> Void)?
 
     /// Called on the main actor with the current font size (points) when it changes (cmd +/-), so the app
     /// can persist it. Pane surfaces share a live-role-aware callback; scratch and overlays leave it unset.
@@ -688,7 +690,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
         // an overlay surface with its own background color applies it here too — the overlay is sessionless,
         // so the watermark path above skips it.
-        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor() }
+        applyOverlayConfig()
 
         // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the deferred
         // overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.
@@ -884,6 +886,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         onClearUnseen = nil
         onUserInputClearsStatus = nil
         onUserInput = nil
+        onGridChange = nil
         onFontSizeChange = nil
         onSearchStart = nil
         onSearchEnd = nil
@@ -981,5 +984,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // the split re-parent invalidates the Metal drawable, and neither a same-grid set_size nor the tick
         // (dirty surfaces only) repaints it — force one or the re-hosted pane stays blank over a live buffer.
         ghostty_surface_refresh(surface)
+        onGridChange?()
     }
 }

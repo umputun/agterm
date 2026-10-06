@@ -90,12 +90,40 @@ extension GhosttySurfaceView {
     /// reapplyOverlayConfigIfNeeded restores what a global reload wiped from a sessionless overlay: its
     /// `--background-color`, and a HUD's creation font size.
     private func reapplyOverlayConfigIfNeeded() {
-        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor() }
+        applyOverlayConfig()
         restoreHudFontSize()
     }
 
+    /// The sessionless overlay's own per-surface config: its `--background-color`, and for a HUD the
+    /// padding below even when it has no color.
+    func applyOverlayConfig() {
+        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor(); return }
+        guard let surface, hudBodyFile != nil else { return }
+        let overlay = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil,
+                                                  fontSize: currentEffectiveFontSize()) + Self.hudPaddingConfig
+        guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
+            NSLog("hud padding: per-surface config build failed")
+            return
+        }
+        ghostty_surface_update_config(surface, config)
+        ownedConfigs.forEach { ghostty_config_free($0) }
+        ownedConfigs = [config]
+        restoreHudFontSize()
+    }
+
+    /// Pins a HUD surface's padding to the one `ControlServer.paneMetrics` sizes the panel with. The surface
+    /// would otherwise inherit the user's `window-padding-*`, and a panel sized to exactly its rows then
+    /// loses its last line. `window-padding-balance` is what makes libghostty derive padding again from an
+    /// updated config; without it padding is fixed when the surface is created.
+    private static let hudPaddingConfig = """
+        window-padding-x = \(Int(ControlServer.windowPadding.horizontal))
+        window-padding-y = \(Int(ControlServer.windowPadding.vertical))
+        window-padding-balance = true
+
+        """
+
     /// restoreHudFontSize puts a HUD back at its creation size after a config rebuild, through the keybind
-    /// action: an included config's `font-size` can outrank the size a rebuilt config restates.
+    /// action: libghostty keeps a size across a config update only when it was set that way.
     private func restoreHudFontSize() {
         guard hudBodyFile != nil, let size = initialFontSize else { return }
         _ = performBindingAction("set_font_size:\(size)")
@@ -111,6 +139,7 @@ extension GhosttySurfaceView {
         let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
                                                   resolvedImagePath: nil, fontSize: currentEffectiveFontSize(),
                                                   windowOpacity: GhosttyApp.shared.windowOpacity)
+            + (hudBodyFile != nil ? Self.hudPaddingConfig : "")
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("overlay background: per-surface config build failed")
             return

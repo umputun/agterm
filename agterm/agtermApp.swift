@@ -765,6 +765,9 @@ struct agtermApp: App {
                                       env: context.localEnvironment(codeFile: codeFile, hudFile: hudFile))
         view.overlayCodeFile = codeFile
         view.hudBodyFile = hudFile
+        // the panel was sized from an estimated cell before this surface existed; once it has a grid, and
+        // whenever a config reload changes its cell, the refresh measures with the cell libghostty draws
+        if isHud { view.onGridChange = { [weak session] in session?.onHudGeometryChange?() } }
         // the overlay's own background color (`session.overlay.open --background-color`), applied in
         // createSurface — the overlay is sessionless, so it can't read it off the session there.
         view.overlayBackgroundColorHex = spec.backgroundColor

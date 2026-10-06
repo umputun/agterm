@@ -135,6 +135,13 @@ struct HudHelperTests {
         #expect(run.paints(frame))
     }
 
+    @Test func aGridAsTallAsTheTextPaintsFromTheFirstRow() throws {
+        let run = try Run("abc\ndef\n", cols: 41, rows: 2)
+        defer { run.stop() }
+        let e = Self.esc
+        #expect(run.paints("\(e)[H\(e)[J\(e)[19Cabc"))
+    }
+
     @Test func keepsAnOversizedLineAtTheLeftEdgeRatherThanOffScreen() throws {
         let run = try Run("a message wider than its box\n", cols: 10, rows: 3)
         defer { run.stop() }

@@ -242,6 +242,74 @@ final class HudDeckGatesTests: XCTestCase {
         XCTAssertEqual(style.horizontalOffset(paneWidth: 1000), 0)
     }
 
+    // MARK: - sticky and frameless
+
+    private func captionSession(position: HudPosition, sizePercent: Int = 100, sticky: Bool = true,
+                                frame: Bool = false) -> Session {
+        let session = hudSession(position: position, sizePercent: sizePercent)
+        session.hudSpec = HudSpec(message: "caption", position: position, sticky: sticky, frame: frame)
+        session.hudHeightPoints = 48
+        return session
+    }
+
+    private let captionPane = CGRect(x: 200, y: 100, width: 1000, height: 800)
+
+    func testAStickyTopPanelSitsFlushAndSpansThePane() {
+        let panel = OverlayPanelStyle.resolve(captionSession(position: .topCenter)).panelFrame(in: captionPane)
+
+        XCTAssertEqual(panel, CGRect(x: 200, y: 100, width: 1000, height: 48))
+    }
+
+    func testAStickyBottomPanelSitsFlushAtTheBottom() {
+        let panel = OverlayPanelStyle.resolve(captionSession(position: .bottomCenter)).panelFrame(in: captionPane)
+
+        XCTAssertEqual(panel.maxY, captionPane.maxY, accuracy: 0.001)
+        XCTAssertEqual(panel.height, 48, accuracy: 0.001)
+    }
+
+    func testAStickyCornerPanelTouchesBothEdges() {
+        let panel = OverlayPanelStyle.resolve(captionSession(position: .bottomRight, sizePercent: 40))
+            .panelFrame(in: captionPane)
+
+        XCTAssertEqual(panel.maxX, captionPane.maxX, accuracy: 0.001)
+        XCTAssertEqual(panel.maxY, captionPane.maxY, accuracy: 0.001)
+        XCTAssertEqual(panel.width, 400, accuracy: 0.001)
+    }
+
+    func testAStickySidePanelTouchesItsEdgeAndStaysVerticallyCentered() {
+        let panel = OverlayPanelStyle.resolve(captionSession(position: .centerLeft, sizePercent: 40))
+            .panelFrame(in: captionPane)
+
+        XCTAssertEqual(panel.minX, captionPane.minX, accuracy: 0.001)
+        XCTAssertEqual(panel.midY, captionPane.midY, accuracy: 0.001)
+    }
+
+    func testStickyChangesNothingAtCenter() {
+        let sticky = OverlayPanelStyle.resolve(captionSession(position: .center, sizePercent: 40))
+        let loose = OverlayPanelStyle.resolve(captionSession(position: .center, sizePercent: 40, sticky: false))
+
+        XCTAssertEqual(sticky.panelFrame(in: captionPane), loose.panelFrame(in: captionPane))
+    }
+
+    func testAPanelThatIsNotStickyKeepsItsEdgeMargin() {
+        let panel = OverlayPanelStyle.resolve(captionSession(position: .topLeft, sizePercent: 40, sticky: false))
+            .panelFrame(in: captionPane)
+
+        XCTAssertEqual(panel.minX, captionPane.minX + 100, accuracy: 0.001)
+        XCTAssertEqual(panel.minY, captionPane.minY + 80, accuracy: 0.001)
+    }
+
+    func testAFramelessHudKeepsItsBackingAndLosesItsBorderAndRounding() {
+        let frameless = OverlayPanelStyle.resolve(captionSession(position: .topCenter))
+        let framed = OverlayPanelStyle.resolve(captionSession(position: .topCenter, frame: true))
+
+        XCTAssertTrue(frameless.framed)
+        XCTAssertEqual(frameless.cornerRadius, 0)
+        XCTAssertEqual(frameless.borderOpacity, 0)
+        XCTAssertEqual(framed.cornerRadius, 8)
+        XCTAssertEqual(framed.borderOpacity, 0.30, accuracy: 0.0001)
+    }
+
     func testPanelFrameUsesThePaneRectForSizeAndAnchor() {
         let style = OverlayPanelStyle.resolve(hudSession(position: .bottomRight,
                                                          sizePercent: 80, heightPercent: 20))

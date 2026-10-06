@@ -408,7 +408,8 @@ public final class AppStore {
                               sizePercent: session.overlaySizePercent,
                               heightPercent: session.hudHeightPercent, position: spec.position.rawValue,
                               pane: session.hudTargetPane?.rawValue, hideAfter: spec.effectiveHideAfter,
-                              markdown: spec.markdown, fontSize: spec.fontSize)
+                              markdown: spec.markdown, fontSize: spec.fontSize,
+                              sticky: spec.sticky, frame: spec.frame)
     }
 
     /// Creates a workspace and appends it. With `revealNewWorkspace` (the default) and the filter ON, the new

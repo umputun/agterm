@@ -60,7 +60,7 @@ extension AppStore {
     /// The published HUD as it travels to a viewer, its remaining lifetime sampled at `now`.
     func presentationHud(of session: Session, now: Date) -> PresentationHud? {
         guard session.onHudWithdrawn != nil, let live = session.hudSpec else { return nil }
-        let spec = live.withSizePercent(session.hudResizedWidthPercent ?? live.sizePercent)
+        let spec = session.effectiveHudSpec ?? live
         return PresentationHud(spec: spec, pane: session.hudPaneIdentity.map(PresentationPane.identity),
                                generation: session.hudPublishGeneration,
                                remaining: session.hudExpiresAt.map { max(0, $0.timeIntervalSince(now)) })

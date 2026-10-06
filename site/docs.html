@@ -2623,7 +2623,10 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"># color both halves of the panel</span
               ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --text-color
               <span style="color: #f2b45c">"#7ec07e"</span> --background-color
-              <span style="color: #f2b45c">"#202020"</span><br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
+              <span style="color: #f2b45c">"#202020"</span><br /><br /><span style="color: #6b727a"
+                ># a caption: a strip flush across the top, as tall as its text, with links that open on ⌘-click</span
+              ><br />agtermctl session hud <span style="color: #f2b45c">"**deploy api** [PR](https://example.com/pr)"</span> --markdown --sticky
+              --no-frame --position top --size-percent 100<br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A HUD carries a message rather than a program, and it is passive: the session keeps first responder and stays
@@ -2647,7 +2650,14 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-right</span> — defaulting to
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>, with every anchor off
               center holding a margin off that pane edge on its own; a corner is what keeps a panel out of the text you are
-              reading. The bare
+              reading.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span> drops that margin
+              and lets the width reach 100%, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-frame</span> drops the
+              border and the blank row above and below the text; together they make the caption above. It is still the one
+              transient panel, so a script posts it again after a restart. A frameless panel is its rendered rows plus 12
+              points of padding tall, one row more than its text with the default font and padding, so a program meant to
+              sit under a caption leaves that room. The bare
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> this took before are
               still accepted for the middle column. The panel comes from the message on both axes — width from the longest line, height
@@ -2660,7 +2670,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               the fallback. Open refuses a pane that is not rendered. Hiding that pane hides the panel without stopping it;
               showing the pane restores it, and closing the pane closes its HUD.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides the
-              width only, bounded to at most 80% of the pane, so a message never covers the session it is about.
+              width only, bounded to at most 80% of the pane, or 100% with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span> off center, so a message never covers the session it is about.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> sets the text's
               own color and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> the panel's
@@ -2669,6 +2679,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-frame</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id</span> have to be repeated
               to survive it. The spinner takes a style —

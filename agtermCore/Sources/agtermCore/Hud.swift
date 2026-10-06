@@ -28,6 +28,12 @@ public struct HudSpec: Codable, Equatable, Sendable {
     /// fontSize is the panel's point size, nil to inherit the session's. The surface reads it once at
     /// creation, like `backgroundColor`.
     public let fontSize: Double?
+    /// sticky drops the edge margin, so the panel sits flush against the edge or corner `position` names.
+    /// `center` names no edge and ignores it.
+    public let sticky: Bool
+    /// frame false drops the border, the rounding and the blank row above and below the text. The opaque
+    /// backing stays either way.
+    public let frame: Bool
 
     /// maxTextLength caps `detail` and a plain `message` in `HudLayout.textLength`'s unit; a markdown message
     /// takes `maxMarkdownLength` instead.
@@ -59,10 +65,13 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public init(message: String, detail: String? = nil, spinner: HudSpinner? = nil,
                 backgroundColor: String? = nil, textColor: String? = nil,
                 sizePercent: Int? = nil, position: HudPosition = .defaultPosition,
-                hideAfter: Double? = nil, markdown: Bool = false, fontSize: Double? = nil) {
+                hideAfter: Double? = nil, markdown: Bool = false, fontSize: Double? = nil,
+                sticky: Bool = false, frame: Bool = true) {
         self.hideAfter = hideAfter
         self.markdown = markdown
         self.fontSize = fontSize
+        self.sticky = sticky
+        self.frame = frame
         self.message = message
         self.detail = detail
         self.spinner = spinner
@@ -74,7 +83,7 @@ public struct HudSpec: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case message, detail, spinner, backgroundColor, textColor, sizePercent, position, hideAfter, markdown
-        case fontSize
+        case fontSize, sticky, frame
     }
 
     /// holdingCreationFields preserves the live background and font size, which the surface reads only at
@@ -82,13 +91,13 @@ public struct HudSpec: Codable, Equatable, Sendable {
     func holdingCreationFields(of live: HudSpec) -> HudSpec {
         HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: live.backgroundColor,
                 textColor: textColor, sizePercent: sizePercent, position: position, hideAfter: hideAfter,
-                markdown: markdown, fontSize: live.fontSize)
+                markdown: markdown, fontSize: live.fontSize, sticky: sticky, frame: frame)
     }
 
     func withSizePercent(_ percent: Int?) -> HudSpec {
         HudSpec(message: message, detail: detail, spinner: spinner, backgroundColor: backgroundColor,
                 textColor: textColor, sizePercent: percent, position: position, hideAfter: hideAfter,
-                markdown: markdown, fontSize: fontSize)
+                markdown: markdown, fontSize: fontSize, sticky: sticky, frame: frame)
     }
 
     public init(from decoder: Decoder) throws {
@@ -103,6 +112,8 @@ public struct HudSpec: Codable, Equatable, Sendable {
         hideAfter = try c.decodeIfPresent(Double.self, forKey: .hideAfter)
         markdown = try c.decodeIfPresent(Bool.self, forKey: .markdown) ?? false
         fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize)
+        sticky = try c.decodeIfPresent(Bool.self, forKey: .sticky) ?? false
+        frame = try c.decodeIfPresent(Bool.self, forKey: .frame) ?? true
     }
 }
 
@@ -200,9 +211,9 @@ public enum HudPosition: String, Codable, CaseIterable, Sendable {
     public static let defaultPosition = HudPosition.center
 
     /// Percent of the pane held clear at an edge the panel is anchored to, on EITHER axis; a `center` term
-    /// ignores it on that axis. The margin is held only while the panel is small enough to leave room —
-    /// `OverlayPanelStyle` centers instead of overhanging the pane, so a panel at or above
-    /// `HudLayout.maxSizePercent` ignores the anchor on that axis entirely.
+    /// ignores it on that axis, and a `sticky` spec holds none. The margin is held only while the panel is
+    /// small enough to leave room — `OverlayPanelStyle` centers instead of overhanging the pane, so a panel
+    /// that holds the margin and is at or above `HudLayout.maxSizePercent` ignores the anchor on that axis.
     public static let edgeMarginPercent = 10
 
     /// parse resolves a caller's spelling, aliases included. The ONE entry point for turning text into a
@@ -309,10 +320,14 @@ public struct HudPaneFrame: Equatable, Sendable {
 public struct HudPaneFrames: Equatable, Sendable {
     public var left: HudPaneFrame?
     public var right: HudPaneFrame?
+    /// The session detail area, which a session-wide HUD is laid out in. Cached from the deck rather than
+    /// read off the terminal views: zoom and the dashboard move those to another host.
+    public var detail: HudPaneFrame?
 
-    public init(left: HudPaneFrame? = nil, right: HudPaneFrame? = nil) {
+    public init(left: HudPaneFrame? = nil, right: HudPaneFrame? = nil, detail: HudPaneFrame? = nil) {
         self.left = left
         self.right = right
+        self.detail = detail
     }
 
     public subscript(_ pane: OverlayPane) -> HudPaneFrame? { pane == .left ? left : right }
@@ -320,6 +335,7 @@ public struct HudPaneFrames: Equatable, Sendable {
     public mutating func merge(_ other: HudPaneFrames) {
         if let left = other.left { self.left = left }
         if let right = other.right { self.right = right }
+        if let detail = other.detail { self.detail = detail }
     }
 }
 
@@ -329,10 +345,15 @@ public struct HudPaneFrames: Equatable, Sendable {
 public struct HudPanelSize: Equatable, Sendable {
     public let widthPercent: Int
     public let heightPercent: Int
+    /// The height the panel is drawn and painted at, already capped; nil for an unmeasured pane, which
+    /// falls back to `heightPercent`. Points rather than the percent because a percent of the pane grows
+    /// the panel with the window while its text stays the same size.
+    public let heightPoints: Double?
 
-    public init(widthPercent: Int, heightPercent: Int) {
+    public init(widthPercent: Int, heightPercent: Int, heightPoints: Double? = nil) {
         self.widthPercent = widthPercent
         self.heightPercent = heightPercent
+        self.heightPoints = heightPoints
     }
 }
 
@@ -356,14 +377,29 @@ public enum HudLayout {
     /// Cells the spinner glyph and its trailing space claim, so turning the spinner on cannot rewrap text.
     static let spinnerWidth = 2
 
-    /// clampSizePercent bounds a CALLER'S `--size-percent` into the same range the measured WIDTH produces.
-    /// The maximum is the invariant `OverlayHudError.fullResize` states for `--full`, one layer down: a HUD
-    /// is a message ABOUT a session and must never cover it, and 100 would do exactly that. The read-back
-    /// reports the clamped value, so a caller sees what the panel actually took. Height takes no caller
-    /// override at all — `heightPercent` owns why.
+    /// clampSizePercent bounds a width into the range a panel holding its edge margin may take. The maximum
+    /// is the invariant `OverlayHudError.fullResize` states for `--full`, one layer down: a HUD is a message
+    /// ABOUT a session and must never cover it. Every path sizing a live HUD takes `clampSizePercent(_:for:)`
+    /// instead, since a sticky spec may take more. Height takes no caller override at all — `heightPercent`
+    /// owns why.
     public static func clampSizePercent(_ requested: Int) -> Int {
         min(max(requested, minSizePercent), maxSizePercent)
     }
+
+    /// The widest `spec`'s panel may be. A sticky panel off center owes no edge margin, so nothing is left
+    /// for the two margins `maxSizePercent` reserves and it may span the pane.
+    static func maxWidthPercent(for spec: HudSpec) -> Int {
+        spec.sticky && spec.position != .center ? 100 : maxSizePercent
+    }
+
+    /// clampSizePercent bounds a width for `spec`'s own panel, which is what every path sizing a live HUD
+    /// takes. The read-back reports the clamped value, so a caller sees what the panel actually took.
+    static func clampSizePercent(_ requested: Int, for spec: HudSpec) -> Int {
+        min(max(requested, minSizePercent), maxWidthPercent(for: spec))
+    }
+
+    /// Blank rows above and below the text: one each for a framed panel, none for a frameless one.
+    static func verticalPadding(for spec: HudSpec) -> Int { spec.frame ? verticalPadding : 0 }
 
     /// box returns the cell box the panel needs for `spec`: the wrapped content plus the frame padding. It
     /// decides how BIG the panel is (through `widthPercent` and `heightPercent`); `panelGrid` decides where
@@ -372,7 +408,8 @@ public enum HudLayout {
         let widths = spec.markdown ? markdownRows(for: spec, columns: wrapColumns).map(HudMarkdown.width)
             : bodyLines(for: spec).map(cellCount)
         let content = max((widths.max() ?? 0) + (spec.spinner != nil ? spinnerWidth : 0), 1)
-        return (columns: content + horizontalPadding * 2, rows: max(widths.count, 1) + verticalPadding * 2)
+        return (columns: content + horizontalPadding * 2,
+                rows: max(widths.count, 1) + verticalPadding(for: spec) * 2)
     }
 
     /// panelSize is the ONE place the two axes are decided together: the caller's `--size-percent` reaches
@@ -381,8 +418,9 @@ public enum HudLayout {
     /// each axis' own rules.
     public static func panelSize(for spec: HudSpec, pane: PaneMetrics) -> HudPanelSize {
         let box = box(for: spec, wrapColumns: wrapColumns(for: spec, pane: pane))
-        return HudPanelSize(widthPercent: spec.sizePercent ?? widthPercent(box: box, pane: pane),
-                            heightPercent: heightPercent(box: box, pane: pane))
+        let width = spec.sizePercent ?? widthPercent(box: box, pane: pane, maxPercent: maxWidthPercent(for: spec))
+        return HudPanelSize(widthPercent: width, heightPercent: heightPercent(box: box, pane: pane),
+                            heightPoints: heightPoints(box: box, pane: pane))
     }
 
     /// wrapColumns is the width a markdown message wraps at before its panel exists: the text columns of
@@ -390,25 +428,29 @@ public enum HudLayout {
     /// `maxColumns` for a plain message and for a pane with no measured width. The caller's percent is
     /// clamped as the store clamps it, or the height is budgeted for a width the panel never has.
     static func wrapColumns(for spec: HudSpec, pane: PaneMetrics) -> Int {
-        let widest = HudPanelSize(widthPercent: spec.sizePercent.map(clampSizePercent) ?? maxSizePercent,
+        let widest = HudPanelSize(widthPercent: spec.sizePercent.map { clampSizePercent($0, for: spec) }
+                                      ?? maxWidthPercent(for: spec),
                                   heightPercent: maxSizePercent)
         guard spec.markdown, let grid = panelGrid(size: widest, pane: pane) else { return maxColumns }
         return textColumns(in: grid.columns, for: spec)
     }
 
     /// textColumns is what a panel `columns` wide leaves for text once its padding and the spinner's gutter
-    /// are taken, never more than `maxColumns`.
+    /// are taken. `maxColumns` bounds it only while the app measures the width: a caller who set one asked
+    /// for text that wide.
     static func textColumns(in columns: Int, for spec: HudSpec) -> Int {
-        min(max(columns - horizontalPadding * 2 - (spec.spinner != nil ? spinnerWidth : 0), 1), maxColumns)
+        let available = max(columns - horizontalPadding * 2 - (spec.spinner != nil ? spinnerWidth : 0), 1)
+        return spec.sizePercent == nil ? min(available, maxColumns) : available
     }
 
     /// widthPercent returns the share of the pane's WIDTH the panel takes: the box's columns plus the
-    /// terminal's own padding, clamped into `minSizePercent...maxSizePercent`. A pane with no measured width
-    /// resolves to `maxSizePercent`: nothing is known to fit, so the panel takes the most room allowed.
-    public static func widthPercent(box: (columns: Int, rows: Int), pane: PaneMetrics) -> Int {
+    /// terminal's own padding, clamped into `minSizePercent...maxPercent`. A pane with no measured width
+    /// resolves to `maxPercent`: nothing is known to fit, so the panel takes the most room allowed.
+    public static func widthPercent(box: (columns: Int, rows: Int), pane: PaneMetrics,
+                                    maxPercent: Int = maxSizePercent) -> Int {
         let needed = Double(max(box.columns, 0)) * pane.cellWidth + pane.paddingWidth * 2
-        let measured = percent(needed, of: pane.paneWidth) ?? maxSizePercent
-        return min(max(measured, minSizePercent), maxSizePercent)
+        let measured = percent(needed, of: pane.paneWidth) ?? maxPercent
+        return min(max(measured, minSizePercent), maxPercent)
     }
 
     /// heightPercent returns the share of the pane's HEIGHT the panel takes, and it is measured from the
@@ -426,20 +468,29 @@ public enum HudLayout {
         return min(max(measured, 1), maxSizePercent)
     }
 
-    /// panelGrid returns the cell grid the PANEL ITSELF gets: each percentage's share of its own pane
-    /// dimension, less the terminal's padding, over one cell. The two percentages are measured separately,
-    /// so the panel tracks the box on both axes and the helper centers in a frame the size of its content.
-    /// It still centers on THIS grid rather than the box, which the rounding to whole cells can differ from.
+    /// heightPoints is the same need in points, under the same cap, and is what the panel is laid out and
+    /// painted at. Nil for an unmeasured pane.
+    public static func heightPoints(box: (columns: Int, rows: Int), pane: PaneMetrics) -> Double? {
+        guard pane.paneHeight > 0, pane.cellHeight > 0 else { return nil }
+        let needed = Double(max(box.rows, 0)) * pane.cellHeight + pane.paddingHeight * 2
+        return min(needed, pane.paneHeight * Double(maxSizePercent) / 100)
+    }
+
+    /// panelGrid returns the cell grid the PANEL ITSELF gets: its width percent of the pane and its height
+    /// in points, each less the terminal's padding, over one cell. The percent stands in for the height only
+    /// when no points were measured. The helper centers on THIS grid rather than the box, which the rounding
+    /// to whole cells can differ from.
     ///
     /// Nil when the pane is not measured (an unrealized session, a zero cell): there is no panel grid to
-    /// compute, and `paintGrid` falls back to the box. The result is an ESTIMATE — a user
-    /// `window-padding-*` override is not tracked — so it can miss by a column.
+    /// compute, and `paintGrid` falls back to the box. The columns are an estimate from a whole percent of
+    /// the pane, so they can miss by one.
     public static func panelGrid(size: HudPanelSize, pane: PaneMetrics) -> (columns: Int, rows: Int)? {
         guard pane.cellWidth > 0, pane.cellHeight > 0, pane.paneWidth > 0, pane.paneHeight > 0 else { return nil }
         let columns = Int((pane.paneWidth * Double(size.widthPercent) / 100
             - pane.paddingWidth * 2) / pane.cellWidth)
-        let rows = Int((pane.paneHeight * Double(size.heightPercent) / 100
-            - pane.paddingHeight * 2) / pane.cellHeight)
+        let height = size.heightPoints ?? pane.paneHeight * Double(size.heightPercent) / 100
+        // the points were built from whole rows, and the division can land a hair under the integer
+        let rows = Int((height - pane.paddingHeight * 2) / pane.cellHeight + 0.001)
         guard columns > 0, rows > 0 else { return nil }
         return (columns: columns, rows: rows)
     }
@@ -522,7 +573,7 @@ public enum HudLayout {
         let gutter = spec.spinner != nil ? spinnerWidth : 0
         let rows = HudMarkdown.fitted(markdownRows(for: spec, columns: textColumns(in: grid.columns, for: spec)),
                                       columns: grid.columns - horizontalPadding * 2 - gutter,
-                                      rows: grid.rows - verticalPadding * 2)
+                                      rows: grid.rows - verticalPadding(for: spec) * 2)
         let blockWidth = max((rows.map(HudMarkdown.width).max() ?? 0) + gutter, 1)
         let indent = String(repeating: " ", count: gutter)
         let lines = rows.enumerated().map { index, row in

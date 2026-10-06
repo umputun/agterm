@@ -494,7 +494,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id}</span>, one of file and url set,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
-                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?}</span>, where
+                slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?, sticky, frame}</span>, where
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">spinner</span> names the effective style or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">none</span> —
                 omitted when none is up; mutually exclusive with
@@ -1813,7 +1813,7 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Against a <a href="#hud" style="color: #6d82f3">HUD</a> a percent is accepted and re-flows its WIDTH (the height
-                stays measured from the message, which a resize does not change), but
+                is measured again for that width), but
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span> errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a hud is always floating: pass --size-percent, not --full</span>
                 — full size would cover the session the message is about.
@@ -2022,8 +2022,8 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session hud [open] &lt;message&gt;|--file FILE [--markdown] [--font-size PT] [--detail T] [--spinner] [--spinner-style S] [--position P]
-                [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS]
-                [--pane P] [--pane-id ID] [--target T] [--window W]
+                [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame]
+                [--hide-after SECONDS] [--pane P] [--pane-id ID] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -2064,8 +2064,18 @@
                 closing the target closes the HUD.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100)
                 overrides the WIDTH only; the height always follows the message, since a caller-set height could only strand it
-                in an empty box. The effective width is bounded to 10–80% of the pane, so a message never covers the session
-                it is about and a requested 100 reads back as 80. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> gives the
+                in an empty box. The effective width is bounded to 10–80% of the pane, or up to 100% with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--sticky</span> off center, so without it a requested 100 reads back as 80.
+                The height follows the rendered rows, capped at 80% of the pane. Markdown wraps at the panel's text width
+                once a width is set, here or by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay resize</span>, and at 60 columns at
+                most while the app measures the width.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--sticky</span> drops the edge margin, so the panel sits flush against the edge or
+                corner <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--position</span> names (center ignores it); it does not force full width.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--no-frame</span> draws no border, no rounded corners and no blank row above and
+                below the text, keeping the opaque backing. Together with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--position top --size-percent 100</span> they make a caption: a strip across the
+                top as tall as its text. Both read back, as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sticky</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">frame</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> gives the
                 panel its own solid background, read once when the panel is created, while
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--text-color</span> colors the TEXT and rides the
                 panel's body file, so an update can change it. Both effective shares read back, as
@@ -2091,7 +2101,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">http</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">https</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">mailto</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ftp</span> open, a local <span style="font-family: &quot;JetBrains Mono&quot;, monospace">file://</span> link is revealed in Finder, and a link to anything
                 else is its plain label. That ⌘-click is the one click the panel takes, and it moves no focus. It raises the message cap to 4096 characters and allows newlines and tabs in it; the
                 detail keeps the plain rules. A message that renders nothing visible is refused like an empty one. A single newline inside a paragraph is a space, so end a line with two spaces or a
-                backslash, or use list items; lists always render tight. Text wraps at the panel's width, 60 columns at most, while table rows stay intact,
+                backslash, or use list items; lists always render tight. Text wraps at the panel's width, while table rows stay intact,
                 all left-aligned as one block. What does not fit is clipped: a table row too wide ends in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">…</span>, and rows past the
                 panel's height give way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace">… N more</span>, itself clipped in a narrow panel. Trailing all-empty table
                 rows and an all-empty header row are not shown; a table is framed in box-drawing borders with a rule under its header.
@@ -2109,8 +2119,8 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session hud update &lt;message&gt;|--file FILE [--markdown] [--detail T] [--spinner] [--spinner-style S] [--position P]
-                [--text-color #rrggbb] [--size-percent N] [--hide-after SECONDS] [--pane P] [--pane-id ID]
-                [--target T] [--window W]
+                [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS]
+                [--pane P] [--pane-id ID] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.hud.update</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">

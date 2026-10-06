@@ -47,6 +47,7 @@ struct TerminalSearchBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(terminalColor, in: RoundedRectangle(cornerRadius: 8))
+        .background(HudClickCover())
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(chromeText.opacity(0.18), lineWidth: 1))
         .shadow(radius: 8)
         .onAppear { fieldFocused = true }

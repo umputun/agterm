@@ -323,16 +323,20 @@ public final class Session: Identifiable {
     /// The percent of the pane an opaque framed panel occupies with the session still VISIBLE behind it; nil
     /// is the full-pane program overlay, which hides it and draws translucent. 1...100 for a floating PROGRAM
     /// overlay, which takes it on BOTH axes and is always centered; a HUD shares the field for its WIDTH
-    /// only, bounded by `HudLayout.clampSizePercent` and placed by its own `HudSpec.position`, and sizes its
-    /// height through `hudHeightPercent`. Cleared on close, never persisted.
+    /// only, bounded by `HudLayout.clampSizePercent(_:for:)` and placed by its own `HudSpec.position`, and
+    /// sizes its height through `hudHeightPoints`. Cleared on close, never persisted.
     public var overlaySizePercent: Int?
 
     /// The percent of the pane's HEIGHT a HUD panel occupies, measured from its message rather than set by
     /// the caller (`HudLayout.heightPercent`); nil for an empty slot and for a program overlay, which takes
     /// `overlaySizePercent` on both axes. A HUD is two or three lines of text, so sharing one percent across
-    /// both axes made every panel as tall as it was wide. Observed — the deck reads it to frame the panel.
-    /// Cleared with the rest of the HUD state, never persisted.
+    /// both axes made every panel as tall as it was wide. The read-back, and what the deck frames with
+    /// when no points were measured. Cleared with the rest of the HUD state, never persisted.
     public var hudHeightPercent: Int?
+
+    /// The height a HUD panel is laid out at, in points and already capped; nil over an unmeasured pane,
+    /// which falls back to `hudHeightPercent`. Cleared with the rest of the HUD state, never persisted.
+    public var hudHeightPoints: Double?
 
     /// hudFontSize is the point size the live HUD's surface was created at: the caller's `HudSpec.fontSize`
     /// or the session's size at open. Measuring reads it, so a session zoom after open cannot change the
@@ -483,6 +487,7 @@ public final class Session: Identifiable {
         hudPaneIdentity = nil
         hudFile = nil
         hudHeightPercent = nil
+        hudHeightPoints = nil
         hudFontSize = nil
         hudExpiresAt = nil
         hudResizedWidthPercent = nil
@@ -503,9 +508,9 @@ public final class Session: Identifiable {
     /// When the app hides the published panel, nil for a persistent one.
     @ObservationIgnored var hudExpiresAt: Date?
 
-    /// The width an `overlay.resize` forced on the published panel, until the next open or update resolves
-    /// the size from its own spec. A viewer sizes from its own pane, so only a forced width travels.
-    @ObservationIgnored var hudResizedWidthPercent: Int?
+    /// The width an `overlay.resize` forced on the panel, until the next open or update resolves the size
+    /// from its own spec. A viewer sizes from its own pane, so only a forced width travels.
+    @ObservationIgnored public internal(set) var hudResizedWidthPercent: Int?
 
     /// Counts publications of the panel. Frame order is what keeps a stale close off a later panel; a
     /// viewer does not read this.
@@ -515,8 +520,8 @@ public final class Session: Identifiable {
     /// that drops a HUD already routes through that one method, which is why the hook hangs there.
     public var onHudDiscarded: (() -> Void)?
 
-    /// onHudGeometryChange tells the app the live HUD panel's measured size changed, so it can rewrite the
-    /// grid in the body header; `discardHudBody` clears it with the rest of the HUD state.
+    /// onHudGeometryChange tells the app the bounds the live HUD is laid out in, or its surface's grid,
+    /// changed, so it can measure the panel again; `discardHudBody` clears it with the rest of the HUD state.
     @ObservationIgnored public var onHudGeometryChange: (() -> Void)?
 
     /// hudActive says the slot holds a passive HUD; the one predicate separating it from the covers.

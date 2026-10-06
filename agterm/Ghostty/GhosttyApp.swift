@@ -639,13 +639,13 @@ final class GhosttyApp {
             settingsConf.withCString { ghostty_config_load_file(cfg, $0) }
         }
 
-        // a per-surface overlay, loaded LAST so it wins over everything above; only `configWithOverlay` passes
-        // it, the app/global build leaves it nil.
+        ghostty_config_load_recursive_files(cfg)
+        // a per-surface overlay, loaded LAST so it wins over everything above, the `config-file` includes the
+        // line before expands too: one of those restating a key would otherwise outrank it. Only
+        // `configWithOverlay` passes it, the app/global build leaves it nil.
         if let extraOverlayPath, FileManager.default.fileExists(atPath: extraOverlayPath) {
             extraOverlayPath.withCString { ghostty_config_load_file(cfg, $0) }
         }
-
-        ghostty_config_load_recursive_files(cfg)
         forceUnsupportedShellFeaturesOff(cfg)
         clearStaticTitle(cfg)
         ghostty_config_finalize(cfg)
