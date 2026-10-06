@@ -49,6 +49,27 @@ struct RemotesTests {
         #expect(diagnostics == [KeymapDiagnostic(line: 3, message: "remote 'studio' is already defined; remote skipped")])
     }
 
+    @Test func aMissingFileLoadsAsNoRemotes() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("remotes-\(UUID().uuidString).conf")
+        let loaded = try RemotesFile.load(at: url)
+        #expect(loaded.remotes.entries.isEmpty)
+        #expect(loaded.diagnostics.isEmpty)
+    }
+
+    @Test func anExistingFileLoadsItsEntries() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("remotes-\(UUID().uuidString).conf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "studio\n".write(to: url, atomically: true, encoding: .utf8)
+        #expect(try RemotesFile.load(at: url).remotes.entries.map(\.destination) == ["studio"])
+    }
+
+    @Test func aFileThatExistsButCannotBeReadThrows() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("remotes-\(UUID().uuidString).conf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try RemotesFile.load(at: url) }
+    }
+
     @Test func emptyTextParsesToNothing() {
         let (remotes, diagnostics) = parseRemotesConf("")
         #expect(remotes.entries.isEmpty)

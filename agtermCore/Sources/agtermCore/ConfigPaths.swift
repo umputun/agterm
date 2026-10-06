@@ -32,31 +32,6 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("remotes.conf")
     }
 
-    /// starterRemotesConf is the commented starter `remotes.conf`; every line is a comment, so a fresh
-    /// file lists nothing.
-    public static func starterRemotesConf() -> String {
-        """
-        # agterm remotes — the Macs File ▸ Attach Remote… offers. Blank lines and lines starting with
-        # `#` are ignored. The file is read each time it is used, so there is nothing to reload.
-        #
-        #   destination [label...]
-        #
-        # destination is the one argument ssh gets: a host, user@host, or a Host alias from
-        # ~/.ssh/config, which is also where a port, a key or a jump host belongs. The rest of the line
-        # is an optional label for the picker and may contain spaces.
-        #
-        # The far side must run agterm in Live sessions mode with agtermctl installed, and key-based ssh
-        # to it must already work: `ssh -o BatchMode=yes <destination> true` has to exit silently.
-        # `agtermctl zmx remotes` prints what this file parses to.
-        #
-        # Examples:
-        #
-        #   studio.local
-        #   me@192.168.1.33   Mac Studio
-
-        """
-    }
-
     /// The commented starter `hooks.conf`: the one-verb syntax, every event kind, the delivery contract and
     /// example lines. Every line is a comment so a fresh file runs nothing.
     public static func starterHooksConf() -> String {

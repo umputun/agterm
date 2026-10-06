@@ -123,6 +123,12 @@ extension agtermApp {
                 Button("Open Directory…") { actions.openDirectory() }
                     .keyboardShortcut(shortcut(for: .openDirectory))
                     .disabled(!PaletteCommand.openDirectory.isEnabled(in: context))
+                Menu("Attach Remote") {
+                    ForEach(actions.configuredRemotes, id: \.destination) { remote in
+                        Button(remote.label) { actions.attachRemote(remote.destination) }
+                    }
+                }
+                .disabled(actions.configuredRemotes.isEmpty || modalActive)
                 Menu("Open Recent") {
                     let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
                     let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }

@@ -45,16 +45,6 @@ struct ConfigPathsTests {
         #expect(ConfigPaths.remotesPath(configDirectory: dir).path == expected)
     }
 
-    @Test func starterRemotesConfIsCommentedAndParsesToNothing() {
-        let starter = ConfigPaths.starterRemotesConf()
-        #expect(starter.contains("destination [label...]"))
-        #expect(starter.contains("agtermctl zmx remotes"))
-        #expect(starter.split(separator: "\n").allSatisfy { $0.hasPrefix("#") })
-        let (remotes, diagnostics) = parseRemotesConf(starter)
-        #expect(remotes.entries.isEmpty)
-        #expect(diagnostics.isEmpty)
-    }
-
     @Test func starterHooksConfIsCommentedListsKindsAndParsesToNothing() {
         let starter = ConfigPaths.starterHooksConf()
         #expect(starter.contains("on <kind> <shell...>"))

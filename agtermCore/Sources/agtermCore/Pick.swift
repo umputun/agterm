@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 /// One picker request currently presented by a window.
@@ -40,6 +41,7 @@ public final class PickController {
     public private(set) var recentResults: [ResolvedPick] = []
     /// The GUI ask currently awaiting an answer in this window.
     public private(set) var pendingAsk: PendingAsk?
+    @ObservationIgnored private var pickWaiter: (id: String, continuation: CheckedContinuation<ControlPickResult, Never>)?
     fileprivate var windowID: WindowInfo.ID?
     /// Reserves the window modal slot for a pick or GUI ask.
     public var modalPending: Bool { pending != nil || pendingAsk != nil }
@@ -69,6 +71,17 @@ public final class PickController {
             recentResults.removeFirst(recentResults.count - Self.retainedResultLimit)
         }
         self.pending = nil
+        if let waiter = pickWaiter, waiter.id == pending.id {
+            pickWaiter = nil
+            waiter.continuation.resume(returning: outcome)
+        }
+    }
+
+    /// pick opens `pick` and suspends until it resolves, for a caller inside the app. Returns nil when the
+    /// modal slot is taken.
+    public func pick(_ pick: PendingPick) async -> ControlPickResult? {
+        guard open(pick) else { return nil }
+        return await withCheckedContinuation { pickWaiter = (pick.id, $0) }
     }
 
     /// Completes the pending picker as cancelled.

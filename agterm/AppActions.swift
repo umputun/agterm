@@ -383,6 +383,7 @@ final class AppActions {
 
     /// The session whose open overlay is the hooks editor, so its close reloads the hooks. Nil when none.
     var hooksEditOverlaySession: UUID?
+    weak var remoteAttacher: (any RemoteAttaching)?
 
     /// Open `hooks.conf` in the user's editor in a 95% overlay over the active session, exactly like
     /// `editKeymap`; exiting reloads the hooks.

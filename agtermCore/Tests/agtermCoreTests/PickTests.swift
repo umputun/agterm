@@ -35,6 +35,47 @@ struct PickTests {
         #expect(controller.pendingModalError == nil)
     }
 
+    @Test func anAwaitedPickDeliversTheAnswerOnceAndKeepsItReadable() async throws {
+        let controller = PickController()
+        let pick = makePick(id: "sessions")
+        let outcome = ControlPickResult(result: .picked, id: "one", label: "One", index: 0)
+
+        async let answer = controller.pick(pick)
+        try await waitUntil { controller.pending == pick }
+        controller.resolve(outcome)
+        controller.resolve(ControlPickResult(result: .cancelled))
+
+        #expect(await answer == outcome)
+        #expect(controller.result(for: pick.id) == outcome)
+        #expect(!controller.modalPending)
+    }
+
+    @Test func anAwaitedPickDismissedByTheUserDeliversCancelled() async throws {
+        let controller = PickController()
+        let pick = makePick(id: "sessions")
+
+        async let answer = controller.pick(pick)
+        try await waitUntil { controller.pending == pick }
+        controller.cancel()
+
+        #expect(await answer == ControlPickResult(result: .cancelled))
+    }
+
+    @Test func anAwaitedPickIsRefusedWhileAnotherModalHoldsTheSlot() async {
+        let controller = PickController()
+        #expect(controller.open(makePick(id: "socket")))
+
+        let result = await controller.pick(makePick(id: "flow"))
+
+        #expect(result == nil)
+        #expect(controller.pending?.id == "socket")
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        for _ in 0..<1000 where !condition() { await Task.yield() }
+        try #require(condition())
+    }
+
     @Test func cancelRetainsCancelledResult() {
         let controller = PickController()
         let pick = makePick(id: "pick-cancel")

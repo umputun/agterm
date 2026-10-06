@@ -23,6 +23,16 @@ public struct Remotes: Equatable, Sendable {
     }
 }
 
+/// RemotesFile reads `remotes.conf` from disk.
+public enum RemotesFile {
+    /// load parses the file at `url`. A missing file is an empty list; one that exists and cannot be read
+    /// throws, so it is never mistaken for "no remotes".
+    public static func load(at url: URL) throws -> (remotes: Remotes, diagnostics: [KeymapDiagnostic]) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return (Remotes(), []) }
+        return parseRemotesConf(try String(contentsOf: url, encoding: .utf8))
+    }
+}
+
 /// parseRemotesConf reads `remotes.conf`. Only a whole-line `#` is a comment: the rest of a line after
 /// the destination is the label verbatim. A bad line is diagnosed and skipped; later lines still parse.
 public func parseRemotesConf(_ text: String) -> (remotes: Remotes, diagnostics: [KeymapDiagnostic]) {
