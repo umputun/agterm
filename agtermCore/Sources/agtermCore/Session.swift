@@ -991,12 +991,3 @@ public final class Session: Identifiable {
         searchSurface = nil
     }
 }
-
-extension String {
-    /// Trimmed of surrounding whitespace and newlines, nil if empty — the one normalizer for the
-    /// rename/displayName "blank after trim" rule.
-    var trimmedOrNil: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-}

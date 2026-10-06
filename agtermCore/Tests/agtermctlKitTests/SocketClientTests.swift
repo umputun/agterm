@@ -320,6 +320,7 @@ struct SocketClientTests {
             custom_command_palette      ctrl+shift+o
             show_attention              ctrl+shift+i
             dashboard                   cmd+shift+g
+            attach_remote               cmd+shift+r
 
         commands:
             Deploy  cmd+shift+y
