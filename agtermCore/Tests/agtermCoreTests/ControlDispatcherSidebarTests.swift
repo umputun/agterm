@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct ControlDispatcherSidebarTests {
-    @Test(arguments: [("flat", .flat), ("tree", .tree), ("toggle", .toggle), (nil, .toggle)] as [(String?, ControlFlaggedLayoutMode)])
+    @Test(arguments: [("flat", .flat), ("plain", .plain), ("tree", .tree), ("toggle", .toggle), (nil, .toggle)] as [(String?, ControlFlaggedLayoutMode)])
     func flaggedLayoutRoutesTheParsedMode(_ raw: String?, _ mode: ControlFlaggedLayoutMode) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

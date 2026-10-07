@@ -1613,9 +1613,9 @@ struct CommandsTests {
             == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "toggle")))
     }
 
-    @Test func sidebarFlaggedLayoutTree() throws {
-        #expect(try request(["sidebar", "flagged-layout", "tree"])
-            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "tree")))
+    @Test(arguments: ["flat", "plain", "tree"]) func sidebarFlaggedLayoutNamesALayout(_ layout: String) throws {
+        #expect(try request(["sidebar", "flagged-layout", layout])
+            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: layout)))
     }
 
     @Test func sidebarFlaggedLayoutRejectsBadLayoutAndAWindowTarget() {

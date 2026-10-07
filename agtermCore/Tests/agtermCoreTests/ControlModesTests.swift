@@ -107,6 +107,7 @@ struct ControlModesTests {
     @Test func flaggedLayoutModeParsesModes() {
         #expect(ControlFlaggedLayoutMode.parse(nil) == .toggle)
         #expect(ControlFlaggedLayoutMode.parse("flat") == .flat)
+        #expect(ControlFlaggedLayoutMode.parse("plain") == .plain)
         #expect(ControlFlaggedLayoutMode.parse("tree") == .tree)
         #expect(ControlFlaggedLayoutMode.parse("toggle") == .toggle)
         #expect(ControlFlaggedLayoutMode.parse("grid") == nil)

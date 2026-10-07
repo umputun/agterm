@@ -106,6 +106,13 @@ final class SettingsUITests: XCTestCase {
                       "selecting 'Workspace tree' should persist flaggedViewLayout=tree to settings.json")
 
         picker.click()
+        let plain = app.menuItems["Flat list, names only"]
+        XCTAssertTrue(plain.waitForExistence(timeout: 5), "the layout picker should offer 'Flat list, names only'")
+        plain.click()
+        XCTAssertTrue(poll { self.settingsValue("flaggedViewLayout") == "plain" },
+                      "selecting 'Flat list, names only' should persist flaggedViewLayout=plain to settings.json")
+
+        picker.click()
         let flat = app.menuItems["Flat list"]
         XCTAssertTrue(flat.waitForExistence(timeout: 5), "the layout picker should offer 'Flat list'")
         flat.click()

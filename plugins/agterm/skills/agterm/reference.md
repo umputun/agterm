@@ -281,7 +281,7 @@ window's sidebar is currently shown — the read side of the write-only `sidebar
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
 `sidebar mode`), `linkOpenMode` (`browser` or `overlay`, app-wide, the read side of `browser links`),
-`sidebarFlaggedLayout` (`flat` or `tree` — how the flagged view is arranged, the read side
+`sidebarFlaggedLayout` (`flat`, `plain` or `tree` — how the flagged view is arranged, the read side
 of `sidebar flagged-layout`; app-wide, so every window reports the same value, under the ordinary tree
 too), `sidebarWidth` (the sidebar divider position in points, the read side of
 `sidebar width`, reported here and nowhere else), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
@@ -337,7 +337,7 @@ buys nothing. A caller with no tree uses `version`.
   workspace id. A workspace's COLLAPSED state does not affect it — a folded workspace is stepped into
   like any other. While the focus filter is applied, stepping is confined to the marked workspaces, the
   same scoping `session go` gets. Errors with `no other workspace to navigate to` when there is nowhere
-  to step: flagged mode under either layout (stepping follows the focus projection, which the flagged
+  to step: flagged mode under any layout (stepping follows the focus projection, which the flagged
   tree does not render), or a single visible workspace.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
@@ -352,7 +352,7 @@ buys nothing. A caller with no tree uses `version`.
   into the set leaving the filter flag EXACTLY as it was. `add` never switches the filter on: that is
   what makes a multi-workspace set buildable, since a mark that narrowed the tree would hide the rows
   still to be marked, so mark several and apply once with `workspace filter on`.
-  Per-window and persisted; orthogonal to `sidebar mode` (the flagged view ignores the filter in both layouts).
+  Per-window and persisted; orthogonal to `sidebar mode` (the flagged view ignores the filter in every layout).
   While the filter is applied, `session go` navigation is scoped to the marked workspaces' sessions (and
   to the flagged set in flagged mode); an explicit `session select` of a session outside the set switches
   the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`.
@@ -1405,9 +1405,10 @@ to the flagged sessions only; back in `tree` it spans the marked workspaces' ses
 filter is applied) or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
 ⌃⇧P palette. Use with `session flag` to build and view a cross-workspace working set.
 
-`agtermctl sidebar flagged-layout [flat|tree|toggle]` — pick how the flagged view arranges its sessions.
-`flat` is one list labeled `session : workspace`; `tree` nests the flagged sessions under their workspace
-rows and leaves out workspaces holding none. `toggle` is the default; an unknown layout is an error.
+`agtermctl sidebar flagged-layout [flat|plain|tree|toggle]` — pick how the flagged view arranges its sessions.
+`flat` is one list labeled `session : workspace`; `plain` is the same list labeled by session name alone;
+`tree` nests the flagged sessions under their workspace rows and leaves out workspaces holding none.
+`toggle` is the default, leaving `tree` for `flat` and either flat form for `tree`; an unknown layout is an error.
 APP-WIDE, the same setting as Settings ▸ General ▸ Flagged view layout: no `--window`, no open window
 needed, and every window's flagged view follows at once. Setting it never enters flagged mode and never
 moves the selection. Returns the resulting layout in `result.text`; read back as the tree's top-level

@@ -95,6 +95,30 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         XCTAssertEqual(sidebar.rows, ["s:a1 : Alpha", "s:c1 : Gamma"])
     }
 
+    func testPlainLayoutListsSessionNamesAlone() throws {
+        let store = try seededStore()
+        store.setSidebarMode(.flagged)
+        model.setFlaggedViewLayout(.plain)
+
+        let sidebar = mount(store)
+
+        XCTAssertEqual(sidebar.rows, ["s:a1", "s:c1"])
+    }
+
+    func testSwitchBetweenTheFlatFormsRelabelsAMountedSidebar() throws {
+        let store = try seededStore()
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+
+        model.setFlaggedViewLayout(.plain)
+
+        XCTAssertEqual(sidebar.rows, ["s:a1", "s:c1"])
+
+        model.setFlaggedViewLayout(.flat)
+
+        XCTAssertEqual(sidebar.rows, ["s:a1 : Alpha", "s:c1 : Gamma"])
+    }
+
     func testTreeLayoutIgnoresTheFocusFilter() throws {
         let store = try seededStore()
         let beta = try XCTUnwrap(store.workspaces.first { $0.name == "Beta" })

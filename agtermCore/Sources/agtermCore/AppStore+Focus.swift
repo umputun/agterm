@@ -159,7 +159,7 @@ extension AppStore {
     /// The workspaces the sidebar TREE renders: the marked set while the filter is enabled, else all — the
     /// `!workspaceFilter || focused` TERM of the row-visibility contract (`ControlWorkspaceNode.focused`), not
     /// the whole predicate a script evaluates: sidebar mode and visibility gate the tree ABOVE this (`.flagged`
-    /// renders the flagged sessions, in either layout, and never calls here). The empty-result fallback guards an INVARIANT
+    /// renders the flagged sessions, in any layout, and never calls here). The empty-result fallback guards an INVARIANT
     /// VIOLATION only — reaching it takes writing the two stored fields directly (`internal(set)`, so
     /// in-module), since the mutators keep `enabled + empty` out of reach, marking is gated on the id existing
     /// and `restoreFocus` prunes stale ids. Rendering the full tree beats stranding the user with no rows.

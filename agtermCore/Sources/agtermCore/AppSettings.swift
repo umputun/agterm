@@ -11,11 +11,12 @@ public enum ToolbarMode: String, Codable, Sendable, CaseIterable {
     case hidden
 }
 
-/// How the sidebar's flagged view arranges its sessions: `flat` is one list labelled `session : workspace`,
-/// `tree` nests them under their workspace rows. App-wide, not per window. Raw-stored, resolved by
-/// `effectiveFlaggedViewLayout`.
+/// FlaggedViewLayout arranges the sidebar's flagged view: `flat` is one list labelled `session : workspace`,
+/// `plain` the same list labelled by session name alone, `tree` nests them under their workspace rows.
+/// App-wide, not per window. Raw-stored, resolved by `effectiveFlaggedViewLayout`.
 public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case flat
+    case plain
     case tree
 }
 

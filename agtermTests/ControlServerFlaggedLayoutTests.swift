@@ -51,6 +51,21 @@ final class ControlServerFlaggedLayoutTests: XCTestCase {
         XCTAssertEqual(GhosttyApp.shared.flaggedViewLayout, .flat)
     }
 
+    func testSetsThePlainLayout() {
+        let response = server.setFlaggedViewLayout(.plain)
+
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(text: "plain")))
+        XCTAssertEqual(GhosttyApp.shared.flaggedViewLayout, .plain)
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().flaggedViewLayout, "plain")
+    }
+
+    func testToggleLeavesThePlainLayoutForTheTreeAndReturnsToFlat() {
+        _ = server.setFlaggedViewLayout(.plain)
+
+        XCTAssertEqual(server.setFlaggedViewLayout(.toggle).result?.text, "tree")
+        XCTAssertEqual(server.setFlaggedViewLayout(.toggle).result?.text, "flat")
+    }
+
     func testAnUnchangedLayoutAnswersOkWithoutABroadcast() {
         let posted = expectation(forNotification: .agtermAppearanceChanged, object: nil)
         posted.isInverted = true

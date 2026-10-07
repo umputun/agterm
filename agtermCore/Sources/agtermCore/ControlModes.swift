@@ -78,12 +78,14 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
 /// Parsed layout for `sidebar.flagged-layout`.
 public enum ControlFlaggedLayoutMode: Equatable, Sendable {
     case flat
+    case plain
     case tree
     case toggle
 
     public static func parse(_ mode: String?) -> ControlFlaggedLayoutMode? {
         switch mode ?? "toggle" {
         case "flat": return .flat
+        case "plain": return .plain
         case "tree": return .tree
         case "toggle": return .toggle
         default: return nil

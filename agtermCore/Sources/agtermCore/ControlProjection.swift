@@ -595,7 +595,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// write-only `sidebar.mode`. `tree`-only, as every field below is: a GUI toggle bypasses the command
     /// path, so a cached `window.list` copy would go stale.
     public let sidebarMode: String?
-    /// How the flagged view arranges its sessions — `FlaggedViewLayout.rawValue` (`flat` | `tree`). APP-WIDE,
+    /// How the flagged view arranges its sessions — `FlaggedViewLayout.rawValue` (`flat` | `plain` | `tree`). APP-WIDE,
     /// so every window's `tree` reports the same value, and reported under the ordinary tree too, where it
     /// is dormant. The read side of `sidebar.flagged-layout` and a term of the workspace-row visibility
     /// predicate on `ControlWorkspaceNode.focused`.

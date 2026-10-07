@@ -55,8 +55,9 @@ extension ControlServer {
         let want: FlaggedViewLayout
         switch mode {
         case .flat: want = .flat
+        case .plain: want = .plain
         case .tree: want = .tree
-        case .toggle: want = current == .flat ? .tree : .flat
+        case .toggle: want = current == .tree ? .flat : .tree
         }
         settingsModel.setFlaggedViewLayout(want)
         return ControlResponse(ok: true, result: ControlResult(text: want.rawValue))

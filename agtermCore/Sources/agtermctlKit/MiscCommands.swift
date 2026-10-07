@@ -724,13 +724,13 @@ struct Sidebar: ParsableCommand {
     /// Sets how every window's flagged sidebar view arranges its sessions; app-wide, so no `--window`.
     struct FlaggedLayout: RequestCommand {
         static let configuration = CommandConfiguration(
-            commandName: "flagged-layout", abstract: "Flagged view layout (flat|tree|toggle).")
-        @Argument(help: "Layout: flat, tree, or toggle (default).") var layout: String = "toggle"
+            commandName: "flagged-layout", abstract: "Flagged view layout (flat|plain|tree|toggle).")
+        @Argument(help: "Layout: flat, plain (flat without workspace names), tree, or toggle (default).") var layout: String = "toggle"
         @OptionGroup var options: BasicOptions
 
         func validate() throws {
-            guard ["flat", "tree", "toggle"].contains(layout) else {
-                throw ValidationError("layout must be flat, tree, or toggle")
+            guard ["flat", "plain", "tree", "toggle"].contains(layout) else {
+                throw ValidationError("layout must be flat, plain, tree, or toggle")
             }
         }
 

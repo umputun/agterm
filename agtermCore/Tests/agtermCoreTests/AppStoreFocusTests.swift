@@ -22,6 +22,7 @@ struct AppStoreFocusTests {
         #expect(store.rendersWorkspaceRows(flaggedLayout: .tree))
         store.setSidebarMode(.flagged)
         #expect(!store.rendersWorkspaceRows(flaggedLayout: .flat))
+        #expect(!store.rendersWorkspaceRows(flaggedLayout: .plain))
         #expect(store.rendersWorkspaceRows(flaggedLayout: .tree))
         #expect(!store.canStepWorkspaces)
     }
