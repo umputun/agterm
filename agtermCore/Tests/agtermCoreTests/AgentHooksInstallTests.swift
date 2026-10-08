@@ -23,14 +23,16 @@ struct AgentHooksInstallTests {
         (entry["hooks"] as? [[String: Any]])?.first?["command"] as? String
     }
 
-    @Test func mergeWhenAbsentAddsAllFourHooks() throws {
+    @Test func mergeWhenAbsentAddsAllFiveHooks() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: nil, scriptDir: scriptDir)
         #expect(result.changed)
         let evts = events(result.json)
+        #expect(evts.count == 5)
         #expect(evts["UserPromptSubmit"]?.count == 1)
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
+        #expect(evts["PermissionRequest"]?.count == 1)
         // the entries invoke the Claude adapter, which guards on ownership and forwards to the wrapper
         let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
         #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
@@ -39,9 +41,12 @@ struct AgentHooksInstallTests {
         // only the Stop hook passes --auto-reset (clear-on-visit); active/blocked stay keep-state
         #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
         #expect(command(evts["Notification"]![0]) == "'\(adapter)' blocked")
+        #expect(command(evts["PermissionRequest"]?.first ?? [:]) == "'\(adapter)' blocked")
         #expect(command(evts["UserPromptSubmit"]![0])?.contains("--auto-reset") == false)
         #expect(command(evts["Notification"]![0])?.contains("--auto-reset") == false)
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
+        // unmatched, so it covers every tool that asks, where a tool-name matcher would narrow it
+        #expect(evts["PermissionRequest"]?.first?["matcher"] == nil)
         #expect(evts["UserPromptSubmit"]![0]["matcher"] == nil)
         #expect(evts["PostToolUse"]![0]["matcher"] == nil)
     }
@@ -81,6 +86,7 @@ struct AgentHooksInstallTests {
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
+        #expect(evts["PermissionRequest"]?.count == 1)
     }
 
     @Test func mergeRemergePreservesUnrelatedAndStaysNoOp() throws {
@@ -140,11 +146,42 @@ struct AgentHooksInstallTests {
         #expect(command(evts["PostToolUse"]![0]) == "'\(adapter)' active --blink")
         #expect(command(evts["Stop"]![0]) == "'\(adapter)' completed --auto-reset")
         #expect(command(evts["Notification"]![0]) == "'\(adapter)' blocked")
+        // an install that old never wrote PermissionRequest, so there is nothing to migrate and it is added
+        #expect(evts["PermissionRequest"]?.count == 1)
+        #expect(command(evts["PermissionRequest"]?.first ?? [:]) == "'\(adapter)' blocked")
         // rewritten in place: the matcher and the entry's other keys are untouched
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
         #expect((evts["Stop"]![0]["hooks"] as? [[String: Any]])?.first?["type"] as? String == "command")
         // migrated, not appended alongside a fresh set
         #expect(!result.json.contains(AgentHooksInstall.wrapperPath(scriptDir: scriptDir) + "'"))
+    }
+
+    @Test func mergeAddsPermissionRequestToFourEventInstall() throws {
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        let existing = """
+        {
+          "hooks": {
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "'\(adapter)' active --blink"}]}],
+            "PostToolUse": [{"hooks": [{"type": "command", "command": "'\(adapter)' active --blink"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "'\(adapter)' completed --auto-reset"}]}],
+            "Notification": [
+              {"matcher": "permission_prompt", "hooks": [{"type": "command", "command": "'\(adapter)' blocked"}]}
+            ]
+          }
+        }
+        """
+        let first = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
+        #expect(first.changed)
+        let evts = events(first.json)
+        #expect(evts.count == 5)
+        for event in ["UserPromptSubmit", "PostToolUse", "Stop", "Notification", "PermissionRequest"] {
+            #expect(evts[event]?.count == 1)
+        }
+        #expect(command(evts["PermissionRequest"]?.first ?? [:]) == "'\(adapter)' blocked")
+        #expect(evts["Notification"]?.first?["matcher"] as? String == "permission_prompt")
+        let second = try AgentHooksInstall.mergeClaudeSettings(existing: first.json, scriptDir: scriptDir)
+        #expect(!second.changed)
+        #expect(second.json == first.json)
     }
 
     @Test func mergeMigratesPreBlinkPromptEntry() throws {
@@ -257,13 +294,13 @@ struct AgentHooksInstallTests {
         // a whitespace-only file has no content to lose, so it starts fresh like an empty file
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "   \n\t\n", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 4)
+        #expect(events(result.json).count == 5)
     }
 
     @Test func mergeHandlesEmptyExisting() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 4)
+        #expect(events(result.json).count == 5)
     }
 
     @Test func codexHooksBlockContainsAllSixEvents() {

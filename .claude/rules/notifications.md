@@ -133,9 +133,10 @@ paths:
 - On pane teardown, `closeSplit`, `closePrimaryPane`, and `closeScratch` clear status owned by the removed
   `.right`, `.left`/nil, or `.scratch` pane, respectively, as they do search state.
 - Input clearing covers the hookless Esc/Ctrl-C decline and completed re-engagement. It must also clear
-  active on quick interrupt: Claude's delayed `Notification[permission_prompt]` uses
-  `messageIdleNotifThresholdMs` (default 60000), and Esc/manual decline emits neither `Stop` nor
-  `PostToolUse`. `PostToolUse` reasserts `active --blink` after an answered prompt. cmux can observe its
+  active on quick interrupt: Esc/manual decline emits neither `Stop` nor `PostToolUse`, and a prompt
+  `PermissionRequest` does not cover turns blocked only through `Notification[permission_prompt]`,
+  about six seconds after the last keystroke.
+  `PostToolUse` reasserts `active --blink` after an answered prompt. cmux can observe its
   own permission UI and herdr scrapes PTY state; agterm does neither.
 - `AgentIndicator.statusPane` also directs GUI selections needing attention. Attention and ordinary
   navigation, palettes, sidebar and Dock rows, and idle auto-follow use

@@ -41,8 +41,10 @@ paths:
 - Agent Hooks installation copies generic, Claude, Codex, Pi, OpenCode, and shell assets under
   `~/.config/agterm/agent-status`, baking the bundled CLI. Marker merges are idempotent and preserve
   unrelated config; unreadable config is never treated as absent.
-- Claude maps prompt/tool work to `active --blink`, Stop to `completed --auto-reset`, and permission
-  prompt to blocked. PostToolUse clears a prior block because there is no answer event.
+- Claude maps prompt/tool work to `active --blink`, Stop to `completed --auto-reset`, and a permission
+  request to blocked. `PermissionRequest` fires as the prompt opens.
+  `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
+  prompt, which `PermissionRequest` skips. PostToolUse clears a prior block because there is no answer event.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
   `PermissionRequest` is insufficient under Auto Review, so a pane watcher reads `session.text` and blocks
   only for visible approval/question UI. Remove stale issue #193 `codex-notify.sh` values, not comments or

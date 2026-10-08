@@ -13,7 +13,7 @@ public enum AgentHooksInstall {
     /// terminal-output knowledge stays in this hook resource, outside agterm's runtime.
     public static let codexWrapperName = "agterm-codex-status.sh"
 
-    /// Claude-specific adapter the four Claude hooks invoke instead of the generic wrapper: a worker agent
+    /// Claude-specific adapter the Claude hooks invoke instead of the generic wrapper: a worker agent
     /// spawned from inside a session inherits the spawner's `AGTERM_*` environment, so its hooks would repaint
     /// the SPAWNER's row. The adapter answers that ownership question from process topology and delegates,
     /// keeping the Claude-specific knowledge in the hook resource the way the Codex adapter does.
@@ -113,12 +113,16 @@ public enum AgentHooksInstall {
     /// `UserPromptSubmit` and `PostToolUse` both set `active` — the latter after every tool run, so the status
     /// returns to `active` when work RESUMES after a `blocked` permission prompt: Claude Code has no
     /// "permission answered" event, and the gated tool's `PreToolUse` fired BEFORE `blocked` was set, so its
-    /// `PostToolUse` is the first hook afterwards. `Notification` alone carries the `permission_prompt` matcher,
-    /// and only `Stop`→`completed` passes `--auto-reset` (it clears on visit); the rest stay keep-state.
+    /// `PostToolUse` is the first hook afterwards. `PermissionRequest` sets `blocked` as the prompt opens.
+    /// `Notification[permission_prompt]` fires only once the prompt has waited about six seconds with no
+    /// keystroke, and stays for the sandboxed network prompt, which `PermissionRequest` does not cover.
+    /// `Notification` alone carries a matcher, and only `Stop`→`completed` passes `--auto-reset` (it clears
+    /// on visit); the rest stay keep-state.
     static let claudeHooks: [(event: String, matcher: String?, state: String)] = [
         ("UserPromptSubmit", nil, "active --blink"),
         ("PostToolUse", nil, "active --blink"),
         ("Stop", nil, "completed --auto-reset"),
+        ("PermissionRequest", nil, "blocked"),
         ("Notification", "permission_prompt", "blocked"),
     ]
 
@@ -164,7 +168,7 @@ public enum AgentHooksInstall {
     /// object: the installer refuses to overwrite a hand-maintained file it cannot safely parse.
     public enum MergeError: Error { case malformedExistingSettings }
 
-    /// merge the four agent-status hooks into an existing Claude Code `settings.json`.
+    /// merge the agent-status hooks into an existing Claude Code `settings.json`.
     ///
     /// `existing` is the current contents (nil/empty = start from a fresh object). Returns the new JSON and
     /// whether it differs; idempotent — hooks already present (detected by the adapter command) return the
@@ -518,7 +522,7 @@ public enum AgentHooksInstall {
     // absent/empty/whitespace-only → fresh empty object; a non-empty file that is not a valid JSON object →
     // throw rather than silently discard the user's file.
     // a wrong-TYPED value is not an absent one: `as?` plus an empty default would read it as missing and then
-    // write over it, deleting the key the merge could not understand. Only the four events this merge writes
+    // write over it, deleting the key the merge could not understand. Only the events this merge writes
     // are checked; an unrelated event of any shape is never read and round-trips.
     private static func claudeHooksObject(_ root: [String: Any]) throws -> [String: Any] {
         guard let value = root["hooks"] else { return [:] }
