@@ -25,17 +25,16 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
 
     /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and
     /// `completed` clear as `reset` says: on any key (you've engaged with the prompt / the finished result),
-    /// on a submit only (the reply is sent, so a half-typed one keeps the glyph), or never. `active` clears
-    /// ONLY on an interrupt (Escape or Ctrl-C) in every mode, so typing while the agent works keeps the
-    /// "working" glyph. That covers the quick-cancel case: a pending question can still read `active` when
-    /// you cancel it (Claude Code's `blocked` notification lands seconds later) and the interrupt fires no
-    /// hook, so nothing else drops the stale value.
+    /// on a submit only (the reply is sent, so a half-typed one keeps the glyph), or never. Under submit-only
+    /// an interrupt (Escape or Ctrl-C) also clears `blocked`: cancelling a prompt fires no hook, so nothing
+    /// else drops it. `active` clears ONLY on an interrupt in every mode, so typing while the agent works
+    /// keeps the "working" glyph, and a prompt cancelled before any `blocked` arrived does not stay `active`.
     func clearedBy(keystroke: StatusKeystroke, reset: StatusReset) -> Bool {
         switch self {
         case .blocked, .completed:
             switch reset {
             case .firstKey: return true
-            case .enter: return keystroke == .submit
+            case .enter: return keystroke == .submit || (self == .blocked && keystroke == .interrupt)
             case .never: return false
             }
         case .active: return keystroke == .interrupt

@@ -3389,7 +3389,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               >
               session clears its status, on the first key by default.
               <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Status reset</strong> can move that to Enter, so a reply
-              you started and walked away from keeps the glyph until you send it, or disable it, leaving the status to the
+              you started and walked away from keeps the glyph until you send it (Esc or Ctrl-C still clears a blocked one,
+              since cancelling the prompt answers it), or disable it, leaving the status to the
               agent's next hook or Clear Status. An interrupt keystroke, Esc or Ctrl-C, interrupts an
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> one and clears it
               whatever the setting.

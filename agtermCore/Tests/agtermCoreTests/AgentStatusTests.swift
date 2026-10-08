@@ -37,6 +37,9 @@ struct AgentStatusTests {
         (AgentStatus.completed, StatusKeystroke.submit, StatusReset.enter, true),
         (AgentStatus.blocked, StatusKeystroke.submit, StatusReset.enter, true),
         (AgentStatus.completed, StatusKeystroke.interrupt, StatusReset.enter, false),
+        // cancelling a prompt fires no hook, so without this a cancelled blocked stayed up under enter
+        (AgentStatus.blocked, StatusKeystroke.interrupt, StatusReset.enter, true),
+        (AgentStatus.blocked, StatusKeystroke.interrupt, StatusReset.never, false),
         (AgentStatus.blocked, StatusKeystroke.other, StatusReset.never, false),
         (AgentStatus.completed, StatusKeystroke.submit, StatusReset.never, false),
         (AgentStatus.completed, StatusKeystroke.interrupt, StatusReset.never, false),

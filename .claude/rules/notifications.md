@@ -106,7 +106,8 @@ paths:
   `.right`, and scratch `.scratch` factories own the pane-scoped decision, allowing scratch to clear
   without `view.session`. `AgentIndicator.clearedBy` takes the key's kind (`InterruptKeystroke.classify`:
   interrupt, submit for a bare Return or keypad Enter, else other) and the `StatusReset` mode: blocked and
-  completed clear on any key under `firstKey`, on submit alone under `enter`, never under `never`; active
+  completed clear on any key under `firstKey`, on submit alone under `enter`, never under `never`;
+  under `enter` an interrupt also clears blocked, since a cancelled prompt fires no hook; active
   clears on interrupt in every mode; and only when the key's pane owns the status. Thus foreground typing
   cannot clear another pane's status.
 - `session.type` fires that same clear through `GhosttySurfaceView.injectAsUserInput`, the input a blocked
