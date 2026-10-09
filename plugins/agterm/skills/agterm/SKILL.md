@@ -1,12 +1,12 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, via the agtermctl CLI. Use inside an agterm session when
+  Drive agterm, a native macOS terminal, via the agtermctl CLI. Use in an agterm session when
   asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD/caption or notification; show a picker or question dialog; display an image inline; type
-  into or restart a pane by its stable id, copy its selection or search its scrollback; manage windows; set font size and
+  post a HUD/caption or notification; show a picker or question dialog; show an image inline; type
+  into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
   pane-visibility and tree-change events.
@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, attach a session from another Mac, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, attach a session from another Mac, copy this to the clipboard, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -686,6 +686,16 @@ open stays where it is when the lead changes. The overlay's program still runs o
 ([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm
 has no CLI an ssh command can find. Every zmx command needs a running agterm.
+
+**clipboard** — `clipboard set [TEXT]` — copy text to the clipboard of every terminal showing the pane
+the command runs in; the text is the argument, or stdin when omitted (`git diff | agtermctl clipboard set`).
+Use it whenever the user asks to copy something to the clipboard: `pbcopy` fills the clipboard of the Mac
+the agent runs on, which is the wrong one when the session is attached from another Mac, while this
+reaches the Mac the user is looking at. It needs no terminal, so it works from a shell tool. Local-only:
+no socket, no `--target`, no `--json`. It works in a main or split pane started under Live sessions and is
+refused elsewhere with `this pane has no zmx daemon`; fall back to `pbcopy` there only when the clipboard
+wanted is this Mac's own. Exit 0 does not confirm receipt, and a terminal set to ask or deny clipboard writes may not take it
+([details](reference.md#clipboard)).
 
 **terminfo** — `terminfo install DESTINATION [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — install the
 bundled `xterm-ghostty` terminfo entry into a remote account's `~/.terminfo` over one interactive ssh

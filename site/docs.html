@@ -2942,6 +2942,13 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               ends. Retrying is automatic, and at once when the Mac wakes or the network changes; close and reattach the session to retry by hand.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              A program on the other Mac that copies with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pbcopy</span> fills that Mac's clipboard, not yours.
+              <a href="/commands#clipboard" style="color: #6d82f3"><span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl clipboard set</span></a>
+              sends the text through the pane instead, asking every terminal attached to that pane to set its clipboard, this
+              Mac's included; each applies its own clipboard-write setting. It needs no terminal, which is what lets an
+              agent's shell tool use it.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               Each pane has one Mac that leads it, and the program inside sees that Mac's window size. Attaching takes the
               lead in every pane at once, so the session arrives at <em>your</em> size with nothing to press, and the same
               panes on the Mac the session runs on are covered with a note that it is in use elsewhere. Pressing a key on a

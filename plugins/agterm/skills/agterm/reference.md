@@ -2004,6 +2004,29 @@ For a PER-SESSION, per-pane override that pins (or suppresses) what a pane resto
 denylist, and is what a `SessionStart` hook rewrites to reattach a non-idempotent command. `restore clear`
 here is app-global and touches only the captured commands, not those overrides.
 
+## clipboard
+
+`agtermctl clipboard set [TEXT]` — copy text to the clipboard of every terminal attached to the pane the
+command runs in. Local-only: it never opens the control socket and takes no `--socket`, `--window`,
+`--target` or `--json`. It prints an OSC 52 clipboard write into the pane's own output through the pane's
+zmx daemon, so the write travels with the terminal bytes: a session attached from another Mac gets the
+text on the Mac showing it, and on the Mac it runs on as well.
+
+- `TEXT` — the text to copy; read from standard input when omitted, byte for byte, a trailing newline
+  included. Refused when empty, and above about 6 MB (libghostty drops a longer clipboard write whole).
+- Needs no terminal, so an agent's shell tool can run it. It does need the pane's own environment:
+  `ZMX_SESSION` and `ZMX_DIR`, which a main or split pane started under Live sessions carries. A scratch,
+  quick or overlay terminal, and a pane started in another restore mode, is refused with `this pane has
+  no zmx daemon; run it in a main or split pane started under Live sessions`. `pbcopy` is a fallback
+  there only when the clipboard wanted is this Mac's own: an overlay shown on another Mac still runs here.
+- Each receiving terminal applies its own `clipboard-write` setting: `ask` prompts, `deny` drops the copy.
+- Exit 0 means `zmx print` exited zero. It reads no reply, so that confirms neither that the session
+  received the text nor that a terminal applied it. Other failures exit 1:
+  `no zmx next to this agtermctl` for a CLI running outside the app bundle, and `zmx print exited N` with
+  zmx's own message.
+- A copy made while the pane's program is in the middle of heavy output can land inside one of its escape
+  sequences and garble that one sequence. Copy while the program is idle when it matters.
+
 ## terminfo
 
 `agtermctl terminfo install DESTINATION [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — install the bundled

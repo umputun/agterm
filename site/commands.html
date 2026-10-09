@@ -207,6 +207,7 @@
             <a href="#config" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">config</a>
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
             <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
+            <a href="#clipboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">clipboard</a>
             <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
             <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
@@ -3622,6 +3623,43 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.job.run</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 The plumbing behind an overlay shown on another Mac, run by that Mac over <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ssh -tt</span> on the origin and not meant to be typed. It claims <span style="font-family: &quot;JetBrains Mono&quot;, monospace">JOB</span> on the local socket, runs its program under the ssh terminal in the working directory a local overlay would get, with agterm's session variables over the environment ssh gave it, and reports how it ended. A job can be claimed once, and only within 30 seconds of its open; a job that cannot be claimed exits 1 having launched nothing, one whose program cannot be launched exits 127, and otherwise it exits with the program's status. Losing the terminal cancels the program.
+              </p>
+            </div>
+          </section>
+
+          <section id="clipboard" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              clipboard
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Local-only: this group never opens the control socket, so it has no protocol command, no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> and no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span>.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl clipboard set [TEXT]
+              </div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Copy text to the clipboard of every terminal showing the pane the command runs in. The text goes out through the pane itself, so it reaches the Mac you are looking at: for a session attached from another Mac that is the Mac showing it, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pbcopy</span> would fill the clipboard of the Mac the command runs on. The Mac the session runs on receives it too. It needs no terminal, so an agent's shell tool can run it.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TEXT</span> is copied as given; without it the text is read from standard input byte for byte, a trailing newline included. Empty text is refused, and so is text over about 6 MB. Run it in a main or split pane started under Live sessions: a scratch, quick or overlay terminal, and a pane started in another restore mode, is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">this pane has no zmx daemon</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Each receiving terminal applies its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clipboard-write</span> setting, so one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> prompts and one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">deny</span> drops the copy. Exit status 0 does not confirm that the session or any terminal received the text. A copy made while the pane's program is in the middle of heavy output can land inside one of its escape sequences and garble that one sequence.
               </p>
             </div>
           </section>

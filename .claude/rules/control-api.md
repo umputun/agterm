@@ -176,11 +176,22 @@ renumbering. Do not reintroduce a count anywhere.
   `restore.clear`, `restore.mode`, `version`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
 
-`terminfo install` is a CLI-only command with no protocol counterpart, the one exemption from the
+`terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
 nothing for the app to dispatch or read back. `TerminfoInstall` in `agtermCore` owns the argv and the
 pipeline; the CLI owns the typed option surface, deliberately narrower than ssh's so `-G`, `-N`, `-n` and
 `-f` cannot fake a success or hang the install.
+
+`clipboard set` is the other. It prints an OSC 52 write into the caller's own pane through
+`zmx print <ZMX_SESSION>`, run from the `zmx` beside the CLI, and never opens the socket. The socket still
+never writes a clipboard: the write arrives in the pane's bytes, so every attached terminal applies its own
+`clipboard-write` policy, and a session attached from another Mac gets the text on the Mac showing it.
+`TerminalClipboard` in `agtermCore` owns the sequence, the size bound and the daemon resolution.
+It takes no target: the daemon is the one zmx named in the pane's environment, so scratch, quick and
+overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemonName` rejects is too.
+`zmx print` reads no reply and exits 0 on a dropped connection, so exit 0 confirms neither receipt nor a
+pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
+may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
 
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
