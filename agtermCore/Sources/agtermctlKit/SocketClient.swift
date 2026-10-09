@@ -322,13 +322,13 @@ struct SocketClient {
         return "ok"
     }
 
-    /// The restore policy as separate lines: "what the next launch will do" and "what this one did" are
-    /// different questions, and collapsing them is what leaves a caller wondering why nothing happened.
     static func formatIdentity(_ identity: AppIdentity) -> String {
         guard let commit = identity.commit, !commit.isEmpty else { return identity.version }
         return "\(identity.version) (\(commit))"
     }
 
+    /// The restore policy as separate lines: "what the next launch will do" and "what this one did" are
+    /// different questions, and collapsing them is what leaves a caller wondering why nothing happened.
     static func formatRestoreStatus(_ status: ControlRestoreStatus) -> String {
         var lines = ["configured: \(status.configured) (next launch)",
                      "this launch: requested \(status.requestedAtLaunch), active \(status.active)"]
