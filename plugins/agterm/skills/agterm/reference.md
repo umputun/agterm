@@ -2065,7 +2065,21 @@ window need be open, so it works as a preflight from a keymap-launched script. R
 - `commit` — the build's git commit, omitted when the build recorded none. Diagnostics only; never part
   of a version comparison.
 
-Human output is `version` alone, or `version (commit)`, followed by a `client:` line naming the resolved
+It also returns `result.installed`, the same two values read from the app bundle on disk at request time.
+The two differ once the bundle is replaced under a running app, by `brew upgrade` for one, and stay
+different until the app is restarted:
+
+```sh
+agtermctl version --json | jq -e '.result | .installed != null and .installed != .app' >/dev/null &&
+  echo "the installed agterm differs from the running one"
+```
+
+It is build metadata, not a comparison of the executables: a rebuild from the same commit reads as equal.
+`installed` is omitted when the bundle cannot be read and by an older app; treat its absence as unknown,
+never as a match.
+
+Human output is `version` alone, or `version (commit)`, then an `installed:` line only when the bundle on
+disk differs, followed by a `client:` line naming the resolved
 path of the `agtermctl` that ran — a diagnostic for a stale CLI earlier on `PATH` than the app's bundled
 helper. That line is human output only: `--json` stays the raw server response, and a caller that needs
 the client path resolves the binary it invoked itself.

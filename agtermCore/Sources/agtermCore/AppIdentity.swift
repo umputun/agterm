@@ -24,4 +24,15 @@ public struct AppIdentity: Codable, Sendable, Equatable {
         default: self.commit = recordedCommit
         }
     }
+
+    /// The build metadata of the bundle on disk at `bundleURL`, which differs from the running identity
+    /// once the bundle is replaced underneath a running app. Nil when the plist cannot be read or names
+    /// no version. Parsed from the file on every call: `Bundle` caches its info dictionary.
+    public static func installed(bundleURL: URL) -> AppIdentity? {
+        let plistURL = bundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plistURL),
+              let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let version = info["CFBundleShortVersionString"] as? String, !version.isEmpty else { return nil }
+        return AppIdentity(version: version, recordedCommit: info["GitCommit"] as? String)
+    }
 }

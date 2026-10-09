@@ -1107,6 +1107,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   absent from `window.list` because it describes the app rather than a window and duplicating it there
   buys nothing — NOT because a cache would stale it, which cannot happen to a constant. A caller with no
   tree uses `version`.
+- `version` alone also carries `result.installed`, the bundle's on-disk version and commit, read through
+  `AppIdentity.installed(bundleURL:)` on every request from the URL `ControlServer` was given.
+  It parses the plist file because `Bundle` caches its info dictionary and would keep answering the
+  running identity after a replacement. Absent means unknown, and equal metadata does not prove equal
+  executables. It is deliberately not on the tree: `version` is the build preflight, and a tree copy
+  would cost a file read on every poll.
 - `agtermctl version`'s `client:` line is HUMAN OUTPUT ONLY. `--json` stays the raw `ControlResponse` like
   every other command; a client-reported path in the protocol would be a field the server cannot vouch
   for. Resolve it with `_NSGetExecutablePath` + `realpath`, never `argv[0]`, and never print it after a

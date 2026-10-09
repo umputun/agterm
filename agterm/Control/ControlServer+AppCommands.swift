@@ -161,7 +161,8 @@ extension ControlServer {
     /// open, which is what makes it usable as a preflight from a keymap-launched script — those inherit the
     /// app's launchd environment and so carry no `TERM_PROGRAM_VERSION`.
     func appIdentity() -> ControlResponse {
-        ControlResponse(ok: true, result: ControlResult(app: identity))
+        ControlResponse(ok: true, result: ControlResult(app: identity,
+                                                        installed: AppIdentity.installed(bundleURL: bundleURL)))
     }
 
     /// Every menu-bar item carrying a key equivalent, in the same kitty syntax the keymap uses so a caller can

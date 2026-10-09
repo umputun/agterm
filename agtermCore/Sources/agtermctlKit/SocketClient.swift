@@ -280,8 +280,8 @@ struct SocketClient {
             return formatRestoreStatus(restore)
         }
         if let app = response.result?.app {
-            guard let commit = app.commit, !commit.isEmpty else { return app.version }
-            return "\(app.version) (\(commit))"
+            guard let installed = response.result?.installed, installed != app else { return formatIdentity(app) }
+            return "\(formatIdentity(app))\ninstalled: \(formatIdentity(installed))"
         }
         if let text = response.result?.text {
             return text
@@ -324,6 +324,11 @@ struct SocketClient {
 
     /// The restore policy as separate lines: "what the next launch will do" and "what this one did" are
     /// different questions, and collapsing them is what leaves a caller wondering why nothing happened.
+    static func formatIdentity(_ identity: AppIdentity) -> String {
+        guard let commit = identity.commit, !commit.isEmpty else { return identity.version }
+        return "\(identity.version) (\(commit))"
+    }
+
     static func formatRestoreStatus(_ status: ControlRestoreStatus) -> String {
         var lines = ["configured: \(status.configured) (next launch)",
                      "this launch: requested \(status.requestedAtLaunch), active \(status.active)"]

@@ -145,6 +145,8 @@ final class ControlServer {
     /// Which agterm this is, injected rather than read from `Bundle.main` here: the identity is the app's to
     /// know, and a hosted test would otherwise see its own host bundle.
     let identity: AppIdentity
+    /// The bundle whose on-disk metadata `version` reports as `installed`.
+    let bundleURL: URL
     /// Talks to the daemons behind the zmx commands. Present in every real launch, live mode or not —
     /// `list` and `prune` must still work after a launch in `none` or `rerun`, which is exactly when
     /// detached daemons are left over. Nil only in hosted tests, where the commands answer that the
@@ -175,6 +177,7 @@ final class ControlServer {
     var liveResetOutcome: () -> LiveReset.Outcome? = { GhosttyApp.shared.liveResetOutcome }
 
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, identity: AppIdentity,
+         bundleURL: URL = Bundle.main.bundleURL,
          launchRestoreMode: RestoreMode = GhosttyApp.shared.launchRestoreMode,
          zmxForegroundResolver: ZmxForegroundResolver? = nil, zmxClient: ZmxClient? = nil,
          zmxOutdatedBefore: Date? = nil,
@@ -195,6 +198,7 @@ final class ControlServer {
         self.zmxOutdatedBefore = zmxOutdatedBefore
         self.liveAttributionProbe = liveAttributionProbe
         self.identity = identity
+        self.bundleURL = bundleURL
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
         AskRegistry.shared.resolveOwner = { [weak library] owner in

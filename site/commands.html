@@ -3727,10 +3727,17 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.app</span> with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span> and, when the build recorded one,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commit</span> — diagnostics only, never part of a
-                version comparison.
+                version comparison. It also returns
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.installed</span>, the same two values read from the app bundle on disk at
+                request time. The two differ once the bundle is replaced under a running app, by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">brew upgrade</span> for one, and stay different until the app is restarted. It is build
+                metadata, not a comparison of the executables: a rebuild from the same commit reads as equal.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">installed</span> is omitted when the bundle cannot be read and by an older app; treat
+                its absence as unknown, never as a match.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Human output is the version, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version (commit)</span>,
+                then an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">installed:</span> line only when the bundle on disk differs,
                 followed by a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">client:</span> line naming the resolved path of
                 the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> that ran — a diagnostic for a stale CLI
                 ahead of the app's bundled helper on <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>. That line is

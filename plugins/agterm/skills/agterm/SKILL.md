@@ -1,7 +1,7 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, via the agtermctl CLI. Use in an agterm session when
+  Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session when
   asked to control it: create, rename, close, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
@@ -11,13 +11,13 @@ description: >
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
   pane-visibility and tree-change events.
   Covers window/workspace/session addressing, AGTERM_* variables,
-  attaching a session from another Mac, cookbook recipes, running version, diagnosing
-  problems and filing a bug or feature request.
+  attaching a session from another Mac, cookbook recipes, running/installed version, diagnosing
+  problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, attach a session from another Mac, copy this to the clipboard, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -709,7 +709,9 @@ settings (no pty, stdin kept, plain session, no fork, no `RemoteCommand`) are th
 over the config. The remote needs `tic` (ncurses) and says so when it is missing.
 
 **version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
-`commit` when the build recorded one). App-global: no target, no `--window`, no window need be open, so it
+`commit` when the build recorded one), and the bundle on disk as `result.installed`, which differs from
+`app` once the app was replaced under the running one (a background `brew upgrade`) and is omitted when
+unknown. App-global: no target, no `--window`, no window need be open, so it
 works as a preflight from a keymap-launched script, which has no `$TERM_PROGRAM_VERSION`. Address the
 socket explicitly (`--socket "$AGTERM_SOCKET"`, or `"$AGT_SOCKET"` in a keymap child): a bare call
 resolves the DEFAULT socket, which may be another app. The same identity is on the tree top level as

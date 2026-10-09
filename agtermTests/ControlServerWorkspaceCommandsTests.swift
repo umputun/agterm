@@ -23,6 +23,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
                 actions: actions,
                 settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
                 identity: AppIdentity(version: "9.9.9", commit: "testsha"),
+                bundleURL: stateDir.appendingPathComponent("Installed.app", isDirectory: true),
                 socketPath: stateDir.appendingPathComponent("control.sock").path
             )
         }
@@ -69,6 +70,34 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         let tree = server.controlTree(window: nil)
         XCTAssertTrue(tree.ok, tree.error ?? "")
         XCTAssertEqual(tree.result?.tree?.app, injected)
+    }
+
+    func testVersionRereadsInstalledMetadataWhileTheRunningIdentityStaysFixed() throws {
+        let running = AppIdentity(version: "9.9.9", commit: "testsha")
+        let contents = stateDir.appendingPathComponent("Installed.app/Contents", isDirectory: true)
+        let plist = contents.appendingPathComponent("Info.plist")
+        func writeInstalled(version: String, commit: String) throws {
+            try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+            let info = ["CFBundleShortVersionString": version, "GitCommit": commit]
+            try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: plist)
+        }
+
+        XCTAssertNil(server.appIdentity().result?.installed)
+
+        try writeInstalled(version: "9.9.9", commit: "testsha")
+        XCTAssertEqual(server.appIdentity().result?.installed, running)
+
+        try writeInstalled(version: "10.0.0", commit: "newsha")
+        let replaced = server.appIdentity()
+        XCTAssertTrue(replaced.ok, replaced.error ?? "")
+        XCTAssertEqual(replaced.result?.installed, AppIdentity(version: "10.0.0", commit: "newsha"))
+        XCTAssertEqual(replaced.result?.app, running)
+
+        try FileManager.default.removeItem(at: plist)
+        let removed = server.appIdentity()
+        XCTAssertTrue(removed.ok, removed.error ?? "")
+        XCTAssertNil(removed.result?.installed)
+        XCTAssertEqual(removed.result?.app, running)
     }
 
     func testSelectingAnEmptyWorkspaceReportsAndTargetsIt() throws {

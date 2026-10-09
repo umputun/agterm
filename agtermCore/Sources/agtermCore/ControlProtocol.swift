@@ -589,6 +589,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var cursor: ControlCursor?
     /// The app serving this socket, for `version`. The same value `tree` carries.
     public var app: AppIdentity?
+    /// The build metadata of the bundle on disk, for `version`. Omitted when it cannot be read, which
+    /// means unknown, never "same as `app`".
+    public var installed: AppIdentity?
     /// The restore-mode policy for `restore.mode`, and the header `zmx list` repeats so its rows can be
     /// read without a second call.
     public var restore: ControlRestoreStatus?
@@ -618,8 +621,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 liveReset: ControlLiveResetStatus? = nil,
                 width: Int? = nil, height: Int? = nil,
                 pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil,
-                restart: ControlRestartReceipt? = nil) {
+                restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil) {
         self.restart = restart
+        self.installed = installed
         self.width = width
         self.height = height
         self.restore = restore
