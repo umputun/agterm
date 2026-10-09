@@ -21,13 +21,15 @@ struct Clipboard: ParsableCommand {
             the Mac showing it, where pbcopy would fill the clipboard of the Mac it runs on. Every \
             terminal attached to the pane receives it, the origin included.
 
-            The text is the argument, or standard input when there is none, copied byte for byte. It \
+            The text is the argument, or standard input when there is none, copied byte for byte. Text \
+            that starts with a dash would be read as an option: pipe it on standard input, or put -- \
+            before it. It \
             needs no terminal, so an agent's shell tool can run it. Each receiving terminal applies its \
             own clipboard-write setting, so one set to ask prompts and one set to deny drops the copy; \
             exit status 0 does not confirm that the session or any terminal received it. A pane that is not \
             backed by a live session is refused, and so is text over about 6 MB.
             """)
-        @Argument(help: "The text to copy. Read from standard input when omitted.")
+        @Argument(help: "The text to copy. Read from standard input when omitted. Put -- before text that starts with a dash.")
         var text: String?
 
         func run() throws {

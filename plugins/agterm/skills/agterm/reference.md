@@ -2013,7 +2013,8 @@ zmx daemon, so the write travels with the terminal bytes: a session attached fro
 text on the Mac showing it, and on the Mac it runs on as well.
 
 - `TEXT` — the text to copy; read from standard input when omitted, byte for byte, a trailing newline
-  included. Refused when empty, and above about 6 MB (libghostty drops a longer clipboard write whole).
+  included. Text that starts with `-` is read as an option, and `-h` or `--help` prints help and exits 0
+  with nothing copied: pipe such text on stdin, or write `agtermctl clipboard set -- "-text"`. Refused when empty, and above about 6 MB (libghostty drops a longer clipboard write whole).
 - Needs no terminal, so an agent's shell tool can run it. It does need the pane's own environment:
   `ZMX_SESSION` and `ZMX_DIR`, which a main or split pane started under Live sessions carries. A scratch,
   quick or overlay terminal, and a pane started in another restore mode, is refused with `this pane has

@@ -689,6 +689,8 @@ has no CLI an ssh command can find. Every zmx command needs a running agterm.
 
 **clipboard** — `clipboard set [TEXT]` — copy text to the clipboard of every terminal showing the pane
 the command runs in; the text is the argument, or stdin when omitted (`git diff | agtermctl clipboard set`).
+Text that starts with `-` (a flag, a list item, a diff line) is read as an option: pipe it on stdin, or put
+`--` before it.
 Use it whenever the user asks to copy something to the clipboard: `pbcopy` fills the clipboard of the Mac
 the agent runs on, which is the wrong one when the session is attached from another Mac, while this
 reaches the Mac the user is looking at. It needs no terminal, so it works from a shell tool. Local-only:

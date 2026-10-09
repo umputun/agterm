@@ -18,11 +18,6 @@ public enum TerminalClipboard {
         case printFailed(status: Int32, stderr: String)
     }
 
-    struct Target: Equatable {
-        let session: String
-        let directory: String
-    }
-
     static func sequence(for text: Data) throws -> Data {
         guard !text.isEmpty else { throw Failure.emptyText }
         let encoded = text.base64EncodedData()
@@ -30,12 +25,13 @@ public enum TerminalClipboard {
         return Data("\u{1b}]52;c;".utf8) + encoded + Data([0x07])
     }
 
-    /// target accepts only a name agterm would have created, so a `ZMX_SESSION` inherited from an
-    /// unrelated zmx session is never printed into.
-    static func target(environment: [String: String]) throws -> Target {
+    /// daemon is the pane's zmx daemon name. Only a name agterm would have created is accepted, so a
+    /// `ZMX_SESSION` inherited from an unrelated zmx session is never printed into. `ZMX_DIR` must be
+    /// set because zmx reads it from the environment `copy` passes on.
+    static func daemon(environment: [String: String]) throws -> String {
         guard let session = environment["ZMX_SESSION"], ZmxSupport.isDaemonName(session),
               let directory = environment["ZMX_DIR"], !directory.isEmpty else { throw Failure.notLivePane }
-        return Target(session: session, directory: directory)
+        return session
     }
 
     /// zmxPath is the zmx beside the CLI in `Contents/MacOS`; `clientPath` is the CLI's resolved real
@@ -53,12 +49,12 @@ public enum TerminalClipboard {
     public static func copy(_ text: Data, clientPath: String?, environment: [String: String],
                             zmx: String? = nil) throws {
         let sequence = try sequence(for: text)
-        let target = try target(environment: environment)
+        let daemon = try daemon(environment: environment)
         let executable = try zmx ?? zmxPath(clientPath: clientPath)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["print", target.session]
+        process.arguments = ["print", daemon]
         // empty is unset to zmx; an inherited prefix would resolve a name agterm never created
         process.environment = environment.merging(["ZMX_SESSION": "", "ZMX_SESSION_PREFIX": ""]) { _, new in new }
         let stdin = Pipe()

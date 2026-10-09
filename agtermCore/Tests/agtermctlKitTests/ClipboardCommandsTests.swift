@@ -13,6 +13,12 @@ struct ClipboardCommandsTests {
         #expect(try Clipboard.Set.parse([]).text == nil)
     }
 
+    @Test(arguments: ["--force", "- item one", "-1"])
+    func setTakesDashLeadingTextOnlyAfterATerminator(_ text: String) throws {
+        #expect(throws: (any Error).self) { try Clipboard.Set.parse([text]) }
+        #expect(try Clipboard.Set.parse(["--", text]).text == text)
+    }
+
     @Test(arguments: [["one", "two"], ["--socket", "/tmp/s"], ["--target", "active"], ["--json"]])
     func setRefusesASecondArgumentAndEveryControlOption(_ arguments: [String]) {
         #expect(throws: (any Error).self) { try Clipboard.Set.parse(arguments) }

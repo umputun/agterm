@@ -34,9 +34,8 @@ struct TerminalClipboardTests {
         }
     }
 
-    @Test func targetIsTheDaemonAndDirectoryThePaneWasGiven() throws {
-        #expect(try TerminalClipboard.target(environment: Self.live)
-            == TerminalClipboard.Target(session: Self.daemon, directory: "/tmp/agterm-zmx-1"))
+    @Test func daemonIsTheOneThePaneWasGiven() throws {
+        #expect(try TerminalClipboard.daemon(environment: Self.live) == Self.daemon)
     }
 
     @Test(arguments: [
@@ -49,7 +48,7 @@ struct TerminalClipboardTests {
         ["ZMX_SESSION": "agterm-notes", "ZMX_DIR": "/tmp/agterm-zmx-1"],
     ])
     func anEnvironmentThatNamesNoAgtermDaemonIsNotALivePane(_ environment: [String: String]) {
-        #expect(throws: TerminalClipboard.Failure.notLivePane) { try TerminalClipboard.target(environment: environment) }
+        #expect(throws: TerminalClipboard.Failure.notLivePane) { try TerminalClipboard.daemon(environment: environment) }
     }
 
     @Test func zmxIsTheExecutableBesideTheClient() throws {
