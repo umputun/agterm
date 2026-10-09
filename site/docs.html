@@ -2983,7 +2983,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <strong style="color: #5ea1f2; font-family: &quot;JetBrains Mono&quot;, monospace">In-session env</strong> — a shell
               inside agterm gets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_ENABLED</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span> (the workspace
+              the shell started in; it is not rewritten when the session moves to another workspace, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> shows the current one),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (the surface's spawn role,

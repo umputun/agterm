@@ -39,7 +39,9 @@ the control channel is available:
 
 - `AGTERM_ENABLED=1` — this shell runs inside agterm.
 - `AGTERM_SESSION_ID` — the current session's UUID (the session this shell belongs to).
-- `AGTERM_WINDOW_ID` / `AGTERM_WORKSPACE_ID` — the owning window / workspace UUIDs.
+- `AGTERM_WINDOW_ID` / `AGTERM_WORKSPACE_ID` — the owning window / workspace UUIDs. The workspace id is
+  the one the shell started in: it is not rewritten when the session moves to another workspace, so read
+  `tree` for the current one.
 - `AGTERM_SOCKET` — the absolute path to the control socket this app bound.
 - `AGTERM_PANE` / `AGTERM_PANE_ID`: the surface's spawn role (`left`|`right`|`scratch`) and stable
   per-surface token. The role is not rewritten after promotion or swap; the token resolves the LIVE slot.
