@@ -299,6 +299,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
   PWD/title link but a weak watermark link. GUI surfaces are Command-J, titlebar, View, and palette.
+  Showing never selects; `--follow` does, as on `overlay.open`. An unselected session's scratch still
+  spawns, the deck mounting every session, and takes no focus: `deckActive` gates the grab.
+  `ControlActions` keeps the four-argument requirement and defaults the `follow:` overload to it.
 - `session.focus primary|split|left|right|top|bottom|other` requires an existing split and works shown or
   hidden. The pane is positional; read `splitFocused`.
 - `session.resize` accepts exactly one absolute ratio or one relative

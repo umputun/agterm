@@ -610,10 +610,12 @@ error keeps those names for compatibility.
 - `session lead [--pane left|right] [--target] [--window W]`: take the lead of a pane for this Mac, as a
   key press on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
   `pane has no lead to take` when its terminal reports none. Read back `surfaces[].lead`.
-- `session scratch [on|off|toggle] [--command CMD] [--target] [--window W]` — a third, full-coverage
+- `session scratch [on|off|toggle] [--command CMD] [--follow] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
-  `exit` in it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the
-  scratch is full-coverage and owns focus). `--command` (only when showing) runs that program as the
+  `exit` in it closes it and the next `on` spawns a fresh shell. Showing it on a session that is not
+  on screen starts it there without switching and without taking the keyboard, which goes to the
+  scratch once that session is selected; `--follow` selects the target, as on `session overlay open`.
+  `--command` (only when showing) runs that program as the
   scratch's process instead of a login shell — argv-style (no shell, and inheriting the app's GUI
   `PATH`, so the same exit-127 caveat as `session new --command`: wrap in `"zsh -lc '…'"` or use an
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain

@@ -413,8 +413,10 @@ extension ControlServer: ControlActions {
     /// against `scratchActive`, so both are idempotent; hiding keeps the shell alive, the `closeScratch`
     /// teardown being reserved for the shell's own `exit`. `command` (only when showing) runs that program
     /// instead of a login shell, run-once: a live scratch is torn down and respawned with it, else inert.
-    func scratchSession(_ target: String?, window: String?, mode: String?,
-                        command: String?) -> ControlResponse {
+    /// Showing selects only with `follow`: the deck mounts every session, and an unselected one's scratch
+    /// spawns without taking the keyboard.
+    func scratchSession(_ target: String?, window: String?, mode: String?, command: String?,
+                        follow: Bool) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
@@ -432,16 +434,17 @@ extension ControlServer: ControlActions {
                 if session.scratchSurface != nil { store.closeScratch(id, emitVisibility: !respawningVisible) }
                 session.scratchCommand = command
             }
-            if want, store.selectedSessionID != id {
-                // the scratch is full-coverage and grabs focus on show, so select the target first — unlike
-                // the overlay (eager deck, no select), a non-active scratch would steal focus while hidden.
-                store.selectSession(id)
-            }
+            if want, follow, store.selectedSessionID != id { store.selectSession(id) }
             if want != session.scratchActive {
                 store.toggleScratch(id, emitVisibility: !respawningVisible)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+    }
+
+    /// Compatibility entry point: shows without selecting.
+    func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse {
+        scratchSession(target, window: window, mode: mode, command: command, follow: false)
     }
 
     /// Move keyboard focus to a split session's pane: `pane` is `left`|`right`|`other` (`other` toggles).

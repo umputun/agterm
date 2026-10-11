@@ -663,26 +663,61 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         try? FileManager.default.removeItem(atPath: marker)
     }
 
-    // session.scratch on a NON-active target selects it first (the scratch is full-coverage and grabs
-    // focus on show, so it must be the visible session), then shows the scratch on it.
-    func testSessionScratchOnSelectsTarget() throws {
-        // the seeded session is active; capture its id.
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
-        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
-        let ws = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
-        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "should have a seeded session")
-
-        // create a second session — session.new focuses it, so the seeded one is no longer active.
+    func testSessionScratchOnABackgroundTargetRunsWithoutSwitchingUnlessFollowed() throws {
+        let seededID = try activeSessionID()
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
-        XCTAssertNotEqual(newID.lowercased(), seededID.lowercased(), "the new session is distinct")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
 
-        // show scratch on the non-active seeded session: it should become active AND report scratch:true.
-        let on = try sendCommand(#"{"cmd":"session.scratch","target":"\#(seededID)","args":{"mode":"on"}}"#)
+        let marker = markerDir.appendingPathComponent("bg-scratch-ran")
+        let command = "sh -c 'echo ran > \(marker.path); cat'"
+        let onJSON = try JSONSerialization.data(withJSONObject:
+            ["cmd": "session.scratch", "target": seededID, "args": ["mode": "on", "command": command]])
+        let on = try sendCommand(try XCTUnwrap(String(data: onJSON, encoding: .utf8)))
         XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on a non-active target should succeed: \(on)")
+        XCTAssertEqual(pollMarker(marker, timeout: 15), "ran", "the scratch program should run on the background session")
+        XCTAssertEqual(try sessionNode(id: seededID)["scratch"] as? Bool, true, "the target should report scratch:true")
+        XCTAssertEqual(try sessionNode(id: newID)["active"] as? Bool, true, "the selection should stay where it was")
+        XCTAssertNotEqual(try sessionNode(id: seededID)["active"] as? Bool, true, "the target should stay unselected")
+
+        let followed = try sendCommand(#"{"cmd":"session.scratch","target":"\#(seededID)","args":{"mode":"on","follow":true}}"#)
+        XCTAssertEqual(followed["ok"] as? Bool, true, "session.scratch on --follow should succeed: \(followed)")
         XCTAssertTrue(pollSessionActiveAndScratch(id: seededID, timeout: 10),
-                      "showing scratch should select the target and report scratch:true")
+                      "--follow should select the target and keep its scratch shown")
+    }
+
+    func testBackgroundSessionScratchTakesTheKeyboardOnlyOnceSelected() throws {
+        let background = try activeSessionID()
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let visible = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
+
+        let visibleTTYFile = markerDir.appendingPathComponent("visible-tty")
+        let visibleTTY = try XCTUnwrap(typeUntilMarker("tty > '\(visibleTTYFile.path)'\n", target: visible, file: visibleTTYFile, select: false),
+                                       "the visible session should report its tty")
+
+        let on = try sendCommand(#"{"cmd":"session.scratch","target":"\#(background)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on a background target should succeed: \(on)")
+        XCTAssertTrue(pollScratchRealized(background, timeout: 15), "the background scratch should realize unselected")
+        usleep(800_000)
+
+        let typedFile = markerDir.appendingPathComponent("typed-while-background")
+        let typedTTY = try XCTUnwrap(keyboardTypeUntilMarker("tty > '\(typedFile.path)'", file: typedFile),
+                                     "keyboard input must still reach a terminal")
+        XCTAssertEqual(typedTTY, visibleTTY, "keyboard input must stay with the visible session")
+
+        let scratchTTYFile = markerDir.appendingPathComponent("scratch-tty")
+        let scratchTTY = try XCTUnwrap(typeUntilMarker("tty > '\(scratchTTYFile.path)'\n", target: background, file: scratchTTYFile,
+                                                       select: false, pane: "scratch"),
+                                       "the background scratch should report its tty")
+        XCTAssertNotEqual(scratchTTY, visibleTTY)
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(background)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollSessionActiveAndScratch(id: background, timeout: 10), "selecting should show the scratch")
+        let arrivedFile = markerDir.appendingPathComponent("typed-after-select")
+        let arrivedTTY = try XCTUnwrap(keyboardTypeUntilMarker("tty > '\(arrivedFile.path)'", file: arrivedFile),
+                                       "keyboard input must reach a terminal after the select")
+        XCTAssertEqual(arrivedTTY, scratchTTY, "after selecting the session the keyboard belongs to its scratch")
     }
 
     // session.focus errors on a non-split session, succeeds on each pane once split, and rejects an
@@ -1207,6 +1242,16 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
 
     /// Polls `tree` until the session with `id` is BOTH active and has `scratch == true` (used to verify
     /// session.scratch on a non-active target selects it before showing).
+    private func pollScratchRealized(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let read = try? sendCommand(#"{"cmd":"session.text","target":"\#(id)","args":{"pane":"scratch"}}"#)
+            if read?["ok"] as? Bool == true { return true }
+            usleep(200_000)
+        }
+        return false
+    }
+
     private func pollSessionActiveAndScratch(id: String, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {

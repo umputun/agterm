@@ -1409,7 +1409,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session scratch [on|off|toggle] [--command CMD] [--target T] [--window W]
+                agtermctl session scratch [on|off|toggle] [--command CMD] [--follow] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.scratch</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1417,7 +1417,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> hides it keep-alive; typing
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">exit</span> closes it and the next
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> spawns a fresh shell.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> selects the target first. Not persisted; an
+                Showing it on a session that is not on screen starts it there without switching;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> selects the target. Not persisted; an
                 unknown mode errors.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">

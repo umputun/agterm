@@ -260,11 +260,13 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Show or hide a session scratch terminal (on|off|toggle).")
         @Argument(help: "Mode: on (show), off (hide), or toggle (default). The hidden scratch shell stays alive.") var mode: String = "toggle"
         @Option(name: .long, help: "When showing, run this command as the scratch's process instead of a login shell (run-once; respawns the scratch if one is already open).") var command: String?
+        @Flag(name: .long, help: "Select (switch to) the target session when showing its scratch (default: show without switching).") var follow = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(ControlArgs(mode: mode, command: command)))
+            ControlRequest(cmd: .sessionScratch, target: target.target,
+                           args: options.withWindow(ControlArgs(mode: mode, command: command, follow: follow ? true : nil)))
         }
     }
 

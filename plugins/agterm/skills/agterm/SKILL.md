@@ -399,10 +399,11 @@ omitted when expanded).
   them. Focus follows the terminal; axis and divider ratio stay fixed. Works on shown or hidden splits and
   under zoom/dashboard; errors when there is no split or either surface is not ready. Read the new primary
   from `tree`'s `cwd`/`title`/`foreground` and the other side from `splitCwd`/`splitForeground`.
-- `session scratch [on|off|toggle] [--command CMD]` — full-coverage third shell (hide keeps it alive; `exit`
+- `session scratch [on|off|toggle] [--command CMD] [--follow]` — full-coverage third shell (hide keeps it alive; `exit`
   recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
   --command` (respawns the scratch if one is open). Target your own session with
-  `--target "$AGTERM_SESSION_ID"` (see Addressing).
+  `--target "$AGTERM_SESSION_ID"` (see Addressing); it opens there without switching the window to it
+  unless you pass `--follow`.
 - `session focus [primary|split|left|right|top|bottom|other]` - move focus between split panes. Role and position
   aliases select the same two live terminals; readback remains `left`/`right`.
 - `session resize --split-ratio R | --grow-left D | --grow-right D | --grow-primary D | --grow-split D | --grow-top D | --grow-bottom D` - move the split divider (the GUI only drags

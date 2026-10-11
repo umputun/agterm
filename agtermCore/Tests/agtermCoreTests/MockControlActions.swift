@@ -40,7 +40,7 @@ final class MockControlActions: ControlActions {
         case sessionSplitClose(target: String?, window: String?)
         case sessionSwap(target: String?, window: String?)
         case sessionLead(target: String?, window: String?, pane: StatusPane?)
-        case sessionScratch(target: String?, window: String?, String?, command: String?)
+        case sessionScratch(target: String?, window: String?, String?, command: String?, follow: Bool)
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
@@ -381,7 +381,12 @@ final class MockControlActions: ControlActions {
 
     func scratchSession(_ target: String?, window: String?, mode: String?,
                         command: String?) -> ControlResponse {
-        calls.append(.sessionScratch(target: target, window: window, mode, command: command))
+        scratchSession(target, window: window, mode: mode, command: command, follow: false)
+    }
+
+    func scratchSession(_ target: String?, window: String?, mode: String?, command: String?,
+                        follow: Bool) -> ControlResponse {
+        calls.append(.sessionScratch(target: target, window: window, mode, command: command, follow: follow))
         return ControlResponse(ok: true)
     }
 

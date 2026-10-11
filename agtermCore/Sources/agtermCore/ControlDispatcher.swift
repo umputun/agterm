@@ -62,6 +62,10 @@ public protocol ControlActions {
     /// default below keeps existing hosts source-compatible.
     func takeSessionLead(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
+    /// Selection-aware entry point: `follow` selects the target when showing its scratch. Its default
+    /// delegates to the original method so an existing conformer keeps its own selection behavior.
+    func scratchSession(_ target: String?, window: String?, mode: String?, command: String?,
+                        follow: Bool) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
     func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
@@ -636,7 +640,7 @@ public struct ControlDispatcher {
             }
         case .sessionScratch:
             return actions.scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
-                                          command: request.args?.command)
+                                          command: request.args?.command, follow: request.args?.follow == true)
         case .sessionFocus:
             return actions.focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
         case .sessionResize:

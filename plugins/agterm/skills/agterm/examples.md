@@ -484,7 +484,8 @@ translucency (solid when off, blurred/translucent when on).
 A third per-session full-coverage shell. Hide keeps it alive; `exit` in it recreates on next show.
 
 ```bash
-agtermctl session scratch on        # show (selects the target)
+agtermctl session scratch on        # show; a --target that is not on screen stays unselected
+agtermctl session scratch on --target "$AGTERM_SESSION_ID" --follow   # show and switch to it
 agtermctl session scratch off       # hide, shell stays alive
 agtermctl session scratch toggle
 agtermctl session scratch on --command "zsh -lc 'lazygit'"   # run a program instead of a shell (run-once); login-shell wrap so Homebrew's PATH is found (bare "lazygit" exits 127)

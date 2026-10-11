@@ -634,6 +634,11 @@ struct ControlDispatcherTests {
             target: "session",
             args: ControlArgs(mode: "on", command: "htop")
         ))
+        let followed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionScratch,
+            target: "session",
+            args: ControlArgs(mode: "on", follow: true)
+        ))
         let focus = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionFocus,
             target: "session",
@@ -648,12 +653,14 @@ struct ControlDispatcherTests {
         #expect(split == ControlResponse(ok: true))
         #expect(splitClose == ControlResponse(ok: true))
         #expect(scratch == ControlResponse(ok: true))
+        #expect(followed == ControlResponse(ok: true))
         #expect(focus == ControlResponse(ok: true))
         #expect(resize == ControlResponse(ok: true))
         #expect(actions.calls == [
             .sessionSplit(target: "session", window: "win", "off", .topBottom),
             .sessionSplitClose(target: "session", window: "win"),
-            .sessionScratch(target: "session", window: nil, "on", command: "htop"),
+            .sessionScratch(target: "session", window: nil, "on", command: "htop", follow: false),
+            .sessionScratch(target: "session", window: nil, "on", command: nil, follow: true),
             .sessionFocus(target: "session", window: nil, "right"),
             .sessionResize(target: "session", window: "win", .delta(-0.1))
         ])

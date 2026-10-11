@@ -418,6 +418,10 @@ struct CommandsTests {
         #expect(try request(["session", "scratch"]) == expected)
     }
 
+    @Test func sessionScratchFollow() throws {
+        #expect(try request(["session", "scratch", "on", "--follow"]).args?.follow == true)
+    }
+
     @Test func sessionScratchOff() throws {
         let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "off"))
         #expect(try request(["session", "scratch", "off"]) == expected)
