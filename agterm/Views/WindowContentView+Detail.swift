@@ -143,7 +143,7 @@ extension WindowContentView {
                              onScreen: deckInteractive && isActive && !fullOverlay)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
-                    .id("\(session.id.uuidString)-scratch")
+                    .id("\(session.id.uuidString)-scratch-\(session.scratchGeneration)")
                     .zIndex(1)
             }
         }

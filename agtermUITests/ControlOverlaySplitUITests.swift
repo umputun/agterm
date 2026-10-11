@@ -663,6 +663,22 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         try? FileManager.default.removeItem(atPath: marker)
     }
 
+    // a --command respawn of a shown scratch kept the torn-down view mounted and never ran the command
+    func testScratchCommandReplacesAShownScratch() throws {
+        let session = try activeSessionID()
+        let shown = try sendCommand(#"{"cmd":"session.scratch","target":"\#(session)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(shown["ok"] as? Bool, true, "session.scratch on should succeed: \(shown)")
+        XCTAssertTrue(pollScratchRealized(session, timeout: 15), "the scratch shell should realize")
+
+        let marker = markerDir.appendingPathComponent("replaced-scratch-ran")
+        let command = "sh -c 'echo ran > \(marker.path); cat'"
+        let replaceJSON = try JSONSerialization.data(withJSONObject:
+            ["cmd": "session.scratch", "target": session, "args": ["mode": "on", "command": command]])
+        let replaced = try sendCommand(try XCTUnwrap(String(data: replaceJSON, encoding: .utf8)))
+        XCTAssertEqual(replaced["ok"] as? Bool, true, "replacing the scratch command should succeed: \(replaced)")
+        XCTAssertEqual(pollMarker(marker, timeout: 15), "ran", "the replacement command should run in the shown scratch")
+    }
+
     func testSessionScratchOnABackgroundTargetRunsWithoutSwitchingUnlessFollowed() throws {
         let seededID = try activeSessionID()
         let created = try sendCommand(#"{"cmd":"session.new"}"#)

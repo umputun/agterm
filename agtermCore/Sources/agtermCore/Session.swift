@@ -567,6 +567,11 @@ public final class Session: Identifiable {
     /// close, the shell's own `exit`, or session/workspace/window teardown), after which a show spawns fresh.
     @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
 
+    /// Bumped on every `closeScratch` so the deck keys the scratch view's identity on it. A `--command`
+    /// respawn closes and re-shows inside one store call, so `scratchActive` never dips where SwiftUI can
+    /// see it and the torn-down view would otherwise stay mounted. Observed, never persisted.
+    public var scratchGeneration: Int = 0
+
     /// The scratch analogue of `initialCommand` (`session.scratch --command`). RUN-ONCE: the scratch factory
     /// reads and clears it on spawn, so the next show is a plain shell. Never persisted.
     @ObservationIgnored public var scratchCommand: String?

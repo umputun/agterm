@@ -571,6 +571,7 @@ extension AppStore {
         dropPaneBackground(.scratch, of: session)
         scratch.teardown()
         session.scratchSurface = nil
+        session.scratchGeneration += 1
         return true
     }
 }
