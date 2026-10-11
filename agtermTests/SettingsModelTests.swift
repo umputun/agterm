@@ -56,6 +56,13 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(HtmlOverlayRegistry.shared.zoom, 1.5)
     }
 
+    func testSetTerminalInputSourcePersistsAndOffRemovesTheKey() {
+        model.setTerminalInputSource("test.source.not-enabled")
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().terminalInputSource, "test.source.not-enabled")
+        model.setTerminalInputSource(nil)
+        XCTAssertNil(SettingsStore(directory: stateDir).load().terminalInputSource)
+    }
+
     func testSetLinkOpenModePersistsAndTheDefaultRemovesTheKey() {
         model.setLinkOpenMode(.overlay)
         XCTAssertEqual(model.settings.effectiveLinkOpenMode, .overlay)

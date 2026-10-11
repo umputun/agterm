@@ -76,6 +76,7 @@ final class SettingsModel {
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
         applyHtmlOverlayZoom()
+        TerminalInputSource.shared.setTarget(settings.terminalInputSource)
         ensureStarterKeymap()
         loadKeymap()
         ensureStarterHooks()
@@ -272,6 +273,15 @@ final class SettingsModel {
         guard mode != settings.effectiveLinkOpenMode else { return }
         settings.linkOpenMode = mode == .browser ? nil : mode.rawValue
         persistAndApply()
+    }
+
+    /// Persist the keyboard input source held while a terminal has the keyboard, nil for off, and apply it
+    /// to the current focus.
+    func setTerminalInputSource(_ id: String?) {
+        guard id != settings.terminalInputSource else { return }
+        settings.terminalInputSource = id
+        try? settingsStore.save(settings)
+        TerminalInputSource.shared.setTarget(id)
     }
 
     /// Show or hide one title-bar / sidebar-footer chrome element (an empty result maps back to nil so

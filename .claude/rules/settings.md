@@ -100,7 +100,8 @@ paths:
   Multiple Windows and the quick terminal's panel size, which sits there rather than under Appearance's
   Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
-  status reset, auto-follow, and Reset. Key Mapping holds config directory, diagnostics, and Reload.
+  status reset, auto-follow, and Reset. Key Mapping holds the keyboard layout lock, config directory,
+  diagnostics, and Reload.
 - `statusReset` stores a raw `StatusReset` (`firstKey`|`enter`|`never`), nil for the default `firstKey`,
   resolved by `effectiveStatusReset` and mirrored to `GhosttyApp.statusReset`, which the surface factories'
   keystroke-clear closure reads at keystroke time. Reset to defaults clears it with the glyph settings.
@@ -275,6 +276,15 @@ paths:
   the section's bottom inset does not; `assertGeneralTabFits` in `SettingsUITests` scrolls the tab and
   requires the closing hint not to move.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
+- `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
+  `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while the key
+  window's first responder is a `GhosttySurfaceView`, reselects on every source-change notification, and
+  restores the earlier source when that stops being true and in `applicationWillTerminate`.
+  It keys on key-window and responder changes, never app activation, because the quick terminal takes key
+  while agterm stays inactive. Selection is system-wide and macOS restores nothing itself (measured with the
+  per-document input source option off), so a crash leaves the id selected; never persist the baseline to
+  restore at the next launch, which would overwrite a later choice made elsewhere.
+  Deliberate control exemption, like `newSessionPlacement`: no command sets or reads it.
 - `linkOpenMode` is raw `LinkOpenMode`, nil = `browser`, read through `effectiveLinkOpenMode` at each link
   click; nothing renders from it. Its picker sits in the General tab's Mouse section, and
   `testLinkOpenModePickerPersists` runs the same fit check. The control catalog carries it as

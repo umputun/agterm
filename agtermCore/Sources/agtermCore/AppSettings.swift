@@ -340,6 +340,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var flaggedViewLayout: String?
     /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
     public var linkOpenMode: String?
+    /// terminalInputSource is the keyboard input source id held while a terminal has the keyboard; nil = off.
+    /// `InputSourceLock` owns when it is selected and restored.
+    public var terminalInputSource: String?
     /// htmlOverlayZoom is the page zoom every HTML overlay shows at, nil for actual size; read it through
     /// `effectiveHtmlOverlayZoom`.
     public var htmlOverlayZoom: Double?
@@ -371,7 +374,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
-                linkOpenMode: String? = nil,
+                linkOpenMode: String? = nil, terminalInputSource: String? = nil,
                 htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
@@ -421,6 +424,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
         self.flaggedViewLayout = flaggedViewLayout
         self.linkOpenMode = linkOpenMode
+        self.terminalInputSource = terminalInputSource
         self.htmlOverlayZoom = htmlOverlayZoom
         self.welcomeShown = welcomeShown
     }

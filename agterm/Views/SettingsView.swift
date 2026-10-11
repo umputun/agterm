@@ -838,6 +838,16 @@ private struct KeyMappingSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Keyboard Layout") {
+                Picker("Lock in terminals", selection: terminalInputSource) {
+                    Text("Off").tag(String?.none)
+                    ForEach(inputSources, id: \.id) { source in
+                        Text(source.name).tag(String?.some(source.id))
+                    }
+                }
+                .accessibilityIdentifier("settings-terminal-input-source")
+            }
+
             Section("Config Directory") {
                 HStack {
                     Text(configDirectoryPath)
@@ -909,6 +919,21 @@ private struct KeyMappingSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    /// inputSources is what macOS can select, plus a saved source it no longer can, so the picker still
+    /// shows the stored choice.
+    private var inputSources: [KeyboardInputSource] {
+        let enabled = TerminalInputSource.enabledSources()
+        guard let saved = model.settings.terminalInputSource, !enabled.contains(where: { $0.id == saved }) else {
+            return enabled
+        }
+        return enabled + [KeyboardInputSource(id: saved, name: "\(saved) (unavailable)")]
+    }
+
+    private var terminalInputSource: Binding<String?> {
+        Binding(get: { model.settings.terminalInputSource },
+                set: { model.setTerminalInputSource($0) })
     }
 
     private var hooksDiagnosticsSummary: String {

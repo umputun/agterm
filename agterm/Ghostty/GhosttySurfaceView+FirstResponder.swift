@@ -44,6 +44,7 @@ extension GhosttySurfaceView {
         // AX hears the move from here, NOT from `updateGhosttyFocus` (which this path deliberately skips):
         // the post is deferred a run-loop turn precisely because `window.firstResponder` reads stale here.
         postAccessibilityFocusChange()
+        TerminalInputSource.shared.requestRefresh()
         return result
     }
 
@@ -54,6 +55,7 @@ extension GhosttySurfaceView {
             if !suppressFocusChange { onFocusChange?(false) }
         }
         postAccessibilityFocusChange() // see becomeFirstResponder; the deferred post coalesces the pair
+        TerminalInputSource.shared.requestRefresh()
         return result
     }
 }

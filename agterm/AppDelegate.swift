@@ -394,6 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         actions?.cancelAllPendingModals()
         controlServer?.stop()
         customCommandRunner?.stop()
+        TerminalInputSource.shared.stop()
         // clear the OS-level Dock badge — it outlives the process while unseenCount is ephemeral, so a quit
         // with unseen > 0 pins a stale count (the willClose refresh() can't: isTerminating no-ops closeWindow).
         DockBadgeController.shared.clear()
