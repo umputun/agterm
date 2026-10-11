@@ -826,6 +826,7 @@ private struct AgentStatusSettingsView: View {
 /// keymap and posts the change, updating the menu shortcuts, custom-command runner and action palette.
 private struct KeyMappingSettingsView: View {
     let model: SettingsModel
+    @State private var enabledInputSources = TerminalInputSource.enabledSources()
 
     /// configDirectoryPath is the directory shown in the field, matching `SettingsModel`'s own resolution.
     private var configDirectoryPath: String {
@@ -846,6 +847,11 @@ private struct KeyMappingSettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings-terminal-input-source")
+                .onAppear { enabledInputSources = TerminalInputSource.enabledSources() }
+                // enabling a source means a trip to System Settings and back, so activation is the reload.
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    enabledInputSources = TerminalInputSource.enabledSources()
+                }
             }
 
             Section("Config Directory") {
@@ -924,7 +930,7 @@ private struct KeyMappingSettingsView: View {
     /// inputSources is what macOS can select, plus a saved source it no longer can, so the picker still
     /// shows the stored choice.
     private var inputSources: [KeyboardInputSource] {
-        let enabled = TerminalInputSource.enabledSources()
+        let enabled = enabledInputSources
         guard let saved = model.settings.terminalInputSource, !enabled.contains(where: { $0.id == saved }) else {
             return enabled
         }

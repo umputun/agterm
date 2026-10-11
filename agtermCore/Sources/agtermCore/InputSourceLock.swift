@@ -7,10 +7,8 @@ public struct InputSourceLock: Equatable, Sendable {
 
     public init() {}
 
-    /// reconcile returns the source to select now, nil when the system already matches. `terminalFocused`
-    /// is whether a terminal holds the keyboard, `target` the configured source, `enabled` the sources
-    /// macOS can select, `current` the selected one. A target outside `enabled` engages nothing, so a
-    /// source the lock never selected is never restored over.
+    /// reconcile returns the next source to select, or nil if no change is needed. A target outside
+    /// `enabled` releases an existing override and cannot engage a new one.
     public mutating func reconcile(terminalFocused: Bool, target: String?, enabled: Set<String>,
                                    current: String) -> String? {
         guard terminalFocused, let target, enabled.contains(target) else { return release(current: current) }
