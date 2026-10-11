@@ -1256,8 +1256,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         return false
     }
 
-    /// Polls `tree` until the session with `id` is BOTH active and has `scratch == true` (used to verify
-    /// session.scratch on a non-active target selects it before showing).
+    /// Polls `session.text --pane scratch` until it answers ok, which needs the scratch surface realized.
     private func pollScratchRealized(_ id: String, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -1268,6 +1267,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         return false
     }
 
+    /// Polls `tree` until the session with `id` is BOTH active and has `scratch == true`.
     private func pollSessionActiveAndScratch(id: String, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
