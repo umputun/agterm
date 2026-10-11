@@ -282,9 +282,10 @@ paths:
   restores the earlier source when that stops being true and in `applicationWillTerminate`.
   It keys on key-window and responder changes, never app activation, because the quick terminal takes key
   while agterm stays inactive. The source-change notification is delivered to an inactive app (measured
-  with the quick panel key), so the observer needs no suspension override. Selection is system-wide and macOS restores nothing itself (measured with the
-  per-document input source option off), so a crash leaves the id selected; never persist the baseline to
-  restore at the next launch, which would overwrite a later choice made elsewhere.
+  with the quick panel key), so the observer needs no suspension override.
+  Selection is system-wide and macOS restores nothing itself (measured with the per-document input source
+  option off), so a crash leaves the id selected; never persist the baseline to restore at the next
+  launch, which would overwrite a later choice made elsewhere.
   Deliberate control exemption, like `newSessionPlacement`: no command sets or reads it.
 - `linkOpenMode` is raw `LinkOpenMode`, nil = `browser`, read through `effectiveLinkOpenMode` at each link
   click; nothing renders from it. Its picker sits in the General tab's Mouse section, and
