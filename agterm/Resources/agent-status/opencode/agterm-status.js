@@ -107,6 +107,8 @@ export const AgtermStatusPlugin = async () => {
   const active = new Set();
   const errored = new Set();
   const overflow = new Set();
+  // request id → sessionID of prompts still waiting for an answer
+  const pending = new Map();
 
   function mapEventToArgs(event) {
     const type = event?.type;
@@ -132,6 +134,10 @@ export const AgtermStatusPlugin = async () => {
             }
             return ACTIVE;
           case "idle":
+            // an interrupted turn drops its prompts without a reply event, so idle is what clears them
+            for (const [id, owner] of pending) {
+              if (owner === sessionID) pending.delete(id);
+            }
             if (!sessionID || !active.has(sessionID)) return null;
             active.delete(sessionID);
             if (overflow.has(sessionID)) {
@@ -158,6 +164,7 @@ export const AgtermStatusPlugin = async () => {
       }
       case "permission.asked":
       case "question.asked":
+        if (typeof properties.id === "string") pending.set(properties.id, sessionID);
         return BLOCKED;
       case "session.error": {
         // Only for a session already reported busy (sessionID is optional on some publishers).
@@ -176,7 +183,9 @@ export const AgtermStatusPlugin = async () => {
       case "permission.replied":
       case "question.replied":
       case "question.rejected":
-        return ACTIVE;
+        pending.delete(properties.requestID);
+        // tool calls run in parallel, so another prompt can still be waiting
+        return pending.size > 0 ? null : ACTIVE;
       // deprecated: OpenCode also emits session.status(type=idle); handling both would double-fire completed
       case "session.idle":
         return null;

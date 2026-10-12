@@ -233,6 +233,44 @@ struct OpenCodeStatusHookTests {
         ])
     }
 
+    @Test func replyToOnePromptStaysBlockedWhileAnotherIsPending() throws {
+        let calls = try runEvents([
+            status("busy"),
+            event("permission.asked", properties: ["sessionID": "ses_root", "id": "per_1"]),
+            event("question.asked", properties: ["sessionID": "ses_root", "id": "que_1"]),
+            event("permission.asked", properties: ["sessionID": "ses_root", "id": "per_2"]),
+            event("permission.replied", properties: ["sessionID": "ses_root", "requestID": "per_1"]),
+            event("question.rejected", properties: ["sessionID": "ses_root", "requestID": "que_1"]),
+            event("permission.replied", properties: ["sessionID": "ses_root", "requestID": "per_2"]),
+        ])
+        #expect(calls == [
+            "active --blink",
+            "blocked",
+            "blocked",
+            "blocked",
+            "active --blink",
+        ])
+    }
+
+    @Test func promptAbandonedAtIdleDoesNotHoldBackLaterReplies() throws {
+        let calls = try runEvents([
+            status("busy"),
+            event("permission.asked", properties: ["sessionID": "ses_root", "id": "per_1"]),
+            status("idle"),
+            status("busy"),
+            event("permission.asked", properties: ["sessionID": "ses_root", "id": "per_2"]),
+            event("permission.replied", properties: ["sessionID": "ses_root", "requestID": "per_2"]),
+        ])
+        #expect(calls == [
+            "active --blink",
+            "blocked",
+            "completed --auto-reset",
+            "active --blink",
+            "blocked",
+            "active --blink",
+        ])
+    }
+
     @Test func sessionErrorStaysBlockedThroughFollowingIdle() throws {
         // SessionProcessor.halt publishes session.error then status(idle) on the next line; without an
         // errored latch the serial queue would overwrite blocked with completed --auto-reset.

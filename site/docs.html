@@ -3554,7 +3554,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               (following idle from halt swallowed, and a clean sibling's idle cannot erase it; abort
               ignored, context overflow decided by the next event — busy means compaction resumed,
               idle means the turn ended → blocked),
-              reply/reject → active.
+              reply/reject → active once no other prompt is still waiting.
               Deprecated
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.idle</span>
               is ignored so it does not double-fire with

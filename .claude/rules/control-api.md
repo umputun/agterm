@@ -63,7 +63,8 @@ paths:
 - Install Pi only when `~/.pi/agent` exists. Start is active; settle only after retries, compaction, and
   queued continuations. Pi exposes no reliable blocked event, so never infer it from prose.
 - Install OpenCode only when its config exists; v1 exports only `AgtermStatusPlugin`, as the legacy loader
-  treats every export as a plugin. Busy/retry and replies are active; asked permission/question is blocked.
+  treats every export as a plugin. Busy/retry is active; asked permission/question is blocked
+  until every pending request is answered, then active.
   Latch a busy terminal error across sibling idle. Skip abort; defer ContextOverflow until idle unless busy
   resumes. Ignore deprecated `session.idle`.
 - OpenCode v2 uses a separate dependency-free CLI entrypoint, `plugins/agterm-v2/tui.js`, with its own marker.
