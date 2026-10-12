@@ -184,8 +184,9 @@ export const AgtermStatusPlugin = async () => {
       case "question.replied":
       case "question.rejected":
         pending.delete(properties.requestID);
-        // tool calls run in parallel, so another prompt can still be waiting
-        return pending.size > 0 ? null : ACTIVE;
+        // tool calls run in parallel, so another prompt can still be waiting. Blocked is re-reported
+        // because the keystroke that answered this one has already cleared the pane's status.
+        return pending.size > 0 ? BLOCKED : ACTIVE;
       // deprecated: OpenCode also emits session.status(type=idle); handling both would double-fire completed
       case "session.idle":
         return null;

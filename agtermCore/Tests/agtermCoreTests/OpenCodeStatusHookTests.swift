@@ -248,6 +248,8 @@ struct OpenCodeStatusHookTests {
             "blocked",
             "blocked",
             "blocked",
+            "blocked",
+            "blocked",
             "active --blink",
         ])
     }
