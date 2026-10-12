@@ -102,7 +102,7 @@ public final class WindowLibrary {
     @ObservationIgnored private var launchInventoryComplete = true
     @ObservationIgnored private var treeEventDebouncers: [UUID: Debouncer]
     @ObservationIgnored private var isBootstrapping = true
-    @ObservationIgnored private var appLaunchedEmitted = false
+    @ObservationIgnored private var appLaunchSettled = false
 
     /// Set once the launch reopen-all has run, so the per-window scene `.task` drives it exactly once.
     @ObservationIgnored public private(set) var hasReopened = false
@@ -228,11 +228,13 @@ public final class WindowLibrary {
         }
     }
 
-    /// Appends `app.launched`, once per run. The caller picks the moment: hooks loaded and the control
-    /// socket bound, neither of which the library can see.
-    public func emitAppLaunched() {
-        guard !appLaunchedEmitted else { return }
-        appLaunchedEmitted = true
+    /// Appends `app.launched` on the first call of a run, and only when `ready`. The caller picks the
+    /// moment and reports readiness: hooks loaded and the control socket bound, which the library cannot
+    /// see. A later call never emits, so a socket that binds on a later window is not a launch.
+    public func emitAppLaunched(ready: Bool = true) {
+        guard !appLaunchSettled else { return }
+        appLaunchSettled = true
+        guard ready else { return }
         let event = controlEventRing.append(ControlEventDraft(kind: .appLaunched))
         onControlEvent?(event)
     }

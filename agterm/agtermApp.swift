@@ -238,7 +238,7 @@ struct agtermApp: App {
                         // session.created hook must already be scheduled to see it (idempotent).
                         hookController.start()
                         // a hook on it calls back over the socket, so an unbound launch emits nothing
-                        if controlServer.boundSocketPath != nil { library.emitAppLaunched() }
+                        library.emitAppLaunched(ready: controlServer.boundSocketPath != nil)
                         appDelegate.drainPendingOpenDirectories()
                         customCommandRunner.start()
                         // wire the keymap + runner into the action hub for the command palette's custom

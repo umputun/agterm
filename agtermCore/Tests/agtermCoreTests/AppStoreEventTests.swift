@@ -880,6 +880,31 @@ final class AppStoreEventTests {
         #expect((session.paneOverlay(.left) != nil) == withPage)
     }
 
+    @Test(arguments: [true, false])
+    func swappingPanesInvalidatesTheTreeOnlyForAPageThatChangesPane(withPage: Bool) throws {
+        let (library, store, session) = try launched()
+        session.surface = SpySurface()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        if withPage { try openPage(on: .left, of: session, in: store) }
+
+        #expect(try treeChanges(library) { store.swapPanes(session.id) } == (withPage ? 1 : 0))
+        #expect((session.paneOverlay(.right) != nil) == withPage)
+    }
+
+    @Test func aLaunchThatWasNotReadyNeverEmitsAppLaunchedLater() throws {
+        let (library, _, _) = try launched()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        library.emitAppLaunched(ready: false)
+        library.emitAppLaunched()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.appLaunched], limit: 100
+        )))
+        #expect(batch.items.isEmpty)
+    }
+
     private func openPage(on pane: OverlayPane, of session: Session, in store: AppStore) throws {
         let page = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
         try #require(store.openHtmlOverlay(session.id, pane: pane, overlay: page, sizePercent: nil) == nil)

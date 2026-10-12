@@ -147,6 +147,7 @@ extension AppStore {
         (session.leftOverlayExitCode, session.rightOverlayExitCode) =
             (session.rightOverlayExitCode, session.leftOverlayExitCode)
         session.remoteOverlays.swapPanes()
+        if holdsPaneOverlay(session) { scheduleTreeChanged() }
         // rendered text files are keyed by pane identity, which swapped above, so they follow without a move
         (session.paneBackgrounds.left, session.paneBackgrounds.right) =
             (session.paneBackgrounds.right, session.paneBackgrounds.left)
@@ -311,8 +312,8 @@ extension AppStore {
         session.splitCommandWait = false
         // the pane overlays follow their panes: the exiting primary's dies with it, the survivor's moves into
         // the left slot WITH its exit code, so `session.overlay.result --pane left` still answers afterwards.
-        // a torn-down left overlay and a right one changing role both move `paneOverlays`
-        if OverlayPane.allCases.contains(where: { session.paneOverlay($0) != nil }) { scheduleTreeChanged() }
+        // a torn-down left overlay and a right one changing role both move the tree's pane slots
+        if holdsPaneOverlay(session) { scheduleTreeChanged() }
         session.teardownPaneOverlay(.left)
         session.promotePaneOverlay()
         dropRemoteOverlay(.left, of: session)
@@ -507,6 +508,11 @@ extension AppStore {
     @discardableResult public func closeHud(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), session.hudActive else { return false }
         return closeOverlay(sessionID)
+    }
+
+    /// Whether either pane holds an overlay, local or handed to a viewer: what a swap or a promotion moves.
+    private func holdsPaneOverlay(_ session: Session) -> Bool {
+        OverlayPane.allCases.contains { session.paneOverlay($0) != nil || session.remoteOverlays.slot($0) != nil }
     }
 
     /// `Session.dropUnrealizedPaneOverlays` plus the tree invalidation a dropped slot owes.

@@ -57,7 +57,7 @@ public struct ControlReconnect: Codable, Sendable, Equatable {
 /// The HUD panel occupying a session's overlay slot, as projected into the `tree` response. Present only
 /// while a HUD is up, and the session node's `overlay` reads FALSE beside it, so a script polling "is a
 /// program covering this session" can never mistake a message for a running program. The read side of
-/// `session.hud.open`/`.update`; HUD state is poll-only, no event announces it.
+/// `session.hud.open`/`.update`; an open or close emits `tree.changed`, an update emits nothing.
 public struct ControlHudNode: Codable, Sendable, Equatable {
     public let message: String
     /// The dim second line; nil/omitted when the caller set none.

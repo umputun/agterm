@@ -66,6 +66,25 @@ struct AppStoreRemoteOverlayTests {
         #expect(treeChanges { store.remoteOverlaySurfaceClosed(job, forSession: session.id) } == 1)
     }
 
+    @Test func promotingTheSplitInvalidatesTheTreeForAReservationThatChangesPane() throws {
+        let (session, _) = try origin(split: true)
+        session.splitSurface = SpySurface()
+        _ = try job(of: open(session, pane: .right))
+
+        #expect(treeChanges { store.closePrimaryPane(session.id) } == 1)
+        #expect(session.remoteOverlays.slot(.left) != nil)
+    }
+
+    @Test func swappingPanesInvalidatesTheTreeForAReservationThatChangesPane() throws {
+        let (session, _) = try origin(split: true)
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        _ = try job(of: open(session, pane: .right))
+
+        #expect(treeChanges { store.swapPanes(session.id) } == 1)
+        #expect(session.remoteOverlays.slot(.left) != nil)
+    }
+
     @Test func aRefusedRemoteOverlayLeavesTheTreeAlone() throws {
         let (session, _) = try origin()
         _ = try job(of: open(session))
