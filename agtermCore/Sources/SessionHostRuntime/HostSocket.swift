@@ -71,12 +71,7 @@ final class HostEndpoint {
             try hostCheck(bound)
             try hostCheck(chmod(paths.socket, 0o600))
             try hostCheck(listen(listener, 128))
-            let pidFile = open(paths.pidfile, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
-            try hostCheck(pidFile)
-            defer { Darwin.close(pidFile) }
-            let pid = Array("\(getpid())\n".utf8)
-            let written = pid.withUnsafeBytes { write(pidFile, $0.baseAddress, $0.count) }
-            guard written == pid.count else { throw HostFailure.system(errno) }
+            try publishPID()
         } catch {
             close()
             throw error
@@ -84,6 +79,32 @@ final class HostEndpoint {
     }
 
     deinit { close() }
+
+    private func publishPID() throws {
+        let pidFile = open(paths.pidfile, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        try hostCheck(pidFile)
+        defer { Darwin.close(pidFile) }
+        let pid = Array("\(getpid())\n".utf8)
+        let written = pid.withUnsafeBytes { write(pidFile, $0.baseAddress, $0.count) }
+        guard written == pid.count else { throw HostFailure.system(errno) }
+    }
+
+    /// Keeps the host's files out of reach of the nightly macOS `/tmp` cleaner, which deletes a regular
+    /// file once its access, modification and change times are all three days old; the app's reads of
+    /// the pidfile do not move its access time. A deleted lock or log cannot be brought back through
+    /// its descriptor. Nothing here may fail the host: its exit orphans every daemon it roots.
+    func keepFilesCurrent(log: Int32) {
+        guard ownsPath else { return }
+        _ = futimes(owner, nil)
+        _ = futimes(log, nil)
+        let pidFile = open(paths.pidfile, O_WRONLY | O_CLOEXEC | O_NOFOLLOW)
+        if pidFile >= 0 {
+            _ = futimes(pidFile, nil)
+            Darwin.close(pidFile)
+        } else if errno == ENOENT {
+            try? publishPID()
+        }
+    }
 
     func close() {
         if listener >= 0 { Darwin.close(listener); listener = -1 }

@@ -211,6 +211,11 @@ session drag are out of scope.
   A connected client waits up to 30 seconds for its turn before falling back to a bare attach,
   so a long enough queue of creations still yields an `app` pane.
 - Fresh shells and Re-run never stop a live host.
+- The host's files live under `/tmp`, where macOS deletes a regular file after three days untouched
+  (`/usr/libexec/tmp_cleaner`; sockets stay). The host touches its lock, log and pidfile at start and
+  hourly, on a clock that counts sleep, and publishes a missing pidfile again.
+  A deleted lock or log cannot be brought back, and a host started by an older build does none of this
+  until it is replaced.
 
 ## Attachment and cache
 

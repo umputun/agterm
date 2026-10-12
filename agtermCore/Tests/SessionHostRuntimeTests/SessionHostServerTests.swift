@@ -251,6 +251,95 @@ struct SessionHostServerTests {
         #expect(child.stopReason?.contains("pre-exec errno \(ENOENT)") == true)
     }
 
+    @Test func upkeepRefreshesHostFilesAtOnceThenOncePerInterval() throws {
+        let files = try UpkeepFiles()
+        defer { files.cleanup() }
+        let inode = try files.inode(files.paths.ownerLock)
+        let tracked = [files.paths.ownerLock, files.paths.pidfile, files.log]
+
+        try files.age(tracked)
+        files.host.maintain(files.endpoint, log: files.logDescriptor)
+        for path in tracked { #expect(try files.isFresh(path), "\(path)") }
+        #expect(try files.inode(files.paths.ownerLock) == inode)
+        #expect(try String(contentsOfFile: files.paths.pidfile, encoding: .utf8) == "\(getpid())\n")
+
+        try files.age(tracked)
+        files.clock.time += 3599
+        files.host.maintain(files.endpoint, log: files.logDescriptor)
+        for path in tracked { #expect(try !files.isFresh(path), "\(path)") }
+
+        files.clock.time += 1
+        files.host.maintain(files.endpoint, log: files.logDescriptor)
+        for path in tracked { #expect(try files.isFresh(path), "\(path)") }
+    }
+
+    @Test func upkeepPublishesAMissingPidfileAndKeepsTheLockHeld() throws {
+        let files = try UpkeepFiles()
+        defer { files.cleanup() }
+        let inode = try files.inode(files.paths.ownerLock)
+        try FileManager.default.removeItem(atPath: files.paths.pidfile)
+
+        files.host.maintain(files.endpoint, log: files.logDescriptor)
+
+        #expect(try String(contentsOfFile: files.paths.pidfile, encoding: .utf8) == "\(getpid())\n")
+        #expect(try files.inode(files.paths.ownerLock) == inode)
+        let second = open(files.paths.ownerLock, O_RDWR | O_CLOEXEC)
+        try #require(second >= 0)
+        defer { close(second) }
+        #expect(flock(second, LOCK_EX | LOCK_NB) == -1)
+    }
+
+    @Test func upkeepLeavesASymlinkedPidfileAndABadLogDescriptorAlone() throws {
+        let files = try UpkeepFiles()
+        defer { files.cleanup() }
+        let target = files.directory.appendingPathComponent("elsewhere").path
+        try "keep\n".write(toFile: target, atomically: false, encoding: .utf8)
+        try FileManager.default.removeItem(atPath: files.paths.pidfile)
+        try FileManager.default.createSymbolicLink(atPath: files.paths.pidfile, withDestinationPath: target)
+        try files.age([target, files.paths.ownerLock])
+
+        files.endpoint.keepFilesCurrent(log: -1)
+
+        #expect(try !files.isFresh(target))
+        #expect(try String(contentsOfFile: target, encoding: .utf8) == "keep\n")
+        #expect(try files.isFresh(files.paths.ownerLock))
+    }
+
+    @Test func closedEndpointIsNotRefreshed() throws {
+        let files = try UpkeepFiles()
+        defer { files.cleanup() }
+        files.endpoint.close()
+
+        files.endpoint.keepFilesCurrent(log: files.logDescriptor)
+
+        #expect(!FileManager.default.fileExists(atPath: files.paths.pidfile))
+    }
+
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
+    func idleHostRefreshesAReusedStaleLockWithoutReplacingIt() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let stale = open(fixture.paths.ownerLock, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        try #require(stale >= 0)
+        close(stale)
+        let old = Date(timeIntervalSinceNow: -4 * 86400)
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: fixture.paths.ownerLock)
+        let inode = try #require(FileManager.default.attributesOfItem(atPath: fixture.paths.ownerLock)[.systemFileNumber] as? NSNumber)
+
+        try fixture.start()
+
+        let deadline = Date().addingTimeInterval(5)
+        var modified = old
+        while Date() < deadline, modified.timeIntervalSinceNow < -60 {
+            Thread.sleep(forTimeInterval: 0.01)
+            modified = try #require(FileManager.default.attributesOfItem(atPath: fixture.paths.ownerLock)[.modificationDate] as? Date)
+        }
+        #expect(modified.timeIntervalSinceNow > -60)
+        #expect(try FileManager.default.attributesOfItem(atPath: fixture.paths.ownerLock)[.systemFileNumber] as? NSNumber == inode)
+        #expect(try fixture.exchange(.stop).last == .stopped)
+        try fixture.waitForExit()
+    }
+
     @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func hostSocketIsNotEnumeratedByStockZmx() throws {
         let fixture = try Fixture()
@@ -462,6 +551,51 @@ struct SessionHostServerTests {
             host = try SessionHostRuntime.Host(configuration: config, backend: backend,
                             now: realClock ? { ProcessInfo.processInfo.systemUptime } : { clock.time },
                             pause: realClock ? { Thread.sleep(forTimeInterval: $0) } : { clock.time += $0 })
+        }
+    }
+
+    private final class UpkeepFiles {
+        let directory: URL
+        let paths: SessionHost.Paths
+        let endpoint: HostEndpoint
+        let log: String
+        let logDescriptor: Int32
+        let clock = Clock()
+        let host: SessionHostRuntime.Host
+
+        init() throws {
+            directory = URL(fileURLWithPath: "/tmp/shs-\(UUID().uuidString)", isDirectory: true)
+            let socketDirectory = directory.appendingPathComponent("zmx").path
+            paths = try SessionHost.paths(socketDirectory: socketDirectory)
+            endpoint = try HostEndpoint(socketDirectory: socketDirectory)
+            log = paths.log
+            logDescriptor = open(log, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
+            let clock = clock
+            let config = SessionHostRuntime.Host.Configuration(socketDirectory: socketDirectory,
+                                            identity: .init(bundleID: "com.umputun.agterm", bundlePath: "/Applications/agterm.app", pid: getpid()),
+                                            zmxPath: "/Applications/agterm.app/Contents/MacOS/zmx")
+            host = try SessionHostRuntime.Host(configuration: config, backend: Backend(), upkeepNow: { clock.time })
+        }
+
+        func age(_ paths: [String]) throws {
+            for path in paths {
+                try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -4 * 86400)], ofItemAtPath: path)
+            }
+        }
+
+        func isFresh(_ path: String) throws -> Bool {
+            let modified = try #require(FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date)
+            return modified.timeIntervalSinceNow > -60
+        }
+
+        func inode(_ path: String) throws -> NSNumber {
+            try #require(FileManager.default.attributesOfItem(atPath: path)[.systemFileNumber] as? NSNumber)
+        }
+
+        func cleanup() {
+            endpoint.close()
+            if logDescriptor >= 0 { close(logDescriptor) }
+            try? FileManager.default.removeItem(at: directory)
         }
     }
 

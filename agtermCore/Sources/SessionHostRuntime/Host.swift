@@ -33,23 +33,28 @@ public final class Host {
         var ensureTimeout: TimeInterval = 10
         var pollInterval: TimeInterval = 0.1
         var terminationGrace: TimeInterval = 0.25
+        var upkeepInterval: TimeInterval = 3600
     }
 
     private let configuration: Configuration
     private let backend: any HostBackend
     private let now: () -> TimeInterval
     private let pause: (TimeInterval) -> Void
+    private let upkeepNow: () -> TimeInterval
+    private var nextUpkeep: TimeInterval?
     private var pendingChildren: [any HostChild] = []
     private(set) var shouldStop = false
 
     init(configuration: Configuration, backend: any HostBackend,
          now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-         pause: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
+         pause: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
+         upkeepNow: @escaping () -> TimeInterval = Host.timeIncludingSleep) throws {
         _ = try SessionHost.paths(socketDirectory: configuration.socketDirectory)
         self.configuration = configuration
         self.backend = backend
         self.now = now
         self.pause = pause
+        self.upkeepNow = upkeepNow
     }
 
     public static func run(socketDirectory: String) throws {
@@ -149,9 +154,24 @@ public final class Host {
         }
     }
 
+    /// Refreshes the endpoint's files on the first call and once per `upkeepInterval` after it.
+    func maintain(_ endpoint: HostEndpoint, log: Int32) {
+        let time = upkeepNow()
+        if let nextUpkeep, time < nextUpkeep { return }
+        nextUpkeep = time + configuration.upkeepInterval
+        endpoint.keepFilesCurrent(log: log)
+    }
+
+    // `now` counts awake time only, which would let a Mac that sleeps most of the day skip upkeep
+    // for longer than the cleaner waits.
+    static func timeIncludingSleep() -> TimeInterval {
+        TimeInterval(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1_000_000_000
+    }
+
     private func serve(_ endpoint: HostEndpoint) throws {
         while !shouldStop {
             maintainChildren()
+            maintain(endpoint, log: STDERR_FILENO)
             var ready = pollfd(fd: endpoint.listener, events: Int16(POLLIN), revents: 0)
             let result = poll(&ready, 1, 100)
             if result == 0 || (result < 0 && errno == EINTR) { continue }
