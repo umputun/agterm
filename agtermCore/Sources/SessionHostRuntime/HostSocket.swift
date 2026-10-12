@@ -80,11 +80,13 @@ final class HostEndpoint {
 
     deinit { close() }
 
+    private var pidRecord: [UInt8] { Array("\(getpid())\n".utf8) }
+
     private func publishPID() throws {
         let pidFile = open(paths.pidfile, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
         try hostCheck(pidFile)
         defer { Darwin.close(pidFile) }
-        let pid = Array("\(getpid())\n".utf8)
+        let pid = pidRecord
         let written = pid.withUnsafeBytes { write(pidFile, $0.baseAddress, $0.count) }
         guard written == pid.count else { throw HostFailure.system(errno) }
     }
@@ -97,13 +99,19 @@ final class HostEndpoint {
         guard ownsPath else { return }
         _ = futimes(owner, nil)
         _ = futimes(log, nil)
-        let pidFile = open(paths.pidfile, O_WRONLY | O_CLOEXEC | O_NOFOLLOW)
-        if pidFile >= 0 {
-            _ = futimes(pidFile, nil)
-            Darwin.close(pidFile)
-        } else if errno == ENOENT {
-            try? publishPID()
+        let pidFile = open(paths.pidfile, O_RDWR | O_CLOEXEC | O_NOFOLLOW)
+        guard pidFile >= 0 else {
+            if errno == ENOENT { try? publishPID() }
+            return
         }
+        // a publication that failed mid-write leaves a file with no pid; touching it would keep it.
+        let expected = pidRecord
+        var found = [UInt8](repeating: 0, count: expected.count + 1)
+        let count = read(pidFile, &found, found.count)
+        let current = count == expected.count && Array(found.prefix(expected.count)) == expected
+        if current { _ = futimes(pidFile, nil) }
+        Darwin.close(pidFile)
+        if !current { try? publishPID() }
     }
 
     func close() {

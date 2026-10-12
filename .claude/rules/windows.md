@@ -213,7 +213,8 @@ session drag are out of scope.
 - Fresh shells and Re-run never stop a live host.
 - The host's files live under `/tmp`, where macOS deletes a regular file after three days untouched
   (`/usr/libexec/tmp_cleaner`; sockets stay). The host touches its lock, log and pidfile at start and
-  hourly, on a clock that counts sleep, and publishes a missing pidfile again.
+  hourly, on a clock that counts sleep, and publishes the pidfile again when it is missing or does not
+  hold the host's pid.
   A deleted lock or log cannot be brought back, and a host started by an older build does none of this
   until it is replaced.
 

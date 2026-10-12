@@ -289,6 +289,17 @@ struct SessionHostServerTests {
         #expect(flock(second, LOCK_EX | LOCK_NB) == -1)
     }
 
+    @Test(arguments: ["", "1\n"])
+    func upkeepRewritesAPidfileThatDoesNotHoldTheHostPid(content: String) throws {
+        let files = try UpkeepFiles()
+        defer { files.cleanup() }
+        try content.write(toFile: files.paths.pidfile, atomically: false, encoding: .utf8)
+
+        files.host.maintain(files.endpoint, log: files.logDescriptor)
+
+        #expect(try String(contentsOfFile: files.paths.pidfile, encoding: .utf8) == "\(getpid())\n")
+    }
+
     @Test func upkeepLeavesASymlinkedPidfileAndABadLogDescriptorAlone() throws {
         let files = try UpkeepFiles()
         defer { files.cleanup() }
