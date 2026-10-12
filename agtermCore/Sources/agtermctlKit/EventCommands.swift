@@ -106,6 +106,8 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.status ?? "")"
         case .remoteOpened, .remoteClosed:
             return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
+        case .appLaunched:
+            return "\(time) \(event.kind.rawValue)"
         }
     }
 }

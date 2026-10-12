@@ -51,7 +51,9 @@ The event kinds and payloads are:
   selected `session new` (after its `session.created`), and the reselection after the active session
   closes. Re-selecting the selected session and raising another window emit nothing.
 - `tree.changed`: an empty payload and the affected window id. Name, membership, and ordering changes
-  are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value.
+  are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value,
+  and an overlay, page or HUD opening or closing (`session hud update` emits nothing). It says the tree
+  moved, never what happened: a page opened and closed inside the 100 ms shows as one event.
   Read `tree --json` for the current snapshot.
 - `pane.split` / `pane.scratch`: session `name` and a `status` of `shown` or `hidden`, emitted only on a
   real visibility change: showing or hiding the split or scratch, closing the split, the primary pane
@@ -61,6 +63,10 @@ The event kinds and payloads are:
   presence in the local tree, never the ssh connection: undo re-emits `remote.opened`, and an ssh that
   died leaves the row holding its exit line until it is closed. Closing a remote split pane alone emits
   neither.
+- `app.launched`: an empty payload and no window, workspace or session. Emitted once per app run, after
+  `hooks.conf` is loaded and the control socket accepts connections, so a hook on it can call
+  `agtermctl` at once. The restored windows and sessions are in the tree by then; their terminals may
+  not be realized yet. A launch whose socket could not be bound emits none.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -196,7 +202,7 @@ tracks the latest update. `spinner` names the STYLE, a string, so a static panel
 `"none"` rather than `false`. A pane-scoped HUD also reports its target identity's current role as `pane`;
 session-wide placement omits it. `hud` and `overlay` are mutually exclusive because they share one slot, and a HUD reports `overlay`
 FALSE with `overlaySizePercent` omitted, so a poll for "is a program covering this session" cannot mistake
-a message for one. No event announces a HUD; poll `tree` for it),
+a message for one. A HUD opening or closing emits `tree.changed`; an update emits nothing),
 `ask` (the session's pending question as `{id, pane?, remote?, replica?}` (a terminal question, or one of
 either style handed over for a remote session), with `pane` omitted for session-wide placement, `remote: true` on an origin while the Mac presenting the session draws it, and
 `replica: true` on that Mac for the copy it draws; omitted when the session ask slot is empty), `scratch` (scratch shown), `flagged` (in the
@@ -1657,7 +1663,11 @@ in order up to 256, then the oldest is dropped and counted. No timeout. A non-ze
 or an event that could not be handed to a running script banners once per hook until its next success
 or a reload; a script that ignores stdin is fine, only its exit status counts. A hook whose command
 emits another event of its own kind triggers itself again; the queue bounds concurrency, nothing detects
-the loop.
+the loop. `session hud open` under `on tree.changed` is one: opening replaces the panel and emits the
+kind again, so open only when `tree` shows no HUD and use `session hud update` otherwise.
+`on app.launched` runs once per launch, which is where a script recreates what a relaunch does not
+restore, such as the pages it keeps in overlays; a hook added by a later reload does not get that
+launch's event.
 
 `agtermctl hooks reload` — re-read and apply `hooks.conf`; returns `result.count` = the number of
 parse diagnostics (0 = clean). A hook whose line is unchanged keeps its running child, queue and

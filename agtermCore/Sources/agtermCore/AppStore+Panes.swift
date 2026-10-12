@@ -85,7 +85,7 @@ extension AppStore {
         }
         // hiding the split un-renders a pane, so an overlay opened on it that has not realized yet would sit
         // active with no surface and no program forever.
-        session.dropUnrealizedPaneOverlays()
+        dropUnrealizedPaneOverlays(of: session)
         if wasShown != shown { emitPaneVisibility(.paneSplit, session: session, shown: shown) }
         savePaneLayout(session)
     }
@@ -241,6 +241,7 @@ extension AppStore {
         session.splitCommandWait = false
         session.splitRatio = nil // tearing down the split clears its geometry too, so a fresh split opens even
         // the right pane is gone, so its overlay has nothing left to cover and nobody left to read its status.
+        if session.paneOverlay(.right) != nil { scheduleTreeChanged() }
         session.teardownPaneOverlay(.right)
         dropRemoteOverlay(.right, of: session)
         // a search bar pinned to the torn-down split surface would stay stuck (the weak `searchSurface`
@@ -310,6 +311,8 @@ extension AppStore {
         session.splitCommandWait = false
         // the pane overlays follow their panes: the exiting primary's dies with it, the survivor's moves into
         // the left slot WITH its exit code, so `session.overlay.result --pane left` still answers afterwards.
+        // a torn-down left overlay and a right one changing role both move `paneOverlays`
+        if OverlayPane.allCases.contains(where: { session.paneOverlay($0) != nil }) { scheduleTreeChanged() }
         session.teardownPaneOverlay(.left)
         session.promotePaneOverlay()
         dropRemoteOverlay(.left, of: session)
@@ -378,6 +381,7 @@ extension AppStore {
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
         session.overlayBackgroundColor = backgroundColor
         session.overlayActive = true
+        scheduleTreeChanged()
         return true
     }
 
@@ -451,6 +455,7 @@ extension AppStore {
         // describe, including for a HUD whose surface never realized and so never tore itself down.
         session.discardHudBody()
         if let replica { session.onReplicaOverlayClosed?(replica.job) }
+        scheduleTreeChanged()
         return true
     }
 
@@ -504,6 +509,11 @@ extension AppStore {
         return closeOverlay(sessionID)
     }
 
+    /// `Session.dropUnrealizedPaneOverlays` plus the tree invalidation a dropped slot owes.
+    public func dropUnrealizedPaneOverlays(of session: Session) {
+        if session.dropUnrealizedPaneOverlays() { scheduleTreeChanged() }
+    }
+
     /// Opens a pane-scoped overlay covering `pane` only, leaving the sibling pane live and interactive.
     /// Behaves like `openOverlay` in every respect but geometry and scope: the surface is created lazily by
     /// the pane, `wait` holds it after the command exits, and `backgroundColor`/`cwd` are per-overlay, so
@@ -521,6 +531,7 @@ extension AppStore {
         session.remoteOverlays.clearFailure(pane)
         session.setPaneOverlay(PaneOverlay(command: command, cwd: cwd, backgroundColor: backgroundColor,
                                            wait: wait), pane: pane)
+        scheduleTreeChanged()
         return nil
     }
 
@@ -540,6 +551,7 @@ extension AppStore {
         session.paneOverlaySurface(pane)?.teardown()
         session.setPaneOverlaySurface(nil, pane: pane)
         if let replica = overlay.replica { session.onReplicaOverlayClosed?(replica.job) }
+        scheduleTreeChanged()
         return true
     }
 

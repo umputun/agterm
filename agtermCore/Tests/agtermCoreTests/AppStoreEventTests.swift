@@ -786,6 +786,122 @@ final class AppStoreEventTests {
         #expect(try selections(library, after: anchor).filter { $0.kind == .sessionSelected }.isEmpty)
     }
 
+    @Test func aProgramOverlayInvalidatesTheTreeOnOpenAndCloseOnly() throws {
+        let (library, store, session) = try launched()
+
+        #expect(try treeChanges(library) { store.openOverlay(session.id, command: "top") } == 1)
+        #expect(try treeChanges(library) { store.openOverlay(session.id, command: "refused") } == 0)
+        #expect(try treeChanges(library) { store.closeOverlay(session.id) } == 1)
+        #expect(try treeChanges(library) { store.closeOverlay(session.id) } == 0)
+    }
+
+    @Test func aPaneOverlayInvalidatesTheTreeOnOpenAndCloseOnly() throws {
+        let (library, store, session) = try launched()
+
+        #expect(try treeChanges(library) { _ = store.openPaneOverlay(session.id, pane: .left, command: "top") } == 1)
+        #expect(try treeChanges(library) { _ = store.openPaneOverlay(session.id, pane: .left, command: "refused") } == 0)
+        #expect(try treeChanges(library) { store.closePaneOverlay(session.id, pane: .left) } == 1)
+        #expect(try treeChanges(library) { store.closePaneOverlay(session.id, pane: .left) } == 0)
+    }
+
+    @Test(arguments: [nil, OverlayPane.left] as [OverlayPane?])
+    func anHtmlPageInvalidatesTheTreeOnOpenAndClose(pane: OverlayPane?) throws {
+        let (library, store, session) = try launched()
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
+
+        #expect(try treeChanges(library) {
+            _ = store.openHtmlOverlay(session.id, pane: pane, overlay: page, sizePercent: nil)
+        } == 1)
+        #expect(try treeChanges(library) {
+            if let pane { store.closePaneOverlay(session.id, pane: pane) } else { store.closeOverlay(session.id) }
+        } == 1)
+    }
+
+    @Test func aHudInvalidatesTheTreeOnOpenAndCloseButNotOnUpdate() throws {
+        let (library, store, session) = try launched()
+        let size = HudPanelSize(widthPercent: 30, heightPercent: 9)
+
+        #expect(try treeChanges(library) {
+            store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/h", size: size)
+        } == 1)
+        #expect(try treeChanges(library) { store.updateHud(session.id, spec: HudSpec(message: "two"), size: size) } == 0)
+        #expect(try treeChanges(library) { store.closeHud(session.id) } == 1)
+    }
+
+    @Test func appLaunchedIsAppendedOncePerRunAndReachesTheHookSink() throws {
+        let (library, _, _) = try launched()
+        var delivered: [ControlEventKind] = []
+        library.onControlEvent = { delivered.append($0.kind) }
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        library.emitAppLaunched()
+        library.emitAppLaunched()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.appLaunched], limit: 100
+        )))
+        let event = try #require(batch.items.first)
+        #expect(batch.items.count == 1)
+        #expect(event.window == nil)
+        #expect(event.session == nil)
+        #expect(delivered == [.appLaunched])
+    }
+
+    @Test func appLaunchedReachesTheRingWithNoObserver() throws {
+        let (library, _, _) = try launched()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        library.emitAppLaunched()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.appLaunched], limit: 100
+        )))
+        #expect(batch.items.count == 1)
+    }
+
+    @Test(arguments: [true, false])
+    func closingASplitInvalidatesTheTreeOnlyForAPageItTakesDown(withPage: Bool) throws {
+        let (library, store, session) = try launched()
+        store.toggleSplit(session.id)
+        if withPage { try openPage(on: .right, of: session, in: store) }
+
+        #expect(try treeChanges(library) { store.closeSplit(session.id) } == (withPage ? 1 : 0))
+        #expect(session.paneOverlay(.right) == nil)
+    }
+
+    @Test(arguments: [true, false])
+    func promotingTheSplitInvalidatesTheTreeOnlyForAPageThatChangesPane(withPage: Bool) throws {
+        let (library, store, session) = try launched()
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        if withPage { try openPage(on: .right, of: session, in: store) }
+
+        #expect(try treeChanges(library) { store.closePrimaryPane(session.id) } == (withPage ? 1 : 0))
+        #expect((session.paneOverlay(.left) != nil) == withPage)
+    }
+
+    private func openPage(on pane: OverlayPane, of session: Session, in store: AppStore) throws {
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
+        try #require(store.openHtmlOverlay(session.id, pane: pane, overlay: page, sizePercent: nil) == nil)
+    }
+
+    private func launched() throws -> (WindowLibrary, AppStore, Session) {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.workspaces.first?.sessions.first)
+        return (library, store, session)
+    }
+
+    private func treeChanges(_ library: WindowLibrary, during action: () -> Void) throws -> Int {
+        library.flushTreeEvents()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+        action()
+        library.flushTreeEvents()
+        return try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.treeChanged], limit: 100
+        ))).items.count
+    }
+
     private func eventBatch(_ response: ControlResponse) throws -> ControlEventBatch {
         #expect(response.ok)
         return try #require(response.result?.events)

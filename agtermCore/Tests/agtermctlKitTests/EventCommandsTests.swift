@@ -254,6 +254,7 @@ struct EventCommandsTests {
             ControlEvent(seq: 12, ts: 0, kind: .remoteClosed, payload: ControlEventPayload(name: "far", host: "buildbox")),
             ControlEvent(seq: 13, ts: 0, kind: .sessionSelected, payload: ControlEventPayload(name: "api", previous: "before")),
             ControlEvent(seq: 14, ts: 0, kind: .sessionSelected, window: "win"),
+            ControlEvent(seq: 15, ts: 0, kind: .appLaunched),
         ]
         let human = events.map { EventFormatter.human($0, timeZone: TimeZone(secondsFromGMT: 0)!) }
         #expect(human[0] == "00:00:00 status api blocked pane=right blink")
@@ -270,6 +271,7 @@ struct EventCommandsTests {
         #expect(human[11] == "00:00:00 remote.closed far host=buildbox")
         #expect(human[12] == "00:00:00 session.selected api previous=before")
         #expect(human[13] == "00:00:00 session.selected win previous=-")
+        #expect(human[14] == "00:00:00 app.launched")
 
         for event in events {
             let line = try EventFormatter.json(event)

@@ -102,6 +102,7 @@ public final class WindowLibrary {
     @ObservationIgnored private var launchInventoryComplete = true
     @ObservationIgnored private var treeEventDebouncers: [UUID: Debouncer]
     @ObservationIgnored private var isBootstrapping = true
+    @ObservationIgnored private var appLaunchedEmitted = false
 
     /// Set once the launch reopen-all has run, so the per-window scene `.task` drives it exactly once.
     @ObservationIgnored public private(set) var hasReopened = false
@@ -225,6 +226,15 @@ public final class WindowLibrary {
         case .failure(let error, let anchor):
             return ControlResponse(ok: false, result: ControlResult(events: anchor), error: error.rawValue)
         }
+    }
+
+    /// Appends `app.launched`, once per run. The caller picks the moment: hooks loaded and the control
+    /// socket bound, neither of which the library can see.
+    public func emitAppLaunched() {
+        guard !appLaunchedEmitted else { return }
+        appLaunchedEmitted = true
+        let event = controlEventRing.append(ControlEventDraft(kind: .appLaunched))
+        onControlEvent?(event)
     }
 
     /// Test/quit seam: fires every pending structural invalidation synchronously, even one queued for a

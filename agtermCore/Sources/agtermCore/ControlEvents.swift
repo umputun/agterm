@@ -12,6 +12,7 @@ public enum ControlEventKind: String, Codable, CaseIterable, Sendable, Equatable
     case paneScratch = "pane.scratch"
     case remoteOpened = "remote.opened"
     case remoteClosed = "remote.closed"
+    case appLaunched = "app.launched"
 }
 
 /// Kind-specific event data. Optional fields keep the encoded payload compact while preserving one

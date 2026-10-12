@@ -23,7 +23,12 @@ struct AppStoreRemoteOverlayTests {
 
     static let context = OverlayLaunchContext(command: "revdiff", cwd: "/tmp", sessionEnvironment: [:])
 
-    let store = makeStore()
+    final class Drafts {
+        var kinds: [ControlEventKind] = []
+    }
+
+    let store: AppStore
+    let drafts = Drafts()
     let hub = PresentationHub(staleTimeout: 30)
     let clock = Clock()
     let jobs: OverlayJobs
@@ -31,7 +36,43 @@ struct AppStoreRemoteOverlayTests {
 
     init() {
         let clock = clock
+        let drafts = drafts
         jobs = OverlayJobs(now: { clock.now })
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        store = AppStore(persistence: PersistenceStore(directory: dir),
+                         controlEventSink: { drafts.kinds.append($0.kind) })
+    }
+
+    private func treeChanges(during action: () -> Void) -> Int {
+        let before = drafts.kinds.filter { $0 == .treeChanged }.count
+        action()
+        return drafts.kinds.filter { $0 == .treeChanged }.count - before
+    }
+
+    @Test func aRemoteOverlayInvalidatesTheTreeWhenItsSlotIsTakenAndFreed() throws {
+        let (session, _) = try origin()
+        var opened: RemoteOverlayOpen = .notPresented
+
+        #expect(treeChanges { opened = open(session) } == 1)
+        let job = try job(of: opened)
+        #expect(treeChanges { jobs.finish(job, .exited(0)) } == 1)
+    }
+
+    @Test func aHeldRemoteSlotInvalidatesTheTreeOnlyOnceItIsFreed() throws {
+        let (session, _) = try origin()
+        let job = try job(of: open(session, wait: true))
+
+        #expect(treeChanges { jobs.finish(job, .exited(0)) } == 0)
+        #expect(treeChanges { store.remoteOverlaySurfaceClosed(job, forSession: session.id) } == 1)
+    }
+
+    @Test func aRefusedRemoteOverlayLeavesTheTreeAlone() throws {
+        let (session, _) = try origin()
+        _ = try job(of: open(session))
+        var second: RemoteOverlayOpen = .notPresented
+
+        #expect(treeChanges { second = open(session) } == 0)
+        #expect(second == .slotTaken)
     }
 
     private func origin(presented: Bool = true, split: Bool = false) throws -> (Session, PresentationHub.SubscriberID?) {

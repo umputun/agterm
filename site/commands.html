@@ -658,7 +658,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.selected</span> (a window's selection moved to this session, with the one that lost it as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">previous</span>; no session when the selection was cleared, and nothing for a window merely coming forward),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span> (a 100 ms coalesced signal that a
-                window's names, membership, or ordering moved, or a session's context changed — read
+                window's names, membership, or ordering moved, a session's context changed, or an overlay, page or HUD
+                opened or closed — read
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span> for the new
                 snapshot), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.split</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.scratch</span> (a
@@ -668,7 +669,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.closed</span> (a local row created by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> entered or
                 left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>; they ride the
                 created/closed edges, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span>, and they say nothing
-                about whether ssh is still connected). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
+                about whether ssh is still connected), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app.launched</span> (once per app run, with no
+                window or session, after hooks are loaded and the control socket accepts connections). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
                 comma-separated; an unknown kind errors. Every event carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">seq</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ts</span>,
@@ -2179,7 +2181,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span> omitted, so a poll for "is a
                 program covering this session" cannot mistake a message for one, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface zoom</span> will not
-                address the panel. HUD state is poll-only; no event announces it.
+                address the panel. A HUD opening or closing emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span>; an update emits nothing.
               </p>
             </div>
           </section>

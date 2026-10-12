@@ -191,8 +191,8 @@ extension WindowContentView {
         // this covers every other writer of `splitFocused` (`session.focus`, a pane click, the dashboard).
         // `dropUnrealizedPaneOverlays` spares a slot terminal zoom claims, so a zoom exit is the other moment
         // the last host can disappear: re-run it there too, else un-zooming a never-mounted target strands it.
-        .onChange(of: session.renderedPanes) { _, _ in session.dropUnrealizedPaneOverlays() }
-        .onChange(of: terminalZoom.target) { _, _ in session.dropUnrealizedPaneOverlays() }
+        .onChange(of: session.renderedPanes) { _, _ in store.dropUnrealizedPaneOverlays(of: session) }
+        .onChange(of: terminalZoom.target) { _, _ in store.dropUnrealizedPaneOverlays(of: session) }
         // a closing pane overlay un-hides its pane and loses the same race.
         .onChange(of: session.openPaneOverlays) { before, after in
             guard after.count < before.count, deckInteractive, isActive, !quickTerminal.holdsKey else { return }

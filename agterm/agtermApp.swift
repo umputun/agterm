@@ -237,6 +237,8 @@ struct agtermApp: App {
                         // hooks apply BEFORE the drain: a queued `open -a agterm /path` creates a session, and a
                         // session.created hook must already be scheduled to see it (idempotent).
                         hookController.start()
+                        // a hook on it calls back over the socket, so an unbound launch emits nothing
+                        if controlServer.boundSocketPath != nil { library.emitAppLaunched() }
                         appDelegate.drainPendingOpenDirectories()
                         customCommandRunner.start()
                         // wire the keymap + runner into the action hub for the command palette's custom

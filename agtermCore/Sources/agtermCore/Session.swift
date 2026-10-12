@@ -777,12 +777,13 @@ public final class Session: Identifiable {
     /// that gap holds a view with no libghostty surface and no process. `teardownPaneOverlay` frees that
     /// stillborn view too, since a later open on the pane would otherwise reuse it — it is baked with the
     /// RETIRED overlay's command, cwd, and colors.
-    public func dropUnrealizedPaneOverlays() {
-        for pane in OverlayPane.allCases
-        where paneOverlay(pane) != nil && !paneOverlayIsHtml(pane) && paneOverlaySurface(pane)?.isRealized != true
-            && !paneOverlayHosted(pane) {
-            teardownPaneOverlay(pane)
+    @discardableResult public func dropUnrealizedPaneOverlays() -> Bool {
+        let stranded = OverlayPane.allCases.filter {
+            paneOverlay($0) != nil && !paneOverlayIsHtml($0) && paneOverlaySurface($0)?.isRealized != true
+                && !paneOverlayHosted($0)
         }
+        stranded.forEach { teardownPaneOverlay($0) }
+        return !stranded.isEmpty
     }
 
     /// The pane whose overlay slot CURRENTLY holds `surface`, nil when neither does. Derived LIVE from slot

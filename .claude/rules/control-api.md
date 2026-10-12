@@ -755,8 +755,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `position` and `spinner` always report the effective value, defaults included — `spinner` names the STYLE
   and spells a static panel `HudSpinner.noneName`, which the dispatcher accepts back as "no spinner" so a
   caller can round-trip what `tree` gave it. `pane` names the targeted identity's current role and is omitted
-  for session-wide placement. HUD state is poll-only.
-  `openOverlay`/`closeOverlay` emit no `scheduleTreeChanged()` and neither does a HUD, so document no event.
+  for session-wide placement.
+- Every overlay slot change emits `tree.changed`: a program, page, pane overlay or HUD opening or closing,
+  and a remote reservation taken or freed. Schedule it only on a real change, from the store method that
+  made it. `hud.update`, a remeasure and a refused open emit nothing, or a hook on the kind loops.
+  Split close, promotion and the unrealized-overlay cleanup signal a pane slot they empty or move.
+  Session, workspace and window removal do not: `session.closed` and the window close already do.
 - The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with
   `AGTERM_HUD_FILE` as its only HUD-SPECIFIC variable (the surface still inherits the session environment
   and the overlay wrapper's `AGTERM_OVL_*` pair) and capturing no exit code. Grid, spinner (flag, interval
@@ -1493,6 +1497,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The held exit reaches the app at once through `onExitHeld`, which forgets the pane's lead and records the
   hold for remote layout, but it carries no ssh status: `/usr/bin/login` discards it. Each pane holding and
   closing on its own is also right when one half of a split dies.
+- `app.launched` is appended by `WindowLibrary.emitAppLaunched`, once per run, from the scene task after
+  `hookController.start()` and only with a bound socket. The library cannot emit it at bootstrap end:
+  hooks attach to `onControlEvent` later and nothing replays the ring into them.
 - `session.selected` is emitted from `selectedSessionID`'s observer, so every writer gets it: direct
   assignments in close, undo and reopen paths included, not only `selectSession`. `restore(from:)`
   suppresses it, since a reload is not a selection. `addSession` emits `session.created` first.

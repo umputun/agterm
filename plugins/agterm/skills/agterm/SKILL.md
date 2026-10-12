@@ -9,7 +9,7 @@ description: >
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notification, lifecycle, selection,
-  pane-visibility and tree-change events.
+  pane-visibility, tree and launch events.
   Covers window/workspace/session addressing, AGTERM_* variables,
   attaching a session from another Mac, cookbook recipes, running/installed version, upgrades, diagnosing
   problems, filing a bug or feature request.
@@ -30,7 +30,9 @@ agterm is a native macOS terminal. It exposes a programmatic control channel ove
 socket, driven by the companion CLI `agtermctl`. Use it to build and steer terminal layouts, run
 programs in overlays, type into sessions, notify the user in the exact session you are working in,
 and subscribe to control events. Events cover status, notifications, session lifecycle, split and
-scratch pane visibility, and structural tree changes; `hooks.conf` runs a shell line on any of them. They do not stream terminal output; use `session text` to read a buffer.
+scratch pane visibility, structural tree changes (an overlay, page or HUD opening or closing included)
+and the app's launch; `hooks.conf` runs a shell line on any of them, so `on app.launched` is where a
+script recreates what a relaunch does not restore. They do not stream terminal output; use `session text` to read a buffer.
 
 ## Am I inside agterm?
 
@@ -240,8 +242,8 @@ up; the read side of `session hud`. `position` and `spinner`
 always report the EFFECTIVE value, `center` and a static panel's `none` included, so a caller who omitted
 them never has to know the defaults; `spinner` names the STYLE, so `none` is what a caller echoes back to
 turn one off. While a HUD is up the node's `overlay` reads `false` and `overlaySizePercent` is omitted, so a
-poll for "is a program covering this session" cannot mistake a message for one; HUD state is poll-only,
-no event announces it),
+poll for "is a program covering this session" cannot mistake a message for one; a HUD opening or closing
+emits `tree.changed`, an update emits nothing),
 `realized` (whether the session's MAIN pane has a live terminal; `false` means no shell was spawned.
 `session text` then answers `session not realized` without realizing anything; `session type` brings up a
 restored main pane still waiting its turn in a launch that replays commands, while any other unrealized
@@ -284,7 +286,8 @@ that window, omitted when no pick is pending.
 given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
 `--kind` over `status`, `notify`, `session.created`, `session.closed`, `session.selected` (a window's
 selection moved; carries the session that lost it as `previous`), `tree.changed`, `pane.split`,
-`pane.scratch`, `remote.opened` and `remote.closed`; resume with paired `--run RUN --after SEQ`; and set
+`pane.scratch`, `remote.opened`, `remote.closed` and `app.launched` (once per app run, when hooks and
+the socket are ready); resume with paired `--run RUN --after SEQ`; and set
 page size with `--limit 1...1000`. The app retains 4,096 events for one process run. Cursor run changes,
 expiry, and ahead-of-tail errors are fatal and are never silently rebaselined. Once the stream holds a
 cursor, a refused connection is retried with that cursor for about 30 s before the stream exits.
