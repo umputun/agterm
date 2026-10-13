@@ -464,13 +464,17 @@ final class CustomCommandRunner {
     }
 
     /// Spawn for a session pane: the context carries the pane's reported cwd raw, while the process starts
-    /// where `Session.localWorkingDirectory` says, which differs on a remote session whose path is not here.
+    /// where `Session.localWorkingDirectory` says, or in HOME when that is not a directory here: a deleted
+    /// one, or a remote path reported through an `ssh` typed into a local session.
     @discardableResult
     private func spawn(_ command: CustomCommand, for session: Session, in store: AppStore,
                        selectionSurface: GhosttySurfaceView?, pane: CommandContext.Pane) -> String? {
         let context = self.context(for: session, in: store, selectionSurface: selectionSurface, pane: pane)
-        let cwd = session.localWorkingDirectory(reported: context.sessionPWD, homeDirectory: NSHomeDirectory())
-        return spawn(command, context: context, cwd: cwd)
+        let home = NSHomeDirectory()
+        let cwd = session.localWorkingDirectory(reported: context.sessionPWD, homeDirectory: home)
+        var isDirectory: ObjCBool = false
+        let usable = FileManager.default.fileExists(atPath: cwd, isDirectory: &isDirectory) && isDirectory.boolValue
+        return spawn(command, context: context, cwd: usable ? cwd : home)
     }
 
     /// Resolve every `{AGT_X}` token for the given session: ids + cwd + remote host from the model, names
@@ -514,13 +518,6 @@ final class CustomCommandRunner {
     /// exit 127. Only commands opting into failure panels capture stderr; a clean exit reports nothing.
     @discardableResult
     private func spawn(_ command: CustomCommand, context: CommandContext, cwd: String?) -> String? {
-        if let cwd, !cwd.isEmpty, !FileManager.default.fileExists(atPath: cwd) {
-            // `Process.run` would refuse it too, naming only the last path component.
-            let reason = "session directory \(TerminalText.sanitized(cwd)) no longer exists"
-            logger.error("custom command \"\(command.name, privacy: .public)\" not started: \(reason, privacy: .public)")
-            report(command: command, reason: reason, detail: nil, sessionID: context.sessionID)
-            return reason
-        }
         let line = context.expand(command.command)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")

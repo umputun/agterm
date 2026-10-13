@@ -698,6 +698,17 @@ final class CustomCommandRunnerTests: XCTestCase {
         return (runner, session)
     }
 
+    /// A directory that exists but cannot be entered, so the launch itself fails.
+    private func unenterableDirectory() throws -> String {
+        let directory = stateDir.appendingPathComponent("locked-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: directory.path)
+        addTeardownBlock {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        }
+        return directory.path
+    }
+
     /// Spins the run loop until `body` is true or the deadline passes, since the spawn, its exit and the
     /// stderr drain all land asynchronously.
     private func wait(upTo seconds: TimeInterval = 5, until body: () -> Bool) {
@@ -824,8 +835,7 @@ final class CustomCommandRunnerTests: XCTestCase {
     func testSpawnFailurePostsOnlyWhenOptedIn() throws {
         let recorder = HudRecorder()
         let fix = try failureFixture(recorder)
-        let missing = stateDir.appendingPathComponent("missing-directory").path
-        fix.session.currentCwd = missing
+        fix.session.currentCwd = try unenterableDirectory()
 
         fix.runner.run(CustomCommand(name: "quiet", command: "true", shortcut: ""))
         XCTAssertTrue(recorder.posts.isEmpty)
@@ -833,7 +843,9 @@ final class CustomCommandRunnerTests: XCTestCase {
                                      errorPosition: .topLeft, errorPane: .left))
 
         XCTAssertEqual(recorder.posts.count, 1)
-        XCTAssertEqual(recorder.posts.first?.message, "loud: session directory \(missing) no longer exists")
+        let message = try XCTUnwrap(recorder.posts.first?.message)
+        XCTAssertTrue(message.hasPrefix("loud: "), message)
+        XCTAssertGreaterThan(message.count, "loud: ".count)
         XCTAssertNil(recorder.posts.first?.detail)
         XCTAssertEqual(recorder.posts.first?.spec.position, .topLeft)
         XCTAssertEqual(recorder.posts.first?.pane, .left)
@@ -1117,12 +1129,14 @@ final class CustomCommandRunnerTests: XCTestCase {
     func testKeymapRunReportsACommandThatDidNotStart() throws {
         let fix = try fixture(keymap: "command \"Mark\" true\n")
         let session = try XCTUnwrap(fix.store.activeSession)
-        let missing = stateDir.appendingPathComponent("missing-directory").path
-        session.currentCwd = missing
+        session.currentCwd = try unenterableDirectory()
 
         let response = controlServer(fix).runCustomCommand(name: "Mark", target: nil, window: nil)
 
-        XCTAssertEqual(response, ControlResponse(ok: false, error: "Mark did not start: session directory \(missing) no longer exists"))
+        XCTAssertFalse(response.ok)
+        let error = try XCTUnwrap(response.error)
+        XCTAssertTrue(error.hasPrefix("Mark did not start: "), error)
+        XCTAssertGreaterThan(error.count, "Mark did not start: ".count)
     }
 
     func testScratchChordKeepsItsOwnerAfterSelectionChanges() throws {
@@ -1320,6 +1334,29 @@ final class CustomCommandRunnerTests: XCTestCase {
         var fields = try XCTUnwrap(written).components(separatedBy: "|")
         fields[2] = URL(fileURLWithPath: fields[2]).resolvingSymlinksInPath().path
         return fields
+    }
+
+    // #738: a deleted session directory refused every custom command fired from that session.
+    func testALocalSessionWhoseDirectoryIsNotThereRunsTheCommandInHome() throws {
+        let file = stateDir.appendingPathComponent("plain.txt")
+        try Data().write(to: file)
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+
+        let fix = try fixture()
+        let owner = try XCTUnwrap(fix.store.currentWorkspaceID)
+
+        for reported in [stateDir.appendingPathComponent("deleted").path, file.path] {
+            let session = try XCTUnwrap(fix.store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+            session.currentCwd = reported
+            let surface = GhosttySurfaceView(workingDirectory: NSHomeDirectory())
+            surface.session = session
+            session.surface = surface
+
+            let written = try fired(fix.runner, from: surface, writing: "\"$AGT_SESSION_PWD|$PWD\"")
+            let fields = try XCTUnwrap(written).components(separatedBy: "|")
+            XCTAssertEqual(fields.first, reported)
+            XCTAssertEqual(fields.last.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }, home)
+        }
     }
 
     func testARemoteSessionWhoseReportedPathExistsLocallyRunsTheCommandThere() throws {

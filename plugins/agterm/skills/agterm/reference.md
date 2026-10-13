@@ -1622,8 +1622,9 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the working directory of the pane the command fired from;
   the scratch terminal reports the main pane's, since it tracks no cwd of its own. For a session opened
   by `zmx attach` the path can be remote: the session starts with local HOME and follows subsequent cwd
-  reports. The command itself starts in that path only when it exists here as a directory, else in
-  local HOME. See Remote sessions.
+  reports. See Remote sessions. On any session the command itself starts in that path only when it
+  exists here as a directory, else in local HOME, so a deleted directory does not stop it; the variable
+  keeps the reported path either way.
 - `{AGT_SESSION_HOST}` / `$AGT_SESSION_HOST` — the SSH destination of a session opened by `zmx attach`,
   verbatim as given (`user@alias` included); empty for a local session, an `ssh` typed into one included,
   so branch on it: `if [ -n "$AGT_SESSION_HOST" ]; then ssh "$AGT_SESSION_HOST" uptime; fi` (a bare

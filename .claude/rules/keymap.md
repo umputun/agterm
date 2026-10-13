@@ -151,7 +151,11 @@ paths:
   any cwd reports that shell emits. `AGT_SESSION_PWD` stays the pane's reported path, remote or not; the
   command's execution directory comes separately from `Session.localWorkingDirectory`, which returns
   that path for a local session and, for a remote one, only when it exists here as a directory, else
-  HOME. Scratch, overlay default, quick terminal, a local split (the first on an unsplit remote session
+  HOME.
+  The runner then applies the same existence rule to every session, so a local session whose directory
+  was deleted runs its commands in HOME; the other launches leave a missing path to libghostty, which
+  ignores it.
+  Scratch, overlay default, quick terminal, a local split (the first on an unsplit remote session
   or one after the attach-time split closes), Duplicate Session and a new session under the
   current-directory setting seed through the same helper.
 - `{AGT_PANE}`/`$AGT_PANE` is `left`, `right`, or `scratch`, derived from the firing surface for keybinds
