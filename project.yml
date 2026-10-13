@@ -166,7 +166,7 @@ targets:
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
           codesign --force --options runtime --sign - "$cli_dest"
-          codesign --force --options runtime --sign - "$host_dest"
+          codesign --force --options runtime --identifier "$PRODUCT_BUNDLE_IDENTIFIER" --sign - "$host_dest"
           codesign --force --options runtime --sign - "$zmx_dest"
           # re-seal the whole app: this phase can run AFTER Xcode's own code-sign on incremental
           # builds, so adding the helper would otherwise break the seal. --deep because a clean

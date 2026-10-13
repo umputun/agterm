@@ -149,9 +149,11 @@ xcodebuild -project agterm.xcodeproj -scheme agterm -configuration Release \
 # TCC grants onto standalone executables. Same constraint as the build-phase re-seal in project.yml.
 if [ "$SIGNED" = "1" ]; then
   echo "==> signing Developer ID (timestamped)"
-  for helper in agtermctl zmx agterm-session-host; do
+  for helper in agtermctl zmx; do
     codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP/Contents/MacOS/$helper"
   done
+  codesign --force --options runtime --identifier "com.umputun.agterm" --timestamp \
+    --sign "$SIGN_ID" "$APP/Contents/MacOS/agterm-session-host"
   codesign --force --options runtime --timestamp \
     --entitlements "$ROOT/agterm/agterm.entitlements" --sign "$SIGN_ID" "$APP"
   codesign --verify --deep --strict "$APP"
