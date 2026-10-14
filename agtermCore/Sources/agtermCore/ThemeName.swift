@@ -1,6 +1,8 @@
+import Foundation
+
 /// Reduces a ghostty `theme` value to the name active for the current appearance. The `light:…,dark:…`
 /// form must collapse to one name before agterm's by-hand `selection-*` lookup: the raw form matches no
-/// theme file, so the selected sidebar row falls back to an unreadable wash. Host-free, so unit-tested.
+/// theme file, so the selected sidebar row loses the theme's selection colors. Host-free, so unit-tested.
 public enum ThemeName {
     /// The theme name for `value` under the appearance. Only a well-formed `light:…,dark:…` (both sides
     /// present) resolves to a variant; a plain or malformed value is returned as-is.
@@ -18,6 +20,24 @@ public enum ThemeName {
         }
         guard let light, let dark else { return trimmed }
         return isDark ? dark : light
+    }
+
+    /// candidatePaths lists the theme files to try, in libghostty's order. A relative value with a slash
+    /// yields none, as ghostty rejects it.
+    public static func candidatePaths(for name: String, userThemesDirectory: String,
+                                      bundledThemesDirectory: String?) -> [String] {
+        if name.hasPrefix("/") { return [name] }
+        guard !name.isEmpty, !name.contains("/") else { return [] }
+        return [userThemesDirectory, bundledThemesDirectory].compactMap { dir in
+            dir.map { ($0 as NSString).appendingPathComponent(name) }
+        }
+    }
+
+    /// userThemesDirectory is ghostty's user themes directory; an empty `XDG_CONFIG_HOME` counts as unset.
+    public static func userThemesDirectory(environment: [String: String], home: String) -> String {
+        let configHome = environment["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? (home as NSString).appendingPathComponent(".config")
+        return (configHome as NSString).appendingPathComponent("ghostty/themes")
     }
 
     /// The trimmed name after a case-insensitive `light:`/`dark:` prefix; nil if absent or empty.

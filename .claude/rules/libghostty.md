@@ -62,8 +62,11 @@ paths:
 
 - Chrome reads background/foreground through `ghostty_config_get`. It cannot read optional
   `selection-*` keys, even when set, so `resolveSelectionColors` parses the same last-wins config sources
-  and named bundled theme file. Selected rows use selection background/foreground, with black/white
-  luminance fallback. Tint borderless New Session through `.tint`; its label ignores foreground style.
+  and the theme file, found as libghostty finds it: an absolute path directly, a name in the user
+  themes directory and then the bundled one.
+  Selected rows use selection background/foreground, black/white luminance text over a background with no
+  foreground, and the theme foreground for both when neither is set.
+  Tint borderless New Session through `.tint`; its label ignores foreground style.
 - Pass `theme = light:X,dark:Y` raw. The pinned libghostty supports conditional themes, but
   `set_color_scheme` only changes conditional state and emits an unhandled soft reload. agterm must set
   app and surface schemes, then call `update_config`.

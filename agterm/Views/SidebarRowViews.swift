@@ -83,15 +83,12 @@ final class SidebarCellView: NSTableCellView {
         setAddButtonVisible(false)
     }
 
-    /// Colors row text/icon from the terminal theme: a selected row takes the selection foreground (over the
-    /// selection-background pill the row draws), or white over the soft wash when the theme exposes no
-    /// selection color; an unselected row takes the theme foreground, icons dimmed. Driven from the real
-    /// selection state, not `backgroundStyle` (AppKit flips that only while the table is first responder) —
-    /// `SidebarRowView` re-asserts it on attach and on every selection flip, the coordinator on theme changes.
+    /// setColors tints row text and icons from the theme for the row's real selection state. Never drive it
+    /// from `backgroundStyle`, which AppKit flips only while the table is first responder.
     func setColors(selected: Bool) {
         let app = GhosttyApp.shared
         let color = selected
-            ? (app.terminalSelectionForegroundColor ?? .white)
+            ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
             : (app.terminalForegroundColor ?? .labelColor)
         textField?.textColor = color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
@@ -243,7 +240,6 @@ final class StatusIconView: NSImageView {
 /// moment it attaches. Otherwise pill and text color desync — and on the many themes where
 /// `foreground == selection-background` (the inverted-selection idiom), a stale tint renders the text invisible.
 final class SidebarRowView: NSTableRowView {
-    /// White-wash fallback opacity for themes with no selection color: brighter key, dimmer background.
     private static let keyAlpha: CGFloat = 0.13
     private static let inactiveAlpha: CGFloat = 0.07
 
@@ -280,7 +276,8 @@ final class SidebarRowView: NSTableRowView {
         if let selection = GhosttyApp.shared.terminalSelectionBackgroundColor {
             selection.withAlphaComponent(isEmphasized ? 1 : 0.55).setFill()
         } else {
-            NSColor(white: 1, alpha: isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
+            (GhosttyApp.shared.terminalForegroundColor ?? .white)
+                .withAlphaComponent(isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
         }
         NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1.5), xRadius: 7, yRadius: 7).fill()
     }

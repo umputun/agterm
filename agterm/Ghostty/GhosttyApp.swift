@@ -46,7 +46,7 @@ final class GhosttyApp {
                                       blue: Double(bg.blueComponent), shiftAmount: shiftAmount)
     }
     /// The theme's `selection-background`; the selected sidebar row's pill uses it to match the terminal's own
-    /// selection. Nil when the theme doesn't set it (the row falls back to a soft white wash).
+    /// selection. Nil when the theme doesn't set it.
     private(set) var terminalSelectionBackgroundColor: NSColor?
     /// The selected sidebar row's text: theme `selection-foreground`, else a black/white contrast of the
     /// selection-background when only that is set. Nil if neither is set.
@@ -445,14 +445,9 @@ final class GhosttyApp {
         return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    /// `ghostty_config_get` doesn't expose the optional `selection-background`/`selection-foreground` keys, so
-    /// resolve them by re-reading the sources `loadConfig` loads, in the same order, plus the active theme
-    /// file. An explicit `selection-*` line wins over the theme's; either may be nil. A `light:…,dark:…` theme
-    /// resolves via `isDark`; the global config counts only when `inheritGlobalConfig` is on, as in `loadConfig`.
-    ///
-    /// Known limitation: only top-level files are scanned — the `config-file` includes
-    /// `ghostty_config_load_recursive_files` expands are NOT followed, so a `selection-*` behind one is missed
-    /// and the sidebar pill falls back.
+    /// resolveSelectionColors re-reads `loadConfig`'s sources and the active theme file, because
+    /// `ghostty_config_get` cannot return the optional `selection-*` keys. `config-file` includes are not
+    /// followed, so a `selection-*` behind one is missed.
     private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
                                                isDark: Bool) -> (NSColor?, NSColor?) {
         var sources: [String] = []
@@ -480,11 +475,15 @@ final class GhosttyApp {
         }
         // the theme file fills any selection color not set explicitly above; the settings conf carries the raw
         // dual `theme = light:,dark:` (ghostty picks the terminal side itself), so pick the appearance side.
-        if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
-           let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
-               .appendingPathComponent("themes", isDirectory: true) {
-            let effectiveName = ThemeName.resolved(from: themeName, isDark: isDark)
-            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(effectiveName).path) {
+        if selBg == nil || selFg == nil, let themeName {
+            let candidates = ThemeName.candidatePaths(
+                for: ThemeName.resolved(from: themeName, isDark: isDark),
+                userThemesDirectory: ThemeName.userThemesDirectory(
+                    environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory()),
+                bundledThemesDirectory: Bundle.main.url(forResource: "ghostty", withExtension: nil)?
+                    .appendingPathComponent("themes", isDirectory: true).path)
+            let themePath = candidates.first { FileManager.default.fileExists(atPath: $0) }
+            for (key, value) in themePath.map(keyValues(ofFileAt:)) ?? [] {
                 if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
                 if key == "selection-foreground", selFg == nil { selFg = parseHexColor(value) }
             }
