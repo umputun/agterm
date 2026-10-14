@@ -62,8 +62,9 @@ paths:
 
 - Chrome reads background/foreground through `ghostty_config_get`. It cannot read optional
   `selection-*` keys, even when set, so `resolveSelectionColors` parses the same last-wins config sources
-  and the theme file, found as libghostty finds it: an absolute path directly, a name in the user
-  themes directory and then the bundled one.
+  and the theme file, found as libghostty finds it: a leading `~/` expanded, an absolute path directly,
+  a name in the user themes directory and then the bundled one.
+  `GhosttyConfigText` owns ghostty's quote, empty-reset and last-valid-wins rules for those keys.
   Selected rows use selection background/foreground, black/white luminance text over a background with no
   foreground, and the theme foreground for both when neither is set.
   Tint borderless New Session through `.tint`; its label ignores foreground style.

@@ -22,8 +22,8 @@ public enum ThemeName {
         return isDark ? dark : light
     }
 
-    /// candidatePaths lists the theme files to try, in libghostty's order. A relative value with a slash
-    /// yields none, as ghostty rejects it.
+    /// candidatePaths lists the theme files to try, in libghostty's order, for a value already passed through
+    /// `expandingHome`. A relative value with a slash yields none, as ghostty rejects it.
     public static func candidatePaths(for name: String, userThemesDirectory: String,
                                       bundledThemesDirectory: String?) -> [String] {
         if name.hasPrefix("/") { return [name] }
@@ -33,6 +33,13 @@ public enum ThemeName {
         }
     }
 
+    /// expandingHome replaces a leading `~/` with `home`, as libghostty does to a theme value before lookup;
+    /// `~` alone and `~user` are left as they are.
+    public static func expandingHome(_ value: String, home: String) -> String {
+        guard value.hasPrefix("~/") else { return value }
+        return (home as NSString).appendingPathComponent(String(value.dropFirst(2)))
+    }
+
     /// userThemesDirectory is ghostty's user themes directory; an empty `XDG_CONFIG_HOME` counts as unset.
     public static func userThemesDirectory(environment: [String: String], home: String) -> String {
         let configHome = environment["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : $0 }
@@ -40,10 +47,11 @@ public enum ThemeName {
         return (configHome as NSString).appendingPathComponent("ghostty/themes")
     }
 
-    /// The trimmed name after a case-insensitive `light:`/`dark:` prefix; nil if absent or empty.
+    /// variant returns the trimmed, unquoted name after a case-insensitive `light:`/`dark:` prefix, or nil if
+    /// absent or empty.
     private static func variant(_ prefix: String, in part: String) -> String? {
         guard part.lowercased().hasPrefix(prefix) else { return nil }
-        let name = String(part.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        let name = GhosttyConfigText.unquoted(String(part.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces))
         return name.isEmpty ? nil : name
     }
 }

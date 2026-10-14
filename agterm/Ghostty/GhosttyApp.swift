@@ -460,48 +460,29 @@ final class GhosttyApp {
         sources.append(ghosttyConfigPath)
         sources.append(settingsConfigURL.path)
 
-        var themeName: String?
-        var selBg: NSColor?
-        var selFg: NSColor?
-        for path in sources {
-            for (key, value) in keyValues(ofFileAt: path) {
-                switch key {
-                case "theme": themeName = value
-                case "selection-background": selBg = parseHexColor(value)
-                case "selection-foreground": selFg = parseHexColor(value)
-                default: break
-                }
-            }
+        let config = sources.flatMap(keyValues(ofFileAt:))
+        let themeName = GhosttyConfigText.lastSetting(of: "theme", in: config) { $0 }.over(.unset) ?? ""
+        // the settings conf carries the raw dual `theme = light:,dark:` (ghostty picks the terminal side
+        // itself), so pick the appearance side.
+        let side = ThemeName.resolved(from: themeName, isDark: isDark)
+        let candidates = ThemeName.candidatePaths(
+            for: ThemeName.expandingHome(side, home: NSHomeDirectory()),
+            userThemesDirectory: ThemeName.userThemesDirectory(
+                environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory()),
+            bundledThemesDirectory: Bundle.main.url(forResource: "ghostty", withExtension: nil)?
+                .appendingPathComponent("themes", isDirectory: true).path)
+        let theme = candidates.first { FileManager.default.fileExists(atPath: $0) }.map(keyValues(ofFileAt:)) ?? []
+        func color(_ key: String) -> NSColor? {
+            GhosttyConfigText.lastSetting(of: key, in: config, parse: parseHexColor)
+                .over(GhosttyConfigText.lastSetting(of: key, in: theme, parse: parseHexColor))
         }
-        // the theme file fills any selection color not set explicitly above; the settings conf carries the raw
-        // dual `theme = light:,dark:` (ghostty picks the terminal side itself), so pick the appearance side.
-        if selBg == nil || selFg == nil, let themeName {
-            let candidates = ThemeName.candidatePaths(
-                for: ThemeName.resolved(from: themeName, isDark: isDark),
-                userThemesDirectory: ThemeName.userThemesDirectory(
-                    environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory()),
-                bundledThemesDirectory: Bundle.main.url(forResource: "ghostty", withExtension: nil)?
-                    .appendingPathComponent("themes", isDirectory: true).path)
-            let themePath = candidates.first { FileManager.default.fileExists(atPath: $0) }
-            for (key, value) in themePath.map(keyValues(ofFileAt:)) ?? [] {
-                if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
-                if key == "selection-foreground", selFg == nil { selFg = parseHexColor(value) }
-            }
-        }
-        return (selBg, selFg)
+        return (color("selection-background"), color("selection-foreground"))
     }
 
-    /// Parse a ghostty-style config file into its `key = value` pairs in file order, skipping blank and `#`
-    /// comment lines. Missing/unreadable files yield no pairs.
-    private static func keyValues(ofFileAt path: String) -> [(String, String)] {
+    /// keyValues reads a config file's pairs; a missing or unreadable file yields none.
+    private static func keyValues(ofFileAt path: String) -> [(key: String, value: String)] {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
-        return text.split(separator: "\n").compactMap { raw in
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty, !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { return nil }
-            let key = line[..<eq].trimmingCharacters(in: .whitespaces)
-            let value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
-            return (key, value)
-        }
+        return GhosttyConfigText.keyValues(in: text)
     }
 
     /// Parse a `#rrggbb` or `#rgb` hex color (with or without the leading `#`) to an opaque sRGB `NSColor`,
