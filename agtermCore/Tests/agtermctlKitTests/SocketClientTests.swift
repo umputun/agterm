@@ -180,6 +180,30 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response).hasPrefix("hooks: /tmp/hooks.conf"))
     }
 
+    @Test func formatsRecentRowsWithFullIdsAndAnEmptyList() {
+        let session = ControlRecentItem(id: "R1", kind: "session", title: "api", subtitle: "project", closedAt: 1,
+                                        workspaceID: "W1", sessionIDs: ["S1"])
+        let workspace = ControlRecentItem(id: "R2", kind: "workspace", title: "project", subtitle: nil, closedAt: 2,
+                                          workspaceID: "W1", sessionIDs: ["S1", "S2"])
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(recent: [session, workspace])))
+            == "R1  session  api (project)\nR2  workspace  project")
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(recent: [])))
+            == "no recently closed items")
+    }
+
+    @Test func formatsRecentOpenAndSaysWhenTheEntryStays() {
+        let item = ControlRecentItem(id: "R1", kind: "session", title: "api", subtitle: nil, closedAt: 1,
+                                     workspaceID: "W1", sessionIDs: ["S1"])
+        let complete = ControlRecentOpen(item: item, window: "WIN", complete: true)
+        let partial = ControlRecentOpen(item: item, window: "WIN", complete: false)
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(recentOpen: complete)))
+            == "reopened session api")
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(recentOpen: partial)))
+            == "reopened session api (incomplete: the entry stays in the list)")
+    }
+
     @Test func formatsKeymapWithEveryActionAndTheLiveMenu() {
         let keymap = Keymap(builtinOverrides: [.closeSession: Chord(mods: [.command], key: "e")], commands: [])
         let payload = ControlKeymap.project(

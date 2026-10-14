@@ -1,8 +1,8 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session to
-  control it: create, rename, close, select or
+  Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
+  create, rename, close, reopen, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD/caption or notification; show a picker or question dialog; show an image inline; type
@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -660,6 +660,12 @@ restart restores plain shells in rerun mode · `restore mode [none|rerun|live]` 
 settings hold, what this launch requested, what it got, whether a restart is needed) or write it for the
 NEXT launch; setting it changes nothing in the running app, because a pane is wrapped in a daemon or not
 at the moment it is created.
+
+**recent** - `recent list` - the File ▸ Open Recent entries, newest first, each with its full id, kind,
+title and the session ids it restores; the last 20 only · `recent open [ID] [--window W]` - reopen an
+entry by id or prefix, the newest with no id; the session keeps its id, goes to the window that already
+holds its session or workspace when one does, and the window is not raised; `complete` false means the
+entry stayed in the list · `recent clear` - empty the list. `list` and `clear` refuse a target or `--window`.
 
 **zmx** - `zmx list` - every daemon behind a live session joined against the pane that claims it, under the
 restore status as a header; a CLOSED window's panes are claimed with zero clients, which is a resting

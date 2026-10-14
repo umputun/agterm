@@ -15,6 +15,13 @@ struct RecentClosedRestore: Equatable, Sendable {
     static let failed = RecentClosedRestore(restored: false, complete: false)
 }
 
+/// What `WindowLibrary.reopenRecentClosedOutcome` achieved: the window the entry was restored into, and
+/// whether the entry is gone from the list.
+public struct RecentClosedReopen: Equatable, Sendable {
+    public let window: UUID
+    public let complete: Bool
+}
+
 public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
     public let id: UUID
     public let kind: RecentClosedKind

@@ -206,6 +206,7 @@
             <a href="#browser" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">browser</a>
             <a href="#config" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">config</a>
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
+            <a href="#recent" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">recent</a>
             <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
             <a href="#clipboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">clipboard</a>
             <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
@@ -3452,6 +3453,72 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Setting it changes nothing in the running app, and no flag makes it: a pane is wrapped in a zmx daemon or not at the moment it is created, so a running shell cannot be retrofitted. A failed write is reported as a failure rather than acknowledged.
+              </p>
+            </div>
+          </section>
+
+          <section id="recent" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              recent
+            </h2>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl recent list
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">recent.list</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                List the recently closed sessions and workspaces that File ▸ Open Recent shows, newest first.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.recent</span>, one entry each: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">kind</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspace</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">title</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">subtitle</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">closedAt</span> in Unix seconds, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span> (the parent workspace of a session entry, the workspace itself otherwise)
+                and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessionIDs</span>, the sessions a reopen brings back. The list keeps the last 20 entries and drops the oldest
+                without notice. This is the read-back for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent open</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent clear</span>.
+                App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl recent open [ID] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">recent.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Reopen an entry by id or unique prefix, or the newest with no id, as File ▸ Reopen Last Closed Item does. The session comes
+                back under its own id, so a script holding that id can keep using it. It goes to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, or the frontmost
+                window, unless another window already holds its session or workspace. The window is not raised.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.recentOpen</span> with the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">item</span> it reopened,
+                the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window</span> it went to, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">complete</span>, false when the entry is still in the list
+                afterwards.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                An unknown or closed <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> fails before anything is restored. Errors:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no recently closed items</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no such recent item: ID</span>,
+                and the ambiguous-prefix error.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl recent clear
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">recent.clear</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Empty the recently closed list. It answers ok only when the list is empty afterwards, so a failed write is an error.
+                App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
               </p>
             </div>
           </section>

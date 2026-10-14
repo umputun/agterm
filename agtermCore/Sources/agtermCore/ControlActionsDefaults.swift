@@ -166,4 +166,16 @@ public extension ControlActions {
                    placement _: ControlHudPlacement) -> ControlResponse {
         updateHud(target, window: window, spec: spec)
     }
+
+    func listRecentClosed() -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("recent.list"))
+    }
+
+    func clearRecentClosed() -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("recent.clear"))
+    }
+
+    func openRecentClosed(_: String?, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("recent.open"))
+    }
 }

@@ -19,6 +19,12 @@ extension WindowLibrary {
     /// The entry survives an incomplete restore. A snapshot member left in no window would otherwise become
     /// unreachable the moment the entry went, so Reopen stays available to finish the job.
     public func reopenRecentClosedReportingWindow(_ itemID: UUID, into targetStore: AppStore? = nil) -> UUID? {
+        reopenRecentClosedOutcome(itemID, into: targetStore)?.window
+    }
+
+    /// `reopenRecentClosedReportingWindow` plus whether the entry left the list. That is read from the
+    /// reloaded list rather than the restore's coverage, because a failed write keeps the entry on disk.
+    public func reopenRecentClosedOutcome(_ itemID: UUID, into targetStore: AppStore? = nil) -> RecentClosedReopen? {
         refreshRecentClosedItems()
         guard let item = recentClosedItems.first(where: { $0.id == itemID }),
               let store = restoreDestination(for: item, requested: targetStore),
@@ -28,7 +34,7 @@ extension WindowLibrary {
         guard outcome.restored else { return nil }
         if outcome.complete { recentClosedStore.remove(itemID) }
         refreshRecentClosedItems()
-        return windowID
+        return RecentClosedReopen(window: windowID, complete: !recentClosedItems.contains { $0.id == itemID })
     }
 
     /// `reopenRecentClosedReportingWindow` over the newest entry.

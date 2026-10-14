@@ -179,6 +179,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
+- `recent.list`, `recent.open`, `recent.clear`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
 
 `terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
@@ -1235,6 +1236,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Seed pending only at the three library bootstrap paths. Seed split pending state when the snapshot restores
   a shown or hidden split. A hidden split keeps its identity and pin until its pane is shown.
 - Tree reads persisted pins, including empty string, never pending state.
+
+## Recent Closed commands
+
+- `recent.list`, `recent.open` and `recent.clear` drive File ▸ Open Recent. `recent.list` is the
+  read-back for the other two; the list is app-global, so no tree or window node repeats it.
+- `recent.open` restores through `WindowLibrary.reopenRecentClosedOutcome`, the menu's path, so a session
+  still pending its close is undone in place and `restoreDestination` may pick another window than the
+  requested one; the reply names the actual one. It neither raises nor focuses that window, and it skips
+  the menu's `uiActionsEnabled` gate, like every other socket command that selects.
+- `complete` and `recent.clear`'s ok are read from the reloaded list, never from the call:
+  `RecentClosedStore.save` logs a failed write and returns, so a restore can finish with its entry still
+  on disk. Restore coverage only decides whether removal is attempted.
 
 ## Restore mode and the zmx group
 

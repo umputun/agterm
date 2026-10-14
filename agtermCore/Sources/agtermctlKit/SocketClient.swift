@@ -279,6 +279,13 @@ struct SocketClient {
         if let restore = response.result?.restore {
             return formatRestoreStatus(restore)
         }
+        if let recent = response.result?.recent {
+            return formatRecent(recent)
+        }
+        if let open = response.result?.recentOpen {
+            let reopened = "reopened \(open.item.kind) \(open.item.title)"
+            return open.complete ? reopened : reopened + " (incomplete: the entry stays in the list)"
+        }
         if let app = response.result?.app {
             guard let installed = response.result?.installed, installed != app else { return formatIdentity(app) }
             return "\(formatIdentity(app))\ninstalled: \(formatIdentity(installed))"
@@ -405,6 +412,15 @@ struct SocketClient {
         guard sync else { return body }
         let header = "syncing with macOS appearance — light: \(light ?? "default ghostty"), dark: \(dark ?? "default ghostty")"
         return header + "\n" + body
+    }
+
+    /// Render `recent.list` one entry per row with its full id, which `recent open` takes as is.
+    static func formatRecent(_ items: [ControlRecentItem]) -> String {
+        guard !items.isEmpty else { return RecentClosedTarget.emptyError }
+        return items.map { item in
+            let subtitle = item.subtitle.map { " (\($0))" } ?? ""
+            return "\(item.id)  \(item.kind)  \(item.title)\(subtitle)"
+        }.joined(separator: "\n")
     }
 
     /// Render the `hooks.list` payload: one row per hook in file order, then parse diagnostics.

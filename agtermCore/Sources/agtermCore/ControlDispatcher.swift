@@ -85,6 +85,12 @@ public protocol ControlActions {
     /// `hooks.reload` / `hooks.list`, app-global like the keymap pair.
     func reloadHooks() -> ControlResponse
     func listHooks() -> ControlResponse
+    /// `recent.list` / `recent.clear`, app-global over the one Recent Closed list.
+    func listRecentClosed() -> ControlResponse
+    func clearRecentClosed() -> ControlResponse
+    /// `recent.open` restores the entry `target` names, the newest when nil, into `window`'s store or the
+    /// frontmost one. The host owns resolution and reports the window the entry actually went to.
+    func openRecentClosed(_ target: String?, window: String?) -> ControlResponse
     /// `browser.clear` empties the saved browser store; the reply waits for the removal to finish.
     func clearBrowser() async -> ControlResponse
     /// `browser.links` sets where a clicked web link opens, or with nil only reads it; the reply's text is
@@ -248,6 +254,8 @@ public struct ControlDispatcher {
             return await dispatchZmxCommand(request)
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
+        case .recentList, .recentOpen, .recentClear:
+            return dispatchRecentCommand(request)
         case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)
         case .quickType, .quickText:

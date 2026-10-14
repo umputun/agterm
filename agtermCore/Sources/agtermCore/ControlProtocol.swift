@@ -109,6 +109,9 @@ public enum Command: String, Codable, Sendable {
     case zmxAttach = "zmx.attach"
     case zmxPresent = "zmx.present"
     case zmxScreen = "zmx.screen"
+    case recentList = "recent.list"
+    case recentOpen = "recent.open"
+    case recentClear = "recent.clear"
     /// A viewer's helper claiming a remote overlay job; after an ok reply the connection carries job frames.
     case sessionOverlayJobRun = "session.overlay.job.run"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
@@ -607,6 +610,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var pageOutcome: ControlHtmlPageOutcome?
     /// restart is what `session.restart` replaced: the pane's stable id and its shell before and after.
     public var restart: ControlRestartReceipt?
+    /// The Recent Closed entries for `recent.list`, newest first.
+    public var recent: [ControlRecentItem]?
+    /// What `recent.open` reopened and where.
+    public var recentOpen: ControlRecentOpen?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -621,7 +628,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 liveReset: ControlLiveResetStatus? = nil,
                 width: Int? = nil, height: Int? = nil,
                 pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil,
-                restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil) {
+                restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil,
+                recent: [ControlRecentItem]? = nil, recentOpen: ControlRecentOpen? = nil) {
+        self.recent = recent
+        self.recentOpen = recentOpen
         self.restart = restart
         self.installed = installed
         self.width = width

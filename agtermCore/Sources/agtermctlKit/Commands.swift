@@ -91,7 +91,7 @@ public struct Agtermctl: ParsableCommand {
         abstract: "Drive agterm over its control socket, and install its terminfo entry on other hosts.",
         subcommands: [Tree.self, Events.self, Workspace.self, Session.self, Surface.self, Dashboard.self, Window.self, Quick.self,
                       Sidebar.self, Notify.self, Font.self, Keymap.self, Hooks.self, Browser.self, Config.self, Theme.self, Pick.self, Ask.self, Restore.self,
-                      Zmx.self, Terminfo.self, Clipboard.self, Version.self]
+                      Recent.self, Zmx.self, Terminfo.self, Clipboard.self, Version.self]
     )
 
     public init() {}

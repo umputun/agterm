@@ -2017,6 +2017,27 @@ For a PER-SESSION, per-pane override that pins (or suppresses) what a pane resto
 denylist, and is what a `SessionStart` hook rewrites to reattach a non-idempotent command. `restore clear`
 here is app-global and touches only the captured commands, not those overrides.
 
+## recent
+
+The File ▸ Open Recent list: sessions and workspaces closed recently, newest first, capped at 20 with
+the oldest dropped silently.
+
+`agtermctl recent list` — returns `result.recent[]`: `id`, `kind` (`session` | `workspace`), `title`,
+`subtitle`, `closedAt` (Unix seconds), `workspaceID` (the parent workspace of a session entry, the
+workspace itself otherwise) and `sessionIDs`, the sessions a reopen brings back. Human output prints one
+row per entry with the full id. This is the read-back for `open` and `clear`.
+
+`agtermctl recent open [ID] [--window W]` — reopen the entry with that id or unique prefix, or the newest
+with no id. The session returns under its original id. It goes to `--window` or the frontmost window,
+unless another window already holds its session or workspace; the window is not raised. Returns
+`result.recentOpen`: `item` (the entry, as `list` shows it), `window` (where it went) and `complete`,
+false when the entry is still in the list afterwards. An unknown or closed `--window` fails before
+anything is restored. Errors: `no recently closed items`, `no such recent item: ID`, ambiguous prefix.
+
+`agtermctl recent clear` — empty the list; ok only when the list is empty afterwards.
+
+`list` and `clear` are app-global and refuse a target or `--window`.
+
 ## clipboard
 
 `agtermctl clipboard set [TEXT]` — copy text to the clipboard of every terminal attached to the pane the
