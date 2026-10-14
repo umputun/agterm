@@ -23,7 +23,7 @@ struct Recent: ParsableCommand {
             abstract: "Reopen a recently closed session or workspace (the newest when no id is given).",
             discussion: "The entry comes back with its id, split, flag, context and restore pins. It goes to "
                 + "--window or the frontmost window, unless another window already holds its session or "
-                + "workspace; the reply names the window it went to. The window is not raised. An entry "
+                + "workspace; --json names the window it went to. The window is not raised. An entry "
                 + "whose restore was incomplete stays in the list."
         )
         @Argument(help: "Entry id or unique prefix, from 'recent list'.") var id: String?

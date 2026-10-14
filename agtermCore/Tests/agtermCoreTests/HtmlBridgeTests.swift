@@ -88,7 +88,9 @@ struct HtmlBridgeTests {
         #expect(newest.args?.window == "W1")
         let targeted = try request(#"{"cmd":"recent.open","target":"ab12"}"#)
         #expect(targeted.target == "ab12")
-        #expect(targeted.args?.window == nil)
+        #expect(targeted.args?.window == "W1")
+        #expect(try request(#"{"cmd":"recent.open","target":"ab12","args":{"window":"W2"}}"#).args?.window == "W2")
+        #expect(try request(#"{"cmd":"recent.open","args":{"window":"active"}}"#).args?.window == "active")
     }
 
     @Test(arguments: ["window.close", "window.select", "window.rename", "window.delete", "window.resize", "window.move",

@@ -885,9 +885,10 @@ error keeps those names for compatibility.
   result or rejects with the error. What the page leaves out comes from where it sits NOW: a session
   command (the `session.*` names bar `new` and `go`, plus `notify`, `font.*` and a non-gui `ask.open`) gets
   the page's session, and `session.overlay.close|reload|navigate|submit` its pane too; a `window.*` command
-  that takes a window gets it as target; anything else gets `--window`. An explicit target, `active`,
-  window or batch is used as given, and `zmx.attach` and `dashboard` keep their ids and still land in the
-  page's window. A page's `reload` defaults to `--current`. `sidebar` and `sidebar.mode` act on the
+  that takes a window gets it as target; anything else gets `--window`, except the app-global `hooks.*`,
+  `browser.*`, `recent list` and `recent clear`, which get none. An explicit target, `active`, window or
+  batch is used as given, and `zmx.attach`, `dashboard` and `recent open` keep their ids and still land in
+  the page's window. A page's `reload` defaults to `--current`. `sidebar` and `sidebar.mode` act on the
   frontmost window. Refused from a page: `zmx.present`, `zmx.reset`, `session.overlay.job.run`, and any
   request from a frame. Escape outside text you put in a page: it can run commands.
 - `session overlay open --url URL [--navigation] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`

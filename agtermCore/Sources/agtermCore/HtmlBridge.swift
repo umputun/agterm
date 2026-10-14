@@ -59,7 +59,7 @@ public enum HtmlBridge {
     private static let windowless: Set<Command> = [.hooksReload, .hooksList, .browserClear, .browserLinks,
                                                    .recentList, .recentClear]
     // their ids name something else (a remote session, dashboard cells), and they still land in a local window
-    private static let placedLocally: Set<Command> = [.zmxAttach, .dashboard]
+    private static let placedLocally: Set<Command> = [.zmxAttach, .dashboard, .recentOpen]
 
     public static func request(from data: Data, page: HtmlBridgePage) -> Result<ControlRequest, HtmlBridgeError> {
         let decoded: ControlRequest
