@@ -597,7 +597,7 @@ struct Session: ParsableCommand {
                 if chromeless, command != nil { throw ValidationError("--chromeless requires --html or a loopback --url") }
                 if chromeless, navigation { throw ValidationError("--chromeless cannot be combined with --navigation") }
                 if chromeless, browse { throw ValidationError("--chromeless cannot be combined with --browse") }
-                if chromeless, let url, !HtmlSource.isLoopback(url) {
+                if chromeless, let url, HtmlSource.webURL(url) != nil, !HtmlSource.isLoopback(url) {
                     throw ValidationError("--chromeless with --url requires a loopback host: 127.0.0.1, ::1 or localhost")
                 }
                 if persistent, url == nil { throw ValidationError("--persistent requires --url") }

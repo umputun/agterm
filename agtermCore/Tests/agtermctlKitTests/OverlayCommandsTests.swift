@@ -80,6 +80,11 @@ struct OverlayCommandsTests {
         #expect(req.args?.chromeless == true)
     }
 
+    @Test func aMalformedChromelessUrlIsLeftForTheServerToName() throws {
+        let req = try request(["session", "overlay", "open", "--url", "localhost:5173", "--chromeless"])
+        #expect(req.args?.url == "localhost:5173")
+    }
+
     @Test func aProgramOpenLeavesItsCwdAsTyped() throws {
         let req = try request(["session", "overlay", "open", "revdiff", "--cwd", "repo"])
         #expect(req.args?.command == "revdiff")

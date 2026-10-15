@@ -10,7 +10,7 @@ public enum HtmlSource: Equatable, Sendable {
     case url(URL)
 
     /// webURL parses `--url`: an absolute http or https URL with a host, nil for anything else.
-    static func webURL(_ text: String) -> URL? {
+    public static func webURL(_ text: String) -> URL? {
         guard let url = URL(string: text), HtmlOrigin(url) != nil else { return nil }
         return url
     }
