@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>agterm snapshot</title>
+<style>
+:root{--bg:#f6f5f1;--panel:#fff;--fg:#1d1f1c;--mut:#6b6f68;--line:#e2e0d8;--acc:#2f6b3f;--accbg:#e4efe6;
+  --sel:#a9512f;--code:#f0efe9;--you:#eef3fb;--youline:#c9d7ee;--run:#b5651d;--flag:#c0392b}
+@media (prefers-color-scheme:dark){:root{--bg:#151715;--panel:#1d201d;--fg:#e7e9e4;--mut:#9aa096;--line:#2c312c;
+  --acc:#7fc18f;--accbg:#22362a;--sel:#a9512f;--code:#121412;--you:#1c2533;--youline:#2d3c52;--run:#e0954f;--flag:#ef6b5e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:14px 16px 12px}
+.top-in{max-width:1500px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+h1{font-size:18px;margin:0}.meta{color:var(--mut);font-size:13px;flex:1;min-width:200px}
+#q{flex:1 1 320px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);font-size:14px}
+.layout{max-width:1500px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:1000px){.layout{grid-template-columns:minmax(340px,440px) minmax(0,1fr)}
+  .detail{position:sticky;top:var(--toph,70px);height:calc(100vh - var(--toph,70px) - 16px);overflow:auto}}
+@media (max-width:999px){.detail{position:fixed;inset:0;z-index:20;overflow:auto;display:none;border-radius:0!important}
+  body.open .detail{display:block}body.open{overflow:hidden}}
+.wtitle{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:16px 0 8px}.wtitle:first-child{margin-top:0}
+.ws{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;overflow:hidden}
+.wsh{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px;font-weight:600;cursor:pointer;user-select:none}
+.wsh .chev{color:var(--mut);width:12px;transition:transform .15s}.ws.fold .chev{transform:rotate(-90deg)}.ws.fold .rows{display:none}
+.wsn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cnt{color:var(--mut);font-weight:400;font-size:12px}
+.row{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 30px;cursor:pointer;border-top:1px solid var(--line);min-width:0}
+.row:hover{background:var(--accbg)}.row.sel{background:var(--sel);color:#fff}.row.sel .sub,.row.sel .ico{color:#fbe9e1;border-color:#fbe9e1}
+.row.sel .b{color:#fff;border-color:#fff}.row.sel .btn{background:transparent;color:#fff;border-color:#fbe9e1}
+.ico{font:10px ui-monospace,Menlo,monospace;color:var(--mut);border:1px solid var(--line);border-radius:4px;padding:0 3px;flex-shrink:0}
+.nmw{flex:1;min-width:0;display:flex;flex-direction:column}
+.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sub{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badges{display:flex;gap:4px;flex-shrink:0}
+.b{font-size:11px;padding:0 6px;border-radius:999px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.b.claude{color:var(--acc);border-color:var(--acc)}.b.run{color:var(--run);border-color:var(--run)}.b.flag{color:var(--flag);border-color:var(--flag)}
+.btn{flex-shrink:0;font-size:12px;padding:3px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--acc);color:var(--acc)}.btn.ok{background:var(--acc);color:var(--panel);border-color:var(--acc)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--panel)}.btn.primary:hover{opacity:.9;color:var(--panel)}
+.btn.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
+.hide{display:none!important}
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--mut);padding:40px;text-align:center}
+.dh{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px 12px;z-index:2}
+.crumb{color:var(--mut);font-size:12px;display:flex;gap:8px;align-items:center;min-height:24px}.dh h2{font-size:19px;margin:2px 0 8px;word-break:break-word}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.acts .badges{margin-right:6px}
+.close{display:none;margin-left:auto}.detail,.dh,.sec{min-width:0;max-width:100%}@media (max-width:999px){.close{display:inline-block}}
+.sec{padding:14px 18px;border-bottom:1px solid var(--line)}.sec:last-child{border-bottom:0}
+.sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sec h3 .sp{flex:1}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;color:var(--mut);font-weight:500;white-space:nowrap;padding:3px 14px 3px 0;vertical-align:top;width:1%}
+td{padding:3px 0;overflow-wrap:anywhere}td code{font:12px ui-monospace,Menlo,monospace}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:12px/1.4 ui-monospace,Menlo,monospace;overflow-x:auto;margin:0;white-space:pre}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.chip{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--code);border:1px solid var(--line);max-width:100%;overflow-wrap:anywhere}
+.tl{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.msg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
+.msg.user{background:var(--you);border-color:var(--youline)}
+.mh{display:flex;gap:8px;font-size:12px;color:var(--mut);margin-bottom:4px}.mh b{color:var(--fg)}
+.mt{white-space:pre-wrap;word-break:break-word;font-size:13px}.msg.clamp .mt{max-height:9.5em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent)}
+.more{font-size:12px;color:var(--acc);background:none;border:0;padding:4px 0 0;cursor:pointer}
+.note{color:var(--mut);font-size:12px}
+.sid{font:11px ui-monospace,Menlo,monospace}.row .sid{opacity:.8;flex-shrink:0}
+.row .sub{display:flex;gap:6px;min-width:0}.row .st{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.conv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px;font-size:13px}.conv .sid{font-size:12px;background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.cand{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px;display:flex;gap:10px;align-items:flex-start}.cand>div{flex:1;min-width:0}
+.cand .t{font-weight:500}.cand .f{color:var(--mut);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+#cq{flex:1 1 180px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font-size:12px;text-transform:none;letter-spacing:0}
+mark{background:#f3d36b;color:#000;border-radius:2px}
+summary{cursor:pointer;color:var(--mut);font-size:12px}
+.foot{color:var(--mut);font-size:12px;padding:4px 2px 24px}.foot code{background:var(--code);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="top"><div class="top-in">
+  <h1>agterm snapshot</h1><span class="meta" id="meta"></span>
+  <input id="q" type="search" placeholder="filter sessions… ( / )" autocomplete="off">
+</div></div>
+<div class="layout">
+  <div><div id="tree"></div><div class="foot" id="foot"></div></div>
+  <aside class="detail" id="detail"><div class="empty">Click a session to see its full details.<br>↑ ↓ to move, Esc to close.</div></aside>
+</div>
+<script>
+const SNAP = /*__SNAPSHOT__*/null;
+const byId = Object.fromEntries(SNAP.sessions.map(s => [s.id, s]));
+const SHELLS = new Set(["zsh", "bash", "fish", "sh", "login"]);
+const $ = s => document.querySelector(s);
+
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  return n;
+}
+const prog = a => a && a.length ? a[0].split("/").pop().replace(/^-/, "") : "";
+const when = ts => ts ? new Date(ts).toLocaleString([], {dateStyle: "medium", timeStyle: "short"}) : "";
+const size = b => b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+const home = p => p || "";
+// mcp__plugin_chrome-devtools-mcp_chrome-devtools__click -> chrome-devtools · click
+const tool = n => { const p = n.split("__"); return p[0] === "mcp" && p.length > 2 ? `${p[1].replace(/^plugin_/, "").split("_").pop()} · ${p.slice(2).join("__")}` : n; };
+
+function copyBtn(label, text, cls) {
+  return el("button", {class: "btn " + (cls || ""), title: text, onclick: ev => {
+    ev.stopPropagation();
+    const b = ev.currentTarget, done = () => { const o = b.textContent; b.textContent = "copied"; b.classList.add("ok");
+      setTimeout(() => { b.textContent = o; b.classList.remove("ok"); }, 1200); };
+    const fb = () => { const a = el("textarea"); a.value = text; document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); done(); };
+    navigator.clipboard ? navigator.clipboard.writeText(text).then(done, fb) : fb();
+  }}, label);
+}
+
+function badges(s) {
+  const p = prog(s.foreground), out = [];
+  if (s.claude) out.push(el("span", {class: "b claude"}, "claude"));
+  if ((s.sharedWith || []).length) out.push(el("span", {class: "b flag", title: "same conversation as " + s.sharedWith.join(", ")}, "shared"));
+  if (p && !SHELLS.has(p) && p !== "claude") out.push(el("span", {class: "b run"}, p));
+  if (s.split) out.push(el("span", {class: "b"}, "split"));
+  if (s.flagged) out.push(el("span", {class: "b flag"}, "flagged"));
+  if (s.status) out.push(el("span", {class: "b"}, s.status));
+  return el("span", {class: "badges"}, out);
+}
+
+function searchText(s) {
+  const c = s.claude || {};
+  return [s.name, s.workspace, s.cwd, (s.foreground || []).join(" "), c.title, c.sid, s.id,
+    ...(c.turns || []).filter(t => t.role === "user").map(t => t.text)].join(" ").toLowerCase();
+}
+
+/* ---- tree ---- */
+function renderTree() {
+  const root = $("#tree");
+  for (const w of SNAP.windows) {
+    root.append(el("div", {class: "wtitle"}, w.name));
+    for (const ws of w.workspaces) {
+      const sec = el("section", {class: "ws", "data-name": ws.name.toLowerCase()});
+      sec.append(el("div", {class: "wsh", onclick: () => sec.classList.toggle("fold")},
+        el("span", {class: "chev"}, "⌄"), el("span", {class: "wsn"}, ws.name),
+        el("span", {class: "cnt"}, ws.sessions.length), copyBtn("copy workspace", ws.snippet)));
+      const rows = el("div", {class: "rows"});
+      for (const id of ws.sessions) {
+        const s = byId[id], c = s.claude, title = c && c.title && c.title !== s.name.replace(/^✳\s*/, "") ? c.title : "";
+        const sub = c ? [title && el("span", {class: "st"}, title), el("span", {class: "sid", title: "Claude conversation " + c.sid}, c.sid.slice(0, 8))] : null;
+        rows.append(el("div", {class: "row", "data-id": id, "data-q": searchText(s), onclick: () => select(id)},
+          el("span", {class: "ico"}, "›_"),
+          el("span", {class: "nmw"}, el("span", {class: "nm"}, s.name), sub && el("span", {class: "sub"}, sub)),
+          badges(s), copyBtn("copy", s.snippet)));
+      }
+      sec.append(rows);
+      root.append(sec);
+    }
+  }
+  const nc = SNAP.sessions.filter(s => s.claude).length;
+  $("#meta").textContent = `${SNAP.created} · ${SNAP.sessions.length} sessions · ${nc} with a Claude conversation`;
+  $("#foot").append("Copy a snippet and paste it into a bash or zsh shell in agterm; a session that is still open is selected instead of duplicated. Data: ",
+    el("code", {}, SNAP.file));
+}
+
+/* ---- detail ---- */
+function table(rows) {
+  return el("table", {}, rows.filter(r => r[1] != null && r[1] !== "").map(([k, v]) => el("tr", {}, el("th", {}, k), el("td", {}, v))));
+}
+const code = t => el("code", {}, t);
+
+function highlight(node, text, q) {
+  if (!q) { node.textContent = text; return; }
+  const low = text.toLowerCase(); let i = 0, j;
+  while ((j = low.indexOf(q, i)) !== -1) { node.append(text.slice(i, j), el("mark", {}, text.slice(j, j + q.length))); i = j + q.length; }
+  node.append(text.slice(i));
+}
+
+function timeline(c) {
+  const box = el("div", {class: "tl"});
+  const state = {prompts: false, newest: true, q: ""};
+  const draw = () => {
+    box.replaceChildren();
+    let turns = c.turns.filter(t => !state.prompts || t.role === "user");
+    if (state.q) turns = turns.filter(t => t.text.toLowerCase().includes(state.q));
+    if (state.newest) turns = [...turns].reverse();
+    if (!turns.length) box.append(el("div", {class: "note"}, "No messages match."));
+    for (const t of turns) {
+      const body = el("div", {class: "mt"}); highlight(body, t.text, state.q);
+      const long = t.text.length > 700 || t.text.split("\n").length > 8;
+      const m = el("div", {class: "msg " + t.role + (long && !state.q ? " clamp" : "")},
+        el("div", {class: "mh"}, el("b", {}, t.role === "user" ? "you" : "claude"), el("span", {}, when(t.ts))), body);
+      if (long && !state.q) m.append(el("button", {class: "more", onclick: ev => {
+        m.classList.toggle("clamp"); ev.target.textContent = m.classList.contains("clamp") ? "show more" : "show less"; }}, "show more"));
+      box.append(m);
+    }
+    if (c.omitted) box.append(el("div", {class: "note"}, `${c.omitted} earlier messages not included in the snapshot.`));
+  };
+  const toggle = (label, key) => { const b = el("button", {class: "btn" + (state[key] ? " on" : ""), onclick: () => {
+    state[key] = !state[key]; b.classList.toggle("on", state[key]); draw(); }}, label); return b; };
+  const q = el("input", {id: "cq", type: "search", placeholder: "search this conversation…", oninput: ev => { state.q = ev.target.value.toLowerCase().trim(); draw(); }});
+  draw();
+  return [el("h3", {}, "Conversation", el("span", {class: "sp"}), q, toggle("prompts only", "prompts"), toggle("newest first", "newest")), box];
+}
+
+function renderDetail(s) {
+  const d = $("#detail"), c = s.claude;
+  const head = el("div", {class: "dh"},
+    el("div", {class: "crumb"}, `${s.window} › ${s.workspace}`, el("button", {class: "btn close", onclick: () => select(null)}, "✕ close")),
+    el("h2", {}, s.name),
+    c && el("div", {class: "conv"}, "Claude conversation", el("span", {class: "sid"}, c.sid), copyBtn("copy id", c.sid)),
+    (s.sharedWith || []).length > 0 && el("div", {class: "note"}, "⚠ The same conversation is also open in ", s.sharedWith.join(", "),
+      ". Two Claude processes writing to one conversation interleave its history; exit one of them."),
+    el("div", {class: "acts"}, badges(s), copyBtn("copy restore snippet", s.snippet, "primary"),
+      s.resume ? copyBtn("copy resume command", s.resume) : s.restore && copyBtn("copy command", s.restore),
+      copyBtn("copy session id", s.id)));
+
+  const parts = [head, el("div", {class: "sec"}, el("h3", {}, "Session"), table([
+    ["directory", code(home(s.cwd))], ["running", code((s.foreground || []).join(" ") || "shell prompt")],
+    ["terminal title", s.title], ["status", s.status], ["flagged", s.flagged ? "yes" : null],
+    ["split", s.split ? `${s.split.cwd}${s.split.foreground.length ? " · " + s.split.foreground.join(" ") : ""}` : null],
+    ["restores with", code(s.restore || "plain shell")],
+    ["split restores with", s.split ? code(s.split.restore || "plain shell") : null],
+    ["split conversation", s.split && s.split.claude ? code(s.split.claude.sid) : null],
+    ["session id", code(s.id)], ["workspace id", code(s.workspaceId)]]))];
+
+  if (c) {
+    const started = c.started ? when(c.started) : "";
+    parts.push(el("div", {class: "sec"}, el("h3", {}, "Claude"), table([
+      ["title", c.title || "untitled"], ["conversation id", code(c.sid)], ["matched by", s.matched], ["directory", code(c.cwd || "")],
+      ["git branch", c.branch], ["model", c.model], ["claude code", c.version],
+      ["started", started], ["last activity", c.modified],
+      ["messages", `${c.prompts} prompts · ${c.replies} replies`], ["transcript", el("span", {}, code(c.path), ` (${size(c.size)})`)]]),
+      c.tools.length ? el("div", {class: "chips"}, c.tools.map(([n, k]) => el("span", {class: "chip", title: n}, `${tool(n)} ${k}`))) : null));
+    parts.push(el("div", {class: "sec"}, ...timeline(c)));
+  }
+  if (!c && (s.candidates || []).length) parts.push(el("div", {class: "sec"},
+    el("h3", {}, "Recent Claude conversations in this directory"),
+    el("div", {class: "note"}, "No conversation could be matched to this session. These were started in ", code(s.cwd), ", newest first."),
+    s.candidates.map(k => el("div", {class: "cand"}, el("div", {},
+      el("div", {class: "t"}, k.title || "untitled", " ", el("span", {class: "sid"}, k.sid)),
+      el("div", {class: "f"}, k.modified, k.first ? " · " + k.first : "")),
+      copyBtn("copy resume command", k.resume)))));
+  if (s.screen) parts.push(el("div", {class: "sec"}, el("h3", {}, "Last screen lines"), el("pre", {}, s.screen)));
+  const raw = {...s, claude: c ? {...c, turns: `${c.turns.length} messages`} : null};
+  parts.push(el("div", {class: "sec"}, el("details", {}, el("summary", {}, "raw snapshot record"), el("pre", {}, JSON.stringify(raw, null, 2)))));
+  d.replaceChildren(...parts);
+  d.scrollTop = 0;
+}
+
+let current = null;
+function select(id, push = true) {
+  document.querySelectorAll(".row.sel").forEach(r => r.classList.remove("sel"));
+  current = id && byId[id] ? id : null;
+  document.body.classList.toggle("open", !!current);
+  if (!current) {
+    $("#detail").replaceChildren(el("div", {class: "empty"}, "Click a session to see its full details.", el("br"), "↑ ↓ to move, Esc to close."));
+    if (push) history.replaceState(null, "", location.pathname);
+    return;
+  }
+  const row = document.querySelector(`.row[data-id="${current}"]`);
+  if (row) { row.classList.add("sel"); row.closest(".ws").classList.remove("fold"); row.scrollIntoView({block: "nearest"}); }
+  renderDetail(byId[current]);
+  if (push) history.replaceState(null, "", "#" + current);
+}
+
+/* ---- filter + keys ---- */
+$("#q").addEventListener("input", ev => {
+  const q = ev.target.value.toLowerCase().trim();
+  document.querySelectorAll(".ws").forEach(ws => {
+    let any = false;
+    ws.querySelectorAll(".row").forEach(r => { const m = !q || r.dataset.q.includes(q); r.classList.toggle("hide", !m); any = any || m; });
+    ws.classList.toggle("hide", !!q && !any && !ws.dataset.name.includes(q));
+    if (q && any) ws.classList.remove("fold");
+  });
+});
+document.addEventListener("keydown", ev => {
+  const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+  if (ev.key === "/" && !typing) { ev.preventDefault(); $("#q").focus(); return; }
+  if (ev.key === "Escape") { if (typing) document.activeElement.blur(); else select(null); return; }
+  if (typing || !["ArrowDown", "ArrowUp"].includes(ev.key)) return;
+  const rows = [...document.querySelectorAll(".row")].filter(r => r.offsetParent);
+  if (!rows.length) return;
+  ev.preventDefault();
+  const i = rows.findIndex(r => r.dataset.id === current);
+  const n = ev.key === "ArrowDown" ? Math.min(rows.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+  select(rows[n].dataset.id);
+});
+const fit = () => document.documentElement.style.setProperty("--toph", $(".top").offsetHeight + 16 + "px");
+addEventListener("resize", fit);
+
+renderTree(); fit();
+if (location.hash.length > 1) select(location.hash.slice(1), false);
+</script>
+</body>
+</html>
