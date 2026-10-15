@@ -17,6 +17,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq, zsh |
 | [project-launcher](project-launcher/) | pick a project anywhere — or type "project + prompt" — and get a session in its workspace | 0.19.0, jq |
 | [project-switcher](project-switcher/) | show only one project's workspaces in the sidebar | 0.18.0, jq |
+| [session-snapshot](session-snapshot/) | snapshot every open session into a browsable page, close them, and restore any one later with its own Claude conversation | 0.7.1, jq, python3 |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
 | [window-switcher](window-switcher/) | jump to a window by number, or pick one with its waiting sessions in view | 0.28.0, jq |
 | [workspace-sets](workspace-sets/) | switch the sidebar between named groups of workspaces, one chord each | 0.18.0, jq |
