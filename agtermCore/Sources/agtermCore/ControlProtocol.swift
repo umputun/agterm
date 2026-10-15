@@ -386,7 +386,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var url: String?
     /// javascript lets an `--html` or `--url` page run its own scripts (`--js`); off by default.
     public var javascript: Bool?
-    /// chromeless opens an `--html` page with no identity strip (`--chromeless`).
+    /// chromeless opens an `--html` page, or a `--url` page on a loopback host, with no identity strip (`--chromeless`).
     public var chromeless: Bool?
     /// persistent opens a `--url` page on the saved browser store (`--persistent`) instead of an in-memory one.
     public var persistent: Bool?
@@ -723,9 +723,12 @@ public enum OverlayHtmlError {
     public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
     public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
     public static let javascriptWithoutPage = "session.overlay.open: --js requires --html or --url"
-    /// chromelessRequiresFile: the strip is what names a URL page's origin, so only a file page may drop it.
-    public static let chromelessRequiresFile = "session.overlay.open: --chromeless requires --html"
+    public static let chromelessRequiresFile = "session.overlay.open: --chromeless requires --html or a loopback --url"
+    /// chromelessRequiresLoopback: the strip is what names a URL page's origin, so only this Mac's may drop it.
+    public static let chromelessRequiresLoopback =
+        "session.overlay.open: --chromeless with --url requires a loopback host: 127.0.0.1, ::1 or localhost"
     public static let chromelessWithNavigation = "session.overlay.open: --chromeless cannot be combined with --navigation"
+    public static let chromelessWithBrowse = "session.overlay.open: --chromeless cannot be combined with --browse"
     public static let persistentRequiresURL = "session.overlay.open: --persistent requires --url"
     public static let persistentUnavailable = "persistent browser storage is not available"
     public static let browseRequiresURL = "session.overlay.open: --browse requires --url"

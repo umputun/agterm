@@ -844,7 +844,7 @@ error keeps those names for compatibility.
   when the page links to others. `--chromeless` drops the strip so the page fills its panel (the session or
   pane without `--size-percent`; the sidebar and title bar stay); it closes with ⌘W (`close_session`,
   rebindable), a `data-agterm="session.overlay.close"` button of its own, or `session overlay close`.
-  Refused with `--navigation` and with `--url` (`--chromeless requires --html`). Without `--cwd` the
+  Refused with `--navigation`; a `--url` page takes it only on a loopback host (see below). Without `--cwd` the
   page gets NO file access (it is loaded from the file's text), so keep it self-contained: inline CSS and
   SVG, data URIs, or remote images and stylesheets. With `--cwd DIR` the page may read files inside DIR, relative links and assets work, and FILE
   must be inside DIR; `/` and the home directory are refused (`cwd must not be / or the home directory`).
@@ -891,7 +891,7 @@ error keeps those names for compatibility.
   the page's window. A page's `reload` defaults to `--current`. `sidebar` and `sidebar.mode` act on the
   frontmost window. Refused from a page: `zmx.present`, `zmx.reset`, `session.overlay.job.run`, and any
   request from a frame. Escape outside text you put in a page: it can run commands.
-- `session overlay open --url URL [--navigation] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a web page by URL in the overlay slot, typically a dev server you are running
   (`http://localhost:5173/`) or a docs page. Everything above for `--html` applies, except that URL must be
   an absolute http or https URL (`--url must be an absolute http or https URL`), `--cwd` and `--block` are
@@ -920,6 +920,12 @@ error keeps those names for compatibility.
   and opens in the browser. `--html` and a program refuse the flag (`--browse requires --url`). It changes
   navigation only: add `--js`, `--navigation` and `--persistent` for the page a clicked link opens (see
   `browser links`). Read back `browse` in `htmlOverlays`.
+  `--chromeless` is accepted only when the host is exactly `127.0.0.1`, `::1` or `localhost`, so a
+  dashboard served on this Mac can drop the strip; any other host is refused (`--chromeless with --url
+  requires a loopback host: 127.0.0.1, ::1 or localhost`), as are `--browse` and `--navigation`. Such a
+  page loads frames from its own origin only. It has no bridge, so it closes with ⌘W,
+  `session overlay close`, or, with `--js`, its own `window.close()` where the web view accepts it.
+  A loopback port can forward another machine's content, so open only a server you trust.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
   overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
   page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.

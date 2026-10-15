@@ -151,8 +151,10 @@ extension ControlDispatcher {
             if !command.isEmpty { return reject(OverlayHtmlError.commandAndURL) }
             if args?.wait == true { return reject(OverlayHtmlError.waitWithURL) }
             if args?.cwd != nil { return reject(OverlayHtmlError.cwdWithURL) }
-            if args?.chromeless == true { return reject(OverlayHtmlError.chromelessRequiresFile) }
+            if args?.chromeless == true, args?.navigation == true { return reject(OverlayHtmlError.chromelessWithNavigation) }
+            if args?.chromeless == true, args?.browse == true { return reject(OverlayHtmlError.chromelessWithBrowse) }
             guard let url = HtmlSource.webURL(text) else { return reject(OverlayHtmlError.invalidURL) }
+            if args?.chromeless == true, !HtmlSource.isLoopback(text) { return reject(OverlayHtmlError.chromelessRequiresLoopback) }
             return .page(.url(url))
         }
     }

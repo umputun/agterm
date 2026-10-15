@@ -149,6 +149,23 @@ struct HtmlOverlayTests {
     }
 
     @Test(arguments: [
+        ("http://127.0.0.1:8792/frame.html", HtmlNavigationTarget.subframe, false, HtmlNavigationDecision.allow),
+        ("http://127.0.0.1:8792/next", .mainFrame, false, .allow),
+        ("https://example.com/embed", .subframe, false, .cancel),
+        ("https://example.com/embed", .subframe, true, .openExternal),
+        ("http://localhost:8792/frame.html", .subframe, false, .cancel),
+        ("http://127.0.0.1:8793/frame.html", .subframe, false, .cancel),
+        ("https://example.com/", .mainFrame, false, .cancel),
+        ("about:srcdoc", .subframe, false, .allow),
+    ])
+    func chromelessPagePolicyKeepsFramesOnItsOrigin(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
+                                                    _ decision: HtmlNavigationDecision) throws {
+        let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
+        let overlay = HtmlOverlay(source: .url(try #require(URL(string: "http://127.0.0.1:8792/"))), chromeless: true)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == decision)
+    }
+
+    @Test(arguments: [
         ("http://example.com/", "http://EXAMPLE.com:80/a", true),
         ("https://example.com/", "https://example.com:443/b", true),
         ("HTTPS://example.com/", "https://example.com/", true),
@@ -232,6 +249,29 @@ struct HtmlOverlayTests {
     ])
     func webURLAcceptsOnlyAbsoluteHttpWithAHost(_ text: String, _ valid: Bool) {
         #expect((HtmlSource.webURL(text) != nil) == valid)
+    }
+
+    @Test(arguments: [
+        ("http://127.0.0.1:8792/", true),
+        ("https://127.0.0.1/app", true),
+        ("http://[::1]:8792/", true),
+        ("http://localhost:5173/", true),
+        ("http://LOCALHOST/", true),
+        ("http://127.0.0.2/", false),
+        ("http://127.1/", false),
+        ("http://2130706433/", false),
+        ("http://0.0.0.0:8792/", false),
+        ("http://[::ffff:127.0.0.1]/", false),
+        ("http://localhost./", false),
+        ("http://app.localhost/", false),
+        ("http://localhost.example.com/", false),
+        ("http://example.com/", false),
+        ("ftp://127.0.0.1/", false),
+        ("localhost:5173", false),
+        ("", false),
+    ])
+    func isLoopbackMatchesOnlyTheExactLoopbackHosts(_ text: String, _ loopback: Bool) {
+        #expect(HtmlSource.isLoopback(text) == loopback)
     }
 
     @Test func sessionWideOpenReplacesAHudAndClearsThePriorResult() throws {

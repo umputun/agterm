@@ -73,6 +73,13 @@ struct OverlayCommandsTests {
         #expect(req.args?.persistent == true)
     }
 
+    @Test(arguments: ["http://127.0.0.1:8792/", "http://[::1]:8792/", "http://localhost:5173/"])
+    func urlOpenSendsChromelessForALoopbackHost(_ url: String) throws {
+        let req = try request(["session", "overlay", "open", "--url", url, "--chromeless", "--js", "--persistent"])
+        #expect(req.args?.url == url)
+        #expect(req.args?.chromeless == true)
+    }
+
     @Test func aProgramOpenLeavesItsCwdAsTyped() throws {
         let req = try request(["session", "overlay", "open", "revdiff", "--cwd", "repo"])
         #expect(req.args?.command == "revdiff")
@@ -88,7 +95,10 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "revdiff", "--navigation"],
         ["session", "overlay", "open", "revdiff", "--js"],
         ["session", "overlay", "open", "revdiff", "--chromeless"],
-        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--chromeless"],
+        ["session", "overlay", "open", "--url", "http://example.com/", "--chromeless"],
+        ["session", "overlay", "open", "--url", "http://127.0.0.2:8792/", "--chromeless"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--chromeless", "--browse"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--chromeless", "--navigation"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--chromeless", "--navigation"],
         ["session", "overlay", "open", "revdiff", "--persistent"],
         ["session", "overlay", "open", "--html", "/tmp/r.html", "--persistent"],

@@ -254,6 +254,37 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "failed" })
     }
 
+    func testAChromelessLoopbackPageHasNoStripAndKeepsItsFramesOnItsOrigin() throws {
+        let id = try activeSessionID()
+        let port = Int.random(in: 40000..<60000)
+        try writePage("inner.html", title: "Inner", body: "<p>same origin frame</p>")
+        try writePage("other.html", title: "Other", body: "<p>other origin frame</p>")
+        try writePage("parent.html", title: "Parent",
+                      body: #"<p>parent page</p><iframe src="/inner.html"></iframe><iframe src="http://localhost:\#(port)/other.html"></iframe>"#)
+        let server = #"/usr/bin/python3 -m http.server \#(port) --bind 127.0.0.1 --directory \#(pageDir.path)"#
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.new","args":{"command":"\#(server)","noSelect":true}}"#)["ok"] as? Bool, true)
+        let parent = "http://127.0.0.1:\(port)/parent.html"
+        XCTAssertTrue(poll(until: (try? Data(contentsOf: URL(string: parent)!)) != nil, timeout: 15), "the page server should start")
+        let open = { (chromeless: Bool) in
+            try self.sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"url":"\#(parent)","chromeless":\#(chromeless)}}"#)
+        }
+
+        XCTAssertEqual(try open(false)["ok"] as? Bool, true)
+        XCTAssertTrue(app.webViews.staticTexts["other origin frame"].waitForExistence(timeout: 10),
+                      "the localhost frame should render in a page with a strip")
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "⌘W should close the page with a strip")
+
+        let chromeless = try open(true)
+        XCTAssertEqual(chromeless["ok"] as? Bool, true, "a chromeless loopback page should open: \(chromeless)")
+        XCTAssertTrue(app.webViews.staticTexts["same origin frame"].waitForExistence(timeout: 10), "the same-origin frame should render")
+        XCTAssertTrue(pollPage(id: id) { $0["chromeless"] as? Bool == true && $0["state"] as? String == "loaded" })
+        XCTAssertFalse(app.staticTexts["htmlOverlay.identity"].exists, "a chromeless page has no strip")
+        XCTAssertFalse(app.webViews.staticTexts["other origin frame"].exists, "a chromeless page must not load another origin's frame")
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "⌘W should close the chromeless page")
+    }
+
     func testAChromelessPageHasNoStripAndCommandWClosesItPastTheKeysItSwallows() throws {
         let id = try activeSessionID()
         let script = "<script>let n = 0; document.addEventListener('keydown', e => { e.preventDefault(); n += 1; "

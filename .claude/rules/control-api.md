@@ -524,7 +524,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--cwd`). The dispatcher parses it once and the host gets `options.page`; the tree reports `file` or
   `url`. A URL page is pinned to its ORIGINAL origin (`HtmlOrigin`, default ports equal): same-origin main
   frame loads clicked or not, which is what lets dev-server redirects and client routing work, any
-  http(s) subframe loads, and a redirect elsewhere during an unclicked load is refused. A clicked link's
+  http(s) subframe loads unless the page is chromeless, which keeps subframes on its origin too, and a
+  redirect elsewhere during an unclicked load is refused. A clicked link's
   redirect reaches the policy as `.linkActivated` (WebKit reuses the triggering action), so it is handled
   like the click and the retained page stays `loaded`. `HtmlOverlayPage.loadPending` makes every
   load in flight (explicit, or started by the page) end `loaded` or `failed`: a policy cancel of its main
@@ -613,8 +614,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The panel has an app-drawn identity strip (`HtmlOverlay.identity`: the file shown or the origin)
   that the page cannot cover or retitle, with the close button; `--navigation` adds the buttons. The page
   title follows it as a separate dimmed view that yields width first, never replacing the identity; agents
-  reading it from `tree` must treat it as untrusted. `--chromeless` (`HtmlOverlay.chromeless`) drops the strip,
-  file pages only: a URL page's strip is the only statement of whose content it is. It is refused with
+  reading it from `tree` must treat it as untrusted. `--chromeless` (`HtmlOverlay.chromeless`) drops the strip.
+  A URL page's strip is the only statement of whose content it is, so a URL page may drop it only on an
+  exact loopback host (`HtmlSource.isLoopback`: 127.0.0.1, ::1, localhost, never a range or alias, shared by
+  the CLI and the dispatcher), never with `--browse`, and its frames are then held to its own origin by
+  `HtmlNavigationPolicy`. A loopback port can still forward remote content, so this narrows what the page
+  can show, never proves who wrote it. It is refused with
   `--navigation`, whose buttons live in the strip, and closes through the Command-W ladder, which
   `ControlHtmlOverlayUITests` pins against a `--js` page that cancels every keydown.
   Page views refuse drags and pastes
