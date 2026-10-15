@@ -1,6 +1,30 @@
+import Darwin
 import Foundation
 import Testing
 @testable import agtermCore
+
+private let fishRequired = ProcessInfo.processInfo.environment["AGTERM_REQUIRE_FISH"] != nil
+
+private let fishPath: String? = {
+    if let path = ProcessInfo.processInfo.environment["PATH"], let executable = path.split(separator: ":").map(String.init).first(where: { directory in
+        FileManager.default.isExecutableFile(atPath: URL(fileURLWithPath: directory).appending(path: "fish").path)
+    }) {
+        return URL(fileURLWithPath: executable).appending(path: "fish").path
+    }
+    return ["/opt/homebrew/bin/fish", "/usr/local/bin/fish"].first(where: FileManager.default.isExecutableFile)
+}()
+
+private func resolvedFish() throws -> String {
+    guard let fishPath else {
+        Issue.record("AGTERM_REQUIRE_FISH is set but fish is absent from PATH")
+        throw RequiredFishFailure.fishUnavailable
+    }
+    return fishPath
+}
+
+private enum RequiredFishFailure: Error {
+    case fishUnavailable
+}
 
 struct ZmxReplayScriptTests {
     @Test func customZdotdirIsRearmedBeforeTheFinalShell() {
@@ -98,6 +122,155 @@ struct ZmxReplayScriptTests {
         #expect(try String(contentsOf: result, encoding: .utf8) == "two words and more")
     }
 
+    @Test func fishRenderersUseFishEscapingAndRearmBeforeTheFinalShell() {
+        let root = "/Applications/agterm resources/shell-integration"
+        let argv = ["/tmp/tool $name;*", "two words", "can't", ""]
+        let argvScript = ZmxReplayScript.renderFish(argv: argv, integrationRoot: root, shell: "/bin/fish")
+        let commandScript = ZmxReplayScript.renderFish(
+            commandLine: "printf '%s' 'two words'", integrationRoot: root, shell: "/bin/fish"
+        )
+
+        #expect(argvScript.hasPrefix("'/tmp/tool $name;*' 'two words' 'can\\'t' ''; "))
+        #expect(commandScript.hasPrefix("builtin eval 'printf \\'%s\\' \\'two words\\''; "))
+        for script in [argvScript, commandScript] {
+            #expect(script.contains("builtin set -gx GHOSTTY_SHELL_INTEGRATION_XDG_DIR '" + root + "'"))
+            #expect(script.contains("builtin set --global --export --path XDG_DATA_DIRS '" + root + "'"))
+            #expect(script.hasSuffix("exec '/bin/fish' -il"))
+        }
+    }
+
+    @Test func fishQuotingCoversRequiredAndHostileArguments() {
+        let cases: [(String, String)] = [
+            ("trailing\\", "'trailing\\\\'"),
+            ("two\\\\slashes", "'two\\\\\\\\slashes'"),
+            ("can't", "'can\\'t'"),
+            ("", "''"),
+            ("\\'", "'" + String(repeating: "\\", count: 3) + "''"),
+            ("many\\\\\\slashes", "'many" + String(repeating: "\\", count: 6) + "slashes'"),
+            ("two words", "'two words'"),
+            ("\u{00E9}\u{043B}\u{0435}\u{043D}\u{0430}", "'\u{00E9}\u{043B}\u{0435}\u{043D}\u{0430}'"),
+            ("$literal", "'$literal'"),
+            ("(parentheses)", "'(parentheses)'"),
+            ("*.swift", "'*.swift'"),
+            ("semi;colon", "'semi;colon'"),
+            (">redirect", "'>redirect'"),
+            ("--option", "'--option'"),
+            ("line one\nline two", "'line one\nline two'"),
+        ]
+
+        for (argument, expected) in cases {
+            let script = ZmxReplayScript.renderFish(argv: [argument], integrationRoot: "/root", shell: "/bin/fish")
+            #expect(script.hasPrefix(expected + "; "))
+        }
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func fishCapturedArgumentsSurviveTheParserRoundTrip() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let argvResult = fixture.appending(path: "argv")
+        let environmentResult = fixture.appending(path: "environment")
+        let replay = fixture.appending(path: "record-argv")
+        let finalShell = fixture.appending(path: "record-environment")
+        try makeArgumentProbe(replay)
+        try makeEnvironmentProbe(finalShell)
+        let expected = [
+            "trailing\\", "two\\\\slashes", "can't", "\\'", "many\\\\\\slashes", "two words",
+            "\u{00E9}\u{043B}\u{0435}\u{043D}\u{0430}", "$literal", "(parentheses)", "*.swift", "semi;colon",
+            ">redirect", "--option", "", "line one\nline two",
+        ]
+        let script = ZmxReplayScript.renderFish(
+            argv: [replay.path, argvResult.path] + expected,
+            integrationRoot: "/integration root", shell: finalShell.path
+        )
+
+        try runFish(executable: fish, script: script, fixture: fixture, environment: ["RESULT_FILE": environmentResult.path])
+        #expect(try nullSeparatedValues(at: argvResult) == expected)
+        let environment = try nullSeparatedValues(at: environmentResult)
+        #expect(environment == [
+            "/integration root:/usr/local/share:/usr/share", "/integration root",
+        ])
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func fishDurableCommandLineSurvivesTheParserRoundTrip() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let argvResult = fixture.appending(path: "argv")
+        let environmentResult = fixture.appending(path: "environment")
+        let replay = fixture.appending(path: "record-argv")
+        let finalShell = fixture.appending(path: "record-environment")
+        try makeArgumentProbe(replay)
+        try makeEnvironmentProbe(finalShell)
+        let expected = ["durable words", "", "$literal", "line one\nline two"]
+        let commandLine = ([replay.path, argvResult.path] + expected).map(fishLiteral).joined(separator: " ")
+        let script = ZmxReplayScript.renderFish(
+            commandLine: commandLine, integrationRoot: "/integration root", shell: finalShell.path
+        )
+
+        try runFish(executable: fish, script: script, fixture: fixture, environment: ["RESULT_FILE": environmentResult.path])
+        #expect(try nullSeparatedValues(at: argvResult) == expected)
+        let environment = try nullSeparatedValues(at: environmentResult)
+        #expect(environment.first == "/integration root:/usr/local/share:/usr/share")
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func fishReplayReachesTheFinalShellAfterFailedPayloads() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let finalShell = fixture.appending(path: "record-environment")
+        try makeEnvironmentProbe(finalShell)
+
+        for payload in [["/definitely/missing/agterm-fish-payload"], ["/usr/bin/false"]] {
+            let scripts = [
+                ZmxReplayScript.renderFish(argv: payload, integrationRoot: "/integration root", shell: finalShell.path),
+                ZmxReplayScript.renderFish(
+                    commandLine: payload.map(fishLiteral).joined(separator: " "),
+                    integrationRoot: "/integration root", shell: finalShell.path
+                ),
+            ]
+            for script in scripts {
+                let result = fixture.appending(path: "environment-\(UUID().uuidString)")
+                try runFish(executable: fish, script: script, fixture: fixture, environment: ["RESULT_FILE": result.path])
+                let environment = try nullSeparatedValues(at: result)
+                #expect(environment == [
+                    "/integration root:/usr/local/share:/usr/share", "/integration root",
+                ])
+            }
+        }
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func fishReplayRearmsXDGDataDirectoriesFromTheLivePayloadState() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let finalShell = fixture.appending(path: "record-environment")
+        try makeEnvironmentProbe(finalShell)
+        let root = "/integration root"
+        let cases: [([String], String)] = [
+            (["set", "-gx", "XDG_DATA_DIRS", "/new/one:/new/two"], root + ":/new/one:/new/two"),
+            (["set", "-gx", "XDG_DATA_DIRS", ""], root + ":/usr/local/share:/usr/share"),
+            (["set", "-e", "XDG_DATA_DIRS"], root + ":/usr/local/share:/usr/share"),
+            (["set", "-gx", "XDG_DATA_DIRS", root + ":/new/one:" + root], root + ":/new/one"),
+            (["set", "-gx", "XDG_DATA_DIRS", "/new with space:/new/two"], root + ":/new with space:/new/two"),
+        ]
+
+        for (argv, expected) in cases {
+            let result = fixture.appending(path: "environment-\(UUID().uuidString)")
+            let script = ZmxReplayScript.renderFish(argv: argv, integrationRoot: root, shell: finalShell.path)
+            try runFish(executable: fish,
+                script: script, fixture: fixture,
+                environment: ["RESULT_FILE": result.path, "XDG_DATA_DIRS": "/original/one:/original/two"]
+            )
+            let environment = try nullSeparatedValues(at: result)
+            #expect(environment == [expected, root])
+        }
+    }
+
     private func makeFixture() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "agterm-zmx-replay-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -107,6 +280,22 @@ struct ZmxReplayScriptTests {
     private func makeExecutable(_ url: URL, contents: String) throws {
         try contents.write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+    }
+
+    private func makeArgumentProbe(_ url: URL) throws {
+        try makeExecutable(url, contents: """
+        #!/bin/sh
+        result=$1
+        shift
+        printf '%s\\0' "$@" > "$result"
+        """)
+    }
+
+    private func makeEnvironmentProbe(_ url: URL) throws {
+        try makeExecutable(url, contents: """
+        #!/bin/sh
+        printf '%s\\0%s\\0' "$XDG_DATA_DIRS" "${GHOSTTY_SHELL_INTEGRATION_XDG_DIR-unset}" > "$RESULT_FILE"
+        """)
     }
 
     private func runZsh(script: String, environment overrides: [String: String] = [:],
@@ -120,5 +309,66 @@ struct ZmxReplayScriptTests {
         try process.run()
         process.waitUntilExit()
         return process.terminationStatus
+    }
+
+    private func runFish(executable: String, script: String, fixture: URL, environment overrides: [String: String] = [:]) throws {
+        let home = fixture.appending(path: "home")
+        let config = fixture.appending(path: "config")
+        let data = fixture.appending(path: "data")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = ["--no-config", "-lic", script]
+        var processEnvironment = ProcessInfo.processInfo.environment
+        processEnvironment.removeValue(forKey: "XDG_DATA_DIRS")
+        process.environment = processEnvironment.merging([
+            "HOME": home.path,
+            "XDG_CONFIG_HOME": config.path,
+            "XDG_DATA_HOME": data.path,
+        ].merging(overrides) { _, new in new }) { _, new in new }
+        process.standardOutput = FileHandle.nullDevice
+        let standardError = Pipe()
+        process.standardError = standardError
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
+        try process.run()
+        guard finished.wait(timeout: .now() + 20) == .success else {
+            process.terminate()
+            if finished.wait(timeout: .now() + 2) == .success { throw ReplayFailure.timedOut }
+            _ = kill(process.processIdentifier, SIGKILL)
+            guard finished.wait(timeout: .now() + 2) == .success else { throw ReplayFailure.didNotTerminate }
+            throw ReplayFailure.timedOut
+        }
+        guard process.terminationStatus == 0 else {
+            throw ReplayFailure.failed(
+                status: process.terminationStatus,
+                standardError: String(decoding: standardError.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            )
+        }
+    }
+
+    private func fishLiteral(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'") + "'"
+    }
+
+    private func nullSeparatedValues(at url: URL) throws -> [String] {
+        let data = try Data(contentsOf: url)
+        var values: [String] = []
+        var start = data.startIndex
+        for index in data.indices where data[index] == 0 {
+            values.append(try #require(String(data: data[start..<index], encoding: .utf8)))
+            start = data.index(after: index)
+        }
+        #expect(start == data.endIndex)
+        return values
+    }
+
+    private enum ReplayFailure: Error {
+        case timedOut
+        case didNotTerminate
+        case failed(status: Int32, standardError: String)
     }
 }

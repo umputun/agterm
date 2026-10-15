@@ -3703,7 +3703,7 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
               Sessions come back on the next launch with their directory, font size, and split state restored. General settings
               offers <strong style="color: #e6e1d7">Fresh shells</strong>, <strong style="color: #e6e1d7">Re-run commands</strong>,
               or <strong style="color: #e6e1d7">Live sessions</strong>. The choice is frozen for the process, so changing it takes
-              effect after restarting agterm. Live mode requires zsh as the macOS login shell; an unsupported shell or missing zmx
+              effect after restarting agterm. Live mode requires zsh or fish as the macOS login shell; an unsupported shell or missing zmx
               resource falls back to fresh shells, with the reason shown in Settings.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: -8px 0 20px">
@@ -3776,6 +3776,14 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> adds no hold prompt. After
                 a clean quit, a missing daemon replays the captured running command inside a new persistent shell; the exclusions above
                 start a fresh shell.
+                A Live pane created through the session host may complete its shell's startup terminal negotiation with
+                synthesized replies rather than the rendering terminal's own: the shell can send DA1/DA2 queries before the pane's
+                terminal is attached, and those are answered on the terminal's behalf &mdash; by the session host while its
+                creation attach is connected, by zmx while no terminal client is attached &mdash; with fixed replies, so the shell
+                starts without waiting. Queries only the real terminal can answer, such as the kitty keyboard protocol, XTVERSION
+                terminal identification, and OSC 11 background color, may get no reply at startup, so the capabilities they enable
+                may not be detected until the program queries again. fish 4.9.3 was observed sending these queries at shell start;
+                zsh does not query at startup.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

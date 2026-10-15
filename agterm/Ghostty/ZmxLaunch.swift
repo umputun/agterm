@@ -11,7 +11,7 @@ enum ZmxLaunch {
         let initialInput: String?
     }
 
-    private struct Runtime {
+    struct Runtime {
         let bundleURL: URL
         let environment: [String: String]
         let passwordDatabaseShell: String?
@@ -127,13 +127,19 @@ enum ZmxLaunch {
         return value.isEmpty ? nil : value
     }
 
-    private static func configurationResult(runtime: Runtime, paneIdentity: UUID,
-                                            baseEnvironment: [String: String], lead: ZmxLeadAttachment? = nil)
+    static func configurationResult(runtime: Runtime, paneIdentity: UUID,
+                                    baseEnvironment: [String: String], lead: ZmxLeadAttachment? = nil)
         -> Result<ZmxSupport.Configuration, ZmxSupport.Rejection> {
         let bundledResources = runtime.bundleURL.appendingPathComponent("Contents/Resources/ghostty").path
         let resources = runtime.environment["GHOSTTY_RESOURCES_DIR"].flatMap { $0.isEmpty ? nil : $0 }
             ?? bundledResources
         let stateDirectory = runtime.environment["AGTERM_STATE_DIR"] ?? PersistenceStore.defaultDirectory.path
+        var paneEnvironment = baseEnvironment
+        // fish only: an explicit zsh pane value would override a ghostty.conf `env` entry
+        if paneEnvironment["XDG_DATA_DIRS"] == nil,
+           CommandRestore.basename(runtime.passwordDatabaseShell ?? "") == "fish" {
+            paneEnvironment["XDG_DATA_DIRS"] = runtime.environment["XDG_DATA_DIRS"]
+        }
         return ZmxSupport.configuration(for: .init(
             zmxExecutablePath: executablePath(bundleURL: runtime.bundleURL, environment: runtime.environment,
                                               allowDebugOverride: runtime.allowDebugOverride),
@@ -141,7 +147,7 @@ enum ZmxLaunch {
             resourcesDirectory: resources,
             stateDirectory: stateDirectory,
             paneIdentity: paneIdentity,
-            baseEnvironment: baseEnvironment,
+            baseEnvironment: paneEnvironment,
             inheritedZdotdir: runtime.environment["ZDOTDIR"],
             sessionHostExecutablePath: sessionHostExecutablePath(bundleURL: runtime.bundleURL, environment: runtime.environment,
                                                                   allowDebugOverride: runtime.allowDebugOverride),
