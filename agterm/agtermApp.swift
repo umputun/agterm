@@ -101,8 +101,8 @@ struct agtermApp: App {
         Self.claimStateDirectory(stateDirectory)
         liveResetMarkerStore = LiveResetMarkerStore(directory: stateDirectory)
         HtmlOverlayRegistry.shared.profile = BrowserProfile(directory: stateDirectory)
-        // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
-        // window and saves it, which a later read would see as evidence of an earlier launch.
+        // before anything else reads or writes the state directory (the lock adds only `agterm.lock`):
+        // `WindowLibrary`'s bootstrap seeds a window and saves it, which would read as an earlier launch.
         let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)
         // the pacer exists before the library so the model can discard the key of a pane it removes before
         // that pane's window ever mounts; the registry that routes grants comes after

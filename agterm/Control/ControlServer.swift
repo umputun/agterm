@@ -48,8 +48,8 @@ final class ControlServer {
 
     /// The path spawned surfaces point `AGTERM_SOCKET` at. Once this instance has REFUSED the real path
     /// because another one owns it, this becomes an unbindable sibling: a shell here must not reach the
-    /// other app, which for a second instance sharing state is the user's live terminal (persisted session
-    /// ids resolve there too). Leaving the variable UNSET is worse than a dead value — the shipped status
+    /// other app, an instance on another state directory sharing this socket, where an untargeted command
+    /// would land. Leaving the variable UNSET is worse than a dead value — the shipped status
     /// hooks drop `--socket` when it is absent, and `agtermctl` then resolves the very default the other
     /// instance is serving. Not `boundSocketPath`: the launch window's surfaces can materialize BEFORE
     /// `start()` binds, and a nil there would leak `AGTERM_SOCKET` permanently. Equals it once bound.

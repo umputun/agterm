@@ -116,8 +116,7 @@ paths:
   exclude nobody.
 - A refused instance advertises `<socketPath>.unavailable` through `resolvedSocketPath`, so its shells and
   `{AGT_SOCKET}` carry a path nothing serves instead of the resolved default, which would point them at
-  the other instance — the user's live terminal, where shared state makes persisted session ids resolve
-  too. Do NOT omit the variable instead: `agterm-agent-status.sh` drops `--socket` when it is absent and
+  the other instance, where an untargeted command would land. Do NOT omit the variable instead: `agterm-agent-status.sh` drops `--socket` when it is absent and
   `agtermctl` then resolves that same default, so an unset value routes agent status onto the live app.
   `refused` clears on a later successful acquire, since `start()` re-runs per window scene and the owner
   may have quit. Its `stop()` returns early without unlinking, leaving the owner's socket intact.
