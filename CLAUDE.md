@@ -151,15 +151,21 @@ C-boundary concurrency before changing the bridge.
   Config is not adopted: that launch reads the default config directory, `~/.config/agterm` unless the
   setting names another. Manual runs still pass a short `/tmp`
   directory: the adopted one is shared by every unisolated Debug launch and persists between them.
-- A second Release instance without `AGTERM_STATE_DIR` still shares state, but does not take the
-  running app's control socket. `ControlServer.init` takes an exclusive `flock` on `<socket>.lock` and
-  `start` refuses to bind while another live instance holds it, logging `already served by another
-  instance`. Ownership is settled at init so the launch window's first shell, whose environment is
-  snapshotted before `start` runs, cannot bake the owner's path.
+- A second instance on a state directory another process owns exits with status 1 before reading or
+  writing anything there. `agtermApp.init` first takes an exclusive `flock` on `<stateDir>/agterm.lock`
+  (`StateDirectoryLock`), and a lock it cannot take exits too. Every store save rewrites its whole file
+  from memory, so a second loader once overwrote the owner's newer sessions with its stale tree (#741);
+  `agterm --help` started one, since libghostty appends `Contents/MacOS` to every pane's PATH.
+  A running build predating the lock holds no `agterm.lock`, so the first fixed launch beside one is
+  unprotected: stop old instances before it.
+- Instances on different state directories that share one `AGTERM_CONTROL_SOCKET` are separated by the
+  socket lock instead. `ControlServer.init` takes an exclusive `flock` on `<socket>.lock` and `start`
+  refuses to bind while another live instance holds it, logging `already served by another instance`.
+  Ownership is settled at init so the launch window's first shell, whose environment is snapshotted
+  before `start` runs, cannot bake the owner's path.
   A refused instance advertises `<socket>.unavailable` in `AGTERM_SOCKET`, so a command passing
   `--socket "$AGTERM_SOCKET"` fails rather than reaching the owner. A BARE `agtermctl` still reaches it:
-  the CLI never reads that variable and resolves the default path. Isolate anyway — state is shared and
-  persisted session ids resolve in both instances, so an untargeted command lands on the live terminal.
+  the CLI never reads that variable and resolves the default path.
 - `lsof -p <pid> | grep agterm.sock` showing an fd on a socket path `ls` cannot find means an orphaned
   socket; a window scene that never bound one is a different fault. Reaching it now takes a build
   predating the lock, or the socket file being deleted by hand.

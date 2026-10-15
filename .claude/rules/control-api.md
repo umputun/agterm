@@ -98,7 +98,10 @@ paths:
   A change to what a refused or absent server returns must keep that path in step.
   `reference.md` owns the user contract.
 - `ControlServer.init` takes an exclusive non-blocking `flock` on `<socketPath>.lock`, and start refuses
-  to bind while another process holds it. Ownership is decided at INIT, not at start: the launch window's
+  to bind while another process holds it. A second instance on the SAME state directory never gets here:
+  it exits at launch on `StateDirectoryLock` (CLAUDE.md), so this lock separates only instances on
+  different state directories sharing one socket.
+  Ownership is decided at INIT, not at start: the launch window's
   surfaces are built during the initial render pass and snapshot `AGTERM_SOCKET` into the pty environment,
   while start runs from the scene's `.task` afterwards, so deciding there would hand the first shell the
   owner's live socket. Start retries acquisition for the instance refused while the owner was still alive,
