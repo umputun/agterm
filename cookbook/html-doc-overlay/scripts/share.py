@@ -130,7 +130,9 @@ class Approval:
                          "--button", "cancel=Cancel", "--default", "cancel")
             pending = str(parse_json(r.stdout).get("id") or "")
             if not pending:
-                err("could not open the approval question")
+                reason = (r.stderr or r.stdout).strip().removeprefix("error: ")
+                hint = "; switch to this session and share again" if "session not visible" in reason else ""
+                err(f"could not open the approval question: {reason or 'no answer from agterm'}{hint}")
                 return False
             deadline = self.clock.now() + APPROVAL_WAIT
             while self.clock.now() < deadline:
@@ -216,6 +218,10 @@ class Shares:
         return (bool(token) and self.running(d, "expiry") and self.hub_live()
                 and (self.hub / "public" / token).is_symlink())
 
+    # a creator still approving or starting the tunnel owns its share until the expiry watcher is up
+    def in_progress(self, d: Path) -> bool:
+        return not self.live(d) and self.running(d, "owner")
+
     def hub_live(self) -> bool:
         return self.running(self.hub, "server") and self.running(self.hub, "tunnel")
 
@@ -274,7 +280,8 @@ class Shares:
 
     def hub_down_if_idle(self) -> bool:
         with self.hub_lock():
-            if self.root.is_dir() and any(p.is_dir() for p in self.root.iterdir()):
+            dirs = [p for p in self.root.iterdir() if p.is_dir()] if self.root.is_dir() else []
+            if any(self.live(p) or self.in_progress(p) for p in dirs):
                 return True
             stopped = [self.stop_proc(self.hub, n) for n in ("tunnel", "server")]
             if not all(stopped):
@@ -380,6 +387,9 @@ class Shares:
         if d.is_dir():
             if self.live(d) and (d / "url").is_file() and self.clock.now() < self.expires(d):
                 return self.update(src, d)
+            if self.in_progress(d):
+                err(f"{src} is already being shared from another session")
+                return 1
             if not self.stop_share(d):
                 return 1
         return self.create(src, d, ttl, ttl_text)
@@ -388,7 +398,8 @@ class Shares:
         return int((d / "expires").read_text())
 
     def update(self, src: Path, d: Path) -> int:
-        index, stage = d / "web" / "index.html", d / "stage.html"
+        # per process, so overlapping shares of one page each publish only what their own Publish approved
+        index, stage = d / "web" / "index.html", d / f"stage-{os.getpid()}.html"
         if src.read_bytes() != index.read_bytes():
             # staged beside web/, never inside it, so the unapproved copy is not reachable through the tunnel
             shutil.copyfile(src, stage)
@@ -414,9 +425,11 @@ class Shares:
         if not tunnel_id:
             err(f"no tunnel credentials at {self.credentials}; run the one-time tunnel setup first")
             return 1
-        web, stage = d / "web", d / "stage.html"
+        web, stage = d / "web", d / f"stage-{os.getpid()}.html"
         web.mkdir(parents=True, mode=0o700)
         (d / "file").write_text(f"{src}\n")
+        (d / "owner.pid").write_text(f"{os.getpid()}\n")
+        (d / "owner.identity").write_text(self.identity(os.getpid()) + "\n")
         done = False
         try:
             shutil.copyfile(src, stage)
@@ -475,15 +488,14 @@ class Shares:
     def list(self) -> int:
         dirs = sorted(p for p in self.root.iterdir() if p.is_dir()) if self.root.is_dir() else []
         for d in dirs:
-            expires = read(d / "expires")
-            # expires is written on approval, so a share without it may still be waiting in another session
-            if not expires:
+            if self.in_progress(d):
                 print("\t".join([read(d / "file"), "pending", "-", "-", "pending"]))
                 continue
             alive = self.live(d)
+            expires = read(d / "expires")
             print("\t".join([
                 read(d / "file"), read(d / "url") or "pending", read(d / "started") or "-",
-                utc(int(expires)), "alive" if alive else "dead"]))
+                utc(int(expires)) if expires else "-", "alive" if alive else "dead"]))
             if not alive:
                 self.stop_share(d)
         if not dirs:
@@ -575,6 +587,8 @@ def run_tests() -> int:
             self.hide_identity = False
             self.alias: tuple[str, str] | None = None
             self.registers = True
+            self.ask_error = ""
+            self.self_pid = os.getpid()
 
         def spawn(self, argv: list[str], log: Path) -> int:
             self.next_pid += 1
@@ -600,7 +614,9 @@ def run_tests() -> int:
                 if pid in self.procs and pid not in self.dead:
                     shown = ["python3", "unrelated"] if self.hide_identity else self.procs[pid]
                     out = "Mon Sep 28 10:00:00 2026 " + " ".join(shown)
-                elif pid != os.getpid():
+                elif pid == self.self_pid:
+                    out = "Mon Sep 28 09:00:00 2026 python3 share.py"
+                else:
                     rc = 1
             elif argv[0] == "pbcopy":
                 self.clipboard = stdin or ""
@@ -609,6 +625,8 @@ def run_tests() -> int:
                 if rc == 0:
                     self.overlay = argv[1]
             elif argv[0] == AGTERMCTL:
+                if argv[1:3] == ["ask", "open"] and self.ask_error:
+                    return Result(argv, 1, "", f"error: {self.ask_error}\n")
                 out, rc = self.ctl(argv[1:])
             return Result(argv, rc, out, "")
 
@@ -703,14 +721,14 @@ def run_tests() -> int:
             def inspect() -> None:
                 seen["overlay"] = self.runner.overlay
                 seen["web"] = sorted(p.name for p in (self.d / "web").iterdir())
-                seen["stage"] = (self.d / "stage.html").is_file()
+                seen["stage"] = (self.d / f"stage-{os.getpid()}.html").is_file()
                 seen["tunnel"] = (self.hub / "tunnel.pid").exists()
 
             self.runner.on_pending = inspect
             self.runner.answers = ["pending", "publish"]
             rc, url = self.share()
             self.assertEqual(0, rc)
-            self.assertEqual({"overlay": str(self.d / "stage.html"), "web": [], "stage": True, "tunnel": False}, seen)
+            self.assertEqual({"overlay": str(self.d / f"stage-{os.getpid()}.html"), "web": [], "stage": True, "tunnel": False}, seen)
             self.assertEqual(f"https://share.example.com/{(self.d / 'token').read_text().strip()}/", url)
             self.assertEqual(url, self.runner.clipboard)
 
@@ -719,7 +737,7 @@ def run_tests() -> int:
             index = self.d / "web" / "index.html"
             self.assertFalse(index.is_symlink())
             self.assertEqual("<p>v1</p>", index.read_text())
-            self.assertFalse((self.d / "stage.html").exists())
+            self.assertFalse((self.d / f"stage-{os.getpid()}.html").exists())
             self.assertEqual(str(self.page), self.runner.overlay)
             self.assertTrue(self.shares.live(self.d))
             self.assertEqual(int(self.clock.now()) // 10, (self.shares.expires(self.d) - 86400) // 10)
@@ -785,7 +803,7 @@ def run_tests() -> int:
             self.runner.answers = ["cancel"]
             self.assertEqual(1, self.share()[0])
             self.assertEqual("<p>v1</p>", (self.d / "web" / "index.html").read_text())
-            self.assertFalse((self.d / "stage.html").exists())
+            self.assertFalse((self.d / f"stage-{os.getpid()}.html").exists())
             self.assertTrue(self.shares.live(self.d))
 
         def test_update_pending_stage_outside_web(self) -> None:
@@ -911,13 +929,108 @@ def run_tests() -> int:
                 with contextlib.redirect_stdout(io.StringIO()) as out:
                     self.shares.list()
                 seen["listed"] = out.getvalue()
-                seen["stage"] = (self.d / "stage.html").is_file()
+                seen["stage"] = (self.d / f"stage-{os.getpid()}.html").is_file()
 
             self.runner.on_pending = list_while_pending
             self.runner.answers = ["pending", "publish"]
             self.assertEqual(0, self.share()[0])
             self.assertTrue(seen["stage"])
             self.assertIn("pending", str(seen["listed"]))
+
+        def list_quietly(self) -> str:
+            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+                self.shares.list()
+            return out.getvalue()
+
+        def test_list_keeps_share_while_tunnel_starts(self) -> None:
+            listed: list[str] = []
+            hub_up = self.shares.hub_up
+
+            def list_then_start(tunnel_id: str) -> bool:
+                listed.append(self.list_quietly())
+                return hub_up(tunnel_id)
+
+            self.runner.answers = ["publish"]
+            with unittest.mock.patch.object(self.shares, "hub_up", side_effect=list_then_start):
+                rc, url = self.share()
+            self.assertEqual(0, rc)
+            self.assertTrue(url.startswith("https://share.example.com/"))
+            self.assertIn("pending", listed[0])
+            self.assertTrue(self.shares.live(self.d))
+
+        def test_list_keeps_share_before_watcher_starts(self) -> None:
+            listed: list[str] = []
+            start = self.shares.start
+
+            def list_then_watch(d: Path, name: str, argv: list[str]) -> None:
+                if name == "expiry":
+                    self.assertTrue((d / "url").is_file())
+                    listed.append(self.list_quietly())
+                start(d, name, argv)
+
+            self.runner.answers = ["publish"]
+            with unittest.mock.patch.object(self.shares, "start", side_effect=list_then_watch):
+                self.assertEqual(0, self.share()[0])
+            self.assertIn("pending", listed[0])
+            self.assertTrue(self.shares.live(self.d))
+
+        def test_list_cleans_pending_share_whose_owner_died(self) -> None:
+            self.d.mkdir(parents=True)
+            (self.d / "file").write_text(f"{self.page}\n")
+            (self.d / "stage-424242.html").write_text("<p>v1</p>")
+            (self.d / "owner.pid").write_text("424242\n")
+            (self.d / "owner.identity").write_text("Mon Sep 28 08:00:00 2026 python3 share.py\n")
+            self.list_quietly()
+            self.assertFalse(self.d.exists())
+
+        def test_dead_pending_share_does_not_keep_hub_up(self) -> None:
+            self.publish()
+            pids = self.hub_pids()
+            orphan = self.shares.dir_for(str(self.page.parent / "orphan.html"))
+            orphan.mkdir(parents=True)
+            (orphan / "owner.pid").write_text("424242\n")
+            (orphan / "owner.identity").write_text("Mon Sep 28 08:00:00 2026 python3 share.py\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, self.shares.stop(str(self.page)))
+            self.assertTrue(all(p in self.runner.dead for p in pids))
+
+        def test_second_share_refused_while_first_awaits_approval(self) -> None:
+            seen: dict[str, int] = {}
+
+            def share_from_other_session() -> None:
+                with unittest.mock.patch.object(os, "getpid", return_value=424242):
+                    seen["rc"] = self.share()[0]
+
+            self.runner.on_pending = share_from_other_session
+            self.runner.answers = ["pending", "publish"]
+            self.assertEqual(0, self.share()[0])
+            self.assertEqual(1, seen["rc"])
+            self.assertTrue(self.shares.live(self.d))
+
+        def test_overlapping_updates_serve_only_approved_bytes(self) -> None:
+            self.publish()
+            self.page.write_text("<p>v2</p>")
+            seen: dict[str, int] = {}
+
+            def update_from_other_session() -> None:
+                self.page.write_text("<p>v3</p>")
+                with unittest.mock.patch.object(os, "getpid", return_value=424242):
+                    seen["rc"] = self.share()[0]
+
+            self.runner.on_pending = update_from_other_session
+            self.runner.answers = ["pending", "publish", "publish"]
+            self.assertEqual(0, self.share()[0])
+            self.assertEqual(0, seen["rc"])
+            self.assertEqual("<p>v2</p>", (self.d / "web" / "index.html").read_text())
+
+        def test_hidden_session_explains_approval_failure(self) -> None:
+            self.runner.ask_error = "session not visible"
+            out = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(out):
+                self.assertEqual(1, self.shares.share(str(self.page), "24h"))
+            self.assertIn("session not visible", out.getvalue())
+            self.assertIn("switch to this session", out.getvalue())
+            self.assertFalse(self.d.exists())
 
         def test_stop_works_without_host(self) -> None:
             self.publish()

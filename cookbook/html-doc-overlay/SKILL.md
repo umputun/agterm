@@ -172,8 +172,9 @@ Only a request rebuilds or re-shows the page; later changes to the subject do no
 
 ## 8. Share (only on request)
 
-A follow-up "share it" shares the existing page without rebuilding it or asking for a design. Run with a
-15-minute Bash timeout:
+A follow-up "share it" shares the existing page without rebuilding it or asking for a design. Approval
+alone can wait ten minutes, longer than a foreground Bash call may run, so start it with the Bash tool's
+`run_in_background` option and read its output when the completion notification arrives:
 
 ```bash
 ${CLAUDE_SKILL_DIR}/scripts/share.py [--ttl 90m|24h|2d] <page.html>
