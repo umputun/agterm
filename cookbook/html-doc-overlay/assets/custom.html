@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TITLE</title>
+<style>
+/* Canvas and CanvasText follow the viewer's light or dark setting only when a scheme is declared */
+:root { color-scheme: light dark; }
+.doc {
+  --fg: var(--agterm-foreground, CanvasText);
+  /* a shade darker than the terminal, so the page reads as its own surface */
+  --bg: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black);
+  --c-red: var(--agterm-color-1, #d0463c);
+  --c-green: var(--agterm-color-2, #2e9e5b);
+  --c-yellow: var(--agterm-color-3, #c8961e);
+  --c-blue: var(--agterm-color-4, #3b7dd8);
+  --c-magenta: var(--agterm-color-5, #9a5cc6);
+  --c-cyan: var(--agterm-color-6, #2a9fb0);
+  /* palette slots are tuned for terminal text; pull them toward the foreground so they read in either scheme */
+  --accent: color-mix(in srgb, var(--c-blue) 55%, var(--fg));
+  --ok: color-mix(in srgb, var(--c-green) 80%, var(--fg));
+  --bad: color-mix(in srgb, var(--c-red) 80%, var(--fg));
+  --warn: color-mix(in srgb, var(--c-yellow) 85%, var(--fg));
+  --alt: color-mix(in srgb, var(--c-magenta) 75%, var(--fg));
+  --info: color-mix(in srgb, var(--c-cyan) 70%, var(--fg));
+  --muted: color-mix(in srgb, var(--fg) 58%, var(--bg));
+  --faint: color-mix(in srgb, var(--fg) 38%, var(--bg));
+  --panel: color-mix(in srgb, var(--fg) 4.5%, var(--bg));
+  --panel-2: color-mix(in srgb, var(--fg) 8%, var(--bg));
+  --line: color-mix(in srgb, var(--fg) 13%, var(--bg));
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; overflow-x: hidden; background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); color: var(--agterm-foreground, CanvasText); }
+.doc { font: 15px/1.58 var(--sans); max-width: 1240px; margin: 0 auto; padding: 32px 36px 64px; }
+code, pre, .mono { font-family: var(--mono); font-size: .86em; }
+:not(pre) > code { padding: .08em .38em; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); }
+pre { margin: 12px 0; padding: 12px 14px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+b, strong { font-weight: 650; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+svg text { fill: var(--fg); font-family: var(--sans); font-size: 13px; }
+.muted { color: var(--muted); }
+
+/* PAGE COMPONENTS: the layout this subject needs, written per page, colored only by the variables above */
+
+footer { margin-top: 40px; padding-top: 12px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+details.md-copy { margin-top: 28px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.md-copy summary { cursor: pointer; font-weight: 600; }
+.md-copy textarea { display: block; box-sizing: border-box; width: 100%; min-height: 360px; margin-top: 8px; resize: vertical;
+  padding: 10px 12px; font: 12.5px/1.5 var(--mono); color: var(--fg);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+</style>
+</head>
+<body>
+<main class="doc">
+
+<!-- the page body goes here: no fixed skeleton, the structure follows the subject -->
+
+<footer>SOURCES · generated DATE</footer>
+</main>
+</body>
+</html>

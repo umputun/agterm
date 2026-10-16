@@ -48,7 +48,7 @@ else
   if [[ -n "$shown" || -n "$shown_url" ]]; then
     "$AGTERMCTL" session overlay close ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --target "$sid" >/dev/null || exit 1
   fi
-  "$AGTERMCTL" session overlay open ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --html "$file" --target "$sid" --size-percent 95 --follow >/dev/null || exit 1
+  "$AGTERMCTL" session overlay open ${AGTERM_SOCKET:+--socket "$AGTERM_SOCKET"} --html "$file" --target "$sid" --size-percent 95 --navigation >/dev/null || exit 1
   action="opened"
 fi
 

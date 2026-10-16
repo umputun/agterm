@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <title>TITLE</title>
 <style>
+/* Canvas and CanvasText follow the viewer's light or dark setting only when a scheme is declared */
+:root { color-scheme: light dark; }
 .doc {
   --fg: var(--agterm-foreground, CanvasText);
-  --bg: var(--agterm-background, Canvas);
+  /* a shade darker than the terminal, so the page reads as its own surface */
+  --bg: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black);
   --c-red: var(--agterm-color-1, #d0463c);
   --c-green: var(--agterm-color-2, #2e9e5b);
   --c-yellow: var(--agterm-color-3, #c8961e);
@@ -30,7 +33,7 @@
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText); }
+body { margin: 0; background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); color: var(--agterm-foreground, CanvasText); }
 .doc { font: 14px/1.5 var(--sans); max-width: 1480px; margin: 0 auto; padding: 26px 34px 22px; }
 code { font: .88em var(--mono); padding: .05em .34em; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); }
 a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
@@ -61,7 +64,7 @@ h1 em { font-style: italic; font-weight: 400; color: var(--muted); }
 /* fact blocks: a dense grid of labelled points; .wide spans two columns, .span-all the whole row.
    the 1px gap over a line-colored grid draws the dividers, so every row must be filled */
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 4px; background: var(--line); border-bottom: 1px solid var(--line); }
-.fact { padding: 16px 20px 14px; background: var(--agterm-background, Canvas); }
+.fact { padding: 16px 20px 14px; background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); }
 .fact.wide { grid-column: span 2; } .fact.span-all { grid-column: 1 / -1; }
 .fact h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 600 11px/1.4 var(--mono);
   letter-spacing: .12em; text-transform: uppercase; color: var(--c, var(--muted)); }
@@ -94,6 +97,11 @@ footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 1
   .fact.wide { grid-column: auto; }
   .bottom { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
+details.md-copy { margin-top: 18px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.md-copy summary { cursor: pointer; font-weight: 600; }
+.md-copy textarea { display: block; box-sizing: border-box; width: 100%; min-height: 320px; margin-top: 8px;
+  resize: vertical; padding: 10px 12px; font: 12.5px/1.5 var(--mono); color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; }
 </style>
 </head>
 <body>

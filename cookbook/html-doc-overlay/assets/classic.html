@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <title>TITLE</title>
 <style>
+/* Canvas and CanvasText follow the viewer's light or dark setting only when a scheme is declared */
+:root { color-scheme: light dark; }
 .doc {
   --fg: var(--agterm-foreground, CanvasText);
-  --bg: var(--agterm-background, Canvas);
+  /* a shade darker than the terminal, so the page reads as its own surface */
+  --bg: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black);
   --ok: var(--agterm-color-2, #2e9e5b);
   --bad: var(--agterm-color-1, #d0463c);
   --warn: var(--agterm-color-3, #c8961e);
@@ -19,7 +22,7 @@
 }
 * { box-sizing: border-box; }
 body {
-  margin: 0; background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText);
+  margin: 0; background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); color: var(--agterm-foreground, CanvasText);
   font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 }
 .doc { max-width: 1080px; margin: 0 auto; padding: 28px 32px 56px; }
@@ -38,7 +41,7 @@ h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; }
 html { scroll-behavior: smooth; }
 nav.toc { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
   margin: 16px -32px 0; padding: 8px 32px; font-size: 13px; border-bottom: 1px solid var(--line);
-  background: var(--agterm-background, Canvas); }
+  background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); }
 nav.toc a { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg); }
 nav.toc a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 nav.toc a.top { margin-left: auto; color: var(--muted); }
@@ -104,6 +107,9 @@ svg .hl { stroke: var(--accent); }
 
 .muted { color: var(--muted); }
 footer { margin-top: 36px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.md-copy textarea { display: block; box-sizing: border-box; width: 100%; min-height: 360px; resize: vertical;
+  padding: 10px 12px; font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: var(--fg);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 </style>
 </head>
 <body>

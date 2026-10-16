@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <title>TITLE</title>
 <style>
+/* Canvas and CanvasText follow the viewer's light or dark setting only when a scheme is declared */
+:root { color-scheme: light dark; }
 .doc {
   --fg: var(--agterm-foreground, CanvasText);
-  --bg: var(--agterm-background, Canvas);
+  /* a shade darker than the terminal, so the page reads as its own surface */
+  --bg: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black);
   --c-red: var(--agterm-color-1, #d0463c);
   --c-green: var(--agterm-color-2, #2e9e5b);
   --c-yellow: var(--agterm-color-3, #c8961e);
@@ -31,7 +34,7 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; overflow-x: hidden; background: var(--agterm-background, Canvas); color: var(--agterm-foreground, CanvasText); }
+body { margin: 0; overflow-x: hidden; background: color-mix(in srgb, var(--agterm-background, Canvas) 80%, black); color: var(--agterm-foreground, CanvasText); }
 .doc { font: 15.5px/1.62 var(--sans); max-width: 1320px; margin: 0 auto; padding: 0 40px 72px;
   display: grid; grid-template-columns: 210px minmax(0, 1fr); column-gap: 56px; }
 code, .mono { font-family: var(--mono); font-size: .86em; }
@@ -215,6 +218,9 @@ footer { grid-column: 2; margin-top: 72px; padding-top: 18px; border-top: 1px so
   .life li { grid-template-columns: 32px 1fr; } .life .what { grid-column: 2; }
   footer { grid-column: 1; }
 }
+.md-copy textarea { display: block; box-sizing: border-box; width: calc(100% - 32px); min-height: 420px; resize: vertical;
+  padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; }
 </style>
 </head>
 <body>
