@@ -694,6 +694,18 @@ error keeps those names for compatibility.
   An unknown state errors. Agents/hooks set non-idle states; `idle` clears it (also available in the GUI).
   The GUI's Mark for Attention sets `completed` on an idle session; a script's equivalent reads `tree` and
   sends `completed` only where the session is idle.
+- `session wait --until STATUS [--until STATUS ...] [--timeout SECONDS] [--target] [--json]` — block until
+  the session's agent status is one of the `--until` values (`idle`|`active`|`completed`|`blocked`). It
+  anchors the event cursor, reads the current status from `tree` (absent means idle) and returns at once on
+  a match, otherwise on the first later `status` event for the session that matches, so a `completed`
+  cleared by auto-reset right after is still seen. A status set before the call also matches: in a reused
+  session wait for `active` first, or the previous run's `completed` answers at once. Prints the status, or
+  `{"id":"<uuid>","status":"<status>"}` with `--json`. Exit 0 on a match; 2 on `session.closed` for it,
+  which also fires on soft close and window close, so it means "left the open tree", not that the process
+  ended; 124 when `--timeout` passes, enforced even while the app does not answer; 1 on any other failure,
+  including an app that quits or relaunches mid-wait. `--target` resolves like other session commands across
+  every open window and is pinned to that id for the whole wait. CLI only: it uses `events.read`,
+  `window.list` and `tree`, and there is no `session.wait` socket command.
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.

@@ -19,7 +19,7 @@ struct Session: ParsableCommand {
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
                       Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self,
-                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self]
+                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self]
     )
 
     struct New: RequestCommand {

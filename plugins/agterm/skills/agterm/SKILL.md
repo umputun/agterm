@@ -8,8 +8,8 @@ description: >
   post a HUD/caption or notification; show a picker or question dialog; show an image inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
-  a closed window's session screen; subscribe to status, notification, lifecycle, selection,
-  pane-visibility, tree and launch events.
+  a closed window's session screen; subscribe to status, notify, lifecycle, selection,
+  pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, AGTERM_* variables,
   attaching a session from another Mac, cookbook recipes, running/installed version, upgrades, diagnosing
   problems, filing a bug or feature request.
@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -80,8 +80,8 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
 - Add `--json` to any command to get the raw JSON response (machine-readable). Without it, ordinary
   mutations print `ok`, batch close/move prints the affected session count, and `tree`/`list` print a
   human listing.
-- Commands other than `events` make one request per invocation. `events` polls with a fresh connection
-  for each request. Mutating commands return the affected/new id; batch session mutations return the
+- Commands other than `events` and `session wait` make one request per invocation. Those two poll with a
+  fresh connection for each request. Mutating commands return the affected/new id; batch session mutations return the
   number actually changed. Create commands (`session new`, `session duplicate`, `workspace new`,
   `window new`) print the new id.
 
@@ -416,6 +416,10 @@ omitted when expanded).
   0.05..0.95). The grow options are
   aliases for growing the primary or split pane. Prints the applied fraction.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape SHAPE] [--pane left|right|scratch] [--pane-id TOKEN]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it; `--shape` (`circle`, `square`, `triangle`, `diamond`, `capsule`, `star`) picks its silhouette for this call only and reverts the same way, read back as the tree `statusShape` field; `--pane` records which pane set it — `left`=main, `right`=split, `scratch` — so foreground typing in another pane won't clear it, and while the session is `blocked` a status from another pane that is not itself `blocked` is refused with `blocked status owned by pane <pane>` so one pane's agent cannot erase the other's request for input, `idle` included since the bundled hooks emit it unprompted; any user-initiated GUI selection (auto-follow, attention-nav ⌃⌥↑/↓, plain session nav, the command palettes, a Dock-menu session, a sidebar row click) reveals that pane when the status needs attention (`blocked`/`completed`); `active` preserves the existing pane selection; the pane reads back as the tree `statusPane` field; the socket `session go next-attention` only steps the selection, it does not itself reveal the pane; `--pane-id` is the hook-forwarded stable surface token (`$AGTERM_PANE_ID`) that resolves the pane's live slot and overrides a stale `--pane` after a promote + re-split — scripts set `--pane` directly and leave `--pane-id` to the hook).
+- `session wait --until STATUS [--until STATUS ...] [--timeout SECONDS]` — block until the session's agent
+  status is one of the values, returning at once when it already is. Exit 0 and print the status on a match,
+  2 when the session closes, 124 on timeout, 1 on failure. Use it to wait for a worker started with
+  `session new --command`; in a reused session wait for `active` first. Details in reference.md.
 - `session flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `session context <TEXT|--clear> [--target] [--window W]` — set what the session is ABOUT, shown in the
   title bar: a PR number, an issue, the task in hand. Use it when you

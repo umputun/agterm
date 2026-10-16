@@ -201,6 +201,15 @@ overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemon
 pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
 may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
 
+`session wait` is not a third exemption but a client-side composite, like `overlay open --block`: it
+opens the socket only for existing reads (`events.read`, `window.list`, `tree`), so there is no
+`session.wait` command and nothing new to read back. It cannot be a server command: the inline accept loop
+would hold the very status writes it waits for. It anchors the cursor BEFORE reading the tree, so a status
+set between the two is replayed, and resolves `--target` client-side with `ControlResolve.resolve`, the
+server's own rule. `SocketClient` has no receive timeout and `runBlocking` waits indefinitely, so
+`SessionWaitWatchdog` enforces `--timeout` from a timer that exits 124 even while a send is blocked; a
+deadline check in the poll loop alone cannot.
+
 `debug.appearance` is a private `Command` case, absent from the list above, used only by `AppearanceFlipUITests`.
 It accepts light/dark, sets `NSApp.appearance`, posts `.agtermSystemAppearanceChanged`, echoes the effective
 side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provide no CLI or skill entry.
