@@ -99,6 +99,26 @@ private final class FakeDrag: NSObject, @preconcurrency NSDraggingInfo {
     func resetSpringLoading() {}
 }
 
+@MainActor
+private final class KeyRecordingWindow: NSWindow {
+    var reached: [String] = []
+
+    override func cancelOperation(_ sender: Any?) {
+        reached.append("cancelOperation")
+        super.cancelOperation(sender)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        reached.append("keyDown")
+        super.keyDown(with: event)
+    }
+
+    override func noResponder(for eventSelector: Selector) {
+        reached.append("noResponder:\(NSStringFromSelector(eventSelector))")
+        super.noResponder(for: eventSelector)
+    }
+}
+
 @MainActor @Observable
 private final class Mount {
     var shown = true
@@ -1123,6 +1143,60 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertTrue(page.webView.readSelection(from: text))
         try await waitFor("text pasted") { probe.messages.contains("paste:0:plain words") }
         XCTAssertFalse(probe.messages.contains { $0.hasPrefix("file:") || $0.hasPrefix("paste:1") }, "\(probe.messages)")
+    }
+
+    // #753: an Esc the page leaves unhandled reached the window's cancelOperation:, which exits full screen
+    func testEscapeOnAPageWithNoKeyHandlerNeverReachesTheWindow() async throws {
+        try write("plain.html", "<title>P</title><p>no handlers</p>")
+        let page = registry.page(for: try open(file: "plain.html"), store: store)
+        let window = try presentRecording(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+
+        try sendEscape(to: window)
+        _ = try await page.webView.evaluateJavaScript("1")
+
+        XCTAssertEqual(window.reached, [])
+    }
+
+    func testEscapeStillReachesAPageListeningForItAndNeverReachesTheWindow() async throws {
+        try write("esc.html", """
+            <title>E</title><script>
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') webkit.messageHandlers.probe.postMessage('escape') })
+            </script>
+            """)
+        let probe = PageProbe()
+        let page = registry.page(for: try open(file: "esc.html", javascript: true), store: store)
+        page.webView.configuration.userContentController.add(probe, name: "probe")
+        let window = try presentRecording(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("loaded") { self.current?.loadState == .loaded }
+
+        try sendEscape(to: window)
+        try await waitFor("page saw escape") { probe.messages == ["escape"] }
+        _ = try await page.webView.evaluateJavaScript("1")
+
+        XCTAssertEqual(window.reached, [])
+    }
+
+    private func presentRecording(_ view: NSView) throws -> KeyRecordingWindow {
+        let window = KeyRecordingWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                                        backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        view.frame = try XCTUnwrap(window.contentView).bounds
+        window.contentView?.addSubview(view)
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(view)
+        return window
+    }
+
+    private func sendEscape(to window: NSWindow) throws {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            window.sendEvent(try XCTUnwrap(NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                isARepeat: false, keyCode: 53)))
+        }
     }
 
     func testPageScriptRunsOnlyWhenTheOverlayAllowsIt() async throws {

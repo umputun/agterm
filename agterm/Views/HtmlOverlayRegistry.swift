@@ -755,6 +755,10 @@ final class HtmlOverlayWebView: WKWebView {
         super.keyDown(with: event)
     }
 
+    // an Esc the page leaves unhandled comes back from WebKit as cancelOperation: up the responder chain,
+    // and the window's own handler takes a full-screen window out of full screen
+    override func cancelOperation(_ sender: Any?) {}
+
     override func mouseDown(with event: NSEvent) {
         onUserInput?()
         onFocus?()
