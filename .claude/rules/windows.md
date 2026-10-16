@@ -85,6 +85,7 @@ session drag are out of scope.
   The reason is an attribute, not a param, despite `AERegistry.h` calling it a parameter: loginwindow
   writes it with `AEPutAttributePtr`. Never switch that read to `paramDescriptor`.
   The GUI-only prompt is keep-in-sync exempt and manually verified.
+- The window-close sheet takes its text from `QuitPrompt.windowCloseMessage` under the same mode rule.
 - A confirmed Live sessions reset (`LiveResetCoordinator.pending`) skips the quit alert, since its own
   dialog or `zmx.reset --force` was the confirmation. `AppDelegate.exitFlush` fixes the order: capture,
   finalize pending closes, then the CHECKED save; only a fully saved snapshot arms the marker and the

@@ -25,4 +25,19 @@ struct QuitPromptTests {
     @Test func liveModePluralizesWindows() {
         #expect(QuitPrompt.message(windows: 2, sessions: 1, mode: .live) == "This closes 2 windows and 1 session.")
     }
+
+    @Test(arguments: [RestoreMode.none, .rerun])
+    func windowCloseNonLiveEndsSessions(mode: RestoreMode) {
+        #expect(QuitPrompt.windowCloseMessage(sessions: 1, mode: mode)
+            == "This ends 1 running session. The window can be reopened from File ▸ Open Window.")
+        #expect(QuitPrompt.windowCloseMessage(sessions: 4, mode: mode)
+            == "This ends 4 running sessions. The window can be reopened from File ▸ Open Window.")
+    }
+
+    @Test func windowCloseLiveDropsEndingClaim() {
+        #expect(QuitPrompt.windowCloseMessage(sessions: 1, mode: .live)
+            == "This closes 1 session. The window can be reopened from File ▸ Open Window.")
+        #expect(QuitPrompt.windowCloseMessage(sessions: 9, mode: .live)
+            == "This closes 9 sessions. The window can be reopened from File ▸ Open Window.")
+    }
 }
