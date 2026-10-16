@@ -233,6 +233,24 @@ struct SessionWaitCommandsTests {
         #expect(fired.wait(timeout: .now() + 5) == .success)
     }
 
+    // regression: a timer on the shared global queue starved when its worker threads were all blocked
+    @Test func watchdogFiresWhileTheGlobalQueueIsExhausted() throws {
+        let probe = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent(".build/debug/session-wait-watchdog-probe")
+        let process = Process()
+        process.executableURL = probe
+        try process.run()
+        let deadline = Date().addingTimeInterval(15)
+        while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        if process.isRunning {
+            process.terminate()
+            process.waitUntilExit()
+            Issue.record("watchdog probe did not exit within 15 s")
+            return
+        }
+        #expect(process.terminationStatus == 0, "exit 1: the watchdog did not fire; exit 3: the global queue was not exhausted")
+    }
+
     @Test func cancelledWatchdogDoesNotFire() {
         let fired = DispatchSemaphore(value: 0)
         let watchdog = SessionWaitWatchdog(seconds: 0.05) { fired.signal() }

@@ -28,11 +28,13 @@ struct SessionWaitDependencies {
 
 /// Ends a `session wait` at its deadline even while a socket call is blocked, which the poll loop's own
 /// deadline check cannot reach: the client has no receive timeout and the app may never answer.
+/// The timer runs on its own serial queue: the global queue gets no new worker once its pool is
+/// exhausted, and a handler queued there can start long after the deadline.
 final class SessionWaitWatchdog {
     private let timer: DispatchSourceTimer
 
     init(seconds: TimeInterval, fire: @escaping @Sendable () -> Void) {
-        timer = DispatchSource.makeTimerSource(queue: .global())
+        timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "agtermctl.session-wait.watchdog"))
         timer.schedule(deadline: .now() + seconds)
         timer.setEventHandler(handler: fire)
         timer.resume()
