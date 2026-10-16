@@ -71,8 +71,8 @@ paths:
   `rightMouseDown`, which ignores a left-button event; `SidebarControlClickTests` pins it on CI.
   The workspace row's `AddSessionButton` passes a Control-click up the responder chain to it, since NSButton
   would otherwise fire the "+" action.
-  `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag, and
-  clear-status operate on all targets.
+  `sidebarSelectionTargets` filters through the visible projection. Batch move, soft close, flag,
+  clear-status, and mark-for-attention operate on all targets.
 - Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank
   workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
   untouched rather than clearing it. No control form — see `control-api.md`.

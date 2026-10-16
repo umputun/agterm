@@ -691,7 +691,9 @@ error keeps those names for compatibility.
   a status from a pane whose baked role went stale (a split survivor promoted into the main pane, then a
   re-split) lands on the pane's CURRENT slot instead of the stale role; an absent/unknown token falls back
   to `--pane`. Scripts normally set `--pane` directly and leave `--pane-id` to the hook.
-  An unknown state errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
+  An unknown state errors. Agents/hooks set non-idle states; `idle` clears it (also available in the GUI).
+  The GUI's Mark for Attention sets `completed` on an idle session; a script's equivalent reads `tree` and
+  sends `completed` only where the session is idle.
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.

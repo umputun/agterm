@@ -102,6 +102,10 @@ paths:
   `AppStore.selectSession`; hooks cannot infer agterm selection.
 - Clear Status is the first row-menu item when non-idle and also appears in the menu bar and palette.
   Row menus target their node; global surfaces call `clearActiveSessionStatus`; all set an empty indicator.
+- Mark for Attention is the row-menu item for idle targets, row menu only: selecting a session is how you
+  look at it, so a global form has no target. `AppStore.markForAttention` sets a plain `completed` on the
+  idle ones and skips the rest, so a live status is never overwritten. No `autoReset`, or visiting the
+  session would undo the mark. Untagged, it reads as the primary pane's: right or scratch typing leaves it.
 - `GhosttySurfaceView.keyDown` always calls `onUserInputClearsStatus(isInterrupt:)`. Main `.left`, split
   `.right`, and scratch `.scratch` factories own the pane-scoped decision, allowing scratch to clear
   without `view.session`. `AgentIndicator.clearedBy` takes the key's kind (`InterruptKeystroke.classify`:

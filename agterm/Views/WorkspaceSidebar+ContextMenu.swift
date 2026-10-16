@@ -64,14 +64,25 @@ extension WorkspaceSidebar.Coordinator {
         let sessionTargets = node.kind == .session ? store.sidebarSelectionTargets(forContextSession: node.id) : []
         let sessionCount = sessionTargets.count
 
-        // "Clear Status" sits first for a session row with a status, the `agtermctl session status idle` effect.
-        if node.kind == .session, sessionTargets.contains(where: { store.session(withID: $0)?.agentIndicator.status != .idle }) {
-            let clearStatus = NSMenuItem(title: sessionCount == 1 ? "Clear Status" : "Clear Statuses",
-                                         action: #selector(menuClearStatus(_:)), keyEquivalent: "")
-            clearStatus.target = self
-            clearStatus.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
-            menu.addItem(clearStatus)
-            menu.addItem(.separator())
+        // "Clear Status" sits first for a session row with a status, the `agtermctl session status idle` effect;
+        // "Mark for Attention" is its idle-row counterpart, `session status completed` on the idle targets.
+        if node.kind == .session {
+            let statuses = sessionTargets.compactMap { store.session(withID: $0)?.agentIndicator.status }
+            if statuses.contains(where: { $0 != .idle }) {
+                let clearStatus = NSMenuItem(title: sessionCount == 1 ? "Clear Status" : "Clear Statuses",
+                                             action: #selector(menuClearStatus(_:)), keyEquivalent: "")
+                clearStatus.target = self
+                clearStatus.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
+                menu.addItem(clearStatus)
+            }
+            if statuses.contains(.idle) {
+                let mark = NSMenuItem(title: "Mark for Attention", action: #selector(menuMarkForAttention(_:)),
+                                      keyEquivalent: "")
+                mark.target = self
+                mark.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
+                menu.addItem(mark)
+            }
+            if !statuses.isEmpty { menu.addItem(.separator()) }
         }
 
         if node.kind == .workspace || sessionCount <= 1 {
@@ -224,6 +235,11 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuClearStatus(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest else { return }
         for id in request.sessionIDs { store.setAgentIndicator(AgentIndicator(), forSession: id) }
+    }
+
+    @objc private func menuMarkForAttention(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? SessionBatchRequest else { return }
+        store.markForAttention(request.sessionIDs)
     }
 
     @objc private func menuToggleFlag(_ sender: NSMenuItem) {

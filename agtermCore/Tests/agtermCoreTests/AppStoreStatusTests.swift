@@ -144,6 +144,73 @@ struct AppStoreStatusTests {
         #expect(session.agentIndicator.status == .active)
     }
 
+    @Test func markForAttentionSetsAPlainCompletedOnAnIdleSession() throws {
+        let drafts = DraftCollector()
+        let store = AppStore(persistence: PersistenceStore(directory: FileManager.default.temporaryDirectory
+                                 .appendingPathComponent("agterm-tests-\(UUID().uuidString)")),
+                             controlEventSink: { drafts.kinds.append($0.kind) })
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        drafts.kinds.removeAll()
+
+        store.markForAttention([session.id])
+
+        #expect(session.agentIndicator == AgentIndicator(status: .completed))
+        #expect(store.attentionSessions.map(\.id) == [session.id])
+        #expect(drafts.kinds == [.status])
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.status == "completed")
+        #expect(node.statusChangedAt == session.statusChangedAt?.timeIntervalSince1970)
+        #expect(node.statusChangedAt != nil)
+    }
+
+    @Test func markForAttentionSurvivesLeavingAndRevisitingTheSession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let marked = try #require(store.addSession(toWorkspace: ws.id, cwd: "/marked"))
+        let other = try #require(store.addSession(toWorkspace: ws.id, cwd: "/other"))
+        store.selectSession(marked.id)
+
+        store.markForAttention([marked.id])
+        store.selectSession(other.id)
+        store.selectSession(marked.id)
+
+        #expect(marked.agentIndicator.status == .completed)
+    }
+
+    @Test(arguments: [AgentStatus.active, .completed, .blocked])
+    func markForAttentionLeavesANonIdleSessionAlone(_ status: AgentStatus) throws {
+        let drafts = DraftCollector()
+        let store = AppStore(persistence: PersistenceStore(directory: FileManager.default.temporaryDirectory
+                                 .appendingPathComponent("agterm-tests-\(UUID().uuidString)")),
+                             controlEventSink: { drafts.kinds.append($0.kind) })
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        let standing = AgentIndicator(status: status, blink: true, color: "#112233", statusPane: .left)
+        store.setAgentIndicator(standing, forSession: session.id)
+        let stamp = session.statusChangedAt
+        drafts.kinds.removeAll()
+
+        store.markForAttention([session.id])
+
+        #expect(session.agentIndicator == standing)
+        #expect(session.statusChangedAt == stamp)
+        #expect(drafts.kinds.isEmpty)
+    }
+
+    @Test func markForAttentionMarksOnlyTheIdleMembersOfABatch() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let idle = try #require(store.addSession(toWorkspace: ws.id, cwd: "/idle"))
+        let blocked = try #require(store.addSession(toWorkspace: ws.id, cwd: "/blocked"))
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: blocked.id)
+
+        store.markForAttention([idle.id, blocked.id, UUID()])
+
+        #expect(idle.agentIndicator.status == .completed)
+        #expect(blocked.agentIndicator.status == .blocked)
+    }
+
     @Test func aRefusedWriteEmitsNoStatusEvent() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let drafts = DraftCollector()

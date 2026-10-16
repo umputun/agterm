@@ -220,7 +220,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `resolveSessions`. Reject batch `--to`. Count only actual moves. A one-member batch uses singular behavior.
 - Sidebar batch Flag computes one uniform value: flag all unless all are already flagged. This is not
   equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status is equivalent to
-  repeated `session.status idle` and needs no batch command.
+  repeated `session.status idle` and needs no batch command. Mark for Attention is `session.status
+  completed` on the targets `tree` reports idle; it skips the rest, so it is not an unconditional write.
 - `workspace.move --to up|down|top|bottom` reorders relative to the target. Drag remains the precise
   between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
   first, then the selected session's, then `workspaces.last` — so repeated moves may target a different
