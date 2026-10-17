@@ -1785,8 +1785,8 @@ started with, so a change applies after restarting agterm.
 
 - **Fresh shells** restores the structural snapshot with new shells.
 - **Re-run commands** starts captured commands again. The old processes are not attached.
-- **Live sessions** wraps primary and split panes with zmx and reattaches to their running processes. Zsh
-  must be the macOS login shell. Scratch, overlay, and quick terminals remain temporary.
+- **Live sessions** wraps primary and split panes with zmx and reattaches to their running processes. Zsh or
+  fish must be the macOS login shell. Scratch, overlay, and quick terminals remain temporary.
 
 Closing agterm or sending it SIGTERM ends the attach clients and leaves live daemons running. A clean quit
 also captures each live pane's foreground command, so a daemon missing after an orderly machine restart is

@@ -126,6 +126,52 @@ final class ZmxLaunchTests: XCTestCase {
             passwordDatabaseShell: "/bin/zsh", isUITestLaunch: false, allowDebugOverride: true))
     }
 
+    func testFishIsEligibleThroughTheAppBoundary() throws {
+        let bundle = try makeBundleWithFishLoader()
+        defer { try? FileManager.default.removeItem(at: bundle) }
+
+        XCTAssertNil(ZmxLaunch.liveUnavailableReason(
+            bundleURL: bundle,
+            environment: ["AGTERM_ZMX_PATH": "/bin/echo"],
+            passwordDatabaseShell: "/bin/fish",
+            isUITestLaunch: false,
+            allowDebugOverride: true
+        ))
+    }
+
+    func testFishConfigurationUsesPaneXDGDataDirectoriesBeforeTheInheritedValue() throws {
+        let bundle = try makeBundleWithFishLoader()
+        defer { try? FileManager.default.removeItem(at: bundle) }
+        let runtime = ZmxLaunch.Runtime(
+            bundleURL: bundle,
+            environment: ["AGTERM_ZMX_PATH": "/bin/echo", "XDG_DATA_DIRS": "/inherited/one:/inherited/two"],
+            passwordDatabaseShell: "/bin/fish",
+            allowDebugOverride: true
+        )
+        let root = bundle.appendingPathComponent("Contents/Resources/ghostty/shell-integration").path
+        let inherited = try ZmxLaunch.configurationResult(runtime: runtime, paneIdentity: UUID(), baseEnvironment: [:]).get()
+        let pane = try ZmxLaunch.configurationResult(
+            runtime: runtime, paneIdentity: UUID(), baseEnvironment: ["XDG_DATA_DIRS": "/pane/one:/pane/two"]
+        ).get()
+
+        XCTAssertEqual(inherited.environment["XDG_DATA_DIRS"], root + ":/inherited/one:/inherited/two")
+        XCTAssertEqual(pane.environment["XDG_DATA_DIRS"], root + ":/pane/one:/pane/two")
+    }
+
+    func testZshConfigurationDoesNotCopyTheInheritedXDGDataDirectories() throws {
+        let bundle = try makeBundleWithZshLoader()
+        defer { try? FileManager.default.removeItem(at: bundle) }
+        let runtime = ZmxLaunch.Runtime(
+            bundleURL: bundle,
+            environment: ["AGTERM_ZMX_PATH": "/bin/echo", "XDG_DATA_DIRS": "/inherited/one"],
+            passwordDatabaseShell: "/bin/zsh",
+            allowDebugOverride: true
+        )
+        let configuration = try ZmxLaunch.configurationResult(runtime: runtime, paneIdentity: UUID(), baseEnvironment: [:]).get()
+
+        XCTAssertNil(configuration.environment["XDG_DATA_DIRS"])
+    }
+
     func testLiveUnavailableReasonUsesTheLoginShellRejectionMessage() throws {
         let bundle = try makeBundleWithZshLoader()
         defer { try? FileManager.default.removeItem(at: bundle) }
@@ -135,7 +181,28 @@ final class ZmxLaunchTests: XCTestCase {
             environment: ["AGTERM_ZMX_PATH": "/bin/echo"],
             passwordDatabaseShell: "/bin/bash",
             isUITestLaunch: false,
-            allowDebugOverride: true), "the password-database login shell is not zsh")
+            allowDebugOverride: true), "the password-database login shell is not zsh or fish")
+    }
+
+    func testFishSuppressionWithCapturedAndDurablePayloadKeepsBareAttach() throws {
+        let configuration = ZmxSupport.Configuration(
+            executablePath: "/bundle/zmx",
+            environment: [
+                "SHELL": "/bin/fish",
+                "GHOSTTY_SHELL_INTEGRATION_XDG_DIR": "/bundle/shell-integration",
+            ],
+            daemonName: "pane", socketDirectory: "/tmp/zmx", paneID: "pane"
+        )
+        let session = Session(initialCwd: "/tmp")
+        session.initialCommand = "printf durable"
+        session.pendingForegroundCommand = ["printf", "captured"]
+
+        let seed = try XCTUnwrap(ZmxLaunch.surfaceSeed(
+            disposition: .wrapped(configuration), session: session, pane: .left, denylist: [], suppressed: true
+        ))
+
+        XCTAssertEqual(seed.command, configuration.command)
+        XCTAssertNil(seed.initialInput)
     }
 
     func testWrappedStateIsFixedAtInitialization() {
@@ -160,5 +227,16 @@ final class ZmxLaunchTests: XCTestCase {
         try FileManager.default.createDirectory(at: loader, withIntermediateDirectories: true)
         try Data().write(to: loader.appendingPathComponent(".zshenv"))
         return resources
+    }
+
+    private func makeBundleWithFishLoader() throws -> URL {
+        let bundle = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-zmx-fish-bundle-\(UUID().uuidString).app", isDirectory: true)
+        let marker = bundle.appendingPathComponent(
+            "Contents/Resources/ghostty/shell-integration/fish/vendor_conf.d/ghostty-shell-integration.fish"
+        )
+        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: marker)
+        return bundle
     }
 }

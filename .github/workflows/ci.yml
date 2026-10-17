@@ -51,10 +51,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Install fish
+        run: brew install fish
+      - name: Verify fish
+        run: which fish && fish --version
       - name: swift test (with coverage)
         working-directory: agtermCore
         run: ../scripts/watchdog.sh swift test --enable-code-coverage
         env:
+          AGTERM_REQUIRE_FISH: "1"
           WATCHDOG_SECONDS: "600"
           DIAG_DIR: ${{ github.workspace }}/test-hang
       - name: upload hang diagnostics
@@ -232,12 +237,30 @@ jobs:
             diff <(echo "$expected") <(echo "$debug") >&2 || true
             exit 1
           fi
-      # ZmxSupport requires a zsh password-database shell. Configure the disposable runner so the
-      # plain-shell seam test runs.
+      # The zsh plain-login seam needs zsh here; the fish seam switches the runner shell below.
       - name: Give the runner account a zsh login shell
         run: sudo dscl . -create "/Users/$(id -un)" UserShell /bin/zsh
+      - name: Install fish
+        run: brew install fish
+      - name: Verify fish
+        run: which fish && fish --version
+      # xcodebuild hands the test host only TEST_RUNNER_-prefixed variables, prefix stripped.
       - name: Application-hosted unit tests
+        env:
+          TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
         run: scripts/test-app.sh
+      - name: Plain fish login shell seam
+        env:
+          TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL: "1"
+          TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
+        run: |
+          sudo dscl . -create "/Users/$(id -un)" UserShell "$(which fish)"
+          xcodebuild test \
+            -project agterm.xcodeproj \
+            -scheme agtermTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -only-testing:agtermTests/SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish
 
   cookbook:
     name: Cookbook checks

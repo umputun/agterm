@@ -146,8 +146,8 @@ paths:
   cached diagnostics.
 - **Process restore mode is frozen at launch; capture follows the configured next mode.** `none` restores fresh shells, `rerun` uses the captured-command path
   below, and `live` is zmx-backed. Settings changes apply after restart. A live request falls back to
-  `none` when the bundled executable, zsh integration, or password-database login shell is unsupported, and
-  Settings reports the reason. The requested-live latch still claims persisted daemons during fallback; only
+  `none` when the bundled executable, the bundled zsh or fish integration, or the password-database login
+  shell (zsh or fish) is unsupported, and Settings reports the reason. The requested-live latch still claims persisted daemons during fallback; only
   a deliberate `none` or `rerun` launch reaps them. Factories, control status, and reap read the immutable
   requested or active mode. Exit capture and `restore.capture` read the configured next-launch mode.
 - **Command replay is launch-scoped; capture runs at two exits and on demand.**
