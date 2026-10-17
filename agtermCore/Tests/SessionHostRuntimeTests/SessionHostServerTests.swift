@@ -60,12 +60,16 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             var calls = 0
             var maximum = 0
             var writable = false
+            var pauses = 0
             let child = NativeHostChild(.init(pid: process.pid, ptyFD: fd, execErrorFD: process.execErrorFD), writePTY: { _, _, count in
                 calls += 1
                 maximum = max(maximum, count)
                 if writable { return count }
                 errno = error
                 return -1
+            }, pause: { interval in
+                pauses += 1
+                Thread.sleep(forTimeInterval: interval)
             })
             defer { try? child.terminate(grace: 0.5) }
             for _ in 0..<20 { #expect(child.poll() == .running) }
@@ -86,7 +90,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             try child.terminate(grace: 0.5)
             #expect(ProcessInfo.processInfo.systemUptime - start < 1.5)
             #expect(child.hasExited)
-            #expect(kill(getpid(), 0) == 0)
+            if error == EIO { #expect(pauses == 0) }
         }
     }
 
@@ -110,12 +114,19 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(calls == 1)
         #expect(kill(process.pid, SIGKILL) == 0)
         let deadline = Date().addingTimeInterval(2)
-        while !child.hasExited && Date() < deadline { _ = child.poll(); Thread.sleep(forTimeInterval: 0.005) }
+        while !child.hasExited && Date() < deadline {
+            let callsBeforePoll = calls
+            let state = child.poll()
+            if child.hasExited {
+                #expect(state == .exited)
+                #expect(calls == callsBeforePoll)
+            }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
         try #require(child.hasExited)
         let callsAtExit = calls
         try child.terminate(grace: 0.5)
         #expect(calls == callsAtExit)
-        #expect(kill(getpid(), 0) == 0)
     }
 
     @Test func existingDaemonDoesNotSpawnOrReplay() throws {
@@ -664,6 +675,11 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
                 try? probe.wait(for: "written-2", timeout: 3)
             }
             Thread.sleep(forTimeInterval: interval)
+        }, signal: { pid, number in
+            if number == SIGTERM {
+                do { try probe.wait(for: "reply-2", timeout: 3) } catch { Issue.record(error) }
+            }
+            return kill(pid, number)
         })
         defer { try? child.terminate(grace: 0.5) }
         let deadline = ProcessInfo.processInfo.systemUptime + 3
@@ -966,7 +982,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
                 reader=$!
                 next=$((phase + 1))
                 while [ ! -f "$marker_dir/reply-$phase" ] && [ ! -f "$marker_dir/go-$next" ]; do
-                    kill -0 "$reader" 2>/dev/null || exit 3
+                    kill -0 "$reader" 2>/dev/null || [ -f "$marker_dir/reply-$phase" ] || exit 3
                     sleep 0.005
                 done
                 if [ ! -f "$marker_dir/reply-$phase" ]; then

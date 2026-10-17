@@ -19,7 +19,7 @@ final class NativeHostChild: HostChild {
     private let pause: (TimeInterval) -> Void
     private let signal: (Int32, Int32) -> Int32
     private var answeredQuery = false
-    private var writeErrorLogged = false
+    private var replyWriteFailed = false
     private(set) var hasExited = false
     private var stopCauses: [String] = []
     private var outputTail = Data()
@@ -110,7 +110,7 @@ final class NativeHostChild: HostChild {
         guard answeredQuery || !pendingWrites.isEmpty || responder.holdsPartialQuery else { return }
         let limit = now() + Self.settleLimit
         var quietSince = now()
-        while !writeErrorLogged && now() < limit {
+        while !replyWriteFailed && now() < limit {
             pause(Self.settleStep)
             guard (try? reap()) == false else { return }
             let produced = (try? drainPTY()) ?? false
@@ -170,8 +170,8 @@ final class NativeHostChild: HostChild {
             let code = errno
             if code == EINTR { continue }
             if code == EAGAIN || code == EWOULDBLOCK { return }
-            if !writeErrorLogged {
-                writeErrorLogged = true
+            if !replyWriteFailed {
+                replyWriteFailed = true
                 try? FileHandle.standardError.write(contentsOf: Data("creation attach reply write failed: errno=\(code)\n".utf8))
             }
             return
