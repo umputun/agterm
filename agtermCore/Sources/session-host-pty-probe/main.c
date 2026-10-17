@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,9 +57,22 @@ static void report(int argc, char **argv, char **envp) {
         write_all(line);
     } else if (argc == 3 && strcmp(argv[1], "fd") == 0) {
         write_all(fcntl(atoi(argv[2]), F_GETFD) < 0 ? "closed\n" : "open\n");
+    } else if (argc == 2 && strcmp(argv[1], "signals") == 0) {
+        static const struct { int signo; const char *name; } watched[] = {
+            {SIGTERM, "TERM"}, {SIGHUP, "HUP"}, {SIGUSR2, "USR2"},
+        };
+        sigset_t blocked;
+        if (sigprocmask(SIG_BLOCK, NULL, &blocked) < 0) fail("sigprocmask");
+        for (size_t i = 0; i < sizeof(watched) / sizeof(watched[0]); i++) {
+            struct sigaction current;
+            if (sigaction(watched[i].signo, NULL, &current) < 0) fail("sigaction");
+            snprintf(line, sizeof(line), "%s blocked=%d ignored=%d\n", watched[i].name,
+                     sigismember(&blocked, watched[i].signo), current.sa_handler == SIG_IGN);
+            write_all(line);
+        }
     } else {
         errno = EINVAL;
-        fail("usage: session-host-pty-probe env|args [ARG...]|size|fd N");
+        fail("usage: session-host-pty-probe env|args [ARG...]|size|fd N|signals");
     }
 }
 

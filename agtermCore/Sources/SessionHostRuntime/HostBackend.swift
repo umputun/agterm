@@ -4,11 +4,22 @@ import Foundation
 import agtermCore
 
 final class NativeHostChild: HostChild {
+    static let settleLimit: TimeInterval = 0.25
+    static let settleQuiet: TimeInterval = 0.05
+    static let settleStep: TimeInterval = 0.005
     private let process: PTYProcess
     private var descriptorsOpen = true
     private var errorOpen = true
     private var errorBytes = Data()
     private var preparationFailed = false
+    private var responder = DeviceAttributeResponder()
+    private var pendingWrites: [UInt8] = []
+    private let writePTY: (Int32, UnsafeRawPointer, Int) -> Int
+    private let now: () -> TimeInterval
+    private let pause: (TimeInterval) -> Void
+    private let signal: (Int32, Int32) -> Int32
+    private var answeredQuery = false
+    private var writeErrorLogged = false
     private(set) var hasExited = false
     private var stopCauses: [String] = []
     private var outputTail = Data()
@@ -25,8 +36,15 @@ final class NativeHostChild: HostChild {
         return parts.joined(separator: "; ")
     }
 
-    init(_ process: PTYProcess) {
+    init(_ process: PTYProcess, writePTY: @escaping (Int32, UnsafeRawPointer, Int) -> Int = { write($0, $1, $2) },
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         pause: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
+         signal: @escaping (Int32, Int32) -> Int32 = { kill($0, $1) }) {
         self.process = process
+        self.writePTY = writePTY
+        self.now = now
+        self.pause = pause
+        self.signal = signal
         do {
             try hostNonblocking(process.ptyFD)
             try hostNonblocking(process.execErrorFD)
@@ -44,6 +62,7 @@ final class NativeHostChild: HostChild {
             if preparationFailed { return hasExited ? .exited : .failed }
             if descriptorsOpen {
                 try drainPTY()
+                servicePendingWrites()
                 try readExecError()
             }
             if hasExited { return .exited }
@@ -57,9 +76,16 @@ final class NativeHostChild: HostChild {
     func terminate(grace: TimeInterval) throws {
         defer { closeDescriptors() }
         if try reap() { return }
-        if kill(pid, SIGTERM) < 0 && errno != ESRCH { throw HostFailure.system(errno) }
+        if descriptorsOpen && !preparationFailed {
+            try? drainPTY()
+            servicePendingWrites()
+            settleAttributeReplies()
+            if hasExited { return }
+        }
+        // a written reply can still be buffered in the attach client or socket/pty queues when sigterm prevents its delivery.
+        if signal(pid, SIGTERM) < 0 && errno != ESRCH { throw HostFailure.system(errno) }
         if try awaitExit(until: ProcessInfo.processInfo.systemUptime + grace) { return }
-        if kill(pid, SIGKILL) < 0 && errno != ESRCH { throw HostFailure.system(errno) }
+        if signal(pid, SIGKILL) < 0 && errno != ESRCH { throw HostFailure.system(errno) }
         guard try awaitExit(until: ProcessInfo.processInfo.systemUptime + grace) else { throw HostFailure.cleanupIncomplete }
     }
 
@@ -77,6 +103,26 @@ final class NativeHostChild: HostChild {
         return hasExited
     }
 
+    /// An attach that never carried a DA query (every zsh creation) is signalled at once. Otherwise, or while a
+    /// reply or an unfinished escape prefix (even a lone ESC) is held, the host keeps answering until replies are
+    /// flushed and the PTY stays quiet: the final pass can precede a query the daemon is still forwarding.
+    private func settleAttributeReplies() {
+        guard answeredQuery || !pendingWrites.isEmpty || responder.holdsPartialQuery else { return }
+        let limit = now() + Self.settleLimit
+        var quietSince = now()
+        while !writeErrorLogged && now() < limit {
+            pause(Self.settleStep)
+            guard (try? reap()) == false else { return }
+            let produced = (try? drainPTY()) ?? false
+            servicePendingWrites()
+            if produced || !pendingWrites.isEmpty || responder.holdsPartialQuery {
+                quietSince = now()
+            } else if now() - quietSince >= Self.settleQuiet {
+                return
+            }
+        }
+    }
+
     private func awaitExit(until deadline: TimeInterval) throws -> Bool {
         while ProcessInfo.processInfo.systemUptime < deadline {
             if try reap() { return true }
@@ -85,16 +131,50 @@ final class NativeHostChild: HostChild {
         return try reap()
     }
 
-    private func drainPTY() throws {
+    /// True when the bytes read produced a reply.
+    @discardableResult
+    private func drainPTY() throws -> Bool {
+        var produced = false
         var bytes = [UInt8](repeating: 0, count: 4096)
         for _ in 0..<16 {
-            let count = read(process.ptyFD, &bytes, bytes.count)
+            // reserve a maximum-size reply per input byte, including a carried query prefix.
+            let capacity = min(bytes.count, (64 * 1024 - pendingWrites.count) / 10)
+            guard capacity > 0 else { return produced }
+            let count = read(process.ptyFD, &bytes, capacity)
             if count > 0 {
                 outputTail = (outputTail + bytes.prefix(count)).suffix(1024)
+                let replies = bytes.withUnsafeBufferPointer { responder.feed(UnsafeBufferPointer(rebasing: $0.prefix(count))) }
+                if !replies.isEmpty {
+                    produced = true
+                    answeredQuery = true
+                    pendingWrites.append(contentsOf: replies)
+                }
                 continue
             }
-            if count == 0 || errno == EIO || errno == EAGAIN { return }
+            if count == 0 || errno == EIO || errno == EAGAIN { return produced }
             if errno != EINTR { throw HostFailure.system(errno) }
+        }
+        return produced
+    }
+
+    private func servicePendingWrites() {
+        guard !hasExited else { return }
+        for _ in 0..<4 {
+            guard !pendingWrites.isEmpty else { return }
+            let count = pendingWrites.withUnsafeBytes { writePTY(process.ptyFD, $0.baseAddress!, $0.count) }
+            if count > 0 {
+                pendingWrites.removeFirst(count)
+                return
+            }
+            if count == 0 { return }
+            let code = errno
+            if code == EINTR { continue }
+            if code == EAGAIN || code == EWOULDBLOCK { return }
+            if !writeErrorLogged {
+                writeErrorLogged = true
+                try? FileHandle.standardError.write(contentsOf: Data("creation attach reply write failed: errno=\(code)\n".utf8))
+            }
+            return
         }
     }
 

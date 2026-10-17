@@ -51,6 +51,17 @@ pid_t sh_forkpty_exec(char *const argv[], char *const envp[], const char *cwd,
     if (child < 0) goto failed;
     if (child == 0) {
         close(error_pipe[0]);
+        /* exec keeps the forking thread's mask and every SIG_IGN, the host's own launch included: either
+           would leave the creation attach alive, and leading, until SIGKILL. Reset before unblocking so a
+           pending signal cannot reach a handler inherited from the host. */
+        struct sigaction defaults = { .sa_handler = SIG_DFL };
+        sigemptyset(&defaults.sa_mask);
+        for (int signo = 1; signo < NSIG; signo++) {
+            if (signo != SIGKILL && signo != SIGSTOP) sigaction(signo, &defaults, NULL);
+        }
+        sigset_t none;
+        sigemptyset(&none);
+        if (sigprocmask(SIG_SETMASK, &none, NULL) < 0) child_failed(error_pipe[1], errno);
         if (chdir(cwd) < 0) child_failed(error_pipe[1], errno);
         execve(argv[0], argv, envp);
         child_failed(error_pipe[1], errno);
