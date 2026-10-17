@@ -59,6 +59,10 @@ struct DeviceAttributeResponderTests {
         #expect([0, 255, 27, 27, 91, 27, 91, 99].withUnsafeBufferPointer { responder.feed($0) } == primary)
     }
 
+    @Test func maximumReplyLengthCoversTheLongestReply() {
+        #expect(DeviceAttributeResponder.maximumReplyLength == max(primary.count, secondary.count))
+    }
+
     @Test func garbageCannotGrowRetainedState() {
         var responder = DeviceAttributeResponder()
         let garbage = Array(repeating: UInt8(0xFF), count: 1_000_000) + [27, 91, 62, 48]

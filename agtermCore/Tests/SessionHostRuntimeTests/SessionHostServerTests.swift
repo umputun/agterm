@@ -75,7 +75,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             #expect(lseek(fd, 0, SEEK_CUR) == stoppedOffset)
             #expect(stoppedOffset < 120_000)
             #expect(maximum <= 64 * 1024)
-            #expect(maximum >= 64 * 1024 - 10)
+            #expect(maximum >= 64 * 1024 - DeviceAttributeResponder.maximumReplyLength)
             #expect(calls - callsBefore == 20)
             writable = true
             _ = child.poll()

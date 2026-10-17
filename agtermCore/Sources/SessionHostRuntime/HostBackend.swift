@@ -138,7 +138,7 @@ final class NativeHostChild: HostChild {
         var bytes = [UInt8](repeating: 0, count: 4096)
         for _ in 0..<16 {
             // reserve a maximum-size reply per input byte, including a carried query prefix.
-            let capacity = min(bytes.count, (64 * 1024 - pendingWrites.count) / 10)
+            let capacity = min(bytes.count, (64 * 1024 - pendingWrites.count) / DeviceAttributeResponder.maximumReplyLength)
             guard capacity > 0 else { return produced }
             let count = read(process.ptyFD, &bytes, capacity)
             if count > 0 {
