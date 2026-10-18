@@ -631,11 +631,44 @@ final class AskDialogViewTests: XCTestCase {
         let first = try XCTUnwrap(fixture.window.firstResponder as? AskTextView)
         first.insertText("kept", replacementRange: NSRange(location: NSNotFound, length: 0))
 
+        let window = fixture.window
+        func ident(_ object: AnyObject?) -> String {
+            object.map { "\(type(of: $0))@\(Unmanaged.passUnretained($0).toOpaque())" } ?? "nil"
+        }
+        func snapshot(_ label: String) -> String {
+            let catcher = fixture.catcher, box = catcher?.editorBox, target = box?.focusTarget
+            return "\(label): responder \(ident(window.firstResponder)); old \(ident(first)) in window \(first.window === window); "
+                + "catcher \(ident(catcher)) in window \(catcher?.window === window) canFocus \(catcher?.canFocus ?? false) "
+                + "key \(window.isKeyWindow) visible \(window.isVisible); box \(ident(box)) view \(ident(box?.view)) "
+                + "in window \(box?.view?.window === window); target \(ident(target)) in window \(target?.window === window)"
+        }
+        final class Trace { var lines: [String] = [] }
+        let trace = Trace()
+        let started = Date()
+        let box = try XCTUnwrap(fixture.catcher?.editorBox)
+        let original = box.onAttach
+        box.onAttach = { [weak window] in
+            let before = window?.firstResponder
+            original?()
+            trace.lines.append(String(format: "onAttach at %.3fs: ", Date().timeIntervalSince(started))
+                + "\(ident(before)) -> \(ident(window?.firstResponder))")
+        }
+        defer { box.onAttach = original }
+
         host.rootView = AnyView(fixture.overlay(detail: short).frame(width: 600, height: 300))
         host.layoutSubtreeIfNeeded()
+        var notes = [snapshot("after swap")]
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        notes.append(snapshot("at 50ms"))
 
-        let second = try XCTUnwrap(fixture.window.firstResponder as? AskTextView)
+        guard let second = window.firstResponder as? AskTextView else {
+            let deadline = Date().addingTimeInterval(1)
+            while !(window.firstResponder is AskTextView), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+            notes.append(snapshot(String(format: "after %.3fs", Date().timeIntervalSince(started))))
+            XCTFail("no AskTextView first responder at 50ms\n" + (notes + trace.lines).joined(separator: "\n"))
+            return
+        }
+        print("layout-swap-diag\n" + (notes + trace.lines).joined(separator: "\n"))
         XCTAssertFalse(second === first)
         XCTAssertEqual(second.string, "kept")
         XCTAssertEqual(fixture.session.askDraft?.text, "kept")
