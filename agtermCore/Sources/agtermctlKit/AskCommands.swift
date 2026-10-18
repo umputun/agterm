@@ -14,7 +14,8 @@ struct Ask: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Ask a question and wait for its button answer.",
             discussion: "--input adds a text field and --choice a radio list (checkboxes with --multiple); either form defaults "
-                + "its buttons to ok=OK and cancel=Cancel, Cancel ending like Esc. The answer carries the field's text or the selected ids."
+                + "its buttons to ok=OK and cancel=Cancel, Cancel ending like Esc. The answer carries the field's text or the selected ids, "
+                + "plus the --other row's text when it is selected."
         )
         @Argument(help: "Dialog title.") var title: String
         @Option(name: .long, help: "Optional message below the title.") var message: String?
@@ -38,6 +39,8 @@ struct Ask: ParsableCommand {
         var choiceSubtitles: [String] = []
         @Flag(name: .long, help: "Make the --choice list checkboxes instead of radio buttons.") var multiple = false
         @Option(name: .customLong("checked"), help: "ID of an item selected at open. Repeat with --multiple.") var checked: [String] = []
+        @Option(name: .long, help: "Add a free-form row after the --choice list, with this placeholder; its text answers as `text`.")
+        var other: String?
         @Option(name: .long, help: "Session id, prefix, or 'active'. Default: selected session for terminal, window-centered for gui.") var target: String?
         @Option(name: .long, help: "Anchor to the session's left or right pane. GUI style requires --target.") var pane: String?
         @Option(name: .customLong("pane-id"), help: "Stable pane token; overrides --pane. GUI style requires --target.") var paneID: String?
@@ -67,7 +70,7 @@ struct Ask: ParsableCommand {
                                    defaultButton: defaultButton, destructiveButton: destructiveButton, style: style, align: align,
                                    pane: pane, paneID: paneID, title: title, width: try parsedWidth(), value: value,
                                    cancelButton: cancelButton, input: input, placeholder: placeholder, choices: try parsedChoices(),
-                                   multiple: multiple ? true : nil, checked: checked.isEmpty ? nil : checked)
+                                   multiple: multiple ? true : nil, checked: checked.isEmpty ? nil : checked, other: other)
             return ControlRequest(cmd: .askOpen, target: target, args: options.withWindow(args))
         }
 
@@ -112,6 +115,7 @@ struct Ask: ParsableCommand {
         private func parsedChoices() throws -> [ControlAskChoice]? {
             guard !choices.isEmpty else {
                 guard choiceSubtitles.isEmpty else { throw ValidationError("--choice-subtitle requires --choice") }
+                guard other == nil else { throw ValidationError("--other requires --choice") }
                 return nil
             }
             let items = choices.map { token -> (id: String, label: String) in

@@ -90,6 +90,8 @@ struct AskCommandsTests {
         (["Question", "--choice", "a", "--choice-subtitle", "b=x"], "unknown subtitle choice: b"),
         (["Question", "--choice", "a", "--choice-subtitle", "a=x", "--choice-subtitle", "a=y"], "subtitle already set for choice: a"),
         (["Question", "--input", "line", "--hotkey", "ok=o"], "--hotkey requires --button"),
+        (["Question", "--button", "ok", "--other", "x"], "--other requires --choice"),
+        (["Question", "--input", "line", "--other", "x"], "--other requires --choice"),
     ])
     func rootRejectsInvalidSyntax(argv: [String], expected: String) {
         do {
@@ -302,6 +304,26 @@ struct AskCommandsTests {
                                  ControlAskChoice(id: "395", label: "395")])
         #expect(args.multiple == true)
         #expect(args.checked == ["395", "398"])
+    }
+
+    @Test func otherMapsItsPlaceholderBesideTheChoices() throws {
+        let args = try #require(try open(["Review", "--choice", "a", "--other", "Something else"]).makeRequest().args)
+        #expect(args.other == "Something else")
+        #expect(args.choices == [ControlAskChoice(id: "a", label: "a")])
+        #expect(try #require(try open(["Review", "--choice", "a"]).makeRequest().args).other == nil)
+    }
+
+    @Test func answerWithOtherTextPrintsTheSelectionAndTheText() throws {
+        let command = try open(["Review", "--choice", "a", "--multiple", "--other", "Something else"])
+        let answer = ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, text: " mine ", selected: ["a"])
+        var lines: [String] = []
+        try command.execute(send: {
+            $0.cmd == .askOpen
+                ? SocketReply(ControlResponse(ok: true, result: ControlResult(id: "ask-id")))
+                : SocketReply(ControlResponse(ok: true, result: ControlResult(ask: answer)))
+        }, sleep: { _ in }, output: { lines.append($0) })
+        #expect(lines.count == 1)
+        #expect(try JSONDecoder().decode(ControlAskResult.self, from: Data(#require(lines.first).utf8)) == answer)
     }
 
     @Test func formKeepsCallerButtons() throws {
