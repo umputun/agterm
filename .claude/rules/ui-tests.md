@@ -116,7 +116,12 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   failure occurred about 64 seconds after synthesis began and the same test passed in about 13 seconds
   without HazeOver. Quit overlays and
   clear covered/minimized/other-Space windows before debugging the test. FB11763863 instead has no
-  window/AX tree.
+  window/AX tree. The same timeout also came from typing that hid the app under test: on 2026-10-18
+  `typeText` keys arrived as Command chords (Cmd-M minimized it, Cmd-H hid it, the rest reached the live
+  agterm the run was launched from and opened its Open Directory panel), while
+  `typeKey(_:modifierFlags: [])` was unaffected. [Unverified] where the stuck Command came from.
+  A window ordered out or an unexpected Open panel seconds into typing means stop the run; do not rerun
+  it on the same desktop.
 - `XCUIApplication.terminate()` does not call `applicationWillTerminate`. Use ⌘Q plus
   `wait(for: .notRunning, timeout:)` for restore-command or quit-flush tests; XCUITest auto-skips the
   quit-confirm modal. `MultiWindowUITests` survives hard termination only because structural saves
