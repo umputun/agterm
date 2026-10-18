@@ -371,7 +371,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             let configuration = try ZmxSupport.configuration(for: inputs).get()
             XCTAssertEqual(configuration.environment["SHELL"], fish.path)
             XCTAssertEqual(configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"], root)
-            XCTAssertEqual(configuration.environment["XDG_DATA_DIRS"], "\(root):\(userXDGDataDirs)")
+            XCTAssertEqual(configuration.environment["XDG_DATA_DIRS"], rawDataDirectories)
             XCTAssertNil(configuration.environment["ZDOTDIR"])
             XCTAssertNil(configuration.environment["GHOSTTY_ZSH_ZDOTDIR"])
             XCTAssertEqual(configuration.environment["AGTERM_PANE_ID"], paneID.uuidString)

@@ -139,7 +139,7 @@ final class ZmxLaunchTests: XCTestCase {
         ))
     }
 
-    func testFishConfigurationUsesPaneXDGDataDirectoriesBeforeTheInheritedValue() throws {
+    func testFishConfigurationKeepsOnlyAnExplicitPaneXDGDataDirectories() throws {
         let bundle = try makeBundleWithFishLoader()
         defer { try? FileManager.default.removeItem(at: bundle) }
         let runtime = ZmxLaunch.Runtime(
@@ -148,14 +148,13 @@ final class ZmxLaunchTests: XCTestCase {
             passwordDatabaseShell: "/bin/fish",
             allowDebugOverride: true
         )
-        let root = bundle.appendingPathComponent("Contents/Resources/ghostty/shell-integration").path
         let inherited = try ZmxLaunch.configurationResult(runtime: runtime, paneIdentity: UUID(), baseEnvironment: [:]).get()
         let pane = try ZmxLaunch.configurationResult(
             runtime: runtime, paneIdentity: UUID(), baseEnvironment: ["XDG_DATA_DIRS": "/pane/one:/pane/two"]
         ).get()
 
-        XCTAssertEqual(inherited.environment["XDG_DATA_DIRS"], root + ":/inherited/one:/inherited/two")
-        XCTAssertEqual(pane.environment["XDG_DATA_DIRS"], root + ":/pane/one:/pane/two")
+        XCTAssertNil(inherited.environment["XDG_DATA_DIRS"])
+        XCTAssertEqual(pane.environment["XDG_DATA_DIRS"], "/pane/one:/pane/two")
     }
 
     func testZshConfigurationDoesNotCopyTheInheritedXDGDataDirectories() throws {
@@ -201,7 +200,7 @@ final class ZmxLaunchTests: XCTestCase {
             disposition: .wrapped(configuration), session: session, pane: .left, denylist: [], suppressed: true
         ))
 
-        XCTAssertEqual(seed.command, configuration.command)
+        XCTAssertEqual(seed.command, ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []))
         XCTAssertNil(seed.initialInput)
     }
 

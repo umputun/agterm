@@ -125,38 +125,63 @@ struct ZmxSupportTests {
         #expect(configuration.environment["AGTERM_PANE_ID"] == paneID.uuidString)
         #expect(configuration.environment["SHELL"] == "/usr/local/bin/fish")
         #expect(configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] == root)
-        #expect(configuration.environment["XDG_DATA_DIRS"] == root + ":/pane/share")
+        #expect(configuration.environment["XDG_DATA_DIRS"] == "/pane/share")
         #expect(configuration.environment["ZDOTDIR"] == nil)
         #expect(configuration.environment["GHOSTTY_ZSH_ZDOTDIR"] == nil)
         #expect(configuration.environment["ZMX_DIR"] == configuration.socketDirectory)
         #expect(configuration.environment["ZMX_NO_DETACH_KEY"] == "1")
     }
 
-    @Test func fishXDGDataDirectoriesMergePreservesThePaneListContract() throws {
+    @Test func fishSurfaceEnvironmentLeavesAnInheritedXDGDataDirectoriesAlone() throws {
+        let resources = try makeFishResources(withMarker: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+        let configuration = try #require(ZmxSupport.configuration(for: makeInputs(resources: resources, shell: "/bin/fish")).value)
+
+        #expect(configuration.environment["XDG_DATA_DIRS"] == nil)
+        #expect(configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] == resources.path + "/shell-integration")
+    }
+
+    @Test(arguments: [nil, "/bin/cat"])
+    func fishAttachMergesTheIntegrationRootIntoTheLaunchEnvironment(sessionHost: String?) throws {
         let resources = try makeFishResources(withMarker: true)
         defer { try? FileManager.default.removeItem(at: resources) }
         let root = resources.path + "/shell-integration"
-        let cases: [(String?, String)] = [
-            (nil, root + ":/usr/local/share:/usr/share"),
-            ("", root + ":/usr/local/share:/usr/share"),
-            ("/first:/second", root + ":/first:/second"),
-            (root, root),
-            (root + ":/first:" + root + ":/second:" + root, root + ":/first:/second"),
-            ("/with space:/with'quote:/with\\backslash:", root + ":/with space:/with'quote:/with\\backslash"),
+        let recorder = resources.appending(path: "record-xdg")
+        try "#!/bin/sh\nprintf '%s' \"$XDG_DATA_DIRS\" > \"$RESULT_FILE\"\n".write(to: recorder, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: recorder.path)
+        let cases: [(inherited: String?, pane: String?, expected: String)] = [
+            ("/custom/share", nil, root + ":/custom/share"),
+            (nil, nil, root + ":/usr/local/share:/usr/share"),
+            ("", nil, root + ":/usr/local/share:/usr/share"),
+            ("/custom/share", "/pane/share", root + ":/pane/share"),
+            (root, nil, root),
+            (root + ":/first:" + root + "::/second:" + root, nil, root + ":/first:/second"),
+            ("/with space:/with'quote:/with\\backslash:/glob/*:", nil,
+             root + ":/with space:/with'quote:/with\\backslash:/glob/*"),
         ]
 
-        for (input, expected) in cases {
-            let baseEnvironment = input.map { ["XDG_DATA_DIRS": $0] } ?? [:]
+        for (inherited, pane, expected) in cases {
             let configuration = try #require(ZmxSupport.configuration(for: .init(
-                zmxExecutablePath: "/bin/echo",
-                passwordDatabaseShell: "/bin/fish",
-                resourcesDirectory: resources.path,
-                stateDirectory: "/tmp/agterm-state",
-                paneIdentity: UUID(),
-                baseEnvironment: baseEnvironment,
-                inheritedZdotdir: nil
+                zmxExecutablePath: recorder.path, passwordDatabaseShell: "/bin/fish",
+                resourcesDirectory: resources.path, stateDirectory: "/tmp/agterm-state", paneIdentity: UUID(),
+                baseEnvironment: pane.map { ["XDG_DATA_DIRS": $0] } ?? [:], inheritedZdotdir: nil,
+                sessionHostExecutablePath: sessionHost.map { _ in recorder.path }
             )).value)
-            #expect(configuration.environment["XDG_DATA_DIRS"] == expected)
+            let result = resources.appending(path: "result-\(UUID().uuidString)")
+            var environment = ProcessInfo.processInfo.environment
+            environment["XDG_DATA_DIRS"] = inherited
+            environment.merge(configuration.environment) { _, surface in surface }
+            environment["RESULT_FILE"] = result.path
+            let line = ZmxSupport.attachCommand(configuration, replaying: nil, denylist: [])
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["--noprofile", "--norc", "-c", "exec -l " + line]
+            process.environment = environment
+            try process.run()
+            process.waitUntilExit()
+
+            #expect(process.terminationStatus == 0)
+            #expect(try String(contentsOf: result, encoding: .utf8) == expected)
         }
     }
 
@@ -332,7 +357,9 @@ struct ZmxSupportTests {
             func attach(_ payload: [String]) -> String {
                 var arguments = configuration.attachArguments + payload
                 if let host { arguments = [host, "client", configuration.daemonName, "--"] + arguments }
-                return CommandRestore.shellQuotedLine(arguments)
+                return CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c",
+                                                       ZmxSupport.fishXDGDataDirectoriesScript, "sh",
+                                                       "/bundle resources/fish"] + arguments)
             }
 
             #expect(ZmxSupport.attachCommand(configuration, replaying: captured, creationCommand: durable, denylist: []) ==

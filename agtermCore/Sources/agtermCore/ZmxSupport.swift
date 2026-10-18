@@ -125,9 +125,6 @@ public enum ZmxSupport {
                 return .failure(.missingFishIntegration)
             }
             environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] = integrationRoot
-            environment["XDG_DATA_DIRS"] = mergedXDGDataDirectories(
-                userValue: environment["XDG_DATA_DIRS"], integrationRoot: integrationRoot
-            )
         }
         environment["ZMX_DIR"] = socketDirectory
         environment["ZMX_SESSION"] = ""
@@ -167,8 +164,20 @@ public enum ZmxSupport {
         if let host = configuration.sessionHostExecutablePath {
             arguments = [host, "client", configuration.daemonName, "--"] + arguments
         }
+        if let shell = configuration.environment["SHELL"], shellKind(for: shell) == .fish,
+           let integrationRoot = configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] {
+            arguments = ["/usr/bin/env", "/bin/sh", "-c", fishXDGDataDirectoriesScript, "sh", integrationRoot] + arguments
+        }
         return CommandRestore.shellQuotedLine(arguments)
     }
+
+    /// Merged at launch because a surface `XDG_DATA_DIRS` would replace a `ghostty.conf` `env` entry.
+    static let fishXDGDataDirectoriesScript = [
+        "root=$1", "shift", "set -f", "merged=$root", "IFS=:",
+        "for entry in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do"
+            + " if [ -n \"$entry\" ] && [ \"$entry\" != \"$root\" ]; then merged=$merged:$entry; fi; done",
+        "unset IFS", "XDG_DATA_DIRS=$merged", "export XDG_DATA_DIRS", "exec \"$@\"",
+    ].joined(separator: "; ")
 
     private static func creationArguments(_ configuration: Configuration, replaying argv: [String]?,
                                           creationCommand: String?, denylist: Set<String>) -> [String] {
@@ -234,15 +243,6 @@ public enum ZmxSupport {
         case "fish": .fish
         default: nil
         }
-    }
-
-    /// The user list is `Inputs.baseEnvironment["XDG_DATA_DIRS"]`, which the app boundary fills from the
-    /// inherited process, for fish only, when the pane supplied no value. An absent or empty list uses the XDG default;
-    /// empty entries and duplicate integration roots are removed before the root is prepended exactly once.
-    private static func mergedXDGDataDirectories(userValue: String?, integrationRoot: String) -> String {
-        let userList = userValue.flatMap { $0.isEmpty ? nil : $0 } ?? "/usr/local/share:/usr/share"
-        let entries = userList.split(separator: ":", omittingEmptySubsequences: true).map(String.init)
-        return ([integrationRoot] + entries.filter { $0 != integrationRoot }).joined(separator: ":")
     }
 
     public static func socketDirectory(forStateDirectory stateDirectory: String) -> String {
