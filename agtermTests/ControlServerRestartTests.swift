@@ -4,6 +4,8 @@ import agtermCore
 
 @MainActor
 final class ControlServerRestartTests: XCTestCase {
+    // /bin/sh re-execs the selected shell after Process.run returns, racing argv reads.
+    private static let shellExecutable = "/bin/bash"
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settingsModel: SettingsModel!
@@ -168,7 +170,7 @@ final class ControlServerRestartTests: XCTestCase {
     func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
-        let shell = try spawn("/bin/sh", ["-c", "read line"])
+        let shell = try spawn(Self.shellExecutable, ["-c", "read line"])
         defer { shell.terminate() }
         var killed: [String] = []
         let server = makeServer(daemon: daemon, foreground: shell.processIdentifier) { killed.append($0) }
@@ -181,11 +183,11 @@ final class ControlServerRestartTests: XCTestCase {
     }
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenThePanesRootShellRunsItsOwnLine() async throws {
-        let shell = try spawn("/bin/sh", ["-c", "read line"])
+        let shell = try spawn(Self.shellExecutable, ["-c", "read line"])
         defer { shell.terminate() }
 
         try await assertReplayRefused(foreground: shell.processIdentifier, leader: shell.processIdentifier,
-                                      RestartReplay.Refusal.shell("sh"))
+                                      RestartReplay.Refusal.shell(CommandRestore.basename(Self.shellExecutable)))
     }
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheProgramsDirectoryIsGone() async throws {
@@ -198,10 +200,11 @@ final class ControlServerRestartTests: XCTestCase {
     }
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenAShellHoldsThePane() async throws {
-        let shell = try spawn("/bin/sh", ["-s"])
+        let shell = try spawn(Self.shellExecutable, ["-s"])
         defer { shell.terminate() }
 
-        try await assertReplayRefused(foreground: shell.processIdentifier, RestartReplay.Refusal.shell("sh"))
+        try await assertReplayRefused(foreground: shell.processIdentifier,
+                                      RestartReplay.Refusal.shell(CommandRestore.basename(Self.shellExecutable)))
     }
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheForegroundCannotBeRead() async throws {
@@ -220,10 +223,30 @@ final class ControlServerRestartTests: XCTestCase {
 
     func testAReplayIsRefusedBeforeAnythingIsKilledWhenTheLineIsTooLong() async throws {
         let long = String(repeating: "a", count: ControlSessionRestartOptions.maxCommandBytes)
-        let program = try spawn("/bin/sh", ["-c", "read line", long])
+        let program = try spawn(Self.shellExecutable, ["-c", "read line", long])
         defer { program.terminate() }
 
         try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.tooLong)
+    }
+
+    func testASpawnedShellRemainsReadableWhileItWaitsForInput() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        for iteration in 0..<20 {
+            let shell = try spawn(Self.shellExecutable, ["-s"])
+            defer { shell.terminate() }
+            let resolver = ZmxForegroundResolver(
+                leaderProvider: { _ in [daemon: shell.processIdentifier] },
+                leaderProbe: { _ in .foreground(shell.processIdentifier) })
+            resolver.acceptLeaderSnapshot([daemon: shell.processIdentifier])
+            for sample in 0..<40 {
+                let observed = ForegroundProcess.observed(for: view, shellBasename: nil, zmxResolver: resolver)
+                XCTAssertEqual(observed?.foreground, .foregroundShell(CommandRestore.basename(Self.shellExecutable)),
+                               "iteration \(iteration), sample \(sample)")
+                if observed == nil { break }
+                try await Task.sleep(for: .microseconds(50))
+            }
+        }
     }
 
     private func assertReplayRefused(foreground: pid_t?, leader: pid_t = 4242, _ refusal: RestartReplay.Refusal,
