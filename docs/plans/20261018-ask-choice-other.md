@@ -89,18 +89,18 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/AskTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherAskTests.swift`
 
-- [ ] write failing tests for draft transitions: typing non-blank selects, blank unselects and disables,
+- [x] write failing tests for draft transitions: typing non-blank selects, blank unselects and disables,
       leading space stays unselected, radio B -> row -> more typing -> clear restores B, B -> row -> pick C ->
       clear retained text keeps C, then edit row again -> clear restores C, no initial pick falls back to the
       first item, caller radio re-toggle no-op, checkbox toggle while enabled and no-op while blank, unchecked
       non-blank row keeps its text, cursor reaches the row after 50 caller items and clamps on it
-- [ ] write failing tests for answers and `validatedAnswer`: radio id-or-text with `selected: []` for text,
+- [x] write failing tests for answers and `validatedAnswer`: radio id-or-text with `selected: []` for text,
       checkbox ids plus text, raw leading/trailing whitespace returned, unchecked row omits text, Cancel/Esc
       carry neither field, caller id literally `other`, text without a row, blank text, control characters,
       cap; one blankness rule shared by draft and validation
-- [ ] write failing dispatcher tests for `other` parsing and its errors
-- [ ] add `AskChoiceForm.other`, draft state and transitions, answer construction, validation, `ControlArgs.other`
-- [ ] run the touched suites - must pass before Task 2
+- [x] write failing dispatcher tests for `other` parsing and its errors
+- [x] add `AskChoiceForm.other`, draft state and transitions, answer construction, validation, `ControlArgs.other`
+- [x] run the touched suites - must pass before Task 2
 
 ### Task 2: CLI flag
 
@@ -108,9 +108,9 @@
 - Modify: `agtermCore/Sources/agtermctlKit/AskCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/AskCommandsTests.swift`
 
-- [ ] write failing tests for `--other` mapping, the without-`--choice` error, and output with `text`
-- [ ] add `--other PLACEHOLDER` and help text
-- [ ] run the touched suites - must pass before Task 3
+- [x] write failing tests for `--other` mapping, the without-`--choice` error, and output with `text`
+- [x] add `--other PLACEHOLDER` and help text
+- [x] run the touched suites - must pass before Task 3
 
 ### Task 3: Remote gating and frame budget
 
@@ -124,14 +124,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationFramesTests.swift`
 
-- [ ] write failing tests: an `ask.form`-only presenter keeps an `other` ask local, a presenter advertising
+- [x] write failing tests: an `ask.form`-only presenter keeps an `other` ask local, a presenter advertising
       `ask.form` and `ask.other` receives it, remote answers with text are applied and refused per Task 1 rules,
       checkbox frame boundary with all ids plus text, radio id-only and text-only shapes
-- [ ] write failing replica tests (real replica draft -> callback -> origin answer) and codec round trips with
+- [x] write failing replica tests (real replica draft -> callback -> origin answer) and codec round trips with
       `other` present and old choice payloads without it
-- [ ] add the `ask.other` kind, the gate before claiming the remote slot, replica and answer forwarding of
+- [x] add the `ask.other` kind, the gate before claiming the remote slot, replica and answer forwarding of
       `other`/`text`, and the `fitsFrames` shapes
-- [ ] run the touched suites - must pass before Task 4
+- [x] run the touched suites - must pass before Task 4
 
 ### Task 4: Row rendering, focus and keys
 

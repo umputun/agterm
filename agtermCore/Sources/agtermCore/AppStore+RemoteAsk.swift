@@ -17,6 +17,7 @@ extension AppStore {
         if request.needsFormSupport {
             guard hub.presenterSupports(PresentationHub.askFormKind, session: session.id), request.fitsFrames() else { return nil }
         }
+        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session.id) { return nil }
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return false }
         AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
         session.onRemoteAskEnded = { [weak hub, id = session.id] askID in

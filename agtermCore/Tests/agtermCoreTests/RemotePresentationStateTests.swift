@@ -533,6 +533,29 @@ struct RemotePresentationStateTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func anOtherRowReplicaSendsItsTextAndTheOriginAppliesIt(multiple: Bool) throws {
+        let (store, session) = try attached()
+        let buttons = [ControlAskButton(id: "ok", label: "OK"), ControlAskButton(id: "cancel", label: "Cancel")]
+        let list = AskChoiceForm(choices: [ControlAskChoice(id: "a", label: "A"), ControlAskChoice(id: "b", label: "B")],
+                                 multiple: multiple, checked: ["a"], other: "Other")
+        let pending = PendingAsk(id: UUID().uuidString, title: "pick", buttons: buttons, form: .choices(list), cancelID: "cancel")
+        let ask = PresentationAsk(pending, pane: nil, owner: 4)
+        var sent: [PresentationFrame.Body] = []
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
+        #expect(session.askPending?.form == .choices(list))
+
+        session.updateAskDraft(id: ask.id) { $0.text = " mine " }
+        session.answerAsk(id: ask.id, buttonAt: 0)
+
+        let answer = PresentationAskAnswer(id: ask.id, owner: 4, button: "ok", text: " mine ", selected: multiple ? ["a"] : [])
+        #expect(sent == [.askResolve(answer)])
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .askResolve(answer)))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .askResolve(answer))
+        #expect(pending.validatedAnswer(buttonID: "ok", text: answer.text, selected: answer.selected)
+            == ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, text: " mine ", selected: answer.selected))
+    }
+
     @Test func aDismissalWithEscSendsNoButton() throws {
         let (store, session) = try attached()
         let ask = handedOver()

@@ -44,10 +44,13 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind]
+    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind, askOtherKind]
     /// askFormKind is the capability of drawing an ask's text field, choice list and cancel role. It names no
     /// frame body: an ask needing it travels as an ordinary `ask.request`, sent only to a presenter listing it.
     public static let askFormKind = "ask.form"
+    /// askOtherKind is the capability of drawing a choice list's free-form row; a presenter with only
+    /// `ask.form` would drop the row, so such an ask needs both.
+    public static let askOtherKind = "ask.other"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date

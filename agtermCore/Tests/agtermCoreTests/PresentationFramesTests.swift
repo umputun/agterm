@@ -54,7 +54,20 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))),
         PresentationFrame(gen: 1, rev: 31, body: .sound(PresentationSound(name: "Glass"))),
         PresentationFrame(gen: 1, rev: 32, body: .sound(PresentationSound(name: nil))),
+        PresentationFrame(gen: 1, rev: 33, body: .askRequest(PresentationAsk(
+            PendingAsk(id: "a2", title: "pick", buttons: [ControlAskButton(id: "ok", label: "OK")],
+                       form: .choices(AskChoiceForm(choices: [ControlAskChoice(id: "a", label: "A")], multiple: true, other: "Other"))),
+            pane: nil, owner: 3))),
+        PresentationFrame(gen: 1, rev: 34, body: .askResolve(PresentationAskAnswer(id: "a2", owner: 3, button: "ok", text: " mine ",
+                                                                                   selected: ["a"]))),
     ]
+
+    @Test func aChoiceRequestFromAnOriginWithoutTheOtherRowDecodesWithNone() throws {
+        let choices = try JSONDecoder().decode(AskChoiceForm.self, from: Data(#"{"choices":[{"id":"a","label":"A"}],"multiple":false,"checked":[]}"#.utf8))
+
+        #expect(choices == AskChoiceForm(choices: [ControlAskChoice(id: "a", label: "A")]))
+        #expect(choices.other == nil)
+    }
 
     @Test(arguments: frames)
     func everyFrameSurvivesARoundTrip(_ frame: PresentationFrame) throws {

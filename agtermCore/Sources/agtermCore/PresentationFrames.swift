@@ -162,15 +162,24 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
     /// Whether the presenter must understand `ask.form` to show this ask as the origin means it.
     public var needsFormSupport: Bool { input != nil || choices != nil || cancelID != nil }
 
+    /// Whether the presenter must also understand `ask.other` to show the choice list's free-form row.
+    public var needsOtherSupport: Bool { choices?.other != nil }
+
     /// Whether the request, and the largest answer it can produce, each fit one stream frame, measured through
     /// the codec with the widest counters. A text answer is tried with every button and the text cap at twice
-    /// its bytes, the worst escaping the allowed characters reach; a selection names only ids the request
-    /// already carried.
+    /// its bytes, the worst escaping the allowed characters reach; a selection alone names only ids the request
+    /// already carried, but a checkbox list's free-form text rides beside every id.
     public func fitsFrames() -> Bool {
         guard Self.fits(.askRequest(self)) else { return false }
-        guard input != nil else { return true }
         let text = String(repeating: "\"", count: AskInputForm.maxTextBytes)
-        return buttons.allSatisfy { Self.fits(.askResolve(PresentationAskAnswer(id: id, owner: owner, button: $0.id, text: text))) }
+        if input != nil {
+            return buttons.allSatisfy { Self.fits(.askResolve(PresentationAskAnswer(id: id, owner: owner, button: $0.id, text: text))) }
+        }
+        guard let choices, choices.other != nil else { return true }
+        let selected = choices.multiple ? choices.choices.map(\.id) : []
+        return buttons.allSatisfy {
+            Self.fits(.askResolve(PresentationAskAnswer(id: id, owner: owner, button: $0.id, text: text, selected: selected)))
+        }
     }
 
     private static func fits(_ body: PresentationFrame.Body) -> Bool {
