@@ -332,6 +332,15 @@ struct AskTests {
         #expect(clamped.allSatisfy { $0 == "é" })
     }
 
+    @Test(arguments: [
+        ("plain é \"q\"", ControlAskInputMode.line, false), ("a\nb\tc", .multiline, false),
+        ("a\nb", .line, true), ("a\tb", .line, true), ("a\u{1}b", .multiline, true),
+        ("a\rb", .multiline, true), ("a\u{7f}", .multiline, true), ("a\u{1b}[31m", .line, true),
+    ])
+    func controlCharactersAreForbiddenExceptNewlineAndTabInMultiline(text: String, mode: ControlAskInputMode, forbidden: Bool) {
+        #expect(AskInputForm.hasForbiddenControls(text, mode: mode) == forbidden)
+    }
+
     @Test(arguments: ControlAskStyle.allCases)
     func slotOwnersKeepTheDraftUntilResolutionAndIgnoreStaleIDs(style: ControlAskStyle) {
         let session = Session(initialCwd: "/tmp")

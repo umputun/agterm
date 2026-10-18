@@ -170,10 +170,10 @@ struct AskTextEditor: NSViewRepresentable {
             onText(textView.string)
         }
 
-        /// Refuses an edit, composition included, that would pass the text cap, so the view never holds more
-        /// than the draft keeps and nothing already typed is truncated later.
+        /// Refuses an edit, composition included, that would pass the text cap or bring in a forbidden control,
+        /// so the view never holds more than the draft keeps and nothing already typed is truncated later.
         func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
-            askEditFits(textView, range: range, replacement: text)
+            askEditAllowed(textView, range: range, replacement: text, mode: mode)
         }
 
         func control(_: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -201,9 +201,11 @@ struct AskTextEditor: NSViewRepresentable {
 }
 
 /// Whether replacing `range` (UTF-16, as AppKit gives it) with `replacement` keeps the editor within the text
-/// cap; marked text counts, so a composition can never push the field past what the draft keeps.
-func askEditFits(_ textView: NSTextView, range: NSRange, replacement: String?) -> Bool {
+/// cap and free of controls the mode forbids; marked text counts, so a composition can never push the field past
+/// what the draft keeps. A paste carrying a forbidden control is refused whole.
+func askEditAllowed(_ textView: NSTextView, range: NSRange, replacement: String?, mode: ControlAskInputMode) -> Bool {
     guard let replacement else { return true }
+    guard !AskInputForm.hasForbiddenControls(replacement, mode: mode) else { return false }
     let replaced = (textView.string as NSString).substring(with: range).utf8.count
     return textView.string.utf8.count - replaced + replacement.utf8.count <= AskInputForm.maxTextBytes
 }
@@ -212,7 +214,7 @@ func askEditFits(_ textView: NSTextView, range: NSRange, replacement: String?) -
 /// AppKit asks before every change.
 final class AskFieldEditor: NSTextView {
     override func shouldChangeText(in range: NSRange, replacementString text: String?) -> Bool {
-        askEditFits(self, range: range, replacement: text) && super.shouldChangeText(in: range, replacementString: text)
+        askEditAllowed(self, range: range, replacement: text, mode: .line) && super.shouldChangeText(in: range, replacementString: text)
     }
 }
 

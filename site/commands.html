@@ -2768,7 +2768,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelButton</span>) names the button that ends the question
                 like Esc, returning nothing; the generated Cancel has that role. In the field Tab moves the button highlight, Return answers a
                 one-line field, Command-Return a multiline one, and nothing answers while an input method is composing; button hotkeys are refused
-                with a field. In a list Up/Down move the cursor and Space toggles. Text is held to 64 KiB. A multiline field
+                with a field. In a list Up/Down move the cursor and Space toggles. Text is held to 64 KiB, and a paste carrying a control
+                character, other than newline and tab in a multiline field, is refused whole. A multiline field
                 grows with its text, wrapped lines included, from five to fifteen lines; a field or list taller than the pane
                 scrolls between the title and the buttons, which stay in place. Wire arguments:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">input</span>,

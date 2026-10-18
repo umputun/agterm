@@ -33,6 +33,15 @@ public struct AskInputForm: Codable, Equatable, Sendable {
         self.placeholder = placeholder
     }
 
+    /// hasForbiddenControls reports a C0 control or DEL in `text`, newline and tab excepted in a multiline field.
+    /// Remote handover sizes answers on this rule: some refused controls escape to six JSON bytes.
+    public static func hasForbiddenControls(_ text: String, mode: ControlAskInputMode) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            guard scalar.value < 0x20 || scalar.value == 0x7f else { return false }
+            return mode == .line || (scalar != "\n" && scalar != "\t")
+        }
+    }
+
     /// clamped cuts `text` at a character boundary so it fits `maxTextBytes`.
     public static func clamped(_ text: String) -> String {
         guard text.utf8.count > maxTextBytes else { return text }
@@ -193,7 +202,7 @@ public struct PendingAsk: Equatable, Sendable {
 
     /// validatedAnswer checks an answer that arrived from elsewhere against this ask: a known button, the cancel
     /// role applied here, and a payload matching the form (text within the cap, or known ids in caller order,
-    /// exactly one for radio). Nil refuses the answer.
+    /// exactly one for radio). Text also follows the field's control-character rule. Nil refuses the answer.
     public func validatedAnswer(buttonID: String, text: String?, selected: [String]?) -> ControlAskResult? {
         guard let index = buttons.firstIndex(where: { $0.id == buttonID }) else { return nil }
         if buttonID == cancelID {
@@ -201,8 +210,9 @@ public struct PendingAsk: Equatable, Sendable {
         }
         let label = buttons[index].label
         switch form {
-        case .input:
-            guard let text, selected == nil, text.utf8.count <= AskInputForm.maxTextBytes else { return nil }
+        case .input(let input):
+            guard let text, selected == nil, text.utf8.count <= AskInputForm.maxTextBytes,
+                  !AskInputForm.hasForbiddenControls(text, mode: input.mode) else { return nil }
             return ControlAskResult(result: .answered, id: buttonID, label: label, index: index, text: text)
         case .choices(let list):
             guard let selected, text == nil else { return nil }

@@ -505,6 +505,26 @@ final class AskDialogViewTests: XCTestCase {
         }
     }
 
+    func testAPasteWithAForbiddenControlIsRefusedWhole() throws {
+        let cases: [(ControlAskInputMode, String, String)] = [
+            (.line, "a\u{1}b", "kept"), (.line, "a\tb", "kept"), (.line, "a\nb", "kept"),
+            (.multiline, "a\u{1}b", "kept"), (.multiline, "a\r\nb", "kept"), (.multiline, "a\u{7f}", "kept"),
+            (.multiline, "a\tb\nc", "kepta\tb\nc"),
+        ]
+        for (mode, paste, expected) in cases {
+            let fixture = try SessionAskTestFixture()
+            defer { fixture.close() }
+            try fixture.open(form: .input(AskInputForm(mode: mode, value: "kept")))
+            fixture.mount()
+            let editor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
+            let end = NSRange(location: (editor.string as NSString).length, length: 0)
+            editor.setSelectedRange(end)
+            editor.insertText(paste, replacementRange: end)
+            XCTAssertEqual(editor.string, expected, "\(mode) \(paste.debugDescription)")
+            XCTAssertEqual(fixture.session.askDraft?.text, expected, "\(mode) \(paste.debugDescription)")
+        }
+    }
+
     func testACompositionThatWouldPassTheCapIsRefusedAndOneThatFitsCommits() throws {
         for mode in ControlAskInputMode.allCases {
             let fixture = try SessionAskTestFixture()

@@ -934,8 +934,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Input asks reject hotkeys. The field takes focus at open; Tab/Shift-Tab move the button highlight, one-line
   Return and multiline Command-Return answer; no key answers or dismisses while the editor composes, though
   `ask.cancel` and owner teardown still resolve. Lists use Up/Down for the item cursor, Space to toggle,
-  Tab/Left/Right for buttons. `value` and edits are held to 64 KiB UTF-8 before the change happens, so a refused
-  edit loses nothing. A multiline field sizes to its laid-out text, wraps included, from five to fifteen lines;
+  Tab/Left/Right for buttons. `value`, edits and remote answers are held to 64 KiB UTF-8 and to
+  `AskInputForm.hasForbiddenControls` before the change happens, so a refused edit or paste loses nothing; that
+  rule is what keeps `fitsFrames`' twice-escaped answer reservation sound. A multiline field sizes to its laid-out text, wraps included, from five to fifteen lines;
   a list or field too tall for the pane scrolls between the pinned title and buttons, and when even those do not
   fit, the whole panel scrolls. Drafts live on the slot owner, survive hiding and layout changes, and are not
   tree state; a remote handback restarts from the initial values.

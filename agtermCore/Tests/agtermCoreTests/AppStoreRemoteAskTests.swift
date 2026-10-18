@@ -258,8 +258,8 @@ struct AppStoreRemoteAskTests {
     }
 
     @Test(arguments: [
-        (RemoteFormAnswer(.input(AskInputForm(mode: .multiline)), "yes", "a \"q\"\nb", nil),
-         ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0, text: "a \"q\"\nb")),
+        (RemoteFormAnswer(.input(AskInputForm(mode: .multiline)), "yes", "a \"q\"\nb\tc", nil),
+         ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0, text: "a \"q\"\nb\tc")),
         (RemoteFormAnswer(.choices(remoteCheckboxes), "yes", nil, ["a", "b"]),
          ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0, selected: ["a", "b"])),
         (RemoteFormAnswer(.choices(remoteCheckboxes), "yes", nil, []),
@@ -279,6 +279,9 @@ struct AppStoreRemoteAskTests {
         RemoteFormAnswer(.input(AskInputForm(mode: .line)), "yes", nil, ["a"]),
         RemoteFormAnswer(.input(AskInputForm(mode: .line)), "yes", nil, nil),
         RemoteFormAnswer(.input(AskInputForm(mode: .line)), "yes", String(repeating: "x", count: AskInputForm.maxTextBytes + 1), nil),
+        RemoteFormAnswer(.input(AskInputForm(mode: .line)), "yes", "a\u{1}b", nil),
+        RemoteFormAnswer(.input(AskInputForm(mode: .line)), "yes", "a\tb", nil),
+        RemoteFormAnswer(.input(AskInputForm(mode: .multiline)), "yes", "a\u{7f}\nb", nil),
         RemoteFormAnswer(.input(AskInputForm(mode: .line)), "no", "typed", nil),
         RemoteFormAnswer(.input(AskInputForm(mode: .line)), nil, "typed", nil),
         RemoteFormAnswer(.choices(remoteRadio), "yes", nil, ["c"]),

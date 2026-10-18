@@ -156,8 +156,7 @@ extension ControlDispatcher {
         guard value.utf8.count <= AskInputForm.maxTextBytes else {
             return .reject("ask text too long (max \(AskInputForm.maxTextBytes) bytes)")
         }
-        let allowed: Set<Unicode.Scalar> = mode == .multiline ? ["\n", "\t"] : []
-        guard !containsControlCharacters(placeholder ?? ""), !containsControlCharacters(value, allowing: allowed) else {
+        guard !containsControlCharacters(placeholder ?? ""), !AskInputForm.hasForbiddenControls(value, mode: mode) else {
             return .reject("ask text must not contain control characters")
         }
         return .form(.input(AskInputForm(mode: mode, value: value, placeholder: placeholder)))
