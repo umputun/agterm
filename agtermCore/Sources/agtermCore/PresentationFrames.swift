@@ -162,19 +162,19 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
     /// Whether the presenter must understand `ask.form` to show this ask as the origin means it.
     public var needsFormSupport: Bool { input != nil || choices != nil || cancelID != nil }
 
-    /// Whether the request, and the largest answer it can produce, each fit one stream frame. A text answer
-    /// reserves its longest JSON-encoded button id and the text cap at twice its bytes, the worst escaping
-    /// the allowed characters reach; a selection names only ids the request already carried.
+    /// Whether the request, and the largest answer it can produce, each fit one stream frame, measured through
+    /// the codec with the widest counters. A text answer is tried with every button and the text cap at twice
+    /// its bytes, the worst escaping the allowed characters reach; a selection names only ids the request
+    /// already carried.
     public func fitsFrames() -> Bool {
-        guard (try? PresentationCodec.encode(PresentationFrame(gen: 0, rev: 0, body: .askRequest(self)))) != nil else { return false }
+        guard Self.fits(.askRequest(self)) else { return false }
         guard input != nil else { return true }
-        let encoder = JSONEncoder()
-        let longest = buttons.max { lhs, rhs in
-            ((try? encoder.encode(lhs.id))?.count ?? 0) < ((try? encoder.encode(rhs.id))?.count ?? 0)
-        }
-        let worst = PresentationAskAnswer(id: id, owner: owner, button: longest?.id,
-                                          text: String(repeating: "\"", count: AskInputForm.maxTextBytes))
-        return (try? PresentationCodec.encode(PresentationFrame(gen: 0, rev: 0, body: .askResolve(worst)))) != nil
+        let text = String(repeating: "\"", count: AskInputForm.maxTextBytes)
+        return buttons.allSatisfy { Self.fits(.askResolve(PresentationAskAnswer(id: id, owner: owner, button: $0.id, text: text))) }
+    }
+
+    private static func fits(_ body: PresentationFrame.Body) -> Bool {
+        (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: body))) != nil
     }
 }
 

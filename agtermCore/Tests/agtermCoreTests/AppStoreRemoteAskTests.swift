@@ -236,6 +236,27 @@ struct AppStoreRemoteAskTests {
         #expect(store.presentAskRemotely(input, in: session, paneIdentity: nil, window: Self.window) == nil)
     }
 
+    @Test func slashesInAButtonIDCountAsTheCodecWritesThem() {
+        let slashes = ControlAskButton(id: String(repeating: "/", count: 90 * 1024), label: "Slashes")
+        let letters = ControlAskButton(id: String(repeating: "b", count: 150 * 1024), label: "Letters")
+        let ask = PendingAsk(id: "a", title: "t", buttons: [slashes, letters], form: .input(AskInputForm(mode: .line)))
+
+        #expect(PresentationAsk(ask, pane: nil, owner: 1).fitsFrames() == false)
+    }
+
+    @Test func anAnswerThatFitsOnlyWithShortCountersIsRefused() throws {
+        let probe = PresentationAskAnswer(id: "a", owner: 1, button: "", text: String(repeating: "\"", count: AskInputForm.maxTextBytes))
+        let base = try PresentationCodec.encode(PresentationFrame(gen: 0, rev: 0, body: .askResolve(probe))).count
+        let slack = PresentationCodec.maxFrameBytes - base - 1
+        let id = String(repeating: "b", count: slack - 5)
+        let ask = PendingAsk(id: "a", title: "t", buttons: [ControlAskButton(id: id, label: "B")],
+                             form: .input(AskInputForm(mode: .line)))
+        let answer = PresentationAskAnswer(id: "a", owner: 1, button: id, text: String(repeating: "\"", count: AskInputForm.maxTextBytes))
+
+        #expect((try? PresentationCodec.encode(PresentationFrame(gen: 0, rev: 0, body: .askResolve(answer)))) != nil)
+        #expect(PresentationAsk(ask, pane: nil, owner: 1).fitsFrames() == false)
+    }
+
     @Test(arguments: [
         (AskForm.input(AskInputForm(mode: .multiline)), "yes", "a \"q\"\nb", nil,
          ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0, text: "a \"q\"\nb")),
