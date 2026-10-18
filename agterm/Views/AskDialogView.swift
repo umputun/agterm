@@ -244,7 +244,7 @@ struct AskDialogView: View {
                 .onChange(of: currentDraft.cursor) { _, cursor in scrollToChoice(cursor, reader: reader) }
             }
             AskKeyCatcher(focusAllowed: focusAllowed, focusRevision: focusRevision, sessionInput: sessionInput,
-                          editorBox: editorBox, onKey: handle)
+                          editorBox: editorBox, editorActive: editorActive, onKey: handle)
                 .frame(width: sessionInput == nil ? 0 : anchorFrame.width, height: sessionInput == nil ? 0 : anchorFrame.height)
                 .allowsHitTesting(false)
         }
@@ -295,21 +295,21 @@ struct AskDialogView: View {
         case .input(let input):
             editor(input)
         case .choices(let list):
+            let otherField = list.other.map { placeholder in
+                AnyView(editor(AskInputForm(mode: .line, placeholder: placeholder), listRows: list.choices.count + 1))
+            }
             let choices = AskChoiceList(form: list, draft: currentDraft, style: ask.style, font: font, foreground: foreground,
-                                        background: background, cell: cell) { index in
+                                        background: background, cell: cell, otherField: otherField) { index in
                 updateDraft { $0.toggle(at: index) }
             }
             if fill {
-                // initial scrollTo is too early in this layout; scrollPosition uses the ForEach ids.
-                // later moves stay on scrollTo for minimal scrolling.
+                // initial scrollTo is too early in this layout; scrollPosition matches the ForEach ids, which
+                // AskChoiceList tags like the scrollTo ids. later moves stay on scrollTo for minimal scrolling.
                 ScrollViewReader { reader in
                     ScrollView { choices }
                         .scrollPosition(id: $openingRow)
                         .frame(minHeight: lineHeight * 3, idealHeight: lineHeight * 3, maxHeight: .infinity)
-                        .onAppear {
-                            guard list.choices.indices.contains(currentDraft.cursor) else { return }
-                            openingRow = list.choices[currentDraft.cursor].id
-                        }
+                        .onAppear { openingRow = rowID(atCursor: currentDraft.cursor) }
                         .onChange(of: currentDraft.cursor) { _, cursor in scrollToChoice(cursor, reader: reader) }
                 }
             } else {
@@ -320,7 +320,9 @@ struct AskDialogView: View {
         }
     }
 
-    private func editor(_ input: AskInputForm) -> some View {
+    /// The form's text editor. `listRows` makes it a choice list's free-form row: Up/Down go to the list and
+    /// focusing it moves the list cursor onto the row, the last of `listRows`.
+    private func editor(_ input: AskInputForm, listRows: Int? = nil) -> some View {
         let text = currentDraft.text
         let padding = ask.style == .gui ? 0 : cell * 0.5
         let lineFieldHeight = input.mode == .line ? lineHeight + (ask.style == .gui ? 8 : 4) : nil
@@ -328,7 +330,9 @@ struct AskDialogView: View {
         return AskTextEditor(mode: input.mode, text: text, placeholder: input.mode == .line ? input.placeholder : nil,
                              placeholderColor: NSColor(placeholderColor), style: ask.style, font: editorFont,
                              foreground: ask.style == .gui ? .textColor : NSColor(foreground), box: editorBox,
-                             onText: { new in updateDraft { $0.text = new } }, onKey: handle)
+                             onText: { new in updateDraft { $0.text = new } }, onKey: handle,
+                             routesVertical: listRows != nil,
+                             onFocus: listRows.map { rows in { updateDraft { $0.moveCursor(by: rows) } } })
             .frame(height: lineFieldHeight)
             .overlay(alignment: .topLeading) {
                 if input.mode == .multiline, text.isEmpty, let placeholder = input.placeholder, !placeholder.isEmpty {
@@ -347,8 +351,22 @@ struct AskDialogView: View {
     }
 
     private func scrollToChoice(_ cursor: Int, reader: ScrollViewProxy) {
-        guard case .choices(let list) = ask.form, list.choices.indices.contains(cursor) else { return }
-        reader.scrollTo(AskChoiceList.rowID(list.choices[cursor].id))
+        guard let id = rowID(atCursor: cursor) else { return }
+        reader.scrollTo(id)
+    }
+
+    /// The tagged identity of the list row at `cursor`, the free-form row included.
+    private func rowID(atCursor cursor: Int) -> String? {
+        guard case .choices(let list) = ask.form else { return nil }
+        if list.other != nil, cursor == list.choices.count { return AskChoiceList.otherRowID }
+        return list.choices.indices.contains(cursor) ? AskChoiceList.rowID(list.choices[cursor].id) : nil
+    }
+
+    /// Whether the form's editor, rather than the key catcher, should hold the keyboard: an input field always,
+    /// a choice list's free-form row only while the cursor is on it.
+    private var editorActive: Bool {
+        guard case .choices = ask.form else { return true }
+        return currentDraft.cursorOnOther
     }
 
     private func content(fill: Bool) -> some View {
@@ -539,6 +557,7 @@ struct AskKeyCatcher: NSViewRepresentable {
     let focusRevision: Int
     var sessionInput: SessionAskInput?
     var editorBox: AskEditorBox?
+    var editorActive = true
     let onKey: (AskKey) -> Void
 
     func makeNSView(context _: Context) -> KeyCatcherView {
@@ -546,6 +565,7 @@ struct AskKeyCatcher: NSViewRepresentable {
         view.focusAllowed = focusAllowed
         view.sessionInput = sessionInput
         view.editorBox = editorBox
+        view.editorActive = editorActive
         view.onKey = onKey
         return view
     }
@@ -555,6 +575,7 @@ struct AskKeyCatcher: NSViewRepresentable {
         nsView.sessionInput = sessionInput
         nsView.editorBox = editorBox
         nsView.onKey = onKey
+        nsView.editorActive = editorActive
         nsView.updateFocus(revision: focusRevision)
     }
 
@@ -595,6 +616,11 @@ struct AskKeyCatcher: NSViewRepresentable {
                     grabFocus()
                 }
             }
+        }
+        /// Whether the editor should hold the keyboard; a choice list's free-form row wants it only while the
+        /// cursor is on the row, so a crossing hands focus between the editor and the catcher.
+        var editorActive = true {
+            didSet { if editorActive != oldValue { grabFocus() } }
         }
         var onKey: ((AskKey) -> Void)?
         private var previouslyAllowed = false
@@ -662,8 +688,10 @@ struct AskKeyCatcher: NSViewRepresentable {
 
         func grabFocus() {
             guard canFocus, let window else { return }
-            let target = editorBox?.focusTarget ?? self
-            guard !holds(window.firstResponder) || (target !== self && window.firstResponder === self) else { return }
+            let target = editorActive ? (editorBox?.focusTarget ?? self) : self
+            let responder = window.firstResponder
+            let onTarget = target === self ? responder === self : editorBox?.owns(responder) == true
+            guard !onTarget else { return }
             window.makeFirstResponder(target)
         }
 

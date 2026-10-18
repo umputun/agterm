@@ -56,6 +56,11 @@ struct AskTextEditor: NSViewRepresentable {
     let box: AskEditorBox
     let onText: (String) -> Void
     let onKey: (AskKey) -> Void
+    /// routesVertical sends Up/Down to the dialog, for the free-form row of a choice list; a standalone field
+    /// keeps them as caret movement.
+    var routesVertical = false
+    /// onFocus runs when the one-line field takes first responder, so a click into it can move the list cursor.
+    var onFocus: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -97,6 +102,7 @@ struct AskTextEditor: NSViewRepresentable {
                     string: placeholder, attributes: [.font: font, .foregroundColor: placeholderColor])
             }
             field.delegate = context.coordinator
+            field.onFocus = { [weak coordinator = context.coordinator] in coordinator?.onFocus?() }
             field.setAccessibilityIdentifier("ask-input")
             view = field
         case .multiline:
@@ -146,14 +152,18 @@ struct AskTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextFieldDelegate, NSTextViewDelegate {
         private(set) var onText: (String) -> Void = { _ in }
         private(set) var onKey: (AskKey) -> Void = { _ in }
+        private(set) var onFocus: (() -> Void)?
         private var mode: ControlAskInputMode = .line
         private var foreground: NSColor = .textColor
+        private var routesVertical = false
 
         func update(_ editor: AskTextEditor) {
             onText = editor.onText
             onKey = editor.onKey
+            onFocus = editor.onFocus
             mode = editor.mode
             foreground = editor.foreground
+            routesVertical = editor.routesVertical
         }
 
         func controlTextDidBeginEditing(_ note: Notification) {
@@ -193,6 +203,8 @@ struct AskTextEditor: NSViewRepresentable {
             case #selector(NSResponder.insertBacktab(_:)): onKey(.backward)
             case #selector(NSResponder.cancelOperation(_:)): onKey(.cancel)
             case #selector(NSResponder.insertNewline(_:)) where mode == .line: onKey(.activate)
+            case #selector(NSResponder.moveUp(_:)) where routesVertical: onKey(.up)
+            case #selector(NSResponder.moveDown(_:)) where routesVertical: onKey(.down)
             default: return false
             }
             return true
@@ -233,6 +245,7 @@ final class AskTextFieldCell: NSTextFieldCell {
 /// measuring pass of `ViewThatFits` builds copies that are never shown.
 final class AskTextField: NSTextField {
     private let box: AskEditorBox
+    var onFocus: (() -> Void)?
 
     override static var cellClass: AnyClass? {
         get { AskTextFieldCell.self }
@@ -256,6 +269,7 @@ final class AskTextField: NSTextField {
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
         if became, let textColor { (currentEditor() as? NSTextView)?.insertionPointColor = textColor }
+        if became { onFocus?() }
         return became
     }
 }
@@ -302,20 +316,62 @@ struct AskChoiceList: View {
     let foreground: Color
     let background: Color
     let cell: CGFloat
+    /// otherField is the free-form row's one-line editor, present when the form has the row.
+    var otherField: AnyView?
     let onToggle: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: cell * 0.6) {
-            ForEach(Array(form.choices.enumerated()), id: \.element.id) { index, choice in
-                row(choice, index: index)
-                    .id(Self.rowID(choice.id))
+            ForEach(rows) { row in
+                self.row(row.choice, index: row.index)
+                    .id(row.id)
+            }
+            if let otherField {
+                otherRow(otherField)
+                    .id(Self.otherRowID)
             }
         }
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// rowID tags a caller item's id; `scrollPosition` matches the ForEach identity and `scrollTo` the
+    /// explicit id, so both use it, and the free-form row's `otherRowID` lacks the prefix every caller row has.
     static func rowID(_ id: String) -> String { "ask-choice-\(id)" }
+    static let otherRowID = "ask-other"
+
+    private struct Row: Identifiable {
+        let index: Int
+        let choice: ControlAskChoice
+        var id: String { AskChoiceList.rowID(choice.id) }
+    }
+
+    private var rows: [Row] { form.choices.enumerated().map { Row(index: $0.offset, choice: $0.element) } }
+
+    /// The free-form row: its marker toggles like any item once the text is non-blank and is dimmed until
+    /// then; the field edits without toggling.
+    private func otherRow(_ field: AnyView) -> some View {
+        let index = form.choices.count
+        let current = draft.cursor == index
+        return HStack(alignment: .center, spacing: cell) {
+            marker(checked: draft.otherSelected, current: current)
+                .padding(.horizontal, cell * 0.5)
+                .padding(.vertical, cell * 0.15)
+                .foregroundStyle(style == .terminal && current ? background : (style == .gui ? Color.primary : foreground))
+                .background {
+                    if current {
+                        if style == .terminal { foreground } else { RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.25)) }
+                    }
+                }
+                .opacity(draft.otherEnabled ? 1 : 0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { onToggle(index) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityValue(draft.otherSelected ? "checked" : "")
+                .accessibilityIdentifier(Self.otherRowID)
+            field
+        }
+    }
 
     private func row(_ choice: ControlAskChoice, index: Int) -> some View {
         let checked = draft.checked.contains(choice.id)
