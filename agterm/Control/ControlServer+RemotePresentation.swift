@@ -116,10 +116,11 @@ extension ControlServer {
         guard library.store(forSession: id)?.session(withID: id) != nil,
               let name = sound.name ?? settingsModel.settings.blockedStatusSoundName, !name.isEmpty else { return }
         let player = statusSoundPlayer
+        // the origin stays silent, so an unavailable sound falls back to the system alert
         Task {
-            if await !player.play(name) {
-                remoteLogger.notice("status sound \(name, privacy: .public) from \(id, privacy: .public)'s origin is unknown here")
-            }
+            guard await !player.play(name) else { return }
+            remoteLogger.notice("status sound \(name, privacy: .public) from \(id, privacy: .public)'s origin is unknown here, playing the alert")
+            await player.play("default")
         }
     }
 

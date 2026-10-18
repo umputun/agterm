@@ -1626,7 +1626,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A `session.status` sound follows the same gate on the status pane, scratch staying local: the origin sends
   a one-shot `sound` frame to the presenter and does not play it. A nil name is the blocked-default marker,
   sent on a transition into `blocked` even when the origin's own blocked sound is off, and the presenter
-  plays its own setting. The kind is negotiated: `sendToPresenter` refuses a `supportedKinds` kind the
+  plays its own setting. A name the presenter cannot resolve plays its system alert, since the origin has
+  already stayed silent. The kind is negotiated: `sendToPresenter` refuses a `supportedKinds` kind the
   presenter's hello omitted, so an older presenter leaves the sound on the origin. It is never part of a
   snapshot, and the destination is the presenter, not necessarily the Mac holding the pane's lead.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws

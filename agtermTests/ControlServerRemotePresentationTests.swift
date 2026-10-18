@@ -287,26 +287,52 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     }
 
     func testAHandedOverSoundPlaysHere() async throws {
-        let (player, resolved, played) = try soundPlayer()
-        let (_, transport) = try connected(player: player)
+        let probe = try soundProbe()
+        let (_, transport) = try connected(player: probe.player)
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
 
         try transport.feed(.sound(PresentationSound(name: "Glass")), rev: 2)
 
-        await fulfillment(of: [played.log.playCalled], timeout: 2)
-        XCTAssertEqual(resolved.names, ["Glass"])
+        await fulfillment(of: [probe.played.log.playCalled], timeout: 2)
+        XCTAssertEqual(probe.resolved.names, ["Glass"])
     }
 
     func testTheBlockedMarkerPlaysThisMacsOwnBlockedSound() async throws {
-        let (player, resolved, played) = try soundPlayer()
-        let (fix, transport) = try connected(player: player)
+        let probe = try soundProbe()
+        let (fix, transport) = try connected(player: probe.player)
         fix.server.settingsModel.setBlockedStatusSoundName("Frog")
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
 
         try transport.feed(.sound(PresentationSound(name: nil)), rev: 2)
 
-        await fulfillment(of: [played.log.playCalled], timeout: 2)
-        XCTAssertEqual(resolved.names, ["Frog"])
+        await fulfillment(of: [probe.played.log.playCalled], timeout: 2)
+        XCTAssertEqual(probe.resolved.names, ["Frog"])
+    }
+
+    func testASoundThisMacLacksPlaysTheSystemAlert() async throws {
+        for (name, blocked) in [("MyChime", nil), (nil, "Gone")] as [(String?, String?)] {
+            let probe = try soundProbe(known: false)
+            let (fix, transport) = try connected(player: probe.player)
+            fix.server.settingsModel.setBlockedStatusSoundName(blocked)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+            try transport.feed(.sound(PresentationSound(name: name)), rev: 2)
+
+            await fulfillment(of: [probe.alerted], timeout: 2)
+            XCTAssertEqual(probe.resolved.names, [name ?? blocked ?? ""])
+        }
+    }
+
+    func testTheBlockedMarkerWithNoBlockedSoundHereStaysSilent() async throws {
+        let probe = try soundProbe()
+        probe.alerted.isInverted = true
+        let (_, transport) = try connected(player: probe.player)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+        try transport.feed(.sound(PresentationSound(name: nil)), rev: 2)
+
+        await fulfillment(of: [probe.alerted], timeout: 0.5)
+        XCTAssertTrue(probe.resolved.names.isEmpty)
     }
 
     private final class ResolvedNames: @unchecked Sendable {
@@ -316,14 +342,22 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         func add(_ name: String) { lock.withLock { recorded.append(name) } }
     }
 
-    private func soundPlayer() throws -> (StatusSoundPlayer, ResolvedNames, RecordingSound) {
+    private struct SoundProbe {
+        let player: StatusSoundPlayer
+        let resolved: ResolvedNames
+        let played: RecordingSound
+        let alerted: XCTestExpectation
+    }
+
+    private func soundProbe(known: Bool = true) throws -> SoundProbe {
         let sound = try XCTUnwrap(RecordingSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true))
         let resolved = ResolvedNames()
+        let alerted = XCTestExpectation(description: "system alert played")
         let player = StatusSoundPlayer(resolve: { name in
             resolved.add(name)
-            return sound
-        })
-        return (player, resolved, sound)
+            return known ? sound : nil
+        }, alert: { alerted.fulfill() })
+        return SoundProbe(player: player, resolved: resolved, played: sound, alerted: alerted)
     }
 
     func testAHandedOverAskIsShownOnTheRowAndItsAnswerGoesBack() throws {

@@ -654,7 +654,8 @@ error keeps those names for compatibility.
   Without `--sound`, a `blocked` status plays the user's Settings "Blocked sound" if they configured one
   (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it. On a session
   another Mac presents, either sound plays there instead while the origin reports the status pane as a
-  follower and the presenting agterm supports it; otherwise it plays here (see Remote sessions).
+  follower and the presenting agterm supports it; otherwise it plays here (see Remote sessions). A custom
+  name the presenting Mac lacks plays its system alert.
   `--color` (`#rrggbb`) overrides the glyph tint for THIS call only — it rides the status, so the next
   `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
   Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
