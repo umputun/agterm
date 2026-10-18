@@ -363,7 +363,7 @@ public final class Session: Identifiable {
     /// The session's pending terminal ask, independent of the HUD/program overlay slot.
     public private(set) var askPending: PendingAsk?
     /// The pending ask's unsubmitted text or selection, kept while its dialog is hidden.
-    public private(set) var askDraft: AskDraft?
+    public internal(set) var askDraft: AskDraft?
     /// Stable identity of the covered pane; nil covers the whole session.
     public private(set) var askPaneIdentity: UUID?
     /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
@@ -385,11 +385,6 @@ public final class Session: Identifiable {
     /// Sends a replica's outcome to its origin. Run once when it resolves; a dismissal skips it.
     @ObservationIgnored var onReplicaResolved: (@MainActor (ControlAskResult) -> Void)?
 
-    /// The anchored pane's current role, nil for session-wide placement or a destroyed pane.
-    public var askTargetPane: OverlayPane? {
-        askPaneIdentity.flatMap(paneRole(forIdentity:))
-    }
-
     /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
     @discardableResult
     public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil) -> Bool {
@@ -399,22 +394,6 @@ public final class Session: Identifiable {
         askPending = ask
         askDraft = AskDraft(form: ask.form)
         return true
-    }
-
-    /// Edits the pending ask's draft; a stale id, from a dialog already resolved, changes nothing.
-    public func updateAskDraft(id: String, _ change: (inout AskDraft) -> Void) {
-        guard askPending?.id == id, var draft = askDraft else { return }
-        change(&draft)
-        askDraft = draft
-    }
-
-    /// Answers the pending ask with the button at `index` and the current draft.
-    @discardableResult
-    public func answerAsk(id: String, buttonAt index: Int) -> Bool {
-        guard let ask = askPending, ask.id == id, let result = ask.answer(buttonAt: index, draft: askDraft) else {
-            return false
-        }
-        return resolveAsk(id: id, result)
     }
 
     /// Reserves the slot for a replica of an origin's ask, whose outcome goes to `resolved` instead of here.
@@ -461,15 +440,6 @@ public final class Session: Identifiable {
         replicaResolved?(result)
         return true
     }
-
-    /// Cancels the current ask only when its id matches.
-    @discardableResult
-    public func cancelAsk(id: String) -> Bool {
-        resolveAsk(id: id, ControlAskResult(result: .cancelled))
-    }
-
-    /// Cancels the session's pending ask, if any.
-    public func cancelPendingAsk() { if let ask = askPending { cancelAsk(id: ask.id) } }
 
     /// Last live bounds emitted by each deck pane host. Ignored by observation because the drawing path takes
     /// the current preference value directly; control commands use this cache only for message measurement.
