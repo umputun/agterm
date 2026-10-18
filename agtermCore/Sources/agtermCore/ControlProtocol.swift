@@ -328,6 +328,18 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var align: String?
     /// destructiveButton identifies the ask button styled as destructive.
     public var destructiveButton: String?
+    /// cancelButton identifies the ask button that resolves `escaped`, as Esc does.
+    public var cancelButton: String?
+    /// input is `line` or `multiline`, giving `ask.open` a text field.
+    public var input: String?
+    /// placeholder is the hint an empty `ask.open` text field shows.
+    public var placeholder: String?
+    /// choices gives `ask.open` a radio or checkbox list, in caller order.
+    public var choices: [ControlAskChoice]?
+    /// multiple makes an `ask.open` choice list checkboxes instead of radio buttons.
+    public var multiple: Bool?
+    /// checked lists the `ask.open` choice ids selected at open.
+    public var checked: [String]?
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
     /// (= frontmost).
     public var window: String?
@@ -392,7 +404,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var persistent: Bool?
     /// browse lets a `--url` page's main frame leave its first origin for any HTTP(S) site (`--browse`).
     public var browse: Bool?
-    /// value is the answer `session.overlay.submit` hands back from a page; empty is a real answer.
+    /// value is the answer `session.overlay.submit` hands back from a page, empty being a real answer, or
+    /// the initial text of an `ask.open` input field.
     public var value: String?
     /// page is the page id `session.overlay.result` reads the outcome of, instead of a program's exit status.
     public var page: String?
@@ -424,7 +437,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
-                persistent: Bool? = nil, browse: Bool? = nil) {
+                persistent: Bool? = nil, browse: Bool? = nil, cancelButton: String? = nil, input: String? = nil,
+                placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
+                checked: [String]? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -511,6 +526,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.chromeless = chromeless
         self.persistent = persistent
         self.browse = browse
+        self.cancelButton = cancelButton
+        self.input = input
+        self.placeholder = placeholder
+        self.choices = choices
+        self.multiple = multiple
+        self.checked = checked
     }
 }
 

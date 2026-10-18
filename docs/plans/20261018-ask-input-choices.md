@@ -115,7 +115,7 @@
   request line allows 1 MiB), so remote handover encodes the `PresentationAsk` first and keeps a form ask
   whose frame would exceed `PresentationCodec.maxFrameBytes` on the origin. An answer stays inside the
   frame only by reservation: an input ask is handed over only when the encoded answer with the longest
-  button id and twice the text cap (escaping only doubles newline, tab, quote and backslash) also fits;
+  JSON-encoded button id and twice the text cap (escaping only doubles newline, tab, quote and backslash) also fits;
   `selected` can only name ids from a request that already fit
 
 **Result payload** (`ControlAskResult`, new optional fields):
@@ -147,7 +147,8 @@
 
 **Rendering**:
 - terminal style: monospace field with theme colors and a theme-foreground outline; items as `( )`/`(•)`
-  or `[ ]`/`[x]` with the cursor row drawn like a highlighted button
+  or `[ ]`/`[x]`; the cursor fills only the marker and label like a highlighted button, never the
+  subtitle, which would vanish in its dimmed foreground over a foreground fill
 - gui style: system text field/text view, native radio and checkbox appearance, accent-colored cursor row
 - a choice `subtitle` sits under its label, wrapped, in the message's dimmed color (terminal) or the
   secondary color (gui); no italic, since the terminal font may lack it. URLs in it are plain text, not links
@@ -187,20 +188,20 @@ in the tree.
 - Modify: `agtermCore/Tests/agtermCoreTests/AskTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherAskTests.swift`
 
-- [ ] add the form (`input` or `choices`) and `cancelButton` to `PendingAsk`, and `text`/`selected` to
+- [x] add the form (`input` or `choices`) and `cancelButton` to `PendingAsk`, and `text`/`selected` to
       `ControlAskResult`, keeping a plain ask's encoded shape unchanged
-- [ ] extend `ControlArgs` with the new wire fields and validate them in `dispatchAskOpen` per Technical
+- [x] extend `ControlArgs` with the new wire fields and validate them in `dispatchAskOpen` per Technical
       Details, generating `ok`/`cancel` buttons when a form has none
-- [ ] add a host-free draft value (text, item cursor, checked set) owned by `Session` for terminal asks and
+- [x] add a host-free draft value (text, item cursor, checked set) owned by `Session` for terminal asks and
       `PickController` for gui asks, keyed by ask id, cleared on every resolution path
-- [ ] build answered results from the draft in one host-free place: cancel role resolves `escaped` with no
+- [x] build answered results from the draft in one host-free place: cancel role resolves `escaped` with no
       payload, others attach `text` or `selected` in caller order
-- [ ] add choice navigation (item cursor up/down, toggle/pick) beside `AskNavigation`, separate from button
+- [x] add choice navigation (item cursor up/down, toggle/pick) beside `AskNavigation`, separate from button
       movement
-- [ ] write tests: every validation error (duplicate checked ids included), default buttons, cancel role
+- [x] write tests: every validation error (duplicate checked ids included), default buttons, cancel role
       and cancel-as-default, payload shaping, radio cardinality, draft survival and clearing, plain-ask
       encoding unchanged, `value` at exactly 65536 and 65537 UTF-8 bytes with multibyte text
-- [ ] run `swift test --filter` for the touched suites - must pass before next task
+- [x] run `swift test --filter` for the touched suites - must pass before next task
 
 ### Task 2: CLI flags and result output
 
@@ -313,7 +314,8 @@ in the tree.
 - [ ] verify a one-line and a multiline prompt return typed text, with the field focused at open
 - [ ] verify custom button labels work and the default OK/Cancel appear without `--button`
 - [ ] verify radio returns one id, checkboxes return any subset in caller order, Cancel/Esc return nothing
-- [ ] verify items with multi-line subtitles render dimmed under their labels and the cursor scrolls them in
+- [ ] verify items with multi-line subtitles render dimmed under their labels, stay readable on the cursor
+      row, and the cursor scrolls them in, using a 50-item list with three-line subtitles
 - [ ] verify a long list scrolls with buttons pinned and `width` affects width only
 - [ ] run full gates once: `make build` (Release), `cd agtermCore && swift test`, `make test-app`, `make lint`
 - [ ] run `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs

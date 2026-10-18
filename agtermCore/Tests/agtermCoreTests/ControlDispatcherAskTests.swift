@@ -319,4 +319,107 @@ struct ControlDispatcherAskTests {
         #expect(response == expected)
         #expect(actions.calls == [.askCancel(target: "ask-id", window: nil)])
     }
+
+    @Test func formWithoutButtonsGetsOKAndCancelWithOKDefault() async throws {
+        let ask = try #require(await openedAsk(ControlArgs(title: "Name", input: "line")))
+        #expect(ask.buttons == [ControlAskButton(id: "ok", label: "OK"), ControlAskButton(id: "cancel", label: "Cancel")])
+        #expect(ask.defaultID == "ok")
+        #expect(ask.cancelID == "cancel")
+        #expect(ask.form == .input(AskInputForm(mode: .line)))
+    }
+
+    @Test func callerButtonsReplaceTheDefaultsAndCancelMayBeTheDefault() async throws {
+        let args = ControlArgs(buttons: [ControlAskButton(id: "save", label: "Save"), ControlAskButton(id: "skip", label: "Skip")],
+                               defaultButton: "skip", title: "Name", value: "x", cancelButton: "skip", input: "multiline")
+        let ask = try #require(await openedAsk(args))
+        #expect(ask.buttons.map(\.id) == ["save", "skip"])
+        #expect(ask.defaultID == "skip")
+        #expect(ask.cancelID == "skip")
+        #expect(ask.form == .input(AskInputForm(mode: .multiline, value: "x")))
+    }
+
+    @Test func plainAskStillRequiresButtonsAndHasNoCancelRole() async throws {
+        #expect(await rejection(ControlArgs(title: "Go?")) == "ask.open requires buttons")
+        let ask = try #require(await openedAsk(ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Go?")))
+        #expect(ask.form == nil)
+        #expect(ask.cancelID == nil)
+        #expect(ask.defaultID == nil)
+    }
+
+    @Test func choicesReachHostWithSubtitlesAndCheckedIDs() async throws {
+        let choices = [ControlAskChoice(id: "398", label: "issue #398", subtitle: "waits on you\nhttps://example.com/398"),
+                       ControlAskChoice(id: "395", label: "PR #395")]
+        let ask = try #require(await openedAsk(ControlArgs(title: "Pick", choices: choices, multiple: true, checked: ["395"])))
+        #expect(ask.form == .choices(AskChoiceForm(choices: choices, multiple: true, checked: ["395"])))
+    }
+
+    @Test(arguments: [
+        (ControlArgs(title: "T", input: "line", choices: [ControlAskChoice(id: "a", label: "A")]), "input and choices are exclusive"),
+        (ControlArgs(title: "T", input: "wide"), "unknown input"),
+        (ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "T", value: "x"), "value requires input"),
+        (ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "T", placeholder: "x"), "placeholder requires input"),
+        (ControlArgs(title: "T", input: "line", checked: ["a"]), "checked requires choices"),
+        (ControlArgs(title: "T", input: "line", multiple: true), "multiple requires choices"),
+        (ControlArgs(title: "T", choices: []), "ask choices must be 1 to 50"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "")]), "ask choice label must not be empty"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A"), ControlAskChoice(id: "a", label: "B")]),
+         "ask choice ids must be unique"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A")], checked: ["b"]), "unknown checked choice: b"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A")], multiple: true, checked: ["a", "a"]),
+         "ask checked ids must be unique"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A"), ControlAskChoice(id: "b", label: "B")],
+                     checked: ["a", "b"]), "radio choices accept one checked id"),
+        (ControlArgs(title: "T", cancelButton: "nope", input: "line"), "unknown cancel button: nope"),
+        (ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK", hotkey: "o")], title: "T", input: "line"),
+         "ask input does not take hotkeys"),
+    ])
+    func invalidFormNeverReachesHost(args: ControlArgs, error: String) async {
+        #expect(await rejection(args) == error)
+    }
+
+    @Test(arguments: [
+        ControlArgs(title: "T", value: "a\tb", input: "line"),
+        ControlArgs(title: "T", value: "a\nb", input: "line"),
+        ControlArgs(title: "T", value: "a\u{7}b", input: "multiline"),
+        ControlArgs(title: "T", input: "multiline", placeholder: "a\nb"),
+        ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A\nB")]),
+        ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A", subtitle: "x\ty")]),
+    ])
+    func controlCharactersOutsideTheirAllowedFieldsAreRejected(args: ControlArgs) async {
+        #expect(await rejection(args) == "ask text must not contain control characters")
+    }
+
+    @Test func multilineValueAndSubtitleKeepTheirAllowedControls() async throws {
+        let input = try #require(await openedAsk(ControlArgs(title: "T", value: "a\nb\tc", input: "multiline")))
+        #expect(input.form == .input(AskInputForm(mode: .multiline, value: "a\nb\tc")))
+        let list = try #require(await openedAsk(ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A", subtitle: "x\ny")])))
+        #expect(list.form != nil)
+    }
+
+    @Test func valueIsCappedInUTF8Bytes() async throws {
+        let fits = String(repeating: "é", count: AskInputForm.maxTextBytes / 2)
+        #expect(try await openedAsk(ControlArgs(title: "T", value: fits, input: "line")) != nil)
+        #expect(await rejection(ControlArgs(title: "T", value: fits + "x", input: "line")) == "ask text too long (max 65536 bytes)")
+    }
+
+    @Test func fiftyChoicesAreAcceptedAndFiftyOneRejected() async throws {
+        let fifty = (0..<50).map { ControlAskChoice(id: "\($0)", label: "item \($0)") }
+        #expect(try await openedAsk(ControlArgs(title: "T", choices: fifty)) != nil)
+        #expect(await rejection(ControlArgs(title: "T", choices: fifty + [ControlAskChoice(id: "x", label: "x")]))
+            == "ask choices must be 1 to 50")
+    }
+
+    private func openedAsk(_ args: ControlArgs) async throws -> PendingAsk? {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+        guard response?.ok == true, case let .askOpen(ask, _, _, _, _) = try #require(actions.calls.first) else { return nil }
+        return ask
+    }
+
+    private func rejection(_ args: ControlArgs) async -> String? {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+        #expect(actions.calls.isEmpty)
+        return response?.ok == false ? response?.error : nil
+    }
 }

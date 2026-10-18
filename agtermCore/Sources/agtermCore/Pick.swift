@@ -41,6 +41,8 @@ public final class PickController {
     public private(set) var recentResults: [ResolvedPick] = []
     /// The GUI ask currently awaiting an answer in this window.
     public private(set) var pendingAsk: PendingAsk?
+    /// The pending GUI ask's unsubmitted text or selection.
+    public private(set) var askDraft: AskDraft?
     @ObservationIgnored private var pickWaiter: (id: String, continuation: CheckedContinuation<ControlPickResult, Never>)?
     fileprivate var windowID: WindowInfo.ID?
     /// Reserves the window modal slot for a pick or GUI ask.
@@ -102,7 +104,21 @@ public final class PickController {
     public func openAsk(_ ask: PendingAsk) -> Bool {
         guard !modalPending else { return false }
         pendingAsk = ask
+        askDraft = AskDraft(form: ask.form)
         return true
+    }
+
+    /// Edits the pending ask's draft; a stale id, from a dialog already resolved, changes nothing.
+    public func updateAskDraft(id: String, _ change: (inout AskDraft) -> Void) {
+        guard pendingAsk?.id == id, var draft = askDraft else { return }
+        change(&draft)
+        askDraft = draft
+    }
+
+    /// Answers the pending ask with the button at `index` and the current draft.
+    public func answerAsk(id: String, buttonAt index: Int) {
+        guard let ask = pendingAsk, ask.id == id, let result = ask.answer(buttonAt: index, draft: askDraft) else { return }
+        resolveAsk(result)
     }
 
     /// resolveAsk retains the outcome before releasing the modal slot.
@@ -113,6 +129,7 @@ public final class PickController {
             AskRegistry.shared.retain(id: pendingAsk.id, result: outcome, window: windowID)
         }
         self.pendingAsk = nil
+        askDraft = nil
     }
 
     /// cancelAsk cancels without synthesizing a named button answer.

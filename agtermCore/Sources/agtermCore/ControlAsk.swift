@@ -17,6 +17,33 @@ public struct ControlAskButton: Codable, Sendable, Equatable {
     }
 }
 
+/// ControlAskChoice is one caller-provided item of an ask choice list.
+public struct ControlAskChoice: Codable, Sendable, Equatable {
+    /// maxChoices limits the number of items in one list.
+    public static let maxChoices = 50
+
+    /// id identifies the item in `checked` and in the answered `selected` list.
+    public let id: String
+    /// label is the item's one-line text.
+    public let label: String
+    /// subtitle is an optional description drawn dimmed under the label; it may span lines.
+    public let subtitle: String?
+
+    public init(id: String, label: String, subtitle: String? = nil) {
+        self.id = id
+        self.label = label
+        self.subtitle = subtitle
+    }
+}
+
+/// ControlAskInputMode selects a one-line or multiline ask text field.
+public enum ControlAskInputMode: String, Codable, Sendable, CaseIterable {
+    /// line is a single-line field where Return answers.
+    case line
+    /// multiline is an editing area where Return inserts a newline and Command-Return answers.
+    case multiline
+}
+
 /// ControlAskOutcome is the current or terminal state returned by ask.result.
 public enum ControlAskOutcome: String, Codable, Sendable, CaseIterable {
     /// pending means the dialog is awaiting an answer.
@@ -59,17 +86,23 @@ public struct ControlAskResult: Codable, Sendable, Equatable {
     public let index: Int?
     /// reason says why a cancelled dialog ended, absent for an ordinary cancel. An older client ignores it.
     public let reason: String?
+    /// text is an input ask's field content on an answer, whitespace and newlines preserved.
+    public let text: String?
+    /// selected is a choice ask's checked ids in caller order on an answer; radio carries exactly one.
+    public let selected: [String]?
 
     /// The reason an ask carries when the viewer presenting it was lost and the origin could not show it.
     public static let presentationLost = "presentation-lost"
 
     public init(result: ControlAskOutcome, id: String? = nil, label: String? = nil, index: Int? = nil,
-                reason: String? = nil) {
+                reason: String? = nil, text: String? = nil, selected: [String]? = nil) {
         self.result = result
         self.id = id
         self.label = label
         self.index = index
         self.reason = reason
+        self.text = text
+        self.selected = selected
     }
 }
 

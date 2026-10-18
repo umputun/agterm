@@ -362,6 +362,8 @@ public final class Session: Identifiable {
 
     /// The session's pending terminal ask, independent of the HUD/program overlay slot.
     public private(set) var askPending: PendingAsk?
+    /// The pending ask's unsubmitted text or selection, kept while its dialog is hidden.
+    public private(set) var askDraft: AskDraft?
     /// Stable identity of the covered pane; nil covers the whole session.
     public private(set) var askPaneIdentity: UUID?
     /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
@@ -395,7 +397,24 @@ public final class Session: Identifiable {
         askPaneIdentity = paneIdentity
         askRemoteOwner = remoteOwner
         askPending = ask
+        askDraft = AskDraft(form: ask.form)
         return true
+    }
+
+    /// Edits the pending ask's draft; a stale id, from a dialog already resolved, changes nothing.
+    public func updateAskDraft(id: String, _ change: (inout AskDraft) -> Void) {
+        guard askPending?.id == id, var draft = askDraft else { return }
+        change(&draft)
+        askDraft = draft
+    }
+
+    /// Answers the pending ask with the button at `index` and the current draft.
+    @discardableResult
+    public func answerAsk(id: String, buttonAt index: Int) -> Bool {
+        guard let ask = askPending, ask.id == id, let result = ask.answer(buttonAt: index, draft: askDraft) else {
+            return false
+        }
+        return resolveAsk(id: id, result)
     }
 
     /// Reserves the slot for a replica of an origin's ask, whose outcome goes to `resolved` instead of here.
@@ -416,6 +435,7 @@ public final class Session: Identifiable {
     /// Empties the slot without an outcome, for an ask that moves to another owner rather than ending.
     public func releaseAsk() {
         askPending = nil
+        askDraft = nil
         askPaneIdentity = nil
         askReplica = false
         onReplicaResolved = nil
@@ -432,6 +452,7 @@ public final class Session: Identifiable {
         let ended = onRemoteAskEnded
         let replicaResolved = onReplicaResolved
         askPending = nil
+        askDraft = nil
         askPaneIdentity = nil
         askReplica = false
         onReplicaResolved = nil

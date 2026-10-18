@@ -48,9 +48,7 @@ extension ControlServer {
                 return response
             }
         }
-        let pending = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
-                                 defaultID: ask.defaultID, destructiveID: ask.destructiveID, style: ask.style, align: ask.align,
-                                 width: ask.width, anchor: anchor)
+        let pending = ask.anchored(at: anchor)
         guard controller.openAsk(pending) else {
             return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
         }
@@ -125,9 +123,7 @@ extension ControlServer {
             return
         }
         let anchor = AskAnchor(sessionID: sessionID, pane: session.askTargetPane, paneIdentity: session.askPaneIdentity)
-        let local = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
-                               defaultID: ask.defaultID, destructiveID: ask.destructiveID, style: ask.style,
-                               align: ask.align, width: ask.width, anchor: anchor)
+        let local = ask.anchored(at: anchor)
         guard controller.openAsk(local) else {
             store.failHandback(forSession: sessionID)
             return

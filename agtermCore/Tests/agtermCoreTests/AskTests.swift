@@ -255,6 +255,142 @@ struct AskTests {
         #expect(result == ControlAskResult(result: .cancelled))
     }
 
+    @Test func inputAnswerCarriesTheDraftTextAndCancelEscapesWithoutIt() {
+        let ask = PendingAsk(id: "a", title: "Name", buttons: formButtons,
+                             form: .input(AskInputForm(mode: .multiline, value: "draft")), cancelID: "cancel")
+        var draft = AskDraft(form: ask.form)
+        #expect(draft.text == "draft")
+        draft.text = "  line one\nline two  "
+        #expect(ask.answer(buttonAt: 0, draft: draft)
+            == ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, text: "  line one\nline two  "))
+        #expect(ask.answer(buttonAt: 1, draft: draft) == ControlAskResult(result: .escaped))
+        #expect(ask.answer(buttonAt: 2, draft: draft) == nil)
+    }
+
+    @Test func choiceAnswerListsCheckedIDsInCallerOrder() {
+        let form = AskForm.choices(AskChoiceForm(choices: choices("a", "b", "c"), multiple: true, checked: ["c"]))
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons, form: form, cancelID: "cancel")
+        var draft = AskDraft(form: form)
+        draft.toggle(at: 0)
+        #expect(draft.selected == ["a", "c"])
+        #expect(ask.answer(buttonAt: 0, draft: draft)?.selected == ["a", "c"])
+        #expect(ask.answer(buttonAt: 0, draft: draft)?.text == nil)
+    }
+
+    @Test func answerWithoutADraftUsesTheFormsInitialValues() {
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons,
+                             form: .choices(AskChoiceForm(choices: choices("a", "b"))))
+        #expect(ask.answer(buttonAt: 0, draft: nil)?.selected == ["a"])
+    }
+
+    @Test func cancelRoleAppliesWithoutAForm() {
+        let ask = PendingAsk(id: "a", title: "Go?", buttons: formButtons, cancelID: "cancel")
+        #expect(ask.answer(buttonAt: 1, draft: nil) == ControlAskResult(result: .escaped))
+        #expect(ask.answer(buttonAt: 0, draft: nil) == ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0))
+    }
+
+    @Test func radioDraftStartsOnTheFirstItemAndPicksExactlyOne() {
+        var draft = AskDraft(form: .choices(AskChoiceForm(choices: choices("a", "b", "c"))))
+        #expect(draft.selected == ["a"])
+        #expect(draft.cursor == 0)
+        draft.moveCursor(by: 2)
+        draft.toggleCursor()
+        #expect(draft.selected == ["c"])
+        draft.toggleCursor()
+        #expect(draft.selected == ["c"])
+    }
+
+    @Test func draftCursorStartsOnTheFirstCheckedItemAndStopsAtTheEnds() {
+        var draft = AskDraft(form: .choices(AskChoiceForm(choices: choices("a", "b", "c"), multiple: true, checked: ["c", "b"])))
+        #expect(draft.cursor == 1)
+        draft.moveCursor(by: -5)
+        #expect(draft.cursor == 0)
+        draft.moveCursor(by: 9)
+        #expect(draft.cursor == 2)
+    }
+
+    @Test func checkboxDraftTogglesAndMayEndEmpty() {
+        var draft = AskDraft(form: .choices(AskChoiceForm(choices: choices("a", "b"), multiple: true, checked: ["b"])))
+        draft.toggle(at: 1)
+        #expect(draft.selected.isEmpty)
+        draft.toggle(at: 7)
+        #expect(draft.selected.isEmpty)
+        #expect(draft.cursor == 1)
+    }
+
+    @Test(arguments: [(AskInputForm.maxTextBytes, AskInputForm.maxTextBytes), (AskInputForm.maxTextBytes + 1, AskInputForm.maxTextBytes)])
+    func draftTextIsClampedToTheByteCap(length: Int, expected: Int) {
+        var draft = AskDraft(form: .input(AskInputForm(mode: .line)))
+        draft.text = String(repeating: "x", count: length)
+        #expect(draft.text.utf8.count == expected)
+    }
+
+    @Test func clampingNeverSplitsAMultibyteCharacter() {
+        let text = String(repeating: "é", count: AskInputForm.maxTextBytes / 2) + "é"
+        let clamped = AskInputForm.clamped(text)
+        #expect(clamped.utf8.count == AskInputForm.maxTextBytes)
+        #expect(clamped.allSatisfy { $0 == "é" })
+    }
+
+    @Test(arguments: ControlAskStyle.allCases)
+    func slotOwnersKeepTheDraftUntilResolutionAndIgnoreStaleIDs(style: ControlAskStyle) {
+        let session = Session(initialCwd: "/tmp")
+        let controller = PickController()
+        let ask = PendingAsk(id: "a", title: "Name", buttons: formButtons, style: style,
+                             form: .input(AskInputForm(mode: .line, value: "x")), cancelID: "cancel")
+        let draft: () -> AskDraft? = { style == .terminal ? session.askDraft : controller.askDraft }
+        let update: (String, String) -> Void = { id, text in
+            if style == .terminal { session.updateAskDraft(id: id) { $0.text = text } } else {
+                controller.updateAskDraft(id: id) { $0.text = text }
+            }
+        }
+        #expect(style == .terminal ? session.openAsk(ask) : controller.openAsk(ask))
+        update("a", "typed")
+        update("stale", "lost")
+        #expect(draft()?.text == "typed")
+        if style == .terminal { session.answerAsk(id: "a", buttonAt: 0) } else { controller.answerAsk(id: "a", buttonAt: 0) }
+        #expect(draft() == nil)
+        #expect(style == .terminal ? session.askPending == nil : controller.pendingAsk == nil)
+    }
+
+    @Test func releasingASessionAskDropsItsDraft() {
+        let session = Session(initialCwd: "/tmp")
+        #expect(session.openAsk(PendingAsk(id: "a", title: "Name", buttons: formButtons, form: .input(AskInputForm(mode: .line)))))
+        session.releaseAsk()
+        #expect(session.askDraft == nil)
+    }
+
+    @Test func aPlainResultEncodesWithoutFormFields() throws {
+        let data = try JSONEncoder().encode(ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(Set(object.keys) == ["result", "id", "label", "index"])
+    }
+
+    @Test func formResultsRoundTrip() throws {
+        for result in [ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, text: "a \"q\"\n\\"),
+                       ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, selected: [])] {
+            let decoded = try JSONDecoder().decode(ControlAskResult.self, from: JSONEncoder().encode(result))
+            #expect(decoded == result)
+        }
+    }
+
+    @Test func anchoringKeepsTheFormAndCancelRole() {
+        let form = AskForm.choices(AskChoiceForm(choices: choices("a")))
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons, form: form, cancelID: "cancel")
+        let anchored = ask.anchored(at: AskAnchor(sessionID: UUID()))
+        #expect(anchored.form == form)
+        #expect(anchored.cancelID == "cancel")
+        #expect(anchored.anchor != nil)
+    }
+
+    private var formButtons: [ControlAskButton] {
+        [ControlAskButton(id: "ok", label: "OK"), ControlAskButton(id: "cancel", label: "Cancel")]
+    }
+
+    private func choices(_ ids: String...) -> [ControlAskChoice] {
+        ids.map { ControlAskChoice(id: $0, label: $0.uppercased()) }
+    }
+
     private func buttons(count: Int) -> [ControlAskButton] {
         (0..<count).map { ControlAskButton(id: "button-\($0)", label: "Button \($0)") }
     }
