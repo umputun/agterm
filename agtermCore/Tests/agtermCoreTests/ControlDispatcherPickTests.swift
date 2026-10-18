@@ -142,6 +142,37 @@ struct ControlDispatcherPickTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [
+        (ControlPickItem(id: "a", label: "A", status: "busy"), "invalid pick item status (idle|active|completed|blocked)"),
+        (ControlPickItem(id: "a", label: "A", status: "blocked", statusColor: "red"), "invalid pick item color (expected #rrggbb)"),
+        (ControlPickItem(id: "a", label: "A", status: "active", statusShape: "hexagon"),
+         "invalid pick item shape (circle|square|triangle|diamond|capsule|star)"),
+    ])
+    func openRejectsAnInvalidItemStatusWithoutCallingHost(item: ControlPickItem, error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .pickOpen, args: ControlArgs(items: [item])))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func openPassesItemStatusThrough() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let items = [ControlPickItem(id: "one", label: "One", status: "completed", statusColor: "#00aa00", statusShape: "star"),
+                     ControlPickItem(id: "two", label: "Two", status: "idle")]
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .pickOpen, args: ControlArgs(items: items)))
+
+        guard case let .pickOpen(pick, _, _) = try #require(actions.calls.first) else {
+            Issue.record("expected pick.open host call")
+            return
+        }
+        #expect(pick.items == items)
+    }
+
     @Test func resultAndCancelRejectMissingTargetWithoutCallingHost() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

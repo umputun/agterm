@@ -589,7 +589,8 @@ control command, the socket `dashboard` command is unchanged.
 
 **pick**: `pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--follow] [--window W] [--no-block]`
 reads choices from stdin and opens the target window's native fuzzy picker. Supply nonblank lines (each line
-is both the id and label) or a JSON array of `{id,label,subtitle?}` items; typing matches labels only, and an
+is both the id and label) or a JSON array of `{id,label,subtitle?,status?,statusColor?,statusShape?}` items (the
+status fields draw a trailing glyph, as `session status` does); typing matches labels only, and an
 empty query keeps the supplied order, so without `--select` the caller's first item is the one Return runs. `--query` prefills
 the field and filters on open, which re-ranks and drops that order. `--select ID` opens with that item
 highlighted and scrolled into view (it must name a supplied item; a `--query` that hides it leaves the first
@@ -688,7 +689,8 @@ reset ·
 `zmx tree [HOST]` - attachable sessions across EVERY open window, on another Mac with a HOST or this app
 without one (the bare form is exactly what the remote call runs on the far side). Each row carries the id
 `zmx attach` takes plus `windowID`/`windowName`, `workspaceID`/`workspaceName` (show the names, group by
-the ids: neither is unique), `context` when set, and per-pane `foreground`; only a session whose every pane
+the ids: neither is unique), `context` when set, `status`/`statusColor`/`statusShape` when not idle, and
+per-pane `foreground`; only a session whose every pane
 still has a live daemon is listed, and an empty list does NOT mean the far side is not in live mode -
 `zmx list` reports that · `zmx attach
 HOST SESSION [--window W]` - open one of them here, marked remote and carrying its split, in the

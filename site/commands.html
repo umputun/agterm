@@ -2620,7 +2620,13 @@
                 Read choices from stdin and open the target window's native picker. Nonblank input lines become items whose id equals
                 the label. Input whose first non-whitespace byte is
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">[</span> is a JSON array of
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. Item ids must be
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. An item may also
+                carry a trailing status glyph through
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span>, the values
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status</span> takes; an invalid one is refused
+                and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> draws none. Item ids must be
                 unique, labels must not be empty, and the list is capped at 1,000 items. The list may be empty only with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span>, which turns the picker into a
                 plain text prompt.
@@ -3673,7 +3679,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceName</span> (show the names, group by the ids — neither is unique, so grouping by name merges two windows called <span style="font-family: &quot;JetBrains Mono&quot;, monospace">main</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (only when its owner set one),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (as the far side's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports them, omitted when idle), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">panes</span>
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane, daemon, foreground}</span>, the last being the argv that pane is running, omitted when the remote reports none).
               </p>

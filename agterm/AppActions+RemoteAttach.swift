@@ -85,7 +85,9 @@ extension AppActions {
         let parts = ["\(session.windowName)/\(session.workspaceName)", session.context ?? "", session.cwd,
                      programs.joined(separator: " | ")]
         return ControlPickItem(id: session.id, label: session.name,
-                               subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "))
+                               subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "),
+                               status: session.status, statusColor: session.statusColor,
+                               statusShape: session.statusShape)
     }
 }
 

@@ -1294,10 +1294,12 @@ subcommand, so `agtermctl pick open` is not required. Stdin is read unconditiona
 no items needs `< /dev/null` or it blocks.
 
 The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
-`id` and `label` strings plus an optional `subtitle`; any other input is split into lines, blank and
+`id` and `label` strings plus an optional `subtitle` and an optional trailing status glyph: `status`
+(`idle|active|completed|blocked`, idle drawing none), `statusColor` (`#rrggbb`) and `statusShape` (a
+`session status --shape` name), the values `session status` takes; any other input is split into lines, blank and
 whitespace-only lines are dropped, and each remaining line becomes both the id and label. Item ids must
-be unique, labels must not be empty, labels and subtitles may not contain control characters, and a
-picker accepts at most 1,000 items. An empty list is rejected with `pick.open requires at least one item`
+be unique, labels must not be empty, labels and subtitles may not contain control characters, an invalid
+status, color or shape is refused, and a picker accepts at most 1,000 items. An empty list is rejected with `pick.open requires at least one item`
 unless `--allow-custom` is set, which accepts it and opens a plain text prompt. Omitting `items` altogether
 is rejected with `pick.open requires items`, reachable only over the raw protocol: the CLI always sends the
 list it parsed, empty or not.
@@ -1904,7 +1906,8 @@ far side, so it is also how to see what another machine would answer without ssh
 `presentation` (the presentation protocol version, absent from an app too old to stream),
 and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID`/`workspaceName` (show the
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
-`context` when its owner set one, `cwd`, `splitAxis` when it has a split, and `panes`
+`context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
+as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), and `panes`
 (`{pane, daemon, foreground}`, the last being the argv that pane is running and omitted when none is
 reported). `host` is the ssh destination the REQUESTING app was given, stamped on after decoding: the far
 side has no idea which name reached it.

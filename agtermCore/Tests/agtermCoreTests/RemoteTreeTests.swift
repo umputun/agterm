@@ -98,6 +98,39 @@ struct RemoteTreeTests {
         #expect(tree.sessions[0].panes[0].foreground == ["/usr/bin/tail", "-f"])
     }
 
+    @Test func aSessionCarriesItsAgentStatusAndAnIdleOneCarriesNone() throws {
+        let busy = ControlSessionNode(id: "s1", name: "agent", cwd: "/repo", active: false, split: false,
+                                      backedByZmx: true, status: "blocked", statusPane: "left", statusBlink: true,
+                                      statusColor: "#ff8800", statusShape: "star")
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [busy, node(id: "s2", name: "shell", cwd: "/tmp")])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows,
+                                                   inventory: inventory(entries: [
+                                                       entry(session: "s1", pane: "left", daemon: Self.left),
+                                                       entry(session: "s2", pane: "left", daemon: Self.right),
+                                                   ]))
+
+        #expect(tree.sessions[0].status == "blocked")
+        #expect(tree.sessions[0].statusColor == "#ff8800")
+        #expect(tree.sessions[0].statusShape == "star")
+        #expect(tree.sessions[1].status == nil)
+        #expect(tree.sessions[1].statusColor == nil)
+        #expect(tree.sessions[1].statusShape == nil)
+    }
+
+    @Test func aSessionFromAnOriginWithoutStatusDecodesWithNone() throws {
+        let stdout = #"{"ok":true,"result":{"remote":{"endpoint":{"executable":"/z","socketDirectory":"/t"},"#
+            + #""sessions":[{"id":"s1","name":"build","windowID":"w","windowName":"main","workspaceID":"ws","#
+            + #""workspaceName":"work","cwd":"/repo","panes":[{"pane":"left","daemon":"d"}]}]}}}"#
+
+        let session = try #require(RemoteTreeMerger.decode(stdout: stdout).sessions.first)
+
+        #expect(session.status == nil)
+        #expect(session.statusColor == nil)
+        #expect(session.statusShape == nil)
+    }
+
     @Test func aSplitSessionCarriesBothDaemonsAndItsAxis() throws {
         let windows = [window(name: "main", workspace: "work",
                               sessions: [node(id: "s1", name: "build", cwd: "/repo", hasSplit: true)])]

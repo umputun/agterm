@@ -53,7 +53,8 @@ final class RemoteAttachTests: XCTestCase {
     private let build = ControlRemoteSession(
         id: "s1", name: "build", windowID: "w1", windowName: "main", workspaceID: "ws1", workspaceName: "work",
         context: "release prep", cwd: "/repo", splitAxis: nil,
-        panes: [ControlRemotePane(pane: "left", daemon: "d1", foreground: ["/usr/bin/vim", "a.txt"])])
+        panes: [ControlRemotePane(pane: "left", daemon: "d1", foreground: ["/usr/bin/vim", "a.txt"])],
+        status: "blocked", statusColor: "#ff8800", statusShape: "star")
 
     private func waitForRemotes(_ expected: [String], _ what: String) async {
         let deadline = Date().addingTimeInterval(5)
@@ -201,7 +202,8 @@ final class RemoteAttachTests: XCTestCase {
         let pick = try XCTUnwrap(controller.pending)
         XCTAssertEqual(pick.prompt, "Attach from studio")
         XCTAssertEqual(pick.items, [ControlPickItem(id: "s1", label: "build",
-                                                    subtitle: "main/work  ·  release prep  ·  /repo  ·  vim")])
+                                                    subtitle: "main/work  ·  release prep  ·  /repo  ·  vim",
+                                                    status: "blocked", statusColor: "#ff8800", statusShape: "star")])
         controller.resolve(ControlPickResult(result: .picked, id: "s1", label: "build", index: 0))
         await waitUntil("the attach is requested") { attacher.attaches.count == 1 }
 

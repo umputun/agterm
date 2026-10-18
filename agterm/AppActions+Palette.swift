@@ -238,10 +238,9 @@ extension AppActions {
         library.attentionAcrossWindows.map { entry in
             let windowID = entry.window.id
             let sessionID = entry.session.id
-            let indicator = entry.session.agentIndicator
             return PaletteItem(id: sessionID.uuidString, title: entry.session.displayName,
-                               subtitle: library.attentionSubtitle(entry), status: indicator.status,
-                               statusColor: indicator.color, statusShape: indicator.shape,
+                               subtitle: library.attentionSubtitle(entry),
+                               indicator: { [weak session = entry.session] in session?.agentIndicator ?? AgentIndicator() },
                                isEnabled: { [weak self] in
                 self?.canSelectAttention(windowID: windowID, sessionID: sessionID) ?? false
             },
@@ -257,7 +256,9 @@ extension AppActions {
         let id = session.id
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle) { [weak self] in
+        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
+                           indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
+                           run: { [weak self] in
             guard self?.uiActionsEnabled == true else { return }
             // a palette pick is user-initiated: note activity so it buys the full idle grace before
             // auto-follow can pull the selection back.
@@ -266,7 +267,7 @@ extension AppActions {
             // reveal the picked session's blocked pane (no-op without a pane-tagged block), async so it runs
             // AFTER the palette closes and its focus-restore, winning the focus race.
             DispatchQueue.main.async { self?.revealActiveBlockedPane(captured: indicator) }
-        }
+        })
     }
 
     /// Toggle the `.attention` palette. Driven by ⌃⇧I `BuiltinAction.showAttention`, Navigate ▸ Go to
