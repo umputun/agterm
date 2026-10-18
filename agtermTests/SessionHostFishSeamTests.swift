@@ -70,6 +70,20 @@ final class SessionHostFishSeamTests: XCTestCase {
         }
     }
 
+    func testCapturedArgvPayloadOwnsPaneForeground() throws {
+        let fish = try FishInstallation.resolve()
+        try forEachAttachVariant(fish) { fixture, supervised in
+            try fixture.assertPayloadForeground(.captured, supervised: supervised)
+        }
+    }
+
+    func testDurableCreationCommandOwnsPaneForeground() throws {
+        let fish = try FishInstallation.resolve()
+        try forEachAttachVariant(fish) { fixture, supervised in
+            try fixture.assertPayloadForeground(.durable, supervised: supervised)
+        }
+    }
+
     func testSurvivingDaemonDoesNotReplayCapturedPayloadOnBareAttach() throws {
         let fish = try FishInstallation.resolve()
         try assertSurvivingDaemonDoesNotReplayPayload(fish, kind: .captured, supervised: false)
@@ -426,6 +440,20 @@ final class SessionHostFishSeamTests: XCTestCase {
             XCTAssertEqual(record.promptMarker, "yes")
             XCTAssertEqual(record.cwdHook, "yes")
             XCTAssertEqual(record.cwd, physicalDirectory)
+        }
+
+        func assertPayloadForeground(_ creation: Creation, supervised: Bool) throws {
+            let output = directory.appendingPathComponent("foreground-payload")
+            let command = ["/usr/bin/tee", output.path]
+            let configuration = try configuration(supervised: supervised)
+            let attachment = try attach(configuration, session: session(creation, command: command))
+            try wait { FileManager.default.fileExists(atPath: output.path) }
+            let leader = try assertDaemon(configuration, supervised: supervised)
+            let resolver = ZmxForegroundResolver(leaderProvider: { _ in [configuration.daemonName: leader] })
+            resolver.refreshIfNeeded()
+
+            XCTAssertEqual(ForegroundProcess.running(for: attachment.surface, shellBasename: "fish", zmxResolver: resolver),
+                           .program(command))
         }
 
         func assertDaemon(_ configuration: ZmxSupport.Configuration, supervised: Bool) throws -> Int32 {
