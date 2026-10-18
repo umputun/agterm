@@ -1353,7 +1353,7 @@ it waited for. Results age out oldest-first: the 8 most recent per open window, 
 
 ## ask
 
-`agtermctl ask [open] TITLE --button ID=LABEL [--button ...] [--message TEXT]` opens a question without
+`agtermctl ask [open] TITLE [--button ID=LABEL ...] [--message TEXT]` opens a question without
 reading stdin. Use explicit `ask open` when the title is `open`, `result`, or `cancel`.
 
 `--style terminal` is the default and uses the window's selected session, with one pending ask per
@@ -1365,23 +1365,42 @@ terminal area, excluding the sidebar. An explicit GUI target must be selected in
 GUI pane selectors require it. Terminal asks can coexist with GUI asks and picks.
 `--window W` selects the window; `--follow` raises it without changing session selection.
 
-Supply one to six buttons with unique ids and nonempty labels. A token without `=` is both id and label;
+Supply one to six buttons with unique ids and nonempty labels; a question with a field or a list may omit
+them. A token without `=` is both id and label;
 otherwise the first `=` separates them. Title, message, and labels reject control characters.
 `--default ID` sets the initial highlight; otherwise the first non-destructive button is highlighted,
-or the first button if it is the only choice. Tab/arrows move the highlight, Return answers, and
+or the first button if it is the only choice. On a buttons-only question Tab/arrows move the highlight, Return answers, and
 `--hotkey ID=LETTER` assigns a unique ASCII letter shortcut; a Latin layout matches the typed letter, any
 other layout the key that types it in the US layout. `--destructive ID` cannot name the default.
 `--align left|center|right` defaults to right. `--width N` fixes the width to 10...100 percent of the
 region; omitted means content sizing. Invalid style, alignment, and width return `unknown style`,
 `unknown align`, and `width must be 10 to 100` respectively.
 
+A question can collect text or a choice instead of only a button. `--input line|multiline` adds a field
+that has the keyboard at open (`--value` prefill, `--placeholder` hint, text held to 64 KiB). `--choice
+ID=LABEL` (up to 50) adds a radio list, checkboxes with `--multiple`; `--choice-subtitle ID=TEXT` adds a
+dimmed description that may span lines, and `--checked ID` preselects. One or the other, never both. With
+either, `--button` is optional and defaults to `ok`=OK and `cancel`=Cancel; `--cancel ID` names the button
+that ends the question like Esc with no payload, which the generated Cancel already is. Keys: Tab moves the
+button highlight, Return answers a one-line field, Command-Return a multiline one, nothing answers while an
+input method composes, and `--hotkey` is refused with a field; in a list Up/Down move and Space toggles.
+
+```bash
+agtermctl ask "Branch name" --input line --placeholder "feature/..."
+agtermctl ask "Open which?" --multiple --choice 398="issue #398" --choice-subtitle 398="waits on you" --choice 395="PR #395"
+```
+
 The blocking call prints one bare result:
 
 ```json
 {"result":"answered","id":"yes","label":"Yes","index":0}
+{"result":"answered","id":"ok","label":"OK","index":0,"text":"feature/forms"}
+{"result":"answered","id":"ok","label":"OK","index":0,"selected":["398","395"]}
 {"result":"escaped"}
 {"result":"cancelled"}
 ```
+
+`text` keeps whitespace and newlines; `selected` lists ids in caller order, exactly one for a radio list.
 
 Index follows caller order. An answer exits 0, including a named No button; inspect `id` before acting.
 Esc/Command-W on the interactive ask return `escaped` with exit 3. Cancellation exits 2; failure exits 1.
@@ -1393,7 +1412,7 @@ global id and reject a mismatched explicit window.
 Session nodes expose terminal asks as `ask: {id, pane?}`, plus a handed-over ask of either style with
 `remote` or `replica` (see Remote sessions); `pane` follows the current left/right role and is omitted for
 session-wide placement. Top-level `askPending` is the window's GUI slot. Resolution removes the field
-for that slot. The raw open reply echoes `result.pane` for pane placement. The latest 32 finished results
+for that slot; a field or list adds no tree field. The raw open reply echoes `result.pane` for pane placement. The latest 32 finished results
 are retained across both styles, including after owner closure; pending requests are never evicted.
 App shutdown can interrupt polling. Ask emits no events.
 

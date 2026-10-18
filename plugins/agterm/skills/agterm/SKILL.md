@@ -5,7 +5,7 @@ description: >
   create, rename, close, reopen, select or
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
   and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD/caption or notification; show a picker or question dialog; show an image inline; type
+  post a HUD/caption/notification; show a picker, question or input dialog; show images inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
@@ -16,6 +16,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
+  ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
@@ -611,7 +612,10 @@ is accepted and keeps its ask hidden and pending. A terminal ask leaves the rest
 `--window` selects the window; `--follow` raises it without changing session selection.
 `--default ID` seeds the highlight, `--hotkey ID=LETTER` adds a shortcut, and `--destructive ID` marks a
 button that cannot be the default. `--align left|center|right` aligns the buttons; `--width N` fixes the
-panel width to 10...100 percent of its region. Exit 0 means answered, including No: inspect `.id`.
+panel width to 10...100 percent of its region. `--input line|multiline` adds a focused text field and
+`--choice ID=LABEL` (with `--multiple`, `--choice-subtitle`, `--checked`) a radio or checkbox list; either
+defaults the buttons to OK/Cancel, Cancel returning `escaped`, and the answer carries `.text` or `.selected`.
+Exit 0 means answered, including No: inspect `.id`.
 Esc/Command-W on the interactive ask return `escaped` with exit 3; cancellation returns `cancelled`
 with exit 2. `--no-block` returns an id for `ask result ID` or `ask cancel ID`; explicit `--window` must
 match its owner. Tree exposes terminal asks on session nodes as `ask: {id, pane?}` and GUI asks as

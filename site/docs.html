@@ -2319,11 +2319,30 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span> uses native buttons and a window modal
-              shared with pick. Terminal questions can coexist with it. Tab and arrows move the highlight; Return answers
-              the interactive question. Esc and Command-W dismiss it with
+              shared with pick. Terminal questions can coexist with it. On a question with buttons only, Tab and arrows
+              move the highlight; Return answers the interactive question. Esc and Command-W dismiss it with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">escaped</span> and exit 3; cancellation exits 2.
               See the <a href="/commands#ask" style="color: #6d82f3">ask reference</a> for placement, sizing,
               input priority, result polling, and cancellation rules.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A question can also collect text or a choice. The field has the keyboard as soon as it opens, buttons default to
+              OK and Cancel, and Cancel ends it like Esc with nothing returned:
+            </p>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 16px 18px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px; overflow-x: auto">
+              agtermctl ask <span style="color: #f2b45c">"Commit message"</span> --input multiline
+              --placeholder <span style="color: #f2b45c">"subject, blank line, body"</span><br />
+              <span style="color: #6b727a"># {"result":"answered","id":"ok","label":"OK","index":0,"text":"fix: ..."}</span><br />
+              agtermctl ask <span style="color: #f2b45c">"Open which?"</span> --multiple
+              --choice 398=<span style="color: #f2b45c">"issue #398"</span>
+              --choice-subtitle 398=<span style="color: #f2b45c">"waits on you: review"</span>
+              --choice 395=<span style="color: #f2b45c">"PR #395"</span><br />
+              <span style="color: #6b727a"># {"result":"answered","id":"ok","label":"OK","index":0,"selected":["398"]}</span>
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              Return answers a one-line field and Command-Return a multiline one; in a list Up/Down move and Space toggles.
+              Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--multiple</span> the list is radio buttons
+              and returns exactly one id.
             </p>
 
             <h3

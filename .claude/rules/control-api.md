@@ -918,12 +918,27 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `--no-block` prints picker ID JSON; result/cancel are one-shot commands.
 
 - `ask.open` accepts a nonblank `title`, optional `message`, and 1...6 `buttons` with unique ids and
-  nonempty labels. Title, message, and labels reject control characters. Optional button `hotkey` is
+  nonempty labels; a plain ask requires them, a form synthesizes them when omitted. Title, message, and labels reject control characters. Optional button `hotkey` is
   one ASCII letter, unique case-insensitively and stored lowercase.
 - `defaultButton` and `destructiveButton` name supplied ids and cannot name the same button.
   Default seeds the highlight; otherwise the first non-destructive button is selected, or the first
-  button if it is the only choice. Tab/Right/Down move forward, Shift-Tab/Left/Up move back, and wrap.
-  Return chooses the highlight; a letter hotkey chooses directly. Outside clicks leave the dialog open.
+  button if it is the only choice. On a plain button ask Tab/Right/Down move forward, Shift-Tab/Left/Up
+  move back, and wrap. Return chooses the highlight; a letter hotkey chooses directly. Outside clicks leave
+  the dialog open.
+- A form adds a text field (`input` line|multiline, optional `value` prefill and `placeholder`) or a choice
+  list (`choices` of 1...50 `{id, label, subtitle?}`, `multiple` for checkboxes, `checked` ids, radio at most
+  one), never both; `ControlDispatcher+Ask` owns the validation messages. Without caller `buttons` a form gets
+  `ok`=OK (default) and `cancel`=Cancel. `cancelButton` names a button that resolves `escaped` with no payload,
+  as Esc does, and may also be the default; it defaults to `cancel` only for the generated pair.
+  Other answers add `text` (whitespace kept) or `selected` (caller order; radio exactly one, checkboxes any).
+  Input asks reject hotkeys. The field takes focus at open; Tab/Shift-Tab move the button highlight, one-line
+  Return and multiline Command-Return answer; no key answers or dismisses while the editor composes, though
+  `ask.cancel` and owner teardown still resolve. Lists use Up/Down for the item cursor, Space to toggle,
+  Tab/Left/Right for buttons. `value` and edits are held to 64 KiB UTF-8 before the change happens, so a refused
+  edit loses nothing. A multiline field sizes to its laid-out text, wraps included, from five to fifteen lines;
+  a list or field too tall for the pane scrolls between the pinned title and buttons, and when even those do not
+  fit, the whole panel scrolls. Drafts live on the slot owner, survive hiding and layout changes, and are not
+  tree state; a remote handback restarts from the initial values.
   The hotkey key resolves through `AskNavigation.resolvedHotkey`, the keymap's per-layout `chordKey` rule
   (#769): an ASCII-capable layout matches the typed letter, any other the US-layout letter at that position.
 - Optional `style` is `terminal` (default) or `gui`; invalid values return `unknown style`.
@@ -966,22 +981,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Undo restores the session without its ask. A session-wide ask survives a sibling pane closing while
   the session remains. GUI asks cancel on window teardown or anchor loss, including session deselection
   or loss of the anchored pane's identity or rendered role.
-- Esc and Command-W dismiss the ask that owns input with `escaped`. `ask.cancel` and owner teardown
+- Esc and Command-W dismiss the ask that owns input with `escaped`; while its editor composes, Command-W is
+  consumed without resolving or closing anything behind it. `ask.cancel` and owner teardown
   return `cancelled`. Result/cancel use the exact global ask id; an explicit window must match its owner,
   including for retained results. Cancelling a retained finished result is a successful no-op.
 - `AskRegistry` indexes both live owner types. Open the owner's slot before registering the id, and retain
   the result before clearing the slot. Pending requests are never evicted. Finished results keep their
   owning window in one 32-entry cache across both styles, ordered by resolution. `PickRegistry` retains
   pick results separately.
-- Blocking CLI output is `{"result":"answered","id":"yes","label":"Yes","index":0}`,
-  `{"result":"escaped"}`, or `{"result":"cancelled"}`; index follows caller order.
+- Blocking CLI output is `{"result":"answered","id":"yes","label":"Yes","index":0}` (plus `text` or
+  `selected` for a form), `{"result":"escaped"}`, or `{"result":"cancelled"}`; index follows caller order.
   Exit 0 means answered, including a No button; exit 3 means escaped, exit 2 means cancelled,
   and exit 1 means failure. `--no-block` prints `{"id":"…"}`.
   One-shot `ask result` also prints `pending` and exits 1 for it.
 - A session node exposes its session-slot ask as `ask: {id, pane?, remote?, replica?}`: a local terminal
   ask, or a handed-over ask of either style (see Remote sessions); `pane` is the current left/right role
   and is omitted for session-wide placement. Top-level `askPending` identifies the window's pending GUI ask.
-  Each field is omitted when its slot is empty. App shutdown can interrupt polling.
+  Each field is omitted when its slot is empty; forms add no tree field. App shutdown can interrupt polling.
   Ask emits no events; result and tree polling are its explicit event exemption.
 
 ## Status, notifications, and flags
@@ -1635,8 +1651,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   presenter's hello omitted, so an older presenter leaves the sound on the origin. It is never part of a
   snapshot, and the destination is the presenter, not necessarily the Mac holding the pane's lead.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
-  a replica, `ask.replica`, whose answer carries only the button id and is checked against the stored
-  buttons. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
+  a replica, `ask.replica`, whose answer carries the button id plus any `text`/`selected`, all checked
+  against the stored ask (`PendingAsk.validatedAnswer`). A form or `cancelButton` ask goes only to a presenter
+  whose hello lists `ask.form`, and only when its request and its largest possible answer each fit one
+  stream frame (`PresentationAsk.fitsFrames`); otherwise it stays on the origin. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
   session or pane, which dismisses the replica. The viewer refusing it (its slot is taken, or a GUI target is
   not on screen; a terminal replica for a hidden row waits hidden like a local one) or its stream being lost
   hands it back: the origin owns it again as an ordinary ask, pending until its target is shown, and one it
