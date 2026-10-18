@@ -11,10 +11,10 @@ struct ZmxReplayScriptTests {
             shell: "/bin/zsh"
         )
 
-        #expect(script == "'printf' 'a b' ; 'builtin' 'export' " +
+        #expect(script == "{ 'printf' 'a b' ; } always { 'builtin' 'export' " +
                 "ZDOTDIR='/Applications/agterm resources/zsh' ; 'builtin' 'export' " +
                 "GHOSTTY_ZSH_ZDOTDIR='/Users/test/.config/zsh' ; " +
-                "'builtin' 'exec' -- '/bin/zsh' -il")
+                "'builtin' 'exec' -- '/bin/zsh' -il ; }")
     }
 
     @Test func missingOriginalZdotdirIsUnsetBeforeTheFinalShell() {
@@ -23,8 +23,8 @@ struct ZmxReplayScriptTests {
             inheritedZdotdir: nil, shell: "/bin/zsh"
         )
 
-        #expect(script == "'top' ; 'builtin' 'export' ZDOTDIR='/bundle/zsh' ; " +
-                "'builtin' 'unset' GHOSTTY_ZSH_ZDOTDIR ; 'builtin' 'exec' -- '/bin/zsh' -il")
+        #expect(script == "{ 'top' ; } always { 'builtin' 'export' ZDOTDIR='/bundle/zsh' ; " +
+                "'builtin' 'unset' GHOSTTY_ZSH_ZDOTDIR ; 'builtin' 'exec' -- '/bin/zsh' -il ; }")
     }
 
     @Test func quotedBuiltinsSurviveHostileAliasesAndFailureStillExecsTheShell() throws {
@@ -98,6 +98,49 @@ struct ZmxReplayScriptTests {
         #expect(try String(contentsOf: result, encoding: .utf8) == "two words and more")
     }
 
+    enum PayloadForm: CaseIterable, Sendable {
+        case argv, commandLine
+    }
+
+    // regression: a Ctrl-C'd payload ends the interactive -c list before the exec, leaving the pane without a shell.
+    @Test(arguments: PayloadForm.allCases)
+    func interruptedPayloadStillExecsTheFinalShell(form: PayloadForm) throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let payloadLog = fixture.appending(path: "payload-log")
+        let result = fixture.appending(path: "result")
+        let payload = fixture.appending(path: "interrupted-payload")
+        try makeExecutable(payload, contents: """
+        #!/bin/sh
+        printf 'ran\\n' >> "$PAYLOAD_LOG"
+        kill -INT 0
+        """)
+        let finalShell = fixture.appending(path: "final-shell")
+        try makeExecutable(finalShell, contents: """
+        #!/bin/sh
+        printf '%s\\n%s\\n%s\\n' "$ZDOTDIR" "${GHOSTTY_ZSH_ZDOTDIR-unset}" "$1" >> "$RESULT_FILE"
+        """)
+        let script = switch form {
+        case .argv:
+            ZmxReplayScript.render(argv: [payload.path], integrationDirectory: "/bundle/integration",
+                                   inheritedZdotdir: "/user/zsh", shell: finalShell.path)
+        case .commandLine:
+            ZmxReplayScript.render(commandLine: CommandRestore.shellQuotedLine([payload.path]),
+                                   integrationDirectory: "/bundle/integration",
+                                   inheritedZdotdir: "/user/zsh", shell: finalShell.path)
+        }
+
+        try runZshInTerminal(script: script, environment: [
+            "HOME": fixture.path,
+            "ZDOTDIR": fixture.path,
+            "PAYLOAD_LOG": payloadLog.path,
+            "RESULT_FILE": result.path,
+        ])
+
+        #expect(try String(contentsOf: payloadLog, encoding: .utf8) == "ran\n")
+        #expect(try String(contentsOf: result, encoding: .utf8) == "/bundle/integration\n/user/zsh\n-il\n")
+    }
+
     private func makeFixture() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "agterm-zmx-replay-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -120,5 +163,24 @@ struct ZmxReplayScriptTests {
         try process.run()
         process.waitUntilExit()
         return process.terminationStatus
+    }
+
+    /// Runs `zsh -lic` under `script(1)` so zsh has a terminal and job control, as in a pane.
+    private func runZshInTerminal(script: String, environment overrides: [String: String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.arguments = ["-q", "/dev/null", "/bin/zsh", "-lic", script]
+        process.environment = ProcessInfo.processInfo.environment.merging(overrides) { _, new in new }
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        let deadline = Date().addingTimeInterval(10)
+        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        if process.isRunning {
+            process.terminate()
+            process.waitUntilExit()
+            Issue.record("zsh under script(1) did not exit within 10 s")
+        }
     }
 }

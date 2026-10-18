@@ -11,19 +11,18 @@ public enum ZmxReplayScript {
                inheritedZdotdir: inheritedZdotdir, shell: shell)
     }
 
+    /// The rearm and exec run in an `always` block: interactive zsh drops the rest of a plain `;` list when the
+    /// payload is interrupted with Ctrl-C, and the pane's process would exit instead of becoming the login shell.
     private static func render(statement: String, integrationDirectory: String,
                                inheritedZdotdir: String?, shell: String) -> String {
-        var statements = [
-            statement,
-            "'builtin' 'export' ZDOTDIR=\(quoted(integrationDirectory))",
-        ]
+        var rearm = ["'builtin' 'export' ZDOTDIR=\(quoted(integrationDirectory))"]
         if let inheritedZdotdir {
-            statements.append("'builtin' 'export' GHOSTTY_ZSH_ZDOTDIR=\(quoted(inheritedZdotdir))")
+            rearm.append("'builtin' 'export' GHOSTTY_ZSH_ZDOTDIR=\(quoted(inheritedZdotdir))")
         } else {
-            statements.append("'builtin' 'unset' GHOSTTY_ZSH_ZDOTDIR")
+            rearm.append("'builtin' 'unset' GHOSTTY_ZSH_ZDOTDIR")
         }
-        statements.append("'builtin' 'exec' -- \(quoted(shell)) -il")
-        return statements.joined(separator: " ; ")
+        rearm.append("'builtin' 'exec' -- \(quoted(shell)) -il")
+        return "{ \(statement) ; } always { \(rearm.joined(separator: " ; ")) ; }"
     }
 
     private static func quoted(_ value: String) -> String {
