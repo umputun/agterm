@@ -622,12 +622,8 @@ struct WindowContentView: View {
                     if let frame = askAnchorFrame(ask.anchor, anchors: anchors, proxy: proxy), valid {
                         AskDialogView(ask: ask, anchorFrame: frame, font: askFont,
                                       foreground: chromeText, background: terminalColor, focusAllowed: isFrontmost,
-                                      onAnswer: { index in
-                                          guard pick.pendingAsk?.id == ask.id else { return }
-                                          let button = ask.buttons[index]
-                                          pick.resolveAsk(ControlAskResult(result: .answered, id: button.id,
-                                                                           label: button.label, index: index))
-                                      },
+                                      draft: pick.askDraft, updateDraft: { pick.updateAskDraft(id: ask.id, $0) },
+                                      onAnswer: { pick.answerAsk(id: ask.id, buttonAt: $0) },
                                       onDismiss: {
                                           guard pick.pendingAsk?.id == ask.id else { return }
                                           actions.escapePendingAsk(for: windowID)

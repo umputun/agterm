@@ -256,18 +256,18 @@ in the tree.
 - Modify: `agtermTests/AskDialogViewTests.swift`
 - Modify: `agtermTests/ControlServerAskTests.swift`
 
-- [ ] add AppKit-backed one-line and multiline editors (`NSTextField`/`NSTextView` representables) bound to
+- [x] add AppKit-backed one-line and multiline editors (`NSTextField`/`NSTextView` representables) bound to
       the slot draft, with the Tab/Return/Cmd-Return/Esc handling and the marked-text guard from Technical
       Details, and the 64 KiB input cap
-- [ ] add the choice list in both styles with item cursor, Space handling, and scroll-to-cursor in its own
+- [x] add the choice list in both styles with item cursor, Space handling, and scroll-to-cursor in its own
       scroll region; split Up/Down from Tab/Left/Right in `AskKeyCatcher`
-- [ ] lay out pinned title/message/buttons with the scrolling middle region and the outer-scroll fallback
+- [x] lay out pinned title/message/buttons with the scrolling middle region and the outer-scroll fallback
       for short panes; multiline prefers about five lines
-- [ ] pass the form through `ControlServer+Ask` for both styles and the remote takeback path
-- [ ] write hosted tests on the editor and list in isolation: Return/Cmd-Return/Tab behavior, marked-text
+- [x] pass the form through `ControlServer+Ask` for both styles and the remote takeback path
+- [x] write hosted tests on the editor and list in isolation: Return/Cmd-Return/Tab behavior, marked-text
       guard, input cap, choice keys, draft binding, short-pane fallback; focus at open inside a live session
       is Task 5's acceptance, since it needs the ownership change
-- [ ] run the touched hosted tests with `-only-testing:` - must pass before next task
+- [x] run the touched hosted tests with `-only-testing:` - must pass before next task
 
 ### Task 5: Keyboard ownership with an in-dialog editor
 
@@ -282,17 +282,23 @@ in the tree.
 - Modify: `agtermTests/AskDialogViewTests.swift`
 - Modify: `agtermUITests/ControlAskUITests.swift`
 
-- [ ] register one dialog input owner per ask that knows its own editor, so `ownsInput` and
+- [x] register one dialog input owner per ask that knows its own editor, so `ownsInput` and
       `blocksTerminalFocus` treat that editor as the dialog's and still yield to unrelated editors, palettes,
       rename, picks and the quick terminal
-- [ ] keep `resignDismissedFieldEditor` from resigning the dialog's editor, and route Cmd-W and Esc to the
+- [x] keep `resignDismissedFieldEditor` from resigning the dialog's editor, and route Cmd-W and Esc to the
       owning form ask before the rest of the close ladder
-- [ ] move terminal focus deferral, HTML focus deferral and HUD click coverage onto the input owner;
+- [x] move terminal focus deferral, HTML focus deferral and HUD click coverage onto the input owner;
       clicking the covered region focuses the editor or the choice list
-- [ ] write hosted tests for ownership and Cmd-W with the editor focused; UI tests: the field is focused at
-      open in a live session, type into it and read the result, check items by keyboard, draft survives a
-      session switch and back
-- [ ] run the touched hosted and UI tests with `-only-testing:` - must pass before next task
+- [x] write hosted tests for ownership, Cmd-W, typing, Return/Cmd-Return/Tab/Esc, focus at open, draft
+      survival and a real layout swap; UI test: check choice items by keyboard and read the selection
+- [x] run the touched hosted tests and the choice UI test with `-only-testing:` - must pass before next task
+- ⚠️ XCUITest text typing (`typeText`) on this desktop delivered every key with Command set: Cmd-H hid the
+  test app and the rest reached the live agterm (Cmd-O). The four typing UI tests were removed on the
+  user's decision; typing, Return, Cmd-Return, Tab, Esc, Cmd-W, cap, composition, draft survival and a
+  real layout swap are covered by hosted tests that call the editor directly. The choice-list UI test stays.
+- ➕ review fixes: cap refuses an over-budget edit before it happens (composition included, one-line field
+  through its own field editor), Cmd-W keeps a composing ask open, multiline height follows laid-out
+  text, and a replaced editor takes focus that fell back to the window
 
 ### Task 6: Contract, user docs and agent skill
 

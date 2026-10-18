@@ -562,6 +562,18 @@ final class ControlAskUITests: ControlAPITestCase {
         XCTAssertTrue(app.buttons["terminal-zoom-exit"].exists)
     }
 
+    func testCLIChoiceKeysCheckItemsAndAnswerTheSelection() throws {
+        let id = try openAskCLI(["--multiple", "--choice", "a=Alpha", "--choice", "b=Beta", "--choice", "c=Gamma",
+                                 "--choice-subtitle", "b=second item"])
+        XCTAssertTrue(askDialog.waitForExistence(timeout: 10))
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey(.space, modifierFlags: [])
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey(.space, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(try awaitAskResult(id)["selected"] as? [String], ["b", "c"])
+    }
+
     private func newSession(_ name: String, select: Bool) throws -> String {
         let response = try sendControlCommand("session.new", args: ["name": name, "noSelect": !select])
         XCTAssertEqual(response["ok"] as? Bool, true)

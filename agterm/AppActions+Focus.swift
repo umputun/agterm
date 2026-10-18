@@ -34,6 +34,8 @@ extension AppActions {
               window.firstResponder is NSText else { return }
         if let editor = window.firstResponder as? NSTextView, let field = editor.delegate as? NSTextField,
            (field.delegate as? SidebarRenameController)?.isEditing == true { return }
+        let catchers = AskKeyCatcher.KeyCatcherView.sessionCatchers.objectEnumerator()?.allObjects as? [AskKeyCatcher.KeyCatcherView]
+        if catchers?.contains(where: { $0.holds(window.firstResponder) }) == true { return }
         window.makeFirstResponder(nil)
     }
 
@@ -53,16 +55,24 @@ extension AppActions {
     func escapePendingAsk(for windowID: WindowInfo.ID?) -> Bool {
         guard let controller = PickRegistry.shared.controller(for: windowID),
               controller.pendingAsk != nil else { return false }
+        let window = NSApp.windows.first { WindowRegistry.shared.windowID(for: $0) == windowID }
+        if let responder = window?.firstResponder, AskEditorBox.isAskEditor(responder), composing(responder) { return true }
         controller.escapeAsk()
         return true
     }
 
-    /// Dismisses only the session dialog currently eligible to receive keys.
+    /// Dismisses only the session dialog currently eligible to receive keys. A dialog whose editor is mid
+    /// composition keeps the chord without closing, so the close ladder never reaches the session behind it.
     func escapePendingSessionAsk() -> Bool {
         guard let session = store?.activeSession, let ask = session.askPending,
               let catcher = AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID),
               catcher.canFocus else { return false }
+        if let responder = catcher.window?.firstResponder, catcher.holds(responder), composing(responder) { return true }
         return session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
+    }
+
+    private func composing(_ responder: NSResponder?) -> Bool {
+        (responder as? NSTextView)?.hasMarkedText() == true
     }
 
     /// Whether terminal zoom is active in the window OWNING this session — the right gate for the
