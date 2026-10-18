@@ -309,6 +309,7 @@ struct AskChoiceList: View {
                     .id(Self.rowID(choice.id))
             }
         }
+        .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

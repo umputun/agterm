@@ -446,6 +446,23 @@ final class AskDialogViewTests: XCTestCase {
         XCTAssertEqual(AskRegistry.shared.result(for: askID)?.result.selected, ["a", "b", "c"])
     }
 
+    func testALongListOpensScrolledToTheCheckedItem() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        let choices = (1...50).map { ControlAskChoice(id: "i\($0)", label: "Item \($0)", subtitle: "one\ntwo\nthree") }
+        try fixture.open(form: .choices(AskChoiceForm(choices: choices, multiple: false, checked: ["i50"])))
+        fixture.mount()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        let host = try XCTUnwrap(fixture.window.contentView)
+        let list = try XCTUnwrap(descendants(NSScrollView.self, in: host).first {
+            ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
+        })
+        let document = try XCTUnwrap(list.documentView)
+        let visible = list.documentVisibleRect
+        let bottomVisible = document.isFlipped ? visible.maxY >= document.frame.height - 1 : visible.minY <= 1
+        XCTAssertTrue(bottomVisible, "visible \(visible) of document \(document.frame)")
+    }
+
     func testTheDraftSurvivesTheDialogUnmountingAndComingBack() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
@@ -691,6 +708,10 @@ final class AskDialogViewTests: XCTestCase {
         try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
                                       windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text,
                                       isARepeat: false, keyCode: keyCode))
+    }
+
+    private func descendants<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
+        ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { descendants(type, in: $0) }
     }
 
     private func descendant<T: NSView>(_ type: T.Type, in view: NSView) -> T? {

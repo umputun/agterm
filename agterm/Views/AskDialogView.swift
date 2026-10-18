@@ -184,6 +184,7 @@ struct AskDialogView: View {
     @State private var focusRevision = 0
     @State private var buttonFrames: [CGRect] = []
     @State private var editorBox = AskEditorBox()
+    @State private var openingRow: String?
 
     init(ask: PendingAsk, anchorFrame: CGRect, font: NSFont, foreground: Color, background: Color,
          focusAllowed: Bool, sessionInput: SessionAskInput? = nil, draft: AskDraft? = nil,
@@ -299,10 +300,17 @@ struct AskDialogView: View {
                 updateDraft { $0.toggle(at: index) }
             }
             if fill {
+                // initial scrollTo is too early in this layout; scrollPosition uses the ForEach ids.
+                // later moves stay on scrollTo for minimal scrolling.
                 ScrollViewReader { reader in
                     ScrollView { choices }
+                        .scrollPosition(id: $openingRow)
                         .frame(minHeight: lineHeight * 3, idealHeight: lineHeight * 3, maxHeight: .infinity)
-                        .onChange(of: currentDraft.cursor, initial: true) { _, cursor in scrollToChoice(cursor, reader: reader) }
+                        .onAppear {
+                            guard list.choices.indices.contains(currentDraft.cursor) else { return }
+                            openingRow = list.choices[currentDraft.cursor].id
+                        }
+                        .onChange(of: currentDraft.cursor) { _, cursor in scrollToChoice(cursor, reader: reader) }
                 }
             } else {
                 choices
