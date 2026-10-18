@@ -330,7 +330,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
   the placement store, wraps within filtered scope, and returns selected ID. It has no target.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and
-  uses click identity. When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
+  posts under the session's control slot (see [[notifications]]). When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
   requests omit text. Read through `unseen`.
 
 ## Session creation and duplication

@@ -19,17 +19,32 @@ public enum TerminalNotification {
         "\(windowID.uuidString):\(sessionID.uuidString):\(pane.rawValue)"
     }
 
-    /// Parses an `identity(windowID:sessionID:pane:)` string back into its parts, or nil if malformed. The
-    /// role is the suffix after the last colon, preceded by the two colon-free UUIDs, window id first.
+    /// The identity of a control `notify` banner, `"<windowID>:<sessionID>:notify"`. One slot per session,
+    /// apart from every pane's, so a terminal banner never replaces a note posted on purpose. Repeated
+    /// notes still replace each other.
+    public static func controlIdentity(windowID: UUID, sessionID: UUID) -> String {
+        "\(windowID.uuidString):\(sessionID.uuidString):\(controlSuffix)"
+    }
+
+    /// Every identity a session's banners can carry: each pane's plus the control slot.
+    public static func sessionIdentities(windowID: UUID, sessionID: UUID) -> [String] {
+        PaneRole.allCases.map { identity(windowID: windowID, sessionID: sessionID, pane: $0) }
+            + [controlIdentity(windowID: windowID, sessionID: sessionID)]
+    }
+
+    /// Decodes a banner identity into the click target, or nil if malformed: two colon-free UUIDs, window
+    /// id first, then a pane role or the control suffix, which targets the main pane.
     public static func parseIdentity(_ identity: String) -> (windowID: UUID, sessionID: UUID, pane: PaneRole)? {
         let parts = identity.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 3,
               let windowID = UUID(uuidString: String(parts[0])),
               let sessionID = UUID(uuidString: String(parts[1])),
-              let pane = PaneRole(rawValue: String(parts[2]))
+              let pane = parts[2] == controlSuffix ? .main : PaneRole(rawValue: String(parts[2]))
         else { return nil }
         return (windowID, sessionID, pane)
     }
+
+    private static let controlSuffix = "notify"
 
     /// Whether a notification should be delivered (banner + badge). Suppressed only when the firing
     /// pane is currently focused AND agterm is the active app — you are already looking at it.

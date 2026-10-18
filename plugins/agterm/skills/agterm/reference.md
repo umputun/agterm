@@ -1479,7 +1479,9 @@ expect points to convert to columns without one.
 
 `agtermctl notify <body> [--title T] [--target] [--window W]` — post a macOS desktop notification
 attributed to a session (default: the active session of the frontmost window). `--title` defaults to
-the session name. Clicking the banner reveals that session. This is the only app-level way to post a
+the session name. Clicking the banner reveals that session. A session keeps one such banner: a newer
+`notify` replaces it, the session's OSC 9/777 banners do not, and focusing the session removes it.
+This is the only app-level way to post a
 banner (the terminal's own OSC 9/777 is the other source). Control-native (no GUI/menu equivalent).
 
 The banner is gated by **Settings ▸ Notifications ▸ Show notification banners**; the unseen badge has its

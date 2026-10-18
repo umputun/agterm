@@ -14,9 +14,11 @@ paths:
   `UNUserNotificationCenterDelegate`. It resolves `Session` and `PaneRole` by surface identity, applies
   suppression, always increments `unseenCount`, and posts only when `bannersEnabled`. Authorization is
   best-effort; request `[.alert, .badge, .sound]` from the scene task. `willPresent` returns
-  `[.banner, .list, .sound]`. `clearDelivered` removes all three pane IDs on focus.
-- `send(toSession:)`, used by `notify`, shares badge, banner, bounce, sound, and identity behavior but
-  deliberately skips focus suppression and attributes the request to `.main`.
+  `[.banner, .list, .sound]`. `clearDelivered` removes `TerminalNotification.sessionIdentities` on focus:
+  the three pane IDs and the control slot.
+- `send(toSession:)`, used by `notify`, shares badge, banner, bounce and sound behavior but deliberately
+  skips focus suppression and posts under `controlIdentity`, its own slot per session, so a pane's OSC
+  banner cannot replace an explicit note (#770). Repeated notes still replace each other.
 - Log every post and suppression at `.notice`, including the focus and banners-off gates (#286).
   Lower levels are not persisted by default, so post-event `log show --last 30m` depends on notice.
   When banners are off, return
@@ -26,8 +28,9 @@ paths:
 - Suppress only when `TerminalNotification.shouldDeliver` sees both an active app and the firing surface
   as the key window's first responder. Do not use `AppActions.focusedSurface()`: its active-session
   fallback mistakes sidebar focus for viewing the pane.
-- `TerminalNotification.identity` encodes `"<sessionID>:<paneRole>"`, coalescing repeats and carrying the
-  click target without `userInfo`. `didReceive` activates the app and calls `AppActions.reveal`: select
+- `TerminalNotification.identity` encodes `"<windowID>:<sessionID>:<paneRole>"`, coalescing repeats and
+  carrying the click target without `userInfo`; `parseIdentity` decodes the control slot's `notify` suffix
+  to `.main`. `didReceive` activates the app and calls `AppActions.reveal`: select
   the session, clear its badge, derive its workspace, focus the pane, and raise its window through
   `WindowRegistry.raise`, which deminiaturizes first. Unknown sessions only activate; a missing split
   falls back to primary. Activation and first-responder changes do not order a background window front.

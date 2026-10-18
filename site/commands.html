@@ -3084,7 +3084,9 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Post a macOS desktop notification attributed to a session (default: the active session of the frontmost window).
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--title</span> defaults to the session name. Clicking
-                the banner reveals that session. It raises the session's unseen badge; clear it with
+                the banner reveals that session. A session keeps one such banner: a newer
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> replaces it, the session's
+                terminal notifications do not, and focusing the session removes it. It raises the session's unseen badge; clear it with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session seen</span>. Control-native.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
