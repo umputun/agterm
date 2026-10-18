@@ -159,7 +159,10 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertEqual(killed, [daemon])
         XCTAssertEqual(launched?.workingDirectory, directory.path)
         XCTAssertNotEqual(directory.path, session.cwd(for: .left))
-        XCTAssertEqual(launched?.command.contains(#"'\''/bin/sleep'\'' '\''300'\''"#), true, launched?.command ?? "no launch")
+        let zshReplay = #"'\''/bin/sleep'\'' '\''300'\''"#
+        let fishReplay = #"\'\''/bin/sleep\'\'' \'\''300\'\''"#
+        let command = launched?.command ?? "no launch"
+        XCTAssertTrue(command.contains(zshReplay) || command.contains(fishReplay), command)
     }
 
     func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
