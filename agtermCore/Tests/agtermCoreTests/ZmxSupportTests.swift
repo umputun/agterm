@@ -141,8 +141,8 @@ struct ZmxSupportTests {
         #expect(configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] == resources.path + "/shell-integration")
     }
 
-    @Test(arguments: [nil, "/bin/cat"])
-    func fishAttachMergesTheIntegrationRootIntoTheLaunchEnvironment(sessionHost: String?) throws {
+    @Test(arguments: [false, true])
+    func fishAttachMergesTheIntegrationRootIntoTheLaunchEnvironment(withSessionHost: Bool) throws {
         let resources = try makeFishResources(withMarker: true)
         defer { try? FileManager.default.removeItem(at: resources) }
         let root = resources.path + "/shell-integration"
@@ -165,7 +165,7 @@ struct ZmxSupportTests {
                 zmxExecutablePath: recorder.path, passwordDatabaseShell: "/bin/fish",
                 resourcesDirectory: resources.path, stateDirectory: "/tmp/agterm-state", paneIdentity: UUID(),
                 baseEnvironment: pane.map { ["XDG_DATA_DIRS": $0] } ?? [:], inheritedZdotdir: nil,
-                sessionHostExecutablePath: sessionHost.map { _ in recorder.path }
+                sessionHostExecutablePath: withSessionHost ? recorder.path : nil
             )).value)
             let result = resources.appending(path: "result-\(UUID().uuidString)")
             var environment = ProcessInfo.processInfo.environment
