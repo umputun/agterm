@@ -2343,6 +2343,10 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Return answers a one-line field and Command-Return a multiline one; in a list Up/Down move and Space toggles.
               Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--multiple</span> the list is radio buttons
               and returns exactly one id.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--other "Something else"</span> adds a free-form line
+              after the items: typing into it selects it, clearing it deselects it, and while selected its text comes back as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">"text"</span> beside the selected ids. A radio list then
+              returns one id or that text, never both.
             </p>
 
             <h3

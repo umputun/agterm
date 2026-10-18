@@ -931,6 +931,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ok`=OK (default) and `cancel`=Cancel. `cancelButton` names a button that resolves `escaped` with no payload,
   as Esc does, and may also be the default; it defaults to `cancel` only for the generated pair.
   Other answers add `text` (whitespace kept) or `selected` (caller order; radio exactly one, checkboxes any).
+  A list's optional `other` placeholder adds one free-form row after the items, its text in the draft's `text`:
+  `AskDraft` owns the transitions (non-blank edit selects, blank deselects, and blanking the SELECTED row of a
+  radio list restores the pick it took over from; blanking retained text of an unselected row leaves the pick
+  alone) and `AskChoiceForm.isBlank` the blankness rule. Its answer keeps caller ids in `selected` and adds the
+  raw `text` only while the row is selected, so a radio answer is one id or text, never both. The row's editor
+  holds the keyboard only while the cursor is on it (`KeyCatcherView.editorActive`); there Space is text, Up
+  returns to the item above, and Down clamps on the last row.
   Input asks reject hotkeys. The field takes focus at open; Tab/Shift-Tab move the button highlight, one-line
   Return and multiline Command-Return answer; no key answers or dismisses while the editor composes, though
   `ask.cancel` and owner teardown still resolve. Lists use Up/Down for the item cursor, Space to toggle,
@@ -1655,7 +1662,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a replica, `ask.replica`, whose answer carries the button id plus any `text`/`selected`, all checked
   against the stored ask (`PendingAsk.validatedAnswer`). A form or `cancelButton` ask goes only to a presenter
   whose hello lists `ask.form`, and only when its request and its largest possible answer each fit one
-  stream frame (`PresentationAsk.fitsFrames`); otherwise it stays on the origin. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
+  stream frame (`PresentationAsk.fitsFrames`); otherwise it stays on the origin. A list with an `other` row
+  also needs `ask.other`, since an `ask.form`-only presenter would drop the row. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
   session or pane, which dismisses the replica. The viewer refusing it (its slot is taken, or a GUI target is
   not on screen; a terminal replica for a hidden row waits hidden like a local one) or its stream being lost
   hands it back: the origin owns it again as an ordinary ask, pending until its target is shown, and one it

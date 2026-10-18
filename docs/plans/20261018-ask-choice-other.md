@@ -141,7 +141,7 @@
 - Modify: `agterm/AppActions+Focus.swift` (only if the composition guard needs the row editor)
 - Modify: `agtermTests/AskDialogViewTests.swift`
 
-- [ ] write failing hosted tests: initial focus on an ordinary row stays on the catcher although the field
+- [x] write failing hosted tests: initial focus on an ordinary row stays on the catcher although the field
       exists, cursor crossings move focus both ways, Up/Down from the field return to the list, Space and
       letters type without firing button hotkeys, leading Space stays editable but unselected, Return answers
       with `text`, checkbox marker click toggles while enabled, radio marker click picks an enabled unpicked
@@ -149,10 +149,10 @@
       toggle, a checkbox uncheck survives Tab, focus changes and remount, composition keeps Up/Down/Return/Esc
       native, the row is reached and scrolled into view after 50 items, draft survives a real layout swap;
       waits use the bounded `waitUntil` helper
-- [ ] render the row in both styles: marker plus a one-line `AskTextEditor` with the placeholder, marker dimmed
+- [x] render the row in both styles: marker plus a one-line `AskTextEditor` with the placeholder, marker dimmed
       while blank, field excluded from the row's toggle gesture, scroll-to-cursor including the row
-- [ ] route focus by cursor in `grabFocus`/`onAttach`; editor `doCommandBy` handles Up/Down back to the list
-- [ ] run the touched hosted tests with `-only-testing:` - must pass before Task 5
+- [x] route focus by cursor in `grabFocus`/`onAttach`; editor `doCommandBy` handles Up/Down back to the list
+- [x] run the touched hosted tests with `-only-testing:` - must pass before Task 5
 
 ### Task 5: Contract, user docs and agent skill
 
@@ -163,9 +163,9 @@
 - Modify: `plugins/agterm/skills/agterm/reference.md`
 - Modify: `plugins/agterm/skills/agterm/SKILL.md` (only if the trigger wording needs it)
 
-- [ ] state the `other` row contract once in `control-api.md`, including `ask.other`
-- [ ] mirror `--other`/`other` and the `text` result for choices in `commands.html`; extend the docs example
-- [ ] update the skill reference
+- [x] state the `other` row contract once in `control-api.md`, including `ask.other`
+- [x] mirror `--other`/`other` and the `text` result for choices in `commands.html`; extend the docs example
+- [x] update the skill reference
 
 ### Task 6: Verify acceptance criteria
 - [ ] radio and checkbox lists with `--other` behave as described, in both styles, verified in an isolated Debug instance

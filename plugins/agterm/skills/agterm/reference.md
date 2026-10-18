@@ -1379,7 +1379,11 @@ region; omitted means content sizing. Invalid style, alignment, and width return
 A question can collect text or a choice instead of only a button. `--input line|multiline` adds a field
 that has the keyboard at open (`--value` prefill, `--placeholder` hint, text held to 64 KiB). `--choice
 ID=LABEL` (up to 50) adds a radio list, checkboxes with `--multiple`; `--choice-subtitle ID=TEXT` adds a
-dimmed description that may span lines, and `--checked ID` preselects. One or the other, never both. With
+dimmed description that may span lines, and `--checked ID` preselects. `--other PLACEHOLDER` adds one
+free-form line after the items: a non-space character enables and selects it, clearing it disables it
+(clearing a selected line in a radio list returns to the previous pick), and while it is selected the answer
+adds its raw `text` beside `selected` (radio: one id or the text with `selected` `[]`, never both). On that
+line Space is text, Up returns to the item above, and Down stays. One or the other, never both. With
 either, `--button` is optional and defaults to `ok`=OK and `cancel`=Cancel; `--cancel ID` names the button
 that ends the question like Esc with no payload, which the generated Cancel already is. Keys: Tab moves the
 button highlight, Return answers a one-line field, Command-Return a multiline one, nothing answers while an
@@ -1388,6 +1392,7 @@ input method composes, and `--hotkey` is refused with a field; in a list Up/Down
 ```bash
 agtermctl ask "Branch name" --input line --placeholder "feature/..."
 agtermctl ask "Open which?" --multiple --choice 398="issue #398" --choice-subtitle 398="waits on you" --choice 395="PR #395"
+agtermctl ask "Deploy where?" --choice staging --choice production --other "another environment"
 ```
 
 The blocking call prints one bare result:

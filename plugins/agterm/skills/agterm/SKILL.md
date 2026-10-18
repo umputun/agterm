@@ -613,8 +613,9 @@ is accepted and keeps its ask hidden and pending. A terminal ask leaves the rest
 `--default ID` seeds the highlight, `--hotkey ID=LETTER` adds a shortcut, and `--destructive ID` marks a
 button that cannot be the default. `--align left|center|right` aligns the buttons; `--width N` fixes the
 panel width to 10...100 percent of its region. `--input line|multiline` adds a focused text field and
-`--choice ID=LABEL` (with `--multiple`, `--choice-subtitle`, `--checked`) a radio or checkbox list; either
-defaults the buttons to OK/Cancel, Cancel returning `escaped`, and the answer carries `.text` or `.selected`.
+`--choice ID=LABEL` (with `--multiple`, `--choice-subtitle`, `--checked`, and `--other PLACEHOLDER` for a
+free-form line) a radio or checkbox list; either defaults the buttons to OK/Cancel, Cancel returning
+`escaped`, and the answer carries `.text` or `.selected`, plus `.text` when the free-form line is selected.
 Exit 0 means answered, including No: inspect `.id`.
 Esc/Command-W on the interactive ask return `escaped` with exit 3; cancellation returns `cancelled`
 with exit 2. `--no-block` returns an id for `ask result ID` or `ask cancel ID`; explicit `--window` must
