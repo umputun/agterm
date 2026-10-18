@@ -118,12 +118,36 @@ struct HudHelperTests {
             defer { try? FileManager.default.removeItem(at: dir) }
             if proc.isRunning { proc.terminate() }
             if waitForExit(2) { return }
-            Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)")
+            Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)\n\(missEvidence())")
             try? removeBody()
             if waitForExit(2) { return }
             Issue.record("hud.sh outlived its body file: pid \(proc.processIdentifier)")
             kill(proc.processIdentifier, SIGKILL)
             if !waitForExit(2) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
+        }
+
+        private func missEvidence() -> String {
+            let first = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
+            Thread.sleep(forTimeInterval: 0.5)
+            let second = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
+            return "output \(first.0) -> \(second.0) bytes over 0.5s\n\(first.1)\n\(second.1)"
+        }
+
+        private static func processTree(of pid: Int32) -> String {
+            let ps = Process()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-A", "-o", "pid=,ppid=,stat=,pending=,sigmask=,etime=,command="]
+            let out = Pipe()
+            ps.standardOutput = out
+            ps.standardError = FileHandle.nullDevice
+            guard (try? ps.run()) != nil else { return "ps failed to start" }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            ps.waitUntilExit()
+            let rows = String(decoding: data, as: UTF8.self).split(separator: "\n").filter { row in
+                let fields = row.split(separator: " ", maxSplits: 2)
+                return fields.count >= 2 && (fields[0] == "\(pid)" || fields[1] == "\(pid)")
+            }
+            return "PID PPID STAT PENDING BLOCKED ELAPSED COMMAND\n" + rows.joined(separator: "\n")
         }
     }
 
