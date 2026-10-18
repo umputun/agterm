@@ -16,7 +16,7 @@ public enum ZmxReplayScript {
     }
 
     public static func renderFish(commandLine: String, integrationRoot: String, shell: String) -> String {
-        renderFish(statement: "builtin eval \(fishQuoted(commandLine))", integrationRoot: integrationRoot, shell: shell)
+        renderFish(statement: commandLine, integrationRoot: integrationRoot, shell: shell)
     }
 
     /// The rearm and exec run in an `always` block: interactive zsh drops the rest of a plain `;` list when the
@@ -57,8 +57,10 @@ public enum ZmxReplayScript {
             "builtin set --global --export --path XDG_DATA_DIRS \(quotedRoot) $__agterm_xdg_user_dirs",
             "end",
         ].joined(separator: "; ")
+        // eval confines interruption to the payload so the outer list still rearms and execs.
         return [
-            statement,
+            "builtin status job-control full",
+            "builtin eval \(fishQuoted(statement))",
             "builtin set -gx GHOSTTY_SHELL_INTEGRATION_XDG_DIR \(quotedRoot)",
             rearm,
             "exec \(fishQuoted(shell)) -il",

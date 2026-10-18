@@ -130,8 +130,9 @@ struct ZmxReplayScriptTests {
             commandLine: "printf '%s' 'two words'", integrationRoot: root, shell: "/bin/fish"
         )
 
-        #expect(argvScript.hasPrefix("'/tmp/tool $name;*' 'two words' 'can\\'t' ''; "))
-        #expect(commandScript.hasPrefix("builtin eval 'printf \\'%s\\' \\'two words\\''; "))
+        let argvStatement = "'/tmp/tool $name;*' 'two words' 'can\\'t' ''"
+        #expect(argvScript.hasPrefix("builtin status job-control full; builtin eval " + fishLiteral(argvStatement) + "; "))
+        #expect(commandScript.hasPrefix("builtin status job-control full; builtin eval 'printf \\'%s\\' \\'two words\\''; "))
         for script in [argvScript, commandScript] {
             #expect(script.contains("builtin set -gx GHOSTTY_SHELL_INTEGRATION_XDG_DIR '" + root + "'"))
             #expect(script.contains("builtin set --global --export --path XDG_DATA_DIRS '" + root + "'"))
@@ -160,7 +161,7 @@ struct ZmxReplayScriptTests {
 
         for (argument, expected) in cases {
             let script = ZmxReplayScript.renderFish(argv: [argument], integrationRoot: "/root", shell: "/bin/fish")
-            #expect(script.hasPrefix(expected + "; "))
+            #expect(script.hasPrefix("builtin status job-control full; builtin eval " + fishLiteral(expected) + "; "))
         }
     }
 
@@ -314,6 +315,40 @@ struct ZmxReplayScriptTests {
         #expect(try String(contentsOf: result, encoding: .utf8) == "/bundle/integration\n/user/zsh\n-il\n")
     }
 
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"),
+          arguments: PayloadForm.allCases)
+    func fishInterruptedPayloadStillExecsTheFinalShell(form: PayloadForm) throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let payloadLog = fixture.appending(path: "payload-log")
+        let result = fixture.appending(path: "result")
+        let payload = fixture.appending(path: "interrupted-payload")
+        try makeExecutable(payload, contents: """
+        #!/bin/sh
+        printf 'ran\\n' >> "$PAYLOAD_LOG"
+        kill -INT 0
+        """)
+        let finalShell = fixture.appending(path: "final-shell")
+        try makeEnvironmentProbe(finalShell)
+        let script = switch form {
+        case .argv:
+            ZmxReplayScript.renderFish(argv: [payload.path], integrationRoot: "/integration root", shell: finalShell.path)
+        case .commandLine:
+            ZmxReplayScript.renderFish(commandLine: fishLiteral(payload.path),
+                                      integrationRoot: "/integration root", shell: finalShell.path)
+        }
+
+        try runFish(executable: fish, script: script, fixture: fixture, inTerminal: true, environment: [
+            "PAYLOAD_LOG": payloadLog.path,
+            "RESULT_FILE": result.path,
+            "XDG_DATA_DIRS": "/user/share",
+        ])
+
+        #expect(try String(contentsOf: payloadLog, encoding: .utf8) == "ran\n")
+        #expect(try nullSeparatedValues(at: result) == ["/integration root:/user/share", "/integration root"])
+    }
+
     private func makeFixture() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "agterm-zmx-replay-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -354,7 +389,8 @@ struct ZmxReplayScriptTests {
         return process.terminationStatus
     }
 
-    private func runFish(executable: String, script: String, fixture: URL, environment overrides: [String: String] = [:]) throws {
+    private func runFish(executable: String, script: String, fixture: URL, inTerminal: Bool = false,
+                         environment overrides: [String: String] = [:]) throws {
         let home = fixture.appending(path: "home")
         let config = fixture.appending(path: "config")
         let data = fixture.appending(path: "data")
@@ -362,8 +398,9 @@ struct ZmxReplayScriptTests {
         try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["--no-config", "-lic", script]
+        process.executableURL = URL(fileURLWithPath: inTerminal ? "/usr/bin/script" : executable)
+        process.arguments = (inTerminal ? ["-q", "/dev/null", executable] : []) + ["--no-config", "-lic", script]
+        if inTerminal { process.standardInput = FileHandle.nullDevice }
         var processEnvironment = ProcessInfo.processInfo.environment
         processEnvironment.removeValue(forKey: "XDG_DATA_DIRS")
         process.environment = processEnvironment.merging([
