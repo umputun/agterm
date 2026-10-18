@@ -136,6 +136,8 @@ public enum RemoteTreeMerger {
         return ControlRemoteSession(id: node.id, name: node.name, windowID: window.id,
                                     windowName: window.name, workspaceID: workspace.id,
                                     workspaceName: workspace.name, context: node.context, cwd: node.cwd,
-                                    splitAxis: node.hasSplit == true ? node.splitAxis : nil, panes: panes)
+                                    splitAxis: node.hasSplit == true ? node.splitAxis : nil, panes: panes,
+                                    status: node.status, statusColor: node.statusColor,
+                                    statusShape: node.statusShape)
     }
 }

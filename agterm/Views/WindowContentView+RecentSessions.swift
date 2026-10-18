@@ -77,9 +77,9 @@ extension WindowContentView {
                 title: session.displayName,
                 subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
                 remote: session.remoteHost != nil,
-                status: nil,
-                statusColorHex: nil,
-                statusShape: nil,
+                status: session.agentIndicator.status,
+                statusColorHex: session.agentIndicator.color,
+                statusShape: session.agentIndicator.shape,
                 foreground: chromeText,
                 hoverColor: popoverHoverColor,
                 accessibilityID: "recent-session-row"
@@ -146,7 +146,7 @@ extension WindowContentView {
     }
 
     /// The attention popover body: every open window's sessions needing attention as full-row
-    /// `SessionPopoverRow`s with a leading status glyph — the mouse form of the ⌃⇧I attention palette. A row
+    /// `SessionPopoverRow`s with a trailing status glyph — the mouse form of the ⌃⇧I attention palette. A row
     /// whose window sits under a cover renders disabled, as the palette's does, rather than dismissing into
     /// a no-op. The rows are measured so short lists stay compact and long lists scroll at
     /// `attentionRowsCap`, for the reason `measuredPanelHeight` gives.
@@ -203,10 +203,9 @@ extension WindowContentView {
 }
 
 /// One clickable session row for the title-bar popovers (recent-sessions and attention) — the shared two-line
-/// `SessionSwitcherRow` tinted with the terminal theme (`foreground`), with an optional leading status glyph
-/// (`status` plus its per-call `statusColorHex`/`statusShape` overrides, set only by the attention popover so
-/// the row matches the sidebar glyph), a pointer-hover highlight (`hoverColor`) and a full-row hit area
-/// (`.contentShape`), so the WHOLE row selects on click, not just the text. Kept a `Button` so it reads as an
+/// `SessionSwitcherRow` tinted with the terminal theme (`foreground`), with an optional trailing status glyph
+/// (`status` plus its per-call `statusColorHex`/`statusShape` overrides, matching the sidebar glyph), a
+/// pointer-hover highlight (`hoverColor`) and a full-row hit area (`.contentShape`), so the WHOLE row selects on click, not just the text. Kept a `Button` so it reads as an
 /// actionable control to VoiceOver; `accessibilityID` distinguishes the two popovers' rows for the tests.
 /// `isEnabled` false renders the row dimmed and inert, for an attention row whose window is under a cover.
 private struct SessionPopoverRow: View {

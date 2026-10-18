@@ -897,6 +897,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   result's `id`/`index` report what was picked, and `ControlPickUITests` pins that a far-down row is
   scrolled into view before Return.
   Reject duplicate IDs and control characters host-free; `prompt` and `query` stay unvalidated free text.
+  Optional item `status`/`statusColor`/`statusShape` take `session.status` values and are checked the same
+  way, without echoing the rejected value. App-built items skip that check, so `ControlPickItem.indicator`
+  turns an unknown status into idle and an unknown shape into the Settings one.
   Picks share the window modal slot with GUI asks. Terminal asks use separate session slots.
   A background window is raised only when `follow` is set.
 - Caller-supplied rows match on their label only. Subtitles are displayed but never searched, so
@@ -1383,7 +1386,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   rows may sit side by side.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
-  already held and discarded. The exact fields are below.
+  already held and discarded. The exact fields are below, plus the far node's non-idle
+  `status`/`statusColor`/`statusShape`, which File ▸ Attach Remote draws on its rows.
 - A remote pane is an ORDINARY command surface whose command is ssh. There is no new surface kind, no new
   lifecycle and no remote daemon ownership, so closing locally tears the surface down, ssh dies, and the
   far-side daemon survives. No command asks the remote zmx to kill anything. `Session.remoteHost` is model

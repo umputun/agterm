@@ -588,14 +588,17 @@ struct WindowContentView: View {
                 actions: actions,
                 terminalAreaInset: terminalAreaInset,
                 items: pending.items.enumerated().map { index, item in
-                    PaletteItem(id: item.id, title: item.label, subtitle: item.subtitle) {
+                    let indicator = item.indicator
+                    return PaletteItem(id: item.id, title: item.label, subtitle: item.subtitle,
+                                       indicator: { indicator },
+                                       run: {
                         pick.resolve(ControlPickResult(
                             result: .picked,
                             id: item.id,
                             label: item.label,
                             index: index
                         ))
-                    }
+                    })
                 },
                 prompt: pending.prompt,
                 initialQuery: pending.query,
