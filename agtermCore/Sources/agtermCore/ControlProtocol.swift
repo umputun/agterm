@@ -340,6 +340,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var multiple: Bool?
     /// checked lists the `ask.open` choice ids selected at open.
     public var checked: [String]?
+    /// other adds a free-form row after an `ask.open` choice list; the value is its placeholder.
+    public var other: String?
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
     /// (= frontmost).
     public var window: String?
@@ -439,7 +441,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
                 persistent: Bool? = nil, browse: Bool? = nil, cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
-                checked: [String]? = nil) {
+                checked: [String]? = nil, other: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -532,6 +534,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.choices = choices
         self.multiple = multiple
         self.checked = checked
+        self.other = other
     }
 }
 

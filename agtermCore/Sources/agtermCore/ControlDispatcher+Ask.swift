@@ -140,13 +140,14 @@ extension ControlDispatcher {
             }
         }
         if args.choices == nil {
-            for (name, present) in [("checked", args.checked != nil), ("multiple", args.multiple != nil)] where present {
+            for (name, present) in [("checked", args.checked != nil), ("multiple", args.multiple != nil),
+                                    ("other", args.other != nil)] where present {
                 return .reject("\(name) requires choices")
             }
         }
         if let input = args.input { return parseAskInput(input, value: args.value ?? "", placeholder: args.placeholder) }
         if let choices = args.choices {
-            return parseAskChoices(choices, checked: args.checked ?? [], multiple: args.multiple ?? false)
+            return parseAskChoices(choices, checked: args.checked ?? [], multiple: args.multiple ?? false, other: args.other)
         }
         return .form(nil)
     }
@@ -162,7 +163,7 @@ extension ControlDispatcher {
         return .form(.input(AskInputForm(mode: mode, value: value, placeholder: placeholder)))
     }
 
-    private func parseAskChoices(_ choices: [ControlAskChoice], checked: [String], multiple: Bool) -> AskFormParse {
+    private func parseAskChoices(_ choices: [ControlAskChoice], checked: [String], multiple: Bool, other: String?) -> AskFormParse {
         guard (1...ControlAskChoice.maxChoices).contains(choices.count) else {
             return .reject("ask choices must be 1 to \(ControlAskChoice.maxChoices)")
         }
@@ -176,7 +177,11 @@ extension ControlDispatcher {
         guard checked.allSatisfy({ seen.insert($0).inserted }) else { return .reject("ask checked ids must be unique") }
         if let unknown = checked.first(where: { !ids.contains($0) }) { return .reject("unknown checked choice: \(unknown)") }
         guard multiple || checked.count <= 1 else { return .reject("radio choices accept one checked id") }
-        return .form(.choices(AskChoiceForm(choices: choices, multiple: multiple, checked: checked)))
+        if let other {
+            guard !AskChoiceForm.isBlank(other) else { return .reject("ask other placeholder must not be blank") }
+            guard !containsControlCharacters(other) else { return .reject("ask text must not contain control characters") }
+        }
+        return .form(.choices(AskChoiceForm(choices: choices, multiple: multiple, checked: checked, other: other)))
     }
 
     private func containsControlCharacters(_ text: String, allowing allowed: Set<Unicode.Scalar>) -> Bool {

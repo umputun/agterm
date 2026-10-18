@@ -318,6 +318,138 @@ struct AskTests {
         #expect(draft.cursor == 1)
     }
 
+    @Test(arguments: [false, true])
+    func typingSelectsTheOtherRowAndBlankTextDisablesIt(multiple: Bool) {
+        var draft = AskDraft(form: otherForm(multiple: multiple))
+        #expect(!draft.otherEnabled)
+        draft.text = " "
+        #expect(!draft.otherEnabled && !draft.otherSelected && draft.otherText == nil)
+        draft.text = " x"
+        #expect(draft.otherEnabled && draft.otherSelected && draft.otherText == " x")
+        draft.text = "  "
+        #expect(!draft.otherEnabled && !draft.otherSelected && draft.otherText == nil)
+        #expect(draft.text == "  ")
+    }
+
+    @Test func radioOtherRestoresThePickItTookOverFrom() {
+        var draft = AskDraft(form: otherForm(multiple: false, checked: ["b"]))
+        draft.text = "x"
+        #expect(draft.selected.isEmpty && draft.otherSelected)
+        draft.text = "xyz"
+        draft.text = ""
+        #expect(draft.selected == ["b"] && !draft.otherSelected)
+    }
+
+    @Test func radioPickElsewhereKeepsOtherTextAndClearingItKeepsThatPick() {
+        var draft = AskDraft(form: otherForm(multiple: false, checked: ["b"]))
+        draft.text = "x"
+        draft.toggle(at: 2)
+        #expect(draft.selected == ["c"] && !draft.otherSelected && draft.text == "x" && draft.otherEnabled)
+        draft.text = ""
+        #expect(draft.selected == ["c"])
+        draft.text = "y"
+        #expect(draft.selected.isEmpty && draft.otherSelected)
+        draft.text = ""
+        #expect(draft.selected == ["c"])
+    }
+
+    @Test func radioOtherWithoutAnInitialPickFallsBackToTheFirstItem() {
+        var draft = AskDraft(form: otherForm(multiple: false))
+        draft.toggle(at: 3)
+        #expect(!draft.otherSelected)
+        draft.text = "x"
+        draft.text = ""
+        #expect(draft.selected == ["a"])
+    }
+
+    @Test func radioOtherMarkerPicksAnEnabledRowAndIsANoOpOncePicked() {
+        var draft = AskDraft(form: otherForm(multiple: false, checked: ["b"]))
+        draft.text = "x"
+        draft.toggle(at: 0)
+        draft.toggle(at: 3)
+        #expect(draft.otherSelected && draft.selected.isEmpty)
+        draft.toggle(at: 3)
+        #expect(draft.otherSelected && draft.selected.isEmpty)
+        draft.text = ""
+        #expect(draft.selected == ["a"])
+    }
+
+    @Test func checkboxOtherMarkerTogglesWhileEnabledAndKeepsTheText() {
+        var draft = AskDraft(form: otherForm(multiple: true, checked: ["a"]))
+        draft.toggle(at: 3)
+        #expect(!draft.otherSelected)
+        draft.text = "x"
+        draft.toggle(at: 3)
+        #expect(!draft.otherSelected && draft.otherEnabled && draft.text == "x" && draft.otherText == nil)
+        #expect(draft.selected == ["a"])
+        draft.text = "xy"
+        #expect(draft.otherSelected && draft.otherText == "xy")
+    }
+
+    @Test func cursorReachesTheOtherRowAfterFiftyItemsAndClampsThere() {
+        let items = (1...ControlAskChoice.maxChoices).map { ControlAskChoice(id: "i\($0)", label: "I\($0)") }
+        var draft = AskDraft(form: .choices(AskChoiceForm(choices: items, multiple: true, other: "Other")))
+        draft.moveCursor(by: 100)
+        #expect(draft.cursor == ControlAskChoice.maxChoices && draft.cursorOnOther)
+        draft.moveCursor(by: 1)
+        #expect(draft.cursor == ControlAskChoice.maxChoices)
+        draft.moveCursor(by: -1)
+        #expect(!draft.cursorOnOther)
+        var plain = AskDraft(form: .choices(AskChoiceForm(choices: choices("a", "b"))))
+        plain.moveCursor(by: 5)
+        #expect(plain.cursor == 1 && !plain.cursorOnOther)
+    }
+
+    @Test(arguments: [false, true])
+    func otherAnswerReturnsRawTextOnlyWhileSelected(multiple: Bool) {
+        let form = AskForm.choices(AskChoiceForm(choices: choices("a", "b", "other"), multiple: multiple, checked: ["other"],
+                                                 other: "Something else"))
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons, form: form, cancelID: "cancel")
+        var draft = AskDraft(form: form)
+        draft.text = "  mine  "
+        let answered = ask.answer(buttonAt: 0, draft: draft)
+        #expect(answered?.text == "  mine  ")
+        #expect(answered?.selected == (multiple ? ["other"] : []))
+        #expect(ask.answer(buttonAt: 1, draft: draft) == ControlAskResult(result: .escaped))
+        draft.toggle(at: 0)
+        #expect(ask.answer(buttonAt: 0, draft: draft)?.text == (multiple ? "  mine  " : nil))
+        if multiple { draft.toggle(at: 3) }
+        #expect(ask.answer(buttonAt: 0, draft: draft)?.text == nil)
+    }
+
+    @Test(arguments: [
+        OtherAnswer(false, [], " mine ", true), OtherAnswer(false, ["a"], nil, true), OtherAnswer(true, ["a", "c"], " mine ", true),
+        OtherAnswer(true, [], nil, true), OtherAnswer(false, ["a"], "mine", false), OtherAnswer(false, [], nil, false),
+        OtherAnswer(true, ["a"], "  ", false), OtherAnswer(true, [], "a\u{1}b", false), OtherAnswer(true, [], "a\tb", false),
+        OtherAnswer(true, [], String(repeating: "x", count: AskInputForm.maxTextBytes + 1), false),
+    ])
+    func validatedOtherAnswerFollowsTheFormsShape(answer: OtherAnswer) {
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons, form: otherForm(multiple: answer.multiple), cancelID: "cancel")
+        let result = ask.validatedAnswer(buttonID: "ok", text: answer.text, selected: answer.selected)
+        #expect((result != nil) == answer.accepted)
+        if answer.accepted {
+            #expect(result == ControlAskResult(result: .answered, id: "ok", label: "OK", index: 0, text: answer.text, selected: answer.selected))
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func retypingTheSameTextReselectsTheRow(multiple: Bool) {
+        var draft = AskDraft(form: otherForm(multiple: multiple))
+        draft.text = "x"
+        draft.toggle(at: multiple ? 3 : 0)
+        #expect(!draft.otherSelected)
+        draft.text = "x"
+        #expect(draft.otherSelected && draft.otherText == "x")
+    }
+
+    @Test func validatedChoiceAnswerRefusesTextWithoutAnOtherRow() {
+        let ask = PendingAsk(id: "a", title: "Pick", buttons: formButtons,
+                             form: .choices(AskChoiceForm(choices: choices("a", "b"), multiple: true)), cancelID: "cancel")
+        #expect(ask.validatedAnswer(buttonID: "ok", text: "x", selected: ["a"]) == nil)
+        #expect(ask.validatedAnswer(buttonID: "cancel", text: nil, selected: nil) == ControlAskResult(result: .escaped))
+        #expect(ask.validatedAnswer(buttonID: "cancel", text: "x", selected: nil) == nil)
+    }
+
     @Test(arguments: [(AskInputForm.maxTextBytes, AskInputForm.maxTextBytes), (AskInputForm.maxTextBytes + 1, AskInputForm.maxTextBytes)])
     func draftTextIsClampedToTheByteCap(length: Int, expected: Int) {
         var draft = AskDraft(form: .input(AskInputForm(mode: .line)))
@@ -400,7 +532,25 @@ struct AskTests {
         ids.map { ControlAskChoice(id: $0, label: $0.uppercased()) }
     }
 
+    private func otherForm(multiple: Bool, checked: [String] = []) -> AskForm {
+        .choices(AskChoiceForm(choices: choices("a", "b", "c"), multiple: multiple, checked: checked, other: "Something else"))
+    }
+
     private func buttons(count: Int) -> [ControlAskButton] {
         (0..<count).map { ControlAskButton(id: "button-\($0)", label: "Button \($0)") }
+    }
+}
+
+struct OtherAnswer: Sendable {
+    let multiple: Bool
+    let selected: [String]
+    let text: String?
+    let accepted: Bool
+
+    init(_ multiple: Bool, _ selected: [String], _ text: String?, _ accepted: Bool) {
+        self.multiple = multiple
+        self.selected = selected
+        self.text = text
+        self.accepted = accepted
     }
 }

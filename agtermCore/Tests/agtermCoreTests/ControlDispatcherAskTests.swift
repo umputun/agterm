@@ -353,6 +353,22 @@ struct ControlDispatcherAskTests {
         #expect(ask.form == .choices(AskChoiceForm(choices: choices, multiple: true, checked: ["395"])))
     }
 
+    @Test func otherPlaceholderReachesHostWithTheChoices() async throws {
+        let choices = [ControlAskChoice(id: "a", label: "A")]
+        let ask = try #require(await openedAsk(ControlArgs(title: "Pick", choices: choices, other: "Something else")))
+        #expect(ask.form == .choices(AskChoiceForm(choices: choices, other: "Something else")))
+    }
+
+    @Test(arguments: [
+        (ControlArgs(title: "T", input: "line", other: "x"), "other requires choices"),
+        (ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "T", other: "x"), "other requires choices"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A")], other: "  "), "ask other placeholder must not be blank"),
+        (ControlArgs(title: "T", choices: [ControlAskChoice(id: "a", label: "A")], other: "a\tb"), "ask text must not contain control characters"),
+    ])
+    func invalidOtherNeverReachesHost(args: ControlArgs, error: String) async {
+        #expect(await rejection(args) == error)
+    }
+
     @Test(arguments: [
         (ControlArgs(title: "T", input: "line", choices: [ControlAskChoice(id: "a", label: "A")]), "input and choices are exclusive"),
         (ControlArgs(title: "T", input: "wide"), "unknown input"),
