@@ -210,13 +210,13 @@ in the tree.
 - Modify: `agtermCore/Sources/agtermctlKit/MiscCommands.swift` (only if result printing needs it)
 - Modify: `agtermCore/Tests/agtermctlKitTests/AskCommandsTests.swift`
 
-- [ ] add `--input line|multiline`, `--value`, `--placeholder`, repeatable `--choice ID=LABEL`,
+- [x] add `--input line|multiline`, `--value`, `--placeholder`, repeatable `--choice ID=LABEL`,
       repeatable `--choice-subtitle ID=TEXT`, `--multiple`, repeatable `--checked ID`, `--cancel ID`;
       `--button` optional with a form
-- [ ] mirror the host-free validation messages client-side where `validate()` already does so
-- [ ] print `text`/`selected` in the blocking and one-shot result JSON; the cancel button exits 3
-- [ ] write tests: request building for each flag, missing-form errors, result output, exit codes
-- [ ] run `swift test --filter AskCommands` - must pass before next task
+- [x] mirror the host-free validation messages client-side where `validate()` already does so
+- [x] print `text`/`selected` in the blocking and one-shot result JSON; the cancel button exits 3
+- [x] write tests: request building for each flag, missing-form errors, result output, exit codes
+- [x] run `swift test --filter AskCommands` - must pass before next task
 
 ### Task 3: Remote presentation of form asks
 
