@@ -191,6 +191,30 @@ public struct PendingAsk: Equatable, Sendable {
         }
     }
 
+    /// validatedAnswer checks an answer that arrived from elsewhere against this ask: a known button, the cancel
+    /// role applied here, and a payload matching the form (text within the cap, or known ids in caller order,
+    /// exactly one for radio). Nil refuses the answer.
+    public func validatedAnswer(buttonID: String, text: String?, selected: [String]?) -> ControlAskResult? {
+        guard let index = buttons.firstIndex(where: { $0.id == buttonID }) else { return nil }
+        if buttonID == cancelID {
+            return text == nil && selected == nil ? ControlAskResult(result: .escaped) : nil
+        }
+        let label = buttons[index].label
+        switch form {
+        case .input:
+            guard let text, selected == nil, text.utf8.count <= AskInputForm.maxTextBytes else { return nil }
+            return ControlAskResult(result: .answered, id: buttonID, label: label, index: index, text: text)
+        case .choices(let list):
+            guard let selected, text == nil else { return nil }
+            let chosen = Set(selected)
+            guard list.choices.map(\.id).filter(chosen.contains) == selected, list.multiple || selected.count == 1 else { return nil }
+            return ControlAskResult(result: .answered, id: buttonID, label: label, index: index, selected: selected)
+        case nil:
+            guard text == nil, selected == nil else { return nil }
+            return ControlAskResult(result: .answered, id: buttonID, label: label, index: index)
+        }
+    }
+
     /// The same dialog anchored at `anchor`, everything else kept.
     public func anchored(at anchor: AskAnchor?) -> PendingAsk {
         PendingAsk(id: id, title: title, message: message, buttons: buttons, defaultID: defaultID,

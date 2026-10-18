@@ -13,28 +13,34 @@ extension AppStore {
         guard let hub = presentationHub, hub.hasPresenter(session: session.id),
               session.followsRemotely(paneIdentity: paneIdentity) else { return nil }
         let owner = hub.presenterGeneration(session: session.id)
+        let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
+        if request.needsFormSupport {
+            guard hub.presenterSupports(PresentationHub.askFormKind, session: session.id), request.fitsFrames() else { return nil }
+        }
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return false }
         AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
         session.onRemoteAskEnded = { [weak hub, id = session.id] askID in
             hub?.sendToPresenter(.askDismiss(PresentationAskRef(id: askID, owner: owner)), session: id)
         }
-        let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
         hub.sendToPresenter(.askRequest(request), session: session.id)
         return true
     }
 
     /// Applies the presenter's answer. Refused unless it is for the ask this session is presenting under that
-    /// owner: a late answer after a handback, or one naming a button the ask does not have, changes nothing.
+    /// owner: a late answer after a handback, or one naming a button the ask does not have or carrying a payload
+    /// its form would not produce, changes nothing.
     @discardableResult
     public func resolveRemoteAsk(_ answer: PresentationAskAnswer, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), let ask = session.askPending, ask.id == answer.id,
               session.askRemoteOwner == answer.owner else { return false }
         guard let buttonID = answer.button else {
+            guard answer.text == nil, answer.selected == nil else { return false }
             return session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
         }
-        guard let index = ask.buttons.firstIndex(where: { $0.id == buttonID }) else { return false }
-        return session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: buttonID,
-                                                              label: ask.buttons[index].label, index: index))
+        guard let result = ask.validatedAnswer(buttonID: buttonID, text: answer.text, selected: answer.selected) else {
+            return false
+        }
+        return session.resolveAsk(id: ask.id, result)
     }
 
     /// Whether `ref` names the ask `id` is presenting under that owner, so a refusal from a presenter that

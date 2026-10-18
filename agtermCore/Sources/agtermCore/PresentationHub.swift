@@ -44,7 +44,10 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound"]
+    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind]
+    /// askFormKind is the capability of drawing an ask's text field, choice list and cancel role. It names no
+    /// frame body: an ask needing it travels as an ordinary `ask.request`, sent only to a presenter listing it.
+    public static let askFormKind = "ask.form"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
@@ -160,6 +163,12 @@ public final class PresentationHub {
 
     /// Whether a viewer holds `session`'s presenter role.
     public func hasPresenter(session: UUID) -> Bool { grant.holder(of: session) != nil }
+
+    /// Whether `session`'s presenter listed `kind` in its hello.
+    public func presenterSupports(_ kind: String, session: UUID) -> Bool {
+        guard let holder = grant.holder(of: session) else { return false }
+        return subscribers[holder]?.kinds.contains(kind) == true
+    }
 
     /// Counts changes of `session`'s presenter, a grant and a loss alike.
     public func presenterGeneration(session: UUID) -> Int { grant.generation(of: session) }

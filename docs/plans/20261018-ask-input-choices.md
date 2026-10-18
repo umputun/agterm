@@ -231,19 +231,19 @@ in the tree.
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationHubTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift`
 
-- [ ] carry the form and `cancelButton` in `PresentationAsk`, and `text`/`selected` in
+- [x] carry the form and `cancelButton` in `PresentationAsk`, and `text`/`selected` in
       `PresentationAskAnswer`; build the replica's `PendingAsk` with them and forward the payload from the
       replica's answer callback
-- [ ] add `ask.form` to `supportedKinds` and a hub query for the presenter's negotiated kinds; check it and
+- [x] add `ask.form` to `supportedKinds` and a hub query for the presenter's negotiated kinds; check it and
       the encoded frame size in `presentAskRemotely` before the slot is claimed, keeping the ask local otherwise
-- [ ] validate the answer payload on the origin against the stored ask and apply the cancel role there
-- [ ] write tests: old presenter keeps the ask local, an oversized form frame keeps the ask local, an input
+- [x] validate the answer payload on the origin against the stored ask and apply the cancel role there
+- [x] write tests: old presenter keeps the ask local, an oversized form frame keeps the ask local, an input
       ask whose longest button id plus the reserved text answer cannot fit stays local, a round
       trip for text and selections through the replica callback (not only synthetic frames), rejected
       payloads (unknown or duplicate id, zero or two radio ids, oversize text, payload of the wrong form
       kind, payload on dismissal), quotes/backslashes/newlines/multibyte text encoded within the frame,
       handback reset
-- [ ] run `swift test --filter` for the touched suites - must pass before next task
+- [x] run `swift test --filter` for the touched suites - must pass before next task
 
 ### Task 4: Dialog rendering, editor, choice list and sizing
 

@@ -186,6 +186,21 @@ struct PresentationHubTests {
         #expect(sink.bodies.last == ask)
     }
 
+    @Test(arguments: [true, false])
+    func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let kinds = advertised ? ["status", PresentationHub.askFormKind] : ["status"]
+        let id = try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter),
+                                   sink: sink) { Self.empty }
+        #expect(!hub.presenterSupports(PresentationHub.askFormKind, session: Self.session))
+
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+
+        #expect(hub.presenterSupports(PresentationHub.askFormKind, session: Self.session) == advertised)
+        #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)))
+    }
+
     @Test func aPeerWithNoUsableVersionIsRefused() {
         let hub = makeHub()
         let sink = Sink()

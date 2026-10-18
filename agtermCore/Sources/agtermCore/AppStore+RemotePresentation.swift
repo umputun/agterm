@@ -139,10 +139,12 @@ extension AppStore {
         }
         let pending = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
                                  defaultID: ask.defaultID, destructiveID: ask.destructiveID, style: ask.style,
-                                 align: ask.align, width: ask.width)
+                                 align: ask.align, width: ask.width, form: ask.form, cancelID: ask.cancelID)
         return session.openReplicaAsk(pending, paneIdentity: paneIdentity) { result in
             switch result.result {
-            case .answered: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: result.id)))
+            case .answered:
+                answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: result.id,
+                                                         text: result.text, selected: result.selected)))
             case .escaped: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: nil)))
             case .cancelled, .pending: answer(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)))
             }
