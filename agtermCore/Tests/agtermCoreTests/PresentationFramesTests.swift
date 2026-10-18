@@ -52,6 +52,8 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 28, body: .context("PR #517")),
         PresentationFrame(gen: 1, rev: 29, body: .context(nil)),
         PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))),
+        PresentationFrame(gen: 1, rev: 31, body: .sound(PresentationSound(name: "Glass"))),
+        PresentationFrame(gen: 1, rev: 32, body: .sound(PresentationSound(name: nil))),
     ]
 
     @Test(arguments: frames)

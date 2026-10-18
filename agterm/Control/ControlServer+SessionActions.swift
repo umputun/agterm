@@ -500,7 +500,8 @@ extension ControlServer: ControlActions {
     /// (default false) clears to idle once the session is visited. A non-empty `sound` plays once on apply
     /// (`default`/`beep` = system alert, else a named system sound), validated up-front so an unknown name
     /// errors `unknown sound` leaving the status unchanged; empty counts as none, and with none given a
-    /// TRANSITION into `blocked` plays the Settings "Blocked sound" (`blockedStatusSoundName`).
+    /// TRANSITION into `blocked` plays the Settings "Blocked sound" (`blockedStatusSoundName`). Either sound
+    /// goes to an attached presenter instead when the status pane follows it (`presentStatusSoundRemotely`).
     /// `update.color` (`#rrggbb` glyph tint) and `update.shape` (silhouette) are dispatcher-validated and
     /// ride the EPHEMERAL indicator, lasting only until the next `session.status` without them.
     /// `update.pane` (`StatusPane`, dispatcher-validated, nil = `left`/main) records the pane that set the
@@ -540,6 +541,12 @@ extension ControlServer: ControlActions {
         if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
             return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
                 "(write from that pane to change it)")
+        }
+        // the blocked marker goes even when this Mac has no blocked sound: the presenter plays its own setting
+        let explicit = prepared == nil ? nil : update.sound
+        if explicit != nil || (update.status == .blocked && !wasBlocked),
+           store.presentStatusSoundRemotely(PresentationSound(name: explicit), in: session, pane: resolvedPane) {
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
         if let name = update.sound, let prepared {
             statusSoundPlayer.play(name, using: prepared)

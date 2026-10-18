@@ -652,7 +652,10 @@ error keeps those names for compatibility.
   (`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`,
   `Sosumi`, `Submarine`, `Tink`; also any custom sound in `~/Library/Sounds`) — an unknown name errors.
   Without `--sound`, a `blocked` status plays the user's Settings "Blocked sound" if they configured one
-  (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it.
+  (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it. On a session
+  another Mac presents, either sound plays there instead while the origin reports the status pane as a
+  follower and the presenting agterm supports it; otherwise it plays here (see Remote sessions). A custom
+  name the presenting Mac lacks plays its system alert.
   `--color` (`#rrggbb`) overrides the glyph tint for THIS call only — it rides the status, so the next
   `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
   Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
@@ -1294,10 +1297,12 @@ subcommand, so `agtermctl pick open` is not required. Stdin is read unconditiona
 no items needs `< /dev/null` or it blocks.
 
 The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
-`id` and `label` strings plus an optional `subtitle`; any other input is split into lines, blank and
+`id` and `label` strings plus an optional `subtitle` and an optional trailing status glyph: `status`
+(`idle|active|completed|blocked`, idle drawing none), `statusColor` (`#rrggbb`) and `statusShape` (a
+`session status --shape` name), the values `session status` takes; any other input is split into lines, blank and
 whitespace-only lines are dropped, and each remaining line becomes both the id and label. Item ids must
-be unique, labels must not be empty, labels and subtitles may not contain control characters, and a
-picker accepts at most 1,000 items. An empty list is rejected with `pick.open requires at least one item`
+be unique, labels must not be empty, labels and subtitles may not contain control characters, an invalid
+status, color or shape is refused, and a picker accepts at most 1,000 items. An empty list is rejected with `pick.open requires at least one item`
 unless `--allow-custom` is set, which accepts it and opens a plain text prompt. Omitting `items` altogether
 is rejected with `pick.open requires items`, reachable only over the raw protocol: the CLI always sends the
 list it parsed, empty or not.
@@ -1364,7 +1369,8 @@ Supply one to six buttons with unique ids and nonempty labels. A token without `
 otherwise the first `=` separates them. Title, message, and labels reject control characters.
 `--default ID` sets the initial highlight; otherwise the first non-destructive button is highlighted,
 or the first button if it is the only choice. Tab/arrows move the highlight, Return answers, and
-`--hotkey ID=LETTER` assigns a unique ASCII letter shortcut. `--destructive ID` cannot name the default.
+`--hotkey ID=LETTER` assigns a unique ASCII letter shortcut; a Latin layout matches the typed letter, any
+other layout the key that types it in the US layout. `--destructive ID` cannot name the default.
 `--align left|center|right` defaults to right. `--width N` fixes the width to 10...100 percent of the
 region; omitted means content sizing. Invalid style, alignment, and width return `unknown style`,
 `unknown align`, and `width must be 10 to 100` respectively.
@@ -1479,7 +1485,9 @@ expect points to convert to columns without one.
 
 `agtermctl notify <body> [--title T] [--target] [--window W]` — post a macOS desktop notification
 attributed to a session (default: the active session of the frontmost window). `--title` defaults to
-the session name. Clicking the banner reveals that session. This is the only app-level way to post a
+the session name. Clicking the banner reveals that session. A session keeps one such banner: a newer
+`notify` replaces it, the session's OSC 9/777 banners do not, and focusing the session removes it.
+This is the only app-level way to post a
 banner (the terminal's own OSC 9/777 is the other source). Control-native (no GUI/menu equivalent).
 
 The banner is gated by **Settings ▸ Notifications ▸ Show notification banners**; the unseen badge has its
@@ -1901,7 +1909,8 @@ far side, so it is also how to see what another machine would answer without ssh
 `presentation` (the presentation protocol version, absent from an app too old to stream),
 and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID`/`workspaceName` (show the
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
-`context` when its owner set one, `cwd`, `splitAxis` when it has a split, and `panes`
+`context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
+as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), and `panes`
 (`{pane, daemon, foreground}`, the last being the argv that pane is running and omitted when none is
 reported). `host` is the ssh destination the REQUESTING app was given, stamped on after decoding: the far
 side has no idea which name reached it.
@@ -1974,6 +1983,9 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   when the target pane reports `follower` there, or every existing pane does for session-wide placement.
   Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
   The caller on the origin gets the answer or the exit status as usual.
+- A `session status` sound (`--sound`, or the blocked default) plays on the presenting Mac instead of the
+  origin under the same rule for the status pane; a `scratch` status, or a presenter too old for it, keeps
+  it on the origin. The blocked default is the presenting Mac's own Settings choice.
 - A handed-over ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on
   screen), or one whose stream drops, goes back to the origin and waits there like a local one. If the
   origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.

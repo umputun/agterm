@@ -103,6 +103,16 @@ public struct PresentationNotify: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationSound is a status sound the origin hands its presenter to play instead of playing it itself.
+/// A nil `name` is the presenter's own Settings blocked sound, so each Mac's choice applies where it plays.
+public struct PresentationSound: Codable, Equatable, Sendable {
+    public var name: String?
+
+    public init(name: String?) {
+        self.name = name
+    }
+}
+
 /// PresentationAsk is an ask the origin hands its presenter to draw. `owner` is the presenter generation it
 /// was handed under, and every answer echoes it, so one arriving after a handback is recognisably stale.
 public struct PresentationAsk: Codable, Equatable, Sendable {
@@ -221,6 +231,7 @@ public struct PresentationFrame: Equatable, Sendable {
         case layout(PresentationLayout)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
+        case sound(PresentationSound)
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
         case presenterAcquire
         case presenterGranted
@@ -253,6 +264,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .layout: return "layout"
             case .hud: return "hud"
             case .notify: return "notify"
+            case .sound: return "sound"
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
@@ -283,7 +295,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, layout, hud, notify, ask, overlay
+        case kind, gen, rev, hello, snapshot, status, context, layout, hud, notify, sound, ask, overlay
     }
 
     public init(from decoder: Decoder) throws {
@@ -301,6 +313,7 @@ extension PresentationFrame: Codable {
         case "layout": body = .layout((try? container.decode(PresentationLayout.self, forKey: .layout)) ?? .invalid)
         case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
         case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
+        case "sound": body = .sound(try container.decode(PresentationSound.self, forKey: .sound))
         case "presenter.acquire": body = .presenterAcquire
         case "presenter.granted": body = .presenterGranted
         case "presenter.refused": body = .presenterRefused
@@ -331,6 +344,7 @@ extension PresentationFrame: Codable {
         case .layout(let layout): try container.encode(layout, forKey: .layout)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)
+        case .sound(let sound): try container.encode(sound, forKey: .sound)
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)
         case .askResolve(let answer): try container.encode(answer, forKey: .ask)
         case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)

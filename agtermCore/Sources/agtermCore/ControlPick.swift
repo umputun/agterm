@@ -5,11 +5,25 @@ public struct ControlPickItem: Codable, Sendable, Equatable {
     public let id: String
     public let label: String
     public let subtitle: String?
+    /// status is the row's glyph in `session.status` values; absent or idle draws none.
+    public let status: String?
+    public let statusColor: String?
+    public let statusShape: String?
 
-    public init(id: String, label: String, subtitle: String? = nil) {
+    public init(id: String, label: String, subtitle: String? = nil, status: String? = nil,
+                statusColor: String? = nil, statusShape: String? = nil) {
         self.id = id
         self.label = label
         self.subtitle = subtitle
+        self.status = status
+        self.statusColor = statusColor
+        self.statusShape = statusShape
+    }
+
+    /// indicator drops unknown values: app-built items bypass `pick.open` validation.
+    public var indicator: AgentIndicator {
+        guard let parsed = status.flatMap(AgentStatus.init(rawValue:)), parsed != .idle else { return AgentIndicator() }
+        return AgentIndicator(status: parsed, color: statusColor, shape: statusShape.flatMap(StatusShape.init(rawValue:)))
     }
 }
 

@@ -14,13 +14,8 @@ struct PaletteItem: Identifiable {
     let shortcut: String?
     /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
     let badge: String?
-    /// A leading agent-status glyph, nil for none — only the `.attention` palette sets it.
-    let status: AgentStatus?
-    /// Per-call `#rrggbb` tint for the status glyph (the session's `AgentIndicator.color`), so the
-    /// attention row matches the sidebar; nil = the default status color.
-    let statusColor: String?
-    /// Per-call silhouette for the status glyph (`AgentIndicator.shape`); nil = the Settings shape.
-    let statusShape: StatusShape?
+    /// indicator is read live: `CommandPalette` keeps its ranked rows while open.
+    let indicator: () -> AgentIndicator
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/click).
     /// Only `.themes` sets it, driving the live theme preview.
     let onSelect: (() -> Void)?
@@ -33,8 +28,8 @@ struct PaletteItem: Identifiable {
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
-         badge: String? = nil, status: AgentStatus? = nil, statusColor: String? = nil,
-         statusShape: StatusShape? = nil, isEnabled: @escaping () -> Bool = { true },
+         badge: String? = nil, indicator: @escaping () -> AgentIndicator = { AgentIndicator() },
+         isEnabled: @escaping () -> Bool = { true },
          onSelect: (() -> Void)? = nil,
          run: @escaping () -> Void) {
         self.id = id ?? title
@@ -42,9 +37,7 @@ struct PaletteItem: Identifiable {
         self.subtitle = subtitle
         self.shortcut = shortcut
         self.badge = badge
-        self.status = status
-        self.statusColor = statusColor
-        self.statusShape = statusShape
+        self.indicator = indicator
         self.isEnabled = isEnabled
         self.onSelect = onSelect
         self.run = run
@@ -409,10 +402,8 @@ private struct PaletteRow: View {
     private var enabled: Bool { item.isEnabled() }
 
     var body: some View {
+        let indicator = item.indicator()
         HStack {
-            if let status = item.status {
-                StatusGlyph(status: status, colorHex: item.statusColor, shape: item.statusShape)
-            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.system(size: metrics.base))
                     .foregroundStyle(enabled ? Color.primary : Color(nsColor: .disabledControlTextColor))
@@ -438,6 +429,9 @@ private struct PaletteRow: View {
                 Text(shortcut)
                     .font(.system(size: metrics.shortcut))
                     .foregroundStyle(.secondary)
+            }
+            if indicator.status != .idle {
+                StatusGlyph(status: indicator.status, colorHex: indicator.color, shape: indicator.shape)
             }
         }
         .padding(.horizontal, metrics.scaled(12))

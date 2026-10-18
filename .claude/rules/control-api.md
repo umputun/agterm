@@ -330,7 +330,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
   the placement store, wraps within filtered scope, and returns selected ID. It has no target.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and
-  uses click identity. When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
+  posts under the session's control slot (see [[notifications]]). When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
   requests omit text. Read through `unseen`.
 
 ## Session creation and duplication
@@ -897,6 +897,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   result's `id`/`index` report what was picked, and `ControlPickUITests` pins that a far-down row is
   scrolled into view before Return.
   Reject duplicate IDs and control characters host-free; `prompt` and `query` stay unvalidated free text.
+  Optional item `status`/`statusColor`/`statusShape` take `session.status` values and are checked the same
+  way, without echoing the rejected value. App-built items skip that check, so `ControlPickItem.indicator`
+  turns an unknown status into idle and an unknown shape into the Settings one.
   Picks share the window modal slot with GUI asks. Terminal asks use separate session slots.
   A background window is raised only when `follow` is set.
 - Caller-supplied rows match on their label only. Subtitles are displayed but never searched, so
@@ -921,6 +924,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Default seeds the highlight; otherwise the first non-destructive button is selected, or the first
   button if it is the only choice. Tab/Right/Down move forward, Shift-Tab/Left/Up move back, and wrap.
   Return chooses the highlight; a letter hotkey chooses directly. Outside clicks leave the dialog open.
+  The hotkey key resolves through `AskNavigation.resolvedHotkey`, the keymap's per-layout `chordKey` rule
+  (#769): an ASCII-capable layout matches the typed letter, any other the US-layout letter at that position.
 - Optional `style` is `terminal` (default) or `gui`; invalid values return `unknown style`.
   Style selects ownership, default placement, and appearance. It has no separate read-back field.
 - Optional `align` is `left`, `center`, or `right` (default). It aligns the whole button block, including
@@ -1381,7 +1386,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   rows may sit side by side.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
-  already held and discarded. The exact fields are below.
+  already held and discarded. The exact fields are below, plus the far node's non-idle
+  `status`/`statusColor`/`statusShape`, which File ▸ Attach Remote draws on its rows.
 - A remote pane is an ORDINARY command surface whose command is ssh. There is no new surface kind, no new
   lifecycle and no remote daemon ownership, so closing locally tears the surface down, ssh dies, and the
   far-side daemon survives. No command asks the remote zmx to kill anything. `Session.remoteHost` is model
@@ -1621,6 +1627,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   presenter only when its target pane reports `follower` on the origin, or every existing pane does for
   session-wide placement; mixed, unknown or unowned roles stay local.
   One already open stays where it is when the lead changes.
+- A `session.status` sound follows the same gate on the status pane, scratch staying local: the origin sends
+  a one-shot `sound` frame to the presenter and does not play it. A nil name is the blocked-default marker,
+  sent on a transition into `blocked` even when the origin's own blocked sound is off, and the presenter
+  plays its own setting. A name the presenter cannot resolve plays its system alert, since the origin has
+  already stayed silent. The kind is negotiated: `sendToPresenter` refuses a `supportedKinds` kind the
+  presenter's hello omitted, so an older presenter leaves the sound on the origin. It is never part of a
+  snapshot, and the destination is the presenter, not necessarily the Mac holding the pane's lead.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
   a replica, `ask.replica`, whose answer carries only the button id and is checked against the stored
   buttons. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its

@@ -467,9 +467,8 @@ struct AskKeyCatcher: NSViewRepresentable {
         case 36, 76: return .activate
         case 53: return .cancel
         default:
-            guard let text = event.charactersIgnoringModifiers, text.utf8.count == 1,
-                  let ascii = text.utf8.first, (65...90).contains(ascii) || (97...122).contains(ascii) else { return nil }
-            return .hotkey(text.lowercased())
+            return AskNavigation.resolvedHotkey(forKeyCode: event.keyCode, produced: event.charactersIgnoringModifiers,
+                                                layoutIsASCIICapable: KeyboardLayout.isASCIICapable).map(AskKey.hotkey)
         }
     }
 

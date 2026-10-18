@@ -16,9 +16,12 @@ final class StatusSoundPlayer {
 
     private var cache: [String: NSSound] = [:]
     private let resolve: @Sendable (String) -> NSSound?
+    private let alert: @Sendable () -> Void
 
-    init(resolve: @escaping @Sendable (String) -> NSSound? = { NSSound(named: NSSound.Name($0)) }) {
+    init(resolve: @escaping @Sendable (String) -> NSSound? = { NSSound(named: NSSound.Name($0)) },
+         alert: @escaping @Sendable () -> Void = { NSSound.beep() }) {
         self.resolve = resolve
+        self.alert = alert
     }
 
     /// Playback runs here, never on the main actor: the first `NSSound.play()` in a process is slow enough
@@ -43,7 +46,7 @@ final class StatusSoundPlayer {
     /// be found. `default`/`beep` plays the system alert sound; anything else plays the named system sound.
     /// Cache misses use the resolution queue; cache hits return without queueing.
     func action(for name: String) async -> (() -> Void)? {
-        if name == "default" || name == "beep" { return { Self.playQueue.async { NSSound.beep() } } }
+        if name == "default" || name == "beep" { return { [alert] in Self.playQueue.async { alert() } } }
         if let cached = cache[name] { return Self.playAction(for: cached) }
         let resolved = await withCheckedContinuation { continuation in
             Self.resolveQueue.async { [resolve] in

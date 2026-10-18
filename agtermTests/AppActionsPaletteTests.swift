@@ -149,6 +149,24 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(actions.renamePending)
     }
 
+    func testASessionRowShowsTheStatusOfTheMomentUnderTheOpenPalette() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let row = try XCTUnwrap(actions.paletteSessions().first { $0.id == session.id.uuidString })
+        XCTAssertEqual(row.indicator(), AgentIndicator())
+
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: session.id)
+        XCTAssertEqual(row.indicator().status, .active)
+
+        let completed = AgentIndicator(status: .completed, color: "#00aa00", shape: .star)
+        store.setAgentIndicator(completed, forSession: session.id)
+        XCTAssertEqual(row.indicator(), completed)
+
+        store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+        XCTAssertEqual(row.indicator().status, .idle)
+    }
+
     // an action neither a palette row nor `paletteLessHandler(for:)` covers can still be bound in
     // keymap.conf, where it would swallow its key and do nothing.
     func testEveryBuiltinActionReachesADispatchPath() {
@@ -170,7 +188,7 @@ final class AppActionsPaletteTests: XCTestCase {
 
         let row = try XCTUnwrap(actions.paletteAttention().first { $0.id == session.id.uuidString })
         XCTAssertEqual(row.subtitle?.hasPrefix("back · "), true)
-        XCTAssertEqual(row.status, .blocked)
+        XCTAssertEqual(row.indicator().status, .blocked)
         XCTAssertTrue(row.isEnabled())
 
         let zoom = TerminalZoomController()

@@ -1493,7 +1493,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">Ping</span>, … plus any custom sound in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/Library/Sounds</span>); an unknown name errors.
                 Without it, a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> status plays the user's
-                configured Blocked sound, if any.
+                configured Blocked sound, if any. On a session another Mac presents, either sound plays there instead while the status pane follows another Mac's lead and the presenting agterm supports it; otherwise it plays here.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--color #rrggbb</span> overrides the glyph tint for
                 this call only; the next status set without it reverts.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--shape</span>
@@ -2620,7 +2620,13 @@
                 Read choices from stdin and open the target window's native picker. Nonblank input lines become items whose id equals
                 the label. Input whose first non-whitespace byte is
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">[</span> is a JSON array of
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. Item ids must be
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. An item may also
+                carry a trailing status glyph through
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span>, the values
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status</span> takes; an invalid one is refused
+                and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> draws none. Item ids must be
                 unique, labels must not be empty, and the list is capped at 1,000 items. The list may be empty only with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span>, which turns the picker into a
                 plain text prompt.
@@ -2770,7 +2776,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--default</span> seeds the highlight. Without it,
                 the first non-destructive button is active, or the first if it is the only choice. Tab and arrows
                 move the highlight and wrap. Return chooses the active button in either style.
-                Hotkeys are single ASCII letters, unique case-insensitively.
+                Hotkeys are single ASCII letters, unique case-insensitively. A Latin layout matches the typed letter;
+                any other layout matches the key that types it in the US layout.
                 A <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--destructive</span> button cannot be the default.
                 Outside clicks leave the question open.
               </p>
@@ -3084,7 +3091,9 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Post a macOS desktop notification attributed to a session (default: the active session of the frontmost window).
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--title</span> defaults to the session name. Clicking
-                the banner reveals that session. It raises the session's unseen badge; clear it with
+                the banner reveals that session. A session keeps one such banner: a newer
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> replaces it, the session's
+                terminal notifications do not, and focusing the session removes it. It raises the session's unseen badge; clear it with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session seen</span>. Control-native.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
@@ -3670,7 +3679,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceName</span> (show the names, group by the ids — neither is unique, so grouping by name merges two windows called <span style="font-family: &quot;JetBrains Mono&quot;, monospace">main</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (only when its owner set one),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (as the far side's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports them, omitted when idle), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">panes</span>
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane, daemon, foreground}</span>, the last being the argv that pane is running, omitted when the remote reports none).
               </p>

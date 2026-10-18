@@ -27,13 +27,15 @@ struct HudHelperTests {
     // a helper process painting into a temp file, so the frames can be read at any point without racing
     // a pipe's EOF.
     private final class Run {
+        static let ignoredTermMessage = "hud.sh ignored SIGTERM"
         let bodyFile: URL
         private let dir: URL
         private let outFile: URL
         private let proc = Process()
 
         init(_ body: String, cols: Int, rows: Int, spinner: HudSpinner? = nil, textColor: String? = nil,
-             blockWidth: Int = 0, ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
+             blockWidth: Int = 0, ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier,
+             ignoresTerm: Bool = false) throws {
             let fm = FileManager.default
             dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-hud-\(UUID().uuidString)")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -45,7 +47,10 @@ struct HudHelperTests {
             fm.createFile(atPath: outFile.path, contents: nil)
 
             proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-            proc.arguments = [HudHelperTests.helper]
+            // a signal ignored when the shell starts cannot be trapped, so the helper's own TERM trap is inert
+            proc.arguments = ignoresTerm
+                ? ["-c", "trap '' TERM; exec /bin/sh \"$0\"", HudHelperTests.helper]
+                : [HudHelperTests.helper]
             // no LANG/LC_*, which is what a Dock-launched app inherits from launchd: the script's own
             // LC_CTYPE is the only thing making `${#line}` count characters.
             proc.environment = [HudLayout.fileEnvKey: bodyFile.path]
@@ -107,10 +112,42 @@ struct HudHelperTests {
             return !proc.isRunning
         }
 
+        /// Ends the helper with SIGTERM, and fails the test if that does not work. The fallback then removes
+        /// the body file, the helper's own stop, and SIGKILLs as a last resort; every wait is bounded.
         func stop() {
+            defer { try? FileManager.default.removeItem(at: dir) }
             if proc.isRunning { proc.terminate() }
-            proc.waitUntilExit()
-            try? FileManager.default.removeItem(at: dir)
+            if waitForExit(2) { return }
+            Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)\n\(missEvidence())")
+            try? removeBody()
+            if waitForExit(2) { return }
+            Issue.record("hud.sh outlived its body file: pid \(proc.processIdentifier)")
+            kill(proc.processIdentifier, SIGKILL)
+            if !waitForExit(2) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
+        }
+
+        private func missEvidence() -> String {
+            let first = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
+            Thread.sleep(forTimeInterval: 0.5)
+            let second = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
+            return "output \(first.0) -> \(second.0) bytes over 0.5s\n\(first.1)\n\(second.1)"
+        }
+
+        private static func processTree(of pid: Int32) -> String {
+            let ps = Process()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-A", "-o", "pid=,ppid=,stat=,pending=,sigmask=,etime=,command="]
+            let out = Pipe()
+            ps.standardOutput = out
+            ps.standardError = FileHandle.nullDevice
+            guard (try? ps.run()) != nil else { return "ps failed to start" }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            ps.waitUntilExit()
+            let rows = String(decoding: data, as: UTF8.self).split(separator: "\n").filter { row in
+                let fields = row.split(separator: " ", maxSplits: 2)
+                return fields.count >= 2 && (fields[0] == "\(pid)" || fields[1] == "\(pid)")
+            }
+            return "PID PPID STAT PENDING BLOCKED ELAPSED COMMAND\n" + rows.joined(separator: "\n")
         }
     }
 
@@ -281,6 +318,18 @@ struct HudHelperTests {
         let run = try Run("busy\n", cols: 40, rows: 7, spinner: style)
         defer { run.stop() }
         #expect(run.paints(style.frames.map { "\($0) busy" }))
+    }
+
+    // regression: a helper that missed SIGTERM left stop() in an unbounded wait and hung the whole suite
+    @Test(.timeLimit(.minutes(1))) func stopFailsAndStillEndsAHelperThatIgnoresTerm() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7, ignoresTerm: true)
+        #expect(run.paints("busy"))
+        withKnownIssue {
+            run.stop()
+        } matching: { issue in
+            issue.comments.contains { $0.rawValue.contains(Run.ignoredTermMessage) }
+        }
+        #expect(!run.running)
     }
 
     @Test func switchingStyleRepaintsWithoutRespawning() throws {

@@ -1423,13 +1423,13 @@ struct CommandsTests {
         let input = Data("""
           [
             {"id":"one","label":"One","subtitle":"First"},
-            {"id":"two","label":"Two"}
+            {"id":"two","label":"Two","status":"blocked","statusColor":"#ff8800","statusShape":"star"}
           ]
         """.utf8)
 
         #expect(try Pick.Open.parseItems(input) == [
             ControlPickItem(id: "one", label: "One", subtitle: "First"),
-            ControlPickItem(id: "two", label: "Two")
+            ControlPickItem(id: "two", label: "Two", status: "blocked", statusColor: "#ff8800", statusShape: "star")
         ])
     }
 

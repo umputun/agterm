@@ -157,4 +157,12 @@ public struct AskNavigation: Sendable {
         let key = letter.lowercased()
         return buttons.firstIndex { $0.hotkey?.lowercased() == key }
     }
+
+    /// resolvedHotkey is the lowercase ASCII letter a key press spells for a hotkey, or nil for any other key.
+    /// It resolves as keymap chords do (`chordKey`), so a non-Latin layout answers from the US-layout position.
+    public static func resolvedHotkey(forKeyCode keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> String? {
+        guard let key = chordKey(forKeyCode: keyCode, produced: produced, layoutIsASCIICapable: layoutIsASCIICapable),
+              key.utf8.count == 1, let ascii = key.utf8.first, (97...122).contains(ascii) else { return nil }
+        return key
+    }
 }

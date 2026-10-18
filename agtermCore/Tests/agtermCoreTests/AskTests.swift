@@ -215,6 +215,20 @@ struct AskTests {
         #expect(navigation.hotkey("a") == nil)
     }
 
+    @Test(arguments: [
+        (UInt16(31), "щ", "o"), (31, "Щ", "o"), (12, ";", "q"), (12, "/", "q"), (18, "&", nil), (10, "\\", nil),
+    ] as [(UInt16, String?, String?)])
+    func hotkeyOnANonLatinLayoutResolvesByUSPosition(keyCode: UInt16, produced: String?, expected: String?) {
+        #expect(AskNavigation.resolvedHotkey(forKeyCode: keyCode, produced: produced, layoutIsASCIICapable: false) == expected)
+    }
+
+    @Test(arguments: [
+        (UInt16(12), "a", "a"), (0, "A", "a"), (18, "1", nil), (44, "/", nil), (19, "é", nil), (31, nil, nil),
+    ] as [(UInt16, String?, String?)])
+    func hotkeyOnALatinLayoutResolvesByTypedLetter(keyCode: UInt16, produced: String?, expected: String?) {
+        #expect(AskNavigation.resolvedHotkey(forKeyCode: keyCode, produced: produced, layoutIsASCIICapable: true) == expected)
+    }
+
     private func makeAsk(id: String) -> PendingAsk {
         PendingAsk(id: id, title: "Choose", buttons: buttons(count: 1))
     }
