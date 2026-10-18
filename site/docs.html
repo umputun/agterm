@@ -3786,8 +3786,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 creation attach is connected, by zmx while no terminal client is attached &mdash; with fixed replies, so the shell
                 starts without waiting. Queries only the real terminal can answer, such as the kitty keyboard protocol, XTVERSION
                 terminal identification, and OSC 11 background color, may get no reply at startup, so the capabilities they enable
-                may not be detected until the program queries again. fish 4.9.3 was observed sending these queries at shell start;
-                zsh does not query at startup.
+                may not be detected until the program queries again. fish 4.9.3 sends the kitty keyboard and XTVERSION queries
+                only at startup: if they go unanswered during supervised creation, fish does not retry them for the rest of that
+                shell's lifetime. zsh does not query at startup.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
