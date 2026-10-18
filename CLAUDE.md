@@ -43,7 +43,8 @@ C-boundary concurrency before changing the bridge.
   looks for `settings.json`, `workspaces.json`, or `windows` before the app writes anything.
   Leave the marker out only when the welcome itself is under test.
 - The control socket binds from the window scene's task, so a backgrounded `open -n -g` can leave the app
-  running with no socket until a window renders. Activate the instance when the socket never appears.
+  running with no socket until a window renders.
+  If the socket is still absent 10 s after launch, activate the instance; never leave a socket wait unbounded.
 - `agtermctl` never reads `AGTERM_SOCKET`; it resolves `--socket`, then `AGTERM_STATE_DIR`, then
   `~/Library/Application Support/agterm`. A shell inside the live terminal therefore defaults onto the
   live socket, and exporting a short `AGTERM_STATE_DIR` is what keeps inherited commands off it.
