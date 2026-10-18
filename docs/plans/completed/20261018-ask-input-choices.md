@@ -309,27 +309,32 @@ in the tree.
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`
 - Modify: `plugins/agterm/skills/agterm/reference.md`
 
-- [ ] state the form contract once in `control-api.md`: arguments, defaults, cancel role, payloads, keys,
+- [x] state the form contract once in `control-api.md`: arguments, defaults, cancel role, payloads, keys,
       sizing, drafts and handback reset, `ask.form` negotiation, and that drafts are not tree state
-- [ ] mirror the new arguments and result fields in `site/commands.html`; add a short text-input and choice
+- [x] mirror the new arguments and result fields in `site/commands.html`; add a short text-input and choice
       example to `site/docs.html`
-- [ ] add the variants to the skill reference and a SKILL.md trigger ("ask for text", "let the user pick
+- [x] add the variants to the skill reference and a SKILL.md trigger ("ask for text", "let the user pick
       items") so agents find them unprompted
 
 ### Task 7: Verify acceptance criteria
-- [ ] verify a one-line and a multiline prompt return typed text, with the field focused at open
-- [ ] verify custom button labels work and the default OK/Cancel appear without `--button`
-- [ ] verify radio returns one id, checkboxes return any subset in caller order, Cancel/Esc return nothing
-- [ ] verify items with multi-line subtitles render dimmed under their labels, stay readable on the cursor
+- [x] verify a one-line and a multiline prompt return typed text, with the field focused at open
+- [x] verify custom button labels work and the default OK/Cancel appear without `--button`
+- [x] verify radio returns one id, checkboxes return any subset in caller order, Cancel/Esc return nothing
+- [x] verify items with multi-line subtitles render dimmed under their labels, stay readable on the cursor
       row, and the cursor scrolls them in, using a 50-item list with three-line subtitles
-- [ ] verify a long list scrolls with buttons pinned and `width` affects width only
-- [ ] run full gates once: `make build` (Release), `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] run `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
+- [x] verify a long list scrolls with buttons pinned and `width` affects width only
+- [x] run full gates once: `make build` (Release), `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] run `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
+- ➕ the 50-item check found a long list opening at the top with the checked cursor row out of view: the
+  opening row now goes through `scrollPosition(id:)`, pinned by `testALongListOpensScrolledToTheCheckedItem`
+- ⚠️ one full `swift test` run failed in `realHostStartupReplyAndClientlessControl` with the DA1-in-DA2
+  signature of `docs/backlog/da-query-answered-twice-before-attach-init.md`; the same-tree retry passed.
+  Not fixed here: the zmx patch it needs is deferred in that backlog item
 
 ### Task 8: [Final] Update documentation
-- [ ] update README.md only if the control-API demo should show the new variants
-- [ ] update CLAUDE.md if new patterns were discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md only if the control-API demo should show the new variants
+- [x] update CLAUDE.md if new patterns were discovered
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
