@@ -32,7 +32,8 @@ final class AskDialogViewTests: XCTestCase {
         XCTAssertTrue(fixture.window.firstResponder === editor)
         let askID = try XCTUnwrap(fixture.session.askPending?.id)
         terminal.onSearchEnd?()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        XCTAssertTrue(waitUntil { fixture.window.firstResponder === catcher },
+                      "responder \(String(describing: fixture.window.firstResponder))")
         XCTAssertFalse(fixture.session.searchActive)
         XCTAssertNil(fixture.session.searchSurface)
         XCTAssertTrue(fixture.window.firstResponder === catcher)
@@ -452,15 +453,21 @@ final class AskDialogViewTests: XCTestCase {
         let choices = (1...50).map { ControlAskChoice(id: "i\($0)", label: "Item \($0)", subtitle: "one\ntwo\nthree") }
         try fixture.open(form: .choices(AskChoiceForm(choices: choices, multiple: false, checked: ["i50"])))
         fixture.mount()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
         let host = try XCTUnwrap(fixture.window.contentView)
-        let list = try XCTUnwrap(descendants(NSScrollView.self, in: host).first {
-            ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
-        })
+        func overflowingList() -> NSScrollView? {
+            descendants(NSScrollView.self, in: host).first { ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height }
+        }
+        func scrolledToEnd(_ list: NSScrollView) -> Bool {
+            guard let document = list.documentView else { return false }
+            let visible = list.documentVisibleRect
+            let scrolled = document.isFlipped ? visible.minY > 0 : visible.maxY < document.frame.height
+            let endVisible = document.isFlipped ? visible.maxY >= document.frame.height - 1 : visible.minY <= 1
+            return visible.height > 0 && scrolled && endVisible
+        }
+        let settled = waitUntil { overflowingList().map(scrolledToEnd) == true }
+        let list = try XCTUnwrap(overflowingList())
         let document = try XCTUnwrap(list.documentView)
-        let visible = list.documentVisibleRect
-        let bottomVisible = document.isFlipped ? visible.maxY >= document.frame.height - 1 : visible.minY <= 1
-        XCTAssertTrue(bottomVisible, "visible \(visible) of document \(document.frame)")
+        XCTAssertTrue(settled && scrolledToEnd(list), "visible \(list.documentVisibleRect) of document \(document.frame)")
     }
 
     func testTheDraftSurvivesTheDialogUnmountingAndComingBack() throws {
@@ -631,44 +638,16 @@ final class AskDialogViewTests: XCTestCase {
         let first = try XCTUnwrap(fixture.window.firstResponder as? AskTextView)
         first.insertText("kept", replacementRange: NSRange(location: NSNotFound, length: 0))
 
-        let window = fixture.window
-        func ident(_ object: AnyObject?) -> String {
-            object.map { "\(type(of: $0))@\(Unmanaged.passUnretained($0).toOpaque())" } ?? "nil"
-        }
-        func snapshot(_ label: String) -> String {
-            let catcher = fixture.catcher, box = catcher?.editorBox, target = box?.focusTarget
-            return "\(label): responder \(ident(window.firstResponder)); old \(ident(first)) in window \(first.window === window); "
-                + "catcher \(ident(catcher)) in window \(catcher?.window === window) canFocus \(catcher?.canFocus ?? false) "
-                + "key \(window.isKeyWindow) visible \(window.isVisible); box \(ident(box)) view \(ident(box?.view)) "
-                + "in window \(box?.view?.window === window); target \(ident(target)) in window \(target?.window === window)"
-        }
-        final class Trace { var lines: [String] = [] }
-        let trace = Trace()
-        let started = Date()
-        let box = try XCTUnwrap(fixture.catcher?.editorBox)
-        let original = box.onAttach
-        box.onAttach = { [weak window] in
-            let before = window?.firstResponder
-            original?()
-            trace.lines.append(String(format: "onAttach at %.3fs: ", Date().timeIntervalSince(started))
-                + "\(ident(before)) -> \(ident(window?.firstResponder))")
-        }
-        defer { box.onAttach = original }
-
         host.rootView = AnyView(fixture.overlay(detail: short).frame(width: 600, height: 300))
         host.layoutSubtreeIfNeeded()
-        var notes = [snapshot("after swap")]
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-        notes.append(snapshot("at 50ms"))
-
-        guard let second = window.firstResponder as? AskTextView else {
-            let deadline = Date().addingTimeInterval(1)
-            while !(window.firstResponder is AskTextView), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
-            notes.append(snapshot(String(format: "after %.3fs", Date().timeIntervalSince(started))))
-            XCTFail("no AskTextView first responder at 50ms\n" + (notes + trace.lines).joined(separator: "\n"))
-            return
+        let window = fixture.window
+        let handedOver = waitUntil {
+            guard let editor = window.firstResponder as? AskTextView else { return false }
+            return editor !== first && editor === fixture.catcher?.editorBox?.focusTarget && editor.window === window
         }
-        print("layout-swap-diag\n" + (notes + trace.lines).joined(separator: "\n"))
+        XCTAssertTrue(handedOver, "responder \(String(describing: window.firstResponder)), "
+            + "focus target \(String(describing: fixture.catcher?.editorBox?.focusTarget))")
+        let second = try XCTUnwrap(window.firstResponder as? AskTextView)
         XCTAssertFalse(second === first)
         XCTAssertEqual(second.string, "kept")
         XCTAssertEqual(fixture.session.askDraft?.text, "kept")
@@ -761,6 +740,17 @@ final class AskDialogViewTests: XCTestCase {
         try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
                                       windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text,
                                       isARepeat: false, keyCode: keyCode))
+    }
+
+    /// Pumps the main run loop in short slices until `condition` holds or `timeout` passes; a focus handover or a
+    /// scroll position lands a run-loop turn after layout, and a slow machine can take longer than a fixed pump.
+    private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while !condition() {
+            guard Date() < deadline else { return false }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+        return true
     }
 
     private func descendants<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
