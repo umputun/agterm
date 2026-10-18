@@ -23,6 +23,7 @@ public struct RemotePresentationEffects {
     public var snapshotStatus: @MainActor (PresentationStatus?) -> Void
     public var hud: @MainActor (PresentationHud?) -> Void
     public var notify: @MainActor (PresentationNotify) -> Void
+    public var sound: @MainActor (PresentationSound) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
     public var context: @MainActor (String?) -> Void
     public var layout: @MainActor (PresentationLayout) -> Void
@@ -48,12 +49,14 @@ public struct RemotePresentationEffects {
                 overlayRequest: @escaping @MainActor (PresentationOverlay) -> Bool = { _ in false },
                 overlayClose: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
                 overlayResize: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
+                sound: @escaping @MainActor (PresentationSound) -> Void = { _ in },
                 layout: @escaping @MainActor (PresentationLayout) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
         self.hud = hud
         self.notify = notify
+        self.sound = sound
         self.connection = connection
         self.context = context
         self.layout = layout
@@ -198,6 +201,7 @@ public final class RemotePresentationClient {
         case .layout(let layout): applyLayout(layout)
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
+        case .sound(let sound): effects.sound(sound)
         case .ping: send(.ack, on: link)
         // an origin that predates the role answers mirror, and nothing is asked of it
         case .hello(let answer) where answer.mode == .presenter: send(.presenterAcquire, on: link)

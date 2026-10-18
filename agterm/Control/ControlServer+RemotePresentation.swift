@@ -80,6 +80,7 @@ extension ControlServer {
             overlayResize: { [weak self] change in
                 self?.library.store(forSession: id)?.resizeReplicaOverlay(change, forSession: id)
             },
+            sound: { [weak self] sound in self?.playRemoteSound(sound, forSession: id) },
             layout: { [weak self] layout in
                 guard let self, let store = library.store(forSession: id) else { return }
                 agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library)
@@ -108,6 +109,17 @@ extension ControlServer {
         let command = CommandRestore.shellQuotedLine(argv)
         return store.presentReplicaOverlay(overlay, command: command, forSession: id) { [weak self] job in
             self?.remoteClients[id]?.answer(.overlayClosed(PresentationOverlayChange(job: job)))
+        }
+    }
+
+    private func playRemoteSound(_ sound: PresentationSound, forSession id: UUID) {
+        guard library.store(forSession: id)?.session(withID: id) != nil,
+              let name = sound.name ?? settingsModel.settings.blockedStatusSoundName, !name.isEmpty else { return }
+        let player = statusSoundPlayer
+        Task {
+            if await !player.play(name) {
+                remoteLogger.notice("status sound \(name, privacy: .public) from \(id, privacy: .public)'s origin is unknown here")
+            }
         }
     }
 

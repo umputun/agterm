@@ -86,4 +86,13 @@ extension AppStore {
         case .scratch: return .scratch
         }
     }
+
+    /// presentStatusSoundRemotely hands a status sound to the session's presenter when the status pane follows
+    /// remotely. False when playback must stay on this Mac.
+    public func presentStatusSoundRemotely(_ sound: PresentationSound, in session: Session, pane: StatusPane?) -> Bool {
+        guard let hub = presentationHub, hub.hasPresenter(session: session.id),
+              case .identity(let identity) = presentationStatusPane(pane, of: session),
+              session.followsRemotely(paneIdentity: identity) else { return false }
+        return hub.sendToPresenter(.sound(sound), session: session.id)
+    }
 }

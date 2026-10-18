@@ -29,6 +29,7 @@ public final class PresentationHub {
         let session: UUID
         let generation: Int
         let sink: PresentationSink
+        var kinds: Set<String> = []
         var revision = 0
         var lastAck: Date
         /// Deltas published while the snapshot is being taken, held so they land after it.
@@ -43,7 +44,7 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "context", "layout"]
+    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound"]
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
@@ -84,6 +85,7 @@ public final class PresentationHub {
         let held = subscriber.held ?? []
         subscriber.held = nil
         let kinds = Self.supportedKinds.filter(hello.kinds.contains)
+        subscriber.kinds = Set(kinds)
         // presenter is offered only to a viewer that asked for it, so a slice-1 viewer stays a mirror
         let answer = PresentationHello(version: version, kinds: kinds, mode: hello.mode)
         for body in [.hello(answer), .snapshot(state)] + held {
@@ -98,10 +100,12 @@ public final class PresentationHub {
         release(id)
     }
 
-    /// Sends `body` to `session`'s presenter alone. False when there is none, or it stalled and was dropped.
+    /// Sends `body` to `session`'s presenter alone. False when there is none, it stalled and was dropped, or
+    /// `body` is a negotiated kind its hello did not list, which an older presenter would skip.
     @discardableResult
     public func sendToPresenter(_ body: PresentationFrame.Body, session: UUID) -> Bool {
         guard let holder = grant.holder(of: session) else { return false }
+        if Self.supportedKinds.contains(body.kind), subscribers[holder]?.kinds.contains(body.kind) != true { return false }
         return send(body, to: holder)
     }
 

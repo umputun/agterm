@@ -652,7 +652,9 @@ error keeps those names for compatibility.
   (`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`,
   `Sosumi`, `Submarine`, `Tink`; also any custom sound in `~/Library/Sounds`) — an unknown name errors.
   Without `--sound`, a `blocked` status plays the user's Settings "Blocked sound" if they configured one
-  (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it.
+  (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it. On a session
+  another Mac presents, either sound plays there instead while the origin reports the status pane as a
+  follower and the presenting agterm supports it; otherwise it plays here (see Remote sessions).
   `--color` (`#rrggbb`) overrides the glyph tint for THIS call only — it rides the status, so the next
   `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
   Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
@@ -1977,6 +1979,9 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   when the target pane reports `follower` there, or every existing pane does for session-wide placement.
   Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
   The caller on the origin gets the answer or the exit status as usual.
+- A `session status` sound (`--sound`, or the blocked default) plays on the presenting Mac instead of the
+  origin under the same rule for the status pane; a `scratch` status, or a presenter too old for it, keeps
+  it on the origin. The blocked default is the presenting Mac's own Settings choice.
 - A handed-over ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on
   screen), or one whose stream drops, goes back to the origin and waits there like a local one. If the
   origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.

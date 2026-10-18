@@ -20,13 +20,14 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func fixture() throws -> (server: ControlServer, store: AppStore, session: Session) {
+    private func fixture(player: StatusSoundPlayer = .shared) throws -> (server: ControlServer, store: AppStore, session: Session) {
         let library = WindowLibrary(directory: stateDir)
         let server = ControlServer(
             library: library,
             actions: AppActions(library: library),
             settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
             identity: AppIdentity(version: "9.9.9"),
+            statusSoundPlayer: player,
             socketPath: "/tmp/agterm-rp-\(UUID().uuidString.prefix(8)).sock"
         )
         servers.append(server)
@@ -245,9 +246,9 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         }
     }
 
-    private func connected() throws -> (fix: (server: ControlServer, store: AppStore, session: Session),
-                                        transport: Transport) {
-        let fix = try fixture()
+    private func connected(player: StatusSoundPlayer = .shared) throws -> (fix: (server: ControlServer, store: AppStore, session: Session),
+                                                                           transport: Transport) {
+        let fix = try fixture(player: player)
         let transport = Transport()
         fix.server.remoteTransport = transport
         fix.server.startRemotePresentation(for: fix.session)
@@ -283,6 +284,46 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         XCTAssertTrue(fix.session.hudActive)
         XCTAssertTrue(body(of: fix.session).contains("deploying"))
+    }
+
+    func testAHandedOverSoundPlaysHere() async throws {
+        let (player, resolved, played) = try soundPlayer()
+        let (_, transport) = try connected(player: player)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+        try transport.feed(.sound(PresentationSound(name: "Glass")), rev: 2)
+
+        await fulfillment(of: [played.log.playCalled], timeout: 2)
+        XCTAssertEqual(resolved.names, ["Glass"])
+    }
+
+    func testTheBlockedMarkerPlaysThisMacsOwnBlockedSound() async throws {
+        let (player, resolved, played) = try soundPlayer()
+        let (fix, transport) = try connected(player: player)
+        fix.server.settingsModel.setBlockedStatusSoundName("Frog")
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+
+        try transport.feed(.sound(PresentationSound(name: nil)), rev: 2)
+
+        await fulfillment(of: [played.log.playCalled], timeout: 2)
+        XCTAssertEqual(resolved.names, ["Frog"])
+    }
+
+    private final class ResolvedNames: @unchecked Sendable {
+        private let lock = NSLock()
+        private var recorded: [String] = []
+        var names: [String] { lock.withLock { recorded } }
+        func add(_ name: String) { lock.withLock { recorded.append(name) } }
+    }
+
+    private func soundPlayer() throws -> (StatusSoundPlayer, ResolvedNames, RecordingSound) {
+        let sound = try XCTUnwrap(RecordingSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true))
+        let resolved = ResolvedNames()
+        let player = StatusSoundPlayer(resolve: { name in
+            resolved.add(name)
+            return sound
+        })
+        return (player, resolved, sound)
     }
 
     func testAHandedOverAskIsShownOnTheRowAndItsAnswerGoesBack() throws {

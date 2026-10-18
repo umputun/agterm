@@ -2939,7 +2939,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               reaches the program on the other side. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this
               Mac opens for it. If this Mac refuses a question, it goes back to the other side; if it cannot show an overlay, the
               overlay fails rather than opening over there. Closing such an overlay from a script asks for it to end, and its
-              result says how it did.
+              result says how it did. A status sound follows the same rule for the pane that set the status: it plays on the
+              presenting Mac and not on the other one, and the blocked sound is the presenting Mac's own setting.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               While the stream is down the row says so and names the host. A question goes back to the other side, a finished

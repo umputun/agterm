@@ -1623,6 +1623,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   presenter only when its target pane reports `follower` on the origin, or every existing pane does for
   session-wide placement; mixed, unknown or unowned roles stay local.
   One already open stays where it is when the lead changes.
+- A `session.status` sound follows the same gate on the status pane, scratch staying local: the origin sends
+  a one-shot `sound` frame to the presenter and does not play it. A nil name is the blocked-default marker,
+  sent on a transition into `blocked` even when the origin's own blocked sound is off, and the presenter
+  plays its own setting. The kind is negotiated: `sendToPresenter` refuses a `supportedKinds` kind the
+  presenter's hello omitted, so an older presenter leaves the sound on the origin. It is never part of a
+  snapshot, and the destination is the presenter, not necessarily the Mac holding the pane's lead.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
   a replica, `ask.replica`, whose answer carries only the button id and is checked against the stored
   buttons. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its

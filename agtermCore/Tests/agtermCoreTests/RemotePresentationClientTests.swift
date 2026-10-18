@@ -38,6 +38,7 @@ struct RemotePresentationClientTests {
         var huds: [PresentationHud?] = []
         var contexts: [String?] = []
         var notifies: [PresentationNotify] = []
+        var sounds: [PresentationSound] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
         var asks: [PresentationAsk] = []
@@ -84,6 +85,7 @@ struct RemotePresentationClientTests {
             },
             overlayClose: { recorder.overlayCloses.append($0) },
             overlayResize: { recorder.overlayResizes.append($0) },
+            sound: { recorder.sounds.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -236,6 +238,18 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.overlayRequest(Self.overlay), rev: 2))
 
         #expect(recorder.overlays == [Self.overlay])
+        #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
+    }
+
+    @Test func aHandedOverSoundReachesTheAppAndNothingIsSentBack() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.sound(PresentationSound(name: "Glass")), rev: 2))
+        transport.deliver(line(.sound(PresentationSound(name: nil)), rev: 3))
+
+        #expect(recorder.sounds == [PresentationSound(name: "Glass"), PresentationSound(name: nil)])
         #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
     }
 

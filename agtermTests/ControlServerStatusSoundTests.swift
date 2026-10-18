@@ -13,6 +13,16 @@ final class ControlServerStatusSoundTests: XCTestCase {
         func promoteToPrimaryPane() {}
     }
 
+    private final class Viewer: PresentationSink {
+        var frames: [PresentationFrame] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            frames.append(frame)
+            return true
+        }
+        func close(_: PresentationHub.CloseReason) {}
+        var sounds: [PresentationSound] { frames.compactMap { if case .sound(let sound) = $0.body { sound } else { nil } } }
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settings: SettingsModel!
@@ -155,6 +165,71 @@ final class ControlServerStatusSoundTests: XCTestCase {
         XCTAssertTrue(response.ok)
         XCTAssertEqual(session.agentIndicator.statusPane, .left)
         await fulfillment(of: [sound.log.playCalled], timeout: 2)
+    }
+
+    func testAFollowingPanesSoundPlaysOnThePresenterInsteadOfHere() async throws {
+        makeServer(resolvedSound: sound)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let viewer = try present(session)
+        let response = await update(soundName: "Tink")
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(session.agentIndicator.status, .blocked)
+        XCTAssertEqual(viewer.sounds, [PresentationSound(name: "Tink")])
+        await assertNoPlayback()
+    }
+
+    func testEnteringBlockedSendsTheMarkerEvenWithNoBlockedSoundHere() async throws {
+        makeServer(resolvedSound: sound)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let viewer = try present(session)
+        let entered = await update(soundName: nil)
+        XCTAssertTrue(entered.ok)
+        XCTAssertEqual(viewer.sounds, [PresentationSound(name: nil)])
+        let repeated = await update(soundName: nil)
+        XCTAssertTrue(repeated.ok)
+        XCTAssertEqual(viewer.sounds, [PresentationSound(name: nil)], "staying blocked plays nothing")
+        let completed = await update(soundName: nil, status: .completed)
+        XCTAssertTrue(completed.ok)
+        XCTAssertEqual(viewer.sounds, [PresentationSound(name: nil)])
+    }
+
+    func testARefusedStatusSendsNoSound() async throws {
+        makeServer(resolvedSound: sound)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        session.hasSplit = true
+        let viewer = try present(session)
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+        let response = await update(soundName: "Tink", status: .completed, pane: .left)
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(viewer.sounds.isEmpty)
+        await assertNoPlayback()
+    }
+
+    func testAPaneLeadingHerePlaysTheSoundHere() async throws {
+        makeServer(resolvedSound: sound)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let viewer = try present(session, role: .leader)
+        let response = await update(soundName: "Tink")
+        XCTAssertTrue(response.ok)
+        XCTAssertTrue(viewer.sounds.isEmpty)
+        await fulfillment(of: [sound.log.playCalled], timeout: 2)
+    }
+
+    private func present(_ session: Session, role: ZmxLeadRole = .follower) throws -> Viewer {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: session.paneIdentity)
+        let notice = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1"))
+        _ = ZmxLeadBook.shared.apply(notice, pane: session.paneIdentity)
+        server.attachPresentationHub()
+        let viewer = Viewer()
+        let hello = PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)
+        let id = try server.presentationHub.subscribe(session: session.id, hello: hello, sink: viewer) {
+            PresentationSnapshot(status: nil, hud: nil)
+        }
+        server.presentationHub.receive(PresentationFrame(gen: viewer.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+        XCTAssertTrue(server.presentationHub.hasPresenter(session: session.id))
+        return viewer
     }
 
     private func makeServer(resolvedSound: NSSound?) {
