@@ -1,0 +1,42 @@
+{
+  "agterm-status": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "\"$HOME/.config/agterm/hooks/agy/agy-status-hook.sh\" invocation",
+        "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "ask_question|ask_permission",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.config/agterm/hooks/agy/agy-status-hook.sh\" ask",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.config/agterm/hooks/agy/agy-status-hook.sh\" tool-done",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "\"$HOME/.config/agterm/hooks/agy/agy-status-hook.sh\" stop",
+        "timeout": 5
+      }
+    ]
+  }
+}

@@ -26,6 +26,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 
 | recipe | what it does | needs |
 |---|---|---|
+| [antigravity-session-resume](antigravity-session-resume/) | each tab reopens its own Antigravity CLI conversation after a restart | 0.16.0, zsh, Antigravity CLI |
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh or fish, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
 | [kimi-session-resume](kimi-session-resume/) | each tab reopens its own Kimi Code conversation after a restart | 0.16.0, Kimi Code, python3 |
@@ -38,6 +39,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [agent-reset](agent-reset/) | one chord clears the pane's Claude Code or codex run, and nothing when neither is running | 0.26.0, python3, Claude Code or Codex |
 | [annotate-claude-replies](annotate-claude-replies/) | mark up Claude's answers in revdiff and send the notes back | 0.13.0, revdiff, python3, Claude Code |
 | [annotate-pane-output](annotate-pane-output/) | mark up what the pane just printed in revdiff and send the notes back to whatever is running there | 0.13.0, revdiff, python3 |
+| [antigravity-agent-status](antigravity-agent-status/) | Antigravity CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Antigravity CLI |
 | [backlog-picker](backlog-picker/) | pick one of the repo's written-down deferred items and hand it to the agent in the pane | 0.20.2, python3, Claude Code |
 | [claude-account-swap](claude-account-swap/) | switch the left pane's Claude account with a conversation summary | 0.26.0, python3, jq, Claude Code, Codex CLI, Git |
 | [claude-conversation-picker](claude-conversation-picker/) | pick a past Claude Code conversation by what it was about and resume it in the pane | 0.21.0, python3, Claude Code |
@@ -68,7 +70,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [same-dir](same-dir/) | sync working directory to target split pane | 0.10.0, jq, zsh |
 | [sqlite-browser](sqlite-browser/) | pick one of the repo's SQLite databases and browse it in an overlay | 0.22.0, python3, tabiew |
 
-Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Three of the four session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI; the Kimi one is a lifecycle hook that pins its tab's restore command through `agtermctl`. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
+Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Three of the five session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI; the Kimi and Antigravity ones use lifecycle hooks that pin the pane's restore command through `agtermctl`. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
 ## Contributing a recipe
 

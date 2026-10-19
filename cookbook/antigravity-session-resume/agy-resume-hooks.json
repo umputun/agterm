@@ -1,0 +1,11 @@
+{
+  "agterm-session-resume": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "\"$HOME/.config/agterm/hooks/agy/agy-pin-resume.sh\"",
+        "timeout": 5
+      }
+    ]
+  }
+}
