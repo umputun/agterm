@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: EXE001
 
 import json
 import os
