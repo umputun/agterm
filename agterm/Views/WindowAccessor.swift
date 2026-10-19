@@ -392,7 +392,8 @@ private final class WindowCloseDelegateProxy: NSObject, NSWindowDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close \u{201C}\(name)\u{201D}?"
-        alert.informativeText = "This ends \(count) running session\(count == 1 ? "" : "s"). The window can be reopened from File ▸ Open Window."
+        alert.informativeText = QuitPrompt.windowCloseMessage(sessions: count,
+                                                              mode: GhosttyApp.shared.restoreLaunchDecision.active)
         alert.addButton(withTitle: "Close")
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: sender) { [weak self, weak sender] response in
