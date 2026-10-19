@@ -10,6 +10,7 @@ public enum ControlEventKind: String, Codable, CaseIterable, Sendable, Equatable
     case treeChanged = "tree.changed"
     case paneSplit = "pane.split"
     case paneScratch = "pane.scratch"
+    case paneFocused = "pane.focused"
     case remoteOpened = "remote.opened"
     case remoteClosed = "remote.closed"
     case appLaunched = "app.launched"
@@ -35,11 +36,14 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
     /// The `remote.opened` / `remote.closed` ssh destination the row is attached to, as `zmx attach` was
     /// given it.
     public var host: String?
+    /// The `pane.focused` pane's surface token, the value `tree` reports as `surfaces[].paneID`; nil while
+    /// that pane's surface does not exist yet.
+    public var paneID: String?
 
     public init(name: String? = nil, status: String? = nil, pane: String? = nil,
                 blink: Bool? = nil, color: String? = nil, shape: String? = nil,
                 previous: String? = nil, title: String? = nil, body: String? = nil,
-                host: String? = nil) {
+                host: String? = nil, paneID: String? = nil) {
         self.name = name
         self.status = status
         self.pane = pane
@@ -50,6 +54,7 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
         self.title = title
         self.body = body
         self.host = host
+        self.paneID = paneID
     }
 }
 

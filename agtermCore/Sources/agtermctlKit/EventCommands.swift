@@ -104,6 +104,8 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name) previous=\(event.payload.previous ?? "-")"
         case .paneSplit, .paneScratch:
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.status ?? "")"
+        case .paneFocused:
+            return "\(time) \(event.kind.rawValue) \(name) \(event.payload.pane ?? "") pane-id=\(event.payload.paneID ?? "-")"
         case .remoteOpened, .remoteClosed:
             return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
         case .appLaunched:

@@ -1571,6 +1571,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   suppresses it, since a reload is not a selection. `addSession` emits `session.created` first.
   The selection is per window, so a window coming forward emits nothing, and `tree.changed` still does
   not fire on selection.
+- `pane.focused` is emitted from one store observer over each session's selected pane IDENTITY
+  (`AppStore+PaneFocus`), never from the `splitFocused` writers, which are spread across both targets.
+  Identity is what keeps a swap silent: it exchanges both identities and toggles the flag. The check is a
+  100 ms trailing debounce, because a shown split's deck re-render moves first responder to the primary
+  and the focus retry moves it back on a later main-queue turn, which a one-turn reconciliation would
+  report as two selections. `restore(from:)` rebaselines, and a session new to the store only joins the
+  baseline.
 - `remote.opened` / `remote.closed` are emitted by `emitSessionCreated` / `emitSessionClosed` themselves,
   gated on `remoteHost`, never from `zmx.attach`: the attach inserts the row before ssh starts, and a
   soft close emits `session.closed` while the pane is still alive for undo, whose `session.created` never

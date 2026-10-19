@@ -287,7 +287,8 @@ that window, omitted when no pick is pending.
 given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
 `--kind` over `status`, `notify`, `session.created`, `session.closed`, `session.selected` (a window's
 selection moved; carries the session that lost it as `previous`), `tree.changed`, `pane.split`,
-`pane.scratch`, `remote.opened`, `remote.closed` and `app.launched` (once per app run, when hooks and
+`pane.scratch`, `pane.focused` (a session's selection moved between its two split panes; carries the
+pane and its `paneID`), `remote.opened`, `remote.closed` and `app.launched` (once per app run, when hooks and
 the socket are ready); resume with paired `--run RUN --after SEQ`; and set
 page size with `--limit 1...1000`. The app retains 4,096 events for one process run. Cursor run changes,
 expiry, and ahead-of-tail errors are fatal and are never silently rebaselined. Once the stream holds a

@@ -101,6 +101,29 @@ final class EventSubscriptionUITests: ControlAPITestCase {
         XCTAssertEqual(closed.items.count, 1)
     }
 
+    func testPaneFocusedFollowsTheSelectedSplitPane() throws {
+        let sessionID = try activeSessionID()
+        let anchor = try eventAnchor()
+
+        try assertOK(#"{"cmd":"session.split","target":"\#(sessionID)","args":{"mode":"on"}}"#)
+        let opened = try pollEvents(anchor: anchor, kinds: ["pane.focused"], minimum: 1)
+        try opened.items.forEach(assertCommonEnvelope)
+        let openedPayload = try XCTUnwrap(opened.items.last?["payload"] as? [String: Any])
+        XCTAssertEqual(openedPayload["pane"] as? String, "right")
+
+        try assertOK(#"{"cmd":"session.focus","target":"\#(sessionID)","args":{"pane":"left"}}"#)
+        let moved = try pollEvents(anchor: opened.anchor, kinds: ["pane.focused"], minimum: 1)
+        let movedPayload = try XCTUnwrap(moved.items.last?["payload"] as? [String: Any])
+        XCTAssertEqual(moved.items.count, 1, "one settled selection per move: \(moved.items)")
+        XCTAssertEqual(movedPayload["pane"] as? String, "left")
+        XCTAssertFalse((movedPayload["paneID"] as? String ?? "").isEmpty)
+
+        try assertOK(#"{"cmd":"session.swap","target":"\#(sessionID)"}"#)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        let afterSwap = try readEvents(anchor: moved.anchor, kinds: ["pane.focused"])
+        XCTAssertTrue(afterSwap.items.isEmpty, "a swap keeps the selected terminal: \(afterSwap.items)")
+    }
+
     private typealias Anchor = (run: String, after: UInt64)
     private typealias EventRead = (anchor: Anchor, items: [[String: Any]])
 

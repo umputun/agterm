@@ -666,7 +666,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.scratch</span> (a
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span> of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">shown</span> or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hidden</span>, emitted only on a real change), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hidden</span>, emitted only on a real change), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.focused</span> (a
+                session's selection moved between its two split panes, settled over 100 ms, carrying
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span> and the pane's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span>; a swap emits nothing, since the
+                selected terminal stays selected), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.closed</span> (a local row created by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> entered or
                 left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>; they ride the
                 created/closed edges, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span>, and they say nothing

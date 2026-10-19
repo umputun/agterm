@@ -58,6 +58,13 @@ The event kinds and payloads are:
 - `pane.split` / `pane.scratch`: session `name` and a `status` of `shown` or `hidden`, emitted only on a
   real visibility change: showing or hiding the split or scratch, closing the split, the primary pane
   exiting with a split promoted, or the scratch shell exiting. An axis change while shown emits nothing.
+- `pane.focused`: session `name`, the newly selected split pane as `pane` (`left` or `right`), and that
+  pane's surface token as `paneID`, absent until its surface exists. It reports the settled selection,
+  coalesced over 100 ms per window, so a move and back inside that interval emits nothing. It follows the
+  terminal, not the position: a click, the focus-pane keys, `session focus`, a new split, closing the
+  selected split and the primary exiting while selected each emit one; a swap, a hidden split shown again
+  and a window coming forward emit nothing, and neither does a reload. The scratch keeps `pane.scratch`
+  and a session switch keeps `session.selected`. A session created in or moved into a window starts silent.
 - `remote.opened` / `remote.closed`: session `name` and the ssh destination of a local row created by
   `zmx attach` as `host`, emitted beside `session.created` / `session.closed` for that session only. They describe the row's
   presence in the local tree, never the ssh connection: undo re-emits `remote.opened`, and an ssh that

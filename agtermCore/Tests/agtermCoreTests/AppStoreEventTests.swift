@@ -905,6 +905,166 @@ final class AppStoreEventTests {
         #expect(batch.items.isEmpty)
     }
 
+    @Test func paneSelectionMovesEmitEachSettledPaneWithItsToken() async throws {
+        let (library, store, session) = try splitSession()
+        let workspace = try #require(store.workspace(forSession: session.id))
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        session.splitFocused = false
+        await settlePaneFocus(store)
+        session.splitFocused = true
+        await settlePaneFocus(store)
+
+        let events = try paneFocusEvents(library, after: anchor)
+        #expect(events.map(\.payload.pane) == ["left", "right"])
+        #expect(events.map(\.payload.paneID) == ["primary-token", "split-token"])
+        #expect(events.allSatisfy { $0.session == session.id.uuidString })
+        #expect(events.allSatisfy { $0.workspace == workspace.id.uuidString })
+        #expect(events.allSatisfy { $0.payload.name == session.displayName })
+        #expect(events.allSatisfy { $0.payload.previous == nil })
+    }
+
+    @Test func openingANewSplitEmitsTheNewPane() async throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        session.surface = SpySurface(paneToken: "primary-token")
+        await settlePaneFocus(store)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.setSplitVisibility(session.id, shown: true)
+        await settlePaneFocus(store)
+
+        let events = try paneFocusEvents(library, after: anchor)
+        #expect(events.map(\.payload.pane) == ["right"])
+        #expect(events.map(\.payload.paneID) == [nil])
+    }
+
+    @Test func aBurstReturningToTheSettledPaneEmitsNothing() async throws {
+        let (library, store, session) = try splitSession()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        session.splitFocused = false
+        await drainMainQueue()
+        session.splitFocused = true
+        await settlePaneFocus(store)
+
+        #expect(try paneFocusEvents(library, after: anchor).isEmpty)
+    }
+
+    @Test func swapsAndSameValueWritesEmitNothing() async throws {
+        let (library, store, session) = try splitSession()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.swapPanes(session.id) == nil)
+        await settlePaneFocus(store)
+        session.splitFocused = session.splitFocused
+        await settlePaneFocus(store)
+        store.setSplitVisibility(session.id, shown: false)
+        store.setSplitVisibility(session.id, shown: true)
+        await settlePaneFocus(store)
+
+        #expect(try paneFocusEvents(library, after: anchor).isEmpty)
+    }
+
+    @Test func closingTheSelectedSplitEmitsThePrimary() async throws {
+        let (library, store, session) = try splitSession()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.closeSplit(session.id)
+        await settlePaneFocus(store)
+
+        let events = try paneFocusEvents(library, after: anchor)
+        #expect(events.map(\.payload.pane) == ["left"])
+        #expect(events.map(\.payload.paneID) == ["primary-token"])
+    }
+
+    @Test func promotingTheSelectedSurvivorEmitsNothing() async throws {
+        let (library, store, session) = try splitSession()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.closePrimaryPane(session.id)
+        await settlePaneFocus(store)
+
+        #expect(try paneFocusEvents(library, after: anchor).isEmpty)
+    }
+
+    @Test func promotingAfterThePrimaryExitsEmitsTheSurvivor() async throws {
+        let (library, store, session) = try splitSession()
+        session.splitFocused = false
+        await settlePaneFocus(store)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.closePrimaryPane(session.id)
+        await settlePaneFocus(store)
+
+        let events = try paneFocusEvents(library, after: anchor)
+        #expect(events.map(\.payload.pane) == ["left"])
+        #expect(events.map(\.payload.paneID) == ["split-token"])
+    }
+
+    @Test func aReloadIsNotASelectionButALaterFlipIs() async throws {
+        let (library, store, session) = try splitSession()
+        session.splitFocused = false
+        let leftSelected = store.snapshot()
+        session.splitFocused = true
+        await settlePaneFocus(store)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.restore(from: leftSelected)
+        await settlePaneFocus(store)
+        let restored = try #require(store.session(withID: session.id))
+        #expect(restored.focusedPane == .left)
+        restored.splitFocused = true
+        await settlePaneFocus(store)
+
+        let events = try paneFocusEvents(library, after: anchor)
+        #expect(events.map(\.payload.pane) == ["right"])
+        #expect(events.map(\.session) == [session.id.uuidString])
+    }
+
+    @Test func aSessionNewToTheStoreOnlyJoinsTheBaseline() async throws {
+        let (library, store, _) = try splitSession()
+        let workspace = try #require(store.workspaces.first)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        let added = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        await settlePaneFocus(store)
+
+        #expect(try paneFocusEvents(library, after: anchor).isEmpty)
+        #expect(store.paneFocusBaseline[added.id] == added.paneIdentity)
+    }
+
+    /// A shown split with the right pane selected and both surfaces carrying tokens, its selection settled.
+    private func splitSession() throws -> (WindowLibrary, AppStore, Session) {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        session.surface = SpySurface(paneToken: "primary-token")
+        store.setSplitVisibility(session.id, shown: true)
+        session.splitSurface = SpySurface(paneToken: "split-token")
+        store.emitPaneFocusChanges()
+        return (library, store, session)
+    }
+
+    /// Runs the observer's queued hop, which arms the debounce, then fires the debounce.
+    private func settlePaneFocus(_ store: AppStore) async {
+        await drainMainQueue()
+        store.paneFocusDebouncer.flush()
+    }
+
+    private func drainMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
+    private func paneFocusEvents(_ library: WindowLibrary, after anchor: ControlEventBatch) throws -> [ControlEvent] {
+        try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.paneFocused], limit: 100
+        ))).items
+    }
+
     private func openPage(on pane: OverlayPane, of session: Session, in store: AppStore) throws {
         let page = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
         try #require(store.openHtmlOverlay(session.id, pane: pane, overlay: page, sizePercent: nil) == nil)
