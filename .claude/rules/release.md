@@ -1,6 +1,7 @@
 ---
 paths:
   - "scripts/release.sh"
+  - "packaging/agterm.rb"
 ---
 
 ## Release (`scripts/release.sh`)
@@ -12,6 +13,9 @@ paths:
   `umputun/homebrew-apps` using the maintainer's `gh` auth. It needs no `HOMEBREW_TAP_PAT`. The DMG
   container must be codesigned before notarization or `spctl` rejects `hdiutil`'s unsigned image.
   Without `--publish`, the full build/sign/notarize/staple/`spctl` dry-run stops before upload.
+- `release.sh` copies `packaging/agterm.rb` into the tap only when the tap has no cask, then rewrites
+  just `version` and `sha256`. Any other cask edit is made by hand in `umputun/homebrew-apps` too, and the
+  two files must stay identical apart from those two lines.
 - Developer ID signing is inside-out: `agtermctl`, zmx and `agterm-session-host` are signed first with no
   entitlements, then the app is sealed with its TCC entitlements. The script rejects any helper carrying them.
 - Before writing or committing a release section, put the exact `CHANGELOG.md` text in a temp file and
