@@ -425,7 +425,7 @@ buys nothing. A caller with no tree uses `version`.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
   (`/opt/homebrew/bin/htop`). All of that describes Fresh shells and Re-run commands. In Live sessions
   mode the command is instead a create-only zmx payload the persistent shell runs as a login shell, so
-  shell operators are interpreted, the `PATH` is that shell's rather than the launchd default, and the
+  the line uses that shell's syntax (zsh or fish), shell operators are interpreted, the `PATH` is that shell's rather than the launchd default, and the
   session stays open after the command exits.
   `--wait` (only with `--command`, else an error) HOLDS the session open after the command exits —
   showing libghostty's press-any-key prompt with the final output intact instead of closing immediately —
@@ -591,7 +591,7 @@ error keeps those names for compatibility.
   (nested shell, ssh, an agent). Answers ok on a session with no split.
 - `session restart [--command LINE] (--pane-id ID | --pane left|right) [--target] [--window W]`: replace one
   pane's shell. Ends the shell and its foreground program, then starts a new login shell in the same pane
-  that runs LINE and stays interactive. Without `--command` it runs the pane's current foreground program
+  that runs LINE using that login shell's syntax (zsh or fish) and stays interactive. Without `--command` it runs the pane's current foreground program
   again: the argv `tree` reports as `foreground`/`splitForeground`, in the directory that program is running in, and
   the reply carries the requested argv as `restart.replayedArgv`. That is the program as it runs now, not the line that
   started it, so environment assignments, redirections and the rest of a pipeline are not reconstructed.

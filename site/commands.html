@@ -984,8 +984,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">--command "zsh -lc 'htop'"</span>. The
                 command is persisted and runs again when a restored session launches in rerun mode.
                 All of that describes <em>Fresh shells</em> and <em>Re-run commands</em>. In <em>Live sessions</em> mode the
-                command is instead a create-only zmx payload the persistent shell runs as a login shell, so shell operators are
-                interpreted, the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> is that shell's
+                command is instead a create-only zmx payload the persistent shell runs as a login shell, so the line uses that
+                shell's syntax (zsh or fish), shell operators are interpreted, the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> is that shell's
                 rather than the launchd default, and the session stays open after the command exits.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
@@ -1357,7 +1357,7 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Replace the shell of one pane. The pane's shell and its foreground program are ended, then a new
                 login shell starts in the same pane, runs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span>
-                and stays as an interactive shell afterwards. The pane keeps its place, its stable id and its
+                using that login shell's syntax (zsh or fish) and stays as an interactive shell afterwards. The pane keeps its place, its stable id and its
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_*</span> environment, and starts with an
                 empty screen. Nothing is typed into the pane. A hidden split and a pane in a background window restart like any
                 other.
