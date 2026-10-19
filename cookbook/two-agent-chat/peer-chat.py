@@ -1475,6 +1475,38 @@ def prepare_message(name: str) -> Path:
     return MESSAGE_SPOOL / name
 
 
+def message_claim(name: str) -> str:
+    return f"{name}.claimed-{os.getpid()}"
+
+
+def settle_message(name: str | None, phase: str) -> None:
+    """Return a claimed message to its name if nothing was typed, otherwise consume it.
+
+    A failure here is reported, never raised, so it cannot mask the send's own error.
+    """
+    if name is None:
+        return
+    claim = message_claim(name)
+    try:
+        spool_fd = private_spool_fd(create=False)
+        try:
+            if phase == "not_started":
+                os.rename(claim, name, src_dir_fd=spool_fd, dst_dir_fd=spool_fd)
+                print(
+                    f"peer-chat: message kept; resend it with --message-file {name}",
+                    file=sys.stderr,
+                )
+                return
+            os.unlink(claim, dir_fd=spool_fd)
+        finally:
+            os.close(spool_fd)
+    except OSError as err:
+        print(
+            f"peer-chat: cannot settle {MESSAGE_SPOOL / claim}: {err}",
+            file=sys.stderr,
+        )
+
+
 def read_message(use_stdin: bool, message_file: str | None) -> str:
     if use_stdin:
         binary = getattr(sys.stdin, "buffer", None)
@@ -1508,29 +1540,34 @@ def read_message(use_stdin: bool, message_file: str | None) -> str:
             and info.st_uid == os.getuid()
             and info.st_nlink == 1
         )
-        if is_owned_regular:
-            os.unlink(message_file, dir_fd=spool_fd)
         if not is_owned_regular:
             raise ValueError("message file must be an owned regular file with one link")
-        if stat.S_IMODE(info.st_mode) & 0o077:
-            raise ValueError(
-                "message file is accessible by other users and was consumed; "
-                "run --prepare-message again"
-            )
-        if info.st_size > MAX_MESSAGE_BYTES:
-            raise ValueError(
-                f"message file exceeds {MAX_MESSAGE_BYTES} bytes and was consumed; "
-                "run --prepare-message again"
-            )
-
-        with os.fdopen(message_fd, encoding="utf-8") as stream:
-            message_fd = -1
-            message = stream.read(MAX_MESSAGE_BYTES + 1)
-        if len(message.encode("utf-8")) > MAX_MESSAGE_BYTES:
-            raise ValueError(
-                f"message file exceeds {MAX_MESSAGE_BYTES} bytes and was consumed; "
-                "run --prepare-message again"
-            )
+        # the rename is the claim: a second send of this name finds no entry, and the
+        # claim name fails MESSAGE_NAME_RE, so a stranded claim can never be resent
+        claim = message_claim(message_file)
+        os.rename(message_file, claim, src_dir_fd=spool_fd, dst_dir_fd=spool_fd)
+        try:
+            if stat.S_IMODE(info.st_mode) & 0o077:
+                raise ValueError(
+                    "message file is accessible by other users and was consumed; "
+                    "run --prepare-message again"
+                )
+            if info.st_size > MAX_MESSAGE_BYTES:
+                raise ValueError(
+                    f"message file exceeds {MAX_MESSAGE_BYTES} bytes and was consumed; "
+                    "run --prepare-message again"
+                )
+            with os.fdopen(message_fd, encoding="utf-8") as stream:
+                message_fd = -1
+                message = stream.read(MAX_MESSAGE_BYTES + 1)
+            if len(message.encode("utf-8")) > MAX_MESSAGE_BYTES:
+                raise ValueError(
+                    f"message file exceeds {MAX_MESSAGE_BYTES} bytes and was consumed; "
+                    "run --prepare-message again"
+                )
+        except BaseException:
+            os.unlink(claim, dir_fd=spool_fd)
+            raise
         return message
     finally:
         if message_fd >= 0:
@@ -1599,7 +1636,10 @@ def run_main(progress: DeliveryProgress) -> int:
     window, sid = resolve_target(args.session, args.window, profile)
     profile = bind_pane(find_node(sid, window), profile)
     message = read_message(args.stdin, args.message_file)
-    sent = send_with_retry(sid, profile, message, window, progress)
+    try:
+        sent = send_with_retry(sid, profile, message, window, progress)
+    finally:
+        settle_message(args.message_file, progress.phase)
     progress.phase = "confirmed"
     report_success(sent)
     return 0

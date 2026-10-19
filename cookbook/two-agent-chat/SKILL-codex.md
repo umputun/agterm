@@ -43,8 +43,9 @@ peer-chat.py --to claude --message-file peer-chat-codex-a91f.txt
 Choose a fresh literal suffix for every send. Do not use stdin, a heredoc, shell redirection,
 variables or substitutions in either invocation: Codex then evaluates the request as a `zsh -lc`
 wrapper, so the two command-prefix rules from *Setup* cannot match it. Never put the message text
-directly in an argument. The send consumes the file, and the script collapses whitespace before
-typing.
+directly in an argument. The send consumes the file once it starts typing, and the script collapses
+whitespace before typing. A refusal that says the message was kept leaves the file in place, and the
+same send command delivers it later.
 
 If a send refuses saying more than one session shares this checkout, stop. It means this Codex was
 started without its pane's session id injected, and the fix is a launch flag only the user can apply.

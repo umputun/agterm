@@ -3194,7 +3194,7 @@ class RetryTests(unittest.TestCase):
 
 
 class MessageInputTests(unittest.TestCase):
-    def test_private_message_is_consumed(self) -> None:
+    def test_private_message_is_claimed_on_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             spool = Path(directory) / "spool"
             name = "peer-chat-codex-a91f.txt"
@@ -3212,7 +3212,21 @@ class MessageInputTests(unittest.TestCase):
                     "a message\nwith two lines\n",
                 )
                 self.assertFalse(path.exists())
+                self.assertEqual(
+                    os.listdir(spool), [f"{name}.claimed-{os.getpid()}"]
+                )
                 self.assertEqual(spool.stat().st_mode & 0o777, 0o700)
+
+    def test_claimed_message_cannot_be_read_again(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spool = Path(directory) / "spool"
+            name = "peer-chat-codex-a92f.txt"
+            with patch.dict(PREPARE_MESSAGE.__globals__, {"MESSAGE_SPOOL": spool}):
+                PREPARE_MESSAGE(name).write_text("once", encoding="utf-8")
+
+                self.assertEqual(READ_MESSAGE(False, name), "once")
+                with self.assertRaises(FileNotFoundError):
+                    READ_MESSAGE(False, name)
 
     def test_world_readable_message_is_rejected_and_consumed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3227,6 +3241,7 @@ class MessageInputTests(unittest.TestCase):
                     READ_MESSAGE(False, name)
 
                 self.assertFalse(path.exists())
+                self.assertEqual(os.listdir(spool), [])
 
     def test_oversized_message_is_rejected_and_consumed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3240,6 +3255,7 @@ class MessageInputTests(unittest.TestCase):
                     READ_MESSAGE(False, name)
 
                 self.assertFalse(path.exists())
+                self.assertEqual(os.listdir(spool), [])
 
     def test_symlink_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3366,6 +3382,66 @@ class MessageInputTests(unittest.TestCase):
                     None, None, CLAUDE_PROFILE
                 )
                 self.assertEqual(path.read_text(encoding="utf-8"), "message to retry")
+
+    def test_send_outcome_settles_the_claimed_message(self) -> None:
+        def refuse(*_args: object) -> int:
+            raise PROMPT_BLOCKED("target composer contains text; nothing was typed")
+
+        def interrupt(*_args: object) -> int:
+            raise KeyboardInterrupt("interrupted during pre-write checks; nothing was typed")
+
+        def fail_after_write(_sid, _profile, _message, _window, progress) -> int:
+            progress.phase = "started"
+            raise RuntimeError("submit request failed; delivery is ambiguous; do not resend")
+
+        def deliver(_sid, _profile, _message, _window, progress) -> int:
+            progress.phase = "started"
+            return 4
+
+        cases = [
+            ("pre-write refusal", refuse, 1, True),
+            ("pre-write interrupt", interrupt, 130, True),
+            ("post-write failure", fail_after_write, 1, False),
+            ("delivered", deliver, 0, False),
+        ]
+        for label, send_with_retry, code, kept in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                spool = Path(directory) / "spool"
+                name = "peer-chat-codex-k15a.txt"
+                args = argparse.Namespace(
+                    prepare_message=None,
+                    stdin=False,
+                    message_file=name,
+                    to="claude",
+                    session=None,
+                    window=None,
+                    target_command=None,
+                    queue=False,
+                )
+                replacements = {
+                    "MESSAGE_SPOOL": spool,
+                    "parse_args": Mock(return_value=args),
+                    "target_profile": Mock(return_value=CLAUDE_PROFILE),
+                    "resolve_target": Mock(return_value=("window-id", "session-id")),
+                    "find_node": Mock(return_value=SPLIT_NODE),
+                    "send_with_retry": send_with_retry,
+                }
+                stderr = io.StringIO()
+                with (
+                    patch.dict(MAIN.__globals__, replacements),
+                    redirect_stderr(stderr),
+                    patch("sys.stdout", new=io.StringIO()),
+                ):
+                    PREPARE_MESSAGE(name).write_text("payload", encoding="utf-8")
+                    self.assertEqual(MAIN(), code)
+
+                if kept:
+                    self.assertEqual(os.listdir(spool), [name])
+                    self.assertEqual((spool / name).read_text(encoding="utf-8"), "payload")
+                    self.assertIn(f"--message-file {name}", stderr.getvalue())
+                else:
+                    self.assertEqual(os.listdir(spool), [])
+                    self.assertNotIn("message kept", stderr.getvalue())
 
 
 class ComposerSimulation:
