@@ -168,14 +168,14 @@
 - [x] update the skill reference
 
 ### Task 6: Verify acceptance criteria
-- [ ] radio and checkbox lists with `--other` behave as described, in both styles, verified in an isolated Debug instance
-- [ ] run full gates once: `make release`, `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] run `lsappinfo list | grep -A4 agterm.debug` after the hosted runs
+- [x] radio and checkbox lists with `--other` behave as described, in both styles, verified in an isolated Debug instance
+- [x] run full gates once: `make release`, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] run `lsappinfo list | grep -A4 agterm.debug` after the hosted runs
 
 ### Task 7: [Final] Update documentation
-- [ ] update README.md only if the demo should show the row
-- [ ] update CLAUDE.md if new patterns were discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md only if the demo should show the row
+- [x] update CLAUDE.md if new patterns were discovered
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Informational only*
