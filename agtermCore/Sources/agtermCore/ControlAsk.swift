@@ -86,9 +86,11 @@ public struct ControlAskResult: Codable, Sendable, Equatable {
     public let index: Int?
     /// reason says why a cancelled dialog ended, absent for an ordinary cancel. An older client ignores it.
     public let reason: String?
-    /// text is an input ask's field content on an answer, whitespace and newlines preserved.
+    /// text is an input ask's field content, or a choice list's selected free-form row text, on an answer,
+    /// whitespace and newlines preserved.
     public let text: String?
-    /// selected is a choice ask's checked ids in caller order on an answer; radio carries exactly one.
+    /// selected is a choice ask's checked ids in caller order on an answer; radio carries exactly one, or none
+    /// when its free-form row answers through `text`.
     public let selected: [String]?
 
     /// The reason an ask carries when the viewer presenting it was lost and the origin could not show it.

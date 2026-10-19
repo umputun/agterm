@@ -930,7 +930,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one), never both; `ControlDispatcher+Ask` owns the validation messages. Without caller `buttons` a form gets
   `ok`=OK (default) and `cancel`=Cancel. `cancelButton` names a button that resolves `escaped` with no payload,
   as Esc does, and may also be the default; it defaults to `cancel` only for the generated pair.
-  Other answers add `text` (whitespace kept) or `selected` (caller order; radio exactly one, checkboxes any).
+  Other answers add `text` (whitespace kept) or `selected` (caller order; radio exactly one, checkboxes any),
+  except as the `other` row below changes it.
   A list's optional `other` placeholder adds one free-form row after the items, its text in the draft's `text`:
   `AskDraft` owns the transitions (non-blank edit selects, blank deselects, and blanking the SELECTED row of a
   radio list restores the pick it took over from; blanking retained text of an unselected row leaves the pick
@@ -997,7 +998,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the result before clearing the slot. Pending requests are never evicted. Finished results keep their
   owning window in one 32-entry cache across both styles, ordered by resolution. `PickRegistry` retains
   pick results separately.
-- Blocking CLI output is `{"result":"answered","id":"yes","label":"Yes","index":0}` (plus `text` or
+- Blocking CLI output is `{"result":"answered","id":"yes","label":"Yes","index":0}` (plus `text` and/or
   `selected` for a form), `{"result":"escaped"}`, or `{"result":"cancelled"}`; index follows caller order.
   Exit 0 means answered, including a No button; exit 3 means escaped, exit 2 means cancelled,
   and exit 1 means failure. `--no-block` prints `{"id":"…"}`.

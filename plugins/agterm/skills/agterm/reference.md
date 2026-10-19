@@ -1405,7 +1405,8 @@ The blocking call prints one bare result:
 {"result":"cancelled"}
 ```
 
-`text` keeps whitespace and newlines; `selected` lists ids in caller order, exactly one for a radio list.
+`text` keeps whitespace and newlines; `selected` lists ids in caller order, exactly one for a radio list
+unless the `--other` line answered, when it is `[]` beside `text`.
 
 Index follows caller order. An answer exits 0, including a named No button; inspect `id` before acting.
 Esc/Command-W on the interactive ask return `escaped` with exit 3. Cancellation exits 2; failure exits 1.
