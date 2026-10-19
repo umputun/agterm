@@ -942,14 +942,16 @@ final class AppStoreEventTests {
 
     @Test func aBurstReturningToTheSettledPaneEmitsNothing() async throws {
         let (library, store, session) = try splitSession()
+        await settlePaneFocus(store)
         let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
 
         session.splitFocused = false
+        DispatchQueue.main.async { MainActor.assumeIsolated { session.splitFocused = true } }
         await drainMainQueue()
-        session.splitFocused = true
         await settlePaneFocus(store)
 
         #expect(try paneFocusEvents(library, after: anchor).isEmpty)
+        #expect(session.focusedPane == .right)
     }
 
     @Test func swapsAndSameValueWritesEmitNothing() async throws {
