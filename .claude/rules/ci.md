@@ -16,6 +16,8 @@ paths:
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
   must run the four Swift jobs.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
+  It installs fish with Homebrew and sets `AGTERM_REQUIRE_FISH=1`, so a fish test fails rather than skips
+  when fish is missing.
   It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
   processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
   A hang otherwise reaches only the job timeout, which records nothing.
@@ -27,6 +29,12 @@ paths:
   app builds: Release exercises the whole-module optimizer and its SIL-deserializer failure. Debug provides
   `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not enable testability in the
   notarized Release app.
+- `build` sets the runner account's login shell to zsh, installs fish, and passes
+  `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `scripts/test-app.sh`. Its last step switches the login shell to
+  fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, with
+  `TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL=1`. Keep that order: switching before the hosted tests
+  silently skips the zsh plain-login seam (#574), and the fish seam fails its login-shell check before the
+  switch.
 - Three entitlement assertions run, all because a wrong entitlement set stays green. The first two read
   the built Release app. The first guards issue #396: `--deep` with `--entitlements` stamps the app's TCC
   entitlements onto bundled helpers. `scripts/release.sh` repeats it after its
