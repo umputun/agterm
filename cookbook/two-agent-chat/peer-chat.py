@@ -1479,8 +1479,8 @@ def message_claim(name: str) -> str:
     return f"{name}.claimed-{os.getpid()}"
 
 
-def settle_message(name: str | None, phase: str) -> None:
-    """Return a claimed message to its name if nothing was typed, otherwise consume it.
+def settle_message(name: str | None, keep: bool) -> None:
+    """Return a claimed message to its name when keep is set, otherwise consume it.
 
     A failure here is reported, never raised, so it cannot mask the send's own error.
     """
@@ -1490,7 +1490,7 @@ def settle_message(name: str | None, phase: str) -> None:
     try:
         spool_fd = private_spool_fd(create=False)
         try:
-            if phase == "not_started":
+            if keep:
                 os.rename(claim, name, src_dir_fd=spool_fd, dst_dir_fd=spool_fd)
                 print(
                     f"peer-chat: message kept; resend it with --message-file {name}",
@@ -1500,7 +1500,7 @@ def settle_message(name: str | None, phase: str) -> None:
             os.unlink(claim, dir_fd=spool_fd)
         finally:
             os.close(spool_fd)
-    except OSError as err:
+    except (OSError, ValueError) as err:
         print(
             f"peer-chat: cannot settle {MESSAGE_SPOOL / claim}: {err}",
             file=sys.stderr,
@@ -1636,10 +1636,16 @@ def run_main(progress: DeliveryProgress) -> int:
     window, sid = resolve_target(args.session, args.window, profile)
     profile = bind_pane(find_node(sid, window), profile)
     message = read_message(args.stdin, args.message_file)
+    keep = False
     try:
         sent = send_with_retry(sid, profile, message, window, progress)
+    except (RuntimeError, KeyboardInterrupt):
+        # a refusal by the target can clear on a resend; a body normalize rejects
+        # (ValueError) never will, so it is consumed like the read-time rejections
+        keep = progress.phase == "not_started"
+        raise
     finally:
-        settle_message(args.message_file, progress.phase)
+        settle_message(args.message_file, keep)
     progress.phase = "confirmed"
     report_success(sent)
     return 0

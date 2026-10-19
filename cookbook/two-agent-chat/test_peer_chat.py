@@ -3399,12 +3399,14 @@ class MessageInputTests(unittest.TestCase):
             return 4
 
         cases = [
-            ("pre-write refusal", refuse, 1, True),
-            ("pre-write interrupt", interrupt, 130, True),
-            ("post-write failure", fail_after_write, 1, False),
-            ("delivered", deliver, 0, False),
+            ("pre-write refusal", refuse, "payload", 1, True),
+            ("pre-write interrupt", interrupt, "payload", 130, True),
+            ("empty body", SEND_WITH_RETRY, "Chat from Codex: ", 1, False),
+            ("control character", SEND_WITH_RETRY, "a\x07b", 1, False),
+            ("post-write failure", fail_after_write, "payload", 1, False),
+            ("delivered", deliver, "payload", 0, False),
         ]
-        for label, send_with_retry, code, kept in cases:
+        for label, send_with_retry, body, code, kept in cases:
             with self.subTest(label), tempfile.TemporaryDirectory() as directory:
                 spool = Path(directory) / "spool"
                 name = "peer-chat-codex-k15a.txt"
@@ -3432,16 +3434,52 @@ class MessageInputTests(unittest.TestCase):
                     redirect_stderr(stderr),
                     patch("sys.stdout", new=io.StringIO()),
                 ):
-                    PREPARE_MESSAGE(name).write_text("payload", encoding="utf-8")
+                    PREPARE_MESSAGE(name).write_text(body, encoding="utf-8")
                     self.assertEqual(MAIN(), code)
 
                 if kept:
                     self.assertEqual(os.listdir(spool), [name])
-                    self.assertEqual((spool / name).read_text(encoding="utf-8"), "payload")
+                    self.assertEqual((spool / name).read_text(encoding="utf-8"), body)
                     self.assertIn(f"--message-file {name}", stderr.getvalue())
                 else:
                     self.assertEqual(os.listdir(spool), [])
                     self.assertNotIn("message kept", stderr.getvalue())
+
+    def test_settle_failure_keeps_the_delivery_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spool = Path(directory) / "spool"
+            name = "peer-chat-codex-m26b.txt"
+            args = argparse.Namespace(
+                prepare_message=None,
+                stdin=False,
+                message_file=name,
+                to="claude",
+                session=None,
+                window=None,
+                target_command=None,
+                queue=False,
+            )
+
+            def fail_after_spool_opened(_sid, _profile, _message, _window, progress) -> int:
+                progress.phase = "started"
+                spool.chmod(0o755)
+                raise RuntimeError("submit request failed; delivery is ambiguous; do not resend")
+
+            replacements = {
+                "MESSAGE_SPOOL": spool,
+                "parse_args": Mock(return_value=args),
+                "target_profile": Mock(return_value=CLAUDE_PROFILE),
+                "resolve_target": Mock(return_value=("window-id", "session-id")),
+                "find_node": Mock(return_value=SPLIT_NODE),
+                "send_with_retry": fail_after_spool_opened,
+            }
+            stderr = io.StringIO()
+            with patch.dict(MAIN.__globals__, replacements), redirect_stderr(stderr):
+                PREPARE_MESSAGE(name).write_text("payload", encoding="utf-8")
+                self.assertEqual(MAIN(), 1)
+
+            self.assertIn("cannot settle", stderr.getvalue())
+            self.assertIn("do not resend", stderr.getvalue())
 
 
 class ComposerSimulation:
