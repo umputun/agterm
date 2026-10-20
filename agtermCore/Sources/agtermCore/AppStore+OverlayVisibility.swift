@@ -19,8 +19,7 @@ extension AppStore {
     @discardableResult
     public func toggleOverlaysHidden(_ sessionID: UUID, pane: OverlayPane?) -> OverlayVisibilityFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
-        let anyShown = session.hideableOverlaySlots(pane).contains { !session.overlayHidden($0) }
-        return setOverlaysHidden(sessionID, pane: pane, hidden: anyShown)
+        return setOverlaysHidden(sessionID, pane: pane, hidden: session.anyOverlayShown(pane))
     }
 
     /// applyOverlayVisibility runs a control `mode` against the scoped overlays.

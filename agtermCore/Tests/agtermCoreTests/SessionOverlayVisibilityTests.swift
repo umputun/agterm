@@ -48,6 +48,24 @@ struct SessionOverlayVisibilityTests {
         #expect(!session.overlayHidden(nil))
     }
 
+    @Test func anyOverlayShownCountsOnlyUnhiddenSlotsInScope() {
+        let session = Session(initialCwd: "/tmp")
+        #expect(!session.anyOverlayShown(nil))
+
+        session.overlayActive = true
+        session.setPaneOverlay(PaneOverlay(command: "htop"), pane: .right)
+        #expect(session.anyOverlayShown(nil))
+
+        session.overlayHidden = true
+        #expect(session.anyOverlayShown(nil))
+        #expect(session.anyOverlayShown(.right))
+        #expect(!session.anyOverlayShown(.left))
+
+        session.setOverlayHidden(true, slot: .right)
+        #expect(!session.anyOverlayShown(nil))
+        #expect(!session.anyOverlayShown(.right))
+    }
+
     @Test func hideableSlotsSkipAHudAndEmptyPanes() {
         let session = Session(initialCwd: "/tmp")
         session.overlayActive = true

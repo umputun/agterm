@@ -512,10 +512,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from
   [[menu-actions]]'s shared-action-seam rule because there is nothing here for a human to invoke by hand.
-- Passivity is four deck exemptions plus two NSView-level gates, each reading a visible-layer predicate
-  (the hide bullet above) and never the raw slot: `gates.overlaid`, the floating click catcher, `backdropWashActive`, the scratch's focus
-  gate, `TerminalView.viewOnly` on the panel, and the cover-only key for the overlay-close refocus. The HTML
-  bullet below says which read the cover predicate and which the program one. `viewOnly` owns the
+- Passivity is four deck exemptions plus two NSView-level gates, none reading the raw slot: `gates.overlaid`,
+  the floating click catcher, `backdropWashActive`, the scratch's focus gate, `TerminalView.viewOnly` on the
+  panel, and the cover-only key for the overlay-close refocus. The deck gates read the visible layer (the hide
+  bullet above); `OverlayPanelStyle` resolves the backdrop, `overlayPanel`'s shown gate drives hit testing,
+  and `viewOnly` follows the occupant's interactivity. The HTML bullet below says which read the cover predicate and which the program one. `viewOnly` owns the
   NSView layer, where `mouseDown` makes a surface first responder; the panel's ancestor
   `.allowsHitTesting(false)` currently blocks the click before that, so the two are belt and braces and
   neither is the place to economise.

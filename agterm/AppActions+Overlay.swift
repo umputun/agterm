@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import agtermCore
 
 extension AppActions {
@@ -7,6 +7,12 @@ extension AppActions {
     func toggleOverlays() {
         guard uiActionsEnabled, let store, let session = store.activeSession else { return }
         store.toggleOverlaysHidden(session.id, pane: nil)
+    }
+
+    /// beepIfHiddenOverlayRefused answers an editor open the session slot refused because a hidden overlay holds
+    /// it, the one refusal with nothing on screen to explain it. Visibility is left alone.
+    func beepIfHiddenOverlayRefused(_ id: UUID) {
+        if store?.session(withID: id)?.overlayHidden == true { NSSound.beep() }
     }
 
     /// closeConfirmationText is the close alert's body for `sessions`, naming the hidden overlays that go with

@@ -10,9 +10,8 @@ extension ControlServer {
             if let failure = store.applyOverlayVisibility(id, pane: pane, mode: mode) {
                 return ControlResponse(ok: false, error: failure.message)
             }
-            let session = store.session(withID: id)
-            let hidden = session.map { session in session.hideableOverlaySlots(pane).allSatisfy { session.overlayHidden($0) } }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: hidden == true ? "hidden" : "shown"))
+            let shown = store.session(withID: id)?.anyOverlayShown(pane) ?? false
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: shown ? "shown" : "hidden"))
         }
     }
 }

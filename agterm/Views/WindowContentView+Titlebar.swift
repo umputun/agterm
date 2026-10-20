@@ -192,7 +192,7 @@ extension WindowContentView {
     private var overlayToggleButton: some View {
         let session = store.activeSession
         let slots = session?.hideableOverlaySlots(nil) ?? []
-        let anyShown = session.map { session in slots.contains { !session.overlayHidden($0) } } ?? false
+        let anyShown = session?.anyOverlayShown(nil) ?? false
         let anyHidden = !(session?.hiddenOverlayNames.isEmpty ?? true)
         return Button {
             actions.toggleOverlays()

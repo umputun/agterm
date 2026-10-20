@@ -320,9 +320,7 @@ extension agtermApp {
                 .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(!PaletteCommand.toggleScratch.isEnabled(in: context))
                 let overlaySession = library.activeStore?.activeSession
-                let overlaysShown = overlaySession.map { session in
-                    session.hideableOverlaySlots(nil).contains { !session.overlayHidden($0) }
-                } ?? true
+                let overlaysShown = overlaySession?.anyOverlayShown(nil) ?? true
                 Button { actions.toggleOverlays() } label: {
                     Label(overlaysShown ? "Hide Overlays" : "Show Overlays", systemImage: "rectangle.on.rectangle")
                 }

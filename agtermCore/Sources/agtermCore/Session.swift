@@ -292,14 +292,13 @@ public final class Session: Identifiable {
     @ObservationIgnored public var pendingSplitForegroundCommand: [String]?
 
     /// overlayActive says the session-wide slot is occupied, by a covering program or page or by a passive HUD.
-    /// Where focus, coverage or input is decided, ask `coverOverlayActive`, `programOverlayActive` or
+    /// Where focus, coverage or input is decided, ask `coverOverlayVisible`, `programOverlayVisible` or
     /// `hudActive` instead. Ephemeral and control-channel only.
     public var overlayActive: Bool = false
     /// overlayHidden keeps the session-wide program or page running while it covers nothing.
     public var overlayHidden: Bool = false
 
-    /// The overlay's surface, created on open and torn down when its `overlayCommand` exits or the control
-    /// channel closes it — unlike the split, never kept alive while hidden.
+    /// The overlay's surface, created on open and kept, hidden or not, until the overlay closes.
     @ObservationIgnored public var overlaySurface: (any TerminalSurface)?
 
     /// The command the overlay runs as its process (e.g. `revdiff`), read by the overlay factory at creation.

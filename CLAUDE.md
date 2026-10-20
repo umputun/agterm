@@ -250,8 +250,8 @@ C-boundary concurrency before changing the bridge.
   `@Sendable` explicitly (`HookProcessRunner`'s `DispatchIO` cleanup and write handlers).
 - The session-wide overlay slot holds a caller's program, an HTML page, or a HUD. Raw `overlayActive` answers
   only "the slot is occupied"; a layer asking "does a cover own this session's input" reads
-  `Session.coverOverlayActive`, and one asking about the covering terminal surface reads
-  `programOverlayActive`. Deck gates, focus routing, zoom, and scratch focus all turn on that distinction,
+  `Session.coverOverlayVisible`, and one asking about the covering terminal surface reads
+  `programOverlayVisible`; their `Active` forms answer occupancy, hidden or not. Deck gates, focus routing, zoom, and scratch focus all turn on that distinction,
   so never spell a predicate inline. `control-api.md` lists the sites.
 - A terminal ask has a separate slot on `Session`, independent of the HUD/program overlay slot; see [[control-api]].
 - A long-lived process spawned into a surface needs a stop condition of its own. A hard-killed app runs no

@@ -262,12 +262,12 @@
 - [x] `keymap.md` and `settings.md` list the new built-in and interface element
 
 ### Task 6: Verify acceptance criteria
-- [ ] every Overview and Solution Overview item implemented
-- [ ] `make build` (Release) succeeds
-- [ ] `make lint` clean
-- [ ] `cd agtermCore && swift test` passes
-- [ ] `make test-app` passes
-- [ ] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test instance
+- [x] every Overview and Solution Overview item implemented
+- [x] `make build` (Release) succeeds
+- [x] `make lint` clean
+- [x] `cd agtermCore && swift test` passes
+- [x] `make test-app` passes
+- [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test instance
 
 ### Task 7: [Final] Update documentation
 - [ ] CLAUDE.md interface-control line committed with this branch

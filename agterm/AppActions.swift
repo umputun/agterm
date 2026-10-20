@@ -239,7 +239,7 @@ final class AppActions {
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
         if let dashboard = frontmostDashboard, dashboard.isOpen { dashboard.close(); focusActiveSession(); return true }
         guard let store, let session = store.activeSession else { return false }
-        if session.overlayActive, !session.overlayHidden { store.closeOverlay(session.id); return true }
+        if session.hudActive || session.coverOverlayVisible { store.closeOverlay(session.id); return true }
         if session.scratchActive { store.toggleScratch(session.id); return true }
         // the focused pane's own overlay is the last cover: without this rung ⌘W over one falls straight
         // through and closes the SESSION. An overlay on the other pane is not in front of the user, so it
@@ -371,6 +371,8 @@ final class AppActions {
         guard let store, let id = store.selectedSessionID, let path = settingsModel?.keymapPath else { return }
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
             keymapEditOverlaySession = id
+        } else {
+            beepIfHiddenOverlayRefused(id)
         }
     }
 
@@ -391,6 +393,8 @@ final class AppActions {
         settingsModel.ensureStarterHooks()
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: settingsModel.hooksPath), sizePercent: 95) {
             hooksEditOverlaySession = id
+        } else {
+            beepIfHiddenOverlayRefused(id)
         }
     }
 
@@ -419,6 +423,8 @@ final class AppActions {
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
             ghosttyEditOverlaySession = id
             ghosttyEditOverlaySnapshot = try? String(contentsOfFile: path, encoding: .utf8)
+        } else {
+            beepIfHiddenOverlayRefused(id)
         }
     }
 

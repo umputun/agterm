@@ -59,6 +59,19 @@ final class AppActionsOverlayTests: XCTestCase {
         XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.id == session.id })
     }
 
+    func testEditKeymapRefusedByAHiddenOverlayLeavesItHidden() throws {
+        let (store, session) = try activeSession()
+        XCTAssertTrue(store.openOverlay(session.id, command: "less"))
+        XCTAssertNil(store.openPaneOverlay(session.id, pane: .left, command: "htop"))
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+
+        actions.editKeymap()
+
+        XCTAssertNil(actions.keymapEditOverlaySession)
+        XCTAssertEqual(session.overlayCommand, "less")
+        XCTAssertEqual(session.hiddenOverlayNames, ["session", "left"])
+    }
+
     func testCloseConfirmationNamesHiddenOverlaysOnlyWhenThereAreAny() throws {
         let (store, session) = try activeSession()
         let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: "/tmp"))

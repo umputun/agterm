@@ -64,6 +64,11 @@ extension Session {
         return (coverOverlayActive ? [nil] : []) + OverlayPane.allCases.filter { paneOverlay($0) != nil }
     }
 
+    /// anyOverlayShown says a slot `pane` scopes holds a program or page that is not hidden: what a toggle hides.
+    public func anyOverlayShown(_ pane: OverlayPane?) -> Bool {
+        hideableOverlaySlots(pane).contains { !overlayHidden($0) }
+    }
+
     /// hiddenOverlayNames is the tree's `hiddenOverlays`: the hidden slots as `session`, `left`, `right`.
     public var hiddenOverlayNames: [String] {
         hideableOverlaySlots(nil).filter { overlayHidden($0) }.map { $0?.rawValue ?? "session" }
