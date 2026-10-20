@@ -407,6 +407,11 @@ buys nothing. A caller with no tree uses `version`.
   back from the tree top-level `workspaceFilter`. The GUI half is the sidebar's bottom-bar grid button
   (filled while applied, disabled with nothing marked), View ▸ Toggle Workspace Filter, the ⌃⇧P palette
   entry, and the `toggle_workspace_filter` keymap action.
+- `workspace flag [on|off|toggle] [--target W] [--window W]` — flag or unflag EVERY session of one workspace
+  as one value, including those the flagged tree layout hides; the control twin of the workspace row's Flag
+  All Sessions. `toggle` (default) unflags only when every session is flagged and otherwise flags them all,
+  so it is not a per-session invert. `on`/`off` are idempotent; an empty workspace changes nothing; returns the workspace
+  id. Read back from each session's `flagged`. Unflagging can move the selection like `session flag off`.
 - `workspace collapse [--target] [--window W]` — collapse ONE workspace's subtree in the sidebar tree
   (hide its sessions); returns the workspace id. The per-workspace counterpart of `sidebar collapse`
   (which collapses ALL but the active workspace) — this targets exactly the addressed workspace and does
@@ -721,11 +726,6 @@ error keeps those names for compatibility.
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
   Pair with `sidebar mode flagged` to see just the flagged sessions, arranged by
   `sidebar flagged-layout` (a flat `session : workspace` list by default). Unknown mode errors. The tree's `flagged` flag tracks membership.
-- `workspace flag [on|off|toggle] [--target W] [--window W]` — flag or unflag EVERY session of one workspace
-  as one value, including those the flagged tree layout hides; the control twin of the workspace row's Flag
-  All Sessions. `toggle` (default) unflags only when every session is flagged and otherwise flags them all,
-  so it is not a per-session invert. `on`/`off` are idempotent; an empty workspace changes nothing; returns the workspace
-  id. Read back from each session's `flagged`. Unflagging can move the selection like `session flag off`.
 - `session context <TEXT|--clear> [--target] [--window W]` — set or clear what the session is ABOUT, shown
   in the title bar — a PR number, an issue, the task in hand. It is set from OUTSIDE the session, so a
   hook or an orchestrator can say what a session it just created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank
@@ -2234,6 +2234,8 @@ a terminal surface's.
 CLI rejects the same value locally with `mode must be one of: on, off, toggle, add`),
 `invalid workspace filter mode: <value>` (workspace filter over the raw socket; the CLI rejects it
 locally with `mode must be on, off, or toggle`),
+`invalid workspace flag mode: <value>` (workspace flag over the raw socket; the CLI rejects it locally
+with `mode must be on, off, or toggle`),
 `no open window` (quick/sidebar/workspace filter), `quick terminal not open` / `quick terminal not realized` (quick type) /
 `failed to read surface buffer` (quick text / session text),
 `text must not contain a NUL byte` (session type / quick type),
