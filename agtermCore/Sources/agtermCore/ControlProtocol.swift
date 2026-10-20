@@ -54,6 +54,9 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlaySubmit = "session.overlay.submit"
     case sessionOverlayCopy = "session.overlay.copy"
     case sessionOverlayText = "session.overlay.text"
+    case sessionOverlayHide = "session.overlay.hide"
+    case sessionOverlayShow = "session.overlay.show"
+    case sessionOverlayToggle = "session.overlay.toggle"
     case sessionHudOpen = "session.hud.open"
     case sessionHudUpdate = "session.hud.update"
     case sessionHudClose = "session.hud.close"
@@ -775,6 +778,13 @@ public enum OverlayHtmlError {
     public static let invalidPageID = "invalid page id"
     /// unknownPage: no page with that id was opened, or its outcome aged out of the retained results.
     public static let unknownPage = "no such page"
+}
+
+/// Error strings for `session.overlay.hide|show|toggle` and for opening into a slot whose overlay is hidden.
+public enum OverlayVisibilityError {
+    /// hidden: the slot still holds its overlay, running; show or close it before opening another.
+    public static let hidden = "overlay hidden"
+    public static let noOverlay = "no overlay"
 }
 
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections

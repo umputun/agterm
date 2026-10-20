@@ -621,4 +621,40 @@ struct ControlDispatcherOverlayTests {
     func commandFailuresMapToTheirMessages(_ failure: HtmlOverlayCommandFailure, _ message: String) {
         #expect(failure.message == message)
     }
+
+    @Test(arguments: [(Command.sessionOverlayHide, OverlayVisibilityMode.hide),
+                      (.sessionOverlayShow, .show), (.sessionOverlayToggle, .toggle)])
+    func visibilityCommandsRouteModePaneTargetAndWindow(_ cmd: Command, _ mode: OverlayVisibilityMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let whole = await dispatcher.dispatch(ControlRequest(cmd: cmd, target: "s", args: ControlArgs(window: "w")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: cmd, target: "s", args: ControlArgs(pane: "split")))
+
+        #expect(whole?.ok == true)
+        #expect(actions.calls == [
+            .overlayVisibility(target: "s", window: "w", pane: nil, mode: mode),
+            .overlayVisibility(target: "s", window: nil, pane: .right, mode: mode),
+        ])
+    }
+
+    @Test(arguments: [Command.sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle])
+    func visibilityCommandsRejectAnInvalidPaneBeforeTheHost(_ cmd: Command) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: cmd, target: "s", args: ControlArgs(pane: "scratch")))
+
+        #expect(response == ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [
+        (OverlayVisibilityFailure.unknownSession, "no such session"),
+        (.noOverlay, OverlayVisibilityError.noOverlay),
+        (.remote, OverlayResultError.shownElsewhere),
+    ])
+    func visibilityFailuresMapToTheirMessages(_ failure: OverlayVisibilityFailure, _ message: String) {
+        #expect(failure.message == message)
+    }
 }

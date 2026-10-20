@@ -88,6 +88,7 @@ extension ControlServer {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
+            if session.overlayHidden { return ControlResponse(ok: false, error: OverlayVisibilityError.hidden) }
             guard let command = Self.helperCommand() else {
                 return ControlResponse(ok: false, error: "hud helper is not bundled in this build")
             }

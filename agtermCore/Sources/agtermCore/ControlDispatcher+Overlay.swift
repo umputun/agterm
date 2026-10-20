@@ -108,6 +108,15 @@ extension ControlDispatcher {
             }
         case .sessionOverlayText:
             return dispatchSessionOverlayText(request)
+        case .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
+            let mode: OverlayVisibilityMode = request.cmd == .sessionOverlayHide ? .hide
+                : (request.cmd == .sessionOverlayShow ? .show : .toggle)
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.setSessionOverlayVisibility(request.target, window: request.args?.window, pane: pane,
+                                                           mode: mode)
+            }
         case .sessionOverlayJobRun:
             guard let job = request.target?.trimmedOrNil else {
                 return ControlResponse(ok: false, error: "session.overlay.job.run requires a job id")

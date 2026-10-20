@@ -37,6 +37,9 @@ extension ControlServer: ControlActions {
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if store.session(withID: id)?.overlayHidden(options.pane) == true {
+                return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
+            }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }

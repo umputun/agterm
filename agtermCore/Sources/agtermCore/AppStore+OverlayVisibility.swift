@@ -23,6 +23,17 @@ extension AppStore {
         return setOverlaysHidden(sessionID, pane: pane, hidden: anyShown)
     }
 
+    /// applyOverlayVisibility runs a control `mode` against the scoped overlays.
+    @discardableResult
+    public func applyOverlayVisibility(_ sessionID: UUID, pane: OverlayPane?,
+                                       mode: OverlayVisibilityMode) -> OverlayVisibilityFailure? {
+        switch mode {
+        case .hide: return setOverlaysHidden(sessionID, pane: pane, hidden: true)
+        case .show: return setOverlaysHidden(sessionID, pane: pane, hidden: false)
+        case .toggle: return toggleOverlaysHidden(sessionID, pane: pane)
+        }
+    }
+
     func hiddenOverlaysNode(_ session: Session) -> [String]? {
         let names = session.hiddenOverlayNames
         return names.isEmpty ? nil : names

@@ -169,16 +169,16 @@
   `OverlayCommandsTests.swift`, `CommandsTests.swift`, `SocketClientTests.swift`,
   `agtermTests/ControlServerSessionActionsTests.swift`, `ControlServerOverlayJobsTests.swift`
 
-- [ ] `session.overlay.hide|show|toggle` in the catalog with optional `pane`, dispatched through `ControlActions`
+- [x] `session.overlay.hide|show|toggle` in the catalog with optional `pane`, dispatched through `ControlActions`
       to the store; app adapter returns the store result
-- [ ] `agtermctl session overlay hide|show|toggle [--pane left|right]` with help stating session scope and, for
+- [x] `agtermctl session overlay hide|show|toggle [--pane left|right]` with help stating session scope and, for
       toggle, the hide-first rule
-- [ ] responses report the resulting hidden slots; refusals use stable error strings; opening into a hidden slot
+- [x] responses report the resulting scoped state (`hidden` or `shown`); refusals use stable error strings; opening into a hidden slot
       (session and pane, local and remote-open paths) answers `overlay hidden`
-- [ ] human tree output tags a hidden overlay `(overlay hidden)`
-- [ ] tests: dispatch per command and pane, refusals, CLI parsing and help text, adapter round trip, hidden-open
+- [x] human tree output tags a hidden overlay `(overlay hidden)`
+- [x] tests: dispatch per command and pane, refusals, CLI parsing and help text, adapter round trip, hidden-open
       refusal messages (program, pane, HTML, remote open, HUD), human tree tag
-- [ ] targeted core and hosted tests pass
+- [x] targeted core and hosted tests pass
 
 ### Task 3: Rendering, focus and cover-site migration
 
@@ -251,7 +251,8 @@
 - [ ] skill: SKILL.md `description` trigger within its 1024-character cap (`SkillInstallTests`), by replacing
       "run overlay programs and read their exit status" with "run, hide or show overlays; read exit status";
       `when_to_use` and a body section ("hide the overlay to talk to me, then show it"); reference entries with
-      the session scope and hide-first rule
+      the session scope and hide-first rule; a page's own hide/show/toggle defaults to its own pane, a
+      session-wide page's to the session, and an explicit target lifts the pane default
 - [ ] `swift test --filter SkillInstallTests` passes, with expectations for the new commands
 - [ ] `keymap.md` and `settings.md` list the new built-in and interface element
 

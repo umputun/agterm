@@ -1,8 +1,22 @@
 import Foundation
 
+/// OverlayVisibilityMode is what `session.overlay.hide|show|toggle` asks of the scoped overlays.
+public enum OverlayVisibilityMode: String, Sendable {
+    case hide, show, toggle
+}
+
 /// OverlayVisibilityFailure is why a hide, show or toggle of a session's overlays refused.
 public enum OverlayVisibilityFailure: Equatable, Sendable {
     case unknownSession, noOverlay, remote
+
+    /// message is the control error for this refusal.
+    public var message: String {
+        switch self {
+        case .unknownSession: return "no such session"
+        case .noOverlay: return OverlayVisibilityError.noOverlay
+        case .remote: return OverlayResultError.shownElsewhere
+        }
+    }
 }
 
 extension Session {
