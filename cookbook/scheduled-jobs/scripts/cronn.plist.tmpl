@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- rendered by install.sh: launchd expands no shell variables, so every path lands absolute. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>@@LABEL@@</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@@CRONN_BIN@@</string>
+        <string>--file=@@CONFIG_DIR@@/crontab.yml</string>
+        <string>--update</string>
+        <string>--dedup</string>
+        <string>--web.enabled</string>
+        <string>--web.address=127.0.0.1:@@PORT@@</string>
+        <string>--web.db-path=@@CONFIG_DIR@@/cronn.db</string>
+        <string>--log.enabled</string>
+        <string>--log.filename=@@LOG_DIR@@/cronn.log</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>WorkingDirectory</key>
+    <string>@@HOME@@</string>
+
+    <key>StandardOutPath</key>
+    <string>@@LOG_DIR@@/cronn.launchd.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>@@LOG_DIR@@/cronn.launchd.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- jobs run under sh -c with this PATH and never a login shell's rc files -->
+        <key>PATH</key>
+        <string>@@JOB_PATH@@</string>
+        <key>HOME</key>
+        <string>@@HOME@@</string>
+    </dict>
+</dict>
+</plist>
