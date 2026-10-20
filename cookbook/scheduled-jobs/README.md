@@ -50,7 +50,7 @@ The installer reads four variables, each with a default:
 | `CRONN_LOG_DIR` | `~/Library/Logs` | `cronn.log` and `cronn.launchd.log` |
 | `CRONN_LABEL` | `local.cronn` | launchd label and plist name |
 
-It records the values in `$CRONN_CONFIG_DIR/cronn.env`, where the skill reads them. If you move the config directory, export `CRONN_CONFIG_DIR` in your shell as well, so the agent looks in the right place. `CRONN_JOB_PATH` replaces the PATH jobs run with; the default is Homebrew's `bin` and `sbin`, `/usr/local/bin` and the system directories.
+It records the values in `$CRONN_CONFIG_DIR/cronn.env`, where the skill reads them, and a rerun or `--uninstall` reuses them unless the environment sets a value. If you move the config directory, export `CRONN_CONFIG_DIR` in your shell as well, so the agent looks in the right place. `CRONN_JOB_PATH` replaces the PATH jobs run with; the default is Homebrew's `bin` and `sbin`, `/usr/local/bin` and the system directories.
 
 To use the job template, copy it next to your jobs and make it executable:
 
@@ -107,7 +107,7 @@ A job runs under `sh -c` with the agent's PATH, and has no `AGTERM_*` variables 
 
 ## Limits
 
-**The installer adds a LaunchAgent that starts cronn at every login and restarts it if it exits.** Rerunning the installer stops and restarts the agent, and with it any job running at that moment. `--uninstall` removes the agent and its plist; the formula, the jobs file, job scripts and history in `~/.config/cronn` stay until you delete them.
+**The installer adds a LaunchAgent that starts cronn at every login and restarts it if it exits.** Rerunning the installer stops and restarts the agent, and with it any job running at that moment. `--uninstall` removes the agent, its plist and `cronn.env`; the formula, the jobs file, job scripts and history in `~/.config/cronn` stay until you delete them.
 
 Jobs run whatever command you, or the agent on your behalf, put in the jobs file, with your user's permissions and no confirmation at run time. Read a job the agent adds before leaving it scheduled.
 
@@ -115,4 +115,4 @@ A job scheduled while the Mac sleeps is skipped, not caught up; it runs at its n
 
 The job template needs agterm running when it fires; otherwise it posts a failure notification and exits. Each run opens a new session, and sessions from earlier days stay until you close them. Because of `--wait`, closing one can take a key press after the agent exits. The agent's working directory must already be trusted by that agent, or the session stops on its trust prompt.
 
-Under the **Re-run commands** restore mode, a scheduled session still open when agterm quits starts its agent on the same prompt again at the next launch. Close these sessions once you have read them.
+Under the **Re-run commands** restore mode, a scheduled session still open when agterm quits comes back at the next launch showing a `No such file or directory` error, because its launcher deleted itself on the first run. Close these sessions once you have read them.

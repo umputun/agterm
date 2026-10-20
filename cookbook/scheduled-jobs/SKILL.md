@@ -18,7 +18,7 @@ Read the settings the installer recorded, then ask the API:
 curl -fsS "http://127.0.0.1:$CRONN_PORT/api/v1/status" >/dev/null && echo running
 ```
 
-When `cronn.env` is missing or the API does not answer, cronn is not set up here. Tell the user
+When `cronn.env` is missing, cronn is not set up here. Tell the user
 what `scripts/install.sh` does and ask before running it: it installs the `umputun/apps/cronn`
 Homebrew formula and a LaunchAgent that starts at every login. `scripts/install.sh --dry-run`
 prints the plan and the rendered plist without changing anything. After the install, read
@@ -93,7 +93,7 @@ copy it into `jobs/`, then set its variables on the command line.
     name: "standup summary"
 ```
 
-A job has no session of its own, which sets three rules the template already follows:
+The template follows four rules that any job driving agterm needs:
 
 - Every `agtermctl` call defaults to the frontmost window. Find the window holding the target
   workspace (`window list --json`, then `tree --json --window`) and pass `--window`.
@@ -162,6 +162,8 @@ when it is already running, and 403 when manual runs are switched off.
 - `$CRONN_LOG_DIR/cronn.log`: cronn's own log, including job output and parse warnings.
 - `$CRONN_LOG_DIR/cronn.launchd.log`: launchd-level failures, plus the version line cronn prints
   at startup.
-- `scripts/install.sh` again re-renders the agent and restarts it; it never touches the jobs file
-  once it exists. For a newer cronn, run `brew upgrade umputun/apps/cronn` first, then the
-  installer. `scripts/install.sh --uninstall` removes the agent and keeps the jobs and history.
+- `scripts/install.sh` again re-renders the agent and restarts it, along with any job running at
+  that moment, so ask the user first. It reuses the port, label and log dir recorded in
+  `cronn.env` and never touches the jobs file once it exists. For a newer cronn, run
+  `brew upgrade umputun/apps/cronn` first, then the installer. `scripts/install.sh --uninstall`
+  removes the agent and `cronn.env`, and keeps the jobs and history.

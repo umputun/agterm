@@ -3,8 +3,19 @@
 # loopback. rerunning refreshes the agent; --dry-run prints what it would do, --uninstall removes it.
 set -euo pipefail
 
-CRONN_PORT="${CRONN_PORT:-9095}"
 CRONN_CONFIG_DIR="${CRONN_CONFIG_DIR:-$HOME/.config/cronn}"
+env_file="$CRONN_CONFIG_DIR/cronn.env"
+
+# a value recorded by an earlier install outranks the default, so a rerun or --uninstall acts on
+# that agent; the environment outranks both. parsed, never sourced, so the file runs no code
+recorded() {
+    [ -f "$env_file" ] || return 0
+    sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$env_file" | tail -1
+}
+CRONN_PORT="${CRONN_PORT:-$(recorded CRONN_PORT)}"
+CRONN_LOG_DIR="${CRONN_LOG_DIR:-$(recorded CRONN_LOG_DIR)}"
+CRONN_LABEL="${CRONN_LABEL:-$(recorded CRONN_LABEL)}"
+CRONN_PORT="${CRONN_PORT:-9095}"
 CRONN_LOG_DIR="${CRONN_LOG_DIR:-$HOME/Library/Logs}"
 CRONN_LABEL="${CRONN_LABEL:-local.cronn}"
 FORMULA="umputun/apps/cronn"
@@ -49,8 +60,8 @@ render_plist() {
 
 uninstall() {
     bootout_and_wait
-    rm -f "$plist"
-    echo "removed the $CRONN_LABEL agent and $plist"
+    rm -f "$plist" "$env_file"
+    echo "removed the $CRONN_LABEL agent, $plist and $env_file"
     echo "kept $CRONN_CONFIG_DIR (jobs, history) and the $FORMULA formula; remove them by hand if unwanted"
 }
 
@@ -111,7 +122,7 @@ jobs: []
 YAML
 fi
 
-cat > "$CRONN_CONFIG_DIR/cronn.env" <<ENV
+cat > "$env_file" <<ENV
 CRONN_PORT="$CRONN_PORT"
 CRONN_CONFIG_DIR="$CRONN_CONFIG_DIR"
 CRONN_LOG_DIR="$CRONN_LOG_DIR"
