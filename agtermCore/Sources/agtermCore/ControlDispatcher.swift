@@ -31,6 +31,8 @@ public protocol ControlActions {
     /// it takes no workspace target — the host resolves the store from `window` (frontmost when nil).
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
+    /// Flags or unflags every session of the target workspace as one value; `toggle` unflags only when all are.
+    func setWorkspaceFlag(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     /// Sets or clears the session's title-bar context; `context` is already trimmed and validated, and nil
     /// means clear.
@@ -244,7 +246,8 @@ public struct ControlDispatcher {
         case .sessionOverlayJobRun:
             return dispatchSessionOverlayCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
-                .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
+                .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
+                .workspaceFlag:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .keymapRun,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarFlaggedLayout,
@@ -618,6 +621,12 @@ public struct ControlDispatcher {
             return actions.setWorkspaceExpansion(request.target, window: request.args?.window, expanded: false)
         case .workspaceExpand:
             return actions.setWorkspaceExpansion(request.target, window: request.args?.window, expanded: true)
+        case .workspaceFlag:
+            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false,
+                                       error: "invalid workspace flag mode: \(request.args?.mode ?? "toggle")")
+            }
+            return actions.setWorkspaceFlag(request.target, window: request.args?.window, mode: mode)
         default:
             preconditionFailure("unexpected workspace command: \(request.cmd.rawValue)")
         }

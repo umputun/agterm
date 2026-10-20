@@ -104,4 +104,12 @@ extension ControlServer {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
+
+    /// Control half of the workspace row's Flag All/Unflag All; the mapping lives in `AppStore.applyWorkspaceFlag`.
+    func setWorkspaceFlag(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse {
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            store.applyWorkspaceFlag(mode, to: id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
 }

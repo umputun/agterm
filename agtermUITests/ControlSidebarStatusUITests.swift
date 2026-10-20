@@ -95,6 +95,38 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid sidebar mode"), "should report invalid mode: \(bad)")
     }
 
+    func testWorkspaceFlagFlagsEverySessionAndReadsBackPerSession() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.new"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "both session rows should be present in tree mode")
+        func workspaceFlags() throws -> (id: String, sessionIDs: [String], flags: [Bool]) {
+            let tree = try XCTUnwrap((try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any])?["tree"] as? [String: Any])
+            let ws = try XCTUnwrap((tree["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+            let sessions = try XCTUnwrap(ws["sessions"] as? [[String: Any]])
+            return (try XCTUnwrap(ws["id"] as? String), sessions.compactMap { $0["id"] as? String },
+                    sessions.map { $0["flagged"] as? Bool ?? false })
+        }
+        let (wsID, sessionIDs, initial) = try workspaceFlags()
+        XCTAssertEqual(initial, [false, false])
+        let firstID = try XCTUnwrap(sessionIDs.first)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.flag","target":"\#(firstID)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+
+        let toggled = try sendCommand(#"{"cmd":"workspace.flag","target":"\#(wsID)","args":{"mode":"toggle"}}"#)
+        XCTAssertEqual(toggled["ok"] as? Bool, true, "workspace.flag toggle should succeed: \(toggled)")
+        XCTAssertEqual((toggled["result"] as? [String: Any])?["id"] as? String, wsID)
+        XCTAssertEqual(try workspaceFlags().flags, [true, true], "toggle on a mixed workspace flags every session")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar.mode","args":{"mode":"flagged"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "both flagged rows should be present")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.flag","target":"\#(wsID)","args":{"mode":"toggle"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try workspaceFlags().flags, [false, false], "toggle on an all-flagged workspace unflags every session")
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 10), "unflagging the workspace empties the flagged view")
+
+        let bad = try sendCommand(#"{"cmd":"workspace.flag","target":"\#(wsID)","args":{"mode":"clear"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "workspace.flag has no clear mode: \(bad)")
+        XCTAssertEqual(bad["error"] as? String, "invalid workspace flag mode: clear")
+    }
+
     func testFlaggedLayoutCommandSwitchesTheRenderedRowsAndReadsBack() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
         let seeded = try sendCommand(#"{"cmd":"tree"}"#)

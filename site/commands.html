@@ -891,6 +891,24 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace flag [on|off|toggle] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.flag</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Flag or unflag every session in the target workspace at once, the control twin of the workspace row's
+                Flag All Sessions / Unflag All Sessions. It covers every session, including those the flagged tree layout
+                hides. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> (the default) unflags only
+                when every session is already flagged and otherwise flags them all, so a mixed workspace ends up all flagged
+                rather than inverted. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> are idempotent; an empty workspace changes nothing. Returns the workspace id. Read back via
+                each session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> field.
+                Unflagging can move the selection exactly as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session flag off</span> does.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl workspace collapse [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.collapse</div>

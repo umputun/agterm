@@ -177,6 +177,14 @@ extension WorkspaceSidebar.Coordinator {
             membership.representedObject = node
             menu.addItem(membership)
             menu.addItem(.separator())
+            // targets every session of the workspace, including the ones the flagged tree layout hides.
+            let flagAll = NSMenuItem(title: store.allSessionsFlagged(inWorkspace: node.id) ? "Unflag All Sessions" : "Flag All Sessions",
+                                     action: #selector(menuToggleWorkspaceFlag(_:)), keyEquivalent: "")
+            flagAll.target = self
+            flagAll.representedObject = node
+            flagAll.isEnabled = store.workspaces.first { $0.id == node.id }?.sessions.isEmpty == false
+            menu.addItem(flagAll)
+            menu.addItem(.separator())
             let delete = NSMenuItem(title: "Delete Workspace", action: #selector(menuDeleteWorkspace(_:)), keyEquivalent: "")
             delete.target = self
             delete.representedObject = node
@@ -245,6 +253,11 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuToggleFlag(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest else { return }
         actions.toggleFlags(request.sessionIDs, in: store)
+    }
+
+    @objc private func menuToggleWorkspaceFlag(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        store.applyWorkspaceFlag(.toggle, to: node.id)
     }
 
     @objc private func menuDuplicate(_ sender: NSMenuItem) {

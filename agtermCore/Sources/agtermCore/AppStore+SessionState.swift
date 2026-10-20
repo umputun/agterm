@@ -48,6 +48,21 @@ extension AppStore {
         }
     }
 
+    /// Whether every session of the workspace is flagged; false for an empty or unknown workspace. The one
+    /// predicate behind the row menu's Flag All/Unflag All label and `workspace.flag toggle`.
+    public func allSessionsFlagged(inWorkspace id: UUID) -> Bool {
+        guard let workspace = workspaces.first(where: { $0.id == id }), !workspace.sessions.isEmpty else { return false }
+        return workspace.sessions.allSatisfy(\.flagged)
+    }
+
+    /// Applies one `workspace.flag` mode to EVERY session of the workspace, including ones the flagged view
+    /// hides. `toggle` unflags all only when all are flagged, otherwise flags all, so a mixed workspace
+    /// converges instead of inverting per session.
+    public func applyWorkspaceFlag(_ mode: ControlToggleMode, to id: UUID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        setFlag(mode.desiredValue(current: allSessionsFlagged(inWorkspace: id)), forSessions: workspace.sessions.map(\.id))
+    }
+
     /// setBackgroundWatermark writes the session default when `pane` is nil, leaving pane overrides in
     /// place, or that pane's override, where nil returns the pane to inheriting. Returns whether it changed.
     @discardableResult

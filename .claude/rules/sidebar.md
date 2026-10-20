@@ -104,6 +104,8 @@ paths:
   would make every script that reads it mode-aware.
 - Mode flips call `reselectIfSelectionHidden` only when the active session would disappear. Mutators
   no-op without saving on unknown/unchanged IDs and prune transient selection when rows disappear.
+- Workspace rows offer Flag All Sessions / Unflag All Sessions over every session of the workspace, hidden ones
+  included, disabled when it has none; `workspace.flag` is the control form.
 - GUI surfaces are `flagged-view-toggle`, row Flag/Unflag, View-menu Show Flagged/Show All, Flag Session,
   Clear Flagged, palette entries, and keyless built-ins `toggleFlaggedView`/`toggleFlag`. Clear Flagged
   is not a built-in and confirms unless under XCUITest.

@@ -40,6 +40,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("sidebar.flagged-layout"))
     }
 
+    func setWorkspaceFlag(_: String?, window _: String?, mode _: ControlToggleMode) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.flag"))
+    }
+
     func reloadHooks() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("hooks.reload"))
     }

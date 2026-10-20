@@ -120,4 +120,47 @@ struct ControlDispatcherWorkspaceTests {
 
         #expect(response == ControlResponse(ok: false, error: "no open window"))
     }
+
+    @Test(arguments: [("on", ControlToggleMode.on), ("off", .off), ("toggle", .toggle)])
+    func workspaceFlagRoutesEveryModeWithTargetAndWindow(raw: String, expected: ControlToggleMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceFlag, target: "work", args: ControlArgs(mode: raw, window: "win")))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "work")))
+        #expect(actions.calls == [.workspaceFlag(target: "work", window: "win", expected)])
+    }
+
+    @Test func workspaceFlagDecodesFromItsWireNameAndDispatches() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let request = try JSONDecoder().decode(ControlRequest.self,
+                                               from: Data(#"{"cmd":"workspace.flag","target":"work","args":{"mode":"off"}}"#.utf8))
+
+        _ = await dispatcher.dispatch(request)
+
+        #expect(actions.calls == [.workspaceFlag(target: "work", window: nil, .off)])
+    }
+
+    @Test func workspaceFlagDefaultsToToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFlag, target: "work"))
+
+        #expect(actions.calls == [.workspaceFlag(target: "work", window: nil, .toggle)])
+    }
+
+    @Test func workspaceFlagRejectsUnknownModeWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFlag, target: "work",
+                                                                args: ControlArgs(mode: "clear")))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid workspace flag mode: clear"))
+        #expect(actions.calls.isEmpty)
+    }
 }
