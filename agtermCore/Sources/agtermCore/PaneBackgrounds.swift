@@ -87,7 +87,7 @@ public extension Session {
         for pane in OverlayPane.allCases {
             guard let frame = paneFrames[pane] else { continue }
             // the overlay's hex through the renderer's own predicate, so the wash matches what it painted
-            let overlayHex = paneOverlay(pane).map { $0.backgroundColor.flatMap { WatermarkConfig.isValidColorHex($0) ? $0 : nil } }
+            let overlayHex = paneOverlay(pane).flatMap { $0.hidden ? nil : $0 }.map { $0.backgroundColor.flatMap { WatermarkConfig.isValidColorHex($0) ? $0 : nil } }
             let hex = overlayHex ?? washColorHex(for: pane == .left ? .left : .right)
             regions.append(BackdropWashRegion(frame: frame, colorHex: hex))
         }

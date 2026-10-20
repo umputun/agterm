@@ -189,30 +189,31 @@
   `TerminalZoom.swift`, `PaneBackgrounds.swift`, `Session.swift` (existing `topmostSurface`, `onScreenSurface`
   and focus-target callers), `Session+OverlayVisibility.swift` / `Session+HtmlOverlay.swift` focus and font
   helpers, deck gate and scratch focus sites named in `control-api.md`
-- Create: `agterm/AppActions+Overlay.swift` (⌘W rung and toggle action; `AppActions.swift` is at 983 lines)
+- Create: `agterm/AppActions+Overlay.swift` (shared close-confirm text, later the toggle action; `AppActions.swift` is at 983 lines)
 - Modify: `agterm/AppActions+Batch.swift` (batch close prompt mentions hidden overlays)
 - Modify tests: `agtermTests/SplitToggleCoverTests.swift`, `HudDeckGatesTests.swift`,
   `GhosttySurfaceViewInputTests.swift`, `agtermCore/Tests/agtermCoreTests/TerminalZoomTests.swift`,
   `DashboardCoverTests.swift`, `PaneBackgroundsTests.swift`
 - Modify UI tests: `agtermUITests/ControlHtmlOverlayUITests.swift`, `ControlOverlaySplitUITests.swift`
 
-- [ ] hidden panel: same host, ids and geometry; opacity 0, no hit testing, no first responder, off-screen for
+- [x] hidden panel: same host, ids and geometry; opacity 0, no hit testing, no first responder, off-screen for
       drops; HTML vs terminal host choice still by occupant type
-- [ ] every cover site from `control-api.md`, plus `fullOverlayActive` pane hiding, `deckPane`,
+- [x] every cover site from `control-api.md`, plus `fullOverlayActive` pane hiding, `deckPane`,
       `focusedOverlayPane`, focus target, zoom pane arms, dashboard cover, HTML font routing and
       `backdropWashRegions` (a hidden colored pane overlay must not tint a visible floating cover's backdrop),
       moved to the visible predicates; lifecycle and read sites stay on occupancy
-- [ ] show refocuses the shown cover in the selected pane without selecting the sibling; hide refocuses the pane
-- [ ] ⌘W ladder skips hidden slots; the opt-in close confirmation and the batch close prompt mention hidden
+- [x] show refocuses the shown cover in the selected pane without selecting the sibling; hide refocuses the pane
+- [x] ⌘W ladder skips hidden slots; the opt-in close confirmation and the batch close prompt mention hidden
       overlays in any slot
-- [ ] a program overlay hidden before its surface realizes still realizes (off-screen host, `deckOnScreen`)
-- [ ] tests: predicate-site behavior with hidden covers, zoom, scratch, backdrop wash with a hidden colored pane
+- [x] a program overlay hidden before its surface realizes still realizes (off-screen host, `deckOnScreen`)
+- [x] tests: predicate-site behavior with hidden covers, zoom, scratch, backdrop wash with a hidden colored pane
       overlay, ⌘W ladder and confirm text; targeted UI tests that hide and show a program overlay, an HTML page
       and a pane overlay, then use REAL keyboard input and a click in the uncovered pane while hidden and real
       input into the restored overlay after show (socket `session.type` writes under a visible overlay, so it
-      proves nothing here), and check the same surface/page identity and drop routing; unrealized-then-hidden
-      case
-- [ ] `cd agtermCore && swift test --filter` for the touched core suites, targeted hosted and UI tests pass
+      proves nothing here), and check the same surface/page identity; unrealized-then-hidden case (model
+      side; creation needs only a backing size, which a hidden host keeps). Drop routing rides the existing
+      `visible`/`deckVisible` gates, now false for a hidden host; no new UI check
+- [x] `cd agtermCore && swift test --filter` for the touched core suites, targeted hosted and UI tests pass
 
 ### Task 4: Keymap action, menu, palette and title-bar icon
 
@@ -221,6 +222,7 @@
 - Modify: `agterm/agtermApp+Menus.swift` (View menu), `agterm/AppActions+Palette.swift`,
   `agterm/Commands/CustomCommandRunner.swift`, `agterm/Views/WindowContentView+Titlebar.swift`,
   `agterm/Views/SettingsView.swift` (Interface tab layout)
+- Modify: `agterm/Views/HtmlOverlayView.swift`, `agtermCore/Sources/agtermCore/AppStore+OverlayVisibility.swift`
 - Modify tests: `BuiltinActionTests`, `PaletteCatalogTests`, `AppSettingsTests`, `TitlebarCompositionTests` in
   `agtermCoreTests`; `agtermTests/PaletteTests.swift`, `AppActionsPaletteTests.swift`,
   `CustomCommandRunnerTests.swift`, `WindowContentView+TitlebarTests.swift`; `agtermUITests/KeymapUITests.swift`,
@@ -233,6 +235,9 @@
 - [ ] `InterfaceElement.overlayToggle`, hidden by default; when enabled always visible, disabled without an
       eligible overlay, highlighted when any is hidden, tooltip/accessibility `Hide Overlays` / `Show Overlays`
 - [ ] Settings > Interface fits: "Multiple Windows" folded into "Sidebar"; fit assertion in `SettingsUITests`
+- [ ] ➕ (Eugene, mid-run) an HTML page's strip gets a Hide button beside Close: `AppStore.hideHtmlOverlay(_:)`
+      finds the page's slot like `closeHtmlOverlay` and hides with the page rule (a pane page its pane, a
+      session-wide page the session); a chromeless page has no strip and no button
 - [ ] tests: default chord and rebinding, enablement on all paths, intercept with a focused page, icon states and
       group divider; targeted keymap and settings UI tests
 - [ ] targeted core, hosted and UI tests pass

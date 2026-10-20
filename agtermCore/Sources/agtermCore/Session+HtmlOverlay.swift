@@ -21,17 +21,17 @@ extension Session {
     /// session-wide page covers both split panes and a shown scratch, a pane page only its own pane.
     public func htmlHidesTerminal(_ pane: StatusPane?) -> Bool {
         switch pane {
-        case .scratch: return htmlOverlayActive && scratchActive
-        case nil, .left: return htmlOverlayActive || paneOverlayIsHtml(.left)
-        case .right: return htmlOverlayActive || paneOverlayIsHtml(.right)
+        case .scratch: return htmlOverlayVisible && scratchActive
+        case nil, .left: return htmlOverlayVisible || (paneOverlayVisible(.left) && paneOverlayIsHtml(.left))
+        case .right: return htmlOverlayVisible || (paneOverlayVisible(.right) && paneOverlayIsHtml(.right))
         }
     }
 
     /// topmostHtmlOverlay is the page that takes the keyboard when focus returns to this session, in the
     /// order `topmostSurface` resolves covers; nil when a terminal is on top.
     public var topmostHtmlOverlay: HtmlOverlay? {
-        if htmlOverlayActive { return htmlOverlay }
-        if programOverlayActive || scratchActive { return nil }
+        if htmlOverlayVisible { return htmlOverlay }
+        if programOverlayVisible || scratchActive { return nil }
         return focusedOverlayPane.flatMap { paneOverlay($0)?.html }
     }
 

@@ -5,6 +5,12 @@ public enum OverlayVisibilityMode: String, Sendable {
     case hide, show, toggle
 }
 
+/// VisibleCover names what owns a session's keyboard instead of its terminal: a session-wide program or page,
+/// or one over the focused pane.
+public enum VisibleCover: Equatable, Sendable {
+    case session, focusedPane
+}
+
 /// OverlayVisibilityFailure is why a hide, show or toggle of a session's overlays refused.
 public enum OverlayVisibilityFailure: Equatable, Sendable {
     case unknownSession, noOverlay, remote
@@ -32,6 +38,15 @@ extension Session {
     /// fullOverlayVisible is `fullOverlayActive` minus a hidden occupant: whether the panes are hidden.
     public var fullOverlayVisible: Bool { fullOverlayActive && !overlayHidden }
 
+    /// visibleCover is the cover owning the keyboard now, nil for the terminal itself. It changes only when what
+    /// the user types into changes: a hidden overlay closing or the other pane's overlay toggling leaves it alone,
+    /// and so does a pane overlay under the scratch, which keeps the keyboard.
+    public var visibleCover: VisibleCover? {
+        if coverOverlayVisible { return .session }
+        if scratchActive { return nil }
+        return focusedOverlayPane == nil ? nil : .focusedPane
+    }
+
     /// paneOverlayVisible says whether `pane` holds an overlay that covers it now.
     public func paneOverlayVisible(_ pane: OverlayPane) -> Bool { paneOverlay(pane).map { !$0.hidden } ?? false }
 
@@ -50,7 +65,7 @@ extension Session {
     }
 
     /// hiddenOverlayNames is the tree's `hiddenOverlays`: the hidden slots as `session`, `left`, `right`.
-    var hiddenOverlayNames: [String] {
+    public var hiddenOverlayNames: [String] {
         hideableOverlaySlots(nil).filter { overlayHidden($0) }.map { $0?.rawValue ?? "session" }
     }
 

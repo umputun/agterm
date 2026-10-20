@@ -57,12 +57,13 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
             // a HUD is NOT addressable: it takes no input, so there is nothing to zoom into, and `tree`
             // already reports the slot as `overlay: false` while one is up — advertising
             // `surface:<id>:overlay` would contradict the same response. `surface.zoom` on it answers
-            // "surface not available" through `isTargetValid`.
-            return session.programOverlayActive
+            // "surface not available" through `isTargetValid`. A hidden overlay is not addressable either, so
+            // hiding a zoomed one ends the zoom.
+            return session.programOverlayVisible
         case .overlayLeft:
-            return session.paneOverlay(.left) != nil && !session.paneOverlayIsHtml(.left)
+            return session.paneOverlayVisible(.left) && !session.paneOverlayIsHtml(.left)
         case .overlayRight:
-            return session.paneOverlay(.right) != nil && !session.paneOverlayIsHtml(.right)
+            return session.paneOverlayVisible(.right) && !session.paneOverlayIsHtml(.right)
         }
     }
 
@@ -70,20 +71,21 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
     /// `session.focusedPane` carry the exclusivity, so widening either without narrowing the other picks the
     /// wrong target.
     @MainActor public func isActive(in session: Session) -> Bool {
-        let uncovered = !session.coverOverlayActive && !session.scratchActive
+        let uncovered = !session.coverOverlayVisible && !session.scratchActive
         switch self {
         case .primary:
-            return uncovered && session.focusedPane == .left && session.leftOverlay == nil
+            return uncovered && session.focusedPane == .left && !session.paneOverlayVisible(.left)
         case .split:
-            return uncovered && session.focusedPane == .right && session.rightOverlay == nil
+            return uncovered && session.focusedPane == .right && !session.paneOverlayVisible(.right)
         case .scratch:
-            return !session.coverOverlayActive && session.scratchActive
+            return !session.coverOverlayVisible && session.scratchActive
         case .overlay:
-            return session.programOverlayActive
+            return session.programOverlayVisible
         case .overlayLeft:
-            return uncovered && session.focusedPane == .left && session.leftOverlay != nil && !session.paneOverlayIsHtml(.left)
+            return uncovered && session.focusedPane == .left && session.paneOverlayVisible(.left) && !session.paneOverlayIsHtml(.left)
         case .overlayRight:
-            return uncovered && session.focusedPane == .right && session.rightOverlay != nil && !session.paneOverlayIsHtml(.right)
+            return uncovered && session.focusedPane == .right && session.paneOverlayVisible(.right)
+                && !session.paneOverlayIsHtml(.right)
         }
     }
 
@@ -91,17 +93,18 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
         switch self {
         case .primary:
             // a pane renders at opacity 0 under its OWN overlay, so the overlay case takes the visibility.
-            return Self.paneVisible(.left, in: session) && session.leftOverlay == nil
+            return Self.paneVisible(.left, in: session) && !session.paneOverlayVisible(.left)
         case .split:
-            return Self.paneVisible(.right, in: session) && session.rightOverlay == nil
+            return Self.paneVisible(.right, in: session) && !session.paneOverlayVisible(.right)
         case .scratch:
-            return !session.coverOverlayActive && session.scratchActive
+            return !session.coverOverlayVisible && session.scratchActive
         case .overlay:
-            return session.programOverlayActive
+            return session.programOverlayVisible
         case .overlayLeft:
-            return Self.paneVisible(.left, in: session) && session.leftOverlay != nil && !session.paneOverlayIsHtml(.left)
+            return Self.paneVisible(.left, in: session) && session.paneOverlayVisible(.left) && !session.paneOverlayIsHtml(.left)
         case .overlayRight:
-            return Self.paneVisible(.right, in: session) && session.rightOverlay != nil && !session.paneOverlayIsHtml(.right)
+            return Self.paneVisible(.right, in: session) && session.paneOverlayVisible(.right)
+                && !session.paneOverlayIsHtml(.right)
         }
     }
 
@@ -109,7 +112,7 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
     /// question `Session.rendersPane` owns, minus the session-wide covers that hide both panes. A HUD is not
     /// one: the deck leaves the panes lit and clickable around the panel.
     @MainActor private static func paneVisible(_ pane: OverlayPane, in session: Session) -> Bool {
-        guard !session.coverOverlayActive, !session.scratchActive else { return false }
+        guard !session.coverOverlayVisible, !session.scratchActive else { return false }
         return session.rendersPane(pane)
     }
 }

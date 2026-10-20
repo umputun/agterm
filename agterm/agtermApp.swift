@@ -211,7 +211,7 @@ struct agtermApp: App {
                         let qtVisible = QuickTerminalController.shared.holdsKey
                         return Self.makeScratchSurface(for: session, store: store,
                                                        env: surfaceEnv(for: session, pane: .scratch),
-                                                       suppressAutoFocus: session.coverOverlayActive || qtVisible,
+                                                       suppressAutoFocus: session.coverOverlayVisible || qtVisible,
                                                        actions: actions)
                     },
                     captureOnExit: captureOnExit,

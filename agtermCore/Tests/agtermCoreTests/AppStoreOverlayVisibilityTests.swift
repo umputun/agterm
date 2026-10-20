@@ -200,4 +200,62 @@ struct AppStoreOverlayVisibilityTests {
 
         #expect(fixture.session.overlayHidden(pane))
     }
+
+    @Test func visibleCoverChangesOnlyWithWhatOwnsTheKeyboard() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        let id = session.id
+        #expect(session.visibleCover == nil)
+
+        #expect(fixture.store.openOverlay(id, command: "less"))
+        #expect(session.visibleCover == .session)
+        fixture.store.setOverlaysHidden(id, pane: nil, hidden: true)
+        #expect(session.visibleCover == nil)
+        fixture.store.setOverlaysHidden(id, pane: nil, hidden: false)
+        #expect(session.visibleCover == .session)
+        fixture.store.setOverlaysHidden(id, pane: nil, hidden: true)
+        #expect(fixture.store.closeOverlay(id))
+        #expect(session.visibleCover == nil, "closing a hidden overlay leaves the terminal in charge")
+    }
+
+    // regression: hiding or closing the unfocused pane's overlay refocused the active pane and stole Find's keys.
+    @Test func theOtherPanesOverlayNeverChangesTheVisibleCover() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        let id = session.id
+        session.splitFocused = false
+        #expect(fixture.store.openPaneOverlay(id, pane: .right, command: "htop") == nil)
+        #expect(session.visibleCover == nil)
+
+        fixture.store.setOverlaysHidden(id, pane: .right, hidden: true)
+        #expect(session.visibleCover == nil)
+        fixture.store.setOverlaysHidden(id, pane: .right, hidden: false)
+        #expect(session.visibleCover == nil)
+        #expect(fixture.store.closePaneOverlay(id, pane: .right))
+        #expect(session.visibleCover == nil)
+
+        #expect(fixture.store.openPaneOverlay(id, pane: .left, command: "htop") == nil)
+        #expect(session.visibleCover == .focusedPane)
+        fixture.store.setOverlaysHidden(id, pane: .left, hidden: true)
+        #expect(session.visibleCover == nil)
+    }
+
+    // regression: a pane overlay changing under the scratch refocused the scratch and stole Find's keys.
+    @Test func aPaneOverlayUnderTheScratchNeverChangesTheVisibleCover() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        let id = session.id
+        session.splitFocused = false
+        session.scratchActive = true
+
+        #expect(fixture.store.openPaneOverlay(id, pane: .left, command: "htop") == nil)
+        #expect(session.visibleCover == nil)
+        fixture.store.setOverlaysHidden(id, pane: .left, hidden: true)
+        #expect(session.visibleCover == nil)
+        #expect(fixture.store.closePaneOverlay(id, pane: .left))
+        #expect(session.visibleCover == nil)
+
+        #expect(fixture.store.openOverlay(id, command: "less"))
+        #expect(session.visibleCover == .session, "a session-wide overlay draws above the scratch")
+    }
 }

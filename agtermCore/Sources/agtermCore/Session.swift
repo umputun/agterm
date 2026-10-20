@@ -731,10 +731,10 @@ public final class Session: Identifiable {
         splitFocused && (isSplit || splitSurface != nil) ? .right : .left
     }
 
-    /// The focused pane's overlay pane, nil when that pane's slot is empty.
+    /// The focused pane's overlay pane, nil when that pane's slot is empty or its overlay hidden.
     public var focusedOverlayPane: OverlayPane? {
         let pane = focusedPane
-        return paneOverlay(pane) == nil ? nil : pane
+        return paneOverlayVisible(pane) ? pane : nil
     }
 
     /// Whether the detail pane LAYS THIS PANE OUT at all — the precondition for realizing a surface in it,
@@ -945,8 +945,8 @@ public final class Session: Identifiable {
     /// helper would take first responder off the session the message is about — the deck's exemptions one
     /// layer down.
     public var topmostSurface: (any TerminalSurface)? {
-        if htmlOverlayActive { return nil }
-        if programOverlayActive { return overlaySurface }
+        if htmlOverlayVisible { return nil }
+        if programOverlayVisible { return overlaySurface }
         if scratchActive { return scratchSurface }
         if let pane = focusedOverlayPane { return paneOverlaySurface(pane) }
         return activeSurface
@@ -958,9 +958,9 @@ public final class Session: Identifiable {
     /// for a covering pane overlay whose surface has not realized yet, leaving the retry to re-resolve.
     /// A HUD is no cover, so the requested pane stays reachable while one is up.
     public func focusTarget(wantSplit: Bool) -> (any TerminalSurface)? {
-        if coverOverlayActive || scratchActive { return topmostSurface }
+        if coverOverlayVisible || scratchActive { return topmostSurface }
         let pane: OverlayPane = wantSplit ? .right : .left
-        if paneOverlay(pane) != nil { return paneOverlaySurface(pane) }
+        if paneOverlayVisible(pane) { return paneOverlaySurface(pane) }
         return wantSplit ? splitSurface : surface
     }
 
@@ -969,7 +969,7 @@ public final class Session: Identifiable {
     /// scratch, not the pane beneath. A program overlay routes via `topmostSurface`; this stays
     /// pane-vs-scratch, like `searchTarget`, and a HUD leaves the scratch on screen underneath it.
     public var onScreenSurface: (any TerminalSurface)? {
-        scratchActive && !coverOverlayActive ? topmostSurface : activeSurface
+        scratchActive && !coverOverlayVisible ? topmostSurface : activeSurface
     }
 
     /// The match counter for the search bar and `session.search`: empty before a query runs, `"no matches"` at

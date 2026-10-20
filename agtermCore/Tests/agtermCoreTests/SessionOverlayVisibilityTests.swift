@@ -101,4 +101,53 @@ struct SessionOverlayVisibilityTests {
 
         #expect(session.overlayVisibilityRefusal(pane) == (pane == .left ? .noOverlay : .remote))
     }
+
+    @Test func focusRoutingSkipsHiddenCoversAndLandsOnThePane() {
+        let session = Session(initialCwd: "/tmp")
+        let primary = SpySurface()
+        let program = SpySurface()
+        let paneProgram = SpySurface()
+        session.surface = primary
+        session.overlayActive = true
+        session.overlaySurface = program
+        session.setPaneOverlay(PaneOverlay(command: "htop"), pane: .left)
+        session.setPaneOverlaySurface(paneProgram, pane: .left)
+        #expect(session.topmostSurface === program)
+
+        session.setOverlayHidden(true, slot: nil)
+        #expect(session.topmostSurface === paneProgram)
+        #expect(session.focusedOverlayPane == .left)
+        #expect(session.focusTarget(wantSplit: false) === paneProgram)
+
+        session.setOverlayHidden(true, slot: .left)
+        #expect(session.topmostSurface === primary)
+        #expect(session.focusedOverlayPane == nil)
+        #expect(session.focusTarget(wantSplit: false) === primary)
+    }
+
+    @Test func aHiddenPageNeitherTakesTheKeysNorHidesTheTerminalFromFontCommands() {
+        let session = Session(initialCwd: "/tmp")
+        session.overlayActive = true
+        session.htmlOverlay = HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))
+        session.setPaneOverlay(PaneOverlay(html: HtmlOverlay(source: .file(path: "/tmp/q.html", grantRoot: nil))), pane: .right)
+        #expect(session.topmostHtmlOverlay != nil)
+        #expect(session.htmlHidesTerminal(.left))
+
+        session.setOverlayHidden(true, slot: nil)
+        session.setOverlayHidden(true, slot: .right)
+
+        #expect(session.topmostHtmlOverlay == nil)
+        #expect(!session.htmlHidesTerminal(.left))
+        #expect(!session.htmlHidesTerminal(.right))
+        #expect(session.htmlCovers(nil))
+    }
+
+    @Test func anUnrealizedHiddenPaneOverlayOnARenderedPaneIsKept() {
+        let session = Session(initialCwd: "/tmp")
+        session.setPaneOverlay(PaneOverlay(command: "htop"), pane: .left)
+        session.setOverlayHidden(true, slot: .left)
+
+        #expect(!session.dropUnrealizedPaneOverlays())
+        #expect(session.paneOverlay(.left)?.hidden == true)
+    }
 }

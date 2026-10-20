@@ -31,9 +31,7 @@ extension AppActions {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close \(sessions.count) Sessions?"
-        alert.informativeText = closeGraceUndoEnabled
-            ? "The sessions will close after a short undo window."
-            : "The sessions will close immediately and can be reopened from File > Open Recent."
+        alert.informativeText = closeConfirmationText(for: sessions)
         alert.addButton(withTitle: "Close")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn

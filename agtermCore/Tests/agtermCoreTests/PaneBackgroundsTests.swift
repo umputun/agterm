@@ -155,6 +155,19 @@ struct PaneBackgroundsTests {
         ])
     }
 
+    @Test func backdropRegionsSkipAHiddenPaneOverlaysBackground() throws {
+        let session = try makeSplitSession().session
+        session.paneBackgrounds.left = tint
+        session.setPaneOverlay(PaneOverlay(command: "top", backgroundColor: "#0a0b0c"), pane: .left)
+        session.setOverlayHidden(true, slot: .left)
+        let left = HudPaneFrame(x: 0, y: 0, width: 400, height: 300)
+
+        #expect(session.backdropWashRegions(paneFrames: HudPaneFrames(left: left)) == [
+            BackdropWashRegion(frame: nil, colorHex: nil),
+            BackdropWashRegion(frame: left, colorHex: "#201414"),
+        ])
+    }
+
     @Test func backdropRegionsUseOnlyTheScratchWhileItIsShown() throws {
         let session = try makeSplitSession().session
         session.backgroundWatermark = tint

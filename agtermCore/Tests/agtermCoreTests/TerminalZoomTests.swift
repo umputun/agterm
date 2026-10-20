@@ -59,6 +59,27 @@ struct TerminalZoomTests {
         #expect(TerminalZoomController.resolveTarget(store: store) == .session(session.id, .overlay))
     }
 
+    @Test func aHiddenOverlayIsNeitherTheTargetNorAvailable() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        session.splitFocused = true
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        #expect(TerminalZoomController.resolveTarget(store: store) == .session(session.id, .overlay))
+
+        session.setOverlayHidden(true, slot: nil)
+        #expect(TerminalZoomController.resolveTarget(store: store) == .session(session.id, .overlayRight))
+        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .overlay), in: store))
+
+        store.setOverlaysHidden(session.id, pane: .right, hidden: true)
+        #expect(TerminalZoomController.resolveTarget(store: store) == .session(session.id, .split))
+        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .overlayRight), in: store))
+        #expect(TerminalZoomSurface.split.isVisible(in: session))
+    }
+
     /// The quick terminal is one detached panel per app, so no WINDOW's zoom can hold it: `.quick` is neither
     /// resolved here nor valid here, and `QuickTerminalController.isZoomed` owns it instead.
     @Test func windowZoomNeverTakesTheQuickTerminal() {

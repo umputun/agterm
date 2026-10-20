@@ -11,13 +11,14 @@ public enum DashboardCover: Equatable, Sendable {
 
 extension Session {
     /// dashboardCover returns the cover over `pane`: a full session-wide program or page first, then the
-    /// pane's own overlay. A HUD and a floating overlay leave the panes lit in the deck, so they cover nothing.
+    /// pane's own overlay. A HUD, a floating overlay and a hidden one leave the panes lit in the deck, so they
+    /// cover nothing.
     public func dashboardCover(for pane: OverlayPane) -> DashboardCover? {
-        if fullOverlayActive {
+        if fullOverlayVisible {
             if let page = htmlOverlay { return .page(identity: page.identity, title: page.current?.title) }
             return .program(command: overlayReplica == nil ? overlayCommand : nil)
         }
-        guard let overlay = paneOverlay(pane) else { return nil }
+        guard let overlay = paneOverlay(pane), !overlay.hidden else { return nil }
         if let page = overlay.html { return .page(identity: page.identity, title: page.current?.title) }
         return .program(command: overlay.replica == nil ? overlay.command : nil)
     }
