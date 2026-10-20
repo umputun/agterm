@@ -442,6 +442,7 @@ extension AppStore {
         let replica = session.overlayReplica
         session.overlayReplica = nil
         session.overlayActive = false
+        session.overlayHidden = false
         session.overlaySurface?.teardown()
         session.overlaySurface = nil
         HtmlOverlayReleases.shared.release(session.htmlOverlay)

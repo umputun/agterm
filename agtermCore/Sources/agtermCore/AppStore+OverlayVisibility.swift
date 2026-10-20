@@ -1,0 +1,30 @@
+import Foundation
+
+extension AppStore {
+    /// setOverlaysHidden hides or shows a session's overlays: one pane's, or every program and page of the
+    /// session for a nil `pane`. A hidden overlay keeps running and stays addressable. nil on success,
+    /// including when nothing changed; `tree.changed` fires only on a change.
+    @discardableResult
+    public func setOverlaysHidden(_ sessionID: UUID, pane: OverlayPane?, hidden: Bool) -> OverlayVisibilityFailure? {
+        guard let session = session(withID: sessionID) else { return .unknownSession }
+        let slots = session.hideableOverlaySlots(pane)
+        guard !slots.isEmpty else { return session.overlayVisibilityRefusal(pane) }
+        let changing = slots.filter { session.overlayHidden($0) != hidden }
+        for slot in changing { session.setOverlayHidden(hidden, slot: slot) }
+        if !changing.isEmpty { scheduleTreeChanged() }
+        return nil
+    }
+
+    /// toggleOverlaysHidden hides the scoped overlays when any of them is shown, otherwise shows them all.
+    @discardableResult
+    public func toggleOverlaysHidden(_ sessionID: UUID, pane: OverlayPane?) -> OverlayVisibilityFailure? {
+        guard let session = session(withID: sessionID) else { return .unknownSession }
+        let anyShown = session.hideableOverlaySlots(pane).contains { !session.overlayHidden($0) }
+        return setOverlaysHidden(sessionID, pane: pane, hidden: anyShown)
+    }
+
+    func hiddenOverlaysNode(_ session: Session) -> [String]? {
+        let names = session.hiddenOverlayNames
+        return names.isEmpty ? nil : names
+    }
+}

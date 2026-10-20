@@ -234,6 +234,18 @@ struct AppStorePaneSwapTests {
         #expect(!restored.splitCommandWait)
     }
 
+    @Test func aHiddenPaneOverlayStaysHiddenOnItsNewPane() {
+        let fixture = makeSeededSession()
+        let session = fixture.session
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: .left, hidden: true) == nil)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+
+        #expect(session.paneOverlay(.right)?.command == "left overlay")
+        #expect(session.overlayHidden(.right))
+        #expect(!session.overlayHidden(.left))
+    }
+
     @Test func swapAssignsEachSurfaceItsNewRole() {
         let fixture = makeSeededSession()
 

@@ -141,20 +141,20 @@
   `HtmlOverlayTests.swift`, `AppStoreTreeProjectionTests.swift`, `AppStoreRemoteOverlayTests.swift`,
   `SnapshotRoundTripTests.swift`; new tests for the store operations in `AppStoreOverlayVisibilityTests.swift`
 
-- [ ] hidden state: `Session.overlayHidden` and `PaneOverlay.hidden`, eligible only for program and HTML
+- [x] hidden state: `Session.overlayHidden` and `PaneOverlay.hidden`, eligible only for program and HTML
       occupants; cleared on removal or replacement, kept across in-place metadata updates (replica, HTML page),
       pane promotion and swap, and a `--wait` exit
-- [ ] visible-coverage predicates in `Session+OverlayVisibility.swift`, occupancy predicates unchanged
-- [ ] store `setOverlaysHidden` / `toggleOverlaysHidden` with optional pane scope and the hide-first rule;
+- [x] visible-coverage predicates in `Session+OverlayVisibility.swift`, occupancy predicates unchanged
+- [x] store `setOverlaysHidden` / `toggleOverlaysHidden` with optional pane scope and the hide-first rule;
       session scope acts on eligible local slots and skips origin-only reservations; refusals for no eligible
       overlay and an explicitly addressed remote pane; existing open paths still refuse an occupied hidden slot
-- [ ] `tree.changed` scheduled only on an actual transition
-- [ ] tree read-back: `hiddenOverlays` on the session node, `hidden` on HTML overlay nodes, both omitted when
+- [x] `tree.changed` scheduled only on an actual transition
+- [x] tree read-back: `hiddenOverlays` on the session node, `hidden` on HTML overlay nodes, both omitted when
       empty, decoder accepts payloads without them
-- [ ] tests: visible-predicate truth table per occupant and slot, transitions, idempotent hide/show, mixed-state toggle, eligibility (HUD, ask, remote, mixed local and
+- [x] tests: visible-predicate truth table per occupant and slot, transitions, idempotent hide/show, mixed-state toggle, eligibility (HUD, ask, remote, mixed local and
       remote panes), clearing on replace/close, survival across metadata update, promotion, swap and `--wait`
       exit, occupied-slot open refusal, projection, old-payload decode and round trip, tree.changed count
-- [ ] `cd agtermCore && swift test --filter` for the touched suites passes
+- [x] `cd agtermCore && swift test --filter` for the touched suites passes
 
 ### Task 2: Control API and CLI
 

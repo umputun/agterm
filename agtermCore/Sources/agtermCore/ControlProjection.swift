@@ -337,6 +337,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// htmlOverlays lists the pages in this session's overlay slots, session-wide first then left and right;
     /// omitted when none is open. `overlay` and `paneOverlays` report their slots as covered too.
     public let htmlOverlays: [ControlHtmlOverlayNode]?
+    /// hiddenOverlays lists the hidden slots as `session`, `left`, `right`, omitted when none is hidden. A
+    /// hidden slot still counts in `overlay` and `paneOverlays`, which report occupancy.
+    public let hiddenOverlays: [String]?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
@@ -355,7 +358,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
                 liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
-                remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil) {
+                remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
+                hiddenOverlays: [String]? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -405,6 +409,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.presenters = presenters
         self.remoteOverlays = remoteOverlays
         self.htmlOverlays = htmlOverlays
+        self.hiddenOverlays = hiddenOverlays
     }
 }
 
@@ -443,12 +448,16 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let zoom: Double?
     /// id is the page's identity, the one `session.overlay.result --page` reads; an older server omits it.
     public let id: String?
+    /// hidden is true while the page's slot is hidden, omitted otherwise.
+    public let hidden: Bool?
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
                 canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, chromeless: Bool = false,
-                zoom: Double? = nil, id: String? = nil, persistent: Bool = false, browse: Bool = false) {
+                zoom: Double? = nil, id: String? = nil, persistent: Bool = false, browse: Bool = false,
+                hidden: Bool? = nil) {
         self.id = id
+        self.hidden = hidden
         self.pane = pane
         self.file = file
         self.cwd = cwd
@@ -469,7 +478,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case pane, file, cwd, url, state, error, page, title, canGoBack, canGoForward, navigation, javascript
-        case chromeless, persistent, browse, zoom, id
+        case chromeless, persistent, browse, zoom, id, hidden
     }
 
     public init(from decoder: Decoder) throws {
@@ -491,6 +500,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         browse = try c.decodeIfPresent(Bool.self, forKey: .browse) ?? false
         zoom = try c.decodeIfPresent(Double.self, forKey: .zoom)
         id = try c.decodeIfPresent(String.self, forKey: .id)
+        hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden)
     }
 }
 

@@ -682,6 +682,37 @@ struct AppStoreTreeProjectionTests {
         let node = try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: Data(
             #"{"url":"http://localhost:5173/","state":"loaded","javascript":false}"#.utf8))
         #expect(!node.browse)
+        #expect(node.hidden == nil)
+    }
+
+    @Test func hiddenOverlaysReportHiddenSlotsWhileOccupancyStays() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        store.toggleSplit(session.id)
+        session.surface = SpySurface(paneToken: "left")
+        session.splitSurface = SpySurface(paneToken: "right")
+        let page = HtmlOverlay(source: .file(path: "/tmp/a/p.html", grantRoot: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        #expect(store.controlTree().workspaces[0].sessions[0].hiddenOverlays == nil)
+
+        #expect(store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil)
+
+        let node = store.controlTree().workspaces[0].sessions[0]
+        #expect(node.hiddenOverlays == ["session", "right"])
+        #expect(node.overlay)
+        #expect(node.paneOverlays == ["right"])
+        #expect(node.htmlOverlays?.first?.hidden == true)
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(store.controlTree()))
+        #expect(decoded.workspaces[0].sessions[0] == node)
+    }
+
+    @Test func aSessionNodeFromAnOlderServerDecodesWithNoHiddenOverlays() throws {
+        let node = try JSONDecoder().decode(ControlSessionNode.self, from: Data(
+            #"{"id":"x","name":"n","cwd":"/","active":true,"split":false,"overlay":true,"scratch":false,"flagged":false}"#.utf8))
+        #expect(node.hiddenOverlays == nil)
+        #expect(node.overlay)
     }
 
     @Test func controlTreeReportsThePassedLinkOpenMode() throws {

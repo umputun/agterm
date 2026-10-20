@@ -375,7 +375,8 @@ public final class AppStore {
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
                                           presentation: presentationNode(of: session), presenters: presentersNode(of: session),
                                           remoteOverlays: remoteOverlayNodes(of: session),
-                                          htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom))
+                                          htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom),
+                                          hiddenOverlays: hiddenOverlaysNode(session))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

@@ -138,8 +138,8 @@ extension AppStore {
     }
 
     func htmlOverlayNodes(_ session: Session, zoom: Double?) -> [ControlHtmlOverlayNode]? {
-        let slots: [(String?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
-            + OverlayPane.allCases.map { ($0.rawValue, session.paneOverlay($0)?.html) }
+        let slots: [(OverlayPane?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
+            + OverlayPane.allCases.map { ($0, session.paneOverlay($0)?.html) }
         let nodes = slots.compactMap { pane, page in
             page.map { page in
                 var file: String?, cwd: String?, url: String?
@@ -147,12 +147,13 @@ extension AppStore {
                 case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
                 case .url(let address): url = address.absoluteString
                 }
-                return ControlHtmlOverlayNode(pane: pane, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
+                return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
                                               error: page.loadError, page: page.current?.page, title: page.current?.title,
                                               canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
                                               navigation: page.navigation ? true : nil, javascript: page.javascript,
                                               chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
-                                              persistent: page.persistent, browse: page.browse)
+                                              persistent: page.persistent, browse: page.browse,
+                                              hidden: session.overlayHidden(pane) ? true : nil)
             }
         }
         return nodes.isEmpty ? nil : nodes

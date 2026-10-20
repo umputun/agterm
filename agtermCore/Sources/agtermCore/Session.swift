@@ -66,6 +66,8 @@ public struct PaneOverlay: Equatable, Sendable {
     public var replica: OverlayReplica?
     /// html is the page this overlay shows instead of running `command`, which is then empty and never read.
     public var html: HtmlOverlay?
+    /// hidden keeps the overlay running while it covers nothing; a new occupant starts shown.
+    public var hidden = false
 
     public init(command: String, cwd: String? = nil, backgroundColor: String? = nil, wait: Bool = false) {
         self.command = command
@@ -293,6 +295,8 @@ public final class Session: Identifiable {
     /// Where focus, coverage or input is decided, ask `coverOverlayActive`, `programOverlayActive` or
     /// `hudActive` instead. Ephemeral and control-channel only.
     public var overlayActive: Bool = false
+    /// overlayHidden keeps the session-wide program or page running while it covers nothing.
+    public var overlayHidden: Bool = false
 
     /// The overlay's surface, created on open and torn down when its `overlayCommand` exits or the control
     /// channel closes it — unlike the split, never kept alive while hidden.
