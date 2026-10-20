@@ -19,6 +19,7 @@ C-boundary concurrency before changing the bridge.
   meaningful to drive.
 - For each hideable titlebar/sidebar element, ask whether it should join host-free `InterfaceElement` and
   Settings > Interface. Never add that preference without approval.
+  A control enabled there stays visible and is disabled when it cannot act; never show or hide it by state.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.
   It also points "can you add X" requests to Discussions ▸ Ideas instead of issues.
