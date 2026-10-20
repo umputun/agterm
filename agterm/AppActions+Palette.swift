@@ -42,7 +42,8 @@ extension AppActions {
             hasRemotes: !configuredRemotes.isEmpty,
             terminalZoomActive: terminalZoomActive,
             dashboardOpen: frontmostDashboard?.isOpen == true,
-            pickerActive: pickActive(for: library.activeWindowID)
+            pickerActive: pickActive(for: library.activeWindowID),
+            activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false
         )
     }
 
@@ -94,6 +95,7 @@ extension AppActions {
         case .closeSplit: closeSplit()
         case .swapPanes: swapActiveSessionPanes()
         case .toggleScratch: toggleScratch()
+        case .toggleOverlay: toggleOverlays()
         case .toggleTerminalZoom: toggleTerminalZoom()
         case .toggleSidebar: toggleSidebar()
         case .toggleFlag: toggleFlagActiveSession()

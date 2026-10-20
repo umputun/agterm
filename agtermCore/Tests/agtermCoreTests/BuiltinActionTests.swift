@@ -14,6 +14,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
         #expect(BuiltinAction.toggleHorizontalSplit.rawValue == "toggle_horizontal_split")
         #expect(BuiltinAction.toggleTerminalZoom.rawValue == "toggle_terminal_zoom")
+        #expect(BuiltinAction.toggleOverlay.rawValue == "toggle_overlay")
         #expect(BuiltinAction.toggleSearch.rawValue == "toggle_search")
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
         #expect(BuiltinAction.customCommandPalette.rawValue == "custom_command_palette")
@@ -36,7 +37,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.previousWindow.rawValue == "previous_window")
         #expect(BuiltinAction.nextWindow.rawValue == "next_window")
         #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
-        #expect(BuiltinAction.allCases.count == 49)
+        #expect(BuiltinAction.allCases.count == 50)
     }
 
     @Test func rejectsUnknownName() {
@@ -100,6 +101,7 @@ struct BuiltinActionTests {
             .toggleSplit: Chord(mods: [.command], key: "d"),
             .toggleHorizontalSplit: Chord(mods: [.command, .shift], key: "d"),
             .toggleScratch: Chord(mods: [.command], key: "j"),
+            .toggleOverlay: Chord(mods: [.command, .shift], key: "j"),
             .toggleTerminalZoom: Chord(mods: [.command, .shift], key: "return"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),

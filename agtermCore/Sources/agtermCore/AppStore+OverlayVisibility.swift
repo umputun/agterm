@@ -34,6 +34,13 @@ extension AppStore {
         }
     }
 
+    /// hideHtmlOverlay hides page `id` from its own strip with a page's scope: a pane page hides its pane,
+    /// a session-wide page the session's overlays. False once the page left its slot.
+    @discardableResult public func hideHtmlOverlay(_ id: UUID) -> Bool {
+        guard let slot = htmlOverlaySlot(id) else { return false }
+        return setOverlaysHidden(slot.session.id, pane: slot.pane, hidden: true) == nil
+    }
+
     func hiddenOverlaysNode(_ session: Session) -> [String]? {
         let names = session.hiddenOverlayNames
         return names.isEmpty ? nil : names

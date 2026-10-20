@@ -319,6 +319,7 @@ struct SocketClientTests {
             toggle_horizontal_split     cmd+shift+d
             toggle_scratch              cmd+j
             toggle_terminal_zoom        cmd+shift+return
+            toggle_overlay              cmd+shift+j
             toggle_search               cmd+f
           * toggle_sidebar              t
             select_theme                -

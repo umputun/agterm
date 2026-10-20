@@ -485,9 +485,12 @@ private struct InterfaceSettingsView: View {
 
     var body: some View {
         Form {
-            twoColumnSection("Title Bar", elements: InterfaceElement.allCases.filter { $0.section == .titleBar })
-            twoColumnSection("Sidebar", elements: InterfaceElement.allCases.filter { $0.section == .sidebar })
-            Section("Multiple Windows") {
+            twoColumnSection("Title Bar", elements: InterfaceElement.allCases.filter { $0.section == .titleBar }) {
+                EmptyView()
+            }
+            // the multi-window toggle rides the Sidebar section: the tab is full at 540x680, and its own
+            // section header would push the quick-terminal Size off the bottom.
+            twoColumnSection("Sidebar", elements: InterfaceElement.allCases.filter { $0.section == .sidebar }) {
                 Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
             }
@@ -520,7 +523,8 @@ private struct InterfaceSettingsView: View {
     /// A section whose toggles lay out TWO per row, each filling half the row around a centered `Divider` so
     /// the columns read as EVEN and visibly separated; an odd final element pairs with an empty half.
     @ViewBuilder
-    private func twoColumnSection(_ title: String, elements: [InterfaceElement]) -> some View {
+    private func twoColumnSection(_ title: String, elements: [InterfaceElement],
+                                  @ViewBuilder trailing: () -> some View) -> some View {
         Section(title) {
             ForEach(Array(stride(from: 0, to: elements.count, by: 2)), id: \.self) { start in
                 HStack(spacing: 16) {
@@ -533,6 +537,7 @@ private struct InterfaceSettingsView: View {
                     }
                 }
             }
+            trailing()
         }
     }
 

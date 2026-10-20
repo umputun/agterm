@@ -2,6 +2,13 @@ import Foundation
 import agtermCore
 
 extension AppActions {
+    /// toggleOverlays hides every program and page of the active session while any is shown, else shows them
+    /// all: the menu, palette, title-bar button and `toggle_overlay` chord share it with `session.overlay.toggle`.
+    func toggleOverlays() {
+        guard uiActionsEnabled, let store, let session = store.activeSession else { return }
+        store.toggleOverlaysHidden(session.id, pane: nil)
+    }
+
     /// closeConfirmationText is the close alert's body for `sessions`, naming the hidden overlays that go with
     /// them: a hidden overlay is out of sight, so the alert is the last place it can be noticed.
     func closeConfirmationText(for sessions: [Session]) -> String {

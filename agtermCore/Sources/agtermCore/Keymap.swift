@@ -175,18 +175,19 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
         line.alternatives.contains { $0.keybind.first == newDashboardChord }
     }
     if !dashboardMapped, oldConfigUsesNewDashboardChord { compatibilityUnbound.insert(.dashboard) }
-    // explicit bindings keep this chord unless attach_remote is mapped.
-    if let attachChord = BuiltinAction.attachRemote.defaultChord {
-        let attachMapped = resolved.overrides.contains { $0.action == .attachRemote }
-            || resolved.alternatives[.attachRemote] != nil || resolved.unbound.contains(.attachRemote)
-        let oldConfigUsesAttachChord = resolved.overrides.contains {
-            $0.action != .attachRemote && $0.chord == attachChord
+    // later defaults: explicit bindings keep these chords unless the new action is mapped.
+    for newAction in [BuiltinAction.attachRemote, .toggleOverlay] {
+        guard let newChord = newAction.defaultChord else { continue }
+        let mapped = resolved.overrides.contains { $0.action == newAction }
+            || resolved.alternatives[newAction] != nil || resolved.unbound.contains(newAction)
+        let oldConfigUsesChord = resolved.overrides.contains {
+            $0.action != newAction && $0.chord == newChord
         } || resolved.alternatives.contains { action, entry in
-            action != .attachRemote && entry.alternatives.contains { $0.keybind.first == attachChord }
+            action != newAction && entry.alternatives.contains { $0.keybind.first == newChord }
         } || commandLines.contains { line in
-            line.alternatives.contains { $0.keybind.first == attachChord }
+            line.alternatives.contains { $0.keybind.first == newChord }
         }
-        if !attachMapped, oldConfigUsesAttachChord { compatibilityUnbound.insert(.attachRemote) }
+        if !mapped, oldConfigUsesChord { compatibilityUnbound.insert(newAction) }
     }
     let builtinOverrides = resolveBuiltinOverrides(resolved.overrides, unbound: compatibilityUnbound,
                                                    alternatives: resolved.alternatives, diagnostics: &diagnostics)

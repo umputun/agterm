@@ -258,4 +258,30 @@ struct AppStoreOverlayVisibilityTests {
         #expect(fixture.store.openOverlay(id, command: "less"))
         #expect(session.visibleCover == .session, "a session-wide overlay draws above the scratch")
     }
+
+    @Test func aPagesOwnHideUsesThePageScope() throws {
+        let fixture = try makeFixture()
+        let id = fixture.session.id
+        let panePage = HtmlOverlay(source: .file(path: "/tmp/pane.html", grantRoot: nil))
+        #expect(fixture.store.openOverlay(id, command: "less"))
+        #expect(fixture.store.openHtmlOverlay(id, pane: .right, overlay: panePage, sizePercent: nil) == nil)
+
+        #expect(fixture.store.hideHtmlOverlay(panePage.id))
+        #expect(fixture.session.hiddenOverlayNames == ["right"], "a pane page hides its own pane only")
+
+        #expect(fixture.store.closePaneOverlay(id, pane: .right))
+        #expect(!fixture.store.hideHtmlOverlay(panePage.id), "a page that left its slot has nothing to hide")
+    }
+
+    @Test func aSessionWidePagesOwnHideHidesTheSession() throws {
+        let fixture = try makeFixture()
+        let id = fixture.session.id
+        let page = HtmlOverlay(source: .file(path: "/tmp/session.html", grantRoot: nil))
+        #expect(fixture.store.openHtmlOverlay(id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        #expect(fixture.store.openPaneOverlay(id, pane: .left, command: "htop") == nil)
+
+        #expect(fixture.store.hideHtmlOverlay(page.id))
+
+        #expect(fixture.session.hiddenOverlayNames == ["session", "left"])
+    }
 }

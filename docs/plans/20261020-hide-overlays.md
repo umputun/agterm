@@ -228,19 +228,19 @@
   `CustomCommandRunnerTests.swift`, `WindowContentView+TitlebarTests.swift`; `agtermUITests/KeymapUITests.swift`,
   `SettingsUITests.swift`
 
-- [ ] built-in `toggle_overlay` with default ⌘⇧J (checked against Ghostty defaults and `keymap.md`), View menu
+- [x] built-in `toggle_overlay` with default ⌘⇧J (checked against Ghostty defaults and `keymap.md`), View menu
       item and palette entry; enablement owned by `PaletteCommand.isEnabled(in:)` through a defaulted
       `PaletteContext` term, read by the menu and monitor paths
-- [ ] page-focus intercept in `CustomCommandRunner` so the chord works from an HTML overlay
-- [ ] `InterfaceElement.overlayToggle`, hidden by default; when enabled always visible, disabled without an
+- [x] page-focus intercept in `CustomCommandRunner` so the chord works from an HTML overlay
+- [x] `InterfaceElement.overlayToggle`, hidden by default; when enabled always visible, disabled without an
       eligible overlay, highlighted when any is hidden, tooltip/accessibility `Hide Overlays` / `Show Overlays`
-- [ ] Settings > Interface fits: "Multiple Windows" folded into "Sidebar"; fit assertion in `SettingsUITests`
-- [ ] ➕ (Eugene, mid-run) an HTML page's strip gets a Hide button beside Close: `AppStore.hideHtmlOverlay(_:)`
+- [x] Settings > Interface fits: "Multiple Windows" folded into "Sidebar"; fit assertion in `SettingsUITests`
+- [x] ➕ (Eugene, mid-run) an HTML page's strip gets a Hide button beside Close: `AppStore.hideHtmlOverlay(_:)`
       finds the page's slot like `closeHtmlOverlay` and hides with the page rule (a pane page its pane, a
       session-wide page the session); a chromeless page has no strip and no button
-- [ ] tests: default chord and rebinding, enablement on all paths, intercept with a focused page, icon states and
+- [x] tests: default chord and rebinding, enablement on all paths, intercept with a focused page, icon states and
       group divider; targeted keymap and settings UI tests
-- [ ] targeted core, hosted and UI tests pass
+- [x] targeted core, hosted and UI tests pass
 
 ### Task 5: Documentation and bundled agent skill
 

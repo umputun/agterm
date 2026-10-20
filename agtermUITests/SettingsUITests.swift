@@ -326,6 +326,25 @@ final class SettingsUITests: XCTestCase {
                       "selecting Default should remove the cursorBlink key from settings.json")
     }
 
+    func testInterfaceTabFitsWithTheOverlaysToggle() throws {
+        let toggle = settingsControl(tab: "Interface", control: "settings-interface-overlayToggle")
+        XCTAssertEqual(toggle.value as? Int, 0, "the overlays button is off until opted in")
+        let window = app.windows.containing(.any, identifier: "settings-quick-terminal-size").firstMatch
+        let size = app.popUpButtons["settings-quick-terminal-size"]
+        XCTAssertTrue(size.waitForExistence(timeout: 5), "the tab's last control should exist")
+        XCTAssertLessThanOrEqual(size.frame.maxY, window.frame.maxY, "the quick-terminal Size should be on screen")
+        let multiWindow = app.descendants(matching: .any).matching(identifier: "settings-auto-hide-inactive-sidebars").firstMatch
+        XCTAssertTrue(multiWindow.exists && multiWindow.isHittable, "the multi-window toggle still renders inside the Sidebar section")
+        let before = size.frame.minY
+        size.scroll(byDeltaX: 0, deltaY: -80)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(size.frame.minY, before, accuracy: 0.5, "the Interface tab should not scroll")
+
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsStringArray("shownInterfaceElements")?.contains("overlayToggle") == true },
+                      "enabling the overlays button should persist into shownInterfaceElements")
+    }
+
     func testQuickTerminalSizePickerPersists() throws {
         let picker = settingsControl(tab: "Interface", control: "settings-quick-terminal-size")
 

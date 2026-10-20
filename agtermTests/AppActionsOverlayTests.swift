@@ -76,4 +76,19 @@ final class AppActionsOverlayTests: XCTestCase {
         XCTAssertEqual(actions.closeConfirmationText(for: [other]),
                        "The session will close immediately and can be reopened from File > Open Recent.")
     }
+
+    func testToggleOverlaysFlipsTheActiveSessionAndThePaletteFollowsWhatIsThere() throws {
+        let (store, session) = try activeSession()
+        XCTAssertFalse(actions.paletteContext.activeSessionHasOverlay)
+        XCTAssertFalse(PaletteCommand.toggleOverlay.isEnabled(in: actions.paletteContext))
+        actions.toggleOverlays()
+        XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.hiddenOverlayNames.isEmpty == false })
+
+        XCTAssertTrue(store.openOverlay(session.id, command: "less"))
+        XCTAssertTrue(PaletteCommand.toggleOverlay.isEnabled(in: actions.paletteContext))
+        actions.perform(.toggleOverlay, in: nil)
+        XCTAssertEqual(session.hiddenOverlayNames, ["session"])
+        actions.toggleOverlays()
+        XCTAssertEqual(session.hiddenOverlayNames, [])
+    }
 }

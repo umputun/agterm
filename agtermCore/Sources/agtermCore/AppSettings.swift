@@ -52,6 +52,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case recentSessions
     case scratch
     case split
+    case overlayToggle
     case dashboard
     case quickTerminal
     case customCommands
@@ -74,7 +75,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     }
 
     /// Whether the element starts hidden, so its toggle reads off until the user opts in.
-    public var hiddenByDefault: Bool { self == .customCommands || self == .workspaceName }
+    public var hiddenByDefault: Bool { self == .customCommands || self == .workspaceName || self == .overlayToggle }
 
     /// The human-facing toggle label shown in the Interface settings tab.
     public var displayName: String {
@@ -88,6 +89,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .recentSessions: return "Recent sessions"
         case .scratch: return "Scratch terminal"
         case .split: return "Split view"
+        case .overlayToggle: return "Hide overlays"
         case .dashboard: return "Dashboard"
         case .quickTerminal: return "Quick terminal"
         case .customCommands: return "Custom commands"

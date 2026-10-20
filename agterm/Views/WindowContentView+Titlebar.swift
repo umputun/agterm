@@ -96,11 +96,12 @@ extension WindowContentView {
         let showAttention = attentionButtonEnabled // the bell keeps its own separate Notifications setting
         let showScratch = shows(.scratch)
         let showSplit = shows(.split)
+        let showOverlayToggle = shows(.overlayToggle)
         let showDashboard = shows(.dashboard)
         let showQuick = shows(.quickTerminal)
         let showCustom = shows(.customCommands)
         let countA = (showRecent ? 1 : 0) + (showAttention ? 1 : 0)
-        let countB = (showScratch ? 1 : 0) + (showSplit ? 1 : 0)
+        let countB = (showScratch ? 1 : 0) + (showSplit ? 1 : 0) + (showOverlayToggle ? 1 : 0)
         let countC = (showDashboard ? 1 : 0) + (showQuick ? 1 : 0) + (showCustom ? 1 : 0)
         // a separator only between two 2+-button groups (the host-free rule, unit-tested in agtermCore).
         let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
@@ -110,6 +111,7 @@ extension WindowContentView {
             if dividers.afterA { titlebarDivider }
             if showScratch { scratchButton.labelStyle(.iconOnly) }
             if showSplit { splitButton.labelStyle(.iconOnly) }
+            if showOverlayToggle { overlayToggleButton.labelStyle(.iconOnly) }
             if dividers.afterB { titlebarDivider }
             if showDashboard { dashboardButton.labelStyle(.iconOnly) }
             if showQuick { quickTerminalButton.labelStyle(.iconOnly) }
@@ -182,6 +184,27 @@ extension WindowContentView {
         .help(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("scratch-toggle")
+    }
+
+    /// Hides the active session's overlays or shows them again. Always present once enabled in Settings,
+    /// disabled with nothing to hide, and slashed while anything is hidden, so a hidden overlay is never out
+    /// of sight entirely.
+    private var overlayToggleButton: some View {
+        let session = store.activeSession
+        let slots = session?.hideableOverlaySlots(nil) ?? []
+        let anyShown = session.map { session in slots.contains { !session.overlayHidden($0) } } ?? false
+        let anyHidden = !(session?.hiddenOverlayNames.isEmpty ?? true)
+        return Button {
+            actions.toggleOverlays()
+        } label: {
+            Label("Overlays", systemImage: anyHidden ? "rectangle.on.rectangle.slash" : "rectangle.on.rectangle")
+        }
+        .help(helpHint(anyShown ? "Hide Overlays" : "Show Overlays", .toggleOverlay))
+        // this window's own covers, the set `PaletteContext.modalActive` holds for the frontmost window
+        .disabled(slots.isEmpty || pick.modalPending || terminalZoom.target != nil || dashboard.isOpen)
+        .accessibilityLabel(anyShown ? "Hide Overlays" : "Show Overlays")
+        .accessibilityValue(anyHidden ? "hidden" : (slots.isEmpty ? "none" : "shown"))
+        .accessibilityIdentifier("overlay-toggle")
     }
 
     /// Toggles the quick terminal: one scratch terminal overlaid at 90% of the window, above the sidebar and

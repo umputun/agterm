@@ -690,7 +690,7 @@ struct AppSettingsTests {
         let settings = AppSettings()
         #expect(settings.hiddenInterfaceElements == nil)
         #expect(settings.shownInterfaceElements == nil)
-        #expect(settings.resolvedHiddenInterfaceElements == [.customCommands, .workspaceName])
+        #expect(settings.resolvedHiddenInterfaceElements == [.customCommands, .workspaceName, .overlayToggle])
         for element in InterfaceElement.allCases {
             #expect(settings.isInterfaceElementHidden(element) == element.hiddenByDefault)
         }
@@ -761,18 +761,18 @@ struct AppSettingsTests {
     @Test func customCommandsIsAHiddenByDefaultTitleBarInterfaceElement() throws {
         #expect(InterfaceElement.customCommands.section == .titleBar)
         #expect(InterfaceElement.customCommands.displayName == "Custom commands")
-        #expect(InterfaceElement.allCases.filter(\.hiddenByDefault) == [.workspaceName, .customCommands])
+        #expect(InterfaceElement.allCases.filter(\.hiddenByDefault) == [.workspaceName, .overlayToggle, .customCommands])
         let shown = AppSettings(shownInterfaceElements: ["customCommands"])
         #expect(!shown.isInterfaceElementHidden(.customCommands))
         #expect(!shown.isInterfaceElementHidden(.dashboard))
-        #expect(shown.resolvedHiddenInterfaceElements == [.workspaceName])
+        #expect(shown.resolvedHiddenInterfaceElements == [.workspaceName, .overlayToggle])
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(shown))
         #expect(decoded == shown)
         // the shown list alone governs a hidden-by-default element; an unknown name there is dropped too.
         let hidden = AppSettings(hiddenInterfaceElements: ["customCommands", "dashboard"], shownInterfaceElements: ["teleporter"])
         #expect(hidden.isInterfaceElementHidden(.customCommands))
         #expect(hidden.isInterfaceElementHidden(.dashboard))
-        #expect(hidden.resolvedHiddenInterfaceElements == [.workspaceName, .customCommands, .dashboard])
+        #expect(hidden.resolvedHiddenInterfaceElements == [.workspaceName, .overlayToggle, .customCommands, .dashboard])
     }
 
     @Test func statusResetDefaultsToFirstKeyAndResolvesKnownRawValues() throws {
@@ -794,7 +794,7 @@ struct AppSettingsTests {
             AppSettings.self,
             from: Data(#"{ "hiddenInterfaceElements": ["scratch", "teleporter"], "fontSize": 16 }"#.utf8))
         #expect(decoded.fontSize == 16)
-        #expect(decoded.resolvedHiddenInterfaceElements == [.workspaceName, .scratch, .customCommands])
+        #expect(decoded.resolvedHiddenInterfaceElements == [.workspaceName, .scratch, .overlayToggle, .customCommands])
         #expect(decoded.isInterfaceElementHidden(.scratch))
     }
 
@@ -827,5 +827,13 @@ struct AppSettingsTests {
         let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
         #expect(dividers.afterA == afterA)
         #expect(dividers.afterB == afterB)
+    }
+
+    @Test func overlayToggleIsAHiddenByDefaultTitleBarElement() {
+        #expect(InterfaceElement.overlayToggle.section == .titleBar)
+        #expect(InterfaceElement.overlayToggle.hiddenByDefault)
+        #expect(InterfaceElement.overlayToggle.displayName == "Hide overlays")
+        #expect(AppSettings().isInterfaceElementHidden(.overlayToggle))
+        #expect(!AppSettings(shownInterfaceElements: ["overlayToggle"]).isInterfaceElementHidden(.overlayToggle))
     }
 }

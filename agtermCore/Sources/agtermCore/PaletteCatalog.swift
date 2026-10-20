@@ -43,6 +43,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let dashboardOpen: Bool
     /// pickerActive covers either a control picker or an ask dialog in the window.
     public let pickerActive: Bool
+    /// activeSessionHasOverlay says the active session holds a program or page that can be hidden or shown.
+    public let activeSessionHasOverlay: Bool
 
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
@@ -67,7 +69,8 @@ public struct PaletteContext: Sendable, Equatable {
                 hasRemotes: Bool = false,
                 terminalZoomActive: Bool = false,
                 dashboardOpen: Bool = false,
-                pickerActive: Bool = false) {
+                pickerActive: Bool = false,
+                activeSessionHasOverlay: Bool = false) {
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -89,6 +92,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.terminalZoomActive = terminalZoomActive
         self.dashboardOpen = dashboardOpen
         self.pickerActive = pickerActive
+        self.activeSessionHasOverlay = activeSessionHasOverlay
     }
 }
 
@@ -100,7 +104,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case previousWorkspace, nextWorkspace
     case previousWindow, nextWindow
     case firstSession, lastSession, showAttention
-    case toggleSplit, toggleHorizontalSplit, closeSplit, swapPanes, toggleScratch, toggleTerminalZoom
+    case toggleSplit, toggleHorizontalSplit, closeSplit, swapPanes, toggleScratch, toggleOverlay, toggleTerminalZoom
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
@@ -124,6 +128,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.hasActiveSession
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
+        case .toggleOverlay:
+            return context.hasActiveSession && context.activeSessionHasOverlay
         case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse:
             return context.hasCurrentWorkspace
         case .previousWorkspace, .nextWorkspace:
@@ -230,6 +236,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .closeSplit: return "Close Split"
         case .swapPanes: return "Swap Panes"
         case .toggleScratch: return "Toggle Scratch"
+        case .toggleOverlay: return "Toggle Overlays"
         case .toggleTerminalZoom: return "Toggle Terminal Zoom"
         case .toggleSidebar: return "Toggle Sidebar"
         case .toggleFlag: return context.activeSessionFlagged ? "Unflag Session" : "Flag Session"
@@ -290,6 +297,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleSplit: return .toggleSplit
         case .toggleHorizontalSplit: return .toggleHorizontalSplit
         case .toggleScratch: return .toggleScratch
+        case .toggleOverlay: return .toggleOverlay
         case .toggleTerminalZoom: return .toggleTerminalZoom
         case .toggleSidebar: return .toggleSidebar
         case .toggleFlag: return .toggleFlag

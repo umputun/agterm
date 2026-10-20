@@ -294,11 +294,13 @@ final class CustomCommandRunner {
                 return true
             }
             // a focused page receives key equivalents before the menu, and one cancelling the keydown makes WebKit
-            // report it handled, so close_session's menu chord never reaches Close Session. Taken here while a
-            // page holds focus; the chord's other owners keep the menu path.
-            if Self.pageHoldsFocus(responder), chord == settings.keymap.equivalent(for: .closeSession) {
-                actions.perform(.closeSession, in: keyWindow)
-                return true
+            // report it handled, so close_session's and toggle_overlay's menu chords never reach their items.
+            // Taken here while a page holds focus; the chords' other owners keep the menu path.
+            if Self.pageHoldsFocus(responder) {
+                for action in [BuiltinAction.closeSession, .toggleOverlay] where chord == settings.keymap.equivalent(for: action) {
+                    actions.perform(action, in: keyWindow)
+                    return true
+                }
             }
             return false
         }

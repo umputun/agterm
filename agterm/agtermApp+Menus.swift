@@ -319,6 +319,15 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(!PaletteCommand.toggleScratch.isEnabled(in: context))
+                let overlaySession = library.activeStore?.activeSession
+                let overlaysShown = overlaySession.map { session in
+                    session.hideableOverlaySlots(nil).contains { !session.overlayHidden($0) }
+                } ?? true
+                Button { actions.toggleOverlays() } label: {
+                    Label(overlaysShown ? "Hide Overlays" : "Show Overlays", systemImage: "rectangle.on.rectangle")
+                }
+                .keyboardShortcut(shortcut(for: .toggleOverlay))
+                .disabled(!PaletteCommand.toggleOverlay.isEnabled(in: context))
                 // search the focused terminal's scrollback. data-driven shortcut (⌘F default), no hardcoded
                 // literal; the bar's open/close toggle lives in onSearchStart.
                 Button { actions.toggleSearch() } label: { Label("Find…", systemImage: "magnifyingglass") }
