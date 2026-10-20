@@ -70,7 +70,7 @@ paths:
   alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
-  `BuiltinAction` (49 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
+  `BuiltinAction` (50 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
   `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts lazily, on activation or key dispatch rather than on
@@ -203,8 +203,8 @@ paths:
   rather than a menu equivalent: `undo_close` through `UndoCloseShortcut`, so native text undo still
   works, and `toggle_fullscreen` through `CustomCommandRunner`, because agterm ships no full screen menu
   item for it to ride — see [[windows]]. Both are absent from `keymap list`'s `menu` by design.
-  `close_session` keeps its menu item, but `CustomCommandRunner` also matches its chord while an
-  `HtmlOverlayWebView` holds focus: WebKit hands key equivalents to the page first and reports a cancelled
+  `close_session` and `toggle_overlay` keep their menu items, but `CustomCommandRunner` also matches their
+  chords while an `HtmlOverlayWebView` holds focus: WebKit hands key equivalents to the page first and reports a cancelled
   keydown as handled, so the menu would never see it.
 - Write shifted symbols as `shift+<base>`: `shift+/` for `?`, `shift+=` for `+`, `shift+5` for `%`, and
   `shift+.` for `>`. `CustomCommandRunner` uses `characters(byApplyingModifiers: [])` to recover that
@@ -267,9 +267,12 @@ paths:
 - A new shipped default must also avoid the shortcuts macOS Services claim in every app while text is
   selected. Terminal.app's `NSServices` take ⇧⌘A and ⇧⌘M, both enabled on a stock Mac;
   `plutil -convert json -o - <App>/Contents/Info.plist | jq '.NSServices'` lists an app's.
+  It may shadow a Ghostty default on the same chord, which the menu claims first: ⌘J hides
+  `scroll_to_selection` and ⇧⌘J `write_screen_file:paste`.
 - New shipped defaults must not break a valid existing keymap. `parseKeymap` vacates the new horizontal
   split default when an old file explicitly uses `cmd+shift+d`, and vacates Dashboard's new default when
-  an old file explicitly uses `cmd+shift+g`, and `attach_remote`'s when one uses `cmd+shift+r`.
+  an old file explicitly uses `cmd+shift+g`, `attach_remote`'s when one uses `cmd+shift+r`, and
+  `toggle_overlay`'s when one uses `cmd+shift+j`.
   An explicit map for the new action opts into its new chord.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject

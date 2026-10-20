@@ -3,8 +3,8 @@ name: agterm
 description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
   create, rename, close, reopen, select or
-  reorder sessions and workspaces; split panes; toggle the scratch terminal; run overlay programs
-  and read their exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
+  reorder sessions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
+  read exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD/caption/notification; show a picker, question or input dialog; show images inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
@@ -15,7 +15,7 @@ description: >
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
-  split the pane, close the overlay, show a message over the session, show a question dialog, agtermctl ask,
+  split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
@@ -98,7 +98,9 @@ program, which is how to show the user an artifact you generated. The same sessi
 (`session hud`), a small passive panel carrying a message instead of a program. A HUD can use the
 whole session or one pane as its placement bounds. The session keeps focus and stays typable
 under it.
-One slot, so a session shows either a HUD or a program overlay, never both. Separately, the app has one
+One slot, so a session shows either a HUD or a program overlay, never both. A program or page overlay can be
+hidden without closing it (`session overlay hide|show|toggle`, ⇧⌘J for the user): it keeps running and keeps
+its slot until it closes, so opening another there is refused. Separately, the app has one
 **quick terminal** (a scratch shell in a floating panel at 90% of the focused screen capped at 1100x700,
 or whatever share Settings sets instead; not part of the tree and not owned by a window).
 
@@ -236,6 +238,8 @@ omitted for a full-pane overlay or no overlay so gate on `overlay` first; the re
 overlay resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by their own overlay —
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `session overlay
 open --pane`, independent of the session-wide `overlay` flag),
+`hiddenOverlays` (the hidden slots — `session`, `left`, `right` — omitted when none is hidden; the read
+side of `session overlay hide`),
 `hud` (the message panel occupying the session-wide slot — `{message, detail?, spinner, backgroundColor?,
 textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?, sticky, frame}`, the two percents being the panel's width and height
 shares and `hideAfter` the configured auto-hide in seconds, 0 for a panel that stays — omitted when none is
@@ -463,6 +467,7 @@ omitted when expanded).
 - `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N | --full)` ·
   `session overlay close [--pane left|right]` ·
+  `session overlay hide|show|toggle [--pane left|right]` ·
   `session overlay reload [--current] [--pane left|right]` ·
   `session overlay navigate back|forward|browser|finder [--pane left|right]` ·
   `session overlay result [--pane left|right] | --page ID` ·

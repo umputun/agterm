@@ -971,6 +971,15 @@ error keeps those names for compatibility.
   as a courtesy — the slot is the same one. For an overlay shown on another Mac (see Remote sessions) the
   reply means the cancel was REQUESTED, not that the program ended; `session overlay result` reports how
   it ended.
+- `session overlay hide|show|toggle [--pane left|right] [--target] [--window W]` — hide program and page
+  overlays without closing them, or show them again. Without `--pane` it acts on every one the session has;
+  `toggle` hides them all while any is shown, else shows them all, and `result.text` says `hidden` or
+  `shown`. A hidden program keeps running, `--block` keeps waiting and `session overlay result` still
+  answers. Showing restores visibility; the slot stays occupied until the overlay closes. Opening another
+  overlay into a hidden slot, or a HUD while the session-wide slot is hidden, fails with `overlay hidden`. A HUD or a dialog cannot be hidden (`no overlay`), nor an overlay shown on
+  another Mac (`overlay is shown on another Mac`). From a page, a bare call acts on the page's pane, or on
+  the whole session for a session-wide page. Read back `hiddenOverlays` and `htmlOverlays[].hidden` on
+  `tree`.
 - `session overlay result --page ID` — the outcome of the page `open --html` named (`result.pageID`),
   readable after the page and its session are gone, up to the 32 most recent finished outcomes (a page still
   open is never evicted; an aged-out id answers `no such page`): `result.pageOutcome` `{pageID, outcome, value?}` with

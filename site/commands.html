@@ -492,8 +492,13 @@
                 pane-scoped overlay — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left"]</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hiddenOverlays</span> (the hidden slots among
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, omitted when none is hidden; see
+                <a href="#overlay" style="color: #6d82f3">session overlay hide</a>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the pages in the overlay slots as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id}</span>, one of file and url set,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id, hidden?}</span>, one of file and url set,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
                 slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?, sticky, frame}</span>, where
@@ -1883,7 +1888,7 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Show a local HTML file, such as an artifact an agent generated, in the overlay slot instead of running a program. Placement, sizing, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span>, ⌘W and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay close</span> work as for a program. A page stays until it is closed; one opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span> can close its own overlay with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window.close()</span> when the web view accepts the call; it may refuse, for example after <span style="font-family: &quot;JetBrains Mono&quot;, monospace">history.pushState</span>. The panel carries a strip naming the file or origin, followed by the page title dimmed, and a close button; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span> adds back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--chromeless</span> drops the strip so the page fills its panel, the session or pane when <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> is omitted, without hiding the sidebar or title bar; it closes with ⌘W (the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">close_session</span> binding, rebindable in the keymap), the page's own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">data-agterm=&quot;session.overlay.close&quot;</span> button, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay close</span>. It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span>, and a URL page takes it only on a loopback host, below.
+                Show a local HTML file, such as an artifact an agent generated, in the overlay slot instead of running a program. Placement, sizing, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span>, ⌘W and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session overlay close</span> work as for a program. A page stays until it is closed; one opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span> can close its own overlay with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window.close()</span> when the web view accepts the call; it may refuse, for example after <span style="font-family: &quot;JetBrains Mono&quot;, monospace">history.pushState</span>. The panel carries a strip naming the file or origin, followed by the page title dimmed, a hide button and a close button; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span> adds back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--chromeless</span> drops the strip so the page fills its panel, the session or pane when <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> is omitted, without hiding the sidebar or title bar; it closes with ⌘W (the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">close_session</span> binding, rebindable in the keymap), the page's own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">data-agterm=&quot;session.overlay.close&quot;</span> button, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay close</span>. It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span>, and a URL page takes it only on a loopback host, below.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> the page has no file access (it is loaded from the file's text), so keep it self-contained. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd DIR</span> it may read files inside DIR, which must contain FILE; / and the home directory are refused. A page that styles nothing takes the terminal theme's colors, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> replacing the background; any CSS the page sets wins. Every page also gets the theme as CSS variables, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-background</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-foreground</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-color-0</span> to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">15</span> (the ANSI palette), for pages built to match the terminal; a theme change reloads a file page and reaches a URL page at its next load. The page's own JavaScript is off unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span> is passed, so generated pages should be static HTML, CSS and SVG; images and stylesheets load. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace">javascript</span> for each page. A clicked http(s) link opens in the default browser once the user confirms a prompt naming its origin, and after Cancel the page asks nothing more until the user clicks or types in it. Popups, dialogs, file-chooser requests, dropped or pasted files and camera or microphone requests are refused. Mutually exclusive with a command and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span>; refused while another Mac presents the session.
@@ -1959,6 +1964,52 @@
                 For an overlay shown on another Mac (<a href="#zmx" style="color: #6d82f3">remote sessions</a>) the reply means
                 the cancel was requested, not that the program ended;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay result</span> reports how it ended.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay hide|show|toggle [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.hide · session.overlay.show · session.overlay.toggle</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Hide the session's overlays without closing them, or show them again. A hidden program keeps running
+                and a hidden page stays loaded. Hidden overlays stop covering their terminals; other covers keep their
+                usual precedence. Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> this acts on every
+                overlay of the session, the session-wide one and both pane overlays;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> limits it to one pane's.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> hides them all while any is shown,
+                otherwise shows them all. A HUD and an ask are never hidden.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hidden</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">shown</span>: the state the overlays were left in.
+                <strong style="color: #bfbab0">Read back</strong> the session node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hiddenOverlays</span>
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>; omitted when none is hidden) and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays[].hidden</span>. A hidden overlay
+                still counts in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneOverlays</span>, keeps answering
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">copy</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">navigate</span>, and keeps its slot until it closes: opening another
+                overlay there fails with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay hidden</span>
+                while it is hidden and the usual
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay already open</span>
+                once it is shown.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> when
+                the scope holds nothing to hide, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay is shown on another Mac</span>
+                for an overlay a viewer presents: hide it on that Mac. A page calling these from its own bridge acts on its
+                own pane unless it names a target.
               </p>
             </div>
 

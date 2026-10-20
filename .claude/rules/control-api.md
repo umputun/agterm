@@ -170,7 +170,8 @@ renumbering. Do not reintroduce a count anywhere.
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
-  `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.hud.open`, `.hud.update`,
+  `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.hide`,
+  `.overlay.show`, `.overlay.toggle`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -467,6 +468,20 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Promotion moves the right pane's overlay into the left slot without rebuilding its surface, so that
   surface's callbacks resolve their pane through `Session.paneOverlayRole(of:)`, never a captured one.
   Read back `paneOverlays`, ordered left-then-right.
+- `session.overlay.hide|show|toggle [--pane]` set a per-slot hidden bit (`Session.overlayHidden`,
+  `PaneOverlay.hidden`, which travels with the struct through swap and promotion) on program and page slots only.
+  Bare scope is every such slot of the session; toggle hides all when any is shown, else shows all. A HUD, an
+  ask and a remote reservation are not hideable: an empty scope answers `no overlay`, a reserved one
+  `overlay is shown on another Mac`. Opening into a hidden slot is refused `overlay hidden`, a HUD open
+  checking the session slot. Close or replace clears the bit; metadata updates and a `--wait` exit keep it.
+  Occupancy predicates keep their meaning for lifecycle, results, `--block`, page lookup and reservations;
+  focus, zoom, layout, deck gates, dashboard covers and font routing read the visible layer in
+  `Session+OverlayVisibility` (`coverOverlayVisible`, `programOverlayVisible`, `htmlOverlayVisible`,
+  `fullOverlayVisible`, `paneOverlayVisible`, `visibleCover`). Never spell either inline. A hidden panel stays mounted at opacity 0
+  with no hit testing or first responder, so a page or program is never rebuilt. Refocus keys on
+  `visibleCover`, which changes only when what owns the keyboard changes. ⌘W skips hidden slots.
+  Read back `hiddenOverlays` (`session`, `left`, `right`) and `htmlOverlays[].hidden`; a real transition
+  emits `tree.changed`.
 - Both full and floating use one always-present `overlayPanel` in `sessionDetail`'s overlay preference
   layer. Gate content inside its `GeometryReader`; never change the `sessionDetail`/HSplitView shape or
   pane modifiers on overlay state.
@@ -497,10 +512,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   so the Command-W ladder, `coverHidesActiveSession`, `searchTarget`, and session-close teardown are
   unchanged. It is control-native: no menu item, chord, or palette entry, a deliberate exemption from
   [[menu-actions]]'s shared-action-seam rule because there is nothing here for a human to invoke by hand.
-- Passivity is four deck exemptions plus two NSView-level gates, each reading an occupant predicate and
-  never the raw slot: `gates.overlaid`, the floating click catcher, `backdropWashActive`, the scratch's focus
+- Passivity is four deck exemptions plus two NSView-level gates, each reading a visible-layer predicate
+  (the hide bullet above) and never the raw slot: `gates.overlaid`, the floating click catcher, `backdropWashActive`, the scratch's focus
   gate, `TerminalView.viewOnly` on the panel, and the cover-only key for the overlay-close refocus. The HTML
-  bullet below says which read `coverOverlayActive` and which `programOverlayActive`. `viewOnly` owns the
+  bullet below says which read the cover predicate and which the program one. `viewOnly` owns the
   NSView layer, where `mouseDown` makes a surface first responder; the panel's ancestor
   `.allowsHitTesting(false)` currently blocks the click before that, so the two are belt and braces and
   neither is the place to economise.
@@ -515,16 +530,19 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   every per-occupant parameter, so the modifier chain stays constant and only values flip. `overlayPanel`'s
   `.id` carries `Session.overlaySlotGeneration`, or a replacement keeping `overlayActive` true never re-runs
   `makeNSView` and `updateNSView` hits a torn-down view.
-- The occupant predicates govern focus routing too: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
+- The visible-layer predicates govern focus routing too: `Session.topmostSurface`, `focusTarget(wantSplit:)`,
   `onScreenSurface`, `AppActions.searchTarget`'s scratch rung, and the scratch factory's `suppressAutoFocus`.
   A raw `overlayActive` read at any of them hands first responder or a buffer read to the HUD painter.
 - An HTML page (`Session.htmlOverlay`, `PaneOverlay.html`) is a third occupant: it covers and owns input
   like a program but has no terminal surface, zoom target or exit status. `programOverlayActive` excludes
-  it; `coverOverlayActive` (program or page) is the input-exclusion question. Cover sites: `gates.overlaid`,
-  the click catcher, `backdropWashActive`, the scratch focus gate, the overlay-close refocus key,
-  `suppressAutoFocus`, `searchTarget`'s scratch rung, `DeckPaneGates.coverActive`, the tree `overlay` field,
-  the remote overlay's local-hold check, and zoom's `uncovered`/`paneVisible`. Program-only sites:
-  `TerminalView.viewOnly`, zoom's `.overlay` and pane-overlay arms, and `overlay.result`'s running check.
+  it; `coverOverlayActive` (program or page) is occupancy and `coverOverlayVisible` the input-exclusion
+  question. Cover sites, reading the visible twin: `gates.overlaid`, the click catcher, `backdropWashActive`,
+  the scratch focus gate, the overlay-close refocus key (`visibleCover`), `suppressAutoFocus`,
+  `searchTarget`'s scratch rung, `DeckPaneGates.coverActive`, and zoom's `uncovered`/`paneVisible`; the tree
+  `overlay` field and the remote overlay's local-hold check read occupancy. Program-only sites: zoom's
+  `.overlay` and pane-overlay arms read the visible program and pane checks; `TerminalView.viewOnly` follows
+  the occupant's interactivity, a hidden program staying interactive behind its own hiding gates; and
+  `overlay.result`'s running check reads occupancy.
   Under a page `topmostSurface` and `focusTarget` return nil, never the hidden pane, and zoom's
   `resolveTarget` returns nil. The font commands follow the page too: ⌘+/⌘−/⌘0 route to it when
   `AppActions.htmlPageOwnsKeys` says so, and `font.*` when `Session.htmlHidesTerminal` does; both step the one

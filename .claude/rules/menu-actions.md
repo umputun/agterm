@@ -94,6 +94,9 @@ paths:
   the `agterm-linux` fork's fold commands visible.
 - Dashboard uses Command-Shift-G, `BuiltinAction.dashboard`, and `toggleDashboard`; it toggles an MRU,
   auto-sized grid unless terminal zoom is active. Share `dashboardMembers` with control.
+- View ▸ Hide/Show Overlays, the palette's Toggle Overlays, the optional title-bar button and `toggle_overlay`
+  run `AppActions.toggleOverlays`, the store toggle `session.overlay.toggle` uses. The item's title follows the
+  active session's state; it is enabled through `PaletteContext.activeSessionHasOverlay`.
 - The View menu carries no fullscreen item of agterm's own, and `toggle_fullscreen` rides the key monitor
   rather than a menu shortcut; see [[windows]]. It remains rebindable and control-drivable.
 - Font shortcuts call libghostty binding actions on the key window's first-responder surface, falling back

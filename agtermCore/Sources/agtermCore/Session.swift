@@ -524,12 +524,12 @@ public final class Session: Identifiable {
     public var hudActive: Bool { overlayActive && hudSpec != nil }
 
     /// programOverlayActive: the slot runs a CALLER'S PROGRAM, either coverage variant, the terminal-surface
-    /// question. Neither a HUD nor a page counts; "a session-wide cover owns input" is `coverOverlayActive`.
+    /// question, hidden or not. Neither a HUD nor a page counts; "a cover owns input" is `coverOverlayVisible`.
     public var programOverlayActive: Bool { overlayActive && !hudActive && htmlOverlay == nil }
 
-    /// fullOverlayActive says a program or page covers the whole session, with no size percent. It hides the
-    /// panes and a shown scratch, since under window translucency anything left visible would bleed through.
-    /// A HUD never counts, whatever its size.
+    /// fullOverlayActive says a program or page fills the whole session slot, with no size percent. Shown
+    /// (`fullOverlayVisible`), it hides the panes and a shown scratch, since under window translucency anything
+    /// left visible would bleed through. A HUD never counts, whatever its size.
     public var fullOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent == nil }
 
     /// The left pane's overlay, covering that pane only and leaving the sibling live; nil means none is up,

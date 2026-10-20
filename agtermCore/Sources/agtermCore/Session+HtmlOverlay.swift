@@ -5,8 +5,8 @@ extension Session {
     /// surface, zoom target or exit status, so it never counts as `programOverlayActive`.
     public var htmlOverlayActive: Bool { overlayActive && htmlOverlay != nil }
 
-    /// coverOverlayActive is the input-exclusion question; terminal-surface questions ask
-    /// `programOverlayActive` instead.
+    /// coverOverlayActive says a program or page holds the session-wide slot, hidden or not; input exclusion
+    /// asks `coverOverlayVisible`, terminal-surface questions `programOverlayActive`.
     public var coverOverlayActive: Bool { programOverlayActive || htmlOverlayActive }
 
     public func paneOverlayIsHtml(_ pane: OverlayPane) -> Bool { paneOverlay(pane)?.html != nil }

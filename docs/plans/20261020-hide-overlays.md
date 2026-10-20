@@ -250,16 +250,16 @@
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`
 - Modify: `README.md` only if it lists overlay controls
 
-- [ ] `control-api.md` owns the hidden-state contract once: occupancy vs visible predicates and which sites read
+- [x] `control-api.md` owns the hidden-state contract once: occupancy vs visible predicates and which sites read
       which, lifecycle, remote rule, scope of the commands
-- [ ] user guide and command reference document the toggle, icon, shortcut, commands and read-back fields
-- [ ] skill: SKILL.md `description` trigger within its 1024-character cap (`SkillInstallTests`), by replacing
+- [x] user guide and command reference document the toggle, icon, shortcut, commands and read-back fields
+- [x] skill: SKILL.md `description` trigger within its 1024-character cap (`SkillInstallTests`), by replacing
       "run overlay programs and read their exit status" with "run, hide or show overlays; read exit status";
       `when_to_use` and a body section ("hide the overlay to talk to me, then show it"); reference entries with
       the session scope and hide-first rule; a page's own hide/show/toggle defaults to its own pane, a
       session-wide page's to the session, and an explicit target lifts the pane default
-- [ ] `swift test --filter SkillInstallTests` passes, with expectations for the new commands
-- [ ] `keymap.md` and `settings.md` list the new built-in and interface element
+- [x] `swift test --filter SkillInstallTests` passes, with expectations for the new commands
+- [x] `keymap.md` and `settings.md` list the new built-in and interface element
 
 ### Task 6: Verify acceptance criteria
 - [ ] every Overview and Solution Overview item implemented
