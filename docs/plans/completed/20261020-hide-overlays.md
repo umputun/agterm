@@ -270,8 +270,8 @@
 - [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test instance
 
 ### Task 7: [Final] Update documentation
-- [ ] CLAUDE.md interface-control line committed with this branch
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md interface-control line committed with this branch
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual checks in an isolated Debug instance (short `/tmp` state dir, own socket)*
