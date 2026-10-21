@@ -771,6 +771,8 @@ public enum OverlayHtmlError {
     public static let finderRequiresFile = "show in Finder requires a file page"
     /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
     public static let remoteFile = "the page's file is on another Mac"
+    /// remotePage: Finder and Browser are refused for a file page shown on the presenting Mac.
+    public static let remotePage = "page is shown on another Mac"
     /// replicaSubmit: a page shown here for another Mac is answered there, through the page itself.
     public static let replicaSubmit = "submit on the Mac that opened the page"
     /// remoteLoopback: a loopback URL names this Mac, so the presenting Mac cannot load it.

@@ -461,6 +461,32 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertTrue(admission.tryAcquire())
     }
 
+    func testReloadAndNavigationOfARemotePageReachThePresenter() throws {
+        let fix = try fixture()
+        _ = try openFile(fix)
+        let target = fix.session.id.uuidString
+
+        XCTAssertTrue(fix.server.reloadSessionOverlay(target, window: nil, pane: nil, current: true).ok)
+        XCTAssertTrue(fix.server.navigateSessionOverlay(target, window: nil, pane: nil, navigation: .back).ok)
+        let browser = fix.server.navigateSessionOverlay(target, window: nil, pane: nil, navigation: .browser)
+
+        XCTAssertEqual(browser.error, OverlayHtmlError.remotePage)
+        let actions = fix.presenter.bodies.compactMap { if case .pageCommand(let command) = $0 { command.action } else { nil } }
+        XCTAssertEqual(actions, [.reloadCurrent, .back])
+    }
+
+    func testAResultOrReadOfARemotePageGivesThePageAnswers() throws {
+        let fix = try fixture()
+        _ = try openFile(fix)
+        let target = fix.session.id.uuidString
+
+        XCTAssertEqual(fix.server.sessionOverlayResult(target, window: nil, pane: nil).error, OverlayHtmlError.noResult)
+        XCTAssertEqual(fix.server.copySessionOverlaySelection(target, window: nil, pane: nil).error, OverlayHtmlError.noRead)
+        let text = fix.server.readSessionOverlayText(target, window: nil,
+                                                     options: ControlSessionOverlayTextOptions(pane: nil, all: false, lines: nil))
+        XCTAssertEqual(text.error, OverlayHtmlError.noRead)
+    }
+
     func testATokenClaimsOnce() throws {
         let fix = try fixture()
         _ = try openFile(fix)

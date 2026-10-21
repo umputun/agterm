@@ -266,6 +266,74 @@ struct AppStoreRemotePageTests {
         #expect(store.remoteOverlayNodes(of: session)?.first?.sizePercent == 40)
     }
 
+    @Test(arguments: [(HtmlNavigation.back, PresentationPageAction.back), (.forward, .forward), (.browser, .browser)])
+    func aUrlPageNavigationReachesThePresenter(navigation: HtmlNavigation, action: PresentationPageAction) throws {
+        let (session, _) = try origin()
+        #expect(open(session, try url("https://example.com/a")) == .opened)
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: navigation) == .sent)
+
+        #expect(presenter.commands.last?.action == action)
+    }
+
+    @Test func aFilePageGoesBackAndForwardButFinderAndBrowserAreRefused() throws {
+        let (session, _) = try origin()
+        #expect(open(session, file()) == .opened)
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .sent)
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .forward) == .sent)
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .browser) == .refused(OverlayHtmlError.remotePage))
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .finder) == .refused(OverlayHtmlError.remotePage))
+
+        #expect(presenter.commands.map(\.action) == [.back, .forward])
+    }
+
+    @Test func finderOnAUrlPageGivesTheLocalAnswer() throws {
+        let (session, _) = try origin()
+        #expect(open(session, try url("https://example.com/a")) == .opened)
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .finder) == .refused(OverlayHtmlError.finderRequiresFile))
+        #expect(presenter.commands.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func reloadReachesThePresenter(current: Bool) throws {
+        let (session, _) = try origin()
+        #expect(open(session, file()) == .opened)
+
+        #expect(store.reloadRemotePage(session.id, pane: nil, current: current) == .sent)
+
+        #expect(presenter.commands.last?.action == (current ? .reloadCurrent : .reloadOriginal))
+    }
+
+    @Test func aSlotWithoutARemotePageIsLeftToThisMac() throws {
+        let (session, _) = try origin()
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .local)
+        #expect(store.reloadRemotePage(session.id, pane: nil, current: false) == .local)
+    }
+
+    @Test func aReservationWhoseStreamIsGoneRefusesWithoutReopening() throws {
+        let (session, presenterID) = try origin()
+        #expect(open(session, file()) == .opened)
+        hub.onPresenterLost = nil
+        hub.unsubscribe(try #require(presenterID))
+
+        #expect(store.reloadRemotePage(session.id, pane: nil, current: false) == .refused(OverlayResultError.viewerGone))
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .refused(OverlayResultError.viewerGone))
+        #expect(!session.overlayActive)
+    }
+
+    @Test func aPageThePresenterLossEndedLeavesNoOverlay() throws {
+        let (session, presenterID) = try origin()
+        #expect(open(session, file()) == .opened)
+        hub.unsubscribe(try #require(presenterID))
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .local)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == .noOverlay)
+        #expect(!session.overlayActive)
+    }
+
     @Test func aTokenClaimsOnceWithinItsDeadlineForTheSamePresenter() throws {
         let (session, _) = try origin()
         let page = file()

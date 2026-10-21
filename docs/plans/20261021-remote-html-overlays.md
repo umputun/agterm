@@ -371,20 +371,21 @@
 ### Task 7: Origin control actions on a remote page
 
 **Files:**
-- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher+Overlay.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+RemotePage.swift` (routing: `navigateRemotePage`, `reloadRemotePage`)
+- Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift` (`OverlayHtmlError.remotePage`)
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
-- Modify: `agterm/Control/ControlServer+OverlayVisibility.swift`
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift`
-- Modify: `agtermTests/ControlServerSessionActionsTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreRemotePageTests.swift`
+- Modify: `agtermTests/ControlServerPageServeTests.swift` (`ControlServerSessionActionsTests.swift` is at the 2000-line
+  test cap, and parsing is unchanged, so the dispatcher and its tests need no edit)
 
-- [ ] implement the per-command answers in Solution Overview: close, resize, reload, back/forward and hide/show/toggle
+- [x] implement the per-command answers in Solution Overview: close, resize, reload, back/forward and hide/show/toggle
       reach the viewer; browser reaches it for a URL page; finder and browser on a remote file page are refused;
       bare `overlay.result` answers `noResult`; `overlay.text`/`copy` answer `noRead`; submit and `result --page`
       use the origin ledger
-- [ ] tests for each command against a remote file page and a remote URL page, including a gone presenter and a
+- [x] tests for each command against a remote file page and a remote URL page, including a gone presenter and a
       remote program reservation still answering `shownElsewhere` for hide
-- [ ] run the touched suites - must pass before task 8
+- [x] run the touched suites - must pass before task 8
 
 ### Task 8: End-to-end page handoff over the real bridge
 

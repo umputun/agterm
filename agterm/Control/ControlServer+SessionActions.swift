@@ -129,6 +129,9 @@ extension ControlServer: ControlActions {
 
     func reloadSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, current: Bool) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if let response = Self.remotePageResponse(store.reloadRemotePage(id, pane: pane, current: current), session: id) {
+                return response
+            }
             if let failure = HtmlOverlayRegistry.shared.reload(sessionID: id, pane: pane,
                                                                target: current ? .current : .original, store: store) {
                 return ControlResponse(ok: false, error: failure.message)
@@ -140,6 +143,10 @@ extension ControlServer: ControlActions {
     func navigateSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                                 navigation: HtmlNavigation) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if let response = Self.remotePageResponse(store.navigateRemotePage(id, pane: pane, navigation: navigation),
+                                                      session: id) {
+                return response
+            }
             if let failure = store.htmlOverlayCommandFailure(id, pane: pane) {
                 return ControlResponse(ok: false, error: failure.message)
             }
@@ -151,6 +158,15 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false, error: error)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    // nil sends the command on to the page in this Mac's own slot
+    private static func remotePageResponse(_ command: RemotePageCommand, session: UUID) -> ControlResponse? {
+        switch command {
+        case .local: return nil
+        case .sent: return ControlResponse(ok: true, result: ControlResult(id: session.uuidString))
+        case .refused(let error): return ControlResponse(ok: false, error: error)
         }
     }
 
@@ -210,6 +226,9 @@ extension ControlServer: ControlActions {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
+            }
+            if session.remoteOverlays.slot(pane)?.page != nil {
+                return ControlResponse(ok: false, error: OverlayHtmlError.noResult)
             }
             if let slot = session.remoteOverlays.slot(pane), !slot.ended {
                 return ControlResponse(ok: false, error: OverlayResultError.stillRunning)

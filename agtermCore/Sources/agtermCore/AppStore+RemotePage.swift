@@ -15,6 +15,14 @@ public enum RemotePageOpen: Equatable, Sendable {
     case opened
 }
 
+/// RemotePageCommand is how a page command addressed to a slot ended: the slot holds no page shown on the
+/// presenting Mac, the command was queued for that Mac (not proof it applied it), or it was refused.
+public enum RemotePageCommand: Equatable, Sendable {
+    case local
+    case sent
+    case refused(String)
+}
+
 /// RemotePageEnds carries the one signal the app's page channels need from the model: a page handed to the
 /// presenting Mac ended, by close, rejection, presenter loss or session removal.
 @MainActor
@@ -126,6 +134,31 @@ extension AppStore {
         }
         return hub.sendToPresenter(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
                                                                         sizePercent: sizePercent)), session: sessionID)
+    }
+
+    /// navigateRemotePage runs a toolbar navigation on the page in `pane`'s slot when the presenting Mac shows it.
+    public func navigateRemotePage(_ sessionID: UUID, pane: OverlayPane?, navigation: HtmlNavigation) -> RemotePageCommand {
+        guard let page = session(withID: sessionID)?.remoteOverlays.slot(pane)?.page else { return .local }
+        let file: Bool
+        if case .file = page.overlay.source { file = true } else { file = false }
+        switch navigation {
+        case .back: return deliverRemotePageCommand(sessionID, pane: pane, action: .back)
+        case .forward: return deliverRemotePageCommand(sessionID, pane: pane, action: .forward)
+        case .browser:
+            return file ? .refused(OverlayHtmlError.remotePage) : deliverRemotePageCommand(sessionID, pane: pane, action: .browser)
+        case .finder: return .refused(file ? OverlayHtmlError.remotePage : OverlayHtmlError.finderRequiresFile)
+        }
+    }
+
+    /// reloadRemotePage asks the presenting Mac to reload the page in `pane`'s slot, its original source or what
+    /// it shows now.
+    public func reloadRemotePage(_ sessionID: UUID, pane: OverlayPane?, current: Bool) -> RemotePageCommand {
+        guard session(withID: sessionID)?.remoteOverlays.slot(pane)?.page != nil else { return .local }
+        return deliverRemotePageCommand(sessionID, pane: pane, action: current ? .reloadCurrent : .reloadOriginal)
+    }
+
+    private func deliverRemotePageCommand(_ sessionID: UUID, pane: OverlayPane?, action: PresentationPageAction) -> RemotePageCommand {
+        sendRemotePageCommand(sessionID, pane: pane, action: action) ? .sent : .refused(OverlayResultError.viewerGone)
     }
 
     /// pageBelongsRemote says the placement rule hands a page in `pane`'s slot to the presenting Mac: a presenter
