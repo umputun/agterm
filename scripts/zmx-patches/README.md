@@ -25,6 +25,14 @@ longer apply, and re-running `check.py`.
   private checkout `setup.sh` patches, in place of the zig package cache. Its context names the pinned
   revision, so a `ZMX_REV` that moves ghostty stops it applying. zmx's build reads the dependency hash
   as its reported ghostty version, so the patch writes that string in, marked `+agterm`.
+- `0003-atomic-socket-publish.patch` gives a session socket its name only after it listens. Upstream binds
+  the session path and then listens, and `zmx list`, attach and the commands that connect to a session
+  delete a path that refuses a connection as stale. A probe between bind and listen can unlink the new socket
+  as stale and leave the daemon unreachable. The patch binds and listens in `.s/<pid>` beside the sessions,
+  a directory, which listing in every zmx version skips, then hard-links the socket to the session name. The link fails when the
+  name exists, so a losing creator gets the same `AddressInUse` a bind gave it and never removes the
+  winner's socket. When `.s` cannot be made or the staged path is too long for `sockaddr_un`, it binds the
+  session name directly and keeps the old window.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
