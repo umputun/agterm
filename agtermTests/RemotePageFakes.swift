@@ -10,19 +10,23 @@ final class FakePageOrigin: @unchecked Sendable {
     private var frames: [PageServeFrame] = []
     private var cancelled: Set<Int> = []
     private var heldIDs: Set<Int> = []
+    private var heldCancels: [Int] = []
     private var chunksWritten = 0
     private var descriptorClosed = false
     private let files: [String: (String, Data)]
     private let held: Set<String>
     private let chunkSize: Int
     private let reply: String?
+    private let holdCancels: Bool
 
-    init(fd: Int32, files: [String: (String, Data)], held: Set<String>, chunkSize: Int, reply: String?) {
+    init(fd: Int32, files: [String: (String, Data)], held: Set<String>, chunkSize: Int, reply: String?,
+         holdCancels: Bool) {
         self.fd = fd
         self.files = files
         self.held = held
         self.chunkSize = chunkSize
         self.reply = reply
+        self.holdCancels = holdCancels
     }
 
     var received: [PageServeFrame] { state.withLock { frames } }
@@ -30,6 +34,12 @@ final class FakePageOrigin: @unchecked Sendable {
 
     func start() {
         Thread { [self] in readLoop() }.start()
+    }
+
+    func answerCancels() {
+        for id in state.withLock({ () -> [Int] in defer { heldCancels.removeAll() }; return heldCancels }) {
+            write(.failure(id: id, error: PageServeFrame.cancelled))
+        }
     }
 
     func close() {
@@ -67,11 +77,15 @@ final class FakePageOrigin: @unchecked Sendable {
             if case .cancel(let id) = frame {
                 cancelled.insert(id)
                 answerCancel = heldIDs.remove(id) != nil
+                if answerCancel, holdCancels {
+                    heldCancels.append(id)
+                    answerCancel = false
+                }
             }
-            if case .resource(let id, _, let path) = frame, held.contains(path) { heldIDs.insert(id) }
+            if case .resource(let id, let path) = frame, held.contains(path) { heldIDs.insert(id) }
         }
         switch frame {
-        case .resource(let id, _, let path):
+        case .resource(let id, let path):
             guard !held.contains(path) else { return }
             workers.enter()
             Thread { [self] in
@@ -145,6 +159,7 @@ final class FakePageLauncher: RemotePageLauncher {
     var held: Set<String> = []
     var chunkSize = 1024
     var reply: String? = #"{"ok":true,"result":{}}"#
+    var holdCancels = false
     private(set) var launches: [[String]] = []
     private(set) var origins: [FakePageOrigin] = []
     private(set) var helpers: [Helper] = []
@@ -155,7 +170,8 @@ final class FakePageLauncher: RemotePageLauncher {
         var pair: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
         launches.append(argv)
-        let origin = FakePageOrigin(fd: pair[1], files: files, held: held, chunkSize: chunkSize, reply: reply)
+        let origin = FakePageOrigin(fd: pair[1], files: files, held: held, chunkSize: chunkSize, reply: reply,
+                                    holdCancels: holdCancels)
         origins.append(origin)
         origin.start()
         let helper = Helper(descriptor: pair[0], onExit: onExit)

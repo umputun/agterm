@@ -4,7 +4,7 @@ import Testing
 
 struct PageServeFramesTests {
     static let frames: [PageServeFrame] = [
-        .resource(id: 1, revision: 2, path: "/Users/u/docs/img/a b.png"),
+        .resource(id: 1, path: "/Users/u/docs/img/a b.png"),
         .head(id: 1, mimeType: "image/png"),
         .chunk(id: 1, data: Data([0, 1, 2, 255, 10, 13])),
         .end(id: 1),

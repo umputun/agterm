@@ -3,8 +3,8 @@ import Foundation
 /// PageServeFrame is one line of a page channel, the connection a presenter's helper opens back to the origin
 /// for one handed-over page. It multiplexes resource transfers and bridge calls by request id.
 public enum PageServeFrame: Equatable, Sendable {
-    /// resource asks for one of the page's files by its path on the origin; `revision` is the load it serves.
-    case resource(id: Int, revision: Int, path: String)
+    /// resource asks for one of the page's files by its path on the origin.
+    case resource(id: Int, path: String)
     /// head starts a resource's answer; chunks follow, then `end`.
     case head(id: Int, mimeType: String)
     case chunk(id: Int, data: Data)
@@ -26,7 +26,7 @@ public enum PageServeFrame: Equatable, Sendable {
 
     public var id: Int {
         switch self {
-        case .resource(let id, _, _), .head(let id, _), .chunk(let id, _), .end(let id), .failure(let id, _),
+        case .resource(let id, _), .head(let id, _), .chunk(let id, _), .end(let id), .failure(let id, _),
              .cancel(let id), .bridge(let id, _), .reply(let id, _):
             return id
         }
@@ -35,7 +35,7 @@ public enum PageServeFrame: Equatable, Sendable {
 
 extension PageServeFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, id, revision, path, mimeType, data, error, request, response
+        case kind, id, path, mimeType, data, error, request, response
     }
 
     public init(from decoder: Decoder) throws {
@@ -44,8 +44,7 @@ extension PageServeFrame: Codable {
         let kind = try container.decode(String.self, forKey: .kind)
         switch kind {
         case "resource":
-            self = .resource(id: id, revision: try container.decode(Int.self, forKey: .revision),
-                             path: try container.decode(String.self, forKey: .path))
+            self = .resource(id: id, path: try container.decode(String.self, forKey: .path))
         case "head": self = .head(id: id, mimeType: try container.decode(String.self, forKey: .mimeType))
         case "chunk": self = .chunk(id: id, data: try container.decode(Data.self, forKey: .data))
         case "end": self = .end(id: id)
@@ -62,9 +61,8 @@ extension PageServeFrame: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         switch self {
-        case .resource(_, let revision, let path):
+        case .resource(_, let path):
             try container.encode("resource", forKey: .kind)
-            try container.encode(revision, forKey: .revision)
             try container.encode(path, forKey: .path)
         case .head(_, let mimeType):
             try container.encode("head", forKey: .kind)

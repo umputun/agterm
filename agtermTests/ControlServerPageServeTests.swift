@@ -237,6 +237,17 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(response.error, OverlayHtmlError.remoteLoopback)
     }
 
+    func testAPageTooLargeForOneFrameIsRefused() throws {
+        let fix = try fixture()
+        let query = String(repeating: "q", count: PresentationCodec.maxFrameBytes)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .url(try XCTUnwrap(URL(string: "https://example.com/?q=\(query)"))))
+        let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)
+        XCTAssertEqual(response.error, OverlayHtmlError.remoteTooLarge)
+        XCTAssertTrue(fix.session.remoteOverlays.slots.isEmpty)
+        XCTAssertFalse(fix.session.overlayActive)
+    }
+
     func testAClaimedChannelServesThePageAndAFileInsideItsGrant() throws {
         let fix = try fixture()
         let big = Data((0..<200_000).map { UInt8($0 % 251) })
@@ -247,9 +258,9 @@ final class ControlServerPageServeTests: XCTestCase {
         let index = docs.appendingPathComponent("index.html").path, bigPath = docs.appendingPathComponent("big.bin").path
 
         let served = offMain { () -> [(String?, Data, String?)] in
-            client.send(.resource(id: 1, revision: 1, path: index))
+            client.send(.resource(id: 1, path: index))
             let first = client.body(1)
-            client.send(.resource(id: 2, revision: 1, path: bigPath))
+            client.send(.resource(id: 2, path: bigPath))
             return [first, client.body(2)]
         }
 
@@ -267,7 +278,7 @@ final class ControlServerPageServeTests: XCTestCase {
         let outside = docs.deletingLastPathComponent().appendingPathComponent("elsewhere.txt").path
 
         let answer = offMain { () -> String? in
-            client.send(.resource(id: 1, revision: 1, path: outside))
+            client.send(.resource(id: 1, path: outside))
             return client.body(1).error
         } ?? nil
 
@@ -282,10 +293,10 @@ final class ControlServerPageServeTests: XCTestCase {
         let huge = docs.appendingPathComponent("huge.bin").path, index = docs.appendingPathComponent("index.html").path
 
         let result = offMain { () -> (sawHugeEnd: Bool, index: Data?) in
-            client.send(.resource(id: 1, revision: 1, path: huge))
+            client.send(.resource(id: 1, path: huge))
             client.send(.cancel(id: 1))
             Thread.sleep(forTimeInterval: 0.3)
-            client.send(.resource(id: 2, revision: 1, path: index))
+            client.send(.resource(id: 2, path: index))
             var sawHugeEnd = false
             var indexData = Data()
             while let frame = client.frame() {
@@ -376,7 +387,7 @@ final class ControlServerPageServeTests: XCTestCase {
         let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
 
         let answer = offMain { () -> String? in
-            client.send(.resource(id: 1, revision: 1, path: folder.path))
+            client.send(.resource(id: 1, path: folder.path))
             return client.body(1).error
         } ?? nil
 
@@ -391,7 +402,7 @@ final class ControlServerPageServeTests: XCTestCase {
         waitUntil("the channel is adopted") { fix.server.pageServeStreams[page] != nil }
         let huge = docs.appendingPathComponent("huge.bin").path
 
-        for id in 1...(ControlServer.pageServeResourceLimit * 3) { client.send(.resource(id: id, revision: 1, path: huge)) }
+        for id in 1...(ControlServer.pageServeResourceLimit * 3) { client.send(.resource(id: id, path: huge)) }
         Thread.sleep(forTimeInterval: 0.3)
         fix.server.pageServeStreams[page]?.shutdown()
 
@@ -409,7 +420,7 @@ final class ControlServerPageServeTests: XCTestCase {
         let limit = ControlServer.pageServeResourceLimit
 
         let seen = offMain { () -> (failures: [Int: String], ends: Set<Int>, replied: Bool) in
-            for id in 1...limit { client.send(.resource(id: id, revision: 1, path: huge)) }
+            for id in 1...limit { client.send(.resource(id: id, path: huge)) }
             for id in 1...limit { client.send(.cancel(id: id)) }
             client.send(.bridge(id: 100, request: #"{"cmd":"version"}"#))
             var failures: [Int: String] = [:], ends: Set<Int> = [], replied = false
@@ -439,12 +450,12 @@ final class ControlServerPageServeTests: XCTestCase {
         let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
         waitUntil("the channel is adopted") { fix.server.pageServeStreams[page] != nil }
         let huge = docs.appendingPathComponent("huge.bin").path
-        client.send(.resource(id: 1, revision: 1, path: huge))
+        client.send(.resource(id: 1, path: huge))
         let filled = Date().addingTimeInterval(0.5)
         waitUntil("the transfer fills the writer queue") { Date() >= filled }
         let started = Date()
 
-        for id in 2...(ControlServer.pageServeResourceLimit + 1) { client.send(.resource(id: id, revision: 1, path: huge)) }
+        for id in 2...(ControlServer.pageServeResourceLimit + 1) { client.send(.resource(id: id, path: huge)) }
 
         waitUntil("the page ends") { fix.session.remoteOverlays.slots.isEmpty }
         XCTAssertLessThan(Date().timeIntervalSince(started), Double(ControlServer.pageServeLimits.writeTimeoutSeconds) - 1)

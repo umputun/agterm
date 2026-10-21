@@ -48,7 +48,7 @@ final class RemotePageChannelTests: XCTestCase {
     }
 
     private func resources(_ frames: [PageServeFrame]) -> [Int] {
-        frames.compactMap { if case .resource(let id, _, _) = $0 { id } else { nil } }
+        frames.compactMap { if case .resource(let id, _) = $0 { id } else { nil } }
     }
 
     private func cancels(_ frames: [PageServeFrame]) -> [Int] {
@@ -58,7 +58,7 @@ final class RemotePageChannelTests: XCTestCase {
     func testAFetchStreamsTheFileInOrder() async throws {
         let channel = channel()
 
-        let resource = try await channel.fetch("/docs/big.bin", current: { true }, revision: 1)
+        let resource = try await channel.fetch("/docs/big.bin", current: { true })
         let data = try await read(resource)
 
         XCTAssertEqual(resource.mimeType, "application/octet-stream")
@@ -68,7 +68,7 @@ final class RemotePageChannelTests: XCTestCase {
 
     func testAStalledConsumerStopsTheReaderUntilItPulls() async throws {
         let channel = channel()
-        let resource = try await channel.fetch("/docs/big.bin", current: { true }, revision: 1)
+        let resource = try await channel.fetch("/docs/big.bin", current: { true })
 
         try await Task.sleep(for: .milliseconds(500))
         let stalled = origin.written
@@ -84,7 +84,7 @@ final class RemotePageChannelTests: XCTestCase {
         let channel = channel()
         let consumer = Task { () -> Error? in
             do {
-                let resource = try await channel.fetch("/docs/big.bin", current: { true }, revision: 1)
+                let resource = try await channel.fetch("/docs/big.bin", current: { true })
                 try await Task.sleep(for: .seconds(30))
                 _ = try await read(resource)
                 return nil
@@ -98,7 +98,7 @@ final class RemotePageChannelTests: XCTestCase {
         consumer.cancel()
         _ = await consumer.value
 
-        let next = try await channel.fetch("/docs/index.html", current: { true }, revision: 1)
+        let next = try await channel.fetch("/docs/index.html", current: { true })
         let data = try await read(next)
         XCTAssertEqual(data, Data("<p>index</p>".utf8))
         XCTAssertEqual(cancels(origin.received), [1])
@@ -106,21 +106,22 @@ final class RemotePageChannelTests: XCTestCase {
 
     func testAResourceDroppedUnreadCancelsItsTransfer() async throws {
         let channel = channel()
-        _ = try await channel.fetch("/docs/big.bin", current: { true }, revision: 1)
+        _ = try await channel.fetch("/docs/big.bin", current: { true })
 
         try await untilOrigin { self.cancels($0) == [1] }
-        let next = try await channel.fetch("/docs/index.html", current: { true }, revision: 1)
+        let next = try await channel.fetch("/docs/index.html", current: { true })
         let data = try await read(next)
         XCTAssertEqual(data, Data("<p>index</p>".utf8))
     }
 
     func testCancelBeforeHeadSendsCancelAndKeepsTheSlotUntilTheOriginEndsIt() async throws {
         launcher.held = ["/docs/held.bin"]
+        launcher.holdCancels = true
         let channel = channel()
         let limit = ControlServer.pageServeResourceLimit
         var waiting: [Task<Void, Error>] = []
         for _ in 0..<limit {
-            waiting.append(Task { _ = try await channel.fetch("/docs/held.bin", current: { true }, revision: 1) })
+            waiting.append(Task { _ = try await channel.fetch("/docs/held.bin", current: { true }) })
         }
         try await untilOrigin { self.resources($0).count == limit }
 
@@ -129,11 +130,22 @@ final class RemotePageChannelTests: XCTestCase {
             try await waiting[0].value
             XCTFail("a cancelled fetch must throw")
         } catch is CancellationError {}
+        try await untilOrigin { self.cancels($0) == [1] }
 
-        let next = try await channel.fetch("/docs/index.html", current: { true }, revision: 1)
-        let data = try await read(next)
+        let next = Task { try await self.read(try await channel.fetch("/docs/index.html", current: { true })) }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(resources(origin.received).count, limit)
+
+        origin.answerCancels()
+        let data = try await next.value
         XCTAssertEqual(data, Data("<p>index</p>".utf8))
-        XCTAssertEqual(cancels(origin.received), [1])
+
+        for _ in 0..<2 {
+            waiting.append(Task { _ = try await channel.fetch("/docs/held.bin", current: { true }) })
+        }
+        try await untilOrigin { self.resources($0).count >= limit + 2 }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(resources(origin.received).count, limit + 2)
         for task in waiting { task.cancel() }
     }
 
@@ -143,10 +155,10 @@ final class RemotePageChannelTests: XCTestCase {
         let limit = ControlServer.pageServeResourceLimit
         var admitted: [Task<Void, Error>] = []
         for _ in 0..<limit {
-            admitted.append(Task { _ = try await channel.fetch("/docs/held.bin", current: { true }, revision: 1) })
+            admitted.append(Task { _ = try await channel.fetch("/docs/held.bin", current: { true }) })
         }
         try await untilOrigin { self.resources($0).count == limit }
-        let queued = Task { _ = try await channel.fetch("/docs/index.html", current: { true }, revision: 1) }
+        let queued = Task { _ = try await channel.fetch("/docs/index.html", current: { true }) }
         try await Task.sleep(for: .milliseconds(200))
 
         queued.cancel()
@@ -165,7 +177,7 @@ final class RemotePageChannelTests: XCTestCase {
         launcher.held = ["/docs/held.bin"]
         launcher.reply = nil
         let channel = channel()
-        let fetch = Task { _ = try await channel.fetch("/docs/held.bin", current: { true }, revision: 1) }
+        let fetch = Task { _ = try await channel.fetch("/docs/held.bin", current: { true }) }
         let bridge = Task { _ = try await channel.bridge(Data(#"{"cmd":"tree"}"#.utf8)) }
         try await untilOrigin { frames in frames.count == 2 }
 
@@ -184,7 +196,7 @@ final class RemotePageChannelTests: XCTestCase {
     func testAnAnswerForALoadThePageLeftIsDropped() async throws {
         let channel = channel()
         var current = true
-        let resource = try await channel.fetch("/docs/big.bin", current: { current }, revision: 1)
+        let resource = try await channel.fetch("/docs/big.bin", current: { current })
         current = false
 
         do {
@@ -214,7 +226,7 @@ final class RemotePageChannelTests: XCTestCase {
             do {
                 let marker = Marker()
                 released = marker
-                _ = try await channel.fetch("/docs/missing.html", current: { _ = marker; return true }, revision: 1)
+                _ = try await channel.fetch("/docs/missing.html", current: { _ = marker; return true })
                 XCTFail("a missing file must fail")
             } catch {
                 XCTAssertEqual(error as? RemotePageChannel.Failure, .refused("no such file"))
@@ -222,7 +234,7 @@ final class RemotePageChannelTests: XCTestCase {
             XCTAssertNil(released, "a failed request keeps nothing")
         }
 
-        let next = try await channel.fetch("/docs/index.html", current: { true }, revision: 1)
+        let next = try await channel.fetch("/docs/index.html", current: { true })
         let data = try await read(next)
         XCTAssertEqual(data, Data("<p>index</p>".utf8))
     }

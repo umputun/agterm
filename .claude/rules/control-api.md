@@ -1725,7 +1725,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   reservation back as `remoteOverlays` (`pane`, `sizePercent`, `pageID` for a page) on the origin's session node.
 - A new PAGE follows the same placement rule and the same presenter, gated on the page kinds in its hello; an
   older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for it is refused
-  (`remoteLoopback`), since it names a server on the origin. The origin reserves the slot and registers the page
+  (`remoteLoopback`), since it names a server on the origin, as is an open request over one presentation frame
+  (`remoteTooLarge`), before anything is reserved. The origin reserves the slot and registers the page
   id in `HtmlPageOutcomes`, so `result --page` and `--html --block` work unchanged; the presenter shows it under a
   page id of its own (`HtmlOverlay.replicaOf` names the origin's), as `HtmlSource.replica` for a file or an
   ordinary URL page that loads directly with viewer-local `--persistent` storage.

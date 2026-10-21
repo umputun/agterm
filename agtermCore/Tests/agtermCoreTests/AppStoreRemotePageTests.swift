@@ -98,6 +98,28 @@ struct AppStoreRemotePageTests {
         #expect(open(session, try url("http://127.0.0.1:8080/")) == .local)
     }
 
+    @Test func aRequestOverOneFrameIsRefusedBeforeAnythingChanges() throws {
+        let (session, _) = try origin(split: true)
+        let shown = file()
+        #expect(open(session, shown, pane: .left) == .opened)
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "working"), file: "/tmp/hud",
+                      size: HudPanelSize(widthPercent: 30, heightPercent: 8))
+        let sent = presenter.frames.count
+        let query = String(repeating: "q", count: PresentationCodec.maxFrameBytes)
+        let page = try url("https://example.com/report?data=\(query)")
+
+        var result: RemotePageOpen = .opened
+
+        #expect(treeChanges { result = open(session, page) } == 0)
+
+        #expect(result == .tooLarge)
+        #expect(session.hudActive)
+        #expect(presenter.frames.count == sent)
+        #expect(hub.hasPresenter(session: session.id))
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id) == nil)
+        #expect(session.remoteOverlays.slots.map(\.job) == [shown.id.uuidString])
+    }
+
     @Test func aTakenSlotAndAMissingPaneAreRefused() throws {
         let (session, _) = try origin()
         #expect(open(session, file()) == .opened)
@@ -398,7 +420,7 @@ struct AppStoreRemotePageTests {
     private func report(_ page: HtmlOverlay, _ session: Session, title: String? = nil, hidden: Bool = false, seq: Int = 0) {
         store.receiveRemotePageFrame(.pageState(PresentationPageState(
             page: page.id.uuidString, title: title, address: "/tmp/docs/b.html", load: .loaded, error: nil, canGoBack: true,
-            canGoForward: false, hidden: hidden, loadRevision: 1, appliedSeq: seq)), forSession: session.id)
+            canGoForward: false, hidden: hidden, appliedSeq: seq)), forSession: session.id)
     }
 
     private func requestToken() throws -> String {

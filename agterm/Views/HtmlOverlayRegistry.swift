@@ -466,7 +466,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             } catch {
                 fail(error.localizedDescription)
             }
-        case .replica(let path, _):
+        case .replica(let path):
             guard replica != nil, let url = HtmlPageSchemeHandler.url(pageID: id, path: path) else {
                 return fail(OverlayHtmlError.remoteFile)
             }
@@ -478,7 +478,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path, _):
+        case .file(let path, _), .replica(let path):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -536,7 +536,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path, _): return URL(fileURLWithPath: path)
+        case .file(let path, _), .replica(let path): return URL(fileURLWithPath: path)
         case .url(let url): return url
         }
     }

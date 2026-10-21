@@ -9,8 +9,8 @@ public enum HtmlSource: Equatable, Sendable {
     /// url is a web page, pinned to its origin by the navigation policy.
     case url(URL)
     /// replica is a file page another Mac opened, shown here from `agterm-page://<page id>/`: `path` is its
-    /// path on that Mac, and `grant` says whether files beside it may be fetched too.
-    case replica(path: String, grant: Bool)
+    /// path on that Mac, whose own grant decides what else may be fetched.
+    case replica(path: String)
 
     /// webURL parses `--url`: an absolute http or https URL with a host, nil for anything else.
     public static func webURL(_ text: String) -> URL? {
@@ -152,7 +152,7 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .replica(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString

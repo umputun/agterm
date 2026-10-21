@@ -37,7 +37,7 @@ struct AppStoreReplicaPageTests {
 
         let shown = try #require(session.htmlOverlay)
         #expect(session.htmlOverlayActive)
-        #expect(shown.source == .replica(path: "/docs/index.html", grant: true))
+        #expect(shown.source == .replica(path: "/docs/index.html"))
         #expect(shown.replicaOf == Self.origin)
         #expect(shown.id != Self.origin)
         #expect(shown.javascript && shown.navigation)
@@ -47,12 +47,12 @@ struct AppStoreReplicaPageTests {
         #expect(store.replicaPage(Self.origin.uuidString, forSession: session.id)?.page.id == shown.id)
     }
 
-    @Test func aPageWithoutAGrantMayFetchOnlyItsFile() throws {
+    @Test func aPageWithoutAGrantIsShownAsAReplicaOfItsFile() throws {
         let (store, session) = try attached()
 
         #expect(store.presentReplicaPage(page(.file(path: "/docs/index.html", grantRoot: nil)), forSession: session.id) == nil)
 
-        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html", grant: false))
+        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html"))
     }
 
     @Test func aUrlPageLoadsItsFullAddressHere() throws {
@@ -176,7 +176,7 @@ struct AppStoreReplicaPageTests {
         let state = try #require(store.replicaPageState(local, appliedSeq: 5))
         #expect(state == PresentationPageState(page: Self.origin.uuidString, title: "Next", address: "/docs/next.html",
                                                load: .loaded, error: nil, canGoBack: true, canGoForward: false,
-                                               hidden: false, loadRevision: 0, appliedSeq: 5))
+                                               hidden: false, appliedSeq: 5))
     }
 
     @Test func aLocalPageReportsNoReplicaChange() throws {

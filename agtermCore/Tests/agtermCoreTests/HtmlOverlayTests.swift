@@ -237,7 +237,7 @@ struct HtmlOverlayTests {
     ])
     func replicaPolicyAllowsOnlyItsOwnSchemeOrigin(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
                                                    _ expected: HtmlNavigationDecision) throws {
-        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", grant: true), replicaOf: UUID())
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html"), replicaOf: UUID())
         let resolved = url.replacingOccurrences(of: "OWN", with: overlay.id.uuidString)
             .replacingOccurrences(of: "own", with: overlay.id.uuidString.lowercased())
         let action = HtmlNavigationAction(url: try #require(URL(string: resolved)), target: target, userActivated: userActivated)
@@ -246,7 +246,7 @@ struct HtmlOverlayTests {
 
     @Test func aReplicaIsNamedByItsFileAndReportsTheOriginPathAsReplica() throws {
         let origin = UUID()
-        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", grant: false), replicaOf: origin)
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html"), replicaOf: origin)
         #expect(overlay.identity == "index.html")
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
 

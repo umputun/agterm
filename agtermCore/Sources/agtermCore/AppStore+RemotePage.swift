@@ -12,6 +12,8 @@ public enum RemotePageOpen: Equatable, Sendable {
     case unsupported
     /// loopback: a URL on this Mac's loopback names a server the presenter cannot reach.
     case loopback
+    /// tooLarge: the request would not fit one presentation frame.
+    case tooLarge
     case opened
 }
 
@@ -58,9 +60,17 @@ extension AppStore {
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
-        if pane == nil, session.hudActive { closeHud(sessionID) }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
+        let request = PresentationPage(
+            page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
+            chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
+            browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
+            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, follow: options.follow)
+        // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
+        guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
+        else { return .tooLarge }
+        if pane == nil, session.hudActive { closeHud(sessionID) }
         let page = RemotePage(overlay: overlay, token: token, claimDeadline: now.addingTimeInterval(Self.pageClaimWindow))
         session.remoteOverlays.reserve(RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane,
                                                          owner: hub.presenterGeneration(session: sessionID),
@@ -68,11 +78,7 @@ extension AppStore {
         clearOverlayExitCode(pane, in: session)
         HtmlPageOutcomes.shared.register(overlay.id)
         scheduleTreeChanged()
-        hub.sendToPresenter(.pageRequest(PresentationPage(
-            page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
-            chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
-            browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
-            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, follow: options.follow)), session: sessionID)
+        hub.sendToPresenter(.pageRequest(request), session: sessionID)
         return .opened
     }
 

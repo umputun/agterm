@@ -79,7 +79,7 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 42, body: .pageCommand(PresentationPageCommand(page: "p1", seq: 8, action: .reloadCurrent))),
         PresentationFrame(gen: 1, rev: 43, body: .pageState(PresentationPageState(
             page: "p1", title: "Review", address: "/Users/u/docs/b.html", load: .loaded, error: nil, canGoBack: true,
-            canGoForward: false, hidden: true, loadRevision: 2, appliedSeq: 8))),
+            canGoForward: false, hidden: true, appliedSeq: 8))),
     ]
 
     @Test func aChoiceRequestFromAnOriginWithoutTheOtherRowDecodesWithNone() throws {
@@ -101,7 +101,7 @@ struct PresentationFramesTests {
     @Test func pageStateBoundsThePagesOwnStrings() throws {
         let long = String(repeating: "x", count: 100_000)
         let state = PresentationPageState(page: "p1", title: long, address: long, load: .failed, error: long, canGoBack: false,
-                                          canGoForward: false, hidden: false, loadRevision: 0, appliedSeq: 0)
+                                          canGoForward: false, hidden: false, appliedSeq: 0)
 
         #expect(state.title?.count == PresentationPageState.maxTitle)
         #expect(state.address?.count == PresentationPageState.maxAddress)

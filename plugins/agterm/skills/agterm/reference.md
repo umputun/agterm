@@ -2051,7 +2051,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   go back to the origin over a channel the presenting Mac opens (`agtermctl session overlay page-serve`,
   plumbing not meant to be typed), so commands act on the origin's session and `overlay submit` answers the
   caller there; `result --page` and `--html --block` work unchanged on the origin. A loopback `--url` is
-  refused (it names a server on the origin), as is any page for a presenting Mac too old for pages.
+  refused (it names a server on the origin), as is any page for a presenting Mac too old for pages
+  and an open request too large for a presentation frame (`page too large to show on another Mac`).
   On the origin `close` ends the page there and frees the slot at once; `resize`, `reload`,
   `navigate back|forward` and `hide|show|toggle` are requests sent to the presenting Mac; `navigate browser` reaches it for a URL page, while `finder` and `browser` on a file
   page answer `page is shown on another Mac`; bare `result` answers the page's no-result error and

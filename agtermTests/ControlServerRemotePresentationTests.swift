@@ -870,7 +870,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         }
         XCTAssertEqual(pair.server.htmlPageResult(page).result?.pageOutcome?.value, "rgb(1, 2, 3)")
         let sent = launcher.toOrigin.frames
-        XCTAssertTrue(sent.contains { if case .resource(_, _, let path) = $0 { path == dir.appendingPathComponent("style.css").path } else { false } })
+        XCTAssertTrue(sent.contains { if case .resource(_, let path) = $0 { path == dir.appendingPathComponent("style.css").path } else { false } })
         XCTAssertTrue(sent.contains { if case .bridge(_, let request) = $0 { request.contains("session.overlay.submit") } else { false } })
         XCTAssertFalse(replicas.isEmpty)
         for local in replicas { XCTAssertNil(HtmlPageOutcomes.shared.outcome(for: local)) }

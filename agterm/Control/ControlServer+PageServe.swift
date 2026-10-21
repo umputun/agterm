@@ -66,7 +66,7 @@ final class PageServeStream {
         switch frame {
         case .cancel(let id):
             transfers.withLock { if $0.active.contains(id) { $0.cancelled.insert(id) } }
-        case .resource(let id, _, _):
+        case .resource(let id, _):
             guard resourceSlots.tryAcquire() else { return refuse(id) }
             transfers.withLock { _ = $0.active.insert(id) }
             DispatchQueue.main.async { MainActor.assumeIsolated { self.receive(frame) } }
@@ -81,7 +81,7 @@ final class PageServeStream {
     /// receive runs one admitted request; its slot is released once its last frame is queued for the writer.
     func receive(_ frame: PageServeFrame) {
         switch frame {
-        case .resource(let id, _, let path): serve(id: id, path: path)
+        case .resource(let id, let path): serve(id: id, path: path)
         case .bridge(let id, let request): relay(id: id, request: request)
         case .cancel, .head, .chunk, .end, .failure, .reply: break
         }

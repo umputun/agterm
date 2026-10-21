@@ -11,7 +11,7 @@ extension AppStore {
         guard let origin = UUID(uuidString: page.page) else { return "invalid page id" }
         let source: HtmlSource
         switch page.source {
-        case .file(let path, let grantRoot): source = .replica(path: path, grant: grantRoot != nil)
+        case .file(let path, _): source = .replica(path: path)
         case .url(let text):
             guard let url = HtmlSource.webURL(text) else { return "invalid url" }
             source = .url(url)
@@ -73,7 +73,7 @@ extension AppStore {
                                      load: page.loadState, error: page.loadError,
                                      canGoBack: page.current?.canGoBack ?? false,
                                      canGoForward: page.current?.canGoForward ?? false,
-                                     hidden: slot.session.overlayHidden(slot.pane), loadRevision: page.reloadRevision,
+                                     hidden: slot.session.overlayHidden(slot.pane),
                                      appliedSeq: appliedSeq)
     }
 

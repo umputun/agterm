@@ -345,11 +345,10 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
     public var canGoBack: Bool
     public var canGoForward: Bool
     public var hidden: Bool
-    public var loadRevision: Int
     public var appliedSeq: Int
 
     public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,
-                canGoBack: Bool, canGoForward: Bool, hidden: Bool, loadRevision: Int, appliedSeq: Int) {
+                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int) {
         self.page = page
         self.title = title.map { String($0.prefix(Self.maxTitle)) }
         self.address = address.map { String($0.prefix(Self.maxAddress)) }
@@ -358,7 +357,6 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
         self.hidden = hidden
-        self.loadRevision = loadRevision
         self.appliedSeq = appliedSeq
     }
 }

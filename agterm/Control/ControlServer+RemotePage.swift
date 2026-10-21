@@ -104,7 +104,7 @@ extension ControlServer {
             fetch: { [weak channel] path, revision in
                 guard let channel else { throw RemotePageChannel.Failure.closed }
                 let asked = revision.value
-                return try await channel.fetch(path, current: { revision.value == asked }, revision: asked)
+                return try await channel.fetch(path, current: { revision.value == asked })
             },
             bridge: { [weak channel] request in
                 guard let channel else { throw RemotePageChannel.Failure.closed }

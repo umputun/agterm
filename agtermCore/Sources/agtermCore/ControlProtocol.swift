@@ -777,6 +777,7 @@ public enum OverlayHtmlError {
     public static let replicaSubmit = "submit on the Mac that opened the page"
     /// remoteLoopback: a loopback URL names this Mac, so the presenting Mac cannot load it.
     public static let remoteLoopback = "a loopback url names this Mac, so the Mac presenting the session cannot load it"
+    public static let remoteTooLarge = "page too large to show on another Mac"
     /// noHistory: the page has nowhere to go in that direction.
     public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
     /// notRealized: the page has not been shown yet, so there is no web view to drive.

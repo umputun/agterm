@@ -194,7 +194,7 @@ final class RemotePageChannel {
     /// fetch asks for the file at `path` on the origin. `current` says whether the page still shows the load
     /// that asked, and an answer for one it no longer shows is dropped. The returned chunks are pulled one at
     /// a time, so a chunk's inbound permit is held until the page takes it.
-    func fetch(_ path: String, current: @escaping @MainActor () -> Bool, revision: Int) async throws -> HtmlPageResource {
+    func fetch(_ path: String, current: @escaping @MainActor () -> Bool) async throws -> HtmlPageResource {
         let id = allocate()
         try await admit(id, into: .resource)
         guard !Task.isCancelled else {
@@ -202,7 +202,7 @@ final class RemotePageChannel {
             throw CancellationError()
         }
         do {
-            try send(.resource(id: id, revision: revision, path: path))
+            try send(.resource(id: id, path: path))
         } catch {
             if !closed { release(.resource) }
             throw error

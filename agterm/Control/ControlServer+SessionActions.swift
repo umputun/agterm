@@ -97,6 +97,7 @@ extension ControlServer: ControlActions {
         case .paneMissing: return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
         case .unsupported: return ControlResponse(ok: false, error: OverlayHtmlError.presenter)
         case .loopback: return ControlResponse(ok: false, error: OverlayHtmlError.remoteLoopback)
+        case .tooLarge: return ControlResponse(ok: false, error: OverlayHtmlError.remoteTooLarge)
         case .local: break
         }
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {

@@ -165,7 +165,7 @@ extension AppStore {
         switch page.source {
         case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
         case .url(let address): url = address.absoluteString
-        case .replica(let path, _): file = path
+        case .replica(let path): file = path
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
                                       error: page.loadError, page: page.current?.page, title: page.current?.title,
