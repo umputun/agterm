@@ -269,10 +269,10 @@ final class ControlServerRemotePageTests: XCTestCase {
     }
 
     func testStateChangesInOneTurnAreReportedOnce() async throws {
-        let fix = try fixture()
-        _ = try present(fix, page(.url("http://127.0.0.1:9/a")))
+        let fix = try fixture(files: ["/docs/index.html": html("<p>x</p>")])
+        _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: nil)))
         let local = try XCTUnwrap(fix.session.htmlOverlay?.id)
-        try await waitFor("the refused load settles") { fix.session.htmlOverlay?.loadState == .failed && !self.states(fix).isEmpty }
+        try await waitFor("the page loads") { fix.session.htmlOverlay?.loadState == .loaded && !self.states(fix).isEmpty }
         try await Task.sleep(for: .milliseconds(100))
         let before = states(fix).count
 
