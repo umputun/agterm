@@ -65,13 +65,24 @@ extension Session {
     }
 
     /// anyOverlayShown says a slot `pane` scopes holds a program or page that is not hidden: what a toggle hides.
+    /// A page shown on the presenting Mac counts by its pending request, else by what that Mac last reported.
     public func anyOverlayShown(_ pane: OverlayPane?) -> Bool {
         hideableOverlaySlots(pane).contains { !overlayHidden($0) }
+            || remotePageSlots(pane).contains { $0.page?.effectiveHidden == false }
     }
 
-    /// hiddenOverlayNames is the tree's `hiddenOverlays`: the hidden slots as `session`, `left`, `right`.
+    /// remotePageSlots lists the reserved slots `pane` scopes that hold a page shown on the presenting Mac; every
+    /// such slot for a nil `pane`.
+    func remotePageSlots(_ pane: OverlayPane?) -> [RemoteOverlaySlot] {
+        remoteOverlays.slots.filter { $0.page != nil && (pane == nil || $0.pane == pane) }
+    }
+
+    /// hiddenOverlayNames is the tree's `hiddenOverlays`: the hidden slots as `session`, `left`, `right`, a remote
+    /// page counted as its presenter reports it.
     public var hiddenOverlayNames: [String] {
-        hideableOverlaySlots(nil).filter { overlayHidden($0) }.map { $0?.rawValue ?? "session" }
+        let remote = remotePageSlots(nil).filter { $0.page?.hidden == true }.map(\.pane)
+        let hidden = hideableOverlaySlots(nil).filter { overlayHidden($0) } + remote
+        return ([nil] + OverlayPane.allCases).filter(hidden.contains).map { $0?.rawValue ?? "session" }
     }
 
     func setOverlayHidden(_ hidden: Bool, slot pane: OverlayPane?) {

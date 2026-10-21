@@ -162,7 +162,8 @@
   next chunk only when the writer drained the last, and a bridge reply is never queued behind a whole asset.
   Oversize requests and replies are refused with an error frame, never by dropping the channel.
 - **Grant resolution** is host-free in agtermCore beside `HtmlOverlay.contains`: decode, standardize, resolve
-  symlinks, refuse escape and absolute paths; no grant serves the document text alone.
+  symlinks, refuse a path that escapes the grant; a request is the absolute origin path the scheme URL carries,
+  decoded at the scheme boundary; no grant serves the page's own file alone.
 - **Custom scheme**: `agterm-page://<replica page id>/<path>` through a `WKURLSchemeHandler`; `<path>` maps to an
   origin logical path. The scheme URL never reaches read-back, which reports the origin's logical path.
 - **Tree**: `ControlHtmlOverlayNode` gains optional `remote` and `replica` (true only when set); `zoom` is omitted
@@ -241,36 +242,37 @@
 - Create: `agtermCore/Sources/agtermCore/RemotePageResources.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+HtmlOverlay.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+RemoteOverlay.swift`
+- Modify: `agtermCore/Sources/agtermCore/RemoteOverlays.swift`
 - Modify: `agtermCore/Sources/agtermCore/Session+OverlayVisibility.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+OverlayVisibility.swift`
 - Modify: `agtermCore/Sources/agtermCore/PresentationHub.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/AppStoreRemotePageTests.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/RemotePageResourcesTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/PresentationHubTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/SessionOverlayVisibilityTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`
 
-- [ ] route a page open through the program overlay placement rule; refuse a loopback URL and keep the old refusal
+- [x] route a page open through the program overlay placement rule; refuse a loopback URL and keep the old refusal
       for a presenter whose hello lacks the page kinds, preserving missing-pane and slot-taken errors
-- [ ] reserve the slot, register the page pending in `HtmlPageOutcomes`, mint the claim token, send `pageRequest`
-- [ ] add the page kinds to `supportedKinds`; `receive` forwards `pageState`, `pageClosed` and `pageRejected` only
+- [x] reserve the slot, register the page pending in `HtmlPageOutcomes`, mint the claim token, send `pageRequest`
+- [x] add the page kinds to `supportedKinds`; `receive` forwards `pageState`, `pageClosed` and `pageRejected` only
       from the current presenter
-- [ ] apply mirrored `pageState`; project a remote page into `htmlOverlayNodes` with `remote: true`, into
+- [x] apply mirrored `pageState`; project a remote page into `htmlOverlayNodes` with `remote: true`, into
       `remoteOverlays[].pageID`, and into `hiddenOverlays` when reported hidden
-- [ ] hide/show/toggle include a remote page slot (bare scope and toggle rule as for local pages) with the
+- [x] hide/show/toggle include a remote page slot (bare scope and toggle rule as for local pages) with the
       request-only contract: a pending requested visibility with its sequence number decides the reply and the next
       toggle; a `pageState` echoing that sequence clears it, after which toggles use the reported visibility; an older
       sequence never overwrites a pending request; a remote program reservation keeps `shownElsewhere`
-- [ ] close, resize, presenter loss, session/pane removal (soft close included) and rejection end or update the
-      reservation; a pending page finishes `dismissed`, an accepted submission is kept, a rejection reason is logged
-- [ ] `submitHtmlOverlay` resolves a remote page reservation into the origin ledger
-- [ ] `tree.changed` fires on slot changes and hidden transitions only
-- [ ] `RemotePageResources` resolves a requested logical path inside the grant (decode, standardize, symlinks,
-      escape and absolute paths refused; no grant: document only)
-- [ ] tests for each path above, including placement with mixed lead roles, the older-presenter refusal, a frame
+- [x] close, resize, presenter loss, session/pane removal (soft close included) and rejection end or update the
+      reservation; a pending page finishes `dismissed`, an accepted submission is kept
+- [x] `submitHtmlOverlay` resolves a remote page reservation into the origin ledger
+- [x] `tree.changed` fires on slot changes and hidden transitions only
+- [x] `RemotePageResources` resolves a requested logical path inside the grant (decode, standardize, symlinks,
+      a path escaping the grant refused, absolute origin paths inside it allowed; no grant: the page file only)
+- [x] tests for each path above, including placement with mixed lead roles, the older-presenter refusal, a frame
       from a non-presenter ignored, read-back projection, hidden agreement between the two fields, no
       `tree.changed` on a title change, remote submit, grant escape cases, and a delayed `pageState`: two toggles
       before any mirror hide then show, a stale report does not overwrite the newer request, and a viewer-local hide
       after an applied show makes the next origin toggle a show
-- [ ] run `swift test --filter` for the new and existing remote overlay suites - must pass before task 4
+- [x] run `swift test --filter` for the new and existing remote overlay suites - must pass before task 4
 
 ### Task 4: Origin app wiring and page service over a claimed stream
 
@@ -284,7 +286,7 @@
 
 - [ ] `openHtmlOverlay` tries the remote route first; a remote page skips the persistent store check, the eager
       page build and local `--follow`, which happen on the viewer
-- [ ] wire `receivePresenterFrame` and the presenter-loss hook to the store's page handlers
+- [ ] wire `receivePresenterFrame` and the presenter-loss hook to the store's page handlers, logging a `page.rejected` reason
 - [ ] answer `session.overlay.page.serve` through the `ControlActions` requirement: validate the token against page,
       presenter generation and deadline; a `handleConnection` branch adopts the connection, and a claim whose reply
       write fails ends the page

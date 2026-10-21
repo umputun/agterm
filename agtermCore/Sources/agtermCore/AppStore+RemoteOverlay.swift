@@ -73,6 +73,11 @@ extension AppStore {
     @discardableResult
     public func closeRemoteOverlay(_ sessionID: UUID, pane: OverlayPane?) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane) else { return false }
+        if slot.page != nil {
+            presentationHub?.sendToPresenter(.pageClose(PresentationPageChange(page: slot.job)), session: sessionID)
+            endRemotePage(slot.job, in: session)
+            return true
+        }
         presentationHub?.sendToPresenter(.overlayClose(PresentationOverlayChange(job: slot.job)), session: sessionID)
         trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: slot.job) }
         overlayJobs?.cancel(slot.job)
@@ -93,6 +98,7 @@ extension AppStore {
               hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
         let size = sizePercent.map { min(100, max(1, $0)) }
         session.remoteOverlays.resize(job: slot.job, sizePercent: size)
+        if slot.page != nil { return sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size) }
         return hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size)),
                                    session: sessionID)
     }
@@ -103,6 +109,10 @@ extension AppStore {
     public func remoteOverlayPresenterLost(forSession sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         for slot in session.remoteOverlays.slots {
+            if slot.page != nil {
+                endRemotePage(slot.job, in: session)
+                continue
+            }
             trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: slot.job) }
             if case .unclaimed? = overlayJobs?.job(slot.job)?.state { overlayJobs?.cancel(slot.job) }
         }
@@ -141,7 +151,9 @@ extension AppStore {
     func remoteOverlayNodes(of session: Session) -> [ControlRemoteOverlayNode]? {
         let slots = session.remoteOverlays.slots
         guard !slots.isEmpty else { return nil }
-        return slots.map { ControlRemoteOverlayNode(pane: $0.pane?.rawValue, sizePercent: $0.sizePercent) }
+        return slots.map {
+            ControlRemoteOverlayNode(pane: $0.pane?.rawValue, sizePercent: $0.sizePercent, pageID: $0.page?.overlay.id.uuidString)
+        }
     }
 
     /// Runs `change` and invalidates the tree when it took or freed a slot. Not every call does: a held
@@ -152,12 +164,12 @@ extension AppStore {
         if session.remoteOverlays.slots.map(\.job) != before { scheduleTreeChanged() }
     }
 
-    private func localOverlayHolds(_ pane: OverlayPane?, in session: Session) -> Bool {
+    func localOverlayHolds(_ pane: OverlayPane?, in session: Session) -> Bool {
         guard let pane else { return session.coverOverlayActive }
         return session.paneOverlay(pane) != nil
     }
 
-    private func clearOverlayExitCode(_ pane: OverlayPane?, in session: Session) {
+    func clearOverlayExitCode(_ pane: OverlayPane?, in session: Session) {
         if let pane {
             session.setPaneOverlayExitCode(nil, pane: pane)
         } else {

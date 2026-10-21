@@ -35,12 +35,12 @@ extension HtmlOverlayCommandFailure {
 
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
-    /// rules of `openOverlay`/`openPaneOverlay`. Refused while a presenter owns the session: the page renders
-    /// on this Mac, where nobody is looking. NOT persisted.
+    /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
+    /// Mac, which `openRemotePage` serves. NOT persisted.
     public func openHtmlOverlay(_ sessionID: UUID, pane: OverlayPane?, overlay: HtmlOverlay, sizePercent: Int?,
                                 backgroundColor: String? = nil) -> HtmlOverlayOpenFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
-        if presentationHub?.hasPresenter(session: sessionID) == true { return .presenter }
+        if pageBelongsRemote(session, pane: pane) { return .presenter }
         if let pane {
             guard session.paneOverlay(pane) == nil else { return .alreadyOpen }
             guard session.rendersPane(pane) else { return .paneNotVisible }
@@ -68,6 +68,11 @@ extension AppStore {
     /// submitHtmlOverlay answers the page in the slot `pane` addresses with `value`, then closes it. The answer is
     /// recorded before the close, whose release would otherwise record the page dismissed.
     public func submitHtmlOverlay(_ sessionID: UUID, pane: OverlayPane?, value: String) -> HtmlOverlayCommandFailure? {
+        if let page = session(withID: sessionID)?.remoteOverlays.slot(pane)?.page {
+            HtmlPageOutcomes.shared.submit(page.overlay.id, value: value)
+            closeRemoteOverlay(sessionID, pane: pane)
+            return nil
+        }
         let page: HtmlOverlay
         switch htmlOverlay(sessionID, pane: pane) {
         case .success(let found): page = found
@@ -137,28 +142,34 @@ extension AppStore {
         return slot.pane.map { closePaneOverlay(slot.session.id, pane: $0) } ?? closeOverlay(slot.session.id)
     }
 
+    /// htmlOverlayNodes lists the pages in `session`'s slots, session-wide first: a local page as its web view last
+    /// reported it, a page shown on the presenting Mac as that Mac last reported it, with no zoom of this Mac's.
     func htmlOverlayNodes(_ session: Session, zoom: Double?) -> [ControlHtmlOverlayNode]? {
-        let slots: [(OverlayPane?, HtmlOverlay?)] = [(nil, session.htmlOverlayActive ? session.htmlOverlay : nil)]
-            + OverlayPane.allCases.map { ($0, session.paneOverlay($0)?.html) }
-        let nodes = slots.compactMap { pane, page in
-            page.map { page in
-                var file: String?, cwd: String?, url: String?
-                switch page.source {
-                case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
-                case .url(let address): url = address.absoluteString
-                case .replica(let path, _): file = path
-                }
-                return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
-                                              error: page.loadError, page: page.current?.page, title: page.current?.title,
-                                              canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
-                                              navigation: page.navigation ? true : nil, javascript: page.javascript,
-                                              chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
-                                              persistent: page.persistent, browse: page.browse,
-                                              hidden: session.overlayHidden(pane) ? true : nil,
-                                              replica: page.replicaOf == nil ? nil : true)
-            }
+        let remote = Dictionary(remotePageNodes(session).map { ($0.pane, $0.page) }, uniquingKeysWith: { first, _ in first })
+        let nodes = ([nil] + OverlayPane.allCases).compactMap { (pane: OverlayPane?) -> ControlHtmlOverlayNode? in
+            let local = pane.map { session.paneOverlay($0)?.html } ?? (session.htmlOverlayActive ? session.htmlOverlay : nil)
+            if let local { return htmlOverlayNode(local, pane: pane, zoom: zoom, hidden: session.overlayHidden(pane)) }
+            guard let page = remote[pane] else { return nil }
+            return htmlOverlayNode(page.overlay, pane: pane, zoom: nil, hidden: page.hidden, remote: true)
         }
         return nodes.isEmpty ? nil : nodes
+    }
+
+    private func htmlOverlayNode(_ page: HtmlOverlay, pane: OverlayPane?, zoom: Double?, hidden: Bool,
+                                 remote: Bool = false) -> ControlHtmlOverlayNode {
+        var file: String?, cwd: String?, url: String?
+        switch page.source {
+        case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
+        case .url(let address): url = address.absoluteString
+        case .replica(let path, _): file = path
+        }
+        return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
+                                      error: page.loadError, page: page.current?.page, title: page.current?.title,
+                                      canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,
+                                      navigation: page.navigation ? true : nil, javascript: page.javascript,
+                                      chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
+                                      persistent: page.persistent, browse: page.browse, hidden: hidden ? true : nil,
+                                      remote: remote ? true : nil, replica: page.replicaOf == nil ? nil : true)
     }
 
     private func htmlOverlay(_ sessionID: UUID, pane: OverlayPane?) -> Result<HtmlOverlay, HtmlOverlayCommandFailure> {

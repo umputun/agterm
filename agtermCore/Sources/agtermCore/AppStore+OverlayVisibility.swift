@@ -3,15 +3,20 @@ import Foundation
 extension AppStore {
     /// setOverlaysHidden hides or shows a session's overlays: one pane's, or every program and page of the
     /// session for a nil `pane`. A hidden overlay keeps running and stays addressable. nil on success,
-    /// including when nothing changed; `tree.changed` fires only on a change.
+    /// including when nothing changed; `tree.changed` fires only on a change. A page shown on the presenting
+    /// Mac is asked to change, and its reported state changes when that Mac answers.
     @discardableResult
     public func setOverlaysHidden(_ sessionID: UUID, pane: OverlayPane?, hidden: Bool) -> OverlayVisibilityFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
         let slots = session.hideableOverlaySlots(pane)
-        guard !slots.isEmpty else { return session.overlayVisibilityRefusal(pane) }
+        let pages = session.remotePageSlots(pane)
+        guard !slots.isEmpty || !pages.isEmpty else { return session.overlayVisibilityRefusal(pane) }
         let changing = slots.filter { session.overlayHidden($0) != hidden }
         for slot in changing { session.setOverlayHidden(hidden, slot: slot) }
         if !changing.isEmpty { scheduleTreeChanged() }
+        for slot in pages where slot.page?.effectiveHidden != hidden {
+            sendRemotePageCommand(sessionID, pane: slot.pane, action: hidden ? .hide : .show)
+        }
         return nil
     }
 

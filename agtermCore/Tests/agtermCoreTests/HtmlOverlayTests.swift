@@ -369,10 +369,14 @@ struct HtmlOverlayTests {
         #expect(session.paneOverlayExitCode(.right) == nil)
     }
 
-    @Test func openIsRefusedWhileAPresenterOwnsTheSession() throws {
+    @Test func openIsRefusedWhenAFollowingPaneBelongsToAPresenterWithoutPages() throws {
         let hub = PresentationHub(staleTimeout: 30)
         let presenter = Sink()
         store.presentationHub = hub
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: session.paneIdentity)
+        let notice = try #require(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1"))
+        _ = ZmxLeadBook.shared.apply(notice, pane: session.paneIdentity)
         let hello = PresentationHello(version: 1, kinds: [], mode: .presenter)
         let id = try hub.subscribe(session: session.id, hello: hello, sink: presenter) { PresentationSnapshot(status: nil, hud: nil) }
         hub.receive(PresentationFrame(gen: presenter.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)

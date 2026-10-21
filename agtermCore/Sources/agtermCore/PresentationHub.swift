@@ -45,6 +45,10 @@ public final class PresentationHub {
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind, askOtherKind]
+        + pageKinds
+    /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
+    public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
+                                   "page.state"]
     /// askFormKind is the capability of drawing an ask's text field, choice list and cancel role. It names no
     /// frame body: an ask needing it travels as an ordinary `ask.request`, sent only to a presenter listing it.
     public static let askFormKind = "ask.form"
@@ -140,7 +144,7 @@ public final class PresentationHub {
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-        case .askResolve, .askRejected, .overlayRejected, .overlayClosed:
+        case .askResolve, .askRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break
