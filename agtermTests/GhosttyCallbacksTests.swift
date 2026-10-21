@@ -36,12 +36,12 @@ final class GhosttyCallbacksTests: XCTestCase {
         XCTAssertEqual(selection.string(forType: .string), "old selection")
     }
 
-    func testSelectionReadServesPrivatePasteboard() {
+    func testClipboardTextReadsTheLocationsPasteboard() {
         seed(.general, "system clipboard")
         seed(selection, "last selection")
-        XCTAssertEqual(GhosttyCallbacks.pasteboardText(selection), "last selection")
-        XCTAssertEqual(GhosttyCallbacks.pasteboardText(GhosttyCallbacks.pasteboard(for: GHOSTTY_CLIPBOARD_STANDARD)),
-                       "system clipboard")
+        XCTAssertEqual(GhosttyCallbacks.clipboardText(for: GHOSTTY_CLIPBOARD_SELECTION), "last selection")
+        XCTAssertEqual(GhosttyCallbacks.clipboardText(for: GHOSTTY_CLIPBOARD_STANDARD), "system clipboard")
+        XCTAssertEqual(GhosttyCallbacks.clipboardText(for: GHOSTTY_CLIPBOARD_PRIMARY), "system clipboard")
     }
 
     func testSelectionPasteboardIsNamedForThisBundle() {

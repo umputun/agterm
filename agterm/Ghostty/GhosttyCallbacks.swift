@@ -192,7 +192,7 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func readClipboard(_ read: ClipboardRead) -> ghostty_clipboard_read_result_e {
         guard let surface = surface(from: read.userdata) else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
-        let text = Self.pasteboardText(Self.pasteboard(for: read.location))
+        let text = Self.clipboardText(for: read.location)
         let requestsText = (0..<Int(read.mimesLen)).contains { index in
             read.mimes?[index].map { String(cString: $0) == "text/plain" } ?? false
         }
@@ -224,13 +224,15 @@ final class GhosttyCallbacks: @unchecked Sendable {
         ShellEscape.path(url.isFileURL ? url.path(percentEncoded: false) : url.absoluteString)
     }
 
-    /// The pasteboard a libghostty clipboard location names. The selection location (copy-on-select = true,
-    /// OSC 52 `s`) gets a private pasteboard, so selecting text never replaces the system clipboard. Every
-    /// other location is the general pasteboard, primary included: an OSC 52 `p` write reaches the embedder
-    /// although macOS has no primary selection.
+    /// The pasteboard for a libghostty clipboard location: private for selection, general for the rest.
     static func pasteboard(for location: ghostty_clipboard_e) -> NSPasteboard {
         guard location == GHOSTTY_CLIPBOARD_SELECTION else { return .general }
         return NSPasteboard(name: .init((Bundle.main.bundleIdentifier ?? "com.umputun.agterm") + ".selection"))
+    }
+
+    /// The text a libghostty clipboard read of `location` gets (the read callback's source).
+    static func clipboardText(for location: ghostty_clipboard_e) -> String? {
+        pasteboardText(pasteboard(for: location))
     }
 
     /// Whether `pasteboardText` would return something, without building the joined result: menu validation
