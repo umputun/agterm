@@ -159,6 +159,8 @@ extension ControlServer {
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
+        case .pageState, .pageClosed, .pageRejected:
+            receiveRemotePageFrame(body, in: store, forSession: sessionID)
         default:
             break
         }

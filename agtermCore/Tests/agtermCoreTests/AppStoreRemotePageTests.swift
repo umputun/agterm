@@ -144,10 +144,14 @@ struct AppStoreRemotePageTests {
         let (session, _) = try origin()
         let page = file()
         #expect(open(session, page) == .opened)
+        var ended: [UUID] = []
+        RemotePageEnds.shared.onEnd = { ended.append($0) }
+        defer { RemotePageEnds.shared.onEnd = nil }
 
         #expect(treeChanges { store.closeRemoteOverlay(session.id, pane: nil) } == 1)
         #expect(presenter.bodies.contains(.pageClose(PresentationPageChange(page: page.id.uuidString))))
         #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(ended == [page.id])
         #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
     }
 

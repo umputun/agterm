@@ -771,6 +771,8 @@ public enum OverlayHtmlError {
     public static let finderRequiresFile = "show in Finder requires a file page"
     /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
     public static let remoteFile = "the page's file is on another Mac"
+    /// remoteLoopback: a loopback URL names this Mac, so the presenting Mac cannot load it.
+    public static let remoteLoopback = "a loopback url names this Mac, so the Mac presenting the session cannot load it"
     /// noHistory: the page has nowhere to go in that direction.
     public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
     /// notRealized: the page has not been shown yet, so there is no web view to drive.

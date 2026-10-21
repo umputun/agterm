@@ -79,6 +79,11 @@ final class ControlServer {
     var overlayJobStreams: [String: OverlayJobStream] = [:]
     /// Jobs cancelled between their claim and the adoption of the helper's connection.
     var pendingJobCancels: Set<String> = []
+    /// pageServeStreams are the channels presenters opened for pages this Mac handed over, by page id.
+    var pageServeStreams: [UUID: PageServeStream] = [:]
+    /// pendingPageClaims are pages whose claim was answered ok and whose connection is not adopted yet, with the
+    /// source each serves.
+    var pendingPageClaims: [UUID: HtmlSource] = [:]
     var presentationHeartbeat: Task<Void, Never>?
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10
@@ -467,6 +472,20 @@ final class ControlServer {
             }
             handedOff = true
             runBlocking { await server.adoptOverlayJobStream(descriptor: conn, job: job) }
+            return
+        }
+        // a claimed page's helper keeps its connection the same way, and a claim whose reply never reached
+        // the helper leaves nobody to load the page
+        if request.cmd == .sessionOverlayPageServe {
+            let response = runBlocking { await server.dispatch(request) }
+            let written = server.responseWriter(conn, response)
+            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)) else { return }
+            guard written else {
+                runBlocking { await server.pageClaimUnanswered(page) }
+                return
+            }
+            handedOff = true
+            runBlocking { await server.adoptPageServeStream(descriptor: conn, page: page) }
             return
         }
 

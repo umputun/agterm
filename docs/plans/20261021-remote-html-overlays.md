@@ -282,23 +282,26 @@
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agterm/Control/ControlServer+Presentation.swift`
 - Modify: `agterm/Control/ControlServer+Ask.swift`
+- Modify: `agterm/Control/ControlStreamOwner.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+RemotePage.swift`
 - Create: `agtermTests/ControlServerPageServeTests.swift`
 
-- [ ] `openHtmlOverlay` tries the remote route first; a remote page skips the persistent store check, the eager
+- [x] `openHtmlOverlay` tries the remote route first; a remote page skips the persistent store check, the eager
       page build and local `--follow`, which happen on the viewer
-- [ ] wire `receivePresenterFrame` and the presenter-loss hook to the store's page handlers, logging a `page.rejected` reason
-- [ ] answer `session.overlay.page.serve` through the `ControlActions` requirement: validate the token against page,
+- [x] wire `receivePresenterFrame` and the presenter-loss hook to the store's page handlers, logging a `page.rejected` reason
+- [x] answer `session.overlay.page.serve` through the `ControlActions` requirement: validate the token against page,
       presenter generation and deadline; a `handleConnection` branch adopts the connection, and a claim whose reply
       write fails ends the page
-- [ ] serve resources off the main actor through `RemotePageResources`, in demand-driven chunks, honoring `cancel`
+- [x] serve resources off the main actor through `RemotePageResources`, in demand-driven chunks, honoring `cancel`
       and the load revision
-- [ ] dispatch relayed bridge requests through `HtmlBridge` and the normal dispatch after checking the live page
+- [x] dispatch relayed bridge requests through `HtmlBridge` and the normal dispatch after checking the live page
       association; refuse after close even when bytes were already queued; never replay
-- [ ] helper EOF or claim timeout ends only that page; presenter loss shuts the page stream
-- [ ] tests: remote open skips local persistent and follow effects, chunking under a slow reader, cancel, stale
-      revision ignored, a relayed submit recorded, bridge after close refused, token reuse refused, failed claim
-      reply ends the page, helper loss keeps the presenter, presenter loss ends the page
-- [ ] run `-only-testing:agtermTests/ControlServerPageServeTests` - must pass before task 5
+- [x] helper EOF or claim timeout ends only that page; presenter loss shuts the page stream
+- [x] tests: remote open skips local persistent and follow effects, loopback refused, grant escape refused on the
+      channel, a large file in chunks, cancel, a relayed submit recorded (its channel closes with the page), bridge
+      for an ended page refused, token reuse refused, failed claim reply ends the page, helper loss keeps the
+      presenter, presenter loss ends the page
+- [x] run `-only-testing:agtermTests/ControlServerPageServeTests` - must pass before task 5
 
 ### Task 5: `agtermctl session overlay page-serve` bridge and its ssh command
 
@@ -308,6 +311,7 @@
 - Modify: `agtermCore/Sources/agtermCore/RemoteSession.swift`
 - Create: `agtermCore/Tests/agtermctlKitTests/OverlayPageServeTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteSessionTests.swift`
+- Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
 - [ ] the CLI subcommand claims with the token and pumps bytes both ways with `StreamBridge`, handling partial
       writes; it reads no files and interprets no frames
@@ -336,7 +340,10 @@
       `remoteTransport`) and loads through the Task 1 scheme handler; a URL page loads its full URL directly with no
       helper and viewer-local persistent storage
 - [ ] the channel writer is bounded and off the main actor, drains partial writes, and stops reading when
-      WebKit is not consuming; scheme tasks map to `resource`/`cancel`
+      WebKit is not consuming; scheme tasks map to `resource`/`cancel`; answers for a request of a superseded load
+      revision are dropped; at most `pageServeResourceLimit` resource requests are in flight, the rest wait
+      locally, and a request's slot is freed only by its terminal frame (`end` or `failure`, which a cancel
+      also produces), while bridge calls do not share those slots
 - [ ] relay the `data-agterm` adapter and `agterm.request` through `bridge` frames with correlation ids; keep the
       main-frame restriction and URL pages bridge-free
 - [ ] audit every `if case .file`/`.url` predicate and early return in the page code (`drawsBackground`, `themed`,

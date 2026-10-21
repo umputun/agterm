@@ -80,7 +80,19 @@ final class ControlStreamOwner: @unchecked Sendable {
         defer { state.unlock() }
         guard !closing, pending.count < limits.maxPendingLines else { return false }
         pending.append(line)
-        state.signal()
+        state.broadcast()
+        return true
+    }
+
+    /// sendWaiting queues one line, waiting while the queue is full, and is false once the stream is closing. It
+    /// blocks its thread, so only a producer off the main actor uses it, one that must not outrun the peer.
+    func sendWaiting(_ line: Data) -> Bool {
+        state.lock()
+        defer { state.unlock() }
+        while !closing, pending.count >= limits.maxPendingLines { state.wait() }
+        guard !closing else { return false }
+        pending.append(line)
+        state.broadcast()
         return true
     }
 
@@ -130,7 +142,9 @@ final class ControlStreamOwner: @unchecked Sendable {
         state.lock()
         defer { state.unlock() }
         while pending.isEmpty, !closing { state.wait() }
-        return closing ? nil : pending.removeFirst()
+        guard !closing else { return nil }
+        state.broadcast()
+        return pending.removeFirst()
     }
 
     private func write(_ line: Data) -> Bool {

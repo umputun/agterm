@@ -156,6 +156,7 @@ extension ControlServer {
         presentationHub.onPresenterFrame = { [weak self] session, body in
             self?.receivePresenterFrame(body, forSession: session)
         }
+        RemotePageEnds.shared.onEnd = { [weak self] page in self?.pageServeStreams[page]?.shutdown() }
         overlayJobs.onFinished = { [weak self] job in
             self?.pendingJobCancels.remove(job.id)
             self?.library.store(forSession: job.session)?.finishRemoteOverlay(job)

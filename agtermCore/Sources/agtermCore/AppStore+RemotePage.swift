@@ -15,6 +15,14 @@ public enum RemotePageOpen: Equatable, Sendable {
     case opened
 }
 
+/// RemotePageEnds carries the one signal the app's page channels need from the model: a page handed to the
+/// presenting Mac ended, by close, rejection, presenter loss or session removal.
+@MainActor
+public final class RemotePageEnds {
+    public static let shared = RemotePageEnds()
+    public var onEnd: ((UUID) -> Void)?
+}
+
 /// RemotePageClaim is a page channel the claim admitted: the session and slot the page sits in, and the page.
 public struct RemotePageClaim: Equatable, Sendable {
     public let sessionID: UUID
@@ -135,6 +143,7 @@ extension AppStore {
         session.remoteOverlays.remove(job: job)
         HtmlPageOutcomes.shared.dismiss(page.overlay.id)
         scheduleTreeChanged()
+        RemotePageEnds.shared.onEnd?(page.overlay.id)
     }
 
     /// remotePageNodes pairs each remote page of `session` with its slot, nil standing for the session-wide one.

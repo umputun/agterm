@@ -19,6 +19,11 @@ public enum PageServeFrame: Equatable, Sendable {
     /// reply carries the origin's raw JSON response, passed to the page as received.
     case reply(id: Int, response: String)
 
+    /// busy is the failure a request gets when the origin already runs as many of its kind as it takes.
+    public static let busy = "too many requests in flight"
+    /// cancelled is the failure that ends a transfer the viewer cancelled.
+    public static let cancelled = "cancelled"
+
     public var id: Int {
         switch self {
         case .resource(let id, _, _), .head(let id, _), .chunk(let id, _), .end(let id), .failure(let id, _),
