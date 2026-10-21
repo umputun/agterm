@@ -392,15 +392,15 @@
 **Files:**
 - Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] both roles in one process with the page-serve launcher set to
+- [x] both roles in one process with the page-serve launcher set to
       `[cli, "session", "overlay", "page-serve", <token>, "--socket", path]`: a `--js --cwd` file page with a relative
       asset opens on the presenter, its bridge submits a value, and `overlay result --page` on the origin returns it
-- [ ] assert the submit crossed the page channel: a recording launcher wrapper observes the `bridge` frame carrying
+- [x] assert the submit crossed the page channel: a recording launcher wrapper observes the `bridge` frame carrying
       `session.overlay.submit`, and the viewer's ledger has no entry under the replica's local id
-- [ ] the origin's `htmlOverlays` lists the page with `remote: true` and the viewer's live `page` and `title`
-- [ ] an older presenter (hello without the page kinds) gets today's refusal
-- [ ] presenter loss mid-page finishes the page `dismissed`
-- [ ] run `-only-testing:agtermTests/ControlServerRemotePresentationTests` - must pass before task 9
+- [x] the origin's `htmlOverlays` lists the page with `remote: true` and the viewer's live `page` and `title`
+- [x] an older presenter (hello without the page kinds) gets today's refusal
+- [x] presenter loss mid-page finishes the page `dismissed`
+- [x] run `-only-testing:agtermTests/ControlServerRemotePresentationTests` - must pass before task 9
 
 ### Task 9: Verify acceptance criteria
 - [ ] verify every Overview and Solution Overview point is implemented

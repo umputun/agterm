@@ -539,13 +539,122 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     @MainActor
     private final class BridgeTransport: RemotePresentationTransport {
         let argv: [String]
+        private let dropPageKinds: Bool
         private let process = RemotePresentationProcess()
 
-        init(argv: [String]) { self.argv = argv }
+        init(argv: [String], dropPageKinds: Bool = false) {
+            self.argv = argv
+            self.dropPageKinds = dropPageKinds
+        }
 
         func open(_ ignored: [String], onLine: @escaping @MainActor (Data) -> Void,
                   onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
-            process.open(argv, onLine: onLine, onClose: onClose)
+            let link = process.open(argv, onLine: onLine, onClose: onClose)
+            return dropPageKinds ? OlderPresenterLink(inner: link) : link
+        }
+    }
+
+    @MainActor
+    private final class OlderPresenterLink: RemotePresentationLink {
+        private let inner: RemotePresentationLink
+
+        init(inner: RemotePresentationLink) { self.inner = inner }
+
+        func send(_ line: Data) {
+            guard let frame = try? PresentationCodec.decode(line.dropLast()), case .hello(let hello) = frame.body,
+                  let older = try? PresentationCodec.encode(PresentationFrame(gen: frame.gen, rev: frame.rev, body: .hello(
+                      PresentationHello(version: hello.version, kinds: hello.kinds.filter { !$0.hasPrefix("page.") },
+                                        mode: hello.mode)))) else { return inner.send(line) }
+            inner.send(older)
+        }
+
+        func stop() { inner.stop() }
+    }
+
+    private final class Lines: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lines: [String] = []
+        private var joins = 0
+        var all: [String] { lock.withLock { lines } }
+        var frames: [PageServeFrame] { all.compactMap { try? PageServeCodec.decode(Data($0.utf8)) } }
+        var joinsClosed: Int { lock.withLock { joins } }
+        func append(_ line: String) { lock.withLock { lines.append(line) } }
+        func joinClosed() { lock.withLock { joins += 1 } }
+    }
+
+    @MainActor
+    private final class RelayLauncher: RemotePageLauncher {
+        final class Helper: RemotePageHelper {
+            let descriptor: Int32
+            private let real: RemotePageHelper
+
+            init(descriptor: Int32, real: RemotePageHelper) {
+                self.descriptor = descriptor
+                self.real = real
+            }
+
+            func terminate() { real.terminate() }
+        }
+
+        let toOrigin = Lines()
+        private(set) var helpers: [RemotePageHelper] = []
+        private let cli: String
+        private let socketPath: String
+
+        init(cli: String, socketPath: String) {
+            self.cli = cli
+            self.socketPath = socketPath
+        }
+
+        func launch(_ argv: [String], onExit: @escaping @MainActor () -> Void) throws -> RemotePageHelper {
+            let pattern = /[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}/.ignoresCase()
+            guard let token = argv.last?.firstMatch(of: pattern).map({ String($0.output) }) else { throw POSIXError(.EINVAL) }
+            let real = try RemotePageProcess().launch([cli, "session", "overlay", "page-serve", token, "--socket", socketPath],
+                                                      onExit: onExit)
+            var pair: [Int32] = [0, 0]
+            guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
+            Self.join(pair[1], real.descriptor, record: toOrigin)
+            helpers.append(real)
+            return Helper(descriptor: pair[0], real: real)
+        }
+
+        // nonisolated, or the notify block inherits the main actor and traps on the global queue
+        private nonisolated static func join(_ local: Int32, _ remote: Int32, record: Lines) {
+            let done = DispatchGroup()
+            relay(from: local, to: remote, record: record, done: done)
+            relay(from: remote, to: local, record: nil, done: done)
+            done.notify(queue: .global()) {
+                close(local)
+                close(remote)
+                record.joinClosed()
+            }
+        }
+
+        private nonisolated static func relay(from source: Int32, to destination: Int32, record: Lines?, done: DispatchGroup) {
+            done.enter()
+            Thread {
+                var pending = Data()
+                var chunk = [UInt8](repeating: 0, count: 16 * 1024)
+                while true {
+                    let count = read(source, &chunk, chunk.count)
+                    guard count > 0 else { break }
+                    if let record {
+                        pending.append(contentsOf: chunk[0..<count])
+                        while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
+                            record.append(String(decoding: pending[pending.startIndex..<newline], as: UTF8.self))
+                            pending.removeSubrange(pending.startIndex...newline)
+                        }
+                    }
+                    var offset = 0
+                    while offset < count {
+                        let written = chunk[offset..<count].withUnsafeBytes { Darwin.write(destination, $0.baseAddress, $0.count) }
+                        guard written > 0 else { break }
+                        offset += written
+                    }
+                }
+                Darwin.shutdown(destination, SHUT_WR)
+                done.leave()
+            }.start()
         }
     }
 
@@ -569,7 +678,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli: String
     }
 
-    private func bridgedPair() throws -> BridgedPair {
+    private func bridgedPair(dropPageKinds: Bool = false) throws -> BridgedPair {
         let library = WindowLibrary(directory: stateDir)
         let socketPath = "/tmp/agterm-e2e-\(UUID().uuidString.prefix(8)).sock"
         let server = ControlServer(
@@ -598,7 +707,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli = try XCTUnwrap(Bundle.main.executableURL).deletingLastPathComponent()
             .appendingPathComponent("agtermctl").path
         server.remoteTransport = BridgeTransport(argv: [cli, "zmx", "present", origin.id.uuidString,
-                                                        "--socket", socketPath])
+                                                        "--socket", socketPath], dropPageKinds: dropPageKinds)
 
         server.startRemotePresentation(for: viewer)
         waitUntil("the viewer's stream connects") { viewer.remotePresentation?.connection == .connected }
@@ -701,5 +810,104 @@ final class ControlServerRemotePresentationTests: XCTestCase {
             server.sessionOverlayResult(origin.id.uuidString, window: nil, pane: nil).result?.exitCode == 7
         }
         XCTAssertEqual(try String(contentsOfFile: ranFile, encoding: .utf8), "ran\n", "the program ran once")
+    }
+
+    private func follow(_ origin: Session) {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: origin.paneIdentity)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: origin.paneIdentity)
+        }
+        addTeardownBlock { @MainActor in ZmxLeadBook.shared.forget(pane: origin.paneIdentity) }
+    }
+
+    private func relay(_ pair: BridgedPair) -> RelayLauncher {
+        let launcher = RelayLauncher(cli: pair.cli, socketPath: pair.socketPath)
+        pair.server.pageLauncher = launcher
+        addTeardownBlock { @MainActor in for helper in launcher.helpers { helper.terminate() } }
+        return launcher
+    }
+
+    private func pageDir(_ files: [String: String]) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-e2e-page-\(UUID().uuidString)")
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for (name, text) in files { try Data(text.utf8).write(to: dir.appendingPathComponent(name)) }
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    private func openPage(_ pair: BridgedPair, in dir: URL) throws -> ControlResponse {
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .file(path: dir.appendingPathComponent("index.html").path,
+                                                                   grantRoot: dir.path),
+                                                       javascript: true)
+        return pair.server.openSessionOverlay(pair.origin.id.uuidString, window: nil, options: options)
+    }
+
+    func testAFilePageHandedToTheViewerSubmitsThroughItsChannel() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        let launcher = relay(pair)
+        var replicas: Set<UUID> = []
+        let report = pair.store.onReplicaPageChanged
+        pair.store.onReplicaPageChanged = { replicas.insert($0); report?($0) }
+        let dir = try pageDir([
+            "style.css": "#p { color: rgb(1, 2, 3); }",
+            "index.html": """
+                <title>E</title><link rel="stylesheet" href="style.css"><p id="p">x</p>
+                <script>window.addEventListener('load', () => agterm.request('session.overlay.submit',
+                  {args: {value: getComputedStyle(document.getElementById('p')).color}}))</script>
+                """,
+        ])
+
+        let opened = try openPage(pair, in: dir)
+
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        let page = try XCTUnwrap(opened.result?.pageID.flatMap(UUID.init(uuidString:)))
+        waitUntil("the viewer's submit reaches the origin's ledger") {
+            pair.server.htmlPageResult(page).result?.pageOutcome?.outcome == .submitted
+        }
+        XCTAssertEqual(pair.server.htmlPageResult(page).result?.pageOutcome?.value, "rgb(1, 2, 3)")
+        let sent = launcher.toOrigin.frames
+        XCTAssertTrue(sent.contains { if case .resource(_, _, let path) = $0 { path == dir.appendingPathComponent("style.css").path } else { false } })
+        XCTAssertTrue(sent.contains { if case .bridge(_, let request) = $0 { request.contains("session.overlay.submit") } else { false } })
+        XCTAssertFalse(replicas.isEmpty)
+        for local in replicas { XCTAssertNil(HtmlPageOutcomes.shared.outcome(for: local)) }
+        XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+    }
+
+    func testTheOriginReadsTheViewersPageStateAndPresenterLossDismissesIt() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        let launcher = relay(pair)
+        let dir = try pageDir(["index.html": "<title>S</title><p>still</p>"])
+        let index = dir.appendingPathComponent("index.html").path
+
+        let opened = try openPage(pair, in: dir)
+
+        let page = try XCTUnwrap(opened.result?.pageID.flatMap(UUID.init(uuidString:)))
+        let node: () -> ControlHtmlOverlayNode? = {
+            pair.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == pair.origin.id.uuidString }?.htmlOverlays?.first
+        }
+        waitUntil("the viewer's page state reaches the origin") { node()?.title == "S" && node()?.page == index }
+        XCTAssertEqual(node()?.remote, true)
+        XCTAssertEqual(node()?.id, page.uuidString)
+
+        pair.server.shutdownPresentationStreams()
+
+        waitUntil("presenter loss ends the page") { HtmlPageOutcomes.shared.outcome(for: page)?.outcome == .dismissed }
+        XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+        waitUntil("the viewer's replica is gone") { pair.viewer.htmlOverlay == nil && pair.server.replicaPages.isEmpty }
+        waitUntil("the channel's helper is gone") { launcher.toOrigin.joinsClosed == 1 }
+    }
+
+    func testAnOlderPresenterKeepsTheRefusal() throws {
+        let pair = try bridgedPair(dropPageKinds: true)
+        follow(pair.origin)
+        let dir = try pageDir(["index.html": "<p>x</p>"])
+
+        XCTAssertEqual(try openPage(pair, in: dir).error, OverlayHtmlError.presenter)
+        XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
     }
 }
