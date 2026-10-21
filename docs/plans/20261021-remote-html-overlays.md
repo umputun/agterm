@@ -313,12 +313,12 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteSessionTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
-- [ ] the CLI subcommand claims with the token and pumps bytes both ways with `StreamBridge`, handling partial
+- [x] the CLI subcommand claims with the token and pumps bytes both ways with `StreamBridge`, handling partial
       writes; it reads no files and interprets no frames
-- [ ] `RemoteSession.pageServeCommand(host:token:)` builds the `ssh -T` argv with the PATH chain
+- [x] `RemoteSession.pageServeCommand(host:token:)` builds the `ssh -T` argv with the PATH chain
       `presentCommand` uses
-- [ ] tests: argv shape and quoting, refused host, a refused claim exits nonzero, EOF on either side ends the pump
-- [ ] run the touched `swift test --filter` suites - must pass before task 6
+- [x] tests: argv shape and quoting, refused host, a refused claim exits nonzero, EOF on either side ends the pump
+- [x] run the touched `swift test --filter` suites - must pass before task 6
 
 ### Task 6: Viewer replica page
 

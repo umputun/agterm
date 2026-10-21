@@ -1301,7 +1301,7 @@ private final class EventReadScript: @unchecked Sendable {
 
 /// An in-process unix-socket server for the round-trip tests: binds a short temp path, accepts one
 /// connection, reads the request line, records it, and writes back a canned `ControlResponse`.
-private final class StubServer: @unchecked Sendable {
+final class StubServer: @unchecked Sendable {
     let path: String
     private let canned: Data
     private var listenFD: Int32 = -1

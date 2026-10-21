@@ -52,6 +52,15 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
     }
 
+    /// pageServeCommand uses plain ssh stdio to claim and carry a remote page's channel.
+    public static func pageServeCommand(host: String, token: String, connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        guard isPlain(token) else { throw InvocationError.invalidSession }
+        let chain = cliPathPrefix + " && exec agtermctl session overlay page-serve " + CommandRestore.shellQuotedLine([token])
+        let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+    }
+
     /// sshd runs a remote command with `/usr/bin:/bin:/usr/sbin:/sbin` and a non-interactive shell reads no
     /// profile, so an installed CLI is otherwise not found and every command exits 127. `CommandPath` owns
     /// where it can live; APPENDED, so a user's own `agtermctl` earlier on PATH still wins.
