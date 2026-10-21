@@ -146,6 +146,7 @@ extension AppStore {
                 switch page.source {
                 case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
                 case .url(let address): url = address.absoluteString
+                case .replica(let path, _): file = path
                 }
                 return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, state: page.loadState.rawValue,
                                               error: page.loadError, page: page.current?.page, title: page.current?.title,
@@ -153,7 +154,8 @@ extension AppStore {
                                               navigation: page.navigation ? true : nil, javascript: page.javascript,
                                               chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
                                               persistent: page.persistent, browse: page.browse,
-                                              hidden: session.overlayHidden(pane) ? true : nil)
+                                              hidden: session.overlayHidden(pane) ? true : nil,
+                                              replica: page.replicaOf == nil ? nil : true)
             }
         }
         return nodes.isEmpty ? nil : nodes

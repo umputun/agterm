@@ -366,8 +366,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard webView.canGoForward else { return OverlayHtmlError.noHistory(.forward) }
             webView.goForward()
         case .browser:
+            if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
             guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
         case .finder:
+            if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
             guard case .file = overlay.source else { return OverlayHtmlError.finderRequiresFile }
             sharing.reveal(pageURL)
         }
@@ -420,6 +422,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             } catch {
                 fail(error.localizedDescription)
             }
+        case .replica:
+            fail(OverlayHtmlError.remoteFile)
         }
     }
 
@@ -427,7 +431,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _):
+        case .file(let path, _), .replica(let path, _):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -483,7 +487,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _): return URL(fileURLWithPath: path)
+        case .file(let path, _), .replica(let path, _): return URL(fileURLWithPath: path)
         case .url(let url): return url
         }
     }

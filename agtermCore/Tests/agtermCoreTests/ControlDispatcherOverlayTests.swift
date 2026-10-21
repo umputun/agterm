@@ -49,6 +49,27 @@ struct ControlDispatcherOverlayTests {
         #expect(actions.calls == [.claimOverlayJob(job)])
     }
 
+    @Test(arguments: [(String?.none, "session.overlay.page.serve requires a page token"),
+                      ("  ", "session.overlay.page.serve requires a page token"), ("not-a-uuid", "invalid page token")])
+    func pageServeRejectsAMissingOrMalformedTokenBeforeCallingActions(_ target: String?, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayPageServe, target: target))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func pageServeReachesTheHostsClaimWhichDefaultsToUnsupported() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayPageServe, target: UUID().uuidString))
+
+        #expect(response == ControlResponse(ok: false, error: "session.overlay.page.serve is not supported on this platform"))
+    }
+
     @Test func sessionOverlayOpenRoutesOptionsAndEchoesActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

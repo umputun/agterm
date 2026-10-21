@@ -214,24 +214,24 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`
 
-- [ ] add the shared-stream page kinds with the typed full source and background color; unknown kinds stay skippable
-- [ ] add page channel frames with bounded chunk and request/reply sizes, and the load revision field
-- [ ] add `session.overlay.page.serve`: catalog entry, dispatcher arm validating the token format, a
+- [x] add the shared-stream page kinds with the typed full source and background color; unknown kinds stay skippable
+- [x] add page channel frames with bounded chunk and request/reply sizes, and the load revision field
+- [x] add `session.overlay.page.serve`: catalog entry, dispatcher arm validating the token format, a
       `ControlActions` requirement with a public unsupported default, `HtmlBridge` refusal
-- [ ] add `HtmlSource.replica` (origin page id, logical path, grant flag); the navigation policy allows only its own
+- [x] add `HtmlSource.replica` (origin page id, logical path, grant flag); the navigation policy allows only its own
       `agterm-page://` origin and opens web links externally; every switch on the source handles it
       (`AppStore+HtmlOverlay` node builder, `HtmlOverlayRegistry`, `HtmlOverlayView`), with replica loading left to
       Task 6
-- [ ] update the remaining exhaustive consumers (`RemotePresentationClient`, `ControlServer`'s fallback); the client
+- [x] update the remaining exhaustive consumers (`RemotePresentationClient`, `ControlServer`'s fallback); the client
       answers `pageRequest` with `pageRejected` until Task 6
-- [ ] add `ControlHtmlOverlayNode.remote`/`replica` and `ControlRemoteOverlayNode.pageID` as trailing defaulted
+- [x] add `ControlHtmlOverlayNode.remote`/`replica` and `ControlRemoteOverlayNode.pageID` as trailing defaulted
       init parameters, omitted when nil; reword the `htmlOverlays` and `hiddenOverlays` comments
       (`ControlProjection.swift:337-341`) so only LOCAL entries also occupy `overlay`/`paneOverlays`
-- [ ] tests: round trips including a URL with path and query and a file source with its grant, oversize refusal,
+- [x] tests: round trips including a URL with path and query and a file source with its grant, oversize refusal,
       an older decoder skipping the new kinds, the dispatcher arm and its unsupported default, bridge refusal,
       the replica navigation policy (own origin allowed, another page id and `file` refused, web link external),
       nil omission of the new tree fields
-- [ ] run `swift test --filter` for the touched suites and `-only-testing:agtermTests/HtmlOverlayRegistryTests`
+- [x] run `swift test --filter` for the touched suites and `-only-testing:agtermTests/HtmlOverlayRegistryTests`
       - must pass before task 3
 
 ### Task 3: Origin reservation, routing and lifecycle for remote pages

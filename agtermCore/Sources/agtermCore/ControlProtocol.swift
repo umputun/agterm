@@ -118,6 +118,9 @@ public enum Command: String, Codable, Sendable {
     case recentClear = "recent.clear"
     /// A viewer's helper claiming a remote overlay job; after an ok reply the connection carries job frames.
     case sessionOverlayJobRun = "session.overlay.job.run"
+    /// sessionOverlayPageServe is a viewer's helper claiming a handed-over page by its single-use token; after an
+    /// ok reply the connection carries page channel frames.
+    case sessionOverlayPageServe = "session.overlay.page.serve"
     /// UI-TEST-ONLY: forces the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied, so a
     /// test can assert the flip drove the reload. Refused outside an XCUITest launch, and EXEMPT from the
@@ -766,6 +769,8 @@ public enum OverlayHtmlError {
     public static let notHtml = "the overlay is not an html page"
     public static let navigation = "session.overlay.navigate requires back, forward, browser or finder"
     public static let finderRequiresFile = "show in Finder requires a file page"
+    /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
+    public static let remoteFile = "the page's file is on another Mac"
     /// noHistory: the page has nowhere to go in that direction.
     public static func noHistory(_ navigation: HtmlNavigation) -> String { "no page to go \(navigation.rawValue) to" }
     /// notRealized: the page has not been shown yet, so there is no web view to drive.

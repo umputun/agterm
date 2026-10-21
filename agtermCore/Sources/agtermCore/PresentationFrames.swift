@@ -251,6 +251,118 @@ public struct PresentationOverlayChange: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationPageSource is a handed-over page's full source on the origin: a file the viewer fetches over the
+/// page channel, with the grant that bounds which files it may ask for, or a complete URL it loads itself.
+public enum PresentationPageSource: Codable, Equatable, Sendable {
+    case file(path: String, grantRoot: String?)
+    case url(String)
+}
+
+/// PresentationPage asks the presenter to show a page the origin opened. `page` is the origin's page id, which
+/// the presenter never reuses as its own; `token` claims the page channel and is single-use.
+public struct PresentationPage: Codable, Equatable, Sendable {
+    public var page: String
+    public var token: String
+    public var source: PresentationPageSource
+    /// identity is the display text the identity strip shows, never used to load anything.
+    public var identity: String
+    public var chromeless: Bool
+    public var javascript: Bool
+    public var navigation: Bool
+    public var browse: Bool
+    public var persistent: Bool
+    public var backgroundColor: String?
+    /// pane is the origin's pane the page covers, nil for the session-wide slot.
+    public var pane: PresentationPane?
+    public var sizePercent: Int?
+    public var follow: Bool
+
+    public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
+                javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
+                pane: PresentationPane?, sizePercent: Int?, follow: Bool) {
+        self.page = page
+        self.token = token
+        self.source = source
+        self.identity = identity
+        self.chromeless = chromeless
+        self.javascript = javascript
+        self.navigation = navigation
+        self.browse = browse
+        self.persistent = persistent
+        self.backgroundColor = backgroundColor
+        self.pane = pane
+        self.sizePercent = sizePercent
+        self.follow = follow
+    }
+}
+
+/// PresentationPageChange names one handed-over page by the origin's id, with a reason when the presenter
+/// refuses it.
+public struct PresentationPageChange: Codable, Equatable, Sendable {
+    public var page: String
+    public var reason: String?
+
+    public init(page: String, reason: String? = nil) {
+        self.page = page
+        self.reason = reason
+    }
+}
+
+/// PresentationPageAction is what the origin asks of a handed-over page.
+public enum PresentationPageAction: String, Codable, Sendable {
+    case hide, show, reloadOriginal, reloadCurrent, back, forward, browser, resize
+}
+
+/// PresentationPageCommand is one origin request for a handed-over page. `seq` grows per page, and the
+/// presenter echoes the last one it applied in `PresentationPageState.appliedSeq`.
+public struct PresentationPageCommand: Codable, Equatable, Sendable {
+    public var page: String
+    public var seq: Int
+    public var action: PresentationPageAction
+    public var sizePercent: Int?
+
+    public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil) {
+        self.page = page
+        self.seq = seq
+        self.action = action
+        self.sizePercent = sizePercent
+    }
+}
+
+/// PresentationPageState is what a handed-over page shows on the presenter. `address` is the origin's logical
+/// address, never the presenter's own scheme URL. Strings are bounded before sending, since the page writes
+/// its title and a long one must not cost a frame.
+public struct PresentationPageState: Codable, Equatable, Sendable {
+    public static let maxTitle = 1024
+    public static let maxAddress = 8192
+    public static let maxError = 1024
+
+    public var page: String
+    public var title: String?
+    public var address: String?
+    public var load: HtmlLoadState
+    public var error: String?
+    public var canGoBack: Bool
+    public var canGoForward: Bool
+    public var hidden: Bool
+    public var loadRevision: Int
+    public var appliedSeq: Int
+
+    public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,
+                canGoBack: Bool, canGoForward: Bool, hidden: Bool, loadRevision: Int, appliedSeq: Int) {
+        self.page = page
+        self.title = title.map { String($0.prefix(Self.maxTitle)) }
+        self.address = address.map { String($0.prefix(Self.maxAddress)) }
+        self.load = load
+        self.error = error.map { String($0.prefix(Self.maxError)) }
+        self.canGoBack = canGoBack
+        self.canGoForward = canGoForward
+        self.hidden = hidden
+        self.loadRevision = loadRevision
+        self.appliedSeq = appliedSeq
+    }
+}
+
 /// PresentationSnapshot is the replaceable state a subscriber starts from.
 public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var status: PresentationStatus?
@@ -298,6 +410,14 @@ public struct PresentationFrame: Equatable, Sendable {
         case overlayResize(PresentationOverlayChange)
         /// The viewer closed its surface, which frees a slot held only for a `--wait` surface.
         case overlayClosed(PresentationOverlayChange)
+        case pageRequest(PresentationPage)
+        /// pageRejected: the presenter cannot show the page, so the origin ends it without waiting for a claim.
+        case pageRejected(PresentationPageChange)
+        case pageClose(PresentationPageChange)
+        /// pageClosed: the presenter took the page down, so the origin ends it, keeping an answer it recorded.
+        case pageClosed(PresentationPageChange)
+        case pageCommand(PresentationPageCommand)
+        case pageState(PresentationPageState)
         /// A kind this build does not speak. Kept, with its ordering, so a newer peer does not break the stream.
         case unknown(String)
 
@@ -325,6 +445,12 @@ public struct PresentationFrame: Equatable, Sendable {
             case .overlayClose: return "overlay.close"
             case .overlayResize: return "overlay.resize"
             case .overlayClosed: return "overlay.closed"
+            case .pageRequest: return "page.request"
+            case .pageRejected: return "page.rejected"
+            case .pageClose: return "page.close"
+            case .pageClosed: return "page.closed"
+            case .pageCommand: return "page.command"
+            case .pageState: return "page.state"
             case .unknown(let kind): return kind
             }
         }
@@ -343,7 +469,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, layout, hud, notify, sound, ask, overlay
+        case kind, gen, rev, hello, snapshot, status, context, layout, hud, notify, sound, ask, overlay, page
     }
 
     public init(from decoder: Decoder) throws {
@@ -375,6 +501,12 @@ extension PresentationFrame: Codable {
         case "overlay.close": body = .overlayClose(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
         case "overlay.resize": body = .overlayResize(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
         case "overlay.closed": body = .overlayClosed(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
+        case "page.request": body = .pageRequest(try container.decode(PresentationPage.self, forKey: .page))
+        case "page.rejected": body = .pageRejected(try container.decode(PresentationPageChange.self, forKey: .page))
+        case "page.close": body = .pageClose(try container.decode(PresentationPageChange.self, forKey: .page))
+        case "page.closed": body = .pageClosed(try container.decode(PresentationPageChange.self, forKey: .page))
+        case "page.command": body = .pageCommand(try container.decode(PresentationPageCommand.self, forKey: .page))
+        case "page.state": body = .pageState(try container.decode(PresentationPageState.self, forKey: .page))
         default: body = .unknown(kind)
         }
     }
@@ -400,6 +532,11 @@ extension PresentationFrame: Codable {
         case .overlayRejected(let change), .overlayClose(let change), .overlayResize(let change),
              .overlayClosed(let change):
             try container.encode(change, forKey: .overlay)
+        case .pageRequest(let page): try container.encode(page, forKey: .page)
+        case .pageRejected(let change), .pageClose(let change), .pageClosed(let change):
+            try container.encode(change, forKey: .page)
+        case .pageCommand(let command): try container.encode(command, forKey: .page)
+        case .pageState(let state): try container.encode(state, forKey: .page)
         case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown: break
         }
     }

@@ -214,7 +214,12 @@ public final class RemotePresentationClient {
             if !effects.overlayRequest(overlay) { send(.overlayRejected(PresentationOverlayChange(job: overlay.job)), on: link) }
         case .overlayClose(let change): effects.overlayClose(change)
         case .overlayResize(let change): effects.overlayResize(change)
-        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .overlayRejected, .overlayClosed, .unknown: break
+        case .pageRequest(let page):
+            send(.pageRejected(PresentationPageChange(page: page.page, reason: "pages are not shown on this Mac")), on: link)
+        case .pageClose, .pageCommand: break
+        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .overlayRejected, .overlayClosed, .unknown,
+             .pageRejected, .pageClosed, .pageState:
+            break
         }
     }
 

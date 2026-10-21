@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import agtermCore
 
 /// HtmlPageResource is one resource a page source answers: its MIME type and its body in chunks.
 struct HtmlPageResource: Sendable {
@@ -12,7 +13,7 @@ struct HtmlPageResource: Sendable {
 /// A request naming another page id, or another scheme, fails without reaching the source.
 @MainActor
 final class HtmlPageSchemeHandler: NSObject, WKURLSchemeHandler {
-    static let scheme = "agterm-page"
+    static let scheme = HtmlSource.replicaScheme
 
     typealias Source = @Sendable (_ path: String) async throws -> HtmlPageResource
 

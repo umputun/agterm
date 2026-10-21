@@ -226,6 +226,50 @@ struct HtmlOverlayTests {
         #expect(HtmlOverlay(source: source, persistent: true).persistent)
     }
 
+    @Test(arguments: [
+        ("agterm-page://OWN/index.html", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
+        ("agterm-page://own/sub/b.html", .subframe, false, .allow),
+        ("agterm-page://\(UUID().uuidString)/index.html", .mainFrame, false, .cancel),
+        ("file:///tmp/a/index.html", .mainFrame, false, .cancel),
+        ("https://example.com/", .mainFrame, true, .openExternal),
+        ("https://example.com/", .mainFrame, false, .cancel),
+        ("about:blank", .mainFrame, false, .allow),
+    ])
+    func replicaPolicyAllowsOnlyItsOwnSchemeOrigin(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
+                                                   _ expected: HtmlNavigationDecision) throws {
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", grant: true), replicaOf: UUID())
+        let resolved = url.replacingOccurrences(of: "OWN", with: overlay.id.uuidString)
+            .replacingOccurrences(of: "own", with: overlay.id.uuidString.lowercased())
+        let action = HtmlNavigationAction(url: try #require(URL(string: resolved)), target: target, userActivated: userActivated)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)
+    }
+
+    @Test func aReplicaIsNamedByItsFileAndReportsTheOriginPathAsReplica() throws {
+        let origin = UUID()
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", grant: false), replicaOf: origin)
+        #expect(overlay.identity == "index.html")
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)
+        #expect(node.file == "/origin/docs/index.html")
+        #expect(node.cwd == nil)
+        #expect(node.replica == true)
+        #expect(node.remote == nil)
+    }
+
+    @Test func aLocalPageNodeOmitsTheRemoteFields() throws {
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)
+        let json = try #require(String(data: try JSONEncoder().encode(node), encoding: .utf8))
+        #expect(!json.contains("\"remote\""))
+        #expect(!json.contains("\"replica\""))
+
+        let reservation = try JSONEncoder().encode(ControlRemoteOverlayNode(pane: nil, sizePercent: 60))
+        #expect(!String(decoding: reservation, as: UTF8.self).contains("pageID"))
+        let page = ControlRemoteOverlayNode(pane: "left", sizePercent: nil, pageID: "p1")
+        #expect(try JSONDecoder().decode(ControlRemoteOverlayNode.self, from: JSONEncoder().encode(page)) == page)
+    }
+
     @Test func fileIdentityIsTheFileShownNeverTheTitle() {
         var overlay = HtmlOverlay(source: .file(path: "/a/docs/index.html", grantRoot: "/a/docs"))
         #expect(overlay.identity == "index.html")

@@ -48,18 +48,19 @@ struct HtmlOverlayView: View {
             }
             label
             if overlay.navigation {
-                button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
-                    _ = registry.navigate(overlay.id, .browser)
-                }
                 switch overlay.source {
                 case .file:
+                    browserButton
                     button("arrow.up.forward.app", "Show in Finder", "htmlOverlay.finder", enabled: true) {
                         _ = registry.navigate(overlay.id, .finder)
                     }
                 case .url:
+                    browserButton
                     button("link", "Copy Link", "htmlOverlay.copy", enabled: true) {
                         registry.copyLink(overlay.id)
                     }
+                case .replica:
+                    EmptyView()
                 }
             }
             button("minus", "Hide", "htmlOverlay.hide", enabled: true) {
@@ -125,8 +126,14 @@ struct HtmlOverlayView: View {
 
     private var sourceText: String {
         switch overlay.source {
-        case .file(let path, _): path
+        case .file(let path, _), .replica(let path, _): path
         case .url(let url): url.absoluteString
+        }
+    }
+
+    private var browserButton: some View {
+        button("safari", "Open in Browser", "htmlOverlay.browser", enabled: true) {
+            _ = HtmlOverlayRegistry.shared.navigate(overlay.id, .browser)
         }
     }
 

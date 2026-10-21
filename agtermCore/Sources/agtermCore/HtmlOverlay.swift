@@ -8,12 +8,18 @@ public enum HtmlSource: Equatable, Sendable {
     case file(path: String, grantRoot: String?)
     /// url is a web page, pinned to its origin by the navigation policy.
     case url(URL)
+    /// replica is a file page another Mac opened, shown here from `agterm-page://<page id>/`: `path` is its
+    /// path on that Mac, and `grant` says whether files beside it may be fetched too.
+    case replica(path: String, grant: Bool)
 
     /// webURL parses `--url`: an absolute http or https URL with a host, nil for anything else.
     public static func webURL(_ text: String) -> URL? {
         guard let url = URL(string: text), HtmlOrigin(url) != nil else { return nil }
         return url
     }
+
+    /// replicaScheme is the URL scheme a replica page loads from.
+    public static let replicaScheme = "agterm-page"
 
     /// isLoopback says whether `--url` names this Mac by one of three exact hosts: 127.0.0.1, ::1 or localhost.
     /// Ranges and aliases never match, so WebKit cannot read an accepted host as a different one.
@@ -85,6 +91,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let persistent: Bool
     /// browse lets a URL page's main frame leave its original origin for any HTTP(S) site.
     public let browse: Bool
+    /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
+    public let replicaOf: UUID?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -96,8 +104,9 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadTarget = HtmlReloadTarget.original
 
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
-                persistent: Bool = false, browse: Bool = false, id: UUID = UUID()) {
+                persistent: Bool = false, browse: Bool = false, id: UUID = UUID(), replicaOf: UUID? = nil) {
         self.id = id
+        self.replicaOf = replicaOf
         self.source = source
         self.navigation = navigation
         self.javascript = javascript
@@ -143,6 +152,7 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -262,6 +272,10 @@ public enum HtmlNavigationPolicy {
             if web { return action.userActivated ? .openExternal : .cancel }
             guard scheme == "file", let grantRoot else { return .cancel }
             return HtmlOverlay.contains(grantRoot, action.url.path) ? .allow : .cancel
+        case .replica:
+            if web { return action.userActivated ? .openExternal : .cancel }
+            let own = action.url.host?.lowercased() == overlay.id.uuidString.lowercased()
+            return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
         case .url(let original):
             guard web else { return .cancel }
             if HtmlOrigin(action.url) == HtmlOrigin(original) || overlay.browse { return .allow }

@@ -123,6 +123,12 @@ extension ControlDispatcher {
             }
             guard UUID(uuidString: job) != nil else { return ControlResponse(ok: false, error: "invalid job id") }
             return actions.claimOverlayJob(job)
+        case .sessionOverlayPageServe:
+            guard let token = request.target?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "session.overlay.page.serve requires a page token")
+            }
+            guard UUID(uuidString: token) != nil else { return ControlResponse(ok: false, error: "invalid page token") }
+            return actions.claimPageServe(token)
         default:
             preconditionFailure("dispatchSessionOverlayCommand called for \(request.cmd.rawValue)")
         }

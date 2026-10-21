@@ -213,6 +213,9 @@ public protocol ControlActions {
     func openPresentation(session: String) -> ControlResponse
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
     func claimOverlayJob(_ job: String) -> ControlResponse
+    /// claimPageServe claims a handed-over page's channel with its single-use token. After an ok answer the
+    /// connection carries page channel frames.
+    func claimPageServe(_ token: String) -> ControlResponse
     /// Attach into an open local window, defaulting to the frontmost window after discovery.
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse
 }
@@ -247,7 +250,7 @@ public struct ControlDispatcher {
                 .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
                 .sessionBackground, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
-        case .sessionOverlayJobRun:
+        case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
