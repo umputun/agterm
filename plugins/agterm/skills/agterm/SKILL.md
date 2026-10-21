@@ -265,7 +265,8 @@ session, and never present after a relaunch because a remote session is not pers
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
 `unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
 `presenters` (origin session: `mirrors`, the streams mirroring it without presenting, and `presenter: true`
-when one presents it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds),
+when one presents it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
+`pageID` included; HTML pages follow the same placement, see reference.md Remote sessions),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
 `splitAxis` (`vertical` for left/right or `horizontal` for top/bottom; omitted without a split),

@@ -170,7 +170,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
-  `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.hide`,
+  `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
   `.overlay.show`, `.overlay.toggle`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
@@ -471,8 +471,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.overlay.hide|show|toggle [--pane]` set a per-slot hidden bit (`Session.overlayHidden`,
   `PaneOverlay.hidden`, which travels with the struct through swap and promotion) on program and page slots only.
   Bare scope is every such slot of the session; toggle hides all when any is shown, else shows all. A HUD, an
-  ask and a remote reservation are not hideable: an empty scope answers `no overlay`, a reserved one
-  `overlay is shown on another Mac`. Opening into a hidden slot is refused `overlay hidden`, a HUD open
+  ask and a remote PROGRAM reservation are not hideable: an empty scope answers `no overlay`, a reserved one
+  `overlay is shown on another Mac`. A page shown on the presenting Mac is in scope: the request goes to that
+  Mac and the reply does not wait for it (Remote sessions owns the sequence rule). Opening into a hidden slot is refused `overlay hidden`, a HUD open
   checking the session slot. Close or replace clears the bit; metadata updates and a `--wait` exit keep it.
   Occupancy predicates keep their meaning for lifecycle, results, `--block`, page lookup and reservations;
   focus, zoom, layout, deck gates, dashboard covers and font routing read the visible layer in
@@ -664,8 +665,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Copy Link is a URL-page toolbar action only: it copies `browserURL` to the pasteboard.
   Scripts read the current address from `tree`'s `htmlOverlays[].page`.
   `HtmlSharing` isolates Finder and clipboard effects for hosted tests.
-  A page never takes the remote program-job path:
-  `open --html` is refused while a presenter owns the session, and one already open stays local.
+  A page the placement rule hands to the presenting Mac is shown there (Remote sessions); one already open stays local.
 - A FILE page drives the control API from its own content; `site/docs.html#page-bridge` owns the user
   contract. Pages are self-authored and trusted like a program overlay, which already inherits
   `AGTERM_SOCKET`, so there are no permission tiers; a URL page gets none of it. Two surfaces, one path:
@@ -683,7 +683,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach`,
   `dashboard` and `recent.open` keep their ids and still land in the page's window, and `hooks.*`, which
   refuse any window, and `browser.clear`, `browser.links`, `recent.list` and `recent.clear` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
-  `zmx.present`, `session.overlay.job.run` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
+  `zmx.present`, `session.overlay.job.run`, `session.overlay.page.serve` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
   separate install would lose the adapter at the next theme change. Release unregisters the handlers;
   reload keeps them.
@@ -1532,9 +1532,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
   freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
   a second Mac.
-- Four commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
+- Five commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
-  `zmx.present` and `session.overlay.job.run` are streaming hand-offs: each is dispatched inline, its
+  `zmx.present`, `session.overlay.job.run` and `session.overlay.page.serve` are streaming hand-offs: each is
+  dispatched inline, its
   ordinary reply is written, and on ok the descriptor passes to a `ControlStreamOwner` whose reader thread
   is the only one that closes it. A remote `overlay.close` does not leave the thread: it replies at once.
   Everything else stays inline, because dispatch
@@ -1721,7 +1722,40 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `overlay.result` reports how it ended. `overlay.resize` reaches only the stream the job was handed to and
   answers `the viewer showing this overlay is gone` without it. Both are best effort: what the viewer applied
   is not read back. `overlay.text` and `overlay.copy` refuse with `overlay is shown on another Mac`. Read the
-  reservation back as `remoteOverlays` (`pane`, `sizePercent`) on the origin's session node.
+  reservation back as `remoteOverlays` (`pane`, `sizePercent`, `pageID` for a page) on the origin's session node.
+- A new PAGE follows the same placement rule and the same presenter, gated on the page kinds in its hello; an
+  older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for it is refused
+  (`remoteLoopback`), since it names a server on the origin. The origin reserves the slot and registers the page
+  id in `HtmlPageOutcomes`, so `result --page` and `--html --block` work unchanged; the presenter shows it under a
+  page id of its own (`HtmlOverlay.replicaOf` names the origin's), as `HtmlSource.replica` for a file or an
+  ordinary URL page that loads directly with viewer-local `--persistent` storage.
+- A file page's files and bridge requests travel over a channel of their own, never the shared stream: the
+  presenter runs `ssh -T <origin> agtermctl session overlay page-serve <token>`, whose single-use token
+  (bound to the page, the presenter generation and a 30-second deadline) is the claim, and the origin adopts
+  the connection as a `PageServeStream`. It serves only files inside the grant (the page file alone without
+  `--cwd`), off the main actor in 64 KiB chunks, and dispatches each bridge request through `HtmlBridge`
+  against the page's place at dispatch time. Resource and bridge requests have separate nonblocking limits
+  (`pageServeResourceLimit`, `pageServeBridgeLimit`); past one the request fails `too many requests in flight`,
+  or the page ends when the bounded writer queue cannot take that refusal. An admitted transfer ends in exactly
+  one `end` or `failure` frame, a cancel included, and a bridge call in one `reply` or `failure`. The presenter's
+  `RemotePageChannel` holds the same limits and frees a slot only on its request's terminal frame, and holds a
+  chunk's inbound permit until WebKit takes it. Bridge replies reach the page as the raw JSON the origin sent.
+- On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
+  `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,
+  each reply meaning requested, not applied. `navigate browser` reaches it
+  for a URL page; `navigate finder` and `browser` on a file page are refused `page is shown on another Mac`.
+  Bare `overlay.result` answers `noResult`, `overlay.text`/`copy` answer `noRead`, and `overlay.submit` records
+  into the origin ledger. A hide/show records the requested visibility with a sequence number, and toggle uses it
+  until a mirrored `pageState` echoes that sequence; an older sequence never overwrites a pending request.
+  On the presenter a socket `overlay.submit` on a replica is refused (`replicaSubmit`) and leaves it open.
+- The origin's `htmlOverlays` lists the page with `remote: true`: its own fields from the origin record, the
+  live ones (`state`, `error`, `page`, `title`, history, `hidden`) from the presenter's coalesced `pageState`,
+  and no `zoom`. The presenter lists its replica with `replica: true`; for a file replica `file` names the origin
+  path, a URL replica retains `url`.
+- A presenter that refuses the page answers `pageRejected`; the origin's open already answered ok, so the page
+  ends `dismissed` and the reason is logged there. Helper loss or claim timeout ends only the page; presenter
+  loss ends it and its channel. Every way a replica leaves its slot tells the origin once (`pageClosed`), through
+  `HtmlOverlayReleases.onReplicaRelease`, URL replicas included.
 - Losing the presenter ends its overlays for good: no later stream adopts one. An unclaimed job is cancelled,
   a held surface's slot is freed, and a running job keeps its slot until its helper reports, which the
   helper does when the ssh terminal goes. On the viewer a held surface closes at once and a running one

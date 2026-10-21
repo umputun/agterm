@@ -2158,7 +2158,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
 &lt;form data-agterm="session.overlay.submit"&gt;&lt;input name="value" placeholder="other"&gt;&lt;/form&gt;</div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               Commands that stream or finish after their reply (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx present</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx reset</span> and the
-              overlay job helper) are refused from a page, and so are requests from a frame inside it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>
+              overlay and page helpers) are refused from a page, and so are requests from a frame inside it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>
               and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar mode</span> act on the frontmost window, as over the socket. See
               <a href="commands.html#session" style="color: #6d82f3">the command reference</a> for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result --page</span>.
@@ -2974,6 +2974,14 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               overlay fails rather than opening over there. Closing such an overlay from a script asks for it to end, and its
               result says how it did. A status sound follows the same rule for the pane that set the status: it plays on the
               presenting Mac and not on the other one, and the blocked sound is the presenting Mac's own setting.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              An HTML page follows the same rule: it opens on the presenting Mac, where you are. A page opened from a file reads
+              its files from the other Mac as it needs them, and the buttons and scripts in it act on the other Mac's session, so
+              a page that answers its caller answers the program over there. A web page loads directly on the presenting Mac;
+              with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--persistent</span>, it uses that Mac's saved browser storage. A page for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">localhost</span> stays refused, because it names a server on the other Mac. Closing the
+              page from a script on the other Mac takes it down here, and reloading asks this Mac to do it; Finder and the browser are refused for a
+              file page, whose file is not on this Mac.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               While the stream is down the row says so and names the host. A question goes back to the other side, a finished

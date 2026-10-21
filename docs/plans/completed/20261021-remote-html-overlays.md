@@ -403,22 +403,22 @@
 - [x] run `-only-testing:agtermTests/ControlServerRemotePresentationTests` - must pass before task 9
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify every Overview and Solution Overview point is implemented
-- [ ] verify edge cases: placement with mixed roles, loopback refusal, grant escape, helper loss, token reuse
-- [ ] run the full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] after the hosted run, check `lsappinfo list | grep -A4 agterm.debug` for leaked test processes
+- [x] verify every Overview and Solution Overview point is implemented
+- [x] verify edge cases: placement with mixed roles, loopback refusal, grant escape, helper loss, token reuse
+- [x] run the full gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] after the hosted run, check `lsappinfo list | grep -A4 agterm.debug` for leaked test processes
 
 ### Task 10: [Final] Update documentation
-- [ ] `.claude/rules/control-api.md`: replace the "a page never takes the remote program-job path" bullet; add the
+- [x] `.claude/rules/control-api.md`: replace the "a page never takes the remote program-job path" bullet; add the
       page handoff contract to Remote sessions; add `.overlay.page.serve` to the Public catalog; "Four commands
       leave the accept thread" becomes five; add it to the HtmlBridge refused list; update the hide contract and the
       remote-overlay commands bullet with the per-command answers
-- [ ] `site/docs.html` and `site/commands.html`: remote page behavior, `page-serve`, `htmlOverlays[].remote` and
+- [x] `site/docs.html` and `site/commands.html`: remote page behavior, `page-serve`, `htmlOverlays[].remote` and
       `.replica`, `remoteOverlays[].pageID`, the per-command answers, the `pageRejected` difference
-- [ ] bundled skill `plugins/agterm/skills/agterm/`: reference (including the HtmlBridge refused list mirror) and a
+- [x] bundled skill `plugins/agterm/skills/agterm/`: reference (including the HtmlBridge refused list mirror) and a
       SKILL.md pointer
-- [ ] `ARCHITECTURE.md`: name the new modules beside the remote-presentation ones
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `ARCHITECTURE.md`: name the new modules beside the remote-presentation ones
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
