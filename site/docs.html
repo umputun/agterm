@@ -3181,6 +3181,14 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">deny</span>. Each prompt offers
               <em>Don't ask again this session</em>.
             </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Selecting text with the mouse copies it to a private selection clipboard, which a middle-click pastes, and leaves
+              the system clipboard alone; ⌘C puts the selection on the system clipboard. To have every selection land on the
+              system clipboard as well, set
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">copy-on-select = clipboard</span>,
+              or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">false</span> to copy nothing on
+              select.
+            </p>
             <p id="links" style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A ⌘-click on a web link opens it in your browser. With
               <strong style="color: #e6e1d7">Settings ▸ General ▸ Open links in</strong> set to Session overlay, or

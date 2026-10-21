@@ -353,6 +353,10 @@ paths:
   `UNAVAILABLE` result never starts the request, so an OSC 52 reader would wait for a reply that never comes.
 - A write keeps every representation (`NSPasteboard.PasteboardType(mimeType:)` mapping): the callback is
   void and core reports `DONE` right after it, so a dropped representation is a false success.
+- Reads and writes follow the callback's clipboard location through `GhosttyCallbacks.pasteboard(for:)`:
+  selection (`copy-on-select = true`, OSC 52 `s`) is a private pasteboard named for the bundle id, as in
+  Ghostty.app, so selecting text never replaces the system clipboard. Primary stays on the general one,
+  because an OSC 52 `p` write reaches the embedder although `supportsClipboard` reports none.
 - Default ungated writes are synchronous so a same-tick read sees them. Read defaults to ask; write defaults
   allow and can be changed in agterm `ghostty.conf`.
 - Deferred completion captures `GhosttySurfaceView`, then rereads its live surface. If a pane closed while
