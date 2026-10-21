@@ -85,6 +85,12 @@ extension ControlServer {
                 guard let self, let store = library.store(forSession: id) else { return }
                 agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library)
             },
+            pageRequest: { [weak self] page in
+                guard let self else { return "no such session" }
+                return showReplicaPage(page, forSession: id)
+            },
+            pageClose: { [weak self] change in self?.library.store(forSession: id)?.closeReplicaPage(change.page, forSession: id) },
+            pageCommand: { [weak self] command in self?.applyReplicaPageCommand(command, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })

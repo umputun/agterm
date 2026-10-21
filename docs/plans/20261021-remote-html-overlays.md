@@ -331,35 +331,41 @@
 - Modify: `agtermCore/Sources/agtermCore/RemotePresentationClient.swift`
 - Modify: `agterm/Views/HtmlOverlayRegistry.swift`
 - Modify: `agterm/Views/HtmlOverlayBridge.swift`
-- Create: `agtermTests/RemotePageReplicaTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/HtmlOverlay.swift` (replica release signal)
+- Modify: `agtermCore/Sources/agtermCore/AppStore+HtmlOverlay.swift`, `AppStore+OverlayVisibility.swift`,
+  `AppStore+RemoteOverlay.swift`, `AppStore+RemotePresentation.swift`, `AppStore.swift`, `ControlProtocol.swift`
+- Modify: `agterm/Control/ControlServer.swift`, `agterm/Control/ControlServer+Presentation.swift`
+- Create: `agtermTests/ControlServerRemotePageTests.swift`, `agtermTests/RemotePageChannelTests.swift`,
+  `agtermTests/RemotePageFakes.swift` (one test file per source file, so the plan's single
+  `RemotePageReplicaTests.swift` became the first two)
 
-- [ ] agtermCore: present a replica page into the target slot with its own local page id mapped to the origin id
+- [x] agtermCore: present a replica page into the target slot with its own local page id mapped to the origin id
       (pane mapping as `presentReplicaOverlay`), close it, apply resize and hide/show, and orphan it on stream loss;
       a refused present answers `pageRejected` with the reason
-- [ ] app: a file replica starts the page-serve helper through an injectable launcher (ssh by default, like
+- [x] app: a file replica starts the page-serve helper through an injectable launcher (ssh by default, like
       `remoteTransport`) and loads through the Task 1 scheme handler; a URL page loads its full URL directly with no
       helper and viewer-local persistent storage
-- [ ] the channel writer is bounded and off the main actor, drains partial writes, and stops reading when
+- [x] the channel writer is bounded and off the main actor, drains partial writes, and stops reading when
       WebKit is not consuming; scheme tasks map to `resource`/`cancel`; answers for a request of a superseded load
       revision are dropped; at most `pageServeResourceLimit` resource requests are in flight, the rest wait
       locally, and a request's slot is freed only by its terminal frame (`end` or `failure`, which a cancel
       also produces), while bridge calls do not share those slots
-- [ ] relay the `data-agterm` adapter and `agterm.request` through `bridge` frames with correlation ids; keep the
+- [x] relay the `data-agterm` adapter and `agterm.request` through `bridge` frames with correlation ids; keep the
       main-frame restriction and URL pages bridge-free
-- [ ] audit every `if case .file`/`.url` predicate and early return in the page code (`drawsBackground`, `themed`,
+- [x] audit every `if case .file`/`.url` predicate and early return in the page code (`drawsBackground`, `themed`,
       which gates the bridge handler and the adapter scripts, `textLoaded`, `pageURL`'s raw `webView.url` return)
       so a file replica is themed, bridged and reports its logical path, never the `agterm-page://` URL
-- [ ] mirror coalesced `pageState` with the last applied command sequence; apply `pageCommand`; refuse Finder and
+- [x] mirror coalesced `pageState` with the last applied command sequence; apply `pageCommand`; refuse Finder and
       Open in Browser for a file replica; Copy Link stays local; the viewer's `htmlOverlays` reports `replica: true`
       with the origin's logical path
-- [ ] the viewer's socket `overlay.submit` on a replica is refused and leaves it open
-- [ ] presenter loss, helper exit, `pageClose` and local close tear the page down once and report `pageClosed`
-- [ ] tests: host-free present/close/orphan/refusal and id mapping; hosted file replica loading an asset over an
+- [x] the viewer's socket `overlay.submit` on a replica is refused and leaves it open
+- [x] presenter loss, helper exit, `pageClose` and local close tear the page down once and report `pageClosed`
+- [x] tests: host-free present/close/orphan/refusal and id mapping; hosted file replica loading an asset over an
       injected channel, bridge relay correlation through an injected dispatch for both `agterm.request` and a JS-off
       `data-agterm` tag, logical-path read-back, URL page without helper, refused Finder/browser on a file replica,
       browser on a URL replica, a refused socket submit leaving the replica and the origin pending, teardown on each
       trigger, state coalescing
-- [ ] run `swift test --filter AppStoreReplicaPage` and `-only-testing:agtermTests/RemotePageReplicaTests` - must
+- [x] run `swift test --filter AppStoreReplicaPage` and `-only-testing:agtermTests/ControlServerRemotePageTests`, `RemotePageChannelTests` - must
       pass before task 7
 
 ### Task 7: Origin control actions on a remote page

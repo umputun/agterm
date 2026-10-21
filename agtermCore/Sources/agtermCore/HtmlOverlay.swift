@@ -292,10 +292,14 @@ public enum HtmlNavigationPolicy {
 public final class HtmlOverlayReleases {
     public static let shared = HtmlOverlayReleases()
     public var onRelease: ((UUID) -> Void)?
+    /// onReplicaRelease is told a page shown for another Mac left its slot, with its local and origin ids, so
+    /// that Mac can free the page whatever closed it here.
+    public var onReplicaRelease: ((_ local: UUID, _ origin: UUID) -> Void)?
 
     func release(_ overlay: HtmlOverlay?) {
         guard let overlay else { return }
         HtmlPageOutcomes.shared.dismiss(overlay.id)
         onRelease?(overlay.id)
+        if let origin = overlay.replicaOf { onReplicaRelease?(overlay.id, origin) }
     }
 }

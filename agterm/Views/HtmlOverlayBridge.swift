@@ -111,6 +111,16 @@ enum HtmlOverlayBridge {
               let object = try? JSONSerialization.jsonObject(with: data) else { return ([String: Any](), nil) }
         return (object, nil)
     }
+
+    /// reply shapes a reply the origin sent as JSON text, read untyped so a result field this Mac's build does
+    /// not know still reaches the page.
+    static func reply(raw: String) -> (Any?, String?) {
+        guard let envelope = try? JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any] else {
+            return (nil, "invalid reply")
+        }
+        guard envelope["ok"] as? Bool == true else { return (nil, envelope["error"] as? String ?? "request failed") }
+        return (envelope["result"] ?? [String: Any](), nil)
+    }
 }
 
 /// HtmlOverlayBridgeHandler receives a page's requests. WebKit keeps it strongly for the page's lifetime, so it

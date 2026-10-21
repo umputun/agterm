@@ -43,11 +43,13 @@ final class HtmlOverlayRegistry {
 
     /// page returns the live page for `overlay`, creating and loading its web view on first use.
     /// `backgroundColor` is the overlay's `--background-color`, which replaces the theme background.
-    func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil) -> HtmlOverlayPage {
+    /// `replica` is the way back to the Mac that opened a file page shown here for it.
+    func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil,
+              replica: HtmlReplicaLink? = nil) -> HtmlOverlayPage {
         if let page = pages[overlay.id] { return page }
         let page = HtmlOverlayPage(overlay: overlay, store: store, backgroundColor: backgroundColor,
                                    theme: theme(backgroundColor: backgroundColor), browser: browser, sharing: sharing,
-                                   storage: storage(for: overlay))
+                                   storage: storage(for: overlay), replica: replica)
         page.webView.pageZoom = zoom
         pages[overlay.id] = page
         return page
@@ -172,6 +174,19 @@ final class HtmlOverlayRegistry {
     }
 }
 
+/// HtmlReplicaRevision is the load a replica page shows, read when its file answers arrive.
+@MainActor
+final class HtmlReplicaRevision {
+    var value = 0
+}
+
+/// HtmlReplicaLink is how a file page shown for another Mac reaches that Mac: `fetch` its files, for the load
+/// `HtmlReplicaRevision` names, and `bridge` its requests, answered with the reply JSON text that Mac sent.
+struct HtmlReplicaLink {
+    let fetch: @MainActor @Sendable (_ path: String, _ revision: HtmlReplicaRevision) async throws -> HtmlPageResource
+    let bridge: @MainActor @Sendable (_ request: Data) async throws -> String
+}
+
 /// HtmlOverlayPage is one page's web view and the delegates that keep the model in step with it: load
 /// state, the page and title shown, history, and the navigation policy.
 @MainActor
@@ -211,12 +226,18 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // restored page closes at its next mount
     private var closeRequested = false
     private let storageFailure: String?
+    private let replica: HtmlReplicaLink?
+    private let revision: HtmlReplicaRevision
     /// usesSavedStore is true for a page built on the saved browser store.
     let usesSavedStore: Bool
 
     init(overlay: HtmlOverlay, store: AppStore, backgroundColor: String?, theme: HtmlOverlayTheme,
-         browser: any HtmlBrowser, sharing: any HtmlSharing, storage: Storage) {
+         browser: any HtmlBrowser, sharing: any HtmlSharing, storage: Storage, replica: HtmlReplicaLink? = nil) {
         id = overlay.id
+        self.replica = replica
+        let revision = HtmlReplicaRevision()
+        revision.value = overlay.reloadRevision
+        self.revision = revision
         self.browser = browser
         self.sharing = sharing
         self.overlay = overlay
@@ -237,12 +258,16 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // the page's own scripts only; the theme user script and app evaluation run either way
         configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript
+        if case .replica = overlay.source, let fetch = replica?.fetch {
+            let handler = HtmlPageSchemeHandler(pageID: overlay.id) { path in try await fetch(path, revision) }
+            configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme)
+        }
         webView = HtmlOverlayWebView(frame: .zero, configuration: configuration)
         webView.pageID = overlay.id
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
         // themed panel behind it while authored backgrounds still paint. A URL page keeps the browser's
         // opaque canvas, since a web app styled against it would lose its background here.
-        if case .file = overlay.source { webView.setValue(false, forKey: "drawsBackground") }
+        if Self.themed(overlay.source, linked: replica != nil) { webView.setValue(false, forKey: "drawsBackground") }
         super.init()
         installScripts()
         if themed {
@@ -318,6 +343,18 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard JSONSerialization.isValidJSONObject(body), let data = try? JSONSerialization.data(withJSONObject: body) else {
             return reply(nil, "invalid request")
         }
+        // a page shown for another Mac acts there, so its request goes as sent and that Mac fills the defaults
+        if let bridge = replica?.bridge {
+            Task {
+                do {
+                    let (value, error) = HtmlOverlayBridge.reply(raw: try await bridge(data))
+                    reply(value, error)
+                } catch {
+                    reply(nil, error.localizedDescription)
+                }
+            }
+            return
+        }
         let registry = HtmlOverlayRegistry.shared
         let origin = HtmlBridgePage(window: registry.windowID?(store), session: slot.session.id, pane: slot.pane)
         let request: ControlRequest
@@ -332,9 +369,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
-    private var themed: Bool {
-        if case .file = overlay.source { return true }
-        return false
+    private var themed: Bool { Self.themed(overlay.source, linked: replica != nil) }
+
+    // a file page and a file page shown for another Mac wear the theme and get the bridge; a URL page neither
+    private static func themed(_ source: HtmlSource, linked: Bool) -> Bool {
+        switch source {
+        case .file: return true
+        case .replica: return linked
+        case .url: return false
+        }
     }
 
     /// apply takes the model's latest value and reloads when its revision moved. It also finishes a close
@@ -344,6 +387,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         closeIfRequested()
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
+        revision.value = overlay.reloadRevision
         if overlay.reloadTarget == .current { reloadShown() } else { loadOriginal() }
     }
 
@@ -422,8 +466,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             } catch {
                 fail(error.localizedDescription)
             }
-        case .replica:
-            fail(OverlayHtmlError.remoteFile)
+        case .replica(let path, _):
+            guard replica != nil, let url = HtmlPageSchemeHandler.url(pageID: id, path: path) else {
+                return fail(OverlayHtmlError.remoteFile)
+            }
+            webView.load(URLRequest(url: url))
         }
     }
 
@@ -485,6 +532,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var pageURL: URL {
         if overlay.browse, case .url(let source) = overlay.source { return shownURL ?? source }
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
+        // a replica's scheme address names this Mac's page id; what it shows is that path on the other Mac
+        if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
         case .file(let path, _), .replica(let path, _): return URL(fileURLWithPath: path)

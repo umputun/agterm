@@ -145,6 +145,7 @@ extension AppStore {
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()
         for slot in session.overlayReplicas { closeReplicaOverlay(slot.replica.job, forSession: session.id) }
+        closeReplicaPages(of: session)
     }
 
     /// `remoteOverlays` read-back: one entry per slot a viewer holds.

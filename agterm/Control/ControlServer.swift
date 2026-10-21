@@ -93,6 +93,12 @@ final class ControlServer {
     var remoteClients: [UUID: RemotePresentationClient] = [:]
     var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()
     var remoteTick: Task<Void, Never>?
+    /// replicaPages are the pages this Mac shows for origins, by local page id; `ControlServer+RemotePage` owns them.
+    var replicaPages: [UUID: ReplicaPageRecord] = [:]
+    /// pageLauncher starts a file page's channel helper; injectable so a hosted test needs no ssh.
+    var pageLauncher: RemotePageLauncher = RemotePageProcess()
+    var pendingReplicaStates: Set<UUID> = []
+    var replicaFlushScheduled = false
 
     nonisolated private func cachedWindows() -> [ControlWindowNode] {
         cacheLock.lock(); defer { cacheLock.unlock() }

@@ -60,6 +60,7 @@ extension AppStore {
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
         if session.askReplica { session.releaseAsk() }
         orphanReplicaOverlays(of: session)
+        closeReplicaPages(of: session)
     }
 
     /// Shows an overlay `id`'s origin handed over as a local one running `command`, the job's helper over

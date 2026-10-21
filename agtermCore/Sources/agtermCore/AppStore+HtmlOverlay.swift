@@ -8,6 +8,8 @@ public enum HtmlOverlayOpenFailure: Equatable, Sendable {
 /// HtmlOverlayCommandFailure is why a command addressing a page (`reload`, `navigate`) refused.
 public enum HtmlOverlayCommandFailure: Error, Equatable, Sendable {
     case unknownSession, noOverlay, notHtml
+    /// replica: the page is shown here for another Mac, whose ledger alone takes its answer.
+    case replica
 }
 
 extension HtmlOverlayOpenFailure {
@@ -29,6 +31,7 @@ extension HtmlOverlayCommandFailure {
         case .unknownSession: return "no such session"
         case .noOverlay: return OverlayHtmlError.noOverlay
         case .notHtml: return OverlayHtmlError.notHtml
+        case .replica: return OverlayHtmlError.replicaSubmit
         }
     }
 }
@@ -47,7 +50,7 @@ extension AppStore {
             session.setPaneOverlayExitCode(nil, pane: pane)
             session.remoteOverlays.clearFailure(pane)
             session.setPaneOverlay(PaneOverlay(html: overlay, backgroundColor: backgroundColor), pane: pane)
-            HtmlPageOutcomes.shared.register(overlay.id)
+            if overlay.replicaOf == nil { HtmlPageOutcomes.shared.register(overlay.id) }
             scheduleTreeChanged()
             return nil
         }
@@ -60,7 +63,7 @@ extension AppStore {
         session.overlayBackgroundColor = backgroundColor
         session.htmlOverlay = overlay
         session.overlayActive = true
-        HtmlPageOutcomes.shared.register(overlay.id)
+        if overlay.replicaOf == nil { HtmlPageOutcomes.shared.register(overlay.id) }
         scheduleTreeChanged()
         return nil
     }
@@ -78,6 +81,7 @@ extension AppStore {
         case .success(let found): page = found
         case .failure(let failure): return failure
         }
+        if page.replicaOf != nil { return .replica }
         HtmlPageOutcomes.shared.submit(page.id, value: value)
         if let pane { closePaneOverlay(sessionID, pane: pane) } else { closeOverlay(sessionID) }
         return nil
@@ -182,6 +186,10 @@ extension AppStore {
 
     private func updateHtmlOverlay(_ id: UUID, _ change: (inout HtmlOverlay) -> Void) {
         let sessions = workspaces.flatMap(\.sessions) + pendingCloseMembers().map(\.session)
-        for session in sessions where session.updateHtmlOverlay(id, change) { return }
+        var replica = false
+        for session in sessions where session.updateHtmlOverlay(id, { change(&$0); replica = $0.replicaOf != nil }) {
+            if replica { onReplicaPageChanged?(id) }
+            return
+        }
     }
 }

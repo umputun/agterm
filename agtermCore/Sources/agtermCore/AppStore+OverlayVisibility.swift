@@ -14,6 +14,7 @@ extension AppStore {
         let changing = slots.filter { session.overlayHidden($0) != hidden }
         for slot in changing { session.setOverlayHidden(hidden, slot: slot) }
         if !changing.isEmpty { scheduleTreeChanged() }
+        for page in session.replicaPages where changing.contains(page.pane) { onReplicaPageChanged?(page.page.id) }
         for slot in pages where slot.page?.effectiveHidden != hidden {
             sendRemotePageCommand(sessionID, pane: slot.pane, action: hidden ? .hide : .show)
         }

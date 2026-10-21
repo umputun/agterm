@@ -143,6 +143,8 @@ public final class AppStore {
     @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
     @ObservationIgnored public var onRemoteRowVisibility: ((Session, Bool) -> Void)?
+    /// onReplicaPageChanged is told the local id of a page shown for an origin whose reported state changed.
+    @ObservationIgnored public var onReplicaPageChanged: ((UUID) -> Void)?
     @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
 
     /// Told the pane identities of every session or split leaving the visible model, hard or soft, which
