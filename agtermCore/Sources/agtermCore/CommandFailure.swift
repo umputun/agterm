@@ -48,7 +48,7 @@ public enum CommandFailure {
     private static func strippingEscapes(_ text: String) -> String {
         guard text.unicodeScalars.contains(where: { $0.value == 0x1B }) else { return text }
         var result = String.UnicodeScalarView()
-        var scalars = Array(text.unicodeScalars)
+        let scalars = Array(text.unicodeScalars)
         var index = 0
         while index < scalars.count {
             let scalar = scalars[index]

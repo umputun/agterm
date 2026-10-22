@@ -44,7 +44,7 @@ public final class HtmlPageOutcomes {
     }
 
     func dismiss(_ id: UUID) {
-        finish(id, ControlHtmlPageOutcome(pageID: id.uuidString, outcome: .dismissed))
+        _ = finish(id, ControlHtmlPageOutcome(pageID: id.uuidString, outcome: .dismissed))
     }
 
     public func outcome(for id: UUID) -> ControlHtmlPageOutcome? {

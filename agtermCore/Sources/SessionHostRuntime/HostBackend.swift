@@ -77,7 +77,7 @@ final class NativeHostChild: HostChild {
         defer { closeDescriptors() }
         if try reap() { return }
         if descriptorsOpen && !preparationFailed {
-            try? drainPTY()
+            _ = try? drainPTY()
             servicePendingWrites()
             settleAttributeReplies()
             if hasExited { return }
