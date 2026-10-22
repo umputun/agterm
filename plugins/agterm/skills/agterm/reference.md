@@ -1692,6 +1692,9 @@ a built-in rides an always-on menu key-equivalent, so a bare arrow would swallow
 any modifier makes it bindable. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane focus)
 and cannot be bound. On Apple keyboards, hold Fn/Globe or enable standard function keys in
 System Settings to send F1-F12 instead of media keys.
+Chords are spelled in Latin. A layout that cannot type ASCII (Russian, Greek) matches every chord by
+physical key position; any other layout matches the character it types, and a chord holding `cmd` the
+character it types while Command is held, as the menu does (on Dvorak - QWERTY ⌘, `cmd+d` is the QWERTY D key).
 
 Custom-command tokens (expanded into the `/bin/sh -c` line, raw — prefer the quoted `$AGT_*` env form
 for untrusted content). A remote host can set the session title (OSC) and working directory (OSC 7),

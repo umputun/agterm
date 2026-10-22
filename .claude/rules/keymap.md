@@ -207,7 +207,7 @@ paths:
   chords while an `HtmlOverlayWebView` holds focus: WebKit hands key equivalents to the page first and reports a cancelled
   keydown as handled, so the menu would never see it.
 - Write shifted symbols as `shift+<base>`: `shift+/` for `?`, `shift+=` for `+`, `shift+5` for `%`, and
-  `shift+.` for `>`. `CustomCommandRunner` uses `characters(byApplyingModifiers: [])` to recover that
+  `shift+.` for `>`. `CustomCommandRunner` translates with Shift left out to recover that
   base; keep `KeymapUITests.testCustomCommandShiftedSymbolFires`.
 - Named keys are `left/right/up/down/tab/space/return/delete` and `f1` through `f20`.
   `parseMapLine` rejects modifier-less arrows because an always-on menu equivalent would swallow
@@ -228,6 +228,10 @@ paths:
   `latinKey(forKeyCode:)` position for non-ASCII layouts. Do not use a per-key ASCII fallback: Greek Q
   emits `;`, Hebrew Q emits `/`, and Hebrew can collapse two physical positions to `,`, causing false
   firing plus consumed input.
+  The runner translates with Command applied when it is held (`modifierFlags.intersection(.command)`),
+  because the menu matches through the layout's Command table: Dvorak - QWERTY ⌘ switches to QWERTY there
+  and Lithuanian's number row types digits (discussion 795). Shift, Option and Control stay out: Shift breaks
+  `shift+<base>`, Option types `∂` for D, Control types control characters.
 - Drop ISO section key code 10 on non-ASCII layouts because Ukrainian-PC `\` and Hebrew-PC `;` collide
   with table codes 42/41. Keypad/number-row aliases are deliberate because keypad output is
   layout-independent. Keep `latinKey` disjoint from named-key codes and pin every entry individually;
@@ -235,7 +239,8 @@ paths:
   Latin positions, not their produced Cyrillic glyphs.
 - Do not merge this policy with `InterruptKeystroke`, which classifies one produced letter.
   The live non-Latin monitor branch cannot be unit-tested because tests cannot change the input source.
-  `characters(byApplyingModifiers: [])` re-translates synthesized runner events through the live layout;
+  `characters(byApplyingModifiers:)` re-translates synthesized runner events through the live layout, and
+  U.S.'s Command table equals its plain one, so no hosted test can observe the Command-table branch either;
   `UndoCloseShortcut` uses verbatim `charactersIgnoringModifiers`. Hosted tests pin wiring and named-key
   precedence; host-free tests take `layoutIsASCIICapable`.
 - Do not switch the runner to `charactersIgnoringModifiers`: it breaks shifted-symbol normalization and
@@ -243,8 +248,8 @@ paths:
   punctuation/digits on ASCII layouts (`shift+/` parses `/`, but runtime reports `?`); shifted letters
   work, and non-ASCII physical lookup works. Hosted tests skip when the machine layout is non-ASCII.
   After monitor changes, manually verify a letter, `cmd+r>t`, `ctrl+a>d`, and ⌘Z on isolated
-  Russian-Phonetic and U.S. instances. Russian-Phonetic does not cover Greek/Hebrew punctuation, which
-  host-free measured-data tests cover.
+  Russian-Phonetic and U.S. instances, plus `cmd+d` and `cmd+1` on Dvorak - QWERTY ⌘ and Lithuanian.
+  Russian-Phonetic does not cover Greek/Hebrew punctuation, which host-free measured-data tests cover.
 - `ghostty.conf` has a separate upstream grammar: bare `g` is Unicode and `key_g` physical; Unicode
   triggers cannot fire on non-Latin layouts. agterm matches Ghostty.app and cannot fix this app-side.
   Use `key_`, as `ghostty-defaults.conf` does for `super+key_c/key_v/key_a` (issue #30).

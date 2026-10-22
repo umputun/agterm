@@ -145,8 +145,8 @@ public func keyCode(forChordKey key: String) -> UInt16? {
     return nil
 }
 
-/// The base key for a key press. `produced` is the character the ACTIVE layout puts on that key with no
-/// modifiers applied, `layoutIsASCIICapable` whether that layout can type ASCII at all.
+/// The base key for a key press. `produced` is the character the ACTIVE layout puts on that key under the
+/// modifiers the caller translated with, `layoutIsASCIICapable` whether that layout can type ASCII at all.
 ///
 /// The choice is per LAYOUT, not per key. An ASCII-capable layout (US, Dvorak, Colemak, US-International,
 /// French, German) binds by the character it produces, so a chord follows the letter the user sees on the

@@ -320,11 +320,13 @@ final class CustomCommandRunner {
     }
 
     private func chord(from event: NSEvent) -> Chord? {
-        // `characters(byApplyingModifiers: [])` gives the UNSHIFTED base key (shift+/ → "/"), matching how
-        // the keymap spells `shift+<base>`. `charactersIgnoringModifiers` instead KEEPS shift (shift+/ → "?")
-        // and `.lowercased()` undoes that only for letters, so punctuation would land on the shifted glyph
-        // and never match a `shift+/` binding.
-        event.keymapChord(produced: event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers)
+        // shift stays out so the base key comes back UNSHIFTED (shift+/ → "/"), matching how the keymap spells
+        // `shift+<base>`; `charactersIgnoringModifiers` keeps shift, and `.lowercased()` undoes that only for
+        // letters. Command goes in when held: a layout's Command table can differ from its plain one
+        // (Dvorak - QWERTY ⌘ types QWERTY, Lithuanian digits), and the menu matches through it, so without
+        // it a `cmd+` chord fires on another key than the same chord on a `map` line.
+        event.keymapChord(produced: event.characters(byApplyingModifiers: event.modifierFlags.intersection(.command))
+            ?? event.charactersIgnoringModifiers)
     }
 
     private func startLeaderTimer(_ interval: TimeInterval = CustomCommandRunner.leaderTimeout) {
