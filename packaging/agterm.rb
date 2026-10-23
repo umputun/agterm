@@ -20,17 +20,18 @@ cask "agterm" do
   # "downloaded from the internet" prompt. the app is Developer ID signed, notarized,
   # and stapled, but that only removes the unidentified-developer block and the online
   # check - Gatekeeper still shows the first-launch confirm whenever the quarantine attr
-  # is present, and brew re-stamps it on every fresh bundle. macOS may deny the strip, which
-  # only costs that prompt, so a failure warns instead of failing the install.
-  postflight_steps do
+  # is present, and brew re-stamps it on every fresh bundle. the strip runs on the staged copy
+  # before the move: brew's install-steps worker does not inherit the terminal's TCC grants, and
+  # macOS can refuse it on the bundle in appdir. a failure only costs that prompt, so it warns.
+  preflight_steps do
     run "/bin/sh",
         args: [
           "-c",
           'err=$(/usr/bin/xattr -dr com.apple.quarantine "$1" 2>&1 >/dev/null) || ' \
           'echo "Warning: could not remove quarantine from $1 ($(printf "%s\n" "$err" | head -n 1)); ' \
-          'grant the terminal running brew App Management or Full Disk Access to skip the first-launch prompt" >&2',
+          'macOS may ask to confirm the first launch" >&2',
           "sh",
-          "{{appdir}}/agterm.app",
+          "{{staged_path}}/agterm.app",
         ]
   end
 
