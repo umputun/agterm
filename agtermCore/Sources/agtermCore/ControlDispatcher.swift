@@ -122,6 +122,9 @@ public protocol ControlActions {
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
+    /// resizeSessionOverlay with `points` re-sizes from `sizePercent` with exactly those axes, or alone changes only them.
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
+                              points: OverlayPointSize) -> ControlResponse
     func reloadSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, current: Bool) -> ControlResponse
     func navigateSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                                 navigation: HtmlNavigation) -> ControlResponse

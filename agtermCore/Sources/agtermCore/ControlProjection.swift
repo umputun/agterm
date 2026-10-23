@@ -214,6 +214,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// of the pane (1...100); absent with no overlay AND while a HUD holds the slot, whose size is `hud`'s.
     /// The read side of `session.overlay.resize`.
     public let overlaySizePercent: Int?
+    /// overlayWidth and overlayHeight are a floating program or page's content size in points, after
+    /// `--width`/`--height` and the cap, from the session's last layout; the page strip is not included. Omitted for a full overlay, a HUD, and a
+    /// session not laid out yet. The read side of `session.overlay.open`/`.resize` `--width`/`--height`.
+    public let overlayWidth: Double?
+    public let overlayHeight: Double?
     /// The panes covered by their OWN overlay, ordered left then right (`["left"]`, `["right"]`,
     /// `["left","right"]`); nil/omitted when neither has one. Independent of `overlay`, the session-wide
     /// one — both kinds can be up at once. The read side of `session.overlay.open --pane`; those overlays
@@ -346,7 +351,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 hasSplit: Bool? = nil, backedByZmx: Bool?, splitAxis: String? = nil,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
-                overlay: Bool = false, overlaySizePercent: Int? = nil, paneOverlays: [String]? = nil,
+                overlay: Bool = false, overlaySizePercent: Int? = nil, overlayWidth: Double? = nil,
+                overlayHeight: Double? = nil, paneOverlays: [String]? = nil,
                 hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
@@ -375,6 +381,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFocused = splitFocused
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
+        self.overlayWidth = overlayWidth
+        self.overlayHeight = overlayHeight
         self.paneOverlays = paneOverlays
         self.hud = hud
         self.ask = ask

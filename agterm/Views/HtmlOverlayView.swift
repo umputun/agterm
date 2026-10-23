@@ -73,7 +73,7 @@ struct HtmlOverlayView: View {
         .font(.system(size: 12))
         .foregroundStyle(foreground)
         .padding(.horizontal, 10)
-        .frame(height: 28)
+        .frame(height: HtmlOverlay.stripHeight)
         .background(foreground.opacity(0.06))
         .background(background)
     }

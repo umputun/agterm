@@ -14,6 +14,8 @@ public enum RemotePageOpen: Equatable, Sendable {
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
+    /// pointsUnsupported: the open carries point sizes, which the presenting Mac does not take.
+    case pointsUnsupported
     case opened
 }
 
@@ -58,6 +60,7 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
+        guard options.points.isEmpty else { return .pointsUnsupported }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
         let token = UUID().uuidString

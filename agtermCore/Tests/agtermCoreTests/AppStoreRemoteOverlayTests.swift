@@ -216,6 +216,30 @@ struct AppStoreRemoteOverlayTests {
         #expect(session.remoteOverlays.slots.isEmpty)
     }
 
+    @Test func pointSizesAreRefusedBeforeAnythingIsReserved() throws {
+        let (session, _) = try origin()
+        let sent = presenter.frames.count
+
+        let result = store.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
+            command: "revdiff", cwd: nil, wait: false, sizePercent: 60, backgroundColor: nil,
+            points: OverlayPointSize(height: 240)), context: Self.context)
+
+        #expect(result == .pointsUnsupported)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(presenter.frames.count == sent)
+    }
+
+    @Test func aSlotShownOnThePresenterTakesNoPointSizes() throws {
+        let (session, _) = try origin()
+        _ = try job(of: open(session, size: 60))
+        let sent = presenter.frames.count
+
+        #expect(store.resizeOverlayInPoints(session.id, sizePercent: 40, points: OverlayPointSize(height: 240)) == .remote)
+
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == 60)
+        #expect(presenter.frames.count == sent)
+    }
+
     @Test func aSessionWithoutAPresenterOpensItsOverlayHere() throws {
         let (session, _) = try origin(presented: false)
 

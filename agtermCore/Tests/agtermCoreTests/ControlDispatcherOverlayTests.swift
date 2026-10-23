@@ -224,10 +224,72 @@ struct ControlDispatcherOverlayTests {
         let tooSmall = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 0)))
 
-        #expect(missing == ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent or --full"))
+        #expect(missing == ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent, --width/--height or --full"))
         #expect(both == ControlResponse(ok: false, error: "session.overlay.resize: --full is mutually exclusive with --size-percent"))
         #expect(tooBig == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
         #expect(tooSmall == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionOverlayResizeRoutesPointsWithAndWithoutAPercent() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(height: 240)))
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 60, window: "win", width: 700)))
+
+        #expect(actions.calls == [
+            .overlayPointResize(target: "session", window: nil, sizePercent: nil, points: OverlayPointSize(height: 240)),
+            .overlayPointResize(target: "session", window: "win", sizePercent: 60, points: OverlayPointSize(width: 700)),
+        ])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(full: true, height: 240), OverlayPointError.fullConflict),
+        (ControlArgs(height: 0), OverlayPointError.notPositive),
+        (ControlArgs(sizePercent: 60, width: -5), OverlayPointError.notPositive),
+        (ControlArgs(pane: "right", height: 240), PaneOverlayError.resizeUnsupported),
+    ])
+    func sessionOverlayResizeRefusesBadPoints(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayResize, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionOverlayOpenRoutesPointsBesideThePercent() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session",
+            args: ControlArgs(command: "cat", sizePercent: 60, width: 500, height: 240)))
+
+        guard case .overlayOpen(_, _, let options) = actions.calls.first else {
+            Issue.record("expected an overlay open, got \(actions.calls)")
+            return
+        }
+        #expect(options.sizePercent == 60)
+        #expect(options.points == OverlayPointSize(width: 500, height: 240))
+    }
+
+    @Test(arguments: [
+        (ControlArgs(command: "cat", height: 240), OverlayPointError.needsPercent),
+        (ControlArgs(command: "cat", sizePercent: 60, height: 0), OverlayPointError.notPositive),
+        (ControlArgs(command: "cat", pane: "right", width: 300), PaneOverlayError.pointsConflict),
+    ])
+    func sessionOverlayOpenRefusesBadPoints(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayOpen, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)
     }
 

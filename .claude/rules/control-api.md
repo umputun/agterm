@@ -495,8 +495,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Read/delete during surface teardown before callbacks are cleared. `overlay.result` returns exit code,
   still-running, or no-result. CLI `--block` polls returned session ID, rejects `--wait`, prints no process
   output, and exits with captured status.
-- `overlay.resize` requires an open overlay and exactly one valid percent or `--full`; mutate the same
+- `overlay.resize` requires an open overlay and a valid percent, `--full`, or point sizes; mutate the same
   surface host. Read `overlaySizePercent`, gated by overlay-active because nil means either full or absent.
+- `--width`/`--height` (`Session.overlayPoints`) override the percent per axis for a floating program or page.
+  `OverlayPointSize.panelSize` is the one sizing function: `OverlayPanelStyle` lays out with it and the tree's
+  `overlayWidth`/`overlayHeight` read back through it from `hudPaneFrames.detail`, so the two cannot disagree.
+  Only point axes take the 80% cap, applied after a page's strip is added; a percent axis keeps 1...100.
+  Units are native points on every transport, the page bridge included; a page scales by its own zoom.
+  Refused on a HUD and for a slot shown on, or replicated from, another Mac: the presentation wire carries
+  only a percent, so the refusal comes before a reservation or a send.
 - `overlay.copy`/`overlay.text` read the COVERING surface, which `session.copy`/`session.text` cannot reach
   (#434) — those address the pane the overlay hides, so a selection made in the overlay reads as
   `no selection` and `--pane right` returns the shell underneath. Both take the overlay family's own

@@ -809,6 +809,20 @@ public enum PaneOverlayError {
     public static let invalidPane = "session.overlay: --pane must be left or right"
     public static let sizePercentConflict = "session.overlay.open: --pane is mutually exclusive with --size-percent"
     public static let resizeUnsupported = "session.overlay.resize: --pane is not supported (pane overlays are always full)"
+    public static let pointsConflict = "session.overlay.open: --pane is mutually exclusive with --width/--height"
+}
+
+/// OverlayPointError holds the `--width`/`--height` error strings of `session.overlay.open` and `.resize`,
+/// split across the dispatcher and the store like `PaneOverlayError`.
+public enum OverlayPointError {
+    public static let needsPercent = "session.overlay.open: --width/--height need --size-percent"
+    public static let notPositive = "session.overlay: --width/--height must be positive"
+    public static let fullConflict = "session.overlay.resize: --full is mutually exclusive with --width/--height"
+    /// notFloating: points alone change the axes of a panel that is already floating; a full overlay has no
+    /// percent for the other axis to keep.
+    public static let notFloating = "session.overlay.resize: --width/--height need a floating overlay; pass --size-percent too"
+    public static let hud = "a hud measures its own height: --width/--height do not apply"
+    public static let remote = "--width/--height are not supported for an overlay shown on another Mac"
 }
 
 /// Advisory text `notify` returns in `result.text` when the banner toggle is off. The command still succeeds

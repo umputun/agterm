@@ -114,6 +114,21 @@ final class HudDeckGatesTests: XCTestCase {
         XCTAssertEqual(program.heightFraction, 0.4, accuracy: 0.0001)
     }
 
+    func testPointSizesReplaceOnlyTheirAxisAndAddThePageStrip() {
+        let program = programSession(sizePercent: 60)
+        program.overlayPoints = OverlayPointSize(height: 240)
+        let frame = OverlayPanelStyle.resolve(program).panelFrame(in: CGRect(x: 0, y: 0, width: 1_000, height: 800))
+        XCTAssertEqual(frame.size, CGSize(width: 600, height: 240))
+        XCTAssertEqual(frame.midY, 400, accuracy: 0.001)
+
+        let page = programSession(sizePercent: 60)
+        page.htmlOverlay = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
+        page.overlayPoints = OverlayPointSize(width: 5_000, height: 240)
+        let pageFrame = OverlayPanelStyle.resolve(page).panelFrame(in: CGRect(x: 0, y: 0, width: 1_000, height: 800))
+        XCTAssertEqual(pageFrame.size, CGSize(width: 800, height: 240 + HtmlOverlay.chromeHeight))
+        XCTAssertEqual(pageFrame.midX, 500, accuracy: 0.001)
+    }
+
     // the defect this split fixes: a HUD as tall as it is wide. The height comes from the message alone,
     // so a wide panel around two lines of text stays two lines tall.
     func testHudHeightIsIndependentOfItsWidth() {

@@ -160,6 +160,14 @@ public extension ControlActions {
         ControlResponse(ok: false, error: "sidebar.width is not supported by this control host")
     }
 
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
+                              points: OverlayPointSize) -> ControlResponse {
+        guard points.isEmpty else {
+            return ControlResponse(ok: false, error: "session.overlay.resize: --width/--height are not supported by this control host")
+        }
+        return resizeSessionOverlay(target, window: window, sizePercent: sizePercent)
+    }
+
     func setSessionContext(_: String?, window _: String?, context _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
     }

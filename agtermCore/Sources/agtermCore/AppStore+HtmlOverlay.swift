@@ -41,6 +41,7 @@ extension AppStore {
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
     /// Mac, which `openRemotePage` serves. NOT persisted.
     public func openHtmlOverlay(_ sessionID: UUID, pane: OverlayPane?, overlay: HtmlOverlay, sizePercent: Int?,
+                                points: OverlayPointSize = OverlayPointSize(),
                                 backgroundColor: String? = nil) -> HtmlOverlayOpenFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
         if pageBelongsRemote(session, pane: pane) { return .presenter }
@@ -60,6 +61,7 @@ extension AppStore {
         session.overlayExitCode = nil
         session.remoteOverlays.clearFailure(nil)
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        session.overlayPoints = sizePercent == nil ? OverlayPointSize() : points
         session.overlayBackgroundColor = backgroundColor
         session.htmlOverlay = overlay
         session.overlayActive = true

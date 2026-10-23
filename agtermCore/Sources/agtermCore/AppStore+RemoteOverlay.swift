@@ -10,6 +10,8 @@ public enum RemoteOverlayOpen: Equatable, Sendable {
     case paneMissing
     /// The launch context is larger than the helper reads in one frame.
     case tooLarge
+    /// pointsUnsupported: the open carries point sizes, which the presenting Mac does not take.
+    case pointsUnsupported
     case opened(job: String)
 }
 
@@ -28,6 +30,7 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
+        guard options.points.isEmpty else { return .pointsUnsupported }
         guard let frame = try? OverlayJobFrame.context(context).line(),
               frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one

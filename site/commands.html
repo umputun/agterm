@@ -488,6 +488,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitFocused</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayWidth</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayHeight</span> (a floating overlay's content size in points as laid out),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneOverlays</span> (the panes covered by their own
                 pane-scoped overlay — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left"]</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
@@ -1792,7 +1793,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay open &lt;command&gt; [--cwd DIR] [--wait] [--block] [--size-percent N]
+                agtermctl session overlay open &lt;command&gt; [--cwd DIR] [--wait] [--block] [--size-percent N [--width PT] [--height PT]]
                 [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
@@ -1855,21 +1856,31 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay resize (--size-percent N | --full) [--target T] [--window W]
+                agtermctl session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full) [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.resize</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Resize an already-open overlay in place. Exactly one of
+                Resize an already-open overlay in place:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100, floating) or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span> is required; both, neither, or an
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span>; both, none of the options, or an
                 out-of-range percent errors. The program keeps running across the resize — it is a layout re-flow, never a re-spawn.
                 Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay</span> when none is open,
                 and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">the viewer showing this overlay is gone</span> for an overlay shown on another Mac
                 (<a href="#zmx" style="color: #6d82f3">remote sessions</a>) whose stream has dropped.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--width</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">--height</span> (positive points, also on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open</span> beside <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span>) override the specified content axes of a
+                floating program or page. A non-chromeless HTML page adds its 29pt strip before the point-sized outer axis is capped at 80%
+                of the session. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> the panel re-sizes from that percent with exactly the point axes given; alone they
+                change only their axes of a panel that is already floating; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> alone or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span> drops them. Refused on a HUD, for an overlay shown on another Mac, and for one this Mac shows for another Mac. Read back
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayWidth</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayHeight</span>; a page converts CSS pixels with its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays[].zoom</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Record the node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span> first to
-                restore the exact size after a zoom to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span>.
+                restore the exact size of a percent-only panel after a zoom to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span>.
                 It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>: pane overlays are always
                 full-pane, and passing one errors.
               </p>
@@ -1884,7 +1895,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+                agtermctl session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1902,7 +1913,7 @@
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+                agtermctl session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">

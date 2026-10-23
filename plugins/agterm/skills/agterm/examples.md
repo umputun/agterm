@@ -321,6 +321,8 @@ agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --follow
 # resize the open overlay in place (the program keeps running): shrink to a floating panel, then back to full
 agtermctl session overlay resize --size-percent 60 --target "$AGTERM_SESSION_ID"
+# keep the 60% width but make the panel 240pt tall; read the laid-out size back as overlayWidth/overlayHeight
+agtermctl session overlay resize --height 240 --target "$AGTERM_SESSION_ID"
 agtermctl session overlay resize --full --target "$AGTERM_SESSION_ID"
 # ... later
 agtermctl session overlay close

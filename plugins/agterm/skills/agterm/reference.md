@@ -187,7 +187,10 @@ after exit, the read side of `session new --wait`; each omitted for a plain or n
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
 `overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
-to restore the exact size),
+to restore the exact size of a percent-only panel),
+`overlayWidth`/`overlayHeight` (a floating program or page's content size in points as last laid out,
+after `--width`/`--height` and their cap, a page's strip left out; omitted for a full overlay, a HUD, or a
+session not laid out yet),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
@@ -816,7 +819,7 @@ error keeps those names for compatibility.
   scratch override ends with that scratch terminal. Errors `session has no split pane` / `session has no
   scratch terminal` when the pane does not exist, and `--pane must be left, right, or scratch` on a bad
   name. Read the default from `background` and pane overrides from `paneBackgrounds` in `tree --json`.
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
@@ -853,10 +856,18 @@ error keeps those names for compatibility.
   the scratch terminal both cover a pane overlay, and ⌘W dismisses the FOCUSED pane's overlay before it
   would close the session — an overlay on the other pane is not in front of the user, so ⌘W keeps its
   ordinary meaning there. Read the open panes back from `paneOverlays` in `tree --json`.
-- `session overlay resize (--size-percent N | --full) [--target] [--window W]` — resize an ALREADY-OPEN
-  overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
-  `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
-  or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
+- `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full) [--target] [--window W]`
+  — resize an ALREADY-OPEN overlay in place. `--size-percent N` (1–100) makes it a floating framed panel and
+  `--full` switches it back to the full-pane overlay that hides the session; passing both, or none of the
+  options, or a percent outside 1–100, is an error.
+  `--width`/`--height` (positive points, also on `open` beside `--size-percent`) override the specified
+  content axes of a floating program or page. A non-chromeless HTML page adds its 29pt strip before the
+  point-sized outer axis is capped at 80% of the session; a percent axis keeps 1–100. With `--size-percent` the panel
+  re-sizes from that percent with exactly the point axes given; alone they change only their axes of a
+  panel that is already floating (`... need a floating overlay; pass --size-percent too` on a full one);
+  `--size-percent` alone or `--full` drops them. Refused on a HUD (`a hud measures its own height`), for
+  an overlay shown on another Mac, and for one this Mac shows for another Mac. Read back `overlayWidth`/`overlayHeight`. Units are native points on
+  every transport: a page converts its CSS pixels with its `htmlOverlays[].zoom`. The overlay program keeps running across the
   resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open, and
   `the viewer showing this overlay is gone` for an overlay shown on another Mac whose stream has dropped. Returns the
   session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors. Against a
@@ -865,7 +876,7 @@ error keeps those names for compatibility.
   resizes until the next `session hud` or `session hud update`) but `--full` is refused with `a hud is always floating: pass --size-percent, not --full` — full size
   would cover the session the message is about. The resize rewrites the body header itself, so the panel
   re-centres on its new grid within a tick — no `session hud update` is needed to correct the placement.
-- `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a local HTML file (an artifact you generated: a report, chart or prototype) in the overlay slot
   instead of running a program. Same placement, sizing, `--follow`, ⌘W and `session overlay close` as a
   program overlay; a page stays up until it is closed. The panel carries a strip
@@ -915,7 +926,7 @@ error keeps those names for compatibility.
   `--js` page also gets `agterm.request(cmd, {target, args})`, returning a promise that resolves with the
   result or rejects with the error. What the page leaves out comes from where it sits NOW: a session
   command (the `session.*` names bar `new` and `go`, plus `notify`, `font.*` and a non-gui `ask.open`) gets
-  the page's session, and `session.overlay.close|reload|navigate|submit` its pane too; a `window.*` command
+  the page's session, and `session.overlay.close|reload|resize|navigate|submit` its pane too; a `window.*` command
   that takes a window gets it as target; anything else gets `--window`, except the app-global `hooks.*`,
   `browser.*`, `recent list` and `recent clear`, which get none. An explicit target, `active`, window or
   batch is used as given, and `zmx.attach`, `dashboard` and `recent open` keep their ids and still land in
@@ -923,7 +934,7 @@ error keeps those names for compatibility.
   frontmost window. Refused from a page: `zmx.present`, `zmx.reset`, `session.overlay.job.run`,
   `session.overlay.page.serve`, and any
   request from a frame. Escape outside text you put in a page: it can run commands.
-- `session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a web page by URL in the overlay slot, typically a dev server you are running
   (`http://localhost:5173/`) or a docs page. Everything above for `--html` applies, except that URL must be
   an absolute http or https URL (`--url must be an absolute http or https URL`), `--cwd` and `--block` are
@@ -2249,6 +2260,10 @@ a terminal surface's.
 `hud message too long (max 256 characters)` / `hud detail too long (max 256 characters)` /
 `session.overlay.open: --size-percent must be 1...100` /
 `session.overlay.resize: --size-percent must be 1...100` /
+`session.overlay: --width/--height must be positive` / `session.overlay.open: --width/--height need --size-percent` /
+`session.overlay.resize: --width/--height need a floating overlay; pass --size-percent too` /
+`a hud measures its own height: --width/--height do not apply` /
+`--width/--height are not supported for an overlay shown on another Mac` /
 `session.hud.open: --size-percent must be 1...100` /
 `hud helper is not bundled in this build` / `could not write the hud message` /
 `invalid position: <value> (top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right|top|bottom)`

@@ -365,10 +365,12 @@ extension AppStore {
     /// replacing it. NOT persisted.
     /// - `sizePercent` (clamped to 1...100) requests a *floating* overlay: an opaque framed panel at that
     ///   percent of the pane with the session visible behind it; nil gives the full-pane overlay that hides it.
+    /// - `points` overrides that percent per axis; ignored without one.
     /// - `backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent of the
     ///   session's; nil leaves the default theme background. Read by the overlay factory at creation.
     @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
                                                wait: Bool = false, sizePercent: Int? = nil,
+                                               points: OverlayPointSize = OverlayPointSize(),
                                                backgroundColor: String? = nil) -> Bool {
         guard let session = session(withID: sessionID) else { return false }
         if session.hudActive { closeOverlay(sessionID) }
@@ -380,6 +382,7 @@ extension AppStore {
         session.overlayExitCode = nil
         session.remoteOverlays.clearFailure(nil)
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        session.overlayPoints = sizePercent == nil ? OverlayPointSize() : points
         session.overlayBackgroundColor = backgroundColor
         session.overlayActive = true
         scheduleTreeChanged()
@@ -393,10 +396,14 @@ extension AppStore {
     /// resize path can grow a message until it covers the session it is about, and the percent reaches its
     /// WIDTH alone. That width is recorded as forced, so it holds through later remeasures until the next
     /// open or update; the caller owes the panel a `remeasureHud` for the height the new width needs.
-    @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
+    /// `points` replaces the panel's point overrides whole, so an axis it omits goes back to the percent; a
+    /// full resize clears them. A HUD takes none.
+    @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?,
+                                                 points: OverlayPointSize = OverlayPointSize()) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
         guard let spec = session.hudSpec, session.hudActive else {
             session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+            session.overlayPoints = sizePercent == nil ? OverlayPointSize() : points
             return true
         }
         session.overlaySizePercent = sizePercent.map { HudLayout.clampSizePercent($0, for: spec) }
@@ -451,6 +458,7 @@ extension AppStore {
         session.overlayCwd = nil
         session.overlayWait = false
         session.overlaySizePercent = nil
+        session.overlayPoints = OverlayPointSize()
         session.overlayBackgroundColor = nil
         // every teardown routes through here — explicit close, ⌘W, the program's own exit, a replacement —
         // so discarding the HUD here is what keeps `hudActive` and its body file from outliving the slot they

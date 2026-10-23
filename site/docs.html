@@ -2101,7 +2101,7 @@ agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               What a page leaves out comes from where it sits: a command that addresses a session, left without a target,
               acts on the page's own session, a command that addresses one window acts on the page's window, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.overlay.close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.overlay.close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">resize</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">navigate</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> on the page itself. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hide</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">show</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle</span> act on the page's pane, or on every overlay of its session for a page that covers the whole session. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span> from a page re-reads the shown page. An
               explicit target, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> or window is used as given. Global commands stay global, and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">window.go</span>, like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>, steps from the frontmost window. Without JavaScript the rows above are what the
@@ -2566,7 +2566,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an
               open overlay in place —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> makes it floating,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> switches it back — without
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> switches it back, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--width</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--height</span> set a floating panel's size in points on one axis — without
               restarting the program. A
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session

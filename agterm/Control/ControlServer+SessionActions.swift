@@ -56,7 +56,7 @@ extension ControlServer: ControlActions {
             } else {
                 guard store.openOverlay(id, command: options.command, cwd: options.cwd,
                                         wait: options.wait, sizePercent: options.sizePercent,
-                                        backgroundColor: options.backgroundColor) else {
+                                        points: options.points, backgroundColor: options.backgroundColor) else {
                     return ControlResponse(ok: false, error: "overlay already open")
                 }
             }
@@ -98,6 +98,7 @@ extension ControlServer: ControlActions {
         case .unsupported: return ControlResponse(ok: false, error: OverlayHtmlError.presenter)
         case .loopback: return ControlResponse(ok: false, error: OverlayHtmlError.remoteLoopback)
         case .tooLarge: return ControlResponse(ok: false, error: OverlayHtmlError.remoteTooLarge)
+        case .pointsUnsupported: return ControlResponse(ok: false, error: OverlayPointError.remote)
         case .local: break
         }
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
@@ -106,8 +107,8 @@ extension ControlServer: ControlActions {
         if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
             return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
         }
-        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: overlay,
-                                               sizePercent: options.sizePercent, backgroundColor: options.backgroundColor) {
+        if let failure = store.openHtmlOverlay(id, pane: options.pane, overlay: overlay, sizePercent: options.sizePercent,
+                                               points: options.points, backgroundColor: options.backgroundColor) {
             return ControlResponse(ok: false, error: failure.message(pane: options.pane))
         }
         // a page exists only once a view asks for it; built here, an accepted persistent page already
@@ -219,6 +220,16 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false, error: OverlayHudError.writeFailed)
             }
             if hud { store.publishHudResize(forSession: id, now: self.hudClock()) }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
+                              points: OverlayPointSize) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            if let failure = store.resizeOverlayInPoints(id, sizePercent: sizePercent, points: points) {
+                return ControlResponse(ok: false, error: failure.message)
+            }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

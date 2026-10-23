@@ -91,6 +91,20 @@ struct AppStoreRemotePageTests {
         #expect(open(session, file(), pane: .left) == .opened)
     }
 
+    @Test func pointSizesAreRefusedOnlyWhenThePageWouldGoToThePresenter() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 60,
+                                                       backgroundColor: nil, points: OverlayPointSize(height: 240))
+        let sent = presenter.frames.count
+
+        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .pointsUnsupported)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(presenter.frames.count == sent)
+
+        setLead(.leader, pane: session.paneIdentity)
+        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .local)
+    }
+
     @Test func aLoopbackUrlIsRefusedOnlyWhenThePageWouldGoToThePresenter() throws {
         let (session, _) = try origin()
         #expect(open(session, try url("http://127.0.0.1:8080/")) == .loopback)

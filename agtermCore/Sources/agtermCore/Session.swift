@@ -331,6 +331,10 @@ public final class Session: Identifiable {
     /// sizes its height through `hudHeightPoints`. Cleared on close, never persisted.
     public var overlaySizePercent: Int?
 
+    /// overlayPoints holds a floating program or page's per-axis point overrides of `overlaySizePercent`;
+    /// empty otherwise, a HUD included. Cleared on open and close, never persisted.
+    public var overlayPoints = OverlayPointSize()
+
     /// The percent of the pane's HEIGHT a HUD panel occupies, measured from its message rather than set by
     /// the caller (`HudLayout.heightPercent`); nil for an empty slot and for a program overlay, which takes
     /// `overlaySizePercent` on both axes. A HUD is two or three lines of text, so sharing one percent across

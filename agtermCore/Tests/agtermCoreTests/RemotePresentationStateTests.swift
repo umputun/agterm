@@ -648,6 +648,15 @@ struct RemotePresentationStateTests {
         store.presentReplicaOverlay(overlay, command: Self.runJob, forSession: session.id) { closed.jobs.append($0) }
     }
 
+    @Test func aHandedOverOverlayTakesNoPointSizes() throws {
+        let (store, session) = try attached()
+        #expect(show(overlay(size: 60), in: store, session))
+
+        #expect(store.resizeOverlayInPoints(session.id, sizePercent: nil, points: OverlayPointSize(height: 240)) == .remote)
+
+        #expect(session.overlayPoints.isEmpty)
+    }
+
     @Test func aHandedOverOverlayRunsTheJobsCommandInTheSessionWideSlot() throws {
         let (store, session) = try attached()
 

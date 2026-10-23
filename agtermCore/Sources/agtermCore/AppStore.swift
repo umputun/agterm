@@ -340,6 +340,8 @@ public final class AppStore {
                                           overlay: session.coverOverlayActive,
                                           overlaySizePercent: session.coverOverlayActive
                                               ? session.overlaySizePercent : nil,
+                                          overlayWidth: session.overlayContentSize?.width,
+                                          overlayHeight: session.overlayContentSize?.height,
                                           paneOverlays: paneOverlays(session), hud: hudNode(session),
                                           ask: session.askPending.map {
                                               ControlSessionAsk(id: $0.id, pane: session.askTargetPane?.rawValue,

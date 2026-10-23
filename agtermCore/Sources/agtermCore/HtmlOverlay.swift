@@ -78,6 +78,10 @@ public enum HtmlZoom {
 /// program. `id` travels with the value, so a pane swap or promotion moves the page and the app's web view
 /// follows it; every adapter callback addresses the page by that id.
 public struct HtmlOverlay: Equatable, Sendable {
+    /// stripHeight is the identity strip's height in points; chromeHeight adds the rule under it.
+    public static let stripHeight = 28.0
+    public static let chromeHeight = stripHeight + 1
+
     public let id: UUID
     public let source: HtmlSource
     /// navigation adds history, reload, browser and source-sharing buttons to the identity strip.

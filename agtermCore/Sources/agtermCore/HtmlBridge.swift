@@ -50,7 +50,8 @@ public enum HtmlBridge {
                                                                   .sessionOverlayPageServe]
     // session commands outside the `session.` names; `ask.open` joins them unless it asks in the window's GUI
     private static let sessionTargeted: Set<Command> = [.notify, .fontInc, .fontDec, .fontReset, .keymapRun]
-    private static let ownOverlay: Set<Command> = [.sessionOverlayClose, .sessionOverlayReload,
+    // resize included: a pane page's own request then meets the pane refusal instead of resizing the session's
+    private static let ownOverlay: Set<Command> = [.sessionOverlayClose, .sessionOverlayReload, .sessionOverlayResize,
                                                    .sessionOverlayNavigate, .sessionOverlaySubmit,
                                                    .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle]
     // these take their window as `target`, not as `args.window`

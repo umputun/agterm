@@ -235,7 +235,8 @@ seen`; omitted when zero), `commandWait`/`splitCommandWait` (whether either pane
 created with `--wait` to hold open after exit, the read side of `session new --wait`; each omitted for a
 plain or non-holding pane), `overlaySizePercent` (an open overlay's floating-panel percent 1-100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `session
-overlay resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by their own overlay —
+overlay resize` for a record-then-restore zoom of a percent-only panel), `overlayWidth`/`overlayHeight` (a floating overlay's
+content size in points as laid out, the read side of `--width`/`--height`), `paneOverlays` (the panes covered by their own overlay —
 `["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `session overlay
 open --pane`, independent of the session-wide `overlay` flag),
 `hiddenOverlays` (the hidden slots — `session`, `left`, `right` — omitted when none is hidden; the read
@@ -465,8 +466,8 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js]) [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
-  `session overlay resize (--size-percent N | --full)` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js]) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+  `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay hide|show|toggle [--pane left|right]` ·
   `session overlay reload [--current] [--pane left|right]` ·
@@ -488,6 +489,7 @@ omitted when expanded).
   its own output file.
   `session overlay resize` changes an ALREADY-OPEN overlay: `--size-percent N` (1-100) makes it a floating panel,
   `--full` switches it back to the full-pane overlay; the program keeps running (no re-spawn).
+  `--width`/`--height` size a floating panel in points per axis; reference.md owns the rules.
   `--pane left|right` scopes the overlay to ONE split pane instead of the whole session, leaving the
   sibling pane live and interactive; left and right are independent and may both be open at once. A pane
   overlay is ALWAYS full-pane, so `--pane` cannot combine with `--size-percent` and `session overlay resize`
@@ -882,6 +884,11 @@ A button outside a form needs `type="button"`.
 - Rows written into the file are a snapshot. For a live list open the page with `--js` and call
   `agterm.request(cmd, {target, args})`, which returns a promise with the reply: build rows from
   `agterm.request('tree')` and redraw on a Refresh button.
+- A `--js` page opened with `--size-percent` can fit its panel to its content, keeping the width:
+  `agterm.request('session.overlay.resize', {args: {height: Math.ceil(content.offsetHeight * zoom)}})` after
+  layout and `document.fonts.ready`, with `zoom` from the page's `htmlOverlays` entry in `tree`. Measure a
+  naturally sized content wrapper, never the root element, whose `scrollHeight` is floored at the viewport
+  height in CSS pixels.
 - To get a choice back, open with `--block` and give the page `session.overlay.submit` controls:
 
 ```bash

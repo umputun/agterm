@@ -116,6 +116,8 @@ extension ControlServer {
             return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
         case .tooLarge:
             return ControlResponse(ok: false, error: OverlayResultError.tooLarge)
+        case .pointsUnsupported:
+            return ControlResponse(ok: false, error: OverlayPointError.remote)
         case .opened:
             scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
             return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))

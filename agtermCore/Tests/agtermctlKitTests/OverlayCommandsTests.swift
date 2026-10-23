@@ -36,6 +36,31 @@ struct OverlayCommandsTests {
         #expect(withToolbar.args?.javascript == true)
     }
 
+    @Test func openAndResizeSendPointSizes() throws {
+        let open = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--size-percent", "60",
+                                "--width", "700", "--height", "240"])
+        #expect(open.args?.sizePercent == 60)
+        #expect(open.args?.width == 700)
+        #expect(open.args?.height == 240)
+        let resize = try request(["session", "overlay", "resize", "--height", "300", "--target", "s"])
+        #expect(resize.cmd == .sessionOverlayResize)
+        #expect(resize.target == "s")
+        #expect(resize.args?.height == 300)
+        #expect(resize.args?.width == nil)
+        #expect(resize.args?.sizePercent == nil)
+    }
+
+    @Test(arguments: [
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--height", "240"],
+        ["session", "overlay", "open", "cat", "--size-percent", "60", "--width", "0"],
+        ["session", "overlay", "open", "cat", "--pane", "right", "--height", "240"],
+        ["session", "overlay", "resize", "--full", "--height", "240"],
+        ["session", "overlay", "resize", "--width", "-1"],
+    ])
+    func pointSizesAreRefusedBeforeAnyConnection(argv: [String]) {
+        #expect(rejects(argv))
+    }
+
     @Test func aRelativePageResolvesAgainstTheCallersDirectory() throws {
         let req = try request(["session", "overlay", "open", "--html", "out/r.html", "--cwd", "out"])
         let cwd = FileManager.default.currentDirectoryPath
