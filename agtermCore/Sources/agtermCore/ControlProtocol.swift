@@ -352,9 +352,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
     /// (= frontmost).
     public var window: String?
-    /// width is window.resize width in points, or ask.open width as an integer percent (10...100).
+    /// width is window.resize width in points, ask.open width as an integer percent (10...100), or a floating
+    /// overlay's content width in points for session.overlay.open/resize.
     public var width: Int?
-    /// New window frame height in points for `window.resize`.
+    /// height is window.resize height in points, or a floating overlay's content height in points for
+    /// session.overlay.open/resize.
     public var height: Int?
     /// The sidebar divider position in points for `sidebar.width`, clamped server-side to
     /// `AppStore.sidebarWidthMin...sidebarWidthMax`. `Double`, not `width`'s `Int`: the divider drag writes a
