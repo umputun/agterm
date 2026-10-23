@@ -74,9 +74,9 @@ watch_for_blocker() {
   local token=${1:-} token_file=${2:-}
   [ -n "$token" ] && [ -n "$token_file" ] || return 0
 
-  local max_checks=${AGTERM_CODEX_WATCH_MAX_CHECKS:-21600}
-  local interval=${AGTERM_CODEX_WATCH_INTERVAL:-0.5}
-  case "$max_checks" in ''|*[!0-9]*) max_checks=21600 ;; esac
+  local max_checks=${AGTERM_CODEX_WATCH_MAX_CHECKS:-5400}
+  local interval=${AGTERM_CODEX_WATCH_INTERVAL:-2}
+  case "$max_checks" in ''|*[!0-9]*) max_checks=5400 ;; esac
 
   local checks=0 prompt_was_visible=0 current_token screen footer
   while [ "$checks" -lt "$max_checks" ]; do
