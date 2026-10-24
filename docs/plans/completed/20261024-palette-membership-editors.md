@@ -219,7 +219,7 @@
       keep-in-sync exemption
 - [x] `.claude/rules/sidebar.md`: the empty-state link and the GUI surfaces list
 - ➕ [x] `.claude/rules/keymap.md`: the `BuiltinAction` case count moves to 52
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual checks in an isolated Debug instance (short `/tmp` state dir and socket)*
