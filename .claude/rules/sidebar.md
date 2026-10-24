@@ -89,7 +89,10 @@ paths:
   and every `== .tree` test about workspace rows.
   `tree` renders workspace rows holding only their flagged sessions, omits workspaces with none, and drops the suffix.
   All use base terminal/split icons, status, and badge, ignore workspace focus, disable drag reorder, and show
-  the tinted non-scrolling hint `No flagged sessions. / Right-click a session → Flag.` when empty.
+  the tinted non-scrolling hint `No flagged sessions.` with an `Add Sessions…` link when empty.
+- `SidebarScrollView.layout()` owns placement of the non-scrolling empty-state stack.
+  The link calls `perform(.editFlaggedSessions, in:)`, asking `isEnabled(in:)` at the click, and declines first
+  mouse so a background-window click only activates the window.
 - The layout is orthogonal to `SidebarMode`, never a third case: every `sidebarMode == .flagged` check in
   `agtermCore` means "the flagged set is what is visible", which holds in every layout.
   `AppStore.rendersWorkspaceRows(flaggedLayout:)` is the one predicate for "the outline has workspace rows",
@@ -107,8 +110,8 @@ paths:
 - Workspace rows offer Flag All Sessions / Unflag All Sessions over every session of the workspace, hidden ones
   included, disabled when it has none; `workspace.flag` is the control form.
 - GUI surfaces are `flagged-view-toggle`, row Flag/Unflag, View-menu Show Flagged/Show All, Flag Session,
-  Clear Flagged, palette entries, and keyless built-ins `toggleFlaggedView`/`toggleFlag`. Clear Flagged
-  is not a built-in and confirms unless under XCUITest.
+  Clear Flagged, Edit Flagged Sessions, the empty-state link, palette entries, and keyless built-ins
+  `toggleFlaggedView`/`toggleFlag`. Clear Flagged is not a built-in and confirms unless under XCUITest.
 - In tree mode, flagged rows swap to `terminal.fill` or `rectangle.split.2x1.fill`; flagged mode retains
   unfilled base icons because every row is flagged. This same-size symbol swap avoids layout shift.
   `RowContent.flagged` limits reload to the changed row.

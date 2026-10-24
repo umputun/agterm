@@ -177,6 +177,98 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertEqual(viaPalette.union(paletteLess), Set(BuiltinAction.allCases))
     }
 
+    func testFlaggedEditorListsEverySessionInTreeOrderIncludingFocusHiddenOnes() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.currentWorkspaceID)
+        let seeded = store.workspaces[0].sessions
+        let a = try XCTUnwrap(store.addSession(toWorkspace: first, cwd: NSHomeDirectory()))
+        let other = store.addWorkspace(name: "other")
+        let b = try XCTUnwrap(store.addSession(toWorkspace: other.id, cwd: NSHomeDirectory(), select: false))
+        let c = try XCTUnwrap(store.addSession(toWorkspace: other.id, cwd: NSHomeDirectory(), select: false))
+        store.setFocusMembership(first, member: true)
+        store.setFocusEnabled(true)
+        XCTAssertFalse(store.visibleWorkspaces.contains { $0.id == other.id })
+
+        let rows = actions.paletteFlaggedEditor()
+        XCTAssertEqual(rows.map(\.id), (seeded + [a, b, c]).map(\.id.uuidString))
+        let firstName = store.workspaces[0].name
+        XCTAssertEqual(rows.map(\.subtitle), Array(repeating: firstName, count: seeded.count + 1) + ["other", "other"])
+        XCTAssertTrue(rows.allSatisfy { $0.mark?() == .flag(false) })
+    }
+
+    func testFlaggedEditorRowTogglesTheFlagAndItsMarkFollows() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let row = try XCTUnwrap(actions.paletteFlaggedEditor().first { $0.id == session.id.uuidString })
+
+        XCTAssertTrue(row.runIfEnabled())
+        XCTAssertTrue(session.flagged)
+        XCTAssertEqual(row.mark?(), .flag(true))
+
+        XCTAssertTrue(row.runIfEnabled())
+        XCTAssertFalse(session.flagged)
+        XCTAssertEqual(row.mark?(), .flag(false))
+    }
+
+    func testFlaggedEditorRowGoesInertWhenItsSessionCloses() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let row = try XCTUnwrap(actions.paletteFlaggedEditor().first { $0.id == session.id.uuidString })
+
+        store.closeSession(session.id)
+
+        XCTAssertFalse(row.isEnabled())
+        XCTAssertFalse(row.runIfEnabled())
+    }
+
+    func testFocusEditorTogglesMembershipWithoutEverEnablingTheFilter() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.currentWorkspaceID)
+        let other = store.addWorkspace(name: "other")
+        let rows = actions.paletteFocusEditor()
+        XCTAssertEqual(rows.map(\.id), store.workspaces.map(\.id.uuidString))
+        let firstRow = try XCTUnwrap(rows.first { $0.id == first.uuidString })
+        let otherRow = try XCTUnwrap(rows.first { $0.id == other.id.uuidString })
+
+        XCTAssertTrue(firstRow.runIfEnabled())
+        XCTAssertEqual(store.focusedWorkspaceIDs, [first])
+        XCTAssertEqual(firstRow.mark?(), .focus(true))
+        XCTAssertFalse(store.focusEnabled, "marking never turns the filter on")
+
+        XCTAssertTrue(firstRow.runIfEnabled())
+        XCTAssertTrue(firstRow.runIfEnabled())
+        XCTAssertEqual(store.focusedWorkspaceIDs, [first])
+        XCTAssertFalse(store.focusEnabled, "re-adding the last member leaves it off too")
+
+        store.setFocusEnabled(true)
+        XCTAssertTrue(otherRow.runIfEnabled())
+        XCTAssertTrue(firstRow.runIfEnabled())
+        XCTAssertEqual(store.focusedWorkspaceIDs, [other.id])
+        XCTAssertTrue(store.focusEnabled, "an applied filter stays on while members remain")
+        XCTAssertEqual(firstRow.mark?(), .focus(false))
+    }
+
+    func testEditorBuiltinsOpenTheirModeOnTheNextRunloopTick() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        _ = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), select: false))
+        let palette = PaletteController()
+        actions.palette = palette
+
+        for (action, mode) in [(BuiltinAction.editFlaggedSessions, PaletteMode.flaggedEditor),
+                               (.editFocusedWorkspaces, .focusEditor)] {
+            palette.close()
+            actions.perform(action, in: nil)
+            XCTAssertNil(palette.mode, "\(action.rawValue) defers past the action palette's own close")
+            let opened = expectation(description: action.rawValue)
+            DispatchQueue.main.async { opened.fulfill() }
+            wait(for: [opened], timeout: 1)
+            XCTAssertEqual(palette.mode, mode)
+        }
+    }
+
     func testAttentionRowsNameTheirWindowAndFollowItsCover() throws {
         let front = try XCTUnwrap(library.activeWindowID)
         let back = library.newWindow(name: "back")

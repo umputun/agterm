@@ -35,6 +35,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasRecentClosed: Bool
     /// Whether the frontmost window has an active session at all.
     public let hasActiveSession: Bool
+    /// hasSessions includes sessions created without selecting one.
+    public let hasSessions: Bool
     /// Whether it has a current workspace — nil only with no store, since a window always keeps one.
     public let hasCurrentWorkspace: Bool
     /// hasRemotes is whether `remotes.conf` lists a machine to attach from.
@@ -65,6 +67,7 @@ public struct PaletteContext: Sendable, Equatable {
                 hasPendingClose: Bool = false,
                 hasRecentClosed: Bool = false,
                 hasActiveSession: Bool = false,
+                hasSessions: Bool = false,
                 hasCurrentWorkspace: Bool = false,
                 hasRemotes: Bool = false,
                 terminalZoomActive: Bool = false,
@@ -87,6 +90,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasPendingClose = hasPendingClose
         self.hasRecentClosed = hasRecentClosed
         self.hasActiveSession = hasActiveSession
+        self.hasSessions = hasSessions
         self.hasCurrentWorkspace = hasCurrentWorkspace
         self.hasRemotes = hasRemotes
         self.terminalZoomActive = terminalZoomActive
@@ -110,7 +114,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
     case attachRemote
     case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
-    case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
+    case deleteWorkspace, toggleFlaggedView, clearFlagged, editFlaggedSessions, clearFocus, editFocusedWorkspaces
     case addWorkspaceToFocus, toggleWorkspaceFilter
     case expandWorkspaces, collapseWorkspaces, toggleWorkspaceCollapse, focusLeftPane, focusRightPane
 
@@ -130,8 +134,10 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
             return context.hasActiveSession && context.activeSessionHasOverlay
-        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse:
+        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse, .editFocusedWorkspaces:
             return context.hasCurrentWorkspace
+        case .editFlaggedSessions:
+            return context.hasSessions
         case .previousWorkspace, .nextWorkspace:
             // a step needs somewhere to go, so a lone visible workspace disables rather than no-ops
             return context.hasCurrentWorkspace && context.canStepWorkspaces
@@ -259,7 +265,9 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .deleteWorkspace: return "Delete Workspace"
         case .toggleFlaggedView: return context.sidebarShowsFlaggedOnly ? "Show All Sessions" : "Show Flagged Sessions"
         case .clearFlagged: return "Clear Flagged"
+        case .editFlaggedSessions: return "Edit Flagged Sessions…"
         case .clearFocus: return "Clear Focus"
+        case .editFocusedWorkspaces: return "Edit Focused Workspaces…"
         case .addWorkspaceToFocus: return "Add Workspace to Focus"
         case .toggleWorkspaceFilter: return "Toggle Workspace Filter"
         case .expandWorkspaces: return "Expand Workspaces"
@@ -316,6 +324,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .focusLeftPane: return .focusLeftPane
         case .focusRightPane: return .focusRightPane
         case .attachRemote: return .attachRemote
+        case .editFlaggedSessions: return .editFlaggedSessions
+        case .editFocusedWorkspaces: return .editFocusedWorkspaces
         case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,
              .clearFlagged, .clearFocus, .addWorkspaceToFocus, .expandWorkspaces, .collapseWorkspaces,
              .closeSplit, .swapPanes:

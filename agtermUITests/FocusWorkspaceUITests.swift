@@ -73,6 +73,18 @@ final class FocusWorkspaceUITests: XCTestCase {
                       "Unfocus CLEARS the set (not just the flag), so the toggle goes back to off AND disabled")
     }
 
+    func testViewMenuOpensTheFocusEditor() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        app.menuBars.firstMatch.menuBarItems["View"].click()
+        let item = app.menuItems["Edit Focused Workspaces…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer the focus editor")
+        item.click()
+        let hint = app.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Return toggles")).firstMatch
+        XCTAssertTrue(hint.waitForExistence(timeout: 5), "the menu item should open an editor")
+        XCTAssertTrue((hint.value as? String ?? "").contains("Filter off"), "the focus editor states the filter")
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
     /// The only assertion that would catch "Add to Focus" being wired to the replace-toggle by mistake,
     /// which would leave ONE row visible.
     func testAddToFocusKeepsBothMarkedWorkspacesVisible() throws {
