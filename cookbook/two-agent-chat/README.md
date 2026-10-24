@@ -119,6 +119,8 @@ The recipe deliberately does not start agents. Deciding that a pane is safe to t
 
 **Highly repetitive input can be refused after the opening scrolls away.** A rendered suffix such as a long run of one character can align with both the complete message and one missing part of the current event. The script stops and cleans up when it cannot distinguish those states.
 
+**A message to Claude is capped at about 10,000 characters and cannot end in a backslash.** Past that length Claude Code rewrites the draft into its first and last 500 characters around a `[...Truncated text #1 +0 lines...]` marker, which the read-back cannot check against the source or clean up. A trailing `\` followed by Return becomes a line break instead of a submit. The script refuses both before typing anything and consumes a `--message-file` message that it refuses, so shorten or reword it and send it again.
+
 **Scroll-indicator recognition is limited to Codex's top `↑`.** Other rows and the bottom `↓` are compared literally. Plain screen text cannot distinguish a margin indicator from an identical extra arrow typed at that position; the source comparison constrains recognition but cannot prove which one was drawn.
 
 **Rendered text cannot prove every source character.** Agterm exposes the terminal's plain screen text, which omits an ASCII space consumed at a visual line wrap. A correctly wrapped space and a missing space at that exact boundary therefore look identical to the script. The 197-byte event cap avoids the reproduced oversized-event loss, but the read-back is not a byte-level receipt from the agent's editor.

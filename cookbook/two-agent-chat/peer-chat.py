@@ -34,6 +34,9 @@ RETRY_DELAY = 10.0
 BOX_LINES = 80
 EMPTY_CURSOR_COLUMN = 2
 MAX_MESSAGE_BYTES = 64 * 1024
+# Claude Code rewrites a draft over this many UTF-16 units into its first and last 500
+# characters around a "[...Truncated text...]" marker, which no read-back can verify.
+CLAUDE_DRAFT_LIMIT = 10_000
 # Claude can put a short context label inside the top composer rule, for example `e2e`.
 RULE_RE = re.compile(r"^\s*[─\u2014-]{10,}(?:\s+[^─\u2014-].*?\s+[─\u2014-]+)?\s*$")
 # Codex draws the composer prompt as `›`; with reasoning effort set to ultra it upgrades
@@ -1224,6 +1227,19 @@ def normalize(profile: Profile, message: str) -> str:
         line = line[len(prefix) :].lstrip(": ").strip()
     if not line:
         raise ValueError("chat message is empty")
+    if profile.agent == "claude":
+        if line.endswith("\\"):
+            raise ValueError(
+                "chat message ends with a backslash, which Claude's composer reads "
+                "as a line continuation instead of a submit"
+            )
+        typed = profile.label + line
+        units = len(typed.encode("utf-16-le")) // 2
+        if units + len(composer_probe_marker(typed)) > CLAUDE_DRAFT_LIMIT:
+            raise ValueError(
+                f"chat message is longer than the {CLAUDE_DRAFT_LIMIT:,} characters "
+                "Claude's composer keeps verbatim"
+            )
     return profile.label + line
 
 

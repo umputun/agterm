@@ -18,6 +18,7 @@ from unittest.mock import ANY, Mock, call, patch
 
 SCRIPT = runpy.run_path(Path(__file__).with_name("peer-chat.py"))
 CHUNK_SETTLE_DELAY = SCRIPT["CHUNK_SETTLE_DELAY"]
+CLAUDE_DRAFT_LIMIT = SCRIPT["CLAUDE_DRAFT_LIMIT"]
 CHUNK_VERIFY_OVERLAP = SCRIPT["CHUNK_VERIFY_OVERLAP"]
 CLEAR_COMPOSER = SCRIPT["clear_composer"]
 COMPOSER_DIRTY = SCRIPT["ComposerDirty"]
@@ -806,7 +807,7 @@ class SendPreflightTests(unittest.TestCase):
 
     def test_long_message_then_return_are_separate_writes(self) -> None:
         pane_text = Mock(return_value=f"{RULE}\n❯ \n{RULE}")
-        message = "opening " + "body " * 4_000 + "closing"
+        message = "opening " + "body " * 1_500 + "closing"
         expected = "Chat from Codex: " + " ".join(message.split())
         type_body = Mock(return_value=(expected, 12))
         type_text = Mock()
@@ -3633,6 +3634,49 @@ class ScrollIndicatorTests(unittest.TestCase):
                                    ("Ask Codex to do anything", 2), owned))
         self.assertEqual(editor.body, before)
         self.assertEqual(editor.submitted, [])
+
+
+class ClaudeComposerLimitTests(unittest.TestCase):
+    def test_claude_refuses_a_message_ending_in_a_backslash(self):
+        for message in ("path C:\\dir\\", "ends here \\\n\n"):
+            with self.subTest(message=message), self.assertRaisesRegex(
+                ValueError, "backslash"
+            ):
+                NORMALIZE(CLAUDE_PROFILE, message)
+
+    def test_other_backslashes_and_codex_are_accepted(self):
+        self.assertEqual(NORMALIZE(CLAUDE_PROFILE, "a\\b and c"), "Chat from Codex: a\\b and c")
+        self.assertEqual(NORMALIZE(PROFILES["codex"], "ends here \\"), "Chat from Claude: ends here \\")
+
+    def test_message_at_the_draft_limit_is_accepted_and_one_unit_over_is_refused(self):
+        label = len(NORMALIZE(CLAUDE_PROFILE, "x")) - 1
+        marker = len(COMPOSER_PROBE_MARKER("x"))
+        fits = "x" * (CLAUDE_DRAFT_LIMIT - label - marker)
+        self.assertEqual(len(NORMALIZE(CLAUDE_PROFILE, fits)), label + len(fits))
+        with self.assertRaisesRegex(ValueError, "longer than"):
+            NORMALIZE(CLAUDE_PROFILE, fits + "x")
+
+    def test_draft_limit_counts_utf16_units(self):
+        label = len(NORMALIZE(CLAUDE_PROFILE, "x")) - 1
+        marker = len(COMPOSER_PROBE_MARKER("x"))
+        emoji = (CLAUDE_DRAFT_LIMIT - label - marker) // 2 + 1
+        with self.assertRaisesRegex(ValueError, "longer than"):
+            NORMALIZE(CLAUDE_PROFILE, "😀" * emoji)
+
+    def test_codex_accepts_a_long_message(self):
+        typed = NORMALIZE(PROFILES["codex"], "x" * 20000)
+        self.assertGreater(len(typed), CLAUDE_DRAFT_LIMIT)
+
+    def test_refusals_happen_before_any_pane_write(self):
+        for message, pattern in (("ends here \\", "backslash"),
+                                 ("x" * CLAUDE_DRAFT_LIMIT, "longer than")):
+            type_text = Mock()
+            replacements = {"pane_text": Mock(), "type_text": type_text}
+            with self.subTest(pattern=pattern), patch.dict(
+                SEND.__globals__, replacements
+            ), self.assertRaisesRegex(ValueError, pattern):
+                SEND("session-id", CLAUDE_PROFILE, message)
+            type_text.assert_not_called()
 
 
 if __name__ == "__main__":
