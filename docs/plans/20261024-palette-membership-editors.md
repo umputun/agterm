@@ -202,22 +202,23 @@
 - [x] the new UI methods pass with `-only-testing`
 
 ### Task 3: Verify acceptance criteria
-- [ ] every Overview requirement holds: in-place toggle, stays open, live marks, immediate effect, focus
+- [x] every Overview requirement holds: in-place toggle, stays open, live marks, immediate effect, focus
       filter never enabled, all entry points
-- [ ] `cd agtermCore && swift test`
-- [ ] `make test-app`
-- [ ] `make lint` reports zero findings
-- [ ] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test instance
+- [x] `cd agtermCore && swift test`
+- [x] `make test-app`
+- [x] `make lint` reports zero findings
+- [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test instance
 
 ### Task 4: [Final] Update documentation
-- [ ] `site/docs.html`: both editors in the flagged-view and workspace-focus sections, built-in names in the
+- [x] `site/docs.html`: both editors in the flagged-view and workspace-focus sections, built-in names in the
       keymap action list
-- [ ] `plugins/agterm/skills/agterm/reference.md`: built-in names
-- [ ] `.claude/rules/menu-actions.md`: the "empty query skips ranking in two cases" sentence gains the editor
+- [x] `plugins/agterm/skills/agterm/reference.md`: built-in names
+- [x] `.claude/rules/menu-actions.md`: the "empty query skips ranking in two cases" sentence gains the editor
       modes; the "`runIfEnabled` … only thing that dismisses" sentence gains the stay-open exception; the
       trailing-status-glyph session-list roster gains the session editor; the openers join the palette
       keep-in-sync exemption
-- [ ] `.claude/rules/sidebar.md`: the empty-state link and the GUI surfaces list
+- [x] `.claude/rules/sidebar.md`: the empty-state link and the GUI surfaces list
+- ➕ [x] `.claude/rules/keymap.md`: the `BuiltinAction` case count moves to 52
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
