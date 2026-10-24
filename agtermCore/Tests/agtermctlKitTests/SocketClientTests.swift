@@ -346,6 +346,8 @@ struct SocketClientTests {
             show_attention              ctrl+shift+i
             dashboard                   cmd+shift+g
             attach_remote               cmd+shift+r
+            edit_flagged_sessions       -
+            edit_focused_workspaces     -
 
         commands:
             Deploy  cmd+shift+y

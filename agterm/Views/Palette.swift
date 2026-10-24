@@ -25,11 +25,14 @@ struct PaletteItem: Identifiable {
     /// it renders like a disabled menu item and stays searchable rather than vanishing, since the palette is
     /// where a user looks the action up.
     let isEnabled: () -> Bool
+    /// read live because toggles retain the cached row.
+    let mark: (() -> PaletteMark)?
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
          badge: String? = nil, indicator: @escaping () -> AgentIndicator = { AgentIndicator() },
          isEnabled: @escaping () -> Bool = { true },
+         mark: (() -> PaletteMark)? = nil,
          onSelect: (() -> Void)? = nil,
          run: @escaping () -> Void) {
         self.id = id ?? title
@@ -39,12 +42,12 @@ struct PaletteItem: Identifiable {
         self.badge = badge
         self.indicator = indicator
         self.isEnabled = isEnabled
+        self.mark = mark
         self.onSelect = onSelect
         self.run = run
     }
 
-    /// Run the row if live state still allows it, reporting whether it ran. The palette dismisses on that
-    /// answer alone, so an inert row neither acts nor closes the palette — like clicking a disabled menu item.
+    /// runIfEnabled reports whether live enablement allowed the row to run.
     @discardableResult
     func runIfEnabled() -> Bool {
         guard isEnabled() else { return false }
@@ -53,15 +56,26 @@ struct PaletteItem: Identifiable {
     }
 }
 
+enum PaletteMark: Equatable {
+    case flag(Bool)
+    case focus(Bool)
+}
+
 /// Which palette is open. Each fuzzy-searches its own source: `actions` the app's commands, `sessions` the
 /// open sessions to jump between, `themes` the bundled themes with a live preview on navigation (Enter
 /// commits, Esc reverts), `customCommands` the `custom` subset of `actions` shown without the badge.
+/// `flaggedEditor` and `focusEditor` list every session or workspace of the window and toggle its flag or
+/// focus membership in place.
 enum PaletteMode {
     case actions
     case sessions
     case themes
     case customCommands
     case attention
+    case flaggedEditor
+    case focusEditor
+
+    var keepsOpenOnRun: Bool { self == .flaggedEditor || self == .focusEditor }
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -157,6 +171,8 @@ struct CommandPalette: View {
         case .themes: return actions.paletteThemes()
         case .customCommands: return actions.paletteCustomCommands()
         case .attention: return actions.paletteAttention()
+        case .flaggedEditor: return actions.paletteFlaggedEditor()
+        case .focusEditor: return actions.paletteFocusEditor()
         case .none: return []
         }
     }
@@ -164,14 +180,14 @@ struct CommandPalette: View {
     /// Recomputes `filtered`: items whose search keys match (`paletteSearchKeys` — label only for a
     /// caller-supplied picker, label plus subtitle for a built-in palette), best score first then
     /// alphabetically by title so equal scores are ordered predictably. An empty query lists a built-in
-    /// palette A→Z, but leaves a caller-supplied picker and `.attention` in their source order. The query is
-    /// trimmed of whitespace AND newlines first: `fuzzyScore` splits on both, so a blank query that kept a
-    /// newline would score every row 0 and lose the source order to the tie-break.
+    /// palette A→Z, but leaves a caller-supplied picker, `.attention` and the editors in their source order.
+    /// The query is trimmed of whitespace AND newlines first: `fuzzyScore` splits on both, so a blank query
+    /// that kept a newline would score every row 0 and lose the source order to the tie-break.
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         // skipping the rank is what preserves the source order: every row scores 0 on an empty query and the
         // tie-break below would re-sort A→Z, replacing the intended first row — the one Return runs.
-        if q.isEmpty, explicitItems != nil || controller.mode == .attention {
+        if q.isEmpty, explicitItems != nil || controller.mode == .attention || controller.mode?.keepsOpenOnRun == true {
             filtered = allItems
             selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
             return
@@ -193,8 +209,18 @@ struct CommandPalette: View {
         case .themes: return "Select a theme…"
         case .customCommands: return "Run a custom command…"
         case .attention: return "Go to a session that needs attention…"
+        case .flaggedEditor: return "Flag or unflag sessions…"
+        case .focusEditor: return "Add or remove focused workspaces…"
         default: return "Run an action…"
         }
+    }
+
+    private var editorHint: String? {
+        guard explicitItems == nil, let mode = controller.mode, mode.keepsOpenOnRun else { return nil }
+        let base = "Return toggles · Esc closes · Changes apply immediately"
+        guard mode == .focusEditor, let store = actions.store else { return base }
+        let filter = store.focusEnabled ? "Filter on" : "Filter off"
+        return store.sidebarMode == .flagged ? "\(base)\n\(filter), applies in tree view" : "\(base)\n\(filter)"
     }
 
     /// Enter/leave the live-preview theme session as the palette opens, switches mode, or closes: entering
@@ -267,6 +293,17 @@ struct CommandPalette: View {
             .padding(metrics.scaled(12))
             Divider()
             results
+            if let editorHint {
+                Divider()
+                Text(editorHint)
+                    .font(.system(size: metrics.secondary))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, metrics.scaled(12))
+                    .padding(.vertical, metrics.scaled(6))
+                    .accessibilityIdentifier("palette-editor-hint")
+                    .accessibilityValue(editorHint)
+            }
         }
         .background { PalettePanelBackground() }
         // the rounded background is drawn, not enforced: a selected or hovered bottom row fills its full
@@ -306,7 +343,11 @@ struct CommandPalette: View {
                     ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
                         PaletteRow(item: item, isSelected: index == selection, metrics: metrics)
                             .id(item.id)
-                            .onTapGesture { runItem(item) }
+                            .onTapGesture {
+                                // an editor stays open after the click, so the next return must hit this row.
+                                if controller.mode?.keepsOpenOnRun == true { selection = index }
+                                runItem(item)
+                            }
                     }
                 }
             }
@@ -354,6 +395,7 @@ struct CommandPalette: View {
     /// through on what it looked like when the list was built.
     private func runItem(_ item: PaletteItem) {
         guard item.runIfEnabled() else { return }
+        if explicitItems == nil, controller.mode?.keepsOpenOnRun == true { return }
         dismiss()
     }
 
@@ -404,6 +446,9 @@ private struct PaletteRow: View {
     var body: some View {
         let indicator = item.indicator()
         HStack {
+            if let mark = item.mark?() {
+                markImage(mark)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.system(size: metrics.base))
                     .foregroundStyle(enabled ? Color.primary : Color(nsColor: .disabledControlTextColor))
@@ -441,5 +486,24 @@ private struct PaletteRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .accessibilityIdentifier("palette-item-\(item.id)")
+    }
+
+    // fill marks a flag and weight marks focus membership, as in the sidebar, so the two never read alike.
+    private func markImage(_ mark: PaletteMark) -> some View {
+        let isOn: Bool, symbol: String, weight: Font.Weight, value: String
+        switch mark {
+        case .flag(let on):
+            (isOn, symbol, weight) = (on, on ? "flag.fill" : "flag", .regular)
+            value = on ? "flagged" : "unflagged"
+        case .focus(let on):
+            (isOn, symbol, weight) = (on, "square.grid.2x2", on ? .black : .regular)
+            value = on ? "focused" : "unfocused"
+        }
+        return Image(systemName: symbol)
+            .font(.system(size: metrics.base, weight: weight))
+            .foregroundStyle(isOn ? Color.primary : Color.secondary)
+            .frame(width: metrics.scaled(18))
+            .accessibilityIdentifier("palette-mark")
+            .accessibilityValue(value)
     }
 }

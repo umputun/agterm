@@ -208,7 +208,114 @@ final class PaletteUITests: XCTestCase {
                        "Collapse Workspaces should be omitted in the flat flagged view")
     }
 
+    func testFlaggedEditorTogglesInPlaceAndStaysOpen() throws {
+        addSession(named: "mike")
+        let mike = try XCTUnwrap(sessionIDs().last)
+
+        openEditor("Edit Flagged Sessions")
+        XCTAssertTrue(app.paletteRow(mike).waitForExistence(timeout: 5), "the editor should list every session")
+        typeIntoPalette("mike")
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(poll { self.flaggedIDs() == [mike] }, "Return should flag the highlighted row")
+        XCTAssertEqual(markValue(mike), "flagged")
+        XCTAssertEqual(app.textFields.firstMatch.value as? String, "mike", "the editor stays open on the same query")
+
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(poll { !self.app.paletteRow(mike).exists }, "Esc should close the editor")
+        invokeViewMenuItem("Show Flagged Sessions")
+        XCTAssertTrue(poll { self.app.staticTexts.matching(identifier: "session-row").count == 1 },
+                      "the flagged view should show the one flagged session")
+    }
+
+    func testFocusEditorTogglesMembershipInPlace() throws {
+        let workspace = try XCTUnwrap(workspaces().first?["id"] as? String)
+
+        openEditor("Edit Focused Workspaces")
+        XCTAssertTrue(app.paletteRow(workspace).waitForExistence(timeout: 5), "the editor should list the workspace")
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(poll { self.focusedIDs() == [workspace] }, "Return should mark the highlighted workspace")
+        XCTAssertEqual(markValue(workspace), "focused")
+        XCTAssertNil(snapshot()?["focusEnabled"], "marking never turns the filter on")
+        XCTAssertTrue(app.paletteRow(workspace).exists, "the editor stays open")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.focusedIDs().isEmpty }, "a second Return should unmark it")
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(poll { !self.app.paletteRow(workspace).exists }, "Esc should close the editor")
+    }
+
+    // regression: a click ran a row without moving the highlight, so the next return toggled another row.
+    func testEditorClickThenReturnBothHitTheClickedRow() throws {
+        addSession(named: "mike")
+        addSession(named: "yankee")
+        let ids = sessionIDs()
+        XCTAssertEqual(ids.count, 3)
+
+        openEditor("Edit Flagged Sessions")
+        XCTAssertTrue(app.paletteRow(ids[2]).waitForExistence(timeout: 5))
+        clickPaletteRow(ids[2])
+        XCTAssertTrue(poll { self.flaggedIDs() == [ids[2]] }, "the click should flag the clicked row")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.flaggedIDs().isEmpty }, "Return should unflag that same row, not the first one")
+        XCTAssertEqual(markValue(ids[2]), "unflagged")
+    }
+
+    func testUnflaggingTheActiveSessionKeepsTheEditorWorking() throws {
+        invokeViewMenuItem("Flag Session")
+        addSession(named: "mike")
+        invokeViewMenuItem("Flag Session")
+        let ids = sessionIDs()
+        XCTAssertTrue(poll { self.flaggedIDs() == ids }, "both sessions start flagged")
+        let mike = ids[1]
+        XCTAssertEqual(selectedID(), mike)
+        invokeViewMenuItem("Show Flagged Sessions")
+
+        openEditor("Edit Flagged Sessions")
+        XCTAssertTrue(app.paletteRow(mike).waitForExistence(timeout: 5))
+        typeIntoPalette("mike")
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(poll { self.flaggedIDs() == [ids[0]] }, "Return should unflag the active session")
+        XCTAssertTrue(poll { self.selectedID() == ids[0] }, "the selection moves to the flagged survivor")
+        XCTAssertTrue(app.paletteRow(mike).exists, "the editor stays open behind the reselection")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.flaggedIDs() == ids }, "the next Return acts on the highlighted row again")
+        app.typeKey("x", modifierFlags: [])
+        XCTAssertEqual(app.textFields.firstMatch.value as? String, "x",
+                       "typing still reaches the search field, replacing the query Return leaves selected")
+    }
+
     // MARK: - Helpers
+
+    private func openEditor(_ title: String) {
+        openPalette("Command Palette")
+        typeIntoPalette(title)
+        app.typeKey(.return, modifierFlags: [])
+    }
+
+    private func markValue(_ id: String) -> String? {
+        let states: Set<String> = ["flagged", "unflagged", "focused", "unfocused"]
+        let tagged = app.descendants(matching: .any).matching(identifier: "palette-item-\(id)")
+        let inside = app.paletteRow(id).descendants(matching: .any)
+        return (tagged.allElementsBoundByIndex + inside.allElementsBoundByIndex)
+            .compactMap { $0.value as? String }
+            .first { states.contains($0) }
+    }
+
+    private func clickPaletteRow(_ id: String) {
+        let matches = app.descendants(matching: .any).matching(identifier: "palette-item-\(id)")
+        (matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch).click()
+    }
+
+    private func flaggedIDs() -> [String] {
+        sessions().filter { $0["flagged"] as? Bool == true }.compactMap { $0["id"] as? String }
+    }
+
+    private func focusedIDs() -> [String] { snapshot()?["focusedWorkspaceIDs"] as? [String] ?? [] }
 
     /// The theme line the live config currently applies, read from <stateDir>/ghostty-settings.conf
     /// (the file the preview rewrites on every apply). nil when no theme line is present.
