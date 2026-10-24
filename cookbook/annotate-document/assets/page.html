@@ -1,0 +1,838 @@
+<!doctype html>
+<html data-style="__WEBREV_STYLE__">
+<head>
+<meta charset="utf-8">
+<title>__WEBREV_TITLE__</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: var(--agterm-background, Canvas);
+  --fg: var(--agterm-foreground, CanvasText);
+  --accent: var(--agterm-color-4, #3d7fd9);
+  --warn: var(--agterm-color-3, #c99a1e);
+  --bad: var(--agterm-color-1, #c8463c);
+  --muted: color-mix(in srgb, var(--fg) 55%, transparent);
+  --faint: color-mix(in srgb, var(--fg) 32%, transparent);
+  --rule: color-mix(in srgb, var(--fg) 13%, transparent);
+  --page: var(--bg);
+  --hairline: var(--rule);
+  --bar: var(--surface);
+  --surface: color-mix(in srgb, var(--fg) 5%, var(--page));
+  --tint: color-mix(in srgb, var(--fg) 4%, transparent);
+  --hover: color-mix(in srgb, var(--fg) 4%, transparent);
+  --current: color-mix(in srgb, var(--accent) 10%, transparent);
+  --h1: var(--agterm-color-12, #6aa4f0);
+  --code: color-mix(in srgb, var(--agterm-color-9, #e07a6e) 75%, var(--fg));
+  --link: var(--agterm-color-6, #3fb5c0);
+  --done: var(--agterm-color-2, #5fb36a);
+  --mono: "JetBrainsMono Nerd Font Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --rail: 64px;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 44px; scroll-padding-bottom: 24px; }
+html, body { margin: 0; background: var(--page); color: var(--fg); }
+body, textarea { font: 15px/1.6 var(--mono); }
+button { font: 14px/1.6 var(--mono); }
+pre, code, kbd, samp { font-family: var(--mono); }
+
+header {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 8px 0 14px; font-size: 13px; background: var(--bar); border-bottom: 1px solid var(--hairline);
+}
+header .path { font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+header .path .dir { color: var(--muted); }
+header .spacer { flex: 1; }
+#error { color: var(--bad); }
+button {
+  height: 26px; padding: 0 10px; border-radius: 4px; cursor: pointer; white-space: nowrap;
+  color: var(--fg); background: transparent; border: 1px solid var(--rule); line-height: 24px;
+}
+header button {
+  height: 22px; padding: 0 9px; font-size: 12px; font-weight: 400; line-height: 22px; border: 0; border-radius: 5px;
+  background: color-mix(in srgb, var(--fg) 9%, var(--bar));
+}
+button:hover { background: var(--hover); }
+header button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bar)); }
+header button:disabled { color: var(--muted); cursor: default; background: color-mix(in srgb, var(--fg) 5%, var(--bar)); }
+header button:disabled .key { visibility: hidden; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button .key { color: var(--muted); margin-left: 6px; font-family: var(--mono); }
+button.primary { background: var(--accent); border-color: var(--accent); color: contrast-color(var(--accent)); }
+button.primary .key { color: color-mix(in srgb, contrast-color(var(--accent)) 70%, transparent); }
+button.primary:hover, header button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+header button.primary { background: var(--accent); }
+button.danger { color: var(--bad); }
+
+#sheet { position: relative; }
+#sheet::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: var(--rail);
+  border-right: 1px solid var(--hairline);
+}
+#bands, #gutter { position: absolute; inset: 0; pointer-events: none; }
+#bands { z-index: 0; }
+#gutter { z-index: 2; right: auto; width: var(--rail); }
+.band { position: absolute; left: 0; right: 0; }
+.band.cur { background: var(--current); }
+.g { position: absolute; left: 0; width: var(--rail); }
+.g .num {
+  position: absolute; right: 26px; top: var(--off, 0); height: 16px;
+  font: 12px/16px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums;
+}
+.g.cur .num { color: var(--muted); }
+.add {
+  pointer-events: auto; position: absolute; right: 5px; top: var(--off, 0); width: 16px; height: 16px;
+  padding: 0; border: 0; border-radius: 3px; background: transparent; color: transparent;
+  font: 14px/16px var(--mono); text-align: center;
+}
+.add::before { content: "+"; }
+.g.cur .add { background: var(--accent); color: var(--bg); }
+.g.noted .add { background: var(--warn); color: var(--bg); }
+.g.noted .add::before { content: "\270E"; }
+
+#doc { position: relative; z-index: 1; padding: 16px 32px 24px calc(var(--rail) + 16px); line-height: 1.3; }
+#doc [data-ls] { cursor: text; }
+#file-slot:empty { display: none; }
+#file-slot { margin-bottom: 12px; }
+
+#doc h1, #doc h2, #doc h3, #doc h4, #doc h5, #doc h6 { line-height: 1.35; margin: 1.6em 0 0.6em; font-weight: 700; }
+#doc h1 { font-size: 1.4em; margin-top: 0.3em; color: var(--h1); }
+#doc h2 { font-size: 1.2em; color: var(--h1); }
+#doc h3 { font-size: 1.08em; color: var(--h1); }
+#doc h4, #doc h5, #doc h6 { font-size: 1em; color: var(--h1); }
+#doc p, #doc ul, #doc ol, #doc blockquote, #doc table, #doc pre { margin: 1em 0; }
+#doc ul, #doc ol { padding-left: 2.2em; }
+#doc p:has(+ ul, + ol) { margin-bottom: 0.3em; }
+#doc p + ul, #doc p + ol { margin-top: 0.3em; }
+#doc li::marker { color: var(--muted); }
+#doc li + li { margin-top: 0.5em; }
+#doc li > ul, #doc li > ol { margin: 0; }
+#doc li:has(> .tp > .task:first-child), #doc li:has(> p > .task:first-child) { list-style: none; }
+#doc a { color: var(--link); text-decoration: none; }
+#doc a:hover { text-decoration: underline; }
+#doc code { font-size: 0.87em; color: var(--code); background: var(--tint); padding: 0.1em 0.3em; border-radius: 3px; }
+#doc pre code, #doc pre { color: var(--fg); }
+#doc strong { font-weight: 700; }
+#doc blockquote { margin-left: 0; padding-left: 1em; border-left: 3px solid var(--accent); color: var(--muted); }
+#doc table { border-collapse: collapse; }
+#doc th, #doc td { border: 1px solid var(--rule); padding: 4px 2ch; }
+#doc th { font-weight: 600; text-align: left; background: var(--tint); }
+#doc hr { border: 0; border-top: 1px solid var(--rule); margin: 1.2em 0; height: 0; }
+#doc img { max-width: 100%; }
+#doc .task { display: inline-block; width: 0.9em; height: 0.9em; margin-right: 0.5em; vertical-align: -0.1em;
+  border: 1px solid var(--muted); border-radius: 2px; }
+#doc .task.done { background: var(--done); border-color: var(--done); position: relative; }
+#doc .task.done::after { content: ""; position: absolute; left: 0.27em; top: 0.08em; width: 0.22em; height: 0.45em;
+  border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+span.tp { display: block; }
+
+#doc pre.code { font-size: 14px; line-height: 1.35; background: var(--tint); border-radius: 4px; padding: 6px 0; overflow-x: auto; }
+pre.code .cl { padding: 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.35em; }
+pre.code .note, pre.code .editor { margin: 4px 12px; white-space: normal; }
+pre.code .note .text { white-space: pre-wrap; }
+pre.code .hljs-keyword, pre.code .hljs-selector-tag, pre.code .hljs-doctag { color: var(--agterm-color-5, #b67ad8); }
+pre.code .hljs-string, pre.code .hljs-regexp, pre.code .hljs-addition, pre.code .hljs-symbol { color: var(--agterm-color-2, #5fb36a); }
+pre.code .hljs-number, pre.code .hljs-literal, pre.code .hljs-attr, pre.code .hljs-attribute, pre.code .hljs-property, pre.code .hljs-variable, pre.code .hljs-template-variable { color: var(--agterm-color-6, #3fb5c0); }
+pre.code .hljs-title, pre.code .hljs-section, pre.code .hljs-built_in { color: var(--agterm-color-4, #3d7fd9); }
+pre.code .hljs-type, pre.code .hljs-title.class_ { color: var(--agterm-color-11, #d9b45a); }
+pre.code .hljs-comment, pre.code .hljs-quote, pre.code .hljs-meta { color: var(--muted); font-style: italic; }
+pre.code .hljs-deletion { color: var(--bad); }
+pre.code .hljs-emphasis { font-style: italic; }
+pre.code .hljs-strong { font-weight: 700; }
+
+.note { margin: 4px 0 12px; padding: 6px 12px 8px; border-radius: 4px; background: color-mix(in srgb, var(--warn) 11%, var(--page)); cursor: pointer; }
+.note:hover { background: color-mix(in srgb, var(--warn) 16%, var(--page)); }
+.note .text { white-space: pre-wrap; }
+.editor { margin: 4px 0 12px; padding: 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--accent); cursor: auto; }
+.editor textarea {
+  display: block; width: 100%; min-height: 5.6em; max-height: 50vh; resize: none; padding: 8px 10px; outline: none;
+  color: var(--fg); background: var(--page); border: 1px solid var(--rule); border-radius: 3px;
+}
+.editor .row { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.editor .row .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+tr.slot > td { border: 0 !important; padding: 0 !important; }
+#toc { position: fixed; inset: 0; z-index: 20; }
+#toc[hidden] { display: none; }
+.toc-panel {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); width: min(520px, 90vw); max-height: 70vh;
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 6px; background: var(--surface);
+  border: 1px solid var(--accent);
+}
+.toc-q {
+  margin: 8px; padding: 5px 8px; font: 13px var(--mono); color: var(--fg); background: var(--page);
+  border: 1px solid var(--rule); border-radius: 4px; outline: none;
+}
+.toc-q:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.toc-list { overflow-y: auto; padding: 0 0 6px; }
+.toc-item .hit { color: var(--accent); font-weight: 700; }
+.toc-empty { padding: 6px 14px; color: var(--muted); }
+.toc-item { display: flex; align-items: baseline; gap: 10px; padding: 3px 14px; cursor: pointer; white-space: nowrap; }
+.toc-item:hover { background: var(--hover); }
+.toc-item.sel { background: var(--current); }
+.toc-item .ln { flex: none; width: 3em; text-align: right; font: 12px var(--mono); color: var(--faint); }
+.toc-item .t { overflow: hidden; text-overflow: ellipsis; }
+.toc-item.l1 .t, .toc-item.l2 .t { font-weight: 600; }
+
+/* WEBREV_STYLE=terminal: one cell size and flat chrome, laid out after revdiff */
+[data-style="terminal"] { scroll-padding: 8px 0 30px; --bar-fg: color-mix(in srgb, var(--fg) 75%, var(--accent)); }
+[data-style="terminal"] * { border-radius: 0 !important; }
+[data-style="terminal"] :is(body, button, textarea, input) { font: 14px/1.32 var(--mono); }
+[data-style="terminal"] body { padding-bottom: 22px; }
+[data-style="terminal"] header {
+  position: fixed; top: auto; bottom: 0; left: 0; right: 0;
+  height: 22px; gap: 0; padding: 0 0 0 1ch; color: var(--bar-fg); background: var(--accent); border: 0;
+}
+[data-style="terminal"] header .path { font: inherit; }
+[data-style="terminal"] header .path .dir,
+[data-style="terminal"] button .key,
+[data-style="terminal"] header button:disabled { color: color-mix(in srgb, var(--fg) 45%, var(--accent)); }
+[data-style="terminal"] #error { color: var(--bar-fg); font-weight: 700; }
+[data-style="terminal"] header button { height: 22px; padding: 0 1ch; font-size: 14px; line-height: 22px; color: var(--bar-fg); background: transparent; }
+[data-style="terminal"] header button:hover { background: color-mix(in srgb, var(--bg) 18%, var(--accent)); }
+[data-style="terminal"] header button:disabled { background: transparent; }
+[data-style="terminal"] header button.primary { font-weight: 700; background: transparent; }
+[data-style="terminal"] button .key { margin-left: 1ch; }
+[data-style="terminal"] { --rail: calc(var(--digits, 3) * 7.2px + 28px); }
+[data-style="terminal"] #sheet { min-height: calc(100vh - 22px); }
+[data-style="terminal"] .toc-panel { top: 15vh; }
+[data-style="terminal"] .g .num { right: 5px; font: 12px/16px var(--mono); }
+[data-style="terminal"] .add { right: auto; left: 5px; width: 14px; font: 12px/16px var(--mono); }
+
+[data-style="terminal"] #doc { padding: 1.32em 2ch 1.32em calc(var(--rail) + 1ch); line-height: 1.32; }
+[data-style="terminal"] #content > :first-child { margin-top: 0; }
+[data-style="terminal"] #doc :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; line-height: 1.32; margin: 1.32em 0 0; }
+[data-style="terminal"] #doc h1 { font-size: 1.3em; }
+[data-style="terminal"] #doc h2 { font-size: 1.15em; }
+[data-style="terminal"] #doc h3 { font-size: 1.05em; }
+[data-style="terminal"] #doc :is(h3, h4, h5, h6) { color: var(--fg); }
+[data-style="terminal"] #doc :is(p, ul, ol, blockquote, table, pre, hr) { margin: 1.32em 0; }
+[data-style="terminal"] #doc :is(li + li, p + ul, p + ol) { margin-top: 0; }
+[data-style="terminal"] #doc :is(li > ul, li > ol) { margin: 0; }
+[data-style="terminal"] #doc p:has(+ ul, + ol) { margin-bottom: 0; }
+[data-style="terminal"] #doc ul { padding-left: 2ch; list-style-type: "- "; }
+[data-style="terminal"] #doc ul > li:is(:has(> .tp > .task:first-child), :has(> p > .task:first-child)) { list-style-type: "- "; }
+[data-style="terminal"] #doc ol { padding-left: 3ch; }
+[data-style="terminal"] #doc code { font-size: 1em; padding: 0; background: none; }
+[data-style="terminal"] #doc pre.code { font-size: 14px; line-height: 1.32; padding: 0; }
+[data-style="terminal"] pre.code .cl { padding: 0 1ch; min-height: 1.32em; }
+[data-style="terminal"] #doc blockquote { border-left-width: 2px; }
+[data-style="terminal"] #doc .task { width: auto; height: auto; margin-right: 1ch; vertical-align: baseline; border: 0; background: none; }
+[data-style="terminal"] #doc .task::before { content: "[ ]"; color: var(--muted); }
+[data-style="terminal"] #doc .task.done::before { content: "[x]"; color: var(--done); }
+[data-style="terminal"] #doc .task.done::after { content: none; }
+
+[data-style="terminal"] .note { margin: 0 0 1.32em; padding: 0 1ch; color: var(--warn); background: none; border-left: 2px solid var(--warn); }
+[data-style="terminal"] .note:hover { background: color-mix(in srgb, var(--warn) 8%, transparent); }
+[data-style="terminal"] .editor { padding: 0; overflow: hidden; background: var(--page); border-radius: 10px !important; }
+[data-style="terminal"] .editor textarea { min-height: 5.28em; padding: 0.66em 1ch; background: transparent; border: 0; }
+[data-style="terminal"] .editor .row { margin: 0; gap: 1ch; padding: 0; background: color-mix(in srgb, var(--fg) 7%, var(--page)); }
+[data-style="terminal"] .editor .row button { height: 26px; padding: 0 1ch; line-height: 26px; border: 0; color: var(--muted); background: none; }
+[data-style="terminal"] .editor .row button:hover { color: var(--fg); background: var(--hover); }
+[data-style="terminal"] .editor .row button.primary { color: var(--accent); font-weight: 700; }
+[data-style="terminal"] .editor .row button.danger { color: var(--bad); }
+[data-style="terminal"] .editor [data-act="save"]::after { content: " ⌘↵"; color: var(--faint); font-weight: 400; }
+[data-style="terminal"] .editor [data-act="cancel"]::after { content: " esc"; color: var(--faint); }
+[data-style="terminal"] .editor .row .hint { display: none; }
+[data-style="terminal"] .toc-panel { padding: 0.66em 1ch; background: var(--page); border-color: var(--faint); }
+[data-style="terminal"] .toc-q { margin: 0 0 0.66em; padding: 0.33em 1ch; border: 0; border-bottom: 1px solid var(--rule); }
+[data-style="terminal"] .toc-list { padding: 0; }
+[data-style="terminal"] .toc-item { padding: 2px 1ch; }
+[data-style="terminal"] .toc-item .ln { font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <span class="path" id="path"></span>
+  <span id="error"></span>
+  <span class="spacer"></span>
+  <button type="button" id="count">Notes <span class="n">0</span><span class="key">m</span></button>
+  <button type="button" id="toc-btn">Contents<span class="key">t</span></button>
+  <button type="button" id="file-btn">File note<span class="key">f</span></button>
+  <button type="button" id="cancel-btn">Cancel<span class="key">esc</span></button>
+  <button type="button" id="submit-btn" class="primary">Submit<span class="key">⌘↵</span></button>
+</header>
+<div id="toc" hidden><div class="toc-panel"><input class="toc-q" type="text" placeholder="search headings" autocomplete="off" spellcheck="false"><div class="toc-list"></div></div></div>
+<div id="sheet">
+  <div id="bands"></div>
+  <div id="doc">
+    <div id="file-slot"></div>
+    <div id="content"></div>
+  </div>
+  <div id="gutter"></div>
+</div>
+<script type="application/json" id="doc-data">__WEBREV_DATA__</script>
+<script>/*__WEBREV_MARKDOWN_IT__*/</script>
+<script>/*__WEBREV_HIGHLIGHT__*/</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById('doc-data').textContent);
+  // match agterm's sidebar with an opaque page surface; the terminal look keeps the terminal's own background
+  (() => {
+    if (data.style === 'terminal') return;
+    const cs = getComputedStyle(document.documentElement);
+    const rgb = (name) => {
+      const m = /^#([0-9a-f]{6})$/i.exec(cs.getPropertyValue(name).trim());
+      return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null;
+    };
+    const mix = (a, b, t) => a.map((c, i) => Math.round(c * (1 - t) + b[i] * t));
+    const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+    const bg = rgb('--agterm-background');
+    const fg = rgb('--agterm-foreground');
+    if (!bg) return;
+    const shift = Number(data.sidebar_shift) || 0;
+    const page = mix(bg, shift >= 0 ? [0, 0, 0] : [255, 255, 255], Math.abs(shift));
+    document.documentElement.style.setProperty('--page', hex(page));
+    if (!fg) return;
+    document.documentElement.style.setProperty('--hairline', hex(mix(page, fg, 0.1)));
+    document.documentElement.style.setProperty('--bar', hex(mix(page, fg, 0.06)));
+  })();
+  const srcLines = data.source.split('\n');
+  document.documentElement.style.setProperty('--digits', String(srcLines.length).length);
+  const sheet = document.getElementById('sheet');
+  const docEl = document.getElementById('doc');
+  const contentEl = document.getElementById('content');
+  const bandsEl = document.getElementById('bands');
+  const gutterEl = document.getElementById('gutter');
+  const notes = new Map();
+  const storeKey = 'webrev:' + data.nonce;
+  let editing = null;
+  let cur = null;
+
+  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const label = (ls, le) => (ls === le ? String(ls) : ls + '-' + le);
+
+  // highlight spans can cross source lines; annotation rows must remain independently valid html
+  const highlightLines = (content, lang) => {
+    if (!lang || !window.hljs || !hljs.getLanguage(lang)) return content.split('\n').map(esc);
+    const html = hljs.highlight(content, {language: lang, ignoreIllegals: true}).value;
+    const lines = [];
+    const open = [];
+    let line = '';
+    const re = /<span class="([^"]*)">|<\/span>|\n|[^<\n]+/g;
+    for (const m of html.matchAll(re)) {
+      if (m[0] === '\n') {
+        lines.push(line + '</span>'.repeat(open.length));
+        line = open.map((c) => '<span class="' + c + '">').join('');
+        continue;
+      }
+      if (m[0] === '</span>') open.pop();
+      if (m[1] !== undefined) open.push(m[1]);
+      line += m[0];
+    }
+    lines.push(line + '</span>'.repeat(open.length));
+    return lines;
+  };
+
+  const codeHTML = (content, firstLine, lang) => {
+    const lines = highlightLines(content.replace(/\n$/, ''), lang);
+    const rows = lines.map((l, i) => {
+      const n = firstLine + i;
+      return '<div class="cl" data-ls="' + n + '" data-le="' + n + '">' + (l || ' ') + '</div>';
+    });
+    return '<pre class="code"' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '>' + rows.join('') + '</pre>';
+  };
+
+  const renderMarkdown = () => {
+    // raw html is off: the page can run agterm commands, so document markup must never become live
+    const md = window.markdownit({html: false, linkify: true});
+    // yaml front matter is shown as code; blanking it keeps markdown-it's line map aligned with the file
+    let front = '';
+    let body = data.source;
+    const fm = /^---\n[\s\S]*?\n---(\n|$)/.exec(data.source);
+    if (fm) {
+      front = codeHTML(fm[0], 1, 'yaml');
+      body = '\n'.repeat(fm[0].split('\n').length - 1) + data.source.slice(fm[0].length);
+    }
+    const tokens = md.parse(body, {});
+    for (const t of tokens) {
+      if (!t.map || !['paragraph_open', 'heading_open', 'tr_open', 'hr'].includes(t.type)) continue;
+      let le = t.map[1];
+      while (le > t.map[0] + 1 && srcLines[le - 1].trim() === '') le--;
+      t.attrSet('data-ls', String(t.map[0] + 1));
+      t.attrSet('data-le', String(le));
+    }
+    // markdown-it core has no task lists; the checkbox token is built here, never taken from the document
+    for (const t of tokens) {
+      const first = t.type === 'inline' && t.children && t.children[0];
+      const m = first && first.type === 'text' && /^\[([ xX])\] /.exec(first.content);
+      if (!m) continue;
+      first.content = first.content.slice(4);
+      const box = new md.core.State.prototype.Token('html_inline', '', 0);
+      box.content = '<span class="task' + (m[1] === ' ' ? '' : ' done') + '"></span>';
+      t.children.unshift(box);
+    }
+    const r = md.renderer.rules;
+    r.paragraph_open = (tk, i, opts, env, self) =>
+      tk[i].hidden ? '<span class="tp"' + self.renderAttrs(tk[i]) + '>' : self.renderToken(tk, i, opts);
+    r.paragraph_close = (tk, i, opts, env, self) => (tk[i].hidden ? '</span>' : self.renderToken(tk, i, opts));
+    r.fence = (tk, i) => codeHTML(tk[i].content, tk[i].map[0] + 2, tk[i].info.trim().split(/\s+/)[0]);
+    r.code_block = (tk, i) => codeHTML(tk[i].content, tk[i].map[0] + 1, '');
+    return front + md.renderer.render(tokens, md.options, {});
+  };
+
+  contentEl.innerHTML = data.kind === 'markdown' ? renderMarkdown() : codeHTML(data.source, 1, '');
+  const shownName = data.title || data.path;
+  const slash = data.title ? -1 : data.path.lastIndexOf('/');
+  document.getElementById('path').innerHTML = '<span class="dir"></span><span class="base"></span>';
+  document.querySelector('#path .dir').textContent = shownName.slice(0, slash + 1);
+  document.querySelector('#path .base').textContent = shownName.slice(slash + 1);
+
+  const keyOf = (el) => el.dataset.ls + '-' + el.dataset.le;
+  const blocks = Array.from(contentEl.querySelectorAll('[data-ls]'));
+  const byKey = new Map();
+
+  // the gutter and row bands sit in their own layers, positioned from each block's box,
+  // so nested lists, tables and code lines all share one aligned line-number column
+  for (const el of blocks) {
+    const key = keyOf(el);
+    const band = document.createElement('div');
+    band.className = 'band';
+    const g = document.createElement('div');
+    g.className = 'g';
+    g.innerHTML = '<span class="num"></span><button type="button" class="add" title="add note"></button>';
+    g.querySelector('.num').textContent = el.dataset.ls;
+    g.querySelector('.add').addEventListener('click', () => { setCur(el); openEditor(key); });
+    bandsEl.appendChild(band);
+    gutterEl.appendChild(g);
+    byKey.set(key, {el, band, g});
+  }
+  const findBlock = (key) => (byKey.get(key) || {}).el || null;
+
+  const layout = () => {
+    const base = sheet.getBoundingClientRect().top;
+    for (const {el, band, g} of byKey.values()) {
+      const rect = el.getBoundingClientRect();
+      const top = rect.top - base;
+      band.style.top = g.style.top = top + 'px';
+      band.style.height = g.style.height = rect.height + 'px';
+      const single = el.tagName === 'TR' || el.tagName === 'HR' || el.classList.contains('cl');
+      const lh = single ? rect.height : Math.min(parseFloat(getComputedStyle(el).lineHeight) || 22, rect.height);
+      g.style.setProperty('--off', Math.max(0, (lh - 16) / 2) + 'px');
+    }
+  };
+  // notes and editors call layout themselves, since a click can land before the observer runs
+  new ResizeObserver(layout).observe(docEl);
+  window.addEventListener('resize', layout);
+
+  const mark = (el, cls, on) => {
+    const b = byKey.get(keyOf(el));
+    for (const n of [el, b.band, b.g]) n.classList.toggle(cls, on);
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storeKey, JSON.stringify(Array.from(notes.entries()))); } catch (e) { /* storage is optional */ }
+  };
+  const clearSaved = () => { try { localStorage.removeItem(storeKey); } catch (e) { /* storage is optional */ } };
+
+  // places a note or editor right under its block, keeping table markup valid
+  const placeAfter = (el, node) => {
+    if (el.tagName === 'TR') {
+      const tr = document.createElement('tr');
+      tr.className = 'slot';
+      const td = document.createElement('td');
+      td.colSpan = el.children.length;
+      td.appendChild(node);
+      tr.appendChild(td);
+      el.after(tr);
+      return tr;
+    }
+    el.after(node);
+    return node;
+  };
+
+
+  const renderNote = (key) => {
+    const el = key === 'file' ? null : findBlock(key);
+    const old = document.querySelector('[data-note="' + key + '"]');
+    if (old) old.remove();
+    if (el) mark(el, 'noted', notes.has(key));
+    if (!notes.has(key)) { layout(); return; }
+    const n = document.createElement('div');
+    n.className = 'note';
+    n.innerHTML = '<span class="text"></span>';
+    n.querySelector('.text').textContent = notes.get(key);
+    n.addEventListener('click', (ev) => { ev.stopPropagation(); openEditor(key); });
+    const host = el ? placeAfter(el, n) : document.getElementById('file-slot').appendChild(n);
+    host.dataset.note = key;
+    layout();
+  };
+
+  const updateCount = () => {
+    const c = notes.size;
+    const el = document.getElementById('count');
+    el.querySelector('.n').textContent = c;
+    el.disabled = c === 0;
+  };
+
+  const closeEditor = () => {
+    if (!editing) return;
+    editing.host.remove();
+    const key = editing.key;
+    editing = null;
+    renderNote(key);
+  };
+
+  // an open note keeps the keyboard until saved or cancelled; opening another would drop its unsaved text
+  const openEditor = (key) => {
+    if (editing) { editing.ta.focus(); return; }
+    disarmSubmit();
+    disarmCancel();
+    const old = document.querySelector('[data-note="' + key + '"]');
+    if (old) old.remove();
+    const ed = document.createElement('div');
+    ed.className = 'editor';
+    ed.innerHTML = '<textarea placeholder="note for this line"></textarea><div class="row">' +
+      '<button type="button" class="primary" data-act="save">Save</button>' +
+      '<button type="button" data-act="cancel">Cancel</button>' +
+      '<button type="button" class="danger" data-act="delete">Delete</button>' +
+      '<span class="hint">⌘↵ save · esc cancel</span></div>';
+    const ta = ed.querySelector('textarea');
+    ta.value = notes.get(key) || '';
+    if (!notes.has(key)) ed.querySelector('[data-act="delete"]').remove();
+    const el = key === 'file' ? null : findBlock(key);
+    const host = el ? placeAfter(el, ed) : document.getElementById('file-slot').appendChild(ed);
+    const commit = () => {
+      const v = ta.value.replace(/\s+$/, '');
+      if (v.trim()) notes.set(key, v); else notes.delete(key);
+      save();
+      updateCount();
+      closeEditor();
+    };
+    editing = {key, host, ta, commit};
+    layout();
+    ed.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const act = ev.target.dataset && ev.target.dataset.act;
+      if (act === 'save') commit();
+      if (act === 'cancel') closeEditor();
+      if (act === 'delete') { notes.delete(key); save(); updateCount(); closeEditor(); }
+    });
+    // stopPropagation keeps the page-level ⌘↵ from submitting the review right after this save closes the editor
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); ev.stopPropagation(); commit(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeEditor(); }
+    });
+    // scrollHeight excludes the textarea borders
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px'; layout(); };
+    ta.addEventListener('input', fit);
+    fit();
+    ta.focus();
+    ed.scrollIntoView({block: 'nearest'});
+  };
+
+  // revdiff output format: "## path:line ( )" for context lines, "## path (file-level)" for file notes
+  const output = () => {
+    const body = (t) => t.split('\n').map((l) => (l.trimStart().startsWith('## ') ? ' ' + l : l)).join('\n');
+    const keys = Array.from(notes.keys()).filter((k) => k !== 'file')
+      .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]));
+    if (notes.has('file')) keys.unshift('file');
+    return keys.map((k) => {
+      const head = k === 'file' ? '## ' + data.path + ' (file-level)' : '## ' + data.path + ':' + label(...k.split('-').map(Number)) + ' ( )';
+      return head + '\n' + body(notes.get(k)) + '\n';
+    }).join('\n');
+  };
+
+  const showError = (e) => { document.getElementById('error').textContent = String(e && e.message ? e.message : e); };
+  const submit = () => {
+    if (editing) editing.commit();
+    agterm.request('session.overlay.submit', {args: {value: output()}}).then(clearSaved).catch(showError);
+  };
+  // ⌘↵ also saves a note, so with saved notes the chord needs a second press within 3s;
+  // a click, q, or ⌘↵ with no saved notes, submits at once
+  const submitBtn = document.getElementById('submit-btn');
+  const submitLabel = submitBtn.innerHTML;
+  let submitArmed = null;
+  const disarmSubmit = () => {
+    if (!submitArmed) return;
+    clearTimeout(submitArmed);
+    submitArmed = null;
+    submitBtn.innerHTML = submitLabel;
+  };
+  const keySubmit = () => {
+    disarmCancel();
+    if (submitArmed || !notes.size) { disarmSubmit(); submit(); return; }
+    submitBtn.textContent = 'Press ⌘↵ again';
+    submitArmed = setTimeout(disarmSubmit, 3000);
+  };
+  const cancelBtn = document.getElementById('cancel-btn');
+  const cancelLabel = cancelBtn.innerHTML;
+  let cancelArmed = null;
+  const disarmCancel = () => {
+    if (!cancelArmed) return;
+    clearTimeout(cancelArmed);
+    cancelArmed = null;
+    cancelBtn.innerHTML = cancelLabel;
+    cancelBtn.classList.remove('danger');
+  };
+  const cancel = () => {
+    disarmSubmit();
+    // js dialogs are refused in the overlay, so a second click or esc confirms discarding notes
+    const draft = editing && !notes.has(editing.key) && editing.ta.value.trim() ? 1 : 0;
+    const pending = notes.size + draft;
+    if (pending && !cancelArmed) {
+      cancelBtn.textContent = 'Discard ' + pending + (pending === 1 ? ' note?' : ' notes?');
+      cancelBtn.classList.add('danger');
+      cancelArmed = setTimeout(disarmCancel, 3000);
+      return;
+    }
+    clearSaved();
+    agterm.request('session.overlay.close', {}).catch(showError);
+  };
+
+  const setCur = (el, scroll = true) => {
+    if (!el || el === cur) return;
+    if (cur) mark(cur, 'cur', false);
+    cur = el;
+    mark(cur, 'cur', true);
+    if (scroll) cur.scrollIntoView({block: 'nearest'});
+  };
+
+  // one current line for mouse and keys; only real pointer movement moves it, because scrolling with j/k
+  // slides new lines under a resting pointer and would otherwise snap the line back to it
+  let lastX = -1;
+  let lastY = -1;
+  const follow = (ev, el) => {
+    if (editing || (ev.clientX === lastX && ev.clientY === lastY)) return;
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    if (el) setCur(el, false);
+  };
+  contentEl.addEventListener('mousemove', (ev) => {
+    follow(ev, ev.target.closest('.note, .editor') ? null : ev.target.closest('[data-ls]'));
+  });
+  gutterEl.addEventListener('mousemove', (ev) => {
+    const g = ev.target.closest('.g');
+    const b = g && Array.from(byKey.values()).find((v) => v.g === g);
+    follow(ev, b ? b.el : null);
+  });
+  contentEl.addEventListener('click', (ev) => {
+    if (ev.target.closest('a, .note, .editor')) return;
+    if (String(window.getSelection())) return;
+    const el = ev.target.closest('[data-ls]');
+    if (!el) return;
+    setCur(el);
+    openEditor(keyOf(el));
+  });
+  const fileNote = () => { openEditor('file'); window.scrollTo(0, 0); };
+  document.getElementById('file-btn').addEventListener('click', fileNote);
+  submitBtn.addEventListener('click', () => { disarmSubmit(); submit(); });
+  document.getElementById('cancel-btn').addEventListener('click', cancel);
+  // one popup serves the heading list and the note list; a source supplies {label, text, level, go} items
+  const headings = blocks.filter((el) => /^H[1-6]$/.test(el.tagName));
+  const tocEl = document.getElementById('toc');
+  const tocQuery = tocEl.querySelector('.toc-q');
+  const tocList = tocEl.querySelector('.toc-list');
+  const tocBtn = document.getElementById('toc-btn');
+  const countBtn = document.getElementById('count');
+  let pickItems = [];
+  let tocShown = [];
+  let tocSel = 0;
+  let tocHome = 0;
+  tocBtn.hidden = headings.length === 0;
+
+  // subsequence match, leftmost per letter; runs and word starts score higher, an earlier first hit breaks ties
+  const fuzzy = (query, text) => {
+    const t = text.toLowerCase();
+    const pos = [];
+    let score = 0;
+    let from = 0;
+    for (const ch of query.toLowerCase().replace(/\s+/g, '')) {
+      const at = t.indexOf(ch, from);
+      if (at < 0) return null;
+      score += 1;
+      if (pos.length && at === pos[pos.length - 1] + 1) score += 3;
+      if (at === 0 || /[\s\-_/.(]/.test(t[at - 1])) score += 2;
+      pos.push(at);
+      from = at + 1;
+    }
+    return {score: score - pos[0] * 0.01, pos};
+  };
+  const buildItem = (it) => {
+    const el = document.createElement('div');
+    el.className = 'toc-item l' + it.level;
+    el.innerHTML = '<span class="ln"></span><span class="t"></span>';
+    el.querySelector('.ln').textContent = it.label;
+    el.querySelector('.t').style.paddingLeft = (it.level - 1) * 16 + 'px';
+    el.addEventListener('click', () => jumpPick(it));
+    return {...it, el};
+  };
+  const paintTitle = (it, pos) => {
+    const t = it.el.querySelector('.t');
+    t.textContent = '';
+    const hits = new Set(pos);
+    for (let n = 0; n < it.text.length; n++) {
+      if (!hits.has(n)) { t.append(it.text[n]); continue; }
+      const b = document.createElement('b');
+      b.className = 'hit';
+      b.textContent = it.text[n];
+      t.append(b);
+    }
+  };
+  const filterPick = (query) => {
+    const q = query.trim();
+    const all = pickItems.map((it, i) => i);
+    const matches = q ? all.map((i) => ({i, m: fuzzy(q, pickItems[i].text)})).filter((x) => x.m) : all.map((i) => ({i, m: {score: 0, pos: []}}));
+    if (q) matches.sort((a, b) => b.m.score - a.m.score || a.i - b.i);
+    tocShown = matches.map((x) => x.i);
+    tocList.textContent = '';
+    for (const x of matches) {
+      paintTitle(pickItems[x.i], x.m.pos);
+      tocList.append(pickItems[x.i].el);
+    }
+    if (!matches.length) tocList.innerHTML = '<div class="toc-empty">No matches</div>';
+  };
+  const selectToc = (n) => {
+    if (!tocShown.length) return;
+    tocSel = Math.max(0, Math.min(n, tocShown.length - 1));
+    pickItems.forEach((it, i) => it.el.classList.toggle('sel', i === tocShown[tocSel]));
+    pickItems[tocShown[tocSel]].el.scrollIntoView({block: 'nearest'});
+  };
+  const openPick = (items, home, placeholder) => {
+    if (editing || !items.length) return;
+    disarmSubmit();
+    disarmCancel();
+    pickItems = items.map(buildItem);
+    tocHome = home;
+    tocQuery.value = '';
+    tocQuery.placeholder = placeholder;
+    filterPick('');
+    tocEl.hidden = false;
+    selectToc(tocHome);
+    tocQuery.focus();
+  };
+  const closeToc = () => { tocEl.hidden = true; tocQuery.blur(); };
+  const jumpPick = (it) => { closeToc(); it.go(); };
+  const goBlock = (el) => { el.scrollIntoView({block: 'start'}); setCur(el, false); };
+  // a tall annotated block can push its note below the view, so the note is brought in after the block
+  const goNote = (el) => {
+    goBlock(el);
+    const card = document.querySelector('[data-note="' + keyOf(el) + '"]');
+    if (card) card.scrollIntoView({block: 'nearest'});
+  };
+  const goFileNote = () => {
+    if (cur) mark(cur, 'cur', false);
+    cur = null;
+    window.scrollTo(0, 0);
+  };
+
+  // the terminal look moves the header to the bottom, so the visible page starts at the viewport top
+  const topEdge = () => (data.style === 'terminal' ? 0 : document.querySelector('header').getBoundingClientRect().bottom + 1);
+  // manual scrolling can leave the current line outside the viewport
+  const curLine = () => {
+    const top = topEdge();
+    const r = cur && cur.getBoundingClientRect();
+    return r && r.bottom > top && r.top < window.innerHeight ? Number(cur.dataset.ls) : null;
+  };
+  // the browser's own page scroll leaves the current line behind, and the next j/k jumps back to it
+  const pageMove = (dir) => {
+    const top = topEdge();
+    const y = window.scrollY;
+    window.scrollBy({top: dir * (window.innerHeight - top) * 0.9, behavior: 'instant'});
+    if (window.scrollY === y) { setCur(blocks[dir > 0 ? blocks.length - 1 : 0]); return; }
+    const inView = (b) => { const r = b.getBoundingClientRect(); return r.top >= top && r.top < window.innerHeight; };
+    setCur(blocks.find(inView) || blocks.findLast((b) => b.getBoundingClientRect().top < top), false);
+  };
+  const openToc = () => {
+    const line = curLine();
+    const top = topEdge();
+    let home = 0;
+    headings.forEach((h, n) => { if (line !== null ? Number(h.dataset.ls) <= line : h.getBoundingClientRect().top <= top) home = n; });
+    openPick(headings.map((h) => ({label: h.dataset.ls, text: h.textContent, level: Number(h.tagName[1]), go: () => goBlock(h)})), home, 'search headings');
+  };
+
+  const lineNotes = () => Array.from(notes.keys()).filter((k) => k !== 'file').map((k) => findBlock(k)).filter(Boolean)
+    .sort((a, b) => Number(a.dataset.ls) - Number(b.dataset.ls));
+  const openNotes = () => {
+    const items = [];
+    if (notes.has('file')) items.push({label: 'file', text: notes.get('file').split('\n')[0], level: 1, go: goFileNote});
+    const line = cur ? Number(cur.dataset.ls) : null;
+    let home = 0;
+    for (const el of lineNotes()) {
+      if (line !== null && Number(el.dataset.ls) <= line) home = items.length;
+      items.push({label: el.dataset.ls, text: notes.get(keyOf(el)).split('\n')[0], level: 1, go: () => goNote(el)});
+    }
+    openPick(items, home, 'search notes');
+  };
+  // the file note sits at position zero, and no current line counts as being on it
+  const stepNote = (dir) => {
+    const cycle = (notes.has('file') ? [null] : []).concat(lineNotes());
+    if (!cycle.length) return;
+    const line = cur ? Number(cur.dataset.ls) : null;
+    let target;
+    if (line === null) {
+      const lines = cycle.filter((x) => x !== null);
+      target = dir > 0 ? (lines[0] || null) : cycle[cycle.length - 1];
+    } else if (dir > 0) {
+      target = cycle.find((x) => x !== null && Number(x.dataset.ls) > line);
+      if (target === undefined) target = cycle[0];
+    } else {
+      const before = cycle.filter((x) => x === null || Number(x.dataset.ls) < line);
+      target = before.length ? before[before.length - 1] : cycle[cycle.length - 1];
+    }
+    if (target === null) goFileNote(); else goNote(target);
+  };
+
+  tocBtn.addEventListener('click', openToc);
+  countBtn.addEventListener('click', openNotes);
+  tocEl.addEventListener('click', (ev) => { if (ev.target === tocEl) closeToc(); });
+  tocQuery.addEventListener('input', () => {
+    filterPick(tocQuery.value);
+    selectToc(tocQuery.value.trim() ? 0 : tocHome);
+  });
+  // letters type into the search box, so only navigation keys are taken; editing chords like cmd-a stay
+  const tocKeys = (ev) => {
+    const step = {ArrowDown: 1, ArrowUp: -1};
+    if (ev.ctrlKey && (ev.key === 'n' || ev.key === 'p')) { ev.preventDefault(); selectToc(tocSel + (ev.key === 'n' ? 1 : -1)); return; }
+    if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey || ev.altKey)) { ev.preventDefault(); return; }
+    if (ev.key in step) { ev.preventDefault(); selectToc(tocSel + step[ev.key]); return; }
+    if (ev.key === 'Enter') { ev.preventDefault(); if (tocShown.length) jumpPick(pickItems[tocShown[tocSel]]); return; }
+    if (ev.key === 'Escape') { ev.preventDefault(); closeToc(); return; }
+    if (ev.key === 'Tab') ev.preventDefault();
+  };
+
+  document.addEventListener('keydown', (ev) => {
+    if (!tocEl.hidden) { tocKeys(ev); return; }
+    // selecting page text takes focus from an open note; keys go back to it, but copy stays with the selection
+    if (editing && !editing.host.contains(document.activeElement)) {
+      if (ev.key === 'Escape') { ev.preventDefault(); closeEditor(); return; }
+      if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); editing.commit(); return; }
+      const chord = ev.metaKey || ev.ctrlKey;
+      if (!['Meta', 'Control', 'Shift', 'Alt'].includes(ev.key) && (!chord || ev.key === 'v')) editing.ta.focus();
+    }
+    // a held chord auto-repeats, which would arm and confirm in one press
+    if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey) && !editing) { ev.preventDefault(); if (!ev.repeat) keySubmit(); return; }
+    if (!['Meta', 'Control', 'Shift', 'Alt'].includes(ev.key)) disarmSubmit();
+    if (!['Meta', 'Control', 'Shift', 'Alt', 'Escape', 'Q'].includes(ev.key)) disarmCancel();
+    if (editing || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const i = cur ? blocks.indexOf(cur) : -1;
+    if (ev.key === 'j' || ev.key === 'ArrowDown') { ev.preventDefault(); setCur(blocks[Math.min(i + 1, blocks.length - 1)]); }
+    if (ev.key === 'k' || ev.key === 'ArrowUp') { ev.preventDefault(); setCur(blocks[Math.max(i - 1, 0)]); }
+    if (ev.key === 'PageDown' || ev.key === 'PageUp') { ev.preventDefault(); pageMove(ev.key === 'PageDown' ? 1 : -1); }
+    if (ev.key === 'Home' || ev.key === 'End') {
+      ev.preventDefault();
+      const end = ev.key === 'End';
+      window.scrollTo({top: end ? document.documentElement.scrollHeight : 0, behavior: 'instant'});
+      setCur(blocks[end ? blocks.length - 1 : 0], false);
+    }
+    if ((ev.key === 'Enter' || ev.key === 'a') && cur) { ev.preventDefault(); openEditor(keyOf(cur)); }
+    if (ev.key === 'f' || ev.key === 'A') { ev.preventDefault(); fileNote(); }
+    if (ev.key === 't') { ev.preventDefault(); openToc(); }
+    if (ev.key === 'm') { ev.preventDefault(); openNotes(); }
+    if (ev.key === 'n') { ev.preventDefault(); stepNote(1); }
+    if (ev.key === 'p') { ev.preventDefault(); stepNote(-1); }
+    // a held esc auto-repeats, which would arm and confirm the discard in one press
+    if (ev.key === 'Escape' || ev.key === 'Q') { ev.preventDefault(); if (!ev.repeat) cancel(); }
+    if (ev.key === 'q') { ev.preventDefault(); if (!ev.repeat) { disarmSubmit(); submit(); } }
+  });
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(storeKey) || '[]');
+    for (const [k, v] of saved) if (k === 'file' || findBlock(k)) notes.set(k, v);
+  } catch (e) { /* storage is optional */ }
+  for (const k of notes.keys()) renderNote(k);
+  updateCount();
+  layout();
+  if (document.fonts) document.fonts.ready.then(layout);
+})();
+</script>
+</body>
+</html>

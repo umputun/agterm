@@ -38,6 +38,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 |---|---|---|
 | [agent-reset](agent-reset/) | one chord clears the pane's Claude Code or codex run, and nothing when neither is running | 0.26.0, python3, Claude Code or Codex |
 | [annotate-claude-replies](annotate-claude-replies/) | mark up Claude's answers in revdiff and send the notes back | 0.13.0, revdiff, python3, Claude Code |
+| [annotate-document](annotate-document/) | review a plan, a document or a draft as a rendered page, and hand the notes back to Claude Code | 0.38.1, python3, Claude Code |
 | [annotate-pane-output](annotate-pane-output/) | mark up what the pane just printed in revdiff and send the notes back to whatever is running there | 0.13.0, revdiff, python3 |
 | [antigravity-agent-status](antigravity-agent-status/) | Antigravity CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Antigravity CLI |
 | [backlog-picker](backlog-picker/) | pick one of the repo's written-down deferred items and hand it to the agent in the pane | 0.20.2, python3, Claude Code |
