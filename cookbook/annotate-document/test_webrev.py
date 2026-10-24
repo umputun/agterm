@@ -108,19 +108,24 @@ class TestOutcome(unittest.TestCase):
     def test_wait_outcome_blinks_then_restores(self) -> None:
         pending = done(1, '{"outcome":"pending"}')
         submitted = done(0, '{"outcome":"submitted","value":""}')
-        for pane, want in (("right", ["--pane", "right"]), ("", []), ("bogus", [])):
-            with mock.patch.object(webrev, "agtermctl", side_effect=[done(), pending, submitted, done()]) as m, \
+        cases = (("right", {}, ["--pane", "right"]), ("", {}, []), ("bogus", {}, []),
+                 ("right", {"AGTERM_PANE_ID": "P1"}, ["--pane", "right", "--pane-id", "P1"]),
+                 ("", {"AGTERM_PANE_ID": "P1"}, ["--pane-id", "P1"]), ("", {"AGTERM_PANE_ID": ""}, []))
+        for pane, env, want in cases:
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(webrev, "agtermctl", side_effect=[done(), pending, submitted, done()]) as m, \
                     mock.patch("time.sleep"):
                 self.assertEqual(webrev.wait_outcome("id", "S", pane), ("submitted", ""))
             calls = [c.args for c in m.call_args_list]
             self.assertEqual(calls[0], ("session", "status", "blocked", "--blink", "--target", "S", *want))
-            self.assertEqual(calls[-1], ("session", "status", "active", "--target", "S", *want))
+            self.assertEqual(calls[-1], ("session", "status", "idle", "--target", "S", *want))
 
     def test_wait_outcome_restores_on_interrupt(self) -> None:
-        with mock.patch.object(webrev, "agtermctl", side_effect=[done(), KeyboardInterrupt, done()]) as m, \
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(webrev, "agtermctl", side_effect=[done(), KeyboardInterrupt, done()]) as m, \
                 self.assertRaises(KeyboardInterrupt):
             webrev.wait_outcome("id", "S", "")
-        self.assertEqual(m.call_args_list[-1].args, ("session", "status", "active", "--target", "S"))
+        self.assertEqual(m.call_args_list[-1].args, ("session", "status", "idle", "--target", "S"))
 
     def test_wait_outcome_restores_on_sigterm(self) -> None:
         before = signal.getsignal(signal.SIGTERM)
@@ -131,11 +136,11 @@ class TestOutcome(unittest.TestCase):
                 return done(1, '{"outcome":"pending"}')
             return done()
 
-        with mock.patch.object(webrev, "agtermctl", side_effect=ctl) as m, mock.patch("time.sleep"), \
-                self.assertRaises(SystemExit) as e:
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(webrev, "agtermctl", side_effect=ctl) as m, \
+                mock.patch("time.sleep"), self.assertRaises(SystemExit) as e:
             webrev.wait_outcome("id", "S", "left")
         self.assertEqual(e.exception.code, 143)
-        self.assertEqual(m.call_args_list[-1].args, ("session", "status", "active", "--target", "S", "--pane", "left"))
+        self.assertEqual(m.call_args_list[-1].args, ("session", "status", "idle", "--target", "S", "--pane", "left"))
         self.assertIs(signal.getsignal(signal.SIGTERM), before)
 
 
@@ -253,6 +258,38 @@ class TestReview(unittest.TestCase):
                         mock.patch.object(webrev, "zoom_fit") as z:
                     self.assertEqual(webrev.review(doc, ReviewOptions(fit=fit)), 2)
                 self.assertEqual(z.call_args_list, calls)
+
+    def test_review_writes_backup(self) -> None:
+        opened = done(0, json.dumps({"result": {"pageID": "P"}}))
+        cases = ((("submitted", "## a.md:1 ( )\nx\n"), "## a.md:1 ( )\nx\n"), (("submitted", ""), ""),
+                 (("dismissed", ""), "dismissed\n"), (("error", "boom"), "pending P\n"))
+        with tempfile.TemporaryDirectory() as d:
+            doc = Path(d) / "a.md"
+            doc.write_text("x\n", encoding="utf-8")
+            for outcome, want in cases:
+                out = Path(d) / "result"
+                out.unlink(missing_ok=True)
+                seen = []
+
+                def wait(*_: str, out: Path = out, seen: list = seen, outcome: tuple = outcome) -> tuple[str, str]:
+                    seen.append(out.read_text())
+                    return outcome
+
+                with mock.patch.dict(os.environ, {"AGTERM_SESSION_ID": "S"}), \
+                        mock.patch.object(webrev, "agtermctl", return_value=opened), \
+                        mock.patch.object(webrev, "wait_outcome", side_effect=wait), mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+                    webrev.review(doc, ReviewOptions(output=out))
+                self.assertEqual(seen, ["pending P\n"], outcome)
+                self.assertEqual(out.read_text(), want, outcome)
+
+    def test_main_usage_errors_exit_1(self) -> None:
+        for argv in (["review", "a.md", "--size", "0"], ["review", "a.md", "--size", "abc"], ["review", "a.md", "--bogus"],
+                     ["review", "a.md", "--pane", "top"], ["review"], []):
+            with mock.patch.object(sys, "argv", ["webrev.py", *argv]), mock.patch("sys.stderr"), \
+                    mock.patch.object(webrev, "review") as m, self.assertRaises(SystemExit) as e:
+                webrev.main()
+            self.assertEqual(e.exception.code, 1, argv)
+            m.assert_not_called()
 
     def test_main_refuses_fit_with_size_or_pane(self) -> None:
         for extra in (["--size", "60"], ["--size", "95"], ["--pane", "right"]):

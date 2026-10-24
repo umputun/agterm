@@ -23,6 +23,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import NoReturn
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 MARKDOWN_IT = ASSETS / "markdown-it-14.1.0.min.js"
@@ -228,6 +229,8 @@ def wait_outcome(page_id: str, session: str, pane: str) -> tuple[str, str]:
     target = ["--target", session]
     if pane in ("left", "right", "scratch"):
         target += ["--pane", pane]
+    if pane_id := os.environ.get("AGTERM_PANE_ID"):
+        target += ["--pane-id", pane_id]
     agtermctl("session", "status", "blocked", "--blink", *target)
     prev = signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
@@ -238,7 +241,9 @@ def wait_outcome(page_id: str, session: str, pane: str) -> tuple[str, str]:
         return state, text
     finally:
         signal.signal(signal.SIGTERM, prev)
-        agtermctl("session", "status", "active", *target)
+        # idle, not a saved snapshot: replaying one could claim another pane's block,
+        # and an agent's own status hooks set its next state
+        agtermctl("session", "status", "idle", *target)
 
 
 def review(file: Path, opts: ReviewOptions) -> int:
@@ -291,8 +296,17 @@ def size_percent(value: str) -> int:
     return n
 
 
+class Parser(argparse.ArgumentParser):
+    """Exit 1 on a usage error; callers read 2 as a review the user cancelled."""
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        print(f"webrev: {message}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="review a file in an agterm overlay")
+    parser = Parser(description="review a file in an agterm overlay")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_review = sub.add_parser("review", help="open the page and wait for annotations")
     p_review.add_argument("file", type=Path)
@@ -308,7 +322,6 @@ def main() -> int:
     p_render.add_argument("out", type=Path)
     p_render.add_argument("--title", default="")
     args = parser.parse_args()
-    # exit 1, not argparse's 2: callers read 2 as a review the user cancelled
     if args.cmd == "review" and args.fit and (args.size is not None or args.pane):
         print("webrev: --fit sizes the overlay itself and cannot be combined with --size or --pane", file=sys.stderr)
         return 1

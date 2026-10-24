@@ -31,6 +31,8 @@ an opened note scrolls. The estimate is for agterm's HTML page zoom of 1.0; agte
 a page is open, so at any other zoom the panel resizes once right after it opens, to the estimate times the
 zoom. A zoom changed while the page is up does not resize it. `--pane left|right` puts the page over one
 split pane, always at full size, so neither `--size` nor `--fit` applies.
+If `--fit` fails because the session is presented from another Mac (`--width/--height are not supported`),
+run the review again without it.
 
 `WEBREV_STYLE=terminal` in the environment switches the page to a flat terminal-like look: body text at one
 size, square chrome, a status bar at the bottom. Unset keeps the default look; any other value is an error.
