@@ -302,16 +302,8 @@ extension AppActions {
         palette?.toggle(.customCommands)
     }
 
-    /// Open `.attention` from the action-palette "Show Attention" launcher on the next runloop tick, like
-    /// `openThemePalette()`: the launcher runs inside the action palette's `runItem`, which calls
-    /// `controller.close()` right after this returns, so a synchronous toggle would be undone.
     func openAttentionPalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.terminalZoomActive,
-                  !self.pickActive(for: self.library.activeWindowID) else { return }
-            self.palette?.open(.attention)
-        }
+        openDeferred(.attention)
     }
 
     // MARK: - Membership editors
@@ -324,7 +316,8 @@ extension AppActions {
         openDeferred(.focusEditor)
     }
 
-    // defer until the launching action palette has dismissed.
+    // defer until the launching action palette has dismissed: its runItem closes the controller right after
+    // the launcher returns, so a synchronous open would be undone.
     private func openDeferred(_ mode: PaletteMode) {
         guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
@@ -374,16 +367,8 @@ extension AppActions {
 
     // MARK: - Theme picker
 
-    /// Open the `.themes` palette (the live-preview theme picker), from the action-palette "Select Theme…"
-    /// launcher or View ▸ Select Theme…, on the next runloop tick: launched from the open action palette, that
-    /// palette's run handler closes itself right after this returns, so only an async reopen survives it.
     func openThemePalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.terminalZoomActive,
-                  !self.pickActive(for: self.library.activeWindowID) else { return }
-            self.palette?.open(.themes)
-        }
+        openDeferred(.themes)
     }
 
     /// Theme rows for the `.themes` palette: a leading "Default" entry plus one per bundled theme,
