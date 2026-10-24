@@ -76,7 +76,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // on launch AppKit makes the sidebar the window's initial first responder; hand focus to the terminal.
         context.coordinator.focusActiveTerminal()
 
-        let scroll = NSScrollView()
+        let scroll = SidebarScrollView()
         scroll.identifier = NSUserInterfaceItemIdentifier("agterm-sidebar-scroll")
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
@@ -196,7 +196,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private var lastSidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
 
         /// Centered hint floating over the empty outline in flagged mode; hidden otherwise.
+        private weak var emptyState: NSStackView?
         private weak var emptyStateLabel: NSTextField?
+        private weak var emptyStateAddButton: NSButton?
 
         init(store: AppStore, actions: AppActions) {
             self.store = store
@@ -563,32 +565,44 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         /// Adds the flagged-mode empty-state hint below the safe-area inset so it clears the titlebar, as a
         /// non-scrolling sibling of the clip view floating above the document. Hidden until it applies.
-        func installEmptyState(in scroll: NSScrollView) {
-            let label = NSTextField(wrappingLabelWithString: "No flagged sessions.\nRight-click a session → Flag.")
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.alignment = .center
-            label.isEditable = false
-            label.isSelectable = false
-            label.drawsBackground = false
-            label.isBordered = false
+        func installEmptyState(in scroll: SidebarScrollView) {
+            let label = NSTextField(labelWithString: "No flagged sessions.")
+            label.lineBreakMode = .byTruncatingTail
             label.font = .preferredFont(forTextStyle: .body)
-            label.isHidden = true
-            scroll.addSubview(label)
-            NSLayoutConstraint.activate([
-                label.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
-                label.topAnchor.constraint(equalTo: scroll.safeAreaLayoutGuide.topAnchor, constant: 40),
-                label.leadingAnchor.constraint(greaterThanOrEqualTo: scroll.leadingAnchor, constant: 16),
-                label.trailingAnchor.constraint(lessThanOrEqualTo: scroll.trailingAnchor, constant: -16),
-            ])
+            let add = EmptyStateLinkButton(title: "Add Sessions…", target: self,
+                                           action: #selector(addFlaggedSessionsClicked(_:)))
+            add.isBordered = false
+            add.setAccessibilityIdentifier("flagged-empty-add")
+            let stack = NSStackView(views: [label, add])
+            stack.orientation = .vertical
+            stack.alignment = .centerX
+            stack.spacing = 6
+            stack.isHidden = true
+            scroll.addSubview(stack)
+            scroll.emptyState = stack
+            emptyState = stack
             emptyStateLabel = label
+            emptyStateAddButton = add
             updateEmptyState()
         }
 
         /// Shows the hint only in flagged mode with nothing flagged; re-tints it to the dimmed theme color.
         func updateEmptyState() {
-            guard let label = emptyStateLabel else { return }
-            label.isHidden = !(store.sidebarMode == .flagged && store.flaggedSessions.isEmpty)
-            label.textColor = (GhosttyApp.shared.terminalForegroundColor ?? .secondaryLabelColor).withAlphaComponent(0.6)
+            guard let stack = emptyState, let label = emptyStateLabel, let add = emptyStateAddButton else { return }
+            let color = (GhosttyApp.shared.terminalForegroundColor ?? .secondaryLabelColor).withAlphaComponent(0.6)
+            stack.isHidden = !(store.sidebarMode == .flagged && store.flaggedSessions.isEmpty)
+            stack.superview?.needsLayout = true
+            label.textColor = color
+            add.attributedTitle = NSAttributedString(string: add.title, attributes: [
+                .foregroundColor: color,
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+                .font: label.font ?? .preferredFont(forTextStyle: .body),
+            ])
+        }
+
+        // the keymap path, so enablement is asked at the click rather than cached on the link.
+        @objc func addFlaggedSessionsClicked(_ sender: NSButton) {
+            actions.perform(.editFlaggedSessions, in: sender.window)
         }
 
         /// Seeds the tracked expansion set from the persisted `Workspace.isExpanded`. Sets only the tracked
@@ -819,6 +833,27 @@ struct WorkspaceSidebar: NSViewRepresentable {
             roots.first(where: { $0.id == id })
         }
     }
+}
+
+/// SidebarScrollView centers the flagged empty state below the safe area; the empty state is a
+/// non-scrolling accessory outside NSScrollView's tiled content.
+final class SidebarScrollView: NSScrollView {
+    weak var emptyState: NSView?
+
+    override func layout() {
+        super.layout()
+        guard let emptyState, !emptyState.isHidden else { return }
+        let size = emptyState.fittingSize
+        let width = min(size.width, max(0, bounds.width - 32))
+        let top = safeAreaInsets.top + 40
+        let y = isFlipped ? top : bounds.height - top - size.height
+        emptyState.frame = NSRect(x: ((bounds.width - width) / 2).rounded(), y: y.rounded(), width: width, height: size.height)
+    }
+}
+
+// a first click into a background window only activates it, so the link's click-time check reads that window.
+private final class EmptyStateLinkButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
 }
 
 /// `NSOutlineView` subclass routing the per-row context menu and double-click rename to the coordinator.

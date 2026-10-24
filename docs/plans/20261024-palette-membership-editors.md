@@ -179,23 +179,27 @@
 **Files:**
 - Modify: `agterm/agtermApp+Menus.swift`
 - Modify: `agterm/Views/WorkspaceSidebar.swift`
+- Modify: `agtermTests/SidebarFlaggedLayoutTests.swift`
 - Modify: `agtermUITests/FlaggedViewUITests.swift`
 - Modify: `agtermUITests/FocusWorkspaceUITests.swift`
 
-- [ ] View menu gains Edit Flagged Sessions… after Clear Flagged and Edit Focused Workspaces… after Clear
+- [x] View menu gains Edit Flagged Sessions… after Clear Flagged and Edit Focused Workspaces… after Clear
       Focus, each `.disabled(!PaletteCommand.….isEnabled(in: context))` and
       `.keyboardShortcut(shortcut(for: .editFlaggedSessions / .editFocusedWorkspaces))` (nil by default, a
       `map` line's chord when bound), calling the openers
-- [ ] the flagged empty-state hint reads `No flagged sessions.` with an `Add Sessions…` link
+- [x] the flagged empty-state hint reads `No flagged sessions.` with an `Add Sessions…` link
       (accessibility id `flagged-empty-add`), always enabled, whose click calls
       `actions.perform(.editFlaggedSessions, in: window)`, the keymap path that asks
       `PaletteCommand.isEnabled(in:)` at the click, so the link holds no enablement state that can go stale
-      and a window with no sessions makes the click inert; layout and tint unchanged otherwise
-- [ ] confirm the link does not take first mouse: a click in a background window only activates it, so
-      `perform` reads the owning window's context as frontmost when it fires
-- [ ] UI tests: the empty-state link opens the session editor and flagging from it hides the hint; the View
+      and a window with no sessions makes the click inert; tint unchanged
+- ➕ [x] hint and link share one `NSStackView` placed by `SidebarScrollView.layout()`: pinned by constraints,
+      the empty state stayed at the scroll origin and the link drew over the hint; a hosted test pins
+      centering, the top gap and no overlap
+- [x] confirm the link does not take first mouse: measured, `NSButton` accepts it by default, so
+      `EmptyStateLinkButton` returns false and a background-window click only activates the window
+- [x] UI tests: the empty-state link opens the session editor and flagging from it hides the hint; the View
       menu items open each editor
-- [ ] the new UI methods pass with `-only-testing`
+- [x] the new UI methods pass with `-only-testing`
 
 ### Task 3: Verify acceptance criteria
 - [ ] every Overview requirement holds: in-place toggle, stays open, live marks, immediate effect, focus

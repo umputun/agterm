@@ -76,6 +76,55 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testEmptyFlaggedViewLinkOpensTheSessionEditorAndHidesOnceSomethingIsFlagged() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+        let add = try installedEmptyStateLink(in: sidebar)
+        XCTAssertFalse(add.isHiddenOrHasHiddenAncestor)
+        let palette = PaletteController()
+        actions.palette = palette
+
+        add.performClick(nil)
+        let opened = expectation(description: "the editor opens a tick after the click")
+        DispatchQueue.main.async { opened.fulfill() }
+        wait(for: [opened], timeout: 1)
+        XCTAssertEqual(palette.mode, .flaggedEditor)
+
+        let session = try XCTUnwrap(store.workspaces.first?.sessions.first)
+        store.setFlag(true, forSession: session.id)
+        sidebar.update()
+        XCTAssertTrue(add.isHiddenOrHasHiddenAncestor)
+    }
+
+    // regression: the scroll view never applied constraints to the hint, so it drew at its origin over the titlebar.
+    func testEmptyFlaggedViewHintSitsCenteredBelowTheTopWithTheLinkUnderIt() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.setSidebarMode(.flagged)
+        let sidebar = mount(store)
+        let add = try installedEmptyStateLink(in: sidebar)
+        let scroll = try XCTUnwrap(sidebar.window.contentView as? SidebarScrollView)
+        scroll.layoutSubtreeIfNeeded()
+
+        let stack = try XCTUnwrap(add.superview)
+        let label = try XCTUnwrap(stack.subviews.first { $0 is NSTextField })
+        XCTAssertGreaterThan(stack.frame.width, 0)
+        XCTAssertEqual(stack.frame.midX, scroll.bounds.midX, accuracy: 1)
+        let topGap = scroll.isFlipped ? stack.frame.minY : scroll.bounds.height - stack.frame.maxY
+        XCTAssertEqual(topGap, scroll.safeAreaInsets.top + 40, accuracy: 1)
+        let labelFrame = label.convert(label.bounds, to: scroll)
+        let linkFrame = add.convert(add.bounds, to: scroll)
+        XCTAssertFalse(labelFrame.intersects(linkFrame), "the link sits under the hint, not on it")
+        XCTAssertEqual(labelFrame.midX, linkFrame.midX, accuracy: 1)
+    }
+
+    func testEmptyFlaggedViewLinkDoesNotTakeFirstMouse() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.setSidebarMode(.flagged)
+        let add = try installedEmptyStateLink(in: mount(store))
+        XCTAssertFalse(add.acceptsFirstMouse(for: nil))
+    }
+
     func testTreeLayoutNestsFlaggedSessionsUnderTheirWorkspaces() throws {
         let store = try seededStore()
         store.setSidebarMode(.flagged)
@@ -426,7 +475,7 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         outline.addTableColumn(column)
         outline.outlineTableColumn = column
 
-        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 400))
+        let scroll = SidebarScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 400))
         scroll.documentView = outline
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 400),
                               styleMask: [.titled], backing: .buffered, defer: false)
@@ -441,5 +490,12 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         let sidebar = Sidebar(window: window, outline: outline, coordinator: coordinator)
         sidebars.append(sidebar)
         return sidebar
+    }
+
+    private func installedEmptyStateLink(in sidebar: Sidebar) throws -> NSButton {
+        let scroll = try XCTUnwrap(sidebar.window.contentView as? SidebarScrollView)
+        sidebar.coordinator.installEmptyState(in: scroll)
+        let buttons = scroll.subviews.flatMap(\.subviews).compactMap { $0 as? NSButton }
+        return try XCTUnwrap(buttons.first { $0.accessibilityIdentifier() == "flagged-empty-add" })
     }
 }
