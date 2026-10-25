@@ -124,7 +124,7 @@ extension WindowContentView {
         Button {
             actions.toggleDashboard()
         } label: {
-            Label("Dashboard", systemImage: "rectangle.split.2x2")
+            Label("Dashboard", systemImage: InterfaceElement.dashboard.symbolName!)
         }
         .help(helpHint("Dashboard", .dashboard))
         .disabled(store.activeSession == nil)

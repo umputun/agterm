@@ -26,7 +26,7 @@ extension WindowContentView {
             guard !pick.modalPending else { return }
             recentSessionsShown.toggle()
         } label: {
-            Label("Recent sessions", systemImage: "clock.arrow.circlepath")
+            Label("Recent sessions", systemImage: InterfaceElement.recentSessions.symbolName!)
         }
         .help("Recent sessions (⌃Tab)")
         // pin the tint to chromeText like the attention bell: a disabled plain button otherwise resolves the SF

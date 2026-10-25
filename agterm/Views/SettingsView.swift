@@ -541,10 +541,25 @@ private struct InterfaceSettingsView: View {
         }
     }
 
-    /// One element's show/hide toggle: ON = visible (the default), so hiding is the opt-in that writes.
+    /// One element's show/hide toggle: ON = visible (the default), so hiding is the opt-in that writes. The
+    /// label leads with the glyph the control shows, or an empty slot of the same width for a text element.
     private func toggle(for element: InterfaceElement) -> some View {
-        Toggle(element.displayName, isOn: binding(for: element))
-            .accessibilityIdentifier("settings-interface-\(element.rawValue)")
+        Toggle(isOn: binding(for: element)) {
+            HStack(spacing: 6) {
+                Group {
+                    if let symbol = element.symbolName {
+                        Image(systemName: symbol).foregroundStyle(.secondary)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 18)
+                .accessibilityHidden(true)
+                Text(element.displayName)
+            }
+        }
+        .accessibilityLabel(element.displayName)
+        .accessibilityIdentifier("settings-interface-\(element.rawValue)")
     }
 
     private func binding(for element: InterfaceElement) -> Binding<Bool> {

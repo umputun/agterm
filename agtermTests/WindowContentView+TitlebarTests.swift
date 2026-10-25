@@ -169,6 +169,13 @@ final class WindowContentViewTitlebarTests: XCTestCase {
         attach(bold, name: "remote-cloud-sidebar-bold")
     }
 
+    func testEveryInterfaceElementSymbolResolves() {
+        for element in InterfaceElement.allCases {
+            guard let symbol = element.symbolName else { continue }
+            XCTAssertNotNil(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), "\(element): \(symbol)")
+        }
+    }
+
     private func renderTitlebar(mode: ToolbarMode, width: Double,
                                 hidden: Set<InterfaceElement> = []) throws -> NSBitmapImageRep {
         let store = try XCTUnwrap(library.activeStore)

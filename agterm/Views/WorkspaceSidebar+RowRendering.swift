@@ -221,7 +221,7 @@ extension WorkspaceSidebar.Coordinator {
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.isBordered = false
         let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
-        btn.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New Session")?
+        btn.image = NSImage(systemSymbolName: InterfaceElement.workspaceAddSession.symbolName!, accessibilityDescription: "New Session")?
             .withSymbolConfiguration(config)
         btn.image?.isTemplate = true
         btn.imageScaling = .scaleProportionallyUpOrDown

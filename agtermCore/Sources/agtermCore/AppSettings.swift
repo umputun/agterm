@@ -101,6 +101,28 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// The SF Symbol the element's control shows at rest, shared by that control and its Settings toggle;
+    /// nil for the text-only elements. A control with state-dependent glyphs uses it for its neutral state.
+    public var symbolName: String? {
+        switch self {
+        case .sidebarToggle: return "sidebar.left"
+        case .workspaceName, .sessionName, .windowName, .sessionContext: return nil
+        case .remoteHost: return "cloud"
+        case .recentSessions: return "clock.arrow.circlepath"
+        case .scratch: return "rectangle"
+        case .split: return "rectangle.split.2x1"
+        case .overlayToggle: return "rectangle.on.rectangle"
+        case .dashboard: return "rectangle.split.2x2"
+        case .quickTerminal: return "terminal"
+        case .customCommands: return "ellipsis.circle"
+        case .newWorkspace: return "rectangle.stack.badge.plus"
+        case .newSession: return "plus.rectangle"
+        case .flaggedView: return "flag"
+        case .focusFilter: return "square.grid.2x2"
+        case .workspaceAddSession: return "plus"
+        }
+    }
+
     /// Which of the two title-bar trailing-cluster separators to draw, from each group's visible button
     /// count (A = recent-sessions + attention, B = scratch + split, C = dashboard + quick-terminal +
     /// custom-commands): one sits ONLY where two groups that each still show 2+ buttons meet. Host-free so

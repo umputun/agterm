@@ -685,7 +685,7 @@ struct WindowContentView: View {
                 Button {
                     actions.newWorkspace()
                 } label: {
-                    Image(systemName: "rectangle.stack.badge.plus")
+                    Image(systemName: InterfaceElement.newWorkspace.symbolName!)
                         .frame(width: 24, height: 22)
                         .contentShape(Rectangle())
                 }
@@ -699,7 +699,7 @@ struct WindowContentView: View {
                     Button("New Session") { actions.newSession() }
                     Button("Open Directory…") { actions.openDirectory() }
                 } label: {
-                    Image(systemName: "plus.rectangle")
+                    Image(systemName: InterfaceElement.newSession.symbolName!)
                         .frame(width: 24, height: 22)
                         .contentShape(Rectangle())
                 }
@@ -721,7 +721,7 @@ struct WindowContentView: View {
                 Button {
                     actions.toggleFocusFilter()
                 } label: {
-                    Image(systemName: store.focusEnabled ? "square.grid.2x2.fill" : "square.grid.2x2")
+                    Image(systemName: store.focusEnabled ? "square.grid.2x2.fill" : InterfaceElement.focusFilter.symbolName!)
                         .frame(width: 24, height: 22)
                         .contentShape(Rectangle())
                 }
@@ -745,7 +745,7 @@ struct WindowContentView: View {
                     actions.toggleFlaggedView()
                 } label: {
                     let flagged = store.sidebarMode == .flagged
-                    Image(systemName: flagged ? "flag.fill" : "flag")
+                    Image(systemName: flagged ? "flag.fill" : InterfaceElement.flaggedView.symbolName!)
                         .frame(width: 24, height: 22)
                         .contentShape(Rectangle())
                 }

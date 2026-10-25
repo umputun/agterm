@@ -264,7 +264,8 @@ paths:
   session stays selected). `TitlebarComposition` caps it at `workspaceNameLimit` characters with an
   ellipsis, display only, because the identity is one tail-truncated text and an uncapped prefix would
   push the session name off the bar. The OS window title (`WindowTitleSync`) does not carry it.
-- `InterfaceElement` owns section/display name; the tab iterates `allCases`. Mutate the raw set, then push
+- `InterfaceElement` owns section, display name, and the resting glyph its control and Settings toggle
+  share; the tab iterates `allCases`. Mutate the raw set, then push
   resolved known values to `GhosttyApp`. SwiftUI gates with `shows(_:)`; the AppKit row "+" checks the
   mirror on hover. Titlebar group dividers appear only between adjacent groups that each retain at least
   two buttons, as computed by `titlebarGroupDividers`. Add a case/render gate only after user approval.

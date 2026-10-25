@@ -730,6 +730,15 @@ struct AppSettingsTests {
         #expect(!AppSettings(hiddenInterfaceElements: ["sessionName"]).isInterfaceElementHidden(.remoteHost))
     }
 
+    @Test func everyControlElementHasADistinctSymbolAndTextElementsHaveNone() {
+        let textOnly: Set<InterfaceElement> = [.workspaceName, .sessionName, .windowName, .sessionContext]
+        for element in InterfaceElement.allCases {
+            #expect((element.symbolName == nil) == textOnly.contains(element), "\(element)")
+        }
+        let symbols = InterfaceElement.allCases.compactMap(\.symbolName)
+        #expect(Set(symbols).count == symbols.count)
+    }
+
     @Test func workspaceNameIsAnOptInTitleBarInterfaceElement() throws {
         #expect(InterfaceElement.workspaceName.section == .titleBar)
         #expect(InterfaceElement.workspaceName.displayName == "Workspace name")
