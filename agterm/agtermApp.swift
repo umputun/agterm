@@ -132,8 +132,8 @@ struct agtermApp: App {
         _controlServer = State(initialValue: controlServer)
         actions.remoteAttacher = controlServer
         LinkOpener.shared.mode = { settingsModel.settings.effectiveLinkOpenMode }
-        LinkOpener.shared.overlay = { [weak controlServer] url, session in
-            controlServer?.openLinkOverlay(url, session: session) ?? false
+        LinkOpener.shared.overlay = { [weak controlServer] url, session, percent in
+            controlServer?.openLinkOverlay(url, session: session, sizePercent: percent) ?? false
         }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })

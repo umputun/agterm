@@ -597,8 +597,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `HtmlOverlayRegistry` owns the saved store. The open adapter asks `persistentStoreFailure()` before it
   accepts a persistent page and builds the page before replying, so the page counts as open from the moment
   the open answers ok; every other page is still built when a view first asks for it.
-- `browser.links` sets or reads `AppSettings.linkOpenMode` (`browser` | `overlay`), app-global like
-  `browser.clear`; no mode reads, and the reply's `text` is the effective mode either way. It writes through
+- `browser.links` sets or reads `AppSettings.linkOpenMode`
+  (`browser` | `overlay` | `overlay95` | `overlay75` | `overlay50`), app-global like `browser.clear`;
+  the numbered modes open the page at that `sizePercent` (`LinkOpenMode.overlaySizePercent`).
+  No mode reads, and the reply's `text` is the effective mode either way. It writes through
   `SettingsModel.setLinkOpenMode`, the Settings picker's setter. Read back as top-level `tree.linkOpenMode`.
   Poll-only: no event reports a change, and nothing is restored but the setting itself.
 - A URL page opened with `--browse` (`HtmlOverlay.browse`, read back as `browse`) may take its main frame to

@@ -302,7 +302,7 @@ next-attention/prev-attention also stop on `active` sessions, Settings ▸ Agent
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), `linkOpenMode` (`browser` or `overlay`, app-wide, the read side of `browser links`),
+`sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide, the read side of `browser links`),
 `sidebarFlaggedLayout` (`flat`, `plain` or `tree` — how the flagged view is arranged, the read side
 of `sidebar flagged-layout`; app-wide, so every window reports the same value, under the ordinary tree
 too), `sidebarWidth` (the sidebar divider position in points, the read side of
@@ -1800,10 +1800,11 @@ before another clear's removal has finished. A socket request queues behind a so
 socket serves one request at a time. With nothing ever saved it answers ok. Clearing local data does not sign you out on the server.
 App-global; refuses a target or `--window`. There is no read-back beyond the reply.
 
-`agtermctl browser links [browser|overlay]` - set where a clicked `http` or `https` link in a terminal
+`agtermctl browser links [browser|overlay|overlay95|overlay75|overlay50]` - set where a clicked `http` or `https` link in a terminal
 opens, or with no mode print the current one. `browser` (default) hands the link to the system browser.
 `overlay` opens it in a full session web overlay as `session overlay open --url URL --browse --js
---navigation --persistent` would, without selecting the session. The link still goes to the browser when
+--navigation --persistent` would, without selecting the session; `overlay95`, `overlay75` and `overlay50` add
+`--size-percent 95`, `75` or `50`. The link still goes to the browser when
 it was clicked in a HUD, a program overlay or the quick terminal, when a HUD is up on the session, when the
 session's window has a zoomed terminal, when the session-wide overlay slot is taken, when the saved
 browser store cannot be used, or when the overlay cannot be opened. A plain `http` link uses the overlay

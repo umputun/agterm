@@ -95,6 +95,9 @@ private struct GeneralSettingsView: View {
                 Picker("Open links in", selection: linkOpenMode) {
                     Text("Browser").tag(LinkOpenMode.browser)
                     Text("Session overlay").tag(LinkOpenMode.overlay)
+                    Text("Session overlay at 95%").tag(LinkOpenMode.overlay95)
+                    Text("Session overlay at 75%").tag(LinkOpenMode.overlay75)
+                    Text("Session overlay at 50%").tag(LinkOpenMode.overlay50)
                 }
                 .accessibilityIdentifier("settings-link-open-mode")
                 Toggle("Click a workspace row to expand or collapse", isOn: workspaceRowClickExpands)

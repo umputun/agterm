@@ -131,6 +131,16 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("linkOpenMode") == "overlay" },
                       "selecting 'Session overlay' should persist linkOpenMode=overlay to settings.json")
 
+        for (label, raw) in [("Session overlay at 95%", "overlay95"), ("Session overlay at 75%", "overlay75"),
+                             ("Session overlay at 50%", "overlay50")] {
+            picker.click()
+            let item = app.menuItems[label]
+            XCTAssertTrue(item.waitForExistence(timeout: 5), "the link picker should offer '\(label)'")
+            item.click()
+            XCTAssertTrue(poll { self.settingsValue("linkOpenMode") == raw },
+                          "selecting '\(label)' should persist linkOpenMode=\(raw) to settings.json")
+        }
+
         picker.click()
         let browser = app.menuItems["Browser"]
         XCTAssertTrue(browser.waitForExistence(timeout: 5), "the link picker should offer 'Browser'")

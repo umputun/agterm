@@ -634,8 +634,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// is dormant. The read side of `sidebar.flagged-layout` and a term of the workspace-row visibility
     /// predicate on `ControlWorkspaceNode.focused`.
     public let sidebarFlaggedLayout: String?
-    /// Where a clicked web link from terminal output opens: `LinkOpenMode.rawValue` (`browser` | `overlay`),
-    /// the effective value, so the default reads `browser`. APP-WIDE, the read side of `browser.links`; nil
+    /// Where a clicked web link from terminal output opens: `LinkOpenMode.rawValue` (`browser` | `overlay` |
+    /// `overlay95` | `overlay75` | `overlay50`), the effective value, so the default reads `browser`. APP-WIDE, the read side of `browser.links`; nil
     /// in a host-produced tree and from an older server.
     public let linkOpenMode: String?
     /// The projected window's sidebar divider position in points - the read side of `sidebar.width`, and the

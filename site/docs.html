@@ -1467,7 +1467,7 @@
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste,
-                <strong style="color: #e6e1d7">Open links in</strong> (Browser, or Session overlay to show a ⌘-clicked web
+                <strong style="color: #e6e1d7">Open links in</strong> (Browser, or Session overlay at full size, 95%, 75% or 50% to show a ⌘-clicked web
                 link over its session; see <a href="#links" style="color: #6d82f3">links</a>), whether clicking a workspace
                 row expands or collapses it (on by default; the disclosure triangle always does), a
                 <strong style="color: #e6e1d7">Flagged view layout</strong> that picks a flat list, with or without each row's workspace name, or a workspace tree for the
@@ -3211,9 +3211,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </p>
             <p id="links" style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A ⌘-click on a web link opens it in your browser. With
-              <strong style="color: #e6e1d7">Settings ▸ General ▸ Open links in</strong> set to Session overlay, or
+              <strong style="color: #e6e1d7">Settings ▸ General ▸ Open links in</strong> set to a Session overlay choice, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl browser links overlay</span>, an http or https link
-              opens in a web overlay over its session instead: JavaScript on, navigation buttons, and the saved browser
+              opens in a web overlay over its session instead, full size or at 95%, 75% or 50%
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay95</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay75</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay50</span>): JavaScript on, navigation buttons, and the saved browser
               store, so a login made there lasts. That store is agterm's own; nothing is taken from your browser. The page
               may go on to other sites, and its strip always names the site shown. The link still opens in the browser
               when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
