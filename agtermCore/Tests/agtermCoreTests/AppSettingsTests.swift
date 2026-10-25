@@ -686,6 +686,21 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func attentionIncludesActiveDefaultsNilAndOmitsFromJSON() throws {
+        #expect(AppSettings().attentionIncludesActive == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("attentionIncludesActive"))
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.attentionIncludesActive == nil)
+    }
+
+    @Test func attentionIncludesActiveRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(attentionIncludesActive: true)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded.attentionIncludesActive == true)
+        #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+    }
+
     @Test func hiddenInterfaceElementsDefaultsNilAndShowsEverythingNotHiddenByDefault() {
         let settings = AppSettings()
         #expect(settings.hiddenInterfaceElements == nil)

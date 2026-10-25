@@ -319,6 +319,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Whether auto-follow stays put on a running (`active`) session instead of pulling to a blocked one;
     /// nil/false = off. Only meaningful when `autoFollowAttention` is set.
     public var autoFollowStayOnActive: Bool?
+    /// Whether attention navigation also stops on `active` sessions, not only blocked and completed ones;
+    /// nil = off. Pushed into every window's `AppStore.attentionIncludesActive`.
+    public var attentionIncludesActive: Bool?
     /// The sidebar row-text point size, nil for `defaultSidebarFontSize`; the row height scales with it
     /// (`sidebarRowHeight(fontSize:)`). Independent of `interfaceFontSize`.
     public var sidebarFontSize: Double?
@@ -372,7 +375,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 newSessionPlacement: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
-                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
+                autoFollowStayOnActive: Bool? = nil, attentionIncludesActive: Bool? = nil,
+                sidebarFontSize: Double? = nil,
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
@@ -418,6 +422,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.closeGraceUndoEnabled = closeGraceUndoEnabled
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
+        self.attentionIncludesActive = attentionIncludesActive
         self.sidebarFontSize = sidebarFontSize
         self.interfaceFontSize = interfaceFontSize
         self.quickTerminalSizePercent = quickTerminalSizePercent

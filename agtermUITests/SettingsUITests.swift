@@ -385,6 +385,24 @@ final class SettingsUITests: XCTestCase {
                       "turning confirm-before-closing on should persist confirmCloseSession=true")
     }
 
+    func testAttentionIncludesActiveTogglePersists() throws {
+        let toggle = settingsControl(tab: "Agent Status", control: "settings-attention-includes-active")
+        let window = app.windows.containing(.any, identifier: "settings-attention-includes-active").firstMatch
+        let reset = app.buttons["settings-status-reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 5), "the tab's last control should exist")
+        XCTAssertLessThanOrEqual(reset.frame.maxY, window.frame.maxY, "Reset to defaults should be on screen")
+        let before = reset.frame.minY
+        reset.scroll(byDeltaX: 0, deltaY: -80)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(reset.frame.minY, before, accuracy: 0.5, "the Agent Status tab should not scroll")
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsBool("attentionIncludesActive") == true },
+                      "turning attention-includes-active on should persist attentionIncludesActive=true")
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsBool("attentionIncludesActive") == nil },
+                      "turning it off (the default) should remove the attentionIncludesActive key")
+    }
+
     func testWorkspaceRowClickExpandsTogglePersists() throws {
         let toggle = settingsControl(tab: "General", control: "settings-workspace-row-click-expands")
         toggle.click() // turn it off (default on)

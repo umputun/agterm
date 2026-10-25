@@ -4,7 +4,7 @@ import XCTest
 /// Control-channel e2e for the auto-follow-attention idle policy (Settings ▸ Agent Status ▸ "Auto-follow
 /// blocked sessions"). The setting is GUI-only over the control channel, so each test SEEDS `settings.json`
 /// with `autoFollowAttention: s5` (the 5 s minimum) into the isolated state dir and relaunches; the app
-/// applies it to every window's store at launch (`SettingsModel.applyAutoFollow`). The session set and
+/// applies it to every window's store at launch (`SettingsModel.applyWindowSettings`). The session set and
 /// statuses are then driven over the socket — `session.new`/`session.status`/`session.select` do NOT count
 /// as user activity, so the setup never resets the per-window idle timer that fires the follow. The live
 /// `tree` node's `active` flag (= the window's selected session) is the selection oracle: it reflects

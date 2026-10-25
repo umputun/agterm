@@ -27,8 +27,8 @@ paths:
 - Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
   `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
   Default-off nil fields include attention button, Dock bounce, global config inheritance, close
-  confirmation, auto-follow, hidden inactive sidebars, and interface hiding. `restoreMode` defaults to
-  `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
+  confirmation, auto-follow, attention-includes-active, hidden inactive sidebars, and interface hiding.
+  `restoreMode` defaults to `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
 - `newSessionPlacement` (nil = `end`) applies only to New Session: `AppActions.newSession()` and the
   workspace row's New Session and "+", through `AppActions.resolvedNewSessionIndex`. It inserts after the
   selection only when that lives in the destination workspace. Open Directory, folder drops, and
@@ -83,6 +83,10 @@ paths:
   auto-follow.
 - Auto-follow choices are Disabled, 5s, 10s, 30s, 60s, and 5m, plus the guard against leaving a running
   session.
+- `attentionIncludesActive` makes attention navigation also stop on `active` sessions; `needsAttention`,
+  auto-follow, the bell and pane reveal are unchanged. `SettingsModel.applyWindowSettings` pushes it with
+  auto-follow into every store; read back as top-level `tree.attentionIncludesActive`, no setter. Reset
+  leaves it, as it leaves auto-follow.
 - Notification badges gate only the sidebar pill/workspace roll-up and Dock total; counts keep tracking
   while hidden. Banners are a separate `notificationsEnabled` mirror, and neither gates agent status.
 - `SettingsModel` saves and writes last-loaded `ghostty-settings.conf`. Reload app/surfaces and clear
@@ -100,8 +104,15 @@ paths:
   Multiple Windows toggle as the Sidebar section's last row, plus the quick terminal's panel size,
   which sits there rather than under Appearance's Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
-  status reset, auto-follow, and Reset. Key Mapping holds the keyboard layout lock, config directory,
-  diagnostics, and Reload.
+  status reset, Navigation (attention-includes-active plus auto-follow), and Reset, and is exactly full:
+  `testAttentionIncludesActiveTogglePersists` requires Reset not to move when scrolled. Key Mapping holds the keyboard layout lock,
+  config directory, diagnostics, and Reload.
+- Every change that adds or moves a Settings control checks that its tab does not scroll: scroll the
+  tab's last control and require it not to move, as `assertGeneralTabFits` does, and look at the tab.
+  To capture it, have the XCUITest write `window.screenshot().pngRepresentation` to
+  `NSTemporaryDirectory()` and read it from
+  `~/Library/Containers/com.umputun.agtermUITests.xctrunner/Data/tmp`; xcresult attachment export
+  returned 60-byte stubs.
 - `statusReset` stores a raw `StatusReset` (`firstKey`|`enter`|`never`), nil for the default `firstKey`,
   resolved by `effectiveStatusReset` and mirrored to `GhosttyApp.statusReset`, which the surface factories'
   keystroke-clear closure reads at keystroke time. Reset to defaults clears it with the glyph settings.

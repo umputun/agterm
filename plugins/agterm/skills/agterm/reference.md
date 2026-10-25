@@ -294,9 +294,11 @@ mode with the filter ON narrows visibility to the members), and `collapsed` (whe
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries fourteen top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries these top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
-timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
+timeout in milliseconds, omitted when the setting is Disabled), `attentionIncludesActive` (whether
+next-attention/prev-attention also stop on `active` sessions, Settings ▸ Agent Status; no command sets it),
+`sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
@@ -508,7 +510,8 @@ buys nothing. A caller with no tree uses `version`.
   flagged sessions in flagged mode, the marked workspaces' sessions while the focus filter is applied,
   else all sessions (clearing the flag / suspending the filter restores the full set). next/prev wrap around at the ends (last→first,
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
-  sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
+  sessions needing attention (status blocked/completed, plus active when the tree reports
+  `attentionIncludesActive: true`), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an

@@ -668,7 +668,9 @@ private struct AgentStatusSettingsView: View {
                 .accessibilityIdentifier("settings-status-clear")
             }
 
-            Section("Auto-follow") {
+            Section("Navigation") {
+                Toggle("Attention navigation includes active sessions", isOn: attentionIncludesActive)
+                    .accessibilityIdentifier("settings-attention-includes-active")
                 Picker("Auto-follow blocked sessions", selection: autoFollowAttention) {
                     Text("Disabled").tag(AppSettings.AutoFollowAttention.off)
                     Text("5 sec idle").tag(AppSettings.AutoFollowAttention.s5)
@@ -816,6 +818,11 @@ private struct AgentStatusSettingsView: View {
     private var autoFollowAttention: Binding<AppSettings.AutoFollowAttention> {
         Binding(get: { AppSettings.AutoFollowAttention(tolerant: model.settings.autoFollowAttention) },
                 set: { model.setAutoFollowAttention($0 == .off ? nil : $0.rawValue) })
+    }
+
+    private var attentionIncludesActive: Binding<Bool> {
+        Binding(get: { model.settings.attentionIncludesActive ?? false },
+                set: { model.setAttentionIncludesActive($0 ? true : nil) })
     }
 
     /// Inverted view of the stored `autoFollowStayOnActive` so the toggle reads forward — ON = do leave a

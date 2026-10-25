@@ -208,7 +208,7 @@ class ControlAPITestCase: XCTestCase {
     /// Terminate the running app, write `json` as `<stateDir>/settings.json`, and relaunch with the same
     /// isolated state dir + socket so a test can exercise a seeded `AppSettings`. `SettingsStore` reads the
     /// file directly under the state dir (the `AGTERM_STATE_DIR` override), and the app applies GUI-only
-    /// settings at launch — e.g. `SettingsModel.applyAutoFollow` pushes the seeded auto-follow timeout into
+    /// settings at launch — e.g. `SettingsModel.applyWindowSettings` pushes the seeded auto-follow timeout into
     /// each window's store — so seeding + relaunch is how a control-only test enables a GUI-only setting.
     /// The previously seeded session set restores from the same state dir.
     func relaunch(withSettings json: String) throws {

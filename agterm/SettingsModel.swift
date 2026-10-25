@@ -346,17 +346,23 @@ final class SettingsModel {
     /// Persist that the first-run welcome has been shown, so it never appears again on this state directory.
     func setWelcomeShown(_ value: Bool?) { settings.welcomeShown = value; try? settingsStore.save(settings) }
     /// Persist the user-idle auto-follow timeout (nil = off) and push it into every open window's `AppStore`
-    /// (a newly opened window seeds itself via `applyAutoFollow(to:)`).
+    /// (a newly opened window seeds itself via `applyWindowSettings(to:)`).
     func setAutoFollowAttention(_ value: String?) {
         settings.autoFollowAttention = value
         try? settingsStore.save(settings)
-        applyAutoFollowToAllWindows()
+        applyWindowSettingsToAllWindows()
     }
     /// Persist whether auto-follow stays put on a running (`active`) session (nil/false = off) and fan it out.
     func setAutoFollowStayOnActive(_ value: Bool?) {
         settings.autoFollowStayOnActive = value
         try? settingsStore.save(settings)
-        applyAutoFollowToAllWindows()
+        applyWindowSettingsToAllWindows()
+    }
+    /// Persist whether attention navigation also stops on `active` sessions (nil = off) and fan it out.
+    func setAttentionIncludesActive(_ value: Bool?) {
+        settings.attentionIncludesActive = value
+        try? settingsStore.save(settings)
+        applyWindowSettingsToAllWindows()
     }
 
     /// Apply a new background opacity live WITHOUT saving — the live-drag half of the slider; each tick
@@ -811,18 +817,21 @@ final class SettingsModel {
         GhosttyApp.shared.setAutoHideSidebarInactiveWindows(settings.autoHideSidebarInactiveWindows ?? false)
     }
 
-    /// Push the current auto-follow configuration into one window's store, from `ContentView.resolveStore`
-    /// so a newly opened window honors the setting. The store is host-free and can't read settings itself.
-    func applyAutoFollow(to store: AppStore) {
+    /// Push the per-window settings (auto-follow, attention navigation) into one window's store, from
+    /// `ContentView.resolveStore` so a newly opened window honors them. The store is host-free and can't
+    /// read settings itself.
+    func applyWindowSettings(to store: AppStore) {
         let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
         store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
+        store.attentionIncludesActive = settings.attentionIncludesActive ?? false
     }
 
-    /// Fan auto-follow out to every open window's store — the settings-change broadcast and the launch seed
-    /// from the scene `.task`. Idempotent: re-pushing the same values no-ops in `AppStore.setAutoFollow`.
-    func applyAutoFollowToAllWindows() {
+    /// Fan the per-window settings out to every open window's store — the settings-change broadcast and the
+    /// launch seed from the scene `.task`. Idempotent: re-pushing the same values no-ops in
+    /// `AppStore.setAutoFollow`.
+    func applyWindowSettingsToAllWindows() {
         for store in library.openIDs().compactMap({ library.store(for: $0) }) {
-            applyAutoFollow(to: store)
+            applyWindowSettings(to: store)
         }
     }
 

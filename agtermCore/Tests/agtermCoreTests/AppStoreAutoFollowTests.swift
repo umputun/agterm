@@ -435,6 +435,23 @@ struct AppStoreAutoFollowTests {
         #expect(store.controlTree().autoFollowMs == nil)
     }
 
+    @Test func controlTreeProjectsAttentionIncludesActive() throws {
+        let store = makeStore()
+        #expect(store.controlTree().attentionIncludesActive == false)
+        store.attentionIncludesActive = true
+        let tree = store.controlTree()
+        #expect(tree.attentionIncludesActive == true)
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(tree))
+        #expect(decoded.attentionIncludesActive == true)
+    }
+
+    @Test func controlTreeOmitsANilAttentionIncludesActive() throws {
+        let json = String(decoding: try JSONEncoder().encode(ControlTree(workspaces: [])), as: UTF8.self)
+        #expect(!json.contains("attentionIncludesActive"))
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.attentionIncludesActive == nil)
+    }
+
     @Test func autoFollowFirePostsFollowedNotification() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "w")

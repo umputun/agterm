@@ -21,6 +21,7 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
 
     /// True for the states attention navigation (⌃⌥↑/↓, `session.go next-attention|prev-attention`) steps
     /// through: a `blocked` prompt or a `completed` run, not `active` (still working) or `idle` (no glyph).
+    /// `AppStore.attentionIncludesActive` adds `active` to navigation only, never to this predicate.
     public var needsAttention: Bool { self == .blocked || self == .completed }
 
     /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and

@@ -615,6 +615,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// The window's auto-follow-blocked timeout in milliseconds, or nil when the feature is disabled
     /// (omitted from the JSON). The read side of the GUI-only Auto-follow setting.
     public let autoFollowMs: Int?
+    /// Whether the projected window's attention navigation also stops on `active` sessions. Always populated
+    /// by the app, optional for version skew. The read side of a GUI-only setting with no control setter.
+    public let attentionIncludesActive: Bool?
     /// Whether the projected window's sidebar is visible. LIVE, built fresh from the window's store per
     /// request — the read side of the write-only `sidebar` command. Always present on a `tree` response (the
     /// producer passes a non-optional `Bool`), unlike `idleMs`/`autoFollowMs`; the `window.list` copy omits
@@ -688,6 +691,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let indexUnsaved: Bool?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
+                attentionIncludesActive: Bool? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, sidebarFlaggedLayout: String? = nil,
                 sidebarWidth: Double? = nil, workspaceFilter: Bool? = nil,
                 quickVisible: Bool? = nil,
@@ -702,6 +706,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.indexUnsaved = indexUnsaved
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
+        self.attentionIncludesActive = attentionIncludesActive
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
         self.sidebarFlaggedLayout = sidebarFlaggedLayout

@@ -3,7 +3,8 @@ import Observation
 
 /// A relative step through the flattened session list for keyboard navigation. `next`/`previous` step one
 /// and wrap, `first`/`last` jump to a tree end, `nextAttention`/`previousAttention` step (wrapping) through
-/// only the sessions needing attention — status `blocked` or `completed`.
+/// only the sessions needing attention — status `blocked` or `completed`, plus `active` under
+/// `AppStore.attentionIncludesActive`.
 public enum SessionNavigation: Sendable { case next, previous, first, last, nextAttention, previousAttention }
 
 extension SessionNavigation {
@@ -165,6 +166,9 @@ public final class AppStore {
 
     /// Whether auto-follow suppresses the jump while the current session is `active` (opt-in, default false).
     @ObservationIgnored var autoFollowStayOnActive = false
+
+    /// Whether `nextAttention`/`previousAttention` also stop on `active` sessions. Set by the Settings fan-out.
+    @ObservationIgnored public var attentionIncludesActive = false
 
     /// The last user interaction with this window (a keystroke or a manual selection), nil until the first.
     /// Stamped unconditionally by `noteUserActivity`, so the idle metric is independent of the feature being
@@ -389,6 +393,7 @@ public final class AppStore {
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
+                           attentionIncludesActive: attentionIncludesActive,
                            sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
                            sidebarFlaggedLayout: flaggedLayout?.rawValue, sidebarWidth: sidebarWidth,
                            workspaceFilter: focusEnabled,
@@ -763,9 +768,9 @@ public final class AppStore {
         return selectWorkspace(target)
     }
 
-    /// The next/previous session needing attention (`blocked`/`completed`) in the flattened order, scanning
-    /// from the current selection and WRAPPING; the current session is excluded, so repeated steps cycle
-    /// through the others. With no/invalid selection the scan starts from the tree end opposite the
+    /// The next/previous session needing attention (`blocked`/`completed`, plus `active` under
+    /// `attentionIncludesActive`) in the flattened order, scanning from the current selection and WRAPPING;
+    /// the current session is excluded, so repeated steps cycle through the others. With no/invalid selection the scan starts from the tree end opposite the
     /// direction. Nil (a no-op) when no other attention session exists.
     private func attentionTarget(in sessions: [Session], forward: Bool) -> UUID? {
         let ids = sessions.map(\.id)
@@ -777,7 +782,8 @@ public final class AppStore {
         for k in 1...count {
             let idx = ((start + step * k) % count + count) % count
             if let curIndex, idx == curIndex { break } // wrapped back to the current session, none other
-            if sessions[idx].agentIndicator.status.needsAttention { return ids[idx] }
+            let status = sessions[idx].agentIndicator.status
+            if status.needsAttention || (attentionIncludesActive && status == .active) { return ids[idx] }
         }
         return nil
     }

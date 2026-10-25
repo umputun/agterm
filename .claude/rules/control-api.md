@@ -338,7 +338,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   double-click reset and the first-layout seed set the value directly. A shown split therefore always
   reports a ratio, so absence means no split or one never shown, never "at the default".
 - `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
-  the placement store, wraps within filtered scope, and returns selected ID. It has no target.
+  the placement store, wraps within filtered scope, and returns selected ID. It has no target. The
+  attention steps include `active` while the window's `attentionIncludesActive` tree field is true.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and
   posts under the session's control slot (see [[notifications]]). When banners are disabled, return `ControlNotify.bannersOffNote` (#286); delivered
   requests omit text. Read through `unseen`.
@@ -1269,7 +1270,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   grandchild stay out; a group whose leader already exited has no parentage to test, so every survivor
   qualifies. The capture (`.command`) stays leader-only, because a non-nil capture sets `hadForeground`,
   which preempts `initialCommand` in `restorePlan` and would drop the exec path.
-- Top-level tree includes idle/auto-follow, live sidebar visibility/mode/width, workspace filter, quick
+- Top-level tree includes idle/auto-follow, attention-includes-active, live sidebar visibility/mode/width, workspace filter, quick
   visibility, zoom, dashboard, pick, and GUI ask state. Prefer live tree sidebar state over cached window list.
   `sidebarWidth` is tree-only: nothing needs width discovery across windows, which is all the cached
   `window.list` copy would add.

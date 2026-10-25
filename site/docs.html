@@ -1523,8 +1523,8 @@
                   >›</span
                 ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and shapes, the blocked-session
                 sound, a <strong style="color: #e6e1d7">Status reset</strong> choice for when typing into a blocked or completed
-                session clears its glyph (on the first key, on Enter, or disabled), and an idle timeout to auto-follow blocked
-                sessions. A <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, sound, and
+                session clears its glyph (on the first key, on Enter, or disabled), whether attention navigation also stops on
+                active sessions, and an idle timeout to auto-follow blocked sessions. A <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, sound, and
                 status reset back to the shipped values.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
@@ -3472,6 +3472,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">completed</span> status that stays
               when you visit it, so it shows up in attention navigation again. It never replaces a live status, and typing in the
               session's main pane, Clear Status, or the agent's next update clears it as usual.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Attention navigation (⌃⌥↑/↓) steps through blocked and completed sessions. Turn on
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Attention navigation includes active sessions</strong>
+              (off by default) to stop on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> sessions too, in the same sidebar
+              order. Landing on an active session keeps the existing pane selection.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               When the sidebar is hidden the glyphs go with it, so an optional

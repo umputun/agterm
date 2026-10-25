@@ -168,6 +168,23 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == ids[2])
     }
 
+    @Test func navigateAttentionStopsOnActiveWhenIncluded() {
+        let (store, ids) = Self.makeNavTree()
+        store.attentionIncludesActive = true
+        store.session(withID: ids[1])?.agentIndicator = AgentIndicator(status: .active)
+        store.session(withID: ids[2])?.agentIndicator = AgentIndicator(status: .blocked)
+        store.session(withID: ids[3])?.agentIndicator = AgentIndicator(status: .idle)
+        store.selectSession(ids[0])
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1])
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[2])
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1])
+        store.navigateSession(.previousAttention)
+        #expect(store.selectedSessionID == ids[2])
+    }
+
     @Test func navigateAttentionWithSingleAttentionSessionStaysPut() {
         let (store, ids) = Self.makeNavTree()
         store.session(withID: ids[2])?.agentIndicator = AgentIndicator(status: .completed)
