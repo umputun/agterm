@@ -232,8 +232,8 @@ paths:
   because the key monitor fires this from the quick terminal with agterm inactive.
 - When selection moves, GUI callers reveal a captured blocked/completed pane; unchanged plain navigation
   only refocuses, preventing a one-item wrap from resetting split focus. Modal focus guards still apply.
-- Attention navigation defaults to Control-Option-Up/Down, includes blocked/completed only, wraps, and
-  excludes current. If it finds no other target, GUI callers may use the current live indicator solely to
+- Attention navigation defaults to Control-Option-Up/Down, includes blocked/completed (plus active under
+  `attentionIncludesActive`, see [[settings]]), wraps, and excludes current. If it finds no other target, GUI callers may use the current live indicator solely to
   reveal its tagged pane. Control changes selection only.
 - `revealActiveBlockedPane` focuses right only when the split surface exists, explicitly chooses primary
   for left/nil, and shows/focuses scratch. Promotion retags right to left. Idle/active never change pane or

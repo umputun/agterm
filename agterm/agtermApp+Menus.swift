@@ -381,7 +381,8 @@ extension agtermApp {
                 Button { actions.selectNextSession() } label: { Label("Next Session", systemImage: "chevron.down") }
                     .keyboardShortcut(shortcut(for: .nextSession))
                     .disabled(!PaletteCommand.nextSession.isEnabled(in: context))
-                // step only through sessions needing attention (blocked/completed glyphs), wrapping.
+                // step only through sessions needing attention (blocked/completed glyphs, plus active when the
+                // Navigation setting includes it), wrapping.
                 Button { actions.selectPreviousAttentionSession() } label: { Label("Previous Attention Session", systemImage: "chevron.up.circle") }
                     .keyboardShortcut(shortcut(for: .previousAttentionSession))
                     .disabled(!PaletteCommand.previousAttentionSession.isEnabled(in: context))

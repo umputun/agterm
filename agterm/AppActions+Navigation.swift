@@ -70,8 +70,9 @@ extension AppActions {
         NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)
     }
 
-    /// Step to the next/previous session needing attention (`blocked`/`completed`), wrapping and skipping
-    /// idle/active, through `navigateSession` shared with the palette and `session.go next-attention|prev-attention`.
+    /// Step to the next/previous session needing attention (`blocked`/`completed`, plus `active` under
+    /// `AppStore.attentionIncludesActive`), wrapping and skipping idle, through `navigateSession` shared with
+    /// the palette and `session.go next-attention|prev-attention`.
     /// Notes user activity like plain nav, then `revealActiveBlockedPane` focuses the split/scratch pane that
     /// SET the status. Unlike plain nav this DOES reveal on a selection no-op, and only the
     /// `?? activeSession?.agentIndicator` fallback makes it: `attentionTarget` EXCLUDES the current session,

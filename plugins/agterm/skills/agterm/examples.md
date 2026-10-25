@@ -1118,7 +1118,7 @@ file is read once per command; nothing watches it, so push each change with an `
 
 ```bash
 agtermctl session go --to next            # step selection to the next session
-agtermctl session go --to next-attention  # jump to the next blocked/completed session
+agtermctl session go --to next-attention  # jump to the next blocked/completed session (plus active when enabled)
 agtermctl workspace go --to next          # step a whole workspace, landing on its first session
 agtermctl workspace go --to prev          # wraps at both ends; no --target, it is relative
 w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
