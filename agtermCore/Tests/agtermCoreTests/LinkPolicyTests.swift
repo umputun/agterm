@@ -230,4 +230,25 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.route(for: "x-custom://run", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
         #expect(LinkPolicy.route(for: "file://elsewhere/tmp/x.md", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
     }
+
+    @Test(arguments: [LinkOpenMode.overlay, .overlay95, .overlay75, .overlay50],
+          [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func commandShiftAsksForTheBrowserInEveryOverlayMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: mode, origin: origin))
+        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .browser, origin: origin))
+    }
+
+    @Test(arguments: [
+        KeyModifiers.command.rawValue, KeyModifiers.shift.rawValue, 0,
+        KeyModifiers([.command, .shift, .option]).rawValue, KeyModifiers([.command, .shift, .control]).rawValue,
+        KeyModifiers([.command, .option]).rawValue,
+    ])
+    func onlyTheExactCommandShiftChordAsksForTheBrowser(_ raw: Int) {
+        #expect(!LinkPolicy.wantsBrowser(modifiers: KeyModifiers(rawValue: raw), mode: .overlay, origin: .pane(Self.session)))
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
+    func sessionlessOriginsNeverTakeTheOverride(_ origin: LinkPolicy.ClickOrigin) {
+        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay, origin: origin))
+    }
 }

@@ -1805,7 +1805,7 @@ opens, or with no mode print the current one. `browser` (default) hands the link
 `overlay` opens it in a full session web overlay as `session overlay open --url URL --browse --js
 --navigation --persistent` would, without selecting the session; `overlay95`, `overlay75` and `overlay50` add
 `--size-percent 95`, `75` or `50`. The link still goes to the browser when
-it was clicked in a HUD, a program overlay or the quick terminal, when a HUD is up on the session, when the
+it was ⌘⇧-clicked, when it was clicked in a HUD, a program overlay or the quick terminal, when a HUD is up on the session, when the
 session's window has a zoomed terminal, when the session-wide overlay slot is taken, when the saved
 browser store cannot be used, or when the overlay cannot be opened. A plain `http` link uses the overlay
 only for a host the page could load: an unqualified name such as `localhost`, a `.local` name, or an IP

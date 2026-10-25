@@ -357,6 +357,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// makes an any-motion + sgr-pixel mouse-reporting TUI emit a synthetic motion report per packet.
     var lastReportedMousePoint: NSPoint?
 
+    // the nonisolated URL callback snapshots this during the synchronous release call.
+    nonisolated let releaseWantsBrowser = OSAllocatedUnfairLock(initialState: false)
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:],
          backedByZmx: Bool = false) {

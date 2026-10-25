@@ -15,8 +15,8 @@ struct LinkOpener {
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
 
-    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin) {
-        switch LinkPolicy.route(for: raw, mode: mode(), origin: origin) {
+    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, wantsBrowser: Bool) {
+        switch LinkPolicy.route(for: raw, mode: wantsBrowser ? .browser : mode(), origin: origin) {
         case .browser(let url): open(url)
         case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
         case .reveal(let url): reveal(url)

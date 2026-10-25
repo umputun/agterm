@@ -136,7 +136,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let openURL = action.action.open_url
             guard let view = surfaceView(from: target), let ptr = openURL.url else { return true }
             let link = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
-            DispatchQueue.main.async { view.openLink(link) }
+            let wantsBrowser = view.releaseWantsBrowser.withLock { $0 }
+            DispatchQueue.main.async { view.openLink(link, wantsBrowser: wantsBrowser) }
             return true
         case GHOSTTY_ACTION_COLOR_CHANGE:
             // a dynamic color set or RESET via OSC 10/11/12 (fg/bg/cursor) or their 110/111/112 resets,
