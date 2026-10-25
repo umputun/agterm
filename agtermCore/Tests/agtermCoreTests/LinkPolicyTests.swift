@@ -234,8 +234,8 @@ struct LinkPolicyTests {
     @Test(arguments: [LinkOpenMode.overlay, .overlay95, .overlay75, .overlay50],
           [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
     func commandShiftAsksForTheBrowserInEveryOverlayMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
-        #expect(LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: mode, origin: origin))
-        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .browser, origin: origin))
+        #expect(LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: mode, origin: origin, mouseCaptured: false))
+        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .browser, origin: origin, mouseCaptured: false))
     }
 
     @Test(arguments: [
@@ -244,11 +244,16 @@ struct LinkPolicyTests {
         KeyModifiers([.command, .option]).rawValue,
     ])
     func onlyTheExactCommandShiftChordAsksForTheBrowser(_ raw: Int) {
-        #expect(!LinkPolicy.wantsBrowser(modifiers: KeyModifiers(rawValue: raw), mode: .overlay, origin: .pane(Self.session)))
+        #expect(!LinkPolicy.wantsBrowser(modifiers: KeyModifiers(rawValue: raw), mode: .overlay, origin: .pane(Self.session), mouseCaptured: false))
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func commandShiftUnderMouseCaptureFollowsTheSetting(_ origin: LinkPolicy.ClickOrigin) {
+        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay, origin: origin, mouseCaptured: true))
     }
 
     @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
     func sessionlessOriginsNeverTakeTheOverride(_ origin: LinkPolicy.ClickOrigin) {
-        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay, origin: origin))
+        #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay, origin: origin, mouseCaptured: false))
     }
 }

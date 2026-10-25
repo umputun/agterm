@@ -131,19 +131,28 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(shown.overlaid.isEmpty)
     }
 
-    func testShiftPressedUnderAStillPointerStillOpensTheBrowser() throws {
+    func testShiftPressedUnderAStillPointerKeepsTheLinkHovered() throws {
+        let fixture = try LinkClickFixture(printing: "https://example.com/pr/1")
+        defer { fixture.close() }
+        _ = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: .command)
+        fixture.wait { fixture.surface.mouseShape == GHOSTTY_MOUSE_SHAPE_POINTER }
+        fixture.flagsChanged(keyCode: 56, flags: [.shift, .command])
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        XCTAssertEqual(fixture.surface.mouseShape, GHOSTTY_MOUSE_SHAPE_POINTER)
+    }
+
+    func testCommandShiftClickOnAStillPointerWithoutAModifierChangeOpensTheBrowser() throws {
         let fixture = try LinkClickFixture(printing: "https://example.com/pr/1")
         defer { fixture.close() }
         let shown = recordLinks(mode: .overlay, overlayOpens: true)
         fixture.move(flags: [])
-        fixture.flagsChanged(keyCode: 56, flags: .shift)
-        fixture.flagsChanged(keyCode: 55, flags: [.shift, .command])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !shown.opened.isEmpty }
         XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/pr/1"))])
     }
 
-    func testCommandShiftClickUnderMouseCaptureOpensTheBrowser() throws {
+    func testCommandShiftClickUnderMouseCaptureFollowsTheOverlaySetting() throws {
         let fixture = try LinkClickFixture(printing: "https://example.com/pr/1", before: #"\033[?1000h"#)
         defer { fixture.close() }
         let shown = recordLinks(mode: .overlay, overlayOpens: true)
@@ -151,8 +160,8 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.move(flags: [.command, .shift])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !shown.opened.isEmpty || !shown.overlaid.isEmpty }
-        XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/pr/1"))])
-        XCTAssertTrue(shown.overlaid.isEmpty)
+        XCTAssertEqual(shown.overlaid.map(\.0), [try XCTUnwrap(URL(string: "https://example.com/pr/1"))])
+        XCTAssertTrue(shown.opened.isEmpty)
     }
 
     func testCommandShiftClickInBrowserModeIsNotALinkClick() throws {

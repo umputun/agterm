@@ -139,13 +139,14 @@ extension GhosttySurfaceView {
         var ke = buildKeyEvent(from: event, action: isFlagPress(event) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE)
         ke.text = nil
         _ = ghostty_surface_key(surface, ke)
-        refreshBrowserChordHover(with: event)
+        guard wantsBrowser(event), NSEvent.pressedMouseButtons == 0,
+              let point = lastReportedMousePoint, point.x >= 0, point.y >= 0 else { return }
+        refreshLinkHover(at: point, with: event)
     }
 
     // reset libghostty's pixel and cell hover caches before applying normalized modifiers.
-    private func refreshBrowserChordHover(with event: NSEvent) {
-        guard let surface, stripsShift(event), NSEvent.pressedMouseButtons == 0,
-              let point = lastReportedMousePoint, point.x >= 0, point.y >= 0 else { return }
+    private func refreshLinkHover(at point: NSPoint, with event: NSEvent) {
+        guard let surface else { return }
         let mods = linkMods(event)
         ghostty_surface_mouse_pos(surface, -1, -1, mods)
         ghostty_surface_mouse_pos(surface, point.x, point.y, mods)
@@ -168,18 +169,14 @@ extension GhosttySurfaceView {
     }
 
     private func wantsBrowser(_ event: NSEvent) -> Bool {
-        LinkPolicy.wantsBrowser(modifiers: keyModifiers(event), mode: LinkOpener.shared.mode(), origin: linkClickOrigin)
-    }
-
-    // under capture, libghostty needs Shift intact to release the mouse and detect links.
-    private func stripsShift(_ event: NSEvent) -> Bool {
-        guard let surface, wantsBrowser(event) else { return false }
-        return !ghostty_surface_mouse_captured(surface)
+        guard let surface else { return false }
+        return LinkPolicy.wantsBrowser(modifiers: keyModifiers(event), mode: LinkOpener.shared.mode(),
+                                       origin: linkClickOrigin, mouseCaptured: ghostty_surface_mouse_captured(surface))
     }
 
     private func linkMods(_ event: NSEvent) -> ghostty_input_mods_e {
         let raw = mods(event)
-        guard stripsShift(event) else { return raw }
+        guard wantsBrowser(event) else { return raw }
         return ghostty_input_mods_e(rawValue: raw.rawValue & ~(GHOSTTY_MODS_SHIFT.rawValue | GHOSTTY_MODS_SHIFT_RIGHT.rawValue))
     }
 
@@ -189,6 +186,9 @@ extension GhosttySurfaceView {
         window?.makeFirstResponder(self)
         updateGhosttyFocus()
         reportMousePos(from: event)
+        // a pane without key focus never saw the chord's flagsChanged, and libghostty drops an
+        // unmoved press position.
+        if wantsBrowser(event) { refreshLinkHover(at: mousePoint(from: event), with: event) }
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, linkMods(event))
     }
 

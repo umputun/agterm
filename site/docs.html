@@ -3219,7 +3219,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay50</span>): JavaScript on, navigation buttons, and the saved browser
               store, so a login made there lasts. That store is agterm's own; nothing is taken from your browser. The page
               may go on to other sites, and its strip always names the site shown. A ⌘⇧-click sends that one link to the
-              browser instead; with Session overlay on, ⌘⇧-click no longer extends a selection, which Shift-click still does.
+              browser instead, except in a program that captures the mouse, where ⌘⇧-click is the ordinary link click and
+              follows this setting. Where the override applies, use Shift-click to extend a selection.
               The link also opens in the browser when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
               already has an overlay, or in the quick terminal. So does a plain http link to anything but a local
               address (localhost, a .local name, an IP address), which the overlay could not load.
@@ -3248,7 +3249,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vim</span> — ⌘-hover stops underlining
               and ⌘-click opens nothing, because links are detected only while reporting is off. Same in Ghostty.app, and
               per-program rather than per-kind of app. Hold shift as well (⌘⇧-hover, ⌘⇧-click) to reach the link anyway, unless the
-              program claimed shift for itself. In
+              program claimed shift for itself. That click follows Open links in. In
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty.conf</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse-shift-capture = never</span> makes
               shift always win, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"

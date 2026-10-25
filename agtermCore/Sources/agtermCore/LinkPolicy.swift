@@ -158,8 +158,10 @@ public enum LinkPolicy {
     }
 
     /// wantsBrowser reports whether a ⌘⇧ link click overrides the overlay setting and goes to the browser.
-    public static func wantsBrowser(modifiers: KeyModifiers, mode: LinkOpenMode, origin: ClickOrigin) -> Bool {
-        guard modifiers == [.command, .shift], mode != .browser else { return false }
+    /// Under mouse capture ⌘⇧ is the only link click, so there it follows the setting.
+    public static func wantsBrowser(modifiers: KeyModifiers, mode: LinkOpenMode, origin: ClickOrigin,
+                                    mouseCaptured: Bool) -> Bool {
+        guard modifiers == [.command, .shift], mode != .browser, !mouseCaptured else { return false }
         switch origin {
         case .pane, .scratch: return true
         case .hud, .programOverlay, .quick: return false
