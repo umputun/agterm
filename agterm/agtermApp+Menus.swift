@@ -270,6 +270,11 @@ extension agtermApp {
                 .disabled(!PaletteCommand.toggleFlag.isEnabled(in: context))
                 Button { actions.clearFlags() } label: { Label("Clear Flagged", systemImage: "flag.slash") }
                     .disabled(!PaletteCommand.clearFlagged.isEnabled(in: context))
+                Button { actions.openFlaggedEditor() } label: {
+                    Label("Edit Flagged Sessions…", systemImage: "flag")
+                }
+                .keyboardShortcut(shortcut(for: .editFlaggedSessions))
+                .disabled(!PaletteCommand.editFlaggedSessions.isEnabled(in: context))
                 // collapse the tree to the current workspace's subtree (or unfocus when already focused).
                 // keyless, rebindable via focus_workspace; control workspace.focus. the label tracks the toggle.
                 let focusStore = library.activeStore
@@ -298,6 +303,11 @@ extension agtermApp {
                 // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar toggle is primary.
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
                     .disabled(!PaletteCommand.clearFocus.isEnabled(in: context))
+                Button { actions.openFocusEditor() } label: {
+                    Label("Edit Focused Workspaces…", systemImage: "square.grid.2x2")
+                }
+                .keyboardShortcut(shortcut(for: .editFocusedWorkspaces))
+                .disabled(!PaletteCommand.editFocusedWorkspaces.isEnabled(in: context))
                 Button { actions.toggleSplit() } label: {
                     Label("Toggle Vertical Split", systemImage: "rectangle.split.2x1")
                 }

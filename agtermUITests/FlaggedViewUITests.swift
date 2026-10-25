@@ -81,6 +81,37 @@ final class FlaggedViewUITests: XCTestCase {
         XCTAssertTrue(hint.waitForExistence(timeout: 8), "the empty-state hint should appear after Clear Flagged")
     }
 
+    func testEmptyStateLinkOpensTheSessionEditor() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        invokeViewMenuItem("Flag Session")
+        let toggle = app.buttons["flagged-view-toggle"]
+        XCTAssertTrue(toggle.waitForHittable(timeout: 8), "flagged-view toggle should be hittable")
+        toggle.click()
+        invokeViewMenuItem("Clear Flagged")
+
+        let add = app.buttons["flagged-empty-add"]
+        XCTAssertTrue(add.waitForHittable(timeout: 8), "the empty flagged view should offer the link")
+        add.click()
+        let id = try XCTUnwrap(firstSessionID())
+        XCTAssertTrue(app.paletteRow(id).waitForExistence(timeout: 5), "the link should open the session editor")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 8), "flagging from the editor should fill the flagged view")
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(app.paletteRow(id).waitForNonExistence(timeout: 5), "Esc should close the editor")
+        let gone = expectation(for: NSPredicate(format: "hittable == false"), evaluatedWith: add)
+        wait(for: [gone], timeout: 8)
+    }
+
+    func testViewMenuOpensTheFlaggedEditor() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        invokeViewMenuItem("Edit Flagged Sessions…")
+        let hint = app.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Return toggles")).firstMatch
+        XCTAssertTrue(hint.waitForExistence(timeout: 5), "the menu item should open an editor")
+        XCTAssertFalse((hint.value as? String ?? "").contains("Filter"), "the session editor states no filter")
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
     /// Issue #242: in the flagged view a row is labeled `session : workspace`. Entering inline rename must
     /// seed the editor with the BARE session name, not that decorated label — otherwise editing without
     /// deleting the ` : <workspace>` tail bakes the suffix into the stored custom name, and the flagged
@@ -293,6 +324,11 @@ final class FlaggedViewUITests: XCTestCase {
     private func snapshotObject() -> [String: Any]? {
         guard let data = try? Data(contentsOf: stateDir.windowSnapshotFile()) else { return nil }
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private func firstSessionID() -> String? {
+        let workspaces = snapshotObject()?["workspaces"] as? [[String: Any]]
+        return (workspaces?.first?["sessions"] as? [[String: Any]])?.first?["id"] as? String
     }
 
     /// Polls the snapshot until the (single seeded workspace's) session `customName`s equal `expected`.

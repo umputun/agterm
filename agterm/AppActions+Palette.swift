@@ -38,6 +38,7 @@ extension AppActions {
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
             hasRecentClosed: !library.recentClosedItems.isEmpty,
             hasActiveSession: activeStore?.activeSession != nil,
+            hasSessions: activeStore?.workspaces.contains { !$0.sessions.isEmpty } == true,
             hasCurrentWorkspace: activeStore?.currentWorkspaceID != nil,
             hasRemotes: !configuredRemotes.isEmpty,
             terminalZoomActive: terminalZoomActive,
@@ -118,7 +119,9 @@ extension AppActions {
         case .deleteWorkspace: deleteActiveWorkspace()
         case .toggleFlaggedView: toggleFlaggedView()
         case .clearFlagged: clearFlags()
+        case .editFlaggedSessions: openFlaggedEditor()
         case .clearFocus: clearFocus()
+        case .editFocusedWorkspaces: openFocusEditor()
         case .addWorkspaceToFocus: addActiveWorkspaceToFocus()
         case .toggleWorkspaceFilter: toggleFocusFilter()
         case .expandWorkspaces: expandAllWorkspaces()
@@ -299,30 +302,73 @@ extension AppActions {
         palette?.toggle(.customCommands)
     }
 
-    /// Open `.attention` from the action-palette "Show Attention" launcher on the next runloop tick, like
-    /// `openThemePalette()`: the launcher runs inside the action palette's `runItem`, which calls
-    /// `controller.close()` right after this returns, so a synchronous toggle would be undone.
     func openAttentionPalette() {
+        openDeferred(.attention)
+    }
+
+    // MARK: - Membership editors
+
+    func openFlaggedEditor() {
+        openDeferred(.flaggedEditor)
+    }
+
+    func openFocusEditor() {
+        openDeferred(.focusEditor)
+    }
+
+    // defer until the launching action palette has dismissed: its runItem closes the controller right after
+    // the launcher returns, so a synchronous open would be undone.
+    private func openDeferred(_ mode: PaletteMode) {
         guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.terminalZoomActive,
                   !self.pickActive(for: self.library.activeWindowID) else { return }
-            self.palette?.open(.attention)
+            self.palette?.open(mode)
+        }
+    }
+
+    // capture the row target because unflagging can change the active session.
+    func paletteFlaggedEditor() -> [PaletteItem] {
+        guard let store else { return [] }
+        return store.workspaces.flatMap { workspace in
+            workspace.sessions.map { session in
+                let id = session.id
+                return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: workspace.name,
+                                   indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
+                                   isEnabled: { [weak self, weak store] in
+                                       self?.uiActionsEnabled == true && store?.session(withID: id) != nil
+                                   },
+                                   mark: { [weak store] in .flag(store?.session(withID: id)?.flagged == true) },
+                                   run: { [weak store] in
+                                       guard let store, let live = store.session(withID: id) else { return }
+                                       store.setFlag(!live.flagged, forSession: id)
+                                   })
+            }
+        }
+    }
+
+    func paletteFocusEditor() -> [PaletteItem] {
+        guard let store else { return [] }
+        return store.workspaces.map { workspace in
+            let id = workspace.id
+            let count = workspace.sessions.count
+            return PaletteItem(id: id.uuidString, title: workspace.name,
+                               subtitle: count == 1 ? "1 session" : "\(count) sessions",
+                               isEnabled: { [weak self, weak store] in
+                                   self?.uiActionsEnabled == true && store?.workspaces.contains { $0.id == id } == true
+                               },
+                               mark: { [weak store] in .focus(store?.focusedWorkspaceIDs.contains(id) == true) },
+                               run: { [weak store] in
+                                   guard let store else { return }
+                                   store.setFocusMembership(id, member: !store.focusedWorkspaceIDs.contains(id))
+                               })
         }
     }
 
     // MARK: - Theme picker
 
-    /// Open the `.themes` palette (the live-preview theme picker), from the action-palette "Select Theme…"
-    /// launcher or View ▸ Select Theme…, on the next runloop tick: launched from the open action palette, that
-    /// palette's run handler closes itself right after this returns, so only an async reopen survives it.
     func openThemePalette() {
-        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.terminalZoomActive,
-                  !self.pickActive(for: self.library.activeWindowID) else { return }
-            self.palette?.open(.themes)
-        }
+        openDeferred(.themes)
     }
 
     /// Theme rows for the `.themes` palette: a leading "Default" entry plus one per bundled theme,
