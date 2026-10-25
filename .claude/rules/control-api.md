@@ -614,7 +614,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   host ATS exempts by syntax (unqualified, `.local`, an IP literal): the store would accept any other and
   the load would then fail, with no refusal for the browser fallback to act on. Explicit `--url` is not
   narrowed. That opens `--url --browse --js --navigation
-  --persistent` full-size on the click's owning session, without selecting it, and returns false, sending
+  --persistent` on the click's owning session at the mode's `sizePercent` (full size for `overlay`), without
+  selecting it, and returns false, sending
   the link to the browser, when a HUD is up on the session, when its window has a zoomed terminal, or when
   `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those
   opens: one closes the HUD for good, the other shows nothing. A HUD, a program overlay and the quick
