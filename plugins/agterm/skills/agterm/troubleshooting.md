@@ -304,6 +304,27 @@ disconnects the CLI sessions attached to it. A daemon-backed conversation can st
 exits: if `codex --no-daemon resume <id>` shows "This conversation is open in another app", stop the
 shared daemon and press R to retry.
 
+### "Claude Code background sessions have no status"
+
+A session started with `claude --bg` runs under Claude Code's supervisor, which does not pass the
+launching pane's `AGTERM_*` variables, so its status hooks find no `AGTERM_SESSION_ID` and exit quietly.
+`--settings` carries over into a background session and its hooks inherit the `env` block, so pass the
+variables there. With the hooks installed (Help ▸ Install Agent Status Hooks…), launch from the pane that
+should show the status:
+
+```bash
+cbg() {
+  claude --bg --settings "$(jq -cn \
+    --arg s "$AGTERM_SESSION_ID" --arg k "$AGTERM_SOCKET" \
+    --arg p "$AGTERM_PANE" --arg i "$AGTERM_PANE_ID" \
+    '{env:{AGTERM_SESSION_ID:$s,AGTERM_SOCKET:$k,AGTERM_PANE:$p,AGTERM_PANE_ID:$i}}')" "$@"
+}
+cbg "your prompt"
+```
+
+The status stays with the launching pane; `claude attach` from another pane does not move it. Verified
+hook routing with Claude Code 2.1.311.
+
 ### "Claude Code's question/permission prompt is unresponsive after switching apps"
 
 Known upstream Claude Code bug, NOT agterm. Do not file an agterm issue for it. While Claude Code shows

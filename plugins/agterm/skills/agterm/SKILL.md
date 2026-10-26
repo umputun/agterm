@@ -68,6 +68,8 @@ Before starting such a process from inside agterm, scrub the variables
 (`env -u AGTERM_ENABLED -u AGTERM_PANE -u AGTERM_PANE_ID -u AGTERM_SESSION_ID -u AGTERM_SOCKET -u AGTERM_WINDOW_ID -u AGTERM_WORKSPACE_ID <cmd>`);
 see troubleshooting.md ("agent-status glyph updates the wrong session") for diagnosing and fixing an
 already-poisoned tmux server, and for the Codex shared-daemon limitation, which scrubbing does not fix.
+Claude Code background sessions (`claude --bg`) get none of the variables; troubleshooting.md ("Claude
+Code background sessions have no status") passes them in through `--settings`.
 
 ## Running agtermctl
 
