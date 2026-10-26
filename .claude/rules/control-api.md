@@ -597,8 +597,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `HtmlOverlayRegistry` owns the saved store. The open adapter asks `persistentStoreFailure()` before it
   accepts a persistent page and builds the page before replying, so the page counts as open from the moment
   the open answers ok; every other page is still built when a view first asks for it.
-- `browser.links` sets or reads `AppSettings.linkOpenMode` (`browser` | `overlay`), app-global like
-  `browser.clear`; no mode reads, and the reply's `text` is the effective mode either way. It writes through
+- `browser.links` sets or reads `AppSettings.linkOpenMode`
+  (`browser` | `overlay` | `overlay95` | `overlay75` | `overlay50`), app-global like `browser.clear`;
+  the numbered modes open the page at that `sizePercent` (`LinkOpenMode.overlaySizePercent`).
+  No mode reads, and the reply's `text` is the effective mode either way. It writes through
   `SettingsModel.setLinkOpenMode`, the Settings picker's setter. Read back as top-level `tree.linkOpenMode`.
   Poll-only: no event reports a change, and nothing is restored but the setting itself.
 - A URL page opened with `--browse` (`HtmlOverlay.browse`, read back as `browse`) may take its main frame to
@@ -612,7 +614,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   host ATS exempts by syntax (unqualified, `.local`, an IP literal): the store would accept any other and
   the load would then fail, with no refusal for the browser fallback to act on. Explicit `--url` is not
   narrowed. That opens `--url --browse --js --navigation
-  --persistent` full-size on the click's owning session, without selecting it, and returns false, sending
+  --persistent` on the click's owning session at the mode's `sizePercent` (full size for `overlay`), without
+  selecting it, and returns false, sending
   the link to the browser, when a HUD is up on the session, when its window has a zoomed terminal, or when
   `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those
   opens: one closes the HUD for good, the other shows nothing. A HUD, a program overlay and the quick

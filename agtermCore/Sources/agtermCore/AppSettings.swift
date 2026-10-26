@@ -20,11 +20,24 @@ public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case tree
 }
 
-/// Where a clicked web link from terminal output opens: the system `browser`, or a session web `overlay`.
-/// App-wide. Raw-stored, resolved by `effectiveLinkOpenMode`.
+/// Where a clicked web link from terminal output opens: the system `browser`, or a session web overlay at
+/// full size (`overlay`), 95%, 75% or 50%. App-wide. Raw-stored, resolved by `effectiveLinkOpenMode`.
 public enum LinkOpenMode: String, Codable, Sendable, CaseIterable {
     case browser
     case overlay
+    case overlay95
+    case overlay75
+    case overlay50
+
+    /// overlaySizePercent is the overlay's `--size-percent`; nil for full size and for `browser`.
+    public var overlaySizePercent: Int? {
+        switch self {
+        case .browser, .overlay: nil
+        case .overlay95: 95
+        case .overlay75: 75
+        case .overlay50: 50
+        }
+    }
 }
 
 /// How a delivered notification bounces the Dock icon (`requestUserAttention`): `off`, `once` (one

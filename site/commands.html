@@ -596,8 +596,9 @@
                 navigation also stops on active sessions; a Settings toggle with no command),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span> or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay95</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay75</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay50</span>, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">browser links</span>; app-wide),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarFlaggedLayout</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">flat</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">plain</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, the read side of
@@ -3495,7 +3496,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl browser links [browser|overlay]
+                agtermctl browser links [browser|overlay|overlay95|overlay75|overlay50]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">browser.links</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -3503,7 +3504,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span>, the default, hands it to the system browser.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span> opens it in a full session web overlay with JavaScript, navigation
                 buttons and the saved browser store, as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--url URL --browse --js --navigation --persistent</span>
-                would, without selecting the session. App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+                would, without selecting the session. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay95</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay75</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay50</span> also pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> 95, 75 or 50. App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
                 Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> at the top of <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree --json</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">

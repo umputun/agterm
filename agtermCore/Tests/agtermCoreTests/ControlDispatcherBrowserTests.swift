@@ -38,7 +38,8 @@ struct ControlDispatcherBrowserTests {
         #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == open)
     }
 
-    @Test(arguments: [("browser", LinkOpenMode.browser), ("overlay", .overlay)])
+    @Test(arguments: [("browser", LinkOpenMode.browser), ("overlay", .overlay), ("overlay95", .overlay95), ("overlay75", .overlay75),
+                       ("overlay50", .overlay50)])
     func browserLinksSetsTheModeAndKeepsTheReply(_ raw: String, _ mode: LinkOpenMode) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

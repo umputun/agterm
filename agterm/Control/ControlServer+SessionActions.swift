@@ -69,14 +69,15 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// openLinkOverlay shows a clicked link as a browsing page over its session and says whether it did.
+    /// openLinkOverlay shows a clicked link as a browsing page over its session, at `sizePercent` or full size
+    /// when nil, and says whether it did.
     /// A HUD on the session and a zoomed terminal in its window both refuse it up front: the store would
     /// accept the page, closing the HUD for good in one case and showing nothing in the other.
-    func openLinkOverlay(_ url: URL, session id: UUID) -> Bool {
+    func openLinkOverlay(_ url: URL, session id: UUID, sizePercent: Int?) -> Bool {
         guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
         if let windowID = library.windowID(forSession: id),
            TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
-        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                        backgroundColor: nil, page: .url(url), navigation: true,
                                                        javascript: true, persistent: true, browse: true)
         return openSessionOverlay(id.uuidString, window: nil, options: options).ok

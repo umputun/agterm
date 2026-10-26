@@ -9,16 +9,16 @@ struct LinkOpener {
     static var shared = LinkOpener()
 
     var mode: () -> LinkOpenMode = { .browser }
-    /// overlay opens `url` as a browsing page over the session and says whether it did; false sends the
-    /// link to the browser.
-    var overlay: (URL, UUID) -> Bool = { _, _ in false }
+    /// overlay opens `url` as a browsing page over the session at the given size percent (nil for full size)
+    /// and says whether it did; false sends the link to the browser.
+    var overlay: (URL, UUID, Int?) -> Bool = { _, _, _ in false }
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
 
     func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin) {
         switch LinkPolicy.route(for: raw, mode: mode(), origin: origin) {
         case .browser(let url): open(url)
-        case .overlay(let url, let session): if !overlay(url, session) { open(url) }
+        case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
         case .reveal(let url): reveal(url)
         case .ignore: return
         }

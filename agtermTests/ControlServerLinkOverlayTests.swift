@@ -48,13 +48,27 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         let before = useBrowserProfile()
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:1/pr/1"))
 
-        XCTAssertTrue(server.openLinkOverlay(url, session: session.id))
+        XCTAssertTrue(server.openLinkOverlay(url, session: session.id, sizePercent: nil))
 
         let page = try XCTUnwrap(session.htmlOverlay)
         XCTAssertEqual(page.source, .url(url))
         XCTAssertTrue(page.browse && page.javascript && page.navigation && page.persistent)
         XCTAssertNil(session.overlaySizePercent)
         XCTAssertEqual(store.selectedSessionID, other.id)
+        store.closeOverlay(session.id)
+        try await TestBrowserStore.remove(BrowserProfile(directory: stateDir))
+        HtmlOverlayRegistry.shared.profile = before
+    }
+
+    func testALinkOpensAtTheSizeItsModeNames() async throws {
+        let (store, session) = try addSession()
+        let before = useBrowserProfile()
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:1/pr/1"))
+
+        XCTAssertTrue(server.openLinkOverlay(url, session: session.id, sizePercent: 75))
+
+        XCTAssertEqual(session.htmlOverlay?.source, .url(url))
+        XCTAssertEqual(session.overlaySizePercent, 75)
         store.closeOverlay(session.id)
         try await TestBrowserStore.remove(BrowserProfile(directory: stateDir))
         HtmlOverlayRegistry.shared.profile = before
@@ -67,7 +81,7 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertTrue(store.openHud(session.id, command: "/bin/cat", spec: HudSpec(message: "recap"), file: "/tmp/hud",
                                     size: HudPanelSize(widthPercent: 40, heightPercent: 20)))
 
-        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id))
+        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id, sizePercent: nil))
 
         XCTAssertTrue(session.hudActive)
         XCTAssertNil(session.htmlOverlay)
@@ -80,7 +94,7 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         defer { HtmlOverlayRegistry.shared.profile = before }
         XCTAssertTrue(store.openOverlay(session.id, command: "/bin/cat"))
 
-        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id))
+        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id, sizePercent: nil))
 
         XCTAssertTrue(session.programOverlayActive)
         store.closeOverlay(session.id)
@@ -96,7 +110,7 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         defer { TerminalZoomRegistry.shared.unregister(windowID) }
         zoom.set(.on, target: .session(session.id, .primary))
 
-        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id))
+        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id, sizePercent: nil))
 
         XCTAssertNil(session.htmlOverlay)
         XCTAssertEqual(zoom.target, .session(session.id, .primary))
@@ -109,9 +123,9 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         HtmlOverlayRegistry.shared.profile = nil
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:1/"))
 
-        XCTAssertFalse(server.openLinkOverlay(url, session: session.id))
+        XCTAssertFalse(server.openLinkOverlay(url, session: session.id, sizePercent: nil))
         XCTAssertNil(session.htmlOverlay)
-        XCTAssertFalse(server.openLinkOverlay(url, session: UUID()))
+        XCTAssertFalse(server.openLinkOverlay(url, session: UUID(), sizePercent: nil))
     }
 
     private func addSession() throws -> (AppStore, Session) {

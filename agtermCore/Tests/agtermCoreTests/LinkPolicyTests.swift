@@ -185,7 +185,14 @@ struct LinkPolicyTests {
     func overlayModeOpensPaneAndScratchWebLinksOnTheOwningSession(_ raw: String, _ origin: LinkPolicy.ClickOrigin) throws {
         let url = try #require(URL(string: raw))
         #expect(LinkPolicy.route(for: raw, mode: .overlay, origin: origin, localHosts: Self.localHosts)
-            == .overlay(url, session: Self.session))
+            == .overlay(url, session: Self.session, sizePercent: nil))
+    }
+
+    @Test(arguments: [(LinkOpenMode.overlay, nil), (.overlay95, 95), (.overlay75, 75), (.overlay50, 50)] as [(LinkOpenMode, Int?)])
+    func eachOverlayModeCarriesItsSizeToTheRoute(_ mode: LinkOpenMode, _ percent: Int?) throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        #expect(LinkPolicy.route(for: "https://example.com/a", mode: mode, origin: .pane(Self.session), localHosts: Self.localHosts)
+            == .overlay(url, session: Self.session, sizePercent: percent))
     }
 
     // regression: a plain-http page the app's web views cannot load was routed to the overlay
@@ -200,7 +207,7 @@ struct LinkPolicyTests {
     func overlayModeTakesPlainHttpOnlyFromHostsAWebViewMayLoad(_ raw: String, _ overlay: Bool) throws {
         let url = try #require(URL(string: raw))
         let route = LinkPolicy.route(for: raw, mode: .overlay, origin: .pane(Self.session), localHosts: Self.localHosts)
-        #expect(route == (overlay ? .overlay(url, session: Self.session) : .browser(url)))
+        #expect(route == (overlay ? .overlay(url, session: Self.session, sizePercent: nil) : .browser(url)))
     }
 
     @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])

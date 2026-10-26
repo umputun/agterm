@@ -18,11 +18,12 @@ struct MiscCommandsTests {
 
     @Test func browserLinksSendsItsModeOrNoneAndTakesNoWindow() throws {
         #expect(try Browser.Links.parse([]).makeRequest() == ControlRequest(cmd: .browserLinks))
-        for mode in ["browser", "overlay"] {
+        for mode in ["browser", "overlay", "overlay95", "overlay75", "overlay50"] {
             #expect(try Browser.Links.parse([mode]).makeRequest()
                 == ControlRequest(cmd: .browserLinks, args: ControlArgs(mode: mode)))
         }
         #expect(throws: (any Error).self) { try Browser.Links.parse(["tab"]) }
+        #expect(throws: (any Error).self) { try Browser.Links.parse(["overlay60"]) }
         #expect(throws: (any Error).self) { try Browser.Links.parse(["overlay", "--window", "w1"]) }
     }
 

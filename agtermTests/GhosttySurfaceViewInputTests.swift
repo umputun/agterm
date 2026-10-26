@@ -9,7 +9,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
     private final class Followed {
         var opened: [URL] = []
         var revealed: [URL] = []
-        var overlaid: [(URL, UUID)] = []
+        var overlaid: [(URL, UUID, Int?)] = []
     }
 
     private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
@@ -17,8 +17,8 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         LinkOpener.shared.mode = { mode }
         LinkOpener.shared.open = { followed.opened.append($0) }
         LinkOpener.shared.reveal = { followed.revealed.append($0) }
-        LinkOpener.shared.overlay = { url, session in
-            followed.overlaid.append((url, session))
+        LinkOpener.shared.overlay = { url, session, percent in
+            followed.overlaid.append((url, session, percent))
             return overlayOpens
         }
         return followed
@@ -61,7 +61,12 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         pane.openLink(url.absoluteString)
         XCTAssertEqual(shown.overlaid.map(\.0), [url])
         XCTAssertEqual(shown.overlaid.map(\.1), [session.id])
+        XCTAssertEqual(shown.overlaid.map(\.2), [nil])
         XCTAssertTrue(shown.opened.isEmpty)
+
+        let sized = recordLinks(mode: .overlay75, overlayOpens: true)
+        pane.openLink(url.absoluteString)
+        XCTAssertEqual(sized.overlaid.map(\.2), [75])
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
         pane.openLink(url.absoluteString)
