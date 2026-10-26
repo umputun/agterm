@@ -544,8 +544,7 @@ private struct InterfaceSettingsView: View {
         }
     }
 
-    /// One element's show/hide toggle: ON = visible (the default), so hiding is the opt-in that writes. The
-    /// label leads with the glyph the control shows, or an empty slot of the same width for a text element.
+    /// One element's show/hide toggle: ON = visible (the default), so hiding is the opt-in that writes.
     private func toggle(for element: InterfaceElement) -> some View {
         Toggle(isOn: binding(for: element)) {
             HStack(spacing: 6) {
@@ -556,8 +555,7 @@ private struct InterfaceSettingsView: View {
                         Color.clear
                     }
                 }
-                .frame(width: 18)
-                .accessibilityHidden(true)
+                .frame(width: 18).accessibilityHidden(true)
                 Text(element.displayName)
             }
         }
