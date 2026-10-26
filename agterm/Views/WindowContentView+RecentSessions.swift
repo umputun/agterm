@@ -28,7 +28,7 @@ extension WindowContentView {
         } label: {
             Label("Recent sessions", systemImage: InterfaceElement.recentSessions.symbolName!)
         }
-        .help("Recent sessions (⌃Tab)")
+        .toolTip("Recent sessions (⌃Tab)")
         // pin the tint to chromeText like the attention bell: a disabled plain button otherwise resolves the SF
         // Symbol to the system disabled color, near-invisible on the themed titlebar — the dimmed clock would
         // vanish instead of graying out like the bell.
@@ -128,7 +128,7 @@ extension WindowContentView {
         .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
         .opacity(enabled ? 1 : 0.35)
         .disabled(!enabled)
-        .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
+        .toolTip(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
         .accessibilityIdentifier("attention-button")
         .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
         .popover(isPresented: $attentionPopoverShown, arrowEdge: .bottom) {

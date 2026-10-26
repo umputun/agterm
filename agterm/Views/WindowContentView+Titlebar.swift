@@ -132,7 +132,7 @@ extension WindowContentView {
         } label: {
             Label("Toggle Sidebar", systemImage: InterfaceElement.sidebarToggle.symbolName!)
         }
-        .help(helpHint("Toggle Sidebar", .toggleSidebar))
+        .toolTip(helpHint("Toggle Sidebar", .toggleSidebar))
         .accessibilityIdentifier("sidebar-toggle-button")
     }
 
@@ -165,7 +165,7 @@ extension WindowContentView {
         } label: {
             Label("Split", systemImage: symbol)
         }
-        .help(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), shortcutAction))
+        .toolTip(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), shortcutAction))
         .disabled(store.activeSession == nil)
         .accessibilityValue(a11y)
         .accessibilityIdentifier("split-toggle")
@@ -180,7 +180,7 @@ extension WindowContentView {
         } label: {
             Label("Scratch", systemImage: active ? "rectangle.inset.filled" : InterfaceElement.scratch.symbolName!)
         }
-        .help(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
+        .toolTip(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("scratch-toggle")
     }
@@ -198,7 +198,7 @@ extension WindowContentView {
         } label: {
             Label("Overlays", systemImage: anyHidden ? "rectangle.on.rectangle.slash" : InterfaceElement.overlayToggle.symbolName!)
         }
-        .help(helpHint(anyShown ? "Hide Overlays" : "Show Overlays", .toggleOverlay))
+        .toolTip(helpHint(anyShown ? "Hide Overlays" : "Show Overlays", .toggleOverlay))
         // this window's own covers, the set `PaletteContext.modalActive` holds for the frontmost window
         .disabled(slots.isEmpty || pick.modalPending || terminalZoom.target != nil || dashboard.isOpen)
         .accessibilityLabel(anyShown ? "Hide Overlays" : "Show Overlays")
@@ -214,7 +214,7 @@ extension WindowContentView {
         } label: {
             Label("Quick Terminal", systemImage: InterfaceElement.quickTerminal.symbolName!)
         }
-        .help(helpHint("Quick Terminal", .quickTerminal))
+        .toolTip(helpHint("Quick Terminal", .quickTerminal))
         .disabled(pick.modalPending)
         .accessibilityIdentifier("quick-terminal-toggle")
     }
