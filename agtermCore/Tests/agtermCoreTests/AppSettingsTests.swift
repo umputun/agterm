@@ -739,6 +739,13 @@ struct AppSettingsTests {
         #expect(Set(symbols).count == symbols.count)
     }
 
+    @Test func settingsOrderListsTextOnlyElementsFirst() {
+        let titleBar = InterfaceElement.settingsOrder(in: .titleBar)
+        #expect(Array(titleBar.prefix(4)) == [.workspaceName, .sessionName, .windowName, .sessionContext])
+        #expect(Array(titleBar.dropFirst(4)) == InterfaceElement.allCases.filter { $0.section == .titleBar && $0.symbolName != nil })
+        #expect(InterfaceElement.settingsOrder(in: .sidebar) == InterfaceElement.allCases.filter { $0.section == .sidebar })
+    }
+
     @Test func workspaceNameIsAnOptInTitleBarInterfaceElement() throws {
         #expect(InterfaceElement.workspaceName.section == .titleBar)
         #expect(InterfaceElement.workspaceName.displayName == "Workspace name")

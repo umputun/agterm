@@ -101,6 +101,12 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// The section's elements as Settings lists them: the text-only ones first, so the glyph rows stay together.
+    public static func settingsOrder(in section: Section) -> [InterfaceElement] {
+        let all = allCases.filter { $0.section == section }
+        return all.filter { $0.symbolName == nil } + all.filter { $0.symbolName != nil }
+    }
+
     /// The SF Symbol the element's control shows at rest, shared by that control and its Settings toggle;
     /// nil for the text-only elements. A control with state-dependent glyphs uses it for its neutral state.
     public var symbolName: String? {
