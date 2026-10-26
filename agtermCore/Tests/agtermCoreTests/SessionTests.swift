@@ -22,6 +22,47 @@ struct SessionTests {
         #expect(session.overlayCommand == "review")
     }
 
+    @Test func askCoversBothPanesWhenSessionWideAndOnlyItsOwnWhenAnchored() {
+        let session = Session(initialCwd: "/tmp")
+        let split = UUID()
+        session.splitPaneIdentity = split
+        session.isSplit = true
+        let ask = PendingAsk(id: "a", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        #expect(!session.askCoversAnyPane)
+
+        #expect(session.openAsk(ask))
+        #expect(session.askCovers(.left))
+        #expect(session.askCovers(.right))
+        #expect(session.cancelAsk(id: ask.id))
+
+        #expect(session.openAsk(ask, paneIdentity: split))
+        #expect(!session.askCovers(.left))
+        #expect(session.askCovers(.right))
+        #expect(session.askCoversAnyPane)
+    }
+
+    @Test(arguments: ["collapsed pane", "scratch", "remote"])
+    func askThatIsNotDrawnHereCoversNoPane(_ hidden: String) {
+        let session = Session(initialCwd: "/tmp")
+        let split = UUID()
+        session.splitPaneIdentity = split
+        session.isSplit = true
+        let ask = PendingAsk(id: "a", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        switch hidden {
+        case "collapsed pane":
+            #expect(session.openAsk(ask, paneIdentity: split))
+            session.isSplit = false
+        case "scratch":
+            #expect(session.openAsk(ask, paneIdentity: split))
+            session.scratchActive = true
+        default:
+            #expect(session.openAsk(ask, remoteOwner: 1))
+        }
+        #expect(!session.askCovers(.left))
+        #expect(!session.askCovers(.right))
+        #expect(!session.askCoversAnyPane)
+    }
+
     @Test func separateSessionsCanHoldAsksTogether() {
         let first = Session(initialCwd: "/tmp")
         let second = Session(initialCwd: "/tmp")

@@ -14,6 +14,8 @@ struct TerminalSearchBar: View {
     let chromeText: Color
     /// The terminal background color, used as the bar's opaque backing so it reads as a distinct panel.
     let terminalColor: Color
+    /// False while a window modal covers the bar, whose AppKit tooltips would otherwise show through it.
+    var toolTipsShown = true
 
     @FocusState private var fieldFocused: Bool
 
@@ -60,7 +62,7 @@ struct TerminalSearchBar: View {
                 .foregroundStyle(chromeText.opacity(0.8))
         }
         .buttonStyle(.plain)
-        .toolTip(help)
+        .toolTip(help, isShown: toolTipsShown)
         .accessibilityLabel(help)
     }
 }

@@ -435,7 +435,8 @@ struct WindowContentView: View {
                 onPrevious: { actions.navigateSearch(.previous) },
                 onClose: { actions.endSearch() },
                 chromeText: chromeText,
-                terminalColor: terminalColor
+                terminalColor: terminalColor,
+                toolTipsShown: !chromeCovered
             )
             .padding(.top, 8)
             .padding(.trailing, 8)
@@ -684,11 +685,17 @@ struct WindowContentView: View {
         }
     }
 
+    /// Whether a window modal (a palette, the switcher, a pick or an ask) is drawn over the sidebar and the
+    /// deck, which AppKit tooltips cannot see, so chrome there gates its tooltips on it.
+    var chromeCovered: Bool {
+        pick.modalPending || (isFrontmost && (palette.mode != nil || sessionSwitcher.isActive))
+    }
+
     /// The sidebar footer, source-list style: two add controls on the left (a workspace; a menu adding a
     /// session at the default cwd or a picked directory) and two view toggles on the right (the workspace
     /// focus filter, the flagged working-set view). Each is hideable via Settings ▸ Interface (`shows(_:)`).
     private var bottomBar: some View {
-        let tipsShown = terminalZoom.target == nil && !dashboard.isOpen
+        let tipsShown = terminalZoom.target == nil && !dashboard.isOpen && !chromeCovered
         return HStack(spacing: 2) {
             if shows(.newWorkspace) {
                 Button {

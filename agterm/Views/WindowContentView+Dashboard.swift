@@ -77,7 +77,7 @@ extension WindowContentView {
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .toolTip("Exit Dashboard")
+                .toolTip("Exit Dashboard", isShown: titlebarTipsShown)
                 .accessibilityLabel("Exit Dashboard")
                 .accessibilityIdentifier("dashboard-exit")
                 .padding(.trailing, 14)
@@ -126,7 +126,7 @@ extension WindowContentView {
         } label: {
             Label("Dashboard", systemImage: InterfaceElement.dashboard.symbolName!)
         }
-        .toolTip(helpHint("Dashboard", .dashboard))
+        .toolTip(helpHint("Dashboard", .dashboard), isShown: titlebarTipsShown)
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("dashboard-toggle-button")
     }

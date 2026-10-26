@@ -8,6 +8,18 @@ extension Session {
         askPaneIdentity.flatMap(paneRole(forIdentity:))
     }
 
+    /// Whether a locally drawn ask covers `pane`: a session-wide ask covers both panes, an anchored one only its
+    /// own, and only while that pane renders without the scratch over it. A remotely presented ask covers none.
+    public func askCovers(_ pane: OverlayPane) -> Bool {
+        guard askPending != nil, !askPresentedRemotely else { return false }
+        guard askPaneIdentity != nil else { return true }
+        guard let target = askTargetPane, rendersPane(target), !scratchActive else { return false }
+        return target == pane
+    }
+
+    /// Whether a locally drawn ask covers either pane.
+    public var askCoversAnyPane: Bool { OverlayPane.allCases.contains(where: askCovers) }
+
     /// Edits the pending ask's draft; a stale id, from a dialog already resolved, changes nothing.
     public func updateAskDraft(id: String, _ change: (inout AskDraft) -> Void) {
         guard askPending?.id == id, var draft = askDraft else { return }

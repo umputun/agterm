@@ -321,7 +321,8 @@ extension WindowContentView {
                         if let page = session.htmlOverlay, session.htmlOverlayActive {
                             HtmlOverlayView(store: store, session: session, overlay: page,
                                             backgroundColor: session.overlayBackgroundColor, isActive: live,
-                                            visible: live, foreground: chromeText, background: terminalColor)
+                                            visible: live, toolTipsShown: live && !chromeCovered && !session.askCoversAnyPane,
+                                            foreground: chromeText, background: terminalColor)
                         } else {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },
@@ -414,7 +415,9 @@ extension WindowContentView {
                     // keyed on the page, so a swap or promotion moves its web view instead of reusing a host
                     HtmlOverlayView(store: store, session: session, overlay: page,
                                     backgroundColor: session.paneOverlay(pane)?.backgroundColor, isActive: isActive,
-                                    visible: deckVisible, foreground: chromeText, background: terminalColor)
+                                    visible: deckVisible,
+                                    toolTipsShown: deckVisible && !chromeCovered && !session.askCovers(pane),
+                                    foreground: chromeText, background: terminalColor)
                         .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
                         .id("\(session.id.uuidString)-html-\(page.id.uuidString)")
                 } else if active {
