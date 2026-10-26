@@ -688,7 +688,8 @@ struct WindowContentView: View {
     /// session at the default cwd or a picked directory) and two view toggles on the right (the workspace
     /// focus filter, the flagged working-set view). Each is hideable via Settings ▸ Interface (`shows(_:)`).
     private var bottomBar: some View {
-        HStack(spacing: 2) {
+        let tipsShown = terminalZoom.target == nil && !dashboard.isOpen
+        return HStack(spacing: 2) {
             if shows(.newWorkspace) {
                 Button {
                     actions.newWorkspace()
@@ -698,7 +699,7 @@ struct WindowContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help(helpHint("New Workspace", .newWorkspace))
+                .toolTip(helpHint("New Workspace", .newWorkspace), isShown: tipsShown)
                 .accessibilityLabel("New Workspace")
             }
 
@@ -716,7 +717,7 @@ struct WindowContentView: View {
                 .tint(chromeText)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .help(helpHint("New Session", .newSession))
+                .toolTip(helpHint("New Session", .newSession), isShown: tipsShown)
                 .accessibilityLabel("Add session")
                 .accessibilityIdentifier("add-session")
             }
@@ -738,8 +739,8 @@ struct WindowContentView: View {
                 // explicit chromeText foregroundStyle defeats SwiftUI's disabled dimming, so mute by hand.
                 .disabled(store.focusedWorkspaceIDs.isEmpty)
                 .opacity(store.focusedWorkspaceIDs.isEmpty ? 0.35 : 1)
-                .help(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
-                               .toggleWorkspaceFilter))
+                .toolTip(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
+                                  .toggleWorkspaceFilter), isShown: tipsShown)
                 .accessibilityLabel("Toggle Workspace Filter")
                 // the only accessibility-observable read of the filter state.
                 .accessibilityValue(store.focusEnabled ? "on" : "off")
@@ -762,7 +763,8 @@ struct WindowContentView: View {
                 // mode so the button can always switch back to the tree. Hand-muted, like the filter above.
                 .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
                 .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
-                .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
+                .toolTip(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView),
+                         isShown: tipsShown)
                 .accessibilityLabel("Toggle Flagged View")
                 .accessibilityIdentifier("flagged-view-toggle")
             }

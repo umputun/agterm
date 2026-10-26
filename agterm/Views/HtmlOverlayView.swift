@@ -86,7 +86,7 @@ struct HtmlOverlayView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .layoutPriority(1)
-                .help(overlay.current?.page ?? sourceText)
+                .toolTip(overlay.current?.page ?? sourceText, isShown: visible)
                 .accessibilityIdentifier("htmlOverlay.identity")
             if let title = overlay.current?.title {
                 Text("·")
@@ -95,7 +95,7 @@ struct HtmlOverlayView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(foreground.opacity(0.55))
-                    .help(title)
+                    .toolTip(title, isShown: visible)
                     .accessibilityIdentifier("htmlOverlay.title")
             }
         }
@@ -144,7 +144,7 @@ struct HtmlOverlayView: View {
         }
         .buttonStyle(HtmlToolbarButtonStyle(tint: foreground))
         .disabled(!enabled)
-        .help(label)
+        .toolTip(label, isShown: visible)
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
     }

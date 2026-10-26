@@ -47,11 +47,23 @@ final class NativeToolTipTests: XCTestCase {
         XCTAssertFalse(host.hitTest(tip.convert(center, to: host.superview)) is NativeToolTip.ToolTipView)
     }
 
-    private func button(tip: String) -> some View {
+    func testAHiddenControlCarriesNoToolTipUntilShownAgain() throws {
+        let host = NSHostingView(rootView: button(tip: "New Workspace", shown: false))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        let tip = try XCTUnwrap(descendants(NativeToolTip.ToolTipView.self, in: host).first)
+        XCTAssertNil(tip.toolTip)
+
+        host.rootView = button(tip: "New Workspace", shown: true)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(descendants(NativeToolTip.ToolTipView.self, in: host).map(\.toolTip), ["New Workspace"])
+    }
+
+    private func button(tip: String, shown: Bool = true) -> some View {
         Button {} label: { Label("Scratch", systemImage: "square") }
             .labelStyle(.iconOnly)
             .buttonStyle(.plain)
-            .toolTip(tip)
+            .toolTip(tip, isShown: shown)
             .frame(width: 200, height: 100)
     }
 

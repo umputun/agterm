@@ -60,6 +60,7 @@ struct TerminalSearchBar: View {
                 .foregroundStyle(chromeText.opacity(0.8))
         }
         .buttonStyle(.plain)
-        .help(help)
+        .toolTip(help)
+        .accessibilityLabel(help)
     }
 }

@@ -2,19 +2,17 @@ import AppKit
 import SwiftUI
 
 extension View {
-    /// Shows `text` as an AppKit tooltip and as the control's accessibility hint, in place of `.help`.
-    /// SwiftUI's `.help` restarts its delay on every pointer movement inside the control, so a hand that is
-    /// not perfectly still never sees it, and a tooltip already up does not pass to the next button the way
-    /// AppKit's does (#809).
-    func toolTip(_ text: String) -> some View {
+    /// An AppKit tooltip and accessibility hint in place of `.help`, whose delay restarts on any move.
+    /// It ignores SwiftUI opacity and views drawn over it: pass `isShown` where the control can be hidden.
+    func toolTip(_ text: String, isShown: Bool = true) -> some View {
         accessibilityHint(text)
-            .background(NativeToolTip(text: text).accessibilityHidden(true))
+            .background(NativeToolTip(text: isShown ? text : nil).accessibilityHidden(true))
     }
 }
 
 /// The view carrying the AppKit tooltip, sized to the control it backs.
 struct NativeToolTip: NSViewRepresentable {
-    let text: String
+    let text: String?
 
     func makeNSView(context _: Context) -> ToolTipView {
         let view = ToolTipView()
