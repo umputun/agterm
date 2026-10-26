@@ -109,14 +109,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.move(flags: .command)
         fixture.click(flags: .command)
         fixture.wait { !plain.overlaid.isEmpty }
-        XCTAssertEqual(plain.overlaid.map(\.0), [url])
+        XCTAssertEqual(plain.overlaid.map(\.0), [url], fixture.geometry)
         XCTAssertTrue(plain.opened.isEmpty)
 
         let chord = recordLinks(mode: .overlay, overlayOpens: true)
         fixture.move(flags: [.command, .shift])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !chord.opened.isEmpty }
-        XCTAssertEqual(chord.opened, [url])
+        XCTAssertEqual(chord.opened, [url], fixture.geometry)
         XCTAssertTrue(chord.overlaid.isEmpty)
     }
 
@@ -127,7 +127,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.move(flags: [.command, .shift])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !shown.opened.isEmpty }
-        XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/osc"))])
+        XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/osc"))], fixture.geometry)
         XCTAssertTrue(shown.overlaid.isEmpty)
     }
 
@@ -139,7 +139,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.wait { fixture.surface.mouseShape == GHOSTTY_MOUSE_SHAPE_POINTER }
         fixture.flagsChanged(keyCode: 56, flags: [.shift, .command])
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
-        XCTAssertEqual(fixture.surface.mouseShape, GHOSTTY_MOUSE_SHAPE_POINTER)
+        XCTAssertEqual(fixture.surface.mouseShape, GHOSTTY_MOUSE_SHAPE_POINTER, fixture.geometry)
     }
 
     func testCommandShiftClickOnAStillPointerWithoutAModifierChangeOpensTheBrowser() throws {
@@ -149,7 +149,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.move(flags: [])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !shown.opened.isEmpty }
-        XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/pr/1"))])
+        XCTAssertEqual(shown.opened, [try XCTUnwrap(URL(string: "https://example.com/pr/1"))], fixture.geometry)
     }
 
     func testCommandShiftClickUnderMouseCaptureFollowsTheOverlaySetting() throws {
@@ -160,7 +160,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.move(flags: [.command, .shift])
         fixture.click(flags: [.command, .shift])
         fixture.wait { !shown.opened.isEmpty || !shown.overlaid.isEmpty }
-        XCTAssertEqual(shown.overlaid.map(\.0), [try XCTUnwrap(URL(string: "https://example.com/pr/1"))])
+        XCTAssertEqual(shown.overlaid.map(\.0), [try XCTUnwrap(URL(string: "https://example.com/pr/1"))], fixture.geometry)
         XCTAssertTrue(shown.opened.isEmpty)
     }
 
@@ -298,21 +298,33 @@ private final class LinkClickFixture {
     let surface: GhosttySurfaceView
     private let window: NSWindow
     private let session = Session(initialCwd: NSTemporaryDirectory())
-    private let link = NSPoint(x: 40, y: 288)
-    private let blank = NSPoint(x: 40, y: 150)
+    private var link = NSPoint.zero
+    private let blank = NSPoint(x: 40, y: 20)
 
     init(printing text: String, before prefix: String = "") throws {
         window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
                           backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "printf '\(prefix)\(text)\\n'; cat")
+        surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "printf '\(prefix)\(text)'; cat")
         surface.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
         window.contentView?.addSubview(surface)
         surface.createSurface()
         XCTAssertTrue(surface.isRealized)
-        wait { self.surface.readScreenText(all: false, lines: nil)?.contains("example") == true
-            || self.surface.readScreenText(all: false, lines: nil)?.contains("pull request") == true }
+        let printed = { self.surface.readScreenText(all: false, lines: nil).map { $0.contains("example") || $0.contains("pull request") } == true }
+        wait(printed)
+        XCTAssertTrue(printed())
+        let raw = try XCTUnwrap(surface.surface)
+        let cell = try XCTUnwrap(surface.cellSize())
+        var x = 0.0, y = 0.0, w = 0.0, h = 0.0
+        ghostty_surface_ime_point(raw, &x, &y, &w, &h)
+        link = NSPoint(x: x - 6 * cell.width, y: surface.bounds.height - (y - cell.height / 2))
+        XCTAssertTrue(surface.bounds.contains(link))
         surface.session = session
+    }
+
+    var geometry: String {
+        "link=\(link) cell=\(String(describing: surface.cellSize())) shape=\(surface.mouseShape.rawValue) "
+            + "screen=<<\(surface.readScreenText(all: false, lines: nil) ?? "nil")>>"
     }
 
     func close() {
