@@ -2,7 +2,7 @@ import agtermCore
 import AppKit
 
 /// Local monitor for the undo-close chord. It deliberately avoids a menu `keyboardShortcut` so native
-/// text undo keeps working in rename fields, palettes, and settings controls.
+/// text undo keeps working in rename fields, palettes, settings controls, and HTML pages.
 @MainActor
 final class UndoCloseShortcut {
     private let actions: AppActions
@@ -22,10 +22,16 @@ final class UndoCloseShortcut {
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard actions.store?.pendingCloseSummary != nil else { return false }
-        guard NSApp.keyWindow?.firstResponder is NSText == false else { return false }
+        guard !Self.yieldsChord(to: NSApp.keyWindow?.firstResponder) else { return false }
         guard let chord = chord(from: event), matchesUndoCloseChord(chord) else { return false }
         actions.undoClose()
         return true
+    }
+
+    /// Whether `responder` keeps the chord for its own undo: a native text field or a focused HTML page.
+    /// No session is passed, so a page that merely covers the session while focus is elsewhere does not.
+    static func yieldsChord(to responder: NSResponder?) -> Bool {
+        responder is NSText || AppActions.htmlPageOwnsKeys(responder: responder, session: nil)
     }
 
     /// Whether `chord` is what `undo_close` is bound to right now. A wired keymap answering nil means a `map`
