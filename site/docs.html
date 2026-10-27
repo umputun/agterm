@@ -2618,7 +2618,10 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> still
               names its current slot. A pane that is not on screen is refused with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane not visible</span>; hiding the
-              split after opening is fine, the program keeps running and reappears when the split comes back.
+              split after opening is fine, the program keeps running and reappears when the split comes back. A pane overlay
+              opened while a session-wide program or page is open draws above it: the session overlay keeps running but steps
+              out of sight while the pane overlay is shown, and comes back when that pane overlay closes or is hidden, unless
+              you hid it yourself.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">copy</span> and

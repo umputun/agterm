@@ -26,17 +26,29 @@ public enum OverlayVisibilityFailure: Equatable, Sendable {
 }
 
 extension Session {
+    /// sessionSlotShown says the session-wide occupant is drawn: not hidden by hand, and not under a pane
+    /// overlay opened after it that is shown on a laid-out pane. `overlayHidden` stays the user's own choice.
+    public var sessionSlotShown: Bool { !overlayHidden && !sessionCoverHeld }
+
+    /// sessionCoverHeld: a pane overlay opened after the session-wide program or page is shown on a laid-out
+    /// pane, so it draws above that cover. Local presentation only: a replica page still reports its own bit.
+    var sessionCoverHeld: Bool {
+        OverlayPane.allCases.contains { pane in
+            paneOverlay(pane).map { $0.holdsSessionCover && !$0.hidden } == true && rendersPane(pane)
+        }
+    }
+
     /// coverOverlayVisible is `coverOverlayActive` minus a hidden occupant: the input-exclusion question.
-    public var coverOverlayVisible: Bool { coverOverlayActive && !overlayHidden }
+    public var coverOverlayVisible: Bool { coverOverlayActive && sessionSlotShown }
 
     /// programOverlayVisible is `programOverlayActive` minus a hidden occupant.
-    public var programOverlayVisible: Bool { programOverlayActive && !overlayHidden }
+    public var programOverlayVisible: Bool { programOverlayActive && sessionSlotShown }
 
     /// htmlOverlayVisible is `htmlOverlayActive` minus a hidden occupant.
-    public var htmlOverlayVisible: Bool { htmlOverlayActive && !overlayHidden }
+    public var htmlOverlayVisible: Bool { htmlOverlayActive && sessionSlotShown }
 
     /// fullOverlayVisible is `fullOverlayActive` minus a hidden occupant: whether the panes are hidden.
-    public var fullOverlayVisible: Bool { fullOverlayActive && !overlayHidden }
+    public var fullOverlayVisible: Bool { fullOverlayActive && sessionSlotShown }
 
     /// visibleCover is the cover owning the keyboard now, nil for the terminal itself. It changes only when what
     /// the user types into changes: a hidden overlay closing or the other pane's overlay toggling leaves it alone,
@@ -77,12 +89,26 @@ extension Session {
         remoteOverlays.slots.filter { $0.page != nil && (pane == nil || $0.pane == pane) }
     }
 
-    /// hiddenOverlayNames is the tree's `hiddenOverlays`: the hidden slots as `session`, `left`, `right`, a remote
-    /// page counted as its presenter reports it.
+    /// overlayOutOfSight says the slot `pane` addresses holds an occupant that is not drawn now, by hand or, for
+    /// the session-wide slot, under a pane overlay opened after it: what the local read-back reports as hidden.
+    public func overlayOutOfSight(_ pane: OverlayPane?) -> Bool {
+        pane == nil ? !sessionSlotShown : overlayHidden(pane)
+    }
+
+    /// hiddenOverlayNames is the tree's `hiddenOverlays`: the slots out of sight as `session`, `left`, `right`, a
+    /// remote page counted as its presenter reports it.
     public var hiddenOverlayNames: [String] {
         let remote = remotePageSlots(nil).filter { $0.page?.hidden == true }.map(\.pane)
-        let hidden = hideableOverlaySlots(nil).filter { overlayHidden($0) } + remote
+        let hidden = hideableOverlaySlots(nil).filter { overlayOutOfSight($0) } + remote
         return ([nil] + OverlayPane.allCases).filter(hidden.contains).map { $0?.rawValue ?? "session" }
+    }
+
+    /// forgetSessionCoverHolds drops every pane overlay's hold once the cover it was opened over leaves, so a
+    /// later cover is not kept out of sight by overlays that predate it.
+    func forgetSessionCoverHolds() {
+        for pane in OverlayPane.allCases where paneOverlay(pane)?.holdsSessionCover == true {
+            self[keyPath: pane.overlaySlot]?.holdsSessionCover = false
+        }
     }
 
     func setOverlayHidden(_ hidden: Bool, slot pane: OverlayPane?) {

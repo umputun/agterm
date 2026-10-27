@@ -30,9 +30,210 @@ struct AppStoreOverlayVisibilityTests {
 
     private func openAll(_ fixture: Fixture) {
         let id = fixture.session.id
-        #expect(fixture.store.openOverlay(id, command: "less"))
         #expect(fixture.store.openPaneOverlay(id, pane: .left, command: "htop") == nil)
         #expect(fixture.store.openPaneOverlay(id, pane: .right, command: "top") == nil)
+        #expect(fixture.store.openOverlay(id, command: "less"))
+    }
+
+    private func openCover(_ fixture: Fixture, page: Bool) {
+        if page {
+            let overlay = HtmlOverlay(source: .file(path: "/tmp/cover.html", grantRoot: nil))
+            #expect(fixture.store.openHtmlOverlay(fixture.session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+        } else {
+            #expect(fixture.store.openOverlay(fixture.session.id, command: "revdiff"))
+        }
+    }
+
+    private func openOnPane(_ fixture: Fixture, _ pane: OverlayPane, page: Bool) {
+        if page {
+            let overlay = HtmlOverlay(source: .file(path: "/tmp/\(pane.rawValue).html", grantRoot: nil))
+            #expect(fixture.store.openHtmlOverlay(fixture.session.id, pane: pane, overlay: overlay, sizePercent: nil) == nil)
+        } else {
+            #expect(fixture.store.openPaneOverlay(fixture.session.id, pane: pane, command: "htop") == nil)
+        }
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func aPaneOpenerDrawsAboveTheSessionCoverUntilItCloses(coverIsPage: Bool, openerIsPage: Bool) throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: coverIsPage)
+
+        openOnPane(fixture, .left, page: openerIsPage)
+        #expect(session.hiddenOverlayNames == ["session"])
+        #expect(session.coverOverlayActive)
+        #expect(!session.overlayHidden, "the user's own hidden bit is untouched")
+        #expect(session.visibleCover == .focusedPane)
+
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+        #expect(session.hiddenOverlayNames.isEmpty)
+        #expect(session.visibleCover == .session)
+    }
+
+    @Test func aFloatingCoverIsHiddenToo() throws {
+        let fixture = try makeFixture()
+        #expect(fixture.store.openOverlay(fixture.session.id, command: "revdiff", sizePercent: 60))
+
+        openOnPane(fixture, .left, page: true)
+
+        #expect(fixture.session.hiddenOverlayNames == ["session"])
+    }
+
+    @Test func aHudStaysUpOverAPaneOpener() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        #expect(fixture.store.openHud(session.id, command: "hud", spec: HudSpec(message: "x"), file: "/tmp/h",
+                                      size: HudPanelSize(widthPercent: 30, heightPercent: 10)))
+
+        openOnPane(fixture, .left, page: true)
+        #expect(session.hudActive)
+        #expect(!session.overlayHidden)
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+        #expect(!session.overlayHidden)
+    }
+
+    @Test func aCoverHiddenByHandStaysHiddenAfterThePaneCloses() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil)
+
+        openOnPane(fixture, .left, page: true)
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+
+        #expect(session.hiddenOverlayNames == ["session"])
+    }
+
+    @Test func theCoverReturnsOnlyAfterTheLastPaneOpenerCloses() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .left, page: true)
+        openOnPane(fixture, .right, page: false)
+
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+        #expect(!session.coverOverlayVisible)
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .right))
+        #expect(session.coverOverlayVisible)
+    }
+
+    @Test func aToggleRoundTripKeepsThePaneOpenerOnTop() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .left, page: true)
+
+        #expect(fixture.store.toggleOverlaysHidden(session.id, pane: nil) == nil)
+        #expect(session.hiddenOverlayNames == ["session", "left"])
+        #expect(fixture.store.toggleOverlaysHidden(session.id, pane: nil) == nil)
+
+        #expect(session.paneOverlayVisible(.left))
+        #expect(!session.coverOverlayVisible)
+        #expect(session.visibleCover == .focusedPane)
+    }
+
+    @Test func hidingThePaneOpenerShowsTheCoverAndAToggleRestoresTheOrder() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .left, page: true)
+
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: .left, hidden: true) == nil)
+        #expect(session.coverOverlayVisible)
+        #expect(session.hiddenOverlayNames == ["left"])
+
+        #expect(fixture.store.toggleOverlaysHidden(session.id, pane: nil) == nil)
+        #expect(fixture.store.toggleOverlaysHidden(session.id, pane: nil) == nil)
+        #expect(session.paneOverlayVisible(.left))
+        #expect(!session.coverOverlayVisible)
+    }
+
+    @Test func aPaneOpenerUnderAHandHiddenCoverStillDrawsAboveItWhenShown() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil)
+        openOnPane(fixture, .left, page: true)
+
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: nil, hidden: false) == nil)
+
+        #expect(!session.coverOverlayVisible)
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+        #expect(session.coverOverlayVisible)
+    }
+
+    @Test func aCoverOpenedAfterThePaneOverlayStaysOnTop() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openOnPane(fixture, .left, page: true)
+
+        openCover(fixture, page: false)
+
+        #expect(session.coverOverlayVisible)
+        #expect(session.hiddenOverlayNames.isEmpty)
+    }
+
+    @Test func aHolderOnAPaneTheSessionDoesNotLayOutLeavesTheCoverShown() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .right, page: true)
+        #expect(!session.coverOverlayVisible)
+
+        session.splitFocused = false
+        session.isSplit = false
+
+        #expect(session.coverOverlayVisible)
+        session.isSplit = true
+        #expect(!session.coverOverlayVisible)
+    }
+
+    @Test func aReplacementCoverIsNotHeldByAnOpenerOfTheOldOne() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .left, page: true)
+        #expect(fixture.store.closeOverlay(session.id))
+        openCover(fixture, page: false)
+        #expect(session.visibleCover == .session)
+
+        openOnPane(fixture, .right, page: false)
+        #expect(!session.coverOverlayVisible)
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .right))
+
+        #expect(session.coverOverlayVisible)
+    }
+
+    @Test func closingTheHoldingSplitBringsTheCoverBack() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .right, page: true)
+
+        fixture.store.closeSplit(session.id)
+
+        #expect(session.openPaneOverlays.isEmpty)
+        #expect(session.coverOverlayVisible)
+    }
+
+    @Test func promotionAndSwapKeepTheHold() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        session.surface = SpySurface()
+        openCover(fixture, page: false)
+        openOnPane(fixture, .right, page: true)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+        #expect(session.openPaneOverlays == [.left])
+        #expect(!session.coverOverlayVisible)
+
+        #expect(fixture.store.swapPanes(session.id) == nil)
+        fixture.store.closePrimaryPane(session.id)
+        #expect(session.openPaneOverlays == [.left])
+        #expect(!session.coverOverlayVisible)
+
+        #expect(fixture.store.closePaneOverlay(session.id, pane: .left))
+        #expect(session.coverOverlayVisible)
     }
 
     @Test func hidingAndShowingTheSessionActsOnEverySlotAndKeepsOccupants() throws {
@@ -263,8 +464,8 @@ struct AppStoreOverlayVisibilityTests {
         let fixture = try makeFixture()
         let id = fixture.session.id
         let panePage = HtmlOverlay(source: .file(path: "/tmp/pane.html", grantRoot: nil))
-        #expect(fixture.store.openOverlay(id, command: "less"))
         #expect(fixture.store.openHtmlOverlay(id, pane: .right, overlay: panePage, sizePercent: nil) == nil)
+        #expect(fixture.store.openOverlay(id, command: "less"))
 
         #expect(fixture.store.hideHtmlOverlay(panePage.id))
         #expect(fixture.session.hiddenOverlayNames == ["right"], "a pane page hides its own pane only")
@@ -277,8 +478,8 @@ struct AppStoreOverlayVisibilityTests {
         let fixture = try makeFixture()
         let id = fixture.session.id
         let page = HtmlOverlay(source: .file(path: "/tmp/session.html", grantRoot: nil))
-        #expect(fixture.store.openHtmlOverlay(id, pane: nil, overlay: page, sizePercent: nil) == nil)
         #expect(fixture.store.openPaneOverlay(id, pane: .left, command: "htop") == nil)
+        #expect(fixture.store.openHtmlOverlay(id, pane: nil, overlay: page, sizePercent: nil) == nil)
 
         #expect(fixture.store.hideHtmlOverlay(page.id))
 

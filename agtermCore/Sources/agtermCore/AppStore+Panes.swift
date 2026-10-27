@@ -450,6 +450,7 @@ extension AppStore {
         session.overlayReplica = nil
         session.overlayActive = false
         session.overlayHidden = false
+        session.forgetSessionCoverHolds()
         session.overlaySurface?.teardown()
         session.overlaySurface = nil
         HtmlOverlayReleases.shared.release(session.htmlOverlay)
@@ -544,8 +545,9 @@ extension AppStore {
         guard session.rendersPane(pane) else { return .paneNotVisible }
         session.setPaneOverlayExitCode(nil, pane: pane)
         session.remoteOverlays.clearFailure(pane)
-        session.setPaneOverlay(PaneOverlay(command: command, cwd: cwd, backgroundColor: backgroundColor,
-                                           wait: wait), pane: pane)
+        var overlay = PaneOverlay(command: command, cwd: cwd, backgroundColor: backgroundColor, wait: wait)
+        overlay.holdsSessionCover = session.coverOverlayActive
+        session.setPaneOverlay(overlay, pane: pane)
         scheduleTreeChanged()
         return nil
     }

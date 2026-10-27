@@ -480,6 +480,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Promotion moves the right pane's overlay into the left slot without rebuilding its surface, so that
   surface's callbacks resolve their pane through `Session.paneOverlayRole(of:)`, never a captured one.
   Read back `paneOverlays`, ordered left-then-right.
+- A pane overlay opened while the session slot holds a program or page (`PaneOverlay.holdsSessionCover`)
+  draws above it: `Session.sessionSlotShown` is false while such a holder is shown on a laid-out pane, and the
+  visible predicates, the deck panel and the local read-back follow it. It is derived, never written into
+  `overlayHidden`, which stays the user's: a mutated bit was wiped by every hand toggle and put the cover back
+  on top. Holds drop only when the cover closes or its slot is torn down, so a later cover wins as the newer.
+  A replica page's `PresentationPageState.hidden` stays the raw bit: the origin's toggles decide on it, and an
+  effective value would make every origin toggle send show.
 - `session.overlay.hide|show|toggle [--pane]` set a per-slot hidden bit (`Session.overlayHidden`,
   `PaneOverlay.hidden`, which travels with the struct through swap and promotion) on program and page slots only.
   Bare scope is every such slot of the session; toggle hides all when any is shown, else shows all. A HUD, an

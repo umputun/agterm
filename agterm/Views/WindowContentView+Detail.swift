@@ -288,7 +288,7 @@ extension WindowContentView {
         // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
         // stays inert as a whole and the session underneath keeps both. A hidden program or page is inert the
         // same way while its host stays mounted, so it keeps running and comes back without a re-host.
-        let shown = !session.overlayHidden
+        let shown = session.sessionSlotShown
         let live = isActive && style.interactive && shown
         GeometryReader { geo in
             let detailFrame = CGRect(origin: .zero, size: geo.size)
@@ -541,7 +541,7 @@ struct OverlayPanelStyle: Equatable {
                                           cornerRadius: floating ? floatingCornerRadius : 0,
                                           borderOpacity: floating ? floatingBorderOpacity : 0,
                                           shadowRadius: floating ? floatingShadowRadius : 0,
-                                          backdrop: floating && !session.overlayHidden, interactive: true,
+                                          backdrop: floating && session.sessionSlotShown, interactive: true,
                                           position: .center)
             if let percent = session.overlaySizePercent, !session.overlayPoints.isEmpty {
                 style.pointSizing = PointSizing(sizePercent: percent, points: session.overlayPoints,

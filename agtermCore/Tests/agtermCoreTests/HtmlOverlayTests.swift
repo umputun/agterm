@@ -527,8 +527,8 @@ struct HtmlOverlayTests {
     @Test func sessionCloseReleasesBothKindsOfPageOnce() throws {
         split()
         let released = recordReleases()
-        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .left, overlay: page(), sizePercent: nil) == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
         let ids = [try #require(session.htmlOverlay?.id), try #require(session.paneOverlay(.left)?.html?.id)]
 
         store.closeSession(session.id)

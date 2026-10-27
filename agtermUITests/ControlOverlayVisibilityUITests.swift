@@ -87,6 +87,40 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         XCTAssertEqual(pageState(id)?.token, token, "the same document came back: a reload mints a new token")
     }
 
+    func testAPanePageOverAProgramHidesItAndClosingThePageBringsItBack() throws {
+        let id = try activeSessionID()
+        let keys = markerDir.appendingPathComponent("cover-keys")
+        try openProgram(id, command: "sh -c 'while IFS= read -r x; do printf \"%s\\n\" \"$x\" >> \(keys.path); done'")
+        XCTAssertTrue(typeIntoCover("COVER1", marker: keys), "the program should own the keyboard first")
+        let page = markerDir.appendingPathComponent("pane-keys.html")
+        let script = "<script>let n = 0; document.title = 'x 0'; "
+            + "document.addEventListener('keydown', () => { n += 1; document.title = 'x ' + n })</script>"
+        try "<!doctype html><html><head><title>loading</title></head><body><p>pane page</p>\(script)</body></html>"
+            .write(to: page, atomically: true, encoding: .utf8)
+
+        let open = try sendCommand(
+            #"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(page.path)","javascript":true,"pane":"left"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "pane page open should succeed: \(open)")
+        let text = app.webViews.staticTexts["pane page"]
+        XCTAssertTrue(text.waitForExistence(timeout: 10))
+        XCTAssertTrue(poll(until: text.isHittable, timeout: 10), "the pane page is on screen, not under the program")
+        XCTAssertEqual(node(id)?["hiddenOverlays"] as? [String], ["session"])
+        XCTAssertTrue(poll(until: self.pageState(id)?.count == 0, timeout: 10))
+        text.click()
+        XCTAssertTrue(pressUntilCountChanges(id, from: 0), "the pane page owns the keyboard")
+
+        XCTAssertEqual(try visibility("toggle", id)["text"] as? String, "hidden")
+        XCTAssertEqual(try visibility("toggle", id)["text"] as? String, "shown")
+        XCTAssertTrue(poll(until: text.isHittable, timeout: 10), "a toggle round trip leaves the page above the program")
+        let before = try XCTUnwrap(pageState(id)?.count)
+        text.click()
+        XCTAssertTrue(pressUntilCountChanges(id, from: before), "the page still owns the keyboard")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: self.node(id)?["hiddenOverlays"] == nil, timeout: 10), "closing the page shows the program")
+        XCTAssertTrue(typeIntoCover("COVER2", marker: keys), "the program owns the keyboard again")
+    }
+
     private func pageState(_ id: String) -> (token: String, count: Int)? {
         let parts = pageTitle(id)?.split(separator: " ") ?? []
         guard parts.count == 2, let count = Int(parts[1]) else { return nil }

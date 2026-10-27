@@ -870,8 +870,11 @@ error keeps those names for compatibility.
   renders only the FOCUSED pane, so the refused one is the pane without focus — `--pane left` on a
   session whose hidden split holds it, `--pane right` when the main pane does; hiding the split AFTER
   opening is fine, the program keeps running and reappears when the split is shown again. Opening a
-  second overlay on the same pane errors `pane overlay already open`. A full session-wide overlay and
-  the scratch terminal both cover a pane overlay, and ⌘W dismisses the FOCUSED pane's overlay before it
+  second overlay on the same pane errors `pane overlay already open`. A pane overlay opened while a
+  session-wide program or page is open draws above it: that overlay keeps running but is not drawn while the
+  pane overlay is shown on a laid-out pane, and `hiddenOverlays` lists `session` meanwhile; it is back once
+  the pane overlay closes or is hidden, unless hidden by hand. A session-wide overlay opened after the pane
+  overlay and the scratch terminal both cover it, and ⌘W dismisses the FOCUSED pane's overlay before it
   would close the session — an overlay on the other pane is not in front of the user, so ⌘W keeps its
   ordinary meaning there. Read the open panes back from `paneOverlays` in `tree --json`.
 - `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full) [--target] [--window W]`

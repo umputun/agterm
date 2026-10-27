@@ -1860,7 +1860,10 @@
                 still names its current slot. Errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane overlay already open</span> on a
                 second open, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane not visible</span>
-                when that pane is not currently rendered — hiding the split AFTER opening is fine. Read the covered panes back from
+                when that pane is not currently rendered — hiding the split AFTER opening is fine. A pane overlay opened while a
+                session-wide program or page is open draws above it: that overlay keeps running but is not drawn while the pane
+                overlay is shown, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hiddenOverlays</span> lists
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span> meanwhile. Read the covered panes back from
                 the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneOverlays</span>; each one also
                 appears in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay-left</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay-right</span>

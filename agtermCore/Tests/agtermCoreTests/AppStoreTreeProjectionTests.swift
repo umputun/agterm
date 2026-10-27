@@ -671,9 +671,9 @@ struct AppStoreTreeProjectionTests {
         let right = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5173/"))), persistent: true,
                                 browse: true)
         let left = HtmlOverlay(source: .file(path: "/tmp/a/bare.html", grantRoot: nil), chromeless: true)
-        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: right, sizePercent: nil) == nil)
         #expect(store.openHtmlOverlay(session.id, pane: .left, overlay: left, sizePercent: nil) == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: wide, sizePercent: 70) == nil)
         store.setHtmlLoadState(right.id, state: .failed, error: "not found")
         store.setHtmlPage(wide.id, HtmlPageInfo(page: "/tmp/a/second.html", title: "Second", canGoBack: true, canGoForward: false))
 
@@ -717,8 +717,8 @@ struct AppStoreTreeProjectionTests {
         session.surface = SpySurface(paneToken: "left")
         session.splitSurface = SpySurface(paneToken: "right")
         let page = HtmlOverlay(source: .file(path: "/tmp/a/p.html", grantRoot: nil))
-        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
         #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
         #expect(store.controlTree().workspaces[0].sessions[0].hiddenOverlays == nil)
 
         #expect(store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil)
