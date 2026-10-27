@@ -63,6 +63,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 
 | recipe | what it does | needs |
 |---|---|---|
+| [claude-pasted-images](claude-pasted-images/) | draw an image pasted into Claude Code under the prompt that carried it | 0.3.1, Claude Code |
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
