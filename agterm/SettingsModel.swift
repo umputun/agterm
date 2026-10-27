@@ -693,8 +693,9 @@ final class SettingsModel {
     private func starterGhosttyConfigText() -> String {
         """
         # agterm-scoped ghostty config — applies ONLY to agterm, not the standalone Ghostty.app.
-        # Put any ghostty config key here to override agterm's bundled defaults and your global
+        # Put any ghostty terminal config key here to override agterm's bundled defaults and your global
         # ~/.config/ghostty/config. Full key reference: https://ghostty.org/docs/config
+        # Keys for Ghostty.app's own window and split chrome are mostly not read; split-divider-color is.
         #
         # Edit this file and run File ▸ Reload Config (or relaunch) to apply. Blank lines and lines
         # starting with `#` are ignored. Most keys apply to open terminals on reload, but layout keys

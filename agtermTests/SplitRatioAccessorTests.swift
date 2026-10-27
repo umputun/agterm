@@ -480,4 +480,74 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertFalse(try press(atX: dividerX(), count: 2, windowNumber: 0))
         XCTAssertEqual(leftWidth(), 300, accuracy: 1)
     }
+
+    private func dividerStrips(colored color: NSColor) -> [CALayer] {
+        (split.layer?.sublayers ?? []).filter { $0.backgroundColor == color.cgColor }
+    }
+
+    func testCoversTheLeftRightDividerGapWithItsColor() throws {
+        probe.dividerColor = .systemRed
+        session.splitRatio = 0.3
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        XCTAssertEqual(strip.frame, CGRect(x: 120, y: 0, width: split.dividerThickness, height: 200))
+    }
+
+    func testCoversTheTopBottomDividerGapAtAnUnevenRatio() throws {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.dividerColor = .systemRed
+        session.splitRatio = 0.3
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        XCTAssertEqual(strip.frame, CGRect(x: 0, y: 60, width: 400, height: split.dividerThickness))
+    }
+
+    // pins the stock divider compositing over the strip: its NSSplitDividerView layer is ordered after it
+    func testTheStripDrawsAboveTheSplitsOwnDivider() throws {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        let others = (split.layer?.sublayers ?? []).filter { $0 !== strip }
+        XCTAssertFalse(others.isEmpty)
+        XCTAssertTrue(others.allSatisfy { $0.zPosition < strip.zPosition },
+                      "strip z=\(strip.zPosition); others: \(others.map { "\(type(of: $0)) z=\($0.zPosition) f=\($0.frame)" })")
+    }
+
+    func testTheStripFollowsTheDividerWithoutALayoutPass() throws {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        split.setPosition(300, ofDividerAt: 0)
+
+        XCTAssertEqual(try XCTUnwrap(dividerStrips(colored: .systemRed).first).frame.minX, 300)
+    }
+
+    func testAColorChangeRepaintsTheSameStrip() {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        probe.dividerColor = .systemBlue
+
+        XCTAssertTrue(dividerStrips(colored: .systemRed).isEmpty)
+        XCTAssertEqual(dividerStrips(colored: .systemBlue).count, 1)
+    }
+
+    func testTheStripLeavesWithTheProbeAndReturnsAfterAReHost() {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        probe.removeFromSuperview()
+        XCTAssertTrue(dividerStrips(colored: .systemRed).isEmpty)
+
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.layout()
+        XCTAssertEqual(dividerStrips(colored: .systemRed).count, 1)
+    }
 }

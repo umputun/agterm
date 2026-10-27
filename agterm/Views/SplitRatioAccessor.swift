@@ -17,9 +17,10 @@ extension NSView {
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView`/`VSplitView` to (1) persist and restore the split
 /// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
-/// of the titlebar strip, (3) paint the divider's own resize cursor, which nothing else writes, and
-/// (4) restore an even split on a divider double-click. Attached as a `.background` on the primary pane so
-/// its `NSView` lives inside the split's view tree without becoming a third arranged pane.
+/// of the titlebar strip, (3) paint the divider's own resize cursor, which nothing else writes,
+/// (4) restore an even split on a divider double-click, and (5) color the divider. Attached as a
+/// `.background` on the primary pane so its `NSView` lives inside the split's view tree without becoming
+/// a third arranged pane.
 ///
 /// (1) Once the split has a real axis extent it restores `session.splitRatio` via `setPosition`, seeding
 /// `splitRatioDefault` when none is stored. The fraction is of the pane area BELOW the titlebar band, which is
@@ -42,9 +43,14 @@ extension NSView {
 /// (4) A drag can't land exactly on 50/50, and `NSSplitView`'s own double-click gesture only collapses a
 /// pane through the delegate SwiftUI owns, so the reset is recognized from a shared mouse monitor instead.
 /// It sees the second click after the first one's divider-drag tracking loop ends, leaving dragging intact.
+///
+/// (5) `NSSplitView.dividerColor` is read-only and SwiftUI owns the split's class, so a sublayer of the
+/// split's own layer covers the divider gap instead. Living in that layer, it is hidden with a background
+/// session's split and clipped by (2)'s mask exactly as AppKit's divider is.
 struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
+    let dividerColor: NSColor
     let suspended: Bool
     /// On screen and uncovered: the deck's `visible` minus any overlay or scratch over the panes. Gates (3)
     /// and (4) — a background session's split is still laid out at the full frame with its tracking area
@@ -57,6 +63,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         let view = SplitProbeView(session: session)
         view.onPersist = onPersist
         view.titlebarHeight = titlebarHeight
+        view.dividerColor = dividerColor
         view.suspended = suspended
         view.deckVisible = deckVisible
         return view
@@ -64,6 +71,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
     func updateNSView(_ nsView: SplitProbeView, context _: Context) {
         nsView.onPersist = onPersist
         nsView.titlebarHeight = titlebarHeight // re-clip on a toolbar-mode change (changes titlebarHeight)
+        nsView.dividerColor = dividerColor
         nsView.suspended = suspended
         nsView.deckVisible = deckVisible
     }
@@ -73,6 +81,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var onPersist: (() -> Void)?
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
+        var dividerColor: NSColor = .separatorColor { didSet { if dividerColor != oldValue { updateDividerStrip() } } }
         var deckVisible: Bool = true
         var suspended: Bool = false {
             didSet {
@@ -91,6 +100,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
         private weak var splitView: NSSplitView?
         private var dividerClipMask: CALayer?
+        private var dividerStrip: CALayer?
         private var dividerTracking: NSTrackingArea?
         private var restored = false
         /// The split's top safe-area inset and axis length when the ratio was last applied; a change in
@@ -137,6 +147,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
             restoreDivider()
+            updateDividerStrip()
         }
 
         /// Apply the stored ratio once the split has a real extent, and again whenever the safe-area inset or
@@ -199,6 +210,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
                     // re-arm is about to re-apply, rather than reading the frame it is about to replace.
                     self?.rearmOnGeometryChange()
                     self?.capture()
+                    self?.updateDividerStrip()
                 }
             }
             // `session.resize` stores a new fraction on the session and posts this (object-scoped to the
@@ -219,6 +231,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
             applyObserver = nil
             if let split = splitView, dividerClipMask != nil { split.layer?.mask = nil }
             dividerClipMask = nil
+            dividerStrip?.removeFromSuperlayer()
+            dividerStrip = nil
             splitView = nil
             restored = false
         }
@@ -409,6 +423,29 @@ struct SplitRatioAccessor: NSViewRepresentable {
                 dividerClipMask = mask
             }
             split.layer?.mask = mask // re-assert (SwiftUI may rebuild the split's layer)
+        }
+
+        /// Cover the gap between the two arranged panes with `dividerColor`. The split is flipped and so is
+        /// its layer's geometry, so the gap in view coordinates is the strip's frame on either axis. AppKit
+        /// draws its own divider as a later sibling, an `NSSplitDividerView` layer or a divider layer at
+        /// `zPosition` 5000 depending on the split's mode, so the strip sits one above the highest sibling.
+        private func updateDividerStrip() {
+            guard let split = splitView, split.arrangedSubviews.count == 2 else { return }
+            split.wantsLayer = true
+            guard let host = split.layer else { return }
+            let first = split.arrangedSubviews[0].frame, second = split.arrangedSubviews[1].frame
+            let frame = split.isVertical
+                ? CGRect(x: first.maxX, y: 0, width: max(0, second.minX - first.maxX), height: split.bounds.height)
+                : CGRect(x: 0, y: first.maxY, width: split.bounds.width, height: max(0, second.minY - first.maxY))
+            let strip = dividerStrip ?? CALayer()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true) // no implicit animation chasing a drag
+            strip.zPosition = (host.sublayers ?? []).filter { $0 !== strip }.map(\.zPosition).max().map { $0 + 1 } ?? 0
+            strip.frame = frame
+            strip.backgroundColor = dividerColor.cgColor
+            CATransaction.commit()
+            dividerStrip = strip
+            if strip.superlayer !== host { host.addSublayer(strip) } // re-assert, as the clip mask does
         }
 
         /// Record the dragged primary-pane fraction onto the session. A resize notification outside a drag

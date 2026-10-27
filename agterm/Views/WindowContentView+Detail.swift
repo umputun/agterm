@@ -220,7 +220,7 @@ extension WindowContentView {
         deckPane(session, pane: .left, focused: !session.splitFocused, gates: gates)
             .background {
                 SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight,
-                                   suspended: !deckInteractive,
+                                   dividerColor: splitDividerColor, suspended: !deckInteractive,
                                    deckVisible: gates.visible && !gates.overlaid,
                                    onPersist: { store.save() })
             }

@@ -35,6 +35,33 @@ final class GhosttyApp {
     private(set) var terminalForegroundColor: NSColor?
     /// terminalPalette is the 16 ANSI colors of the resolved config as `#rrggbb`, by slot; empty when unread.
     private(set) var terminalPalette: [String] = []
+    /// The config's `split-divider-color`, nil when unset.
+    private(set) var configuredSplitDividerColor: NSColor?
+
+    /// The color `SplitRatioAccessor` paints the split divider with: the configured key, else the theme.
+    var splitDividerColor: NSColor {
+        Self.splitDividerColor(configured: configuredSplitDividerColor, background: terminalBackgroundColor,
+                               foreground: terminalForegroundColor)
+    }
+
+    /// The configured color, else the background moved a tenth toward the foreground: the opaque form of
+    /// the `chromeText.opacity(0.1)` the titlebar hairline and sidebar divider use. Opaque because AppKit's
+    /// own divider still draws beneath the strip and a translucent one would mix with it. Mixed in sRGB, as
+    /// that compositing is; `blended(withFraction:of:)` mixes in calibrated RGB and lands lighter. With no
+    /// background read yet it is AppKit's own divider color.
+    static func splitDividerColor(configured: NSColor?, background: NSColor?, foreground: NSColor?) -> NSColor {
+        if let configured { return configured }
+        guard let bg = background?.usingColorSpace(.sRGB),
+              let fg = (foreground ?? .labelColor).usingColorSpace(.sRGB) else { return .separatorColor }
+        func mix(_ from: CGFloat, _ toward: CGFloat) -> CGFloat { from + (toward - from) * 0.1 }
+        return NSColor(srgbRed: mix(bg.redComponent, fg.redComponent), green: mix(bg.greenComponent, fg.greenComponent),
+                       blue: mix(bg.blueComponent, fg.blueComponent), alpha: 1)
+    }
+
+    /// Reads `split-divider-color` from a resolved config.
+    static func configuredSplitDividerColor(from config: ghostty_config_t) -> NSColor? {
+        color(from: config, key: "split-divider-color")
+    }
     /// Whether the active theme reads as dark, by perceived luminance of the WASHED sidebar background (theme
     /// background plus sidebar-tint wash) — the color the disclosure triangle sits on, so a strong tint pushing
     /// a near-threshold theme past the midpoint still classifies right. Pins AppKit-drawn chrome to the theme,
@@ -429,6 +456,7 @@ final class GhosttyApp {
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
         terminalPalette = Self.palette(from: config)
+        configuredSplitDividerColor = Self.configuredSplitDividerColor(from: config)
         refreshSelectionColors(isDark: isDark)
     }
 

@@ -78,6 +78,7 @@ struct WindowContentView: View {
     /// The terminal theme's foreground, used for the chrome text (title bar text + buttons, sidebar bottom
     /// bar) so non-terminal text tracks the theme.
     @State var chromeText: Color = WindowContentView.resolvedChromeText()
+    @State var splitDividerColor: NSColor = GhosttyApp.shared.splitDividerColor
     /// When true the title bar shows the attention bell.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
     /// The title-bar / sidebar-footer chrome the user hid in Settings ▸ Interface, read by `shows(_:)`.
@@ -223,6 +224,7 @@ struct WindowContentView: View {
             terminalColor = WindowContentView.resolvedTerminalColor()
             toolbarMode = WindowContentView.resolvedToolbarMode()
             chromeText = WindowContentView.resolvedChromeText()
+            splitDividerColor = GhosttyApp.shared.splitDividerColor
             attentionButtonEnabled = WindowContentView.resolvedAttentionButtonEnabled()
             hiddenInterfaceElements = WindowContentView.resolvedHiddenInterfaceElements()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()

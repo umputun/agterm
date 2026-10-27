@@ -3141,7 +3141,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               >) is the place to customize agterm. It sits next to
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span> and gets the same
               treatment: a fully commented starter file is written on first launch, so a fresh one changes nothing. It is always loaded,
-              and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty config key there. Values agterm emits
+              and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty terminal config key there. Values agterm emits
               from Settings use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">font-family</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">font-size</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">theme</span>,
@@ -3172,6 +3172,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               this file, so an <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">env</span> line naming
               one of them has no effect. Other
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">env</span> keys reach every new shell.
+              Keys for Ghostty.app's own window and split chrome are mostly not read, because agterm draws its own.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">split-divider-color</span> is:
+              it colors the split divider, which otherwise takes a faint line from the theme.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unfocused-split-fill</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unfocused-split-opacity</span> are not;
+              Settings ▸ Appearance sets how much the inactive pane dims.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keybind</span> here follows ghostty's
