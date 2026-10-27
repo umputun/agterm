@@ -235,6 +235,11 @@ paths:
 - Attention navigation defaults to Control-Option-Up/Down, includes blocked/completed (plus active under
   `attentionIncludesActive`, see [[settings]]), wraps, and excludes current. If it finds no other target, GUI callers may use the current live indicator solely to
   reveal its tagged pane. Control changes selection only.
+- Under `attentionNavigationAcrossWindows` the GUI step walks windows in library order and each window's
+  `navigableSessions` in sidebar order, skipping a window `uiActionsEnabled(for:)` refuses. The attention
+  commands then stay enabled without an active session, so an empty window can step out. A target in
+  another window goes through `selectAttention` one main-queue tick later, as the attention palette does;
+  a same-window target selects at once. `session.go` never crosses windows.
 - `revealActiveBlockedPane` focuses right only when the split surface exists, explicitly chooses primary
   for left/nil, and shows/focuses scratch. Promotion retags right to left. Idle/active never change pane or
   dismiss scratch. Navigation, palettes, sidebar, Dock menu, titlebar attention, and auto-follow share it.

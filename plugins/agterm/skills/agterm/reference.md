@@ -302,6 +302,8 @@ The tree object itself carries these top-level read-only fields: `idleMs` (milli
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `attentionIncludesActive` (whether
 next-attention/prev-attention also stop on `active` sessions, Settings ▸ Agent Status; no command sets it),
+`attentionNavigationAcrossWindows` (whether the GUI attention keys walk every open window, Settings ▸ Agent
+Status; no command sets it, and `session go` stays in its window either way),
 `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
@@ -515,7 +517,7 @@ buys nothing. A caller with no tree uses `version`.
   else all sessions (clearing the flag / suspending the filter restores the full set). next/prev wrap around at the ends (last→first,
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed, plus active when the tree reports
-  `attentionIncludesActive: true`), wrapping. Returns the newly selected id.
+  `attentionIncludesActive: true`), wrapping, always within the addressed window. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an
@@ -1580,7 +1582,8 @@ and OSC 9/777. The two overlap, either can raise an "I need you" signal, but a n
 one-shot banner and badge with no lasting state, while `session status` is a typed, persistent state
 (`active`/`blocked`/`completed`) that stays on the row until acted on, is more precise, and drives the
 attention list, the title-bar bell, and attention navigation (`session go --to next-attention`). The list
-and the bell span every open window; attention navigation steps within the window. Keep `notify` for a
+and the bell span every open window; `session go` attention steps stay within the window, while the GUI keys
+cross windows when Settings ▸ Agent Status ▸ Attention navigation crosses windows is on. Keep `notify` for a
 one-off nudge that needs no follow-up.
 
 ## font

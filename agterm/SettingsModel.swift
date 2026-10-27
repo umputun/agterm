@@ -362,6 +362,12 @@ final class SettingsModel {
         try? settingsStore.save(settings)
         applyWindowSettingsToAllWindows()
     }
+    /// Persist whether attention navigation walks every open window (nil = off) and fan it out.
+    func setAttentionNavigationAcrossWindows(_ value: Bool?) {
+        settings.attentionNavigationAcrossWindows = value
+        try? settingsStore.save(settings)
+        applyWindowSettingsToAllWindows()
+    }
 
     /// Apply a new background opacity live WITHOUT saving — the live-drag half of the slider; each tick
     /// reschedules `backgroundSaveDebouncer`, so the disk write coalesces to one on settle.
@@ -823,6 +829,8 @@ final class SettingsModel {
         let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
         store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
         store.attentionIncludesActive = settings.attentionIncludesActive ?? false
+        let acrossWindows = settings.attentionNavigationAcrossWindows ?? false
+        if store.attentionNavigationAcrossWindows != acrossWindows { store.attentionNavigationAcrossWindows = acrossWindows }
     }
 
     /// Fan the per-window settings out to every open window's store — the settings-change broadcast and the

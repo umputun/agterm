@@ -116,7 +116,8 @@ control address for `surface zoom` and `surface cursor` (`left`, `right`, `scrat
 `overlay-left`, or `overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries
 read-only top-level fields — `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `attentionIncludesActive` (whether attention
-navigation also stops on active sessions), `sidebarVisible` (whether the window's
+navigation also stops on active sessions), `attentionNavigationAcrossWindows` (whether GUI attention
+navigation walks every open window; `session go` stays in its window), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
 (`tree` or `flagged` — the read side of `sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide —
 the read side of `browser links`), `sidebarFlaggedLayout` (`flat`, `plain` or `tree`, app-wide —

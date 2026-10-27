@@ -38,6 +38,7 @@ extension AppActions {
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
             hasRecentClosed: !library.recentClosedItems.isEmpty,
             hasActiveSession: activeStore?.activeSession != nil,
+            attentionNavigationAcrossWindows: activeStore?.attentionNavigationAcrossWindows == true,
             hasSessions: activeStore?.workspaces.contains { !$0.sessions.isEmpty } == true,
             hasCurrentWorkspace: activeStore?.currentWorkspaceID != nil,
             hasRemotes: !configuredRemotes.isEmpty,

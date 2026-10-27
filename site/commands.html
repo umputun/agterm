@@ -597,6 +597,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">autoFollowMs</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">attentionIncludesActive</span> (whether attention
                 navigation also stops on active sessions; a Settings toggle with no command),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">attentionNavigationAcrossWindows</span> (whether the GUI attention keys walk
+                every open window; a Settings toggle with no command),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">linkOpenMode</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">browser</span>,
@@ -1154,7 +1156,8 @@
                 needing attention (status
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span>, plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> when
-                <strong>Settings ▸ Agent Status ▸ Attention navigation includes active sessions</strong> is on), also wrapping.
+                <strong>Settings ▸ Agent Status ▸ Attention navigation includes active sessions</strong> is on), also wrapping,
+                always within the addressed window.
                 <strong style="color: #bfbab0">Returns</strong> the newly selected
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>

@@ -433,6 +433,20 @@ final class SettingsUITests: XCTestCase {
                       "turning it off (the default) should remove the attentionIncludesActive key")
     }
 
+    func testAttentionAcrossWindowsTogglePersists() throws {
+        let toggle = settingsControl(tab: "Agent Status", control: "settings-attention-across-windows")
+        let window = app.windows.containing(.any, identifier: "settings-attention-across-windows").firstMatch
+        let reset = app.buttons["settings-status-reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 5), "the tab's last control should exist")
+        XCTAssertLessThanOrEqual(reset.frame.maxY, window.frame.maxY, "Reset to defaults should be on screen")
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsBool("attentionNavigationAcrossWindows") == true },
+                      "turning cross-window attention on should persist attentionNavigationAcrossWindows=true")
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsBool("attentionNavigationAcrossWindows") == nil },
+                      "turning it off (the default) should remove the attentionNavigationAcrossWindows key")
+    }
+
     func testWorkspaceRowClickExpandsTogglePersists() throws {
         let toggle = settingsControl(tab: "General", control: "settings-workspace-row-click-expands")
         toggle.click() // turn it off (default on)

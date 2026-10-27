@@ -365,6 +365,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Whether attention navigation also stops on `active` sessions, not only blocked and completed ones;
     /// nil = off. Pushed into every window's `AppStore.attentionIncludesActive`.
     public var attentionIncludesActive: Bool?
+    /// Whether attention navigation walks every open window, in window order, instead of the active one
+    /// only; nil = off. GUI navigation only, `session.go` stays window-scoped. Pushed into every window's `AppStore.attentionNavigationAcrossWindows`.
+    public var attentionNavigationAcrossWindows: Bool?
     /// The sidebar row-text point size, nil for `defaultSidebarFontSize`; the row height scales with it
     /// (`sidebarRowHeight(fontSize:)`). Independent of `interfaceFontSize`.
     public var sidebarFontSize: Double?
@@ -420,7 +423,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, attentionIncludesActive: Bool? = nil,
-                sidebarFontSize: Double? = nil,
+                attentionNavigationAcrossWindows: Bool? = nil, sidebarFontSize: Double? = nil,
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
@@ -468,6 +471,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.attentionIncludesActive = attentionIncludesActive
+        self.attentionNavigationAcrossWindows = attentionNavigationAcrossWindows
         self.sidebarFontSize = sidebarFontSize
         self.interfaceFontSize = interfaceFontSize
         self.quickTerminalSizePercent = quickTerminalSizePercent

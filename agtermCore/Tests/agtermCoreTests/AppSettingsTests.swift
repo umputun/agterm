@@ -719,6 +719,16 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
     }
 
+    @Test func attentionNavigationAcrossWindowsDefaultsNilAndRoundTrips() throws {
+        #expect(AppSettings().attentionNavigationAcrossWindows == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("attentionNavigationAcrossWindows"))
+        let original = AppSettings(attentionNavigationAcrossWindows: true)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded.attentionNavigationAcrossWindows == true)
+        #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+    }
+
     @Test func hiddenInterfaceElementsDefaultsNilAndShowsEverythingNotHiddenByDefault() {
         let settings = AppSettings()
         #expect(settings.hiddenInterfaceElements == nil)

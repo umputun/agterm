@@ -28,7 +28,8 @@ paths:
 - Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
   `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
   Default-off nil fields include attention button, Dock bounce, global config inheritance, close
-  confirmation, auto-follow, attention-includes-active, hidden inactive sidebars, and interface hiding.
+  confirmation, auto-follow, attention-includes-active, attention-across-windows, hidden inactive sidebars,
+  and interface hiding.
   `restoreMode` defaults to `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
 - `newSessionPlacement` (nil = `end`) applies only to New Session: `AppActions.newSession()` and the
   workspace row's New Session and "+", through `AppActions.resolvedNewSessionIndex`. It inserts after the
@@ -88,6 +89,10 @@ paths:
   auto-follow, the bell and pane reveal are unchanged. `SettingsModel.applyWindowSettings` pushes it with
   auto-follow into every store; read back as top-level `tree.attentionIncludesActive`, no setter. Reset
   leaves it, as it leaves auto-follow.
+- `attentionNavigationAcrossWindows` makes GUI attention navigation walk every open window
+  (`WindowLibrary.attentionStep`, [[menu-actions]]). Pushed into every store the same way and read back as
+  top-level `tree.attentionNavigationAcrossWindows`, no setter; `session.go` stays window-scoped. Reset
+  leaves it.
 - Notification badges gate only the sidebar pill/workspace roll-up and Dock total; counts keep tracking
   while hidden. Banners are a separate `notificationsEnabled` mirror, and neither gates agent status.
 - `SettingsModel` saves and writes last-loaded `ghostty-settings.conf`. Reload app/surfaces and clear
@@ -105,7 +110,8 @@ paths:
   Multiple Windows toggle as the Sidebar section's last row, plus the quick terminal's panel size,
   which sits there rather than under Appearance's Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
-  status reset, Navigation (attention-includes-active plus auto-follow), and Reset, and is exactly full:
+  status reset, Navigation (attention-includes-active, attention-across-windows, auto-follow), and Reset,
+  and is exactly full:
   `testAttentionIncludesActiveTogglePersists` requires Reset not to move when scrolled. Key Mapping holds the keyboard layout lock,
   config directory, diagnostics, and Reload.
 - Every change that adds or moves a Settings control checks that its tab does not scroll: scroll the

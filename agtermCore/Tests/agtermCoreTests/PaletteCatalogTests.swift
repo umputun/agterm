@@ -263,6 +263,15 @@ struct PaletteCatalogTests {
         #expect(!PaletteCommand.editFlaggedSessions.isEnabled(in: PaletteContext(hasSessions: true, pickerActive: true)))
     }
 
+    @Test(arguments: [PaletteCommand.previousAttentionSession, .nextAttentionSession])
+    func attentionStepsAcrossWindowsNeedNoActiveSession(_ command: PaletteCommand) {
+        #expect(!command.isEnabled(in: PaletteContext(hasActiveSession: false)))
+        #expect(command.isEnabled(in: PaletteContext(hasActiveSession: false, attentionNavigationAcrossWindows: true)))
+        #expect(!command.isEnabled(in: PaletteContext(attentionNavigationAcrossWindows: true, terminalZoomActive: true)))
+        #expect(!command.isEnabled(in: PaletteContext(attentionNavigationAcrossWindows: true, dashboardOpen: true)))
+        #expect(!command.isEnabled(in: PaletteContext(attentionNavigationAcrossWindows: true, pickerActive: true)))
+    }
+
     @Test func membershipEditorsStayListedInEitherSidebarMode() {
         let tree = PaletteContext(sidebarShowsWorkspaceTree: true, hasSessions: true, hasCurrentWorkspace: true)
         let flagged = PaletteContext(sidebarShowsFlaggedOnly: true, hasSessions: true, hasCurrentWorkspace: true)

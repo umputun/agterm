@@ -94,6 +94,13 @@ extension AppStore {
             .sorted(by: Self.attentionPrecedes)
     }
 
+    /// Whether attention navigation lands on `session`: `needsAttention`, or `active` under
+    /// `attentionIncludesActive`. Shared with `WindowLibrary.attentionStep`.
+    func stopsAttentionNavigation(_ session: Session) -> Bool {
+        let status = session.agentIndicator.status
+        return status.needsAttention || (attentionIncludesActive && status == .active)
+    }
+
     /// The attention order every attention list shares, so the per-window and cross-window lists cannot
     /// drift: `attentionRank` ascending (blocked → active → completed), then `statusChangedAt` DESCENDING
     /// (newest first; a nil stamp sorts last within its rank group).

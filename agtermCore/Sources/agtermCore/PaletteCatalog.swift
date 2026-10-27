@@ -35,6 +35,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasRecentClosed: Bool
     /// Whether the frontmost window has an active session at all.
     public let hasActiveSession: Bool
+    /// Whether attention navigation walks every open window, so an empty frontmost window can still step.
+    public let attentionNavigationAcrossWindows: Bool
     /// hasSessions includes sessions created without selecting one.
     public let hasSessions: Bool
     /// Whether it has a current workspace — nil only with no store, since a window always keeps one.
@@ -67,6 +69,7 @@ public struct PaletteContext: Sendable, Equatable {
                 hasPendingClose: Bool = false,
                 hasRecentClosed: Bool = false,
                 hasActiveSession: Bool = false,
+                attentionNavigationAcrossWindows: Bool = false,
                 hasSessions: Bool = false,
                 hasCurrentWorkspace: Bool = false,
                 hasRemotes: Bool = false,
@@ -90,6 +93,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasPendingClose = hasPendingClose
         self.hasRecentClosed = hasRecentClosed
         self.hasActiveSession = hasActiveSession
+        self.attentionNavigationAcrossWindows = attentionNavigationAcrossWindows
         self.hasSessions = hasSessions
         self.hasCurrentWorkspace = hasCurrentWorkspace
         self.hasRemotes = hasRemotes
@@ -127,9 +131,10 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         switch self {
         case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
              .toggleHorizontalSplit, .toggleScratch,
-             .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
-             .firstSession, .lastSession:
+             .find, .previousSession, .nextSession, .firstSession, .lastSession:
             return context.hasActiveSession
+        case .previousAttentionSession, .nextAttentionSession:
+            return context.hasActiveSession || context.attentionNavigationAcrossWindows
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:

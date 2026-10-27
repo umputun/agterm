@@ -452,6 +452,34 @@ struct AppStoreAutoFollowTests {
         #expect(decoded.attentionIncludesActive == nil)
     }
 
+    @Test func controlTreeProjectsAttentionNavigationAcrossWindows() throws {
+        let store = makeStore()
+        #expect(store.controlTree().attentionNavigationAcrossWindows == false)
+        store.attentionNavigationAcrossWindows = true
+        let tree = store.controlTree()
+        #expect(tree.attentionNavigationAcrossWindows == true)
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(tree))
+        #expect(decoded.attentionNavigationAcrossWindows == true)
+        let json = String(decoding: try JSONEncoder().encode(ControlTree(workspaces: [])), as: UTF8.self)
+        #expect(!json.contains("attentionNavigationAcrossWindows"))
+    }
+
+    // the Navigate menu's enablement reads this flag, so a live toggle must invalidate it
+    @Test func attentionNavigationAcrossWindowsIsObserved() {
+        let store = makeStore()
+        let invalidated = Flag()
+        withObservationTracking { _ = store.attentionNavigationAcrossWindows } onChange: { invalidated.set() }
+
+        store.attentionNavigationAcrossWindows = true
+
+        #expect(invalidated.isSet)
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private(set) var isSet = false
+        func set() { isSet = true }
+    }
+
     @Test func autoFollowFirePostsFollowedNotification() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "w")

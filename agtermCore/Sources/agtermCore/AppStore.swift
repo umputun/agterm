@@ -174,6 +174,10 @@ public final class AppStore {
     /// Whether `nextAttention`/`previousAttention` also stop on `active` sessions. Set by the Settings fan-out.
     @ObservationIgnored public var attentionIncludesActive = false
 
+    /// Whether GUI attention navigation walks every open window (`WindowLibrary.attentionStep`). Observed,
+    /// unlike `attentionIncludesActive`, because the Navigate menu's enablement reads it.
+    public var attentionNavigationAcrossWindows = false
+
     /// The last user interaction with this window (a keystroke or a manual selection), nil until the first.
     /// Stamped unconditionally by `noteUserActivity`, so the idle metric is independent of the feature being
     /// on. Stamped at high frequency and read imperatively, so no view may react to it.
@@ -399,6 +403,7 @@ public final class AppStore {
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            attentionIncludesActive: attentionIncludesActive,
+                           attentionNavigationAcrossWindows: attentionNavigationAcrossWindows,
                            sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
                            sidebarFlaggedLayout: flaggedLayout?.rawValue, sidebarWidth: sidebarWidth,
                            workspaceFilter: focusEnabled,
@@ -787,8 +792,7 @@ public final class AppStore {
         for k in 1...count {
             let idx = ((start + step * k) % count + count) % count
             if let curIndex, idx == curIndex { break } // wrapped back to the current session, none other
-            let status = sessions[idx].agentIndicator.status
-            if status.needsAttention || (attentionIncludesActive && status == .active) { return ids[idx] }
+            if stopsAttentionNavigation(sessions[idx]) { return ids[idx] }
         }
         return nil
     }
