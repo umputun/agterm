@@ -118,6 +118,16 @@ if [ "$action" = "__watch-blocked" ]; then
 fi
 
 case "$action" in
+  session-start|user-prompt-submit|pre-tool-use|post-tool-use)
+    # codex's memory consolidation thread reaches these hooks but no user Stop handler, so its
+    # events would leave the pane active and replace the foreground watcher. it is ephemeral, so its
+    # transcript_path is null, which plutil types as "(any)". foreground ephemeral sessions lose
+    # these updates too.
+    [ "$(/usr/bin/plutil -type transcript_path - 2>/dev/null)" = "(any)" ] && exit 0
+    ;;
+esac
+
+case "$action" in
   session-start)
     stop_watcher
     report_status idle

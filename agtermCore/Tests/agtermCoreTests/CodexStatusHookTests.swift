@@ -17,7 +17,7 @@ struct CodexStatusHookTests {
 
     private func run(_ action: String, screen: String = "", screens: [String] = [], worker: Bool = false,
                      supersedeTokenOnRead: Bool = false,
-                     input: String = "") throws -> (statusCalls: [String], controlCalls: [String], exit: Int32) {
+                     input: String = "") throws -> HookRun {
         let fm = FileManager.default
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-codex-hook-\(UUID().uuidString)")
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -82,7 +82,15 @@ struct CodexStatusHookTests {
             ((try? String(contentsOf: url, encoding: .utf8)) ?? "")
                 .split(separator: "\n").map(String.init)
         }
-        return (lines(statuses), lines(controls), proc.terminationStatus)
+        return HookRun(statusCalls: lines(statuses), controlCalls: lines(controls), exit: proc.terminationStatus,
+                       token: try? String(contentsOf: tokenFile, encoding: .utf8))
+    }
+
+    private struct HookRun {
+        let statusCalls: [String]
+        let controlCalls: [String]
+        let exit: Int32
+        let token: String?
     }
 
     @Test func lifecycleActionsDriveOnlyTheGenericStatusWrapper() throws {
@@ -91,6 +99,24 @@ struct CodexStatusHookTests {
         #expect(try run("pre-tool-use").statusCalls == ["active --blink"])
         #expect(try run("post-tool-use").statusCalls == ["active --blink"])
         #expect(try run("stop").statusCalls == ["completed --auto-reset"])
+    }
+
+    // codex's memory consolidation thread reaches these user hooks but no user Stop, leaving the pane active
+    @Test(arguments: ["session-start", "user-prompt-submit", "pre-tool-use", "post-tool-use"])
+    func eventWithoutTranscriptLeavesStatusAndWatcherAlone(action: String) throws {
+        let result = try run(action, input: #"{"hook_event_name":"x","transcript_path":null}"#)
+        #expect(result.statusCalls.isEmpty)
+        #expect(result.token == "token\n")
+        #expect(result.exit == 0)
+    }
+
+    @Test(arguments: [
+        ("session-start", "idle"), ("user-prompt-submit", "active --blink"),
+        ("pre-tool-use", "active --blink"), ("post-tool-use", "active --blink"),
+    ])
+    func eventWithTranscriptReportsStatus(action: String, status: String) throws {
+        let input = #"{"hook_event_name":"x","transcript_path":"/tmp/rollout.jsonl"}"#
+        #expect(try run(action, input: input).statusCalls == [status])
     }
 
     @Test func permissionRequestDoesNotImmediatelySetBlocked() throws {
