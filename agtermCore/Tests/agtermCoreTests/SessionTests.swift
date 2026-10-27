@@ -41,6 +41,35 @@ struct SessionTests {
         #expect(session.askCoversAnyPane)
     }
 
+    enum AskShadeCase: CaseIterable { case sessionAskOverProgram, paneAsk, paneAskOverProgram, paneAskOverPage,
+                                      paneAskOverHiddenProgram, paneAskOverHud }
+
+    // regression: a pane ask's pane-sized shade split a session-wide cover into two tones at the divider
+    @Test(arguments: AskShadeCase.allCases)
+    func paneAskLeavesAShownSessionCoverUnshaded(_ shadeCase: AskShadeCase) {
+        let session = Session(initialCwd: "/tmp")
+        let split = UUID()
+        session.splitPaneIdentity = split
+        session.isSplit = true
+        switch shadeCase {
+        case .sessionAskOverProgram, .paneAskOverProgram: session.overlayActive = true
+        case .paneAsk: break
+        case .paneAskOverPage:
+            session.overlayActive = true
+            session.htmlOverlay = HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))
+        case .paneAskOverHiddenProgram:
+            session.overlayActive = true
+            session.overlayHidden = true
+        case .paneAskOverHud:
+            session.overlayActive = true
+            session.hudSpec = HudSpec(message: "deploying")
+        }
+        let ask = PendingAsk(id: "a", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        #expect(session.openAsk(ask, paneIdentity: shadeCase == .sessionAskOverProgram ? nil : split))
+
+        #expect(session.askShadesFrame == ![.paneAskOverProgram, .paneAskOverPage].contains(shadeCase))
+    }
+
     @Test(arguments: ["collapsed pane", "scratch", "remote"])
     func askThatIsNotDrawnHereCoversNoPane(_ hidden: String) {
         let session = Session(initialCwd: "/tmp")

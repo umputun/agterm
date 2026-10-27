@@ -1030,6 +1030,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   palette dismissal ends editing before focus restoration. Clicking the covered region focuses its dialog;
   answering an unfocused ask does not pull focus.
 - Terminal asks draw above program overlays, pane overlays, and the HUD within their region.
+  A pane ask drops its shade over a shown session-wide program or page (`Session.askShadesFrame`).
   A session-wide ask draws above the scratch; a pane ask hides under it. Zoom and dashboard hide terminal
   asks without resolving them. Deselecting a session or hiding its pane also keeps the ask pending.
   Hidden asks own no input and return when their region is displayed. Geometry follows resize and the

@@ -98,7 +98,7 @@ struct SessionAskOverlay: View {
             if let frame, input.visible {
                 AskDialogView(ask: ask, anchorFrame: CGRect(origin: .zero, size: frame.size), font: font,
                               foreground: foreground, background: background, focusAllowed: input.wantsFocus,
-                              sessionInput: input, draft: session.askDraft,
+                              shaded: session.askShadesFrame, sessionInput: input, draft: session.askDraft,
                               updateDraft: { session.updateAskDraft(id: ask.id, $0) }, onFocus: input.selectPane,
                               onAnswer: { session.answerAsk(id: ask.id, buttonAt: $0) },
                               onDismiss: { session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped)) })
@@ -174,6 +174,7 @@ struct AskDialogView: View {
     let foreground: Color
     let background: Color
     let focusAllowed: Bool
+    let shaded: Bool
     let sessionInput: SessionAskInput?
     let draft: AskDraft?
     let updateDraft: ((inout AskDraft) -> Void) -> Void
@@ -187,7 +188,7 @@ struct AskDialogView: View {
     @State private var openingRow: String?
 
     init(ask: PendingAsk, anchorFrame: CGRect, font: NSFont, foreground: Color, background: Color,
-         focusAllowed: Bool, sessionInput: SessionAskInput? = nil, draft: AskDraft? = nil,
+         focusAllowed: Bool, shaded: Bool = true, sessionInput: SessionAskInput? = nil, draft: AskDraft? = nil,
          updateDraft: @escaping ((inout AskDraft) -> Void) -> Void = { _ in }, onFocus: @escaping () -> Void = {},
          onAnswer: @escaping (Int) -> Void, onDismiss: @escaping () -> Void) {
         self.ask = ask
@@ -196,6 +197,7 @@ struct AskDialogView: View {
         self.foreground = foreground
         self.background = background
         self.focusAllowed = focusAllowed
+        self.shaded = shaded
         self.sessionInput = sessionInput
         self.draft = draft
         self.updateDraft = updateDraft
@@ -226,7 +228,7 @@ struct AskDialogView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.2)
+            Color.black.opacity(shaded ? 0.2 : 0)
                 .contentShape(Rectangle())
             ScrollViewReader { reader in
                 ViewThatFits(in: .horizontal) {

@@ -20,6 +20,10 @@ extension Session {
     /// Whether a locally drawn ask covers either pane.
     public var askCoversAnyPane: Bool { OverlayPane.allCases.contains(where: askCovers) }
 
+    /// Whether the ask shades the frame it covers. A pane ask leaves a shown session-wide program or page
+    /// unshaded: its shade would stop at the divider and split one cover into two tones.
+    public var askShadesFrame: Bool { askPaneIdentity == nil || !coverOverlayVisible }
+
     /// Edits the pending ask's draft; a stale id, from a dialog already resolved, changes nothing.
     public func updateAskDraft(id: String, _ change: (inout AskDraft) -> Void) {
         guard askPending?.id == id, var draft = askDraft else { return }
