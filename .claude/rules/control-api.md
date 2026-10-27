@@ -46,6 +46,8 @@ paths:
   `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
   prompt, which `PermissionRequest` skips. PostToolUse clears a prior block because there is no answer event.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
+  Those first four report nothing for a null `transcript_path`: Codex's ephemeral memory consolidation
+  thread fires them but never a user Stop, so they would leave the pane active.
   `PermissionRequest` is insufficient under Auto Review, so a pane watcher reads `session.text` and blocks
   only for visible approval/question UI. Remove stale issue #193 `codex-notify.sh` values, not comments or
   foreign notifiers.
