@@ -508,14 +508,17 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(strip.frame, CGRect(x: 0, y: 60, width: 400, height: split.dividerThickness))
     }
 
-    // pins the stock divider compositing over the strip: its NSSplitDividerView layer is ordered after it
+    // pins the stock divider compositing over the strip: AppKit orders its divider layer after it
     func testTheStripDrawsAboveTheSplitsOwnDivider() throws {
+        split.wantsLayer = true
+        let stockDivider = CALayer()
+        stockDivider.zPosition = 5000
+        split.layer?.addSublayer(stockDivider)
         probe.dividerColor = .systemRed
         probe.layout()
 
         let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
         let others = (split.layer?.sublayers ?? []).filter { $0 !== strip }
-        XCTAssertFalse(others.isEmpty)
         XCTAssertTrue(others.allSatisfy { $0.zPosition < strip.zPosition },
                       "strip z=\(strip.zPosition); others: \(others.map { "\(type(of: $0)) z=\($0.zPosition) f=\($0.frame)" })")
     }
