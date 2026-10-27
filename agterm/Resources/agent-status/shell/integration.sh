@@ -47,7 +47,8 @@ elif [ -n "${BASH_VERSION:-}" ]; then
       _ags_active=1
     fi
   }
-  _ags_precmd() { [ -n "${_ags_active:-}" ] && { "$AGTERM_AGENT_BIN" idle; unset _ags_active; }; }
+  # preserve the command status for the rest of PROMPT_COMMAND
+  _ags_precmd() { local s=$?; [ -n "${_ags_active:-}" ] && { "$AGTERM_AGENT_BIN" idle; unset _ags_active; }; return "$s"; }
 
   if [ -n "${bash_preexec_imported:-}${__bp_imported:-}" ]; then
     # bash-preexec is active: register into its additive arrays so we don't clobber other consumers
