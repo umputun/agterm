@@ -1010,7 +1010,9 @@ error keeps those names for compatibility.
   overlays without closing them, or show them again. Without `--pane` it acts on every one the session has;
   `toggle` hides them all while any is shown, else shows them all, and `result.text` says `hidden` or
   `shown`. A hidden program keeps running, `--block` keeps waiting and `session overlay result` still
-  answers. Showing restores visibility; the slot stays occupied until the overlay closes. Opening another
+  answers. Showing restores visibility, except for a session-wide overlay a pane overlay draws above (see
+  `--pane` on `session overlay open`): it stays out of sight until that pane overlay is hidden or closes.
+  The slot stays occupied until the overlay closes. Opening another
   overlay into a hidden slot, or a HUD while the session-wide slot is hidden, fails with `overlay hidden`. A HUD or a dialog cannot be hidden (`no overlay`), nor a program overlay
   shown on another Mac (`overlay is shown on another Mac`); a page shown there takes the request, and the
   reply does not wait for that Mac. From a page, a bare call acts on the page's pane, or on

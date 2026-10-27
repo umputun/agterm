@@ -52,7 +52,7 @@ extension Session {
 
     /// visibleCover is the cover owning the keyboard now, nil for the terminal itself. It changes only when what
     /// the user types into changes: a hidden overlay closing or the other pane's overlay toggling leaves it alone,
-    /// and so does a pane overlay under the scratch, which keeps the keyboard.
+    /// unless that overlay keeps the session cover out of sight, and so does a pane overlay under the scratch.
     public var visibleCover: VisibleCover? {
         if coverOverlayVisible { return .session }
         if scratchActive { return nil }

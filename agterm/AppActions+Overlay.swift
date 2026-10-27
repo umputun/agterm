@@ -9,10 +9,10 @@ extension AppActions {
         store.toggleOverlaysHidden(session.id, pane: nil)
     }
 
-    /// beepIfHiddenOverlayRefused answers an editor open the session slot refused because a hidden overlay holds
-    /// it, the one refusal with nothing on screen to explain it. Visibility is left alone.
+    /// beepIfHiddenOverlayRefused answers an editor open the session slot refused because an overlay out of sight
+    /// holds it, hidden or under a pane overlay: the refusal with nothing on screen to explain it.
     func beepIfHiddenOverlayRefused(_ id: UUID) {
-        if store?.session(withID: id)?.overlayHidden == true { NSSound.beep() }
+        if store?.session(withID: id).map({ !$0.sessionSlotShown }) == true { NSSound.beep() }
     }
 
     /// closeConfirmationText is the close alert's body for `sessions`, naming the hidden overlays that go with

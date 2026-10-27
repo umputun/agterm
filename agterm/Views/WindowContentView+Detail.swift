@@ -174,8 +174,9 @@ extension WindowContentView {
         // the quick terminal owns it while it covers the window, and its own hide re-grabs the cover.
         //
         // Keyed on `visibleCover`, not the slots: a HUD, a hidden overlay closing, or the other pane's overlay
-        // toggling changes nothing the user types into, and `retryReparentFocus` would yank focus out of an
-        // open ⌘F search field or an in-progress sidebar rename for ~0.36s.
+        // toggling (unless it keeps the session cover out of sight) changes nothing the user types into, and
+        // `retryReparentFocus` would yank focus out of an open ⌘F search field or an in-progress sidebar
+        // rename for ~0.36s.
         .onChange(of: session.visibleCover) { _, _ in
             guard deckInteractive, isActive, !quickTerminal.holdsKey else { return }
             HtmlOverlayRegistry.shared.refocus(session)
