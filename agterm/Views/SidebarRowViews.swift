@@ -88,8 +88,9 @@ final class SidebarCellView: NSTableCellView {
         setAddButtonVisible(false)
     }
 
-    /// setColors tints row text and icons from the theme for the row's real selection state. Never drive it
-    /// from `backgroundStyle`, which AppKit flips only while the table is first responder.
+    /// setColors tints row text and icons from the theme for the row's real selection state, except the parts
+    /// a row `tint` colors, which keep it selected or not. Never drive it from `backgroundStyle`, which AppKit
+    /// flips only while the table is first responder.
     func setColors(selected: Bool) {
         let app = GhosttyApp.shared
         let color = selected

@@ -603,15 +603,19 @@ struct ControlDispatcherSessionMetadataTests {
         #expect(actions.calls.isEmpty)
     }
 
-    @Test func sessionNewCarriesItsCreationTint() async {
+    // a host predating tints must refuse the tint, never create an untinted session and answer ok.
+    @Test func sessionNewThroughTheDefaultOverloadRefusesATint() async {
         let actions = MockControlActions()
-        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .sessionNew, args: ControlArgs(name: "s")))
+        let tinted = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionNew, args: ControlArgs(tint: "red", tintOn: ["name"])))
 
-        #expect(response?.ok == true)
+        #expect(plain?.ok == true)
+        #expect(tinted == ControlResponse(ok: false, error: "session.new --tint is not supported on this platform"))
         #expect(actions.calls == [.sessionNew(ControlSessionCreateOptions(
-            window: nil, cwd: nil, workspace: nil, workspaceName: nil, createWorkspace: nil, command: nil, name: nil,
-            tint: SidebarTint(color: .red, parts: [.name])))])
+            window: nil, cwd: nil, workspace: nil, workspaceName: nil, createWorkspace: nil, command: nil, name: "s"))])
     }
 
     @Test(arguments: [

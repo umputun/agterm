@@ -158,12 +158,10 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let before: String?
     /// Create in the background (`--no-select`): skip select+focus, leaving the current selection untouched.
     public let noSelect: Bool
-    /// The new session's sidebar tint, parsed by the dispatcher before anything is created; nil = none.
-    public let tint: SidebarTint?
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
                 createWorkspace: Bool?, command: String?, wait: Bool? = nil, name: String?,
-                after: String? = nil, before: String? = nil, noSelect: Bool = false, tint: SidebarTint? = nil) {
+                after: String? = nil, before: String? = nil, noSelect: Bool = false) {
         self.window = window
         self.cwd = cwd
         self.workspace = workspace
@@ -175,7 +173,6 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.after = after
         self.before = before
         self.noSelect = noSelect
-        self.tint = tint
     }
 }
 

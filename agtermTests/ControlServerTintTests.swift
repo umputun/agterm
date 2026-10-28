@@ -80,7 +80,7 @@ final class ControlServerTintTests: XCTestCase {
         XCTAssertTrue(workspace.ok, workspace.error ?? "")
         let session = server.createSession(ControlSessionCreateOptions(
             window: nil, cwd: NSTemporaryDirectory(), workspace: nil, workspaceName: "prod", createWorkspace: nil,
-            command: nil, name: "db", noSelect: true, tint: SidebarTint(color: .orange)))
+            command: nil, name: "db", noSelect: true), tint: SidebarTint(color: .orange))
         XCTAssertTrue(session.ok, session.error ?? "")
 
         let tree = store.controlTree()
@@ -89,6 +89,23 @@ final class ControlServerTintTests: XCTestCase {
         XCTAssertEqual(node.tintOn, ["name"])
         XCTAssertEqual(node.sessions.first?.tint, "orange")
         XCTAssertEqual(node.sessions.first?.tintOn, ["icon"])
+    }
+
+    func testEverySessionPlacementPathCarriesTheCreationTint() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspaceID = try XCTUnwrap(store.currentWorkspaceID)
+        let byID = server.createSession(ControlSessionCreateOptions(
+            window: nil, cwd: NSTemporaryDirectory(), workspace: workspaceID.uuidString, workspaceName: nil,
+            createWorkspace: nil, command: nil, name: "by-id", noSelect: true), tint: SidebarTint(color: .blue))
+        let anchorID = try XCTUnwrap(byID.result?.id)
+        let byAnchor = server.createSession(ControlSessionCreateOptions(
+            window: nil, cwd: NSTemporaryDirectory(), workspace: nil, workspaceName: nil, createWorkspace: nil,
+            command: nil, name: "by-anchor", after: anchorID, noSelect: true), tint: SidebarTint(color: .gray, parts: [.name]))
+        XCTAssertTrue(byAnchor.ok, byAnchor.error ?? "")
+
+        let sessions = store.workspaces.flatMap(\.sessions)
+        XCTAssertEqual(sessions.first { $0.customName == "by-id" }?.tint, SidebarTint(color: .blue))
+        XCTAssertEqual(sessions.first { $0.customName == "by-anchor" }?.tint, SidebarTint(color: .gray, parts: [.name]))
     }
 
     private func addSession() throws -> (AppStore, Session) {

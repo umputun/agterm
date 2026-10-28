@@ -8,6 +8,8 @@ public protocol ControlActions {
     func controlTree(window: String?) -> ControlResponse
     func readEvents(_ options: ControlEventReadOptions) -> ControlResponse
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse
+    /// createSession with a creation tint; the default keeps tintless hosts working and refuses a tint.
+    func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
     func selectSession(_ target: String?, window: String?) -> ControlResponse
     func goSession(window: String?, direction: SessionNavigation) -> ControlResponse
@@ -379,9 +381,8 @@ public struct ControlDispatcher {
                 name: args?.name,
                 after: args?.after,
                 before: args?.before,
-                noSelect: args?.noSelect == true,
-                tint: tint
-            ))
+                noSelect: args?.noSelect == true
+            ), tint: tint)
         case .sessionDuplicate:
             // no options: the source session names its own workspace AND its cwd, so a duplicate is fully
             // described by the target. The GUI half is the sidebar row's "Duplicate".

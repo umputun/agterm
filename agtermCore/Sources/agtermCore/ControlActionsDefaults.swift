@@ -199,8 +199,16 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.tint"))
     }
 
-    /// A host that predates tints creates an untinted workspace through its own form and refuses a tint,
+    /// A host that predates tints creates an untinted session through its own form and refuses a tint,
     /// so the request never answers ok over a tint it dropped.
+    func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
+        guard tint == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.new --tint"))
+        }
+        return createSession(options)
+    }
+
+    /// The workspace twin of the session default above.
     func createWorkspace(window: String?, name: String?, collapsed: Bool, tint: SidebarTint?) -> ControlResponse {
         guard tint == nil else {
             return ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.new --tint"))

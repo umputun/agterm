@@ -74,6 +74,26 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
     }
 
+    // the palette's rows outlive a selection change made while it is open, so the target is read at run.
+    func testTintRowsTintTheSessionSelectedWhenTheyRun() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(first.id)
+        let red = try XCTUnwrap(actions.paletteActions().first { $0.title == "Tint Session: Red" })
+
+        store.selectSession(second.id)
+        XCTAssertTrue(red.isEnabled())
+        red.run()
+
+        XCTAssertNil(first.tint)
+        XCTAssertEqual(second.tint, SidebarTint(color: .red))
+        let none = try XCTUnwrap(actions.paletteActions().first { $0.title == "Tint Session: None" })
+        none.run()
+        XCTAssertNil(second.tint)
+    }
+
     private func actionRow(_ command: PaletteCommand) throws -> PaletteItem {
         let title = command.title(in: actions.paletteContext)
         return try XCTUnwrap(actions.paletteActions().first { $0.title == title })

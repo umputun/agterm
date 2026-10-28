@@ -273,6 +273,10 @@ extension ControlServer: ControlActions {
     /// default) or `workspaceName` (the sidebar label) plus optional `createWorkspace` — create needs a
     /// name, there is nothing to create by id. cwd/command/name are applied in `makeSessionResponse`.
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
+        createSession(options, tint: nil)
+    }
+
+    func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
         resolver.resolvePlacementStore(options.window) { store in
             // anchor-relative placement: the anchor names its own workspace, bypassing `--workspace`/
             // `--workspace-name`. `before` takes the anchor's slot, `after` the next (clamped in `addSession`).
@@ -280,7 +284,7 @@ extension ControlServer: ControlActions {
                 let placeBefore = options.before != nil
                 return resolveAnchorLocation(anchor, in: store) { location in
                     let index = placeBefore ? location.index : location.index + 1
-                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
+                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, tint: tint, at: index)
                 }
             }
             // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
@@ -296,13 +300,13 @@ extension ControlServer: ControlActions {
                 guard let workspace else {
                     return ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)")
                 }
-                return makeSessionResponse(in: store, workspaceID: workspace.id, options: options)
+                return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
             // id addressing (default `active`): the canonical prefix/active resolver.
             let target = options.workspace ?? "active"
             return resolver.resolve(target, candidates: store.workspaces.map(\.id),
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                makeSessionResponse(in: store, workspaceID: workspaceID, options: options)
+                makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
             }
         }
     }
