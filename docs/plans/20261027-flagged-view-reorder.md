@@ -239,14 +239,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherSessionMetadataTests.swift`, `MockControlActions.swift`,
   `agtermTests/ControlServerFlaggedLayoutTests.swift`, `agtermUITests/ControlSidebarStatusUITests.swift`
 
-- [ ] add `session.flag move` with `--before`/`--after`: dispatcher checks, new `ControlActions` requirement with
+- [x] add `session.flag move` with `--before`/`--after`: dispatcher checks, new `ControlActions` requirement with
       an unsupported default, app action checking flagged and same window
-- [ ] add top-level `flaggedOrder` to the tree read-back
-- [ ] write tests: dispatcher parsing and refusals, existing modes unchanged, `flaggedOrder` populated through
+- [x] add top-level `flaggedOrder` to the tree read-back
+- [x] write tests: dispatcher parsing and refusals, existing modes unchanged, `flaggedOrder` populated through
       `AppStore.controlTree` and omitted when empty, CLI argument mapping
-- [ ] write a hosted test of the app action: success, unknown anchor, unflagged anchor, anchor in another window
-- [ ] write one UI round trip: move via CLI, read `flaggedOrder` back and assert the sidebar row order
-- [ ] run the added and changed suites and methods - must pass before task 6
+- [x] write a hosted test of the app action: success, unknown anchor, unflagged anchor, anchor in another window
+- [x] write one UI round trip: move via CLI, read `flaggedOrder` back and assert the sidebar row order
+- [x] run the added and changed suites and methods - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify flat and plain reorder across workspaces, tree-layout moves, navigation per layout, arrivals and

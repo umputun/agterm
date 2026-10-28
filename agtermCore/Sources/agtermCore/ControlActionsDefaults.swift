@@ -45,6 +45,11 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("sidebar.flagged-layout"))
     }
 
+    func moveFlaggedSession(_: String?, window _: String?, anchor _: String,
+                            placement _: FlaggedOrderPlacement) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.flag move"))
+    }
+
     func setWorkspaceFlag(_: String?, window _: String?, mode _: ControlToggleMode) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.flag"))
     }

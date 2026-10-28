@@ -345,6 +345,25 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree(paneForeground: { _ in nil }, flaggedLayout: .flat).sidebarFlaggedLayout == "flat")
     }
 
+    @Test func controlTreeReportsTheSavedFlaggedOrderAndOmitsItWhenNothingIsFlagged() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let empty = try #require(String(data: JSONEncoder().encode(store.controlTree()), encoding: .utf8))
+        #expect(store.controlTree().flaggedOrder == nil)
+        #expect(!empty.contains("\"flaggedOrder\""))
+
+        store.setFlag(true, forSession: b.id)
+        store.setFlag(true, forSession: a.id)
+        let tree = store.controlTree()
+
+        #expect(tree.flaggedOrder == [b.id.uuidString, a.id.uuidString])
+        #expect(tree.workspaces.first { $0.id == ws.id.uuidString }?.sessions.map(\.id) == [a.id.uuidString, b.id.uuidString])
+        let json = try #require(String(data: JSONEncoder().encode(tree), encoding: .utf8))
+        #expect(json.contains("\"flaggedOrder\""))
+    }
+
     @Test func controlTreeReportsQuickVisibleFromClosure() {
         let store = makeStore()
         #expect(store.controlTree().quickVisible == nil)

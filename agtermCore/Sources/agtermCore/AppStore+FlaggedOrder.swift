@@ -42,6 +42,11 @@ extension AppStore {
         return true
     }
 
+    var flaggedOrderReadback: [String]? {
+        let ids = orderedFlaggedSessions.map(\.id.uuidString)
+        return ids.isEmpty ? nil : ids
+    }
+
     // recorded when the session arrives rather than derived from the tree later, so a session placed earlier
     // in the tree by a later arrival cannot jump ahead of one that arrived before it
     func appendFlaggedArrivals() {

@@ -116,19 +116,34 @@ extension Session {
     // named `FlagCommand` (not `Flag`) so it doesn't shadow ArgumentParser's `@Flag` wrapper within
     // the `Session` namespace; `commandName` keeps the user-facing verb `flag`.
     struct FlagCommand: RequestCommand {
-        static let configuration = CommandConfiguration(commandName: "flag", abstract: "Flag a session for the flagged working-set view (on|off|toggle|clear).")
-        @Argument(help: "Mode: on, off, toggle (default), or clear (unflag all; ignores --target).") var mode: String = "toggle"
+        static let configuration = CommandConfiguration(commandName: "flag", abstract: "Flag a session for the flagged working-set view (on|off|toggle|clear|move).")
+        @Argument(help: """
+            Mode: on, off, toggle (default), clear (unflag all; ignores --target), or move (reorder the flagged \
+            target with --before or --after).
+            """) var mode: String = "toggle"
+        @Option(name: .long, help: "With move: the flagged session to place the target right before.") var before: String?
+        @Option(name: .long, help: "With move: the flagged session to place the target right after.") var after: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
         func validate() throws {
-            guard ["on", "off", "toggle", "clear"].contains(mode) else {
-                throw ValidationError("mode must be on, off, toggle, or clear")
+            guard ["on", "off", "toggle", "clear", "move"].contains(mode) else {
+                throw ValidationError("mode must be on, off, toggle, clear, or move")
+            }
+            guard mode == "move" else {
+                guard before == nil, after == nil else { throw ValidationError("--before and --after apply only to move") }
+                return
+            }
+            guard (before == nil) != (after == nil) else {
+                throw ValidationError("move requires exactly one of --before or --after")
             }
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+            var args = ControlArgs(mode: mode)
+            args.before = before
+            args.after = after
+            return ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(args))
         }
     }
 

@@ -641,6 +641,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// is dormant. The read side of `sidebar.flagged-layout` and a term of the workspace-row visibility
     /// predicate on `ControlWorkspaceNode.focused`.
     public let sidebarFlaggedLayout: String?
+    /// flaggedOrder is the window's saved flagged order as session ids, the flat and plain rows' order and the
+    /// read side of `session.flag move`; omitted when nothing is flagged.
+    public let flaggedOrder: [String]?
     /// Where a clicked web link from terminal output opens: `LinkOpenMode.rawValue` (`browser` | `overlay` |
     /// `overlay95` | `overlay75` | `overlay50`), the effective value, so the default reads `browser`. APP-WIDE, the read side of `browser.links`; nil
     /// in a host-produced tree and from an older server.
@@ -700,7 +703,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 attentionIncludesActive: Bool? = nil, attentionNavigationAcrossWindows: Bool? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, sidebarFlaggedLayout: String? = nil,
-                sidebarWidth: Double? = nil, workspaceFilter: Bool? = nil,
+                flaggedOrder: [String]? = nil, sidebarWidth: Double? = nil, workspaceFilter: Bool? = nil,
                 quickVisible: Bool? = nil,
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
@@ -718,6 +721,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
         self.sidebarFlaggedLayout = sidebarFlaggedLayout
+        self.flaggedOrder = flaggedOrder
         self.sidebarWidth = sidebarWidth
         self.workspaceFilter = workspaceFilter
         self.quickVisible = quickVisible

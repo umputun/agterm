@@ -650,6 +650,25 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// moveFlaggedSession moves the target within its window's saved flagged order, just before or after
+    /// `anchor`, resolved in the same window. Both must be flagged; an unchanged order still answers ok.
+    func moveFlaggedSession(_ target: String?, window: String?, anchor: String,
+                            placement: FlaggedOrderPlacement) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                             active: store.selectedSessionID, noun: "session") { anchorID in
+                guard anchorID != id else {
+                    return ControlResponse(ok: false, error: "a session cannot be its own anchor")
+                }
+                guard store.session(withID: id)?.flagged == true, store.session(withID: anchorID)?.flagged == true else {
+                    return ControlResponse(ok: false, error: "session.flag move needs a flagged session and a flagged anchor")
+                }
+                store.moveFlagged([id], to: placement, of: anchorID)
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
+        }
+    }
+
     /// Set or clear a session's title-bar context. The value is already trimmed and validated by the
     /// dispatcher, so nil here means clear rather than "nothing supplied".
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {

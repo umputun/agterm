@@ -37,6 +37,10 @@ public protocol ControlActions {
     /// Flags or unflags every session of the target workspace as one value; `toggle` unflags only when all are.
     func setWorkspaceFlag(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    /// moveFlaggedSession moves the flagged target just before or after the flagged `anchor` in its window's
+    /// saved flagged order.
+    func moveFlaggedSession(_ target: String?, window: String?, anchor: String,
+                            placement: FlaggedOrderPlacement) -> ControlResponse
     /// Sets or clears the session's title-bar context; `context` is already trimmed and validated, and nil
     /// means clear.
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse
@@ -435,7 +439,7 @@ public struct ControlDispatcher {
             }
             return actions.moveSession(request.target, window: args?.window, move: move)
         case .sessionFlag:
-            return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
+            return dispatchSessionFlag(request)
         case .sessionContext:
             return dispatchSessionContext(request)
         case .sessionSeen:

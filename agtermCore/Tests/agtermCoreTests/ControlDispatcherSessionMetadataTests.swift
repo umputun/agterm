@@ -26,6 +26,60 @@ struct ControlDispatcherSessionMetadataTests {
         ])
     }
 
+    @Test func sessionFlagMoveRoutesTheOneAnchorAndItsSide() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var before = ControlArgs(mode: "move", window: "win")
+        before.before = "b"
+        var after = ControlArgs(mode: "move")
+        after.after = "c"
+
+        #expect(await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, target: "a", args: before)) == ControlResponse(ok: true))
+        #expect(await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: after)) == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .flaggedMove(target: "a", window: "win", anchor: "b", .before),
+            .flaggedMove(target: nil, window: nil, anchor: "c", .after),
+        ])
+    }
+
+    @Test func sessionFlagMoveRefusesNoAnchorOrBoth() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var both = ControlArgs(mode: "move")
+        both.before = "b"
+        both.after = "c"
+
+        let none = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: ControlArgs(mode: "move")))
+        let two = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: both))
+
+        let refusal = ControlResponse(ok: false, error: "session.flag move requires exactly one of --before or --after")
+        #expect(none == refusal)
+        #expect(two == refusal)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: ["on", "toggle", "clear", nil] as [String?])
+    func sessionFlagRefusesAnAnchorOutsideMove(_ mode: String?) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var args = ControlArgs(mode: mode)
+        args.after = "c"
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: args))
+
+        #expect(response == ControlResponse(ok: false, error: "--before and --after apply only to session.flag move"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionFlagWithoutAModeStillRoutesToTheToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, target: "a"))
+
+        #expect(actions.calls == [.sessionFlag(target: "a", window: nil, nil)])
+    }
+
     @Test func sessionContextRoutesSetAndClear() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
